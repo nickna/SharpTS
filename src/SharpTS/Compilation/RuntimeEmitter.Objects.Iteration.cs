@@ -831,8 +831,23 @@ public partial class RuntimeEmitter
         il.Emit(OpCodes.Stloc, currentLocal);
 
         il.Emit(OpCodes.Ldloc, resultLocal);
-        il.Emit(OpCodes.Ldloca, currentLocal);
-        il.Emit(OpCodes.Call, _types.GetProperty(kvpType, "Value")!.GetGetMethod()!);
+        if (inputs.ObjectStorage.ModuleNamespaces is { } namespaces)
+        {
+            var fieldValue = il.DeclareLocal(_types.Object);
+            il.Emit(OpCodes.Ldloca, currentLocal);
+            il.Emit(OpCodes.Call, _types.GetProperty(kvpType, "Value")!.GetGetMethod()!);
+            il.Emit(OpCodes.Stloc, fieldValue);
+            EmitModuleNamespaceDataRead(il, namespaces, fieldValue, () => il.Emit(OpCodes.Ldarg_0), () =>
+            {
+                il.Emit(OpCodes.Ldloca, currentLocal);
+                il.Emit(OpCodes.Call, _types.GetProperty(kvpType, "Key")!.GetGetMethod()!);
+            });
+        }
+        else
+        {
+            il.Emit(OpCodes.Ldloca, currentLocal);
+            il.Emit(OpCodes.Call, _types.GetProperty(kvpType, "Value")!.GetGetMethod()!);
+        }
         il.Emit(OpCodes.Callvirt, _types.GetMethod(listType, "Add")!);
         il.Emit(OpCodes.Br, fieldsLoopStart);
 
@@ -1467,8 +1482,23 @@ public partial class RuntimeEmitter
         il.Emit(OpCodes.Call, _types.GetProperty(kvpType, "Key")!.GetGetMethod()!);
         il.Emit(OpCodes.Callvirt, _types.GetMethod(listType, "Add")!);
         il.Emit(OpCodes.Ldloc, entryLocal);
-        il.Emit(OpCodes.Ldloca, currentLocal);
-        il.Emit(OpCodes.Call, _types.GetProperty(kvpType, "Value")!.GetGetMethod()!);
+        if (inputs.ObjectStorage.ModuleNamespaces is { } namespaces)
+        {
+            var fieldValue = il.DeclareLocal(_types.Object);
+            il.Emit(OpCodes.Ldloca, currentLocal);
+            il.Emit(OpCodes.Call, _types.GetProperty(kvpType, "Value")!.GetGetMethod()!);
+            il.Emit(OpCodes.Stloc, fieldValue);
+            EmitModuleNamespaceDataRead(il, namespaces, fieldValue, () => il.Emit(OpCodes.Ldarg_0), () =>
+            {
+                il.Emit(OpCodes.Ldloca, currentLocal);
+                il.Emit(OpCodes.Call, _types.GetProperty(kvpType, "Key")!.GetGetMethod()!);
+            });
+        }
+        else
+        {
+            il.Emit(OpCodes.Ldloca, currentLocal);
+            il.Emit(OpCodes.Call, _types.GetProperty(kvpType, "Value")!.GetGetMethod()!);
+        }
         il.Emit(OpCodes.Callvirt, _types.GetMethod(listType, "Add")!);
 
         il.Emit(OpCodes.Ldloc, resultLocal);

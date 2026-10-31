@@ -766,6 +766,16 @@ public partial class RuntimeEmitter
         il.Emit(OpCodes.Callvirt, inputs.DescriptorStorage.DescriptorEnumerable.GetGetMethod()!);
         il.Emit(OpCodes.Brfalse, skipKeyLabel);
         il.MarkLabel(fieldsAddKeyLabel);
+        // Namespace [[GetOwnProperty]] observes the value even for Object.keys.
+        // Own-name/Reflect.ownKeys enumeration remains on its separate key-only path.
+        if (inputs.ObjectStorage.ModuleNamespaces is { } namespaces)
+        {
+            il.Emit(OpCodes.Ldarg_0);
+            il.Emit(OpCodes.Ldloc, keyLocal);
+            il.Emit(OpCodes.Ldnull);
+            il.Emit(OpCodes.Call, namespaces.Read);
+            il.Emit(OpCodes.Pop);
+        }
 
         il.Emit(OpCodes.Ldloc, resultLocal);
         il.Emit(OpCodes.Ldloc, keyLocal);

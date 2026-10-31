@@ -444,7 +444,7 @@ public partial class RuntimeEmitter
                     runtime.DescriptorStorage.DescriptorValue.GetGetMethod()!, runtime.FunctionValues.Type,
                     runtime.FunctionValues.InvokeWithThis, runtime.Sentinels.UndefinedInstance),
                 new ObjectInvokeInputs(runtime.FunctionValues.Type, runtime.FunctionValues.InvokeWithThis),
-                runtime.Errors.TypeErrorConstructor, sourceOwners));
+                runtime.Errors.TypeErrorConstructor, sourceOwners, features.UsesModuleNamespaces));
 
         if (features.UsesJSON || features.UsesCompactObjectRecords)
         {

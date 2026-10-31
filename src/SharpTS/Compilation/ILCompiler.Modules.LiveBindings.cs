@@ -79,7 +79,7 @@ public partial class ILCompiler
         {
             if (Resolve(source) is not { } field || !_modules.ImportFields[slot.Module].ContainsKey(slot.Name)) continue;
             _modules.ImportFields[slot.Module][slot.Name] = field;
-            if (InitializationField(field) is { } initialized)
+            if (GetLiveModuleSourceBinding(field)?.Initialized is { } initialized)
             {
                 if (!_closures.ModuleTopLevelLexicalInitFields.TryGetValue(slot.Module, out var flags))
                     _closures.ModuleTopLevelLexicalInitFields[slot.Module] = flags = [];
@@ -135,8 +135,7 @@ public partial class ILCompiler
             }
             finally { visiting.Remove(slot); }
         }
-        FieldBuilder? InitializationField(FieldBuilder field) => _liveModuleBindings.Values
-            .SelectMany(bindings => bindings.Values).FirstOrDefault(binding => ReferenceEquals(binding.Field, field))?.Initialized;
+
         bool TryLiveSource(string specifier, string path, out string source)
         {
             source = "";
@@ -145,6 +144,9 @@ public partial class ILCompiler
             return declarations.ContainsKey(source);
         }
     }
+
+    private ModuleSourceBinding? GetLiveModuleSourceBinding(FieldBuilder field) => _liveModuleBindings.Values
+        .SelectMany(bindings => bindings.Values).FirstOrDefault(binding => ReferenceEquals(binding.Field, field));
 
     private void EmitLiveModuleFunctionInitialization(ParsedModule module, ILEmitter emitter)
     {

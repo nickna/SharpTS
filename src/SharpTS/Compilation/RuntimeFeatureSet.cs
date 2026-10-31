@@ -144,6 +144,7 @@ public sealed class RuntimeFeatureSet
     public bool UsesAbortController { get; set; } = true;   // AbortController / AbortSignal identifiers
     public bool UsesAbortSignalAny { get; set; } = true;    // AbortSignal.any([...]) — late-binds to SharpTS runtime, needs SharpTS.dll co-located
     public bool UsesProxy { get; set; } = true;             // `new Proxy(...)` / bare `Proxy` identifier
+    public bool UsesModuleNamespaces { get; set; } = true;
     public bool UsesDynamicImport { get; set; } = true;     // `import(specifier)` syntax (Expr.DynamicImport)
     public bool UsesAsyncGenerator { get; set; } = true;    // `async function*` / async generators
     public bool UsesForAwaitOf { get; set; } = true;        // `for await (... of ...)`

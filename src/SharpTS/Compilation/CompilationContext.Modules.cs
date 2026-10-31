@@ -18,6 +18,8 @@ public partial class CompilationContext
     // Module types (module path -> TypeBuilder)
     public Dictionary<string, TypeBuilder>? ModuleTypes { get; set; }
 
+    internal IReadOnlyDictionary<string, MethodBuilder>? ModuleNamespaceMethods { get; set; }
+
     // Module initialization methods (module path -> init method)
     // Used to ensure modules are initialized before their exports are accessed
     public Dictionary<string, MethodBuilder>? ModuleInitMethods { get; set; }

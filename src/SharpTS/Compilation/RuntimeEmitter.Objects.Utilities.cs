@@ -489,6 +489,18 @@ public partial class RuntimeEmitter
         il.Emit(OpCodes.Call, _types.GetProperty(_types.KeyValuePairStringObject, "Key").GetGetMethod()!);
         il.Emit(OpCodes.Ldloca, fkvLocal);
         il.Emit(OpCodes.Call, _types.GetProperty(_types.KeyValuePairStringObject, "Value").GetGetMethod()!);
+        if (inputs.ObjectStorage.ModuleNamespaces is { } namespaces)
+        {
+            var rawValue = il.DeclareLocal(_types.Object);
+            il.Emit(OpCodes.Stloc, rawValue);
+            EmitModuleNamespaceDataRead(il, namespaces, rawValue,
+                () => il.Emit(OpCodes.Ldarg_0),
+                () =>
+                {
+                    il.Emit(OpCodes.Ldloca, fkvLocal);
+                    il.Emit(OpCodes.Call, _types.GetProperty(_types.KeyValuePairStringObject, "Key").GetGetMethod()!);
+                });
+        }
         il.Emit(OpCodes.Callvirt, _types.GetMethod(_types.DictionaryStringObject, "set_Item", _types.String, _types.Object));
         il.Emit(OpCodes.Br, fieldsLoopStart);
         il.MarkLabel(fieldsLoopEnd);

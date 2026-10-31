@@ -404,6 +404,7 @@ public partial class ILCompiler
     /// <summary>Applies the compilation's definition→module maps.</summary>
     private void ApplyModuleMaps(CompilationContext ctx)
     {
+        ctx.ModuleNamespaceMethods = _moduleGetNamespaceMethods;
         ctx.ClassToModule = _modules.ClassToModule;
         ctx.FunctionToModule = _modules.FunctionToModule;
         ctx.EnumToModule = _modules.EnumToModule;
@@ -435,6 +436,7 @@ public partial class ILCompiler
     {
         ctx.ModuleResolver = _modules.Resolver;
         ctx.ModuleExportFields = _modules.ExportFields;
+        ctx.ModuleNamespaceMethods = _moduleGetNamespaceMethods;
         ctx.ModuleInitMethods = _modules.InitMethods;
         ctx.ModuleImportFields = _modules.ImportFields;
         ctx.ModuleTypes = _modules.Types;

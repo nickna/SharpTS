@@ -25,7 +25,7 @@ public partial class RuntimeEmitter
         Type HasFieldsInterface,
         ObjectReadInputs Read,
         ObjectInvokeInputs Invocation,
-        ConstructorBuilder TypeErrorCtor, NativeSourceOwnerCatalog? SourceOwners = null);
+        ConstructorBuilder TypeErrorCtor, NativeSourceOwnerCatalog? SourceOwners = null, bool ModuleNamespaces = false);
 
     private readonly record struct ObjectSetFields(
         FieldBuilder Fields,
@@ -76,6 +76,7 @@ public partial class RuntimeEmitter
 
         // Property: Fields (getter only)
         EmitTSObjectFieldsProperty(typeBuilder, storage, fieldsField);
+        if (peers.ModuleNamespaces) storage.ModuleNamespaces = EmitModuleNamespaceStorage(typeBuilder, storage, fieldsField);
 
         // Properties: IsFrozen, IsSealed
         EmitTSObjectIsFrozenProperty(typeBuilder, isFrozenField);
@@ -410,7 +411,8 @@ public partial class RuntimeEmitter
         il.Emit(OpCodes.Ret);
 
         il.MarkLabel(foundLabel);
-        il.Emit(OpCodes.Ldloc, valueLocal);
+        EmitModuleNamespaceDataRead(il, storage.ModuleNamespaces, valueLocal,
+            () => il.Emit(OpCodes.Ldarg_0), () => il.Emit(OpCodes.Ldarg_1));
         il.Emit(OpCodes.Ret);
     }
 

@@ -158,24 +158,30 @@ public partial class ILEmitter
             _ctx.NamespaceImports ??= new Dictionary<string, string>();
             _ctx.NamespaceImports[localName] = importedPath;
 
-            // Create new Dictionary<string, object?>
-            var dictType = _ctx.Types.DictionaryStringObject;
-            var dictCtor = _ctx.Types.GetDefaultConstructor(dictType);
-            var addMethod = _ctx.Types.GetMethod(dictType, "Add", _ctx.Types.String, _ctx.Types.Object);
-
-            IL.Emit(OpCodes.Newobj, dictCtor);
-
-            // Add each export to the dictionary
-            foreach (var (exportName, field) in exportFields)
+            if (_ctx.Runtime!.ObjectStorage.ModuleNamespaces is not null &&
+                _ctx.ModuleNamespaceMethods?.TryGetValue(importedPath, out var getNamespace) == true)
+                IL.Emit(OpCodes.Call, getNamespace);
+            else
             {
-                IL.Emit(OpCodes.Dup);
-                IL.Emit(OpCodes.Ldstr, exportName);
-                IL.Emit(OpCodes.Ldsfld, field);
-                IL.Emit(OpCodes.Callvirt, addMethod);
-            }
+                // Create new Dictionary<string, object?>
+                var dictType = _ctx.Types.DictionaryStringObject;
+                var dictCtor = _ctx.Types.GetDefaultConstructor(dictType);
+                var addMethod = _ctx.Types.GetMethod(dictType, "Add", _ctx.Types.String, _ctx.Types.Object);
 
-            // Call CreateObject to wrap the dictionary
-            IL.Emit(OpCodes.Call, _ctx.Runtime!.ObjectConstruction.Create);
+                IL.Emit(OpCodes.Newobj, dictCtor);
+
+                // Add each export to the dictionary
+                foreach (var (exportName, field) in exportFields)
+                {
+                    IL.Emit(OpCodes.Dup);
+                    IL.Emit(OpCodes.Ldstr, exportName);
+                    IL.Emit(OpCodes.Ldsfld, field);
+                    IL.Emit(OpCodes.Callvirt, addMethod);
+                }
+
+                // Call CreateObject to wrap the dictionary
+                IL.Emit(OpCodes.Call, _ctx.Runtime!.ObjectConstruction.Create);
+            }
 
             // Store in static field if available, otherwise use local
             if (currentModuleImportFields?.TryGetValue(localName, out var importField) == true)

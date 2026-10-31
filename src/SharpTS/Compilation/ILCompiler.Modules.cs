@@ -224,6 +224,36 @@ public partial class ILCompiler
         );
         _moduleGetNamespaceMethods[module.Path] = method;
 
+        MethodBuilder? reader = null;
+        var namespaces = _runtime.ObjectStorage.ModuleNamespaces;
+        if (namespaces is not null && IsLiveBindingModule(module))
+        {
+            reader = moduleType.DefineMethod("$ReadNamespaceData", MethodAttributes.Assembly | MethodAttributes.Static,
+                _types.Object, [_types.String, _types.Object]);
+            var readIl = reader.GetILGenerator();
+            foreach (var (name, field) in exportFields)
+            {
+                var next = readIl.DefineLabel();
+                readIl.Emit(OpCodes.Ldarg_0);
+                readIl.Emit(OpCodes.Ldstr, name);
+                readIl.Emit(OpCodes.Call, _types.GetMethod(_types.String, "op_Equality", _types.String, _types.String));
+                readIl.Emit(OpCodes.Brfalse, next);
+                if (GetLiveModuleSourceBinding(field) is { Initialized: { } initialized } binding)
+                {
+                    var ready = readIl.DefineLabel();
+                    readIl.Emit(OpCodes.Ldsfld, initialized);
+                    readIl.Emit(OpCodes.Brtrue, ready);
+                    GuestErrorEmitter.ThrowError(readIl, _runtime, _runtime.Errors.ReferenceErrorConstructor,
+                        $"Cannot access '{binding.Name}' before initialization");
+                    readIl.MarkLabel(ready);
+                }
+                readIl.Emit(OpCodes.Ldsfld, field);
+                readIl.Emit(OpCodes.Ret);
+                readIl.MarkLabel(next);
+            }
+            readIl.Emit(OpCodes.Ldarg_1);
+            readIl.Emit(OpCodes.Ret);
+        }
         var il = method.GetILGenerator();
 
         // var dict = new Dictionary<string, object?>();
@@ -256,7 +286,14 @@ public partial class ILCompiler
 
         // return $Runtime.CreateObject(dict);
         il.Emit(OpCodes.Ldloc, dictLocal);
-        il.Emit(OpCodes.Call, _runtime.ObjectConstruction.Create);
+        if (reader is not null)
+        {
+            il.Emit(OpCodes.Ldnull);
+            il.Emit(OpCodes.Ldftn, reader);
+            NativePrototypeFieldsLookup.EmitCarrierCreate(_runtime.NativePrototypeFields, il, namespaces!.ReaderConstructor);
+            il.Emit(OpCodes.Call, namespaces.Create);
+        }
+        else il.Emit(OpCodes.Call, _runtime.ObjectConstruction.Create);
         il.Emit(OpCodes.Ret);
     }
 

@@ -789,7 +789,8 @@ public partial class RuntimeEmitter
         il.Emit(OpCodes.Ldloca, valueLocal);
         il.Emit(OpCodes.Callvirt, _types.GetMethod(_types.DictionaryStringObject, "TryGetValue"));
         il.Emit(OpCodes.Brfalse, notTSObjectLabel);  // Changed: check $IHasFields if not in _fields
-        il.Emit(OpCodes.Ldloc, valueLocal);
+        EmitModuleNamespaceDataRead(il, inputs.ObjectStorage.ModuleNamespaces, valueLocal,
+            () => il.Emit(OpCodes.Ldarg_0), () => il.Emit(OpCodes.Ldarg_1));
         il.Emit(OpCodes.Ret);
 
         il.MarkLabel(notTSObjectLabel);
@@ -1647,6 +1648,20 @@ public partial class RuntimeEmitter
         // null check
         il.Emit(OpCodes.Ldarg_0);
         il.Emit(OpCodes.Brfalse, nullLabel);
+        // Actual namespace own data wins over inherited Object.prototype names.
+        if (inputs.ObjectStorage.ModuleNamespaces is { } namespaces)
+        {
+            var namespaceValue = il.DeclareLocal(_types.Object);
+            var ordinary = il.DefineLabel();
+            il.Emit(OpCodes.Ldarg_0);
+            il.Emit(OpCodes.Ldarg_1);
+            il.Emit(OpCodes.Ldloca, namespaceValue);
+            il.Emit(OpCodes.Call, namespaces.TryRead);
+            il.Emit(OpCodes.Brfalse, ordinary);
+            il.Emit(OpCodes.Ldloc, namespaceValue);
+            il.Emit(OpCodes.Ret);
+            il.MarkLabel(ordinary);
+        }
 
         // globalThis/global sentinel (#271): a value-position globalThis reads
         // properties through GlobalThisGetProperty (user props → built-in

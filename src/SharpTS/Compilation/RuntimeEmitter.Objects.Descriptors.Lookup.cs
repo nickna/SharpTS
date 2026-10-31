@@ -191,7 +191,8 @@ public partial class RuntimeEmitter
     private readonly record struct GetOwnDescriptorFieldsReceiverInputs(
         EmittedDescriptorStorageRuntime DescriptorStorage,
         MethodInfo IHasFieldsFieldsGetter,
-        Type IHasFieldsInterface
+        Type IHasFieldsInterface,
+        EmittedModuleNamespaceRuntime? ModuleNamespaces = null
     );
 
     // Emits a data result using explicit scratch/exit ownership. emitValue leaves one value;
@@ -1783,7 +1784,8 @@ public partial class RuntimeEmitter
         // Set value
         il.Emit(OpCodes.Ldloc, resultDictLocal);
         il.Emit(OpCodes.Ldstr, "value");
-        il.Emit(OpCodes.Ldloc, valueLocal);
+        EmitModuleNamespaceDataRead(il, inputs.ModuleNamespaces, valueLocal,
+            () => il.Emit(OpCodes.Ldarg_0), () => il.Emit(OpCodes.Ldloc, propNameLocal));
         il.Emit(OpCodes.Callvirt, _types.GetMethod(_types.DictionaryStringObject, "set_Item"));
 
         // writable = !frozen.

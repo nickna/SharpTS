@@ -113,6 +113,7 @@ public sealed partial class RuntimeFeatureDetector
             UsesAbortSignalAny = false,
             UsesProxy = false,
             UsesDynamicImport = false,
+            UsesModuleNamespaces = false,
             UsesAsyncGenerator = false,
             UsesForAwaitOf = false,
             UsesWeakRef = false,
@@ -676,6 +677,10 @@ public sealed partial class RuntimeFeatureDetector
         switch (stmt)
         {
             case Stmt.Import imp:
+                if (!imp.IsTypeOnly && imp.NamespaceImport is not null &&
+                    Runtime.BuiltIns.Modules.BuiltInModuleRegistry.GetModuleName(imp.ModulePath) is null &&
+                    !Modules.DotNetImports.IsDotNetSpecifier(imp.ModulePath) && !Modules.DotNetExtensionImports.IsSpecifier(imp.ModulePath))
+                    _set.UsesModuleNamespaces = true;
                 HandleModulePath(imp.ModulePath);
                 break;
             case Stmt.ImportRequire req:
@@ -1800,6 +1805,7 @@ public sealed partial class RuntimeFeatureDetector
             case Expr.DynamicImport dimp:
                 _set.UsesPromise = true;
                 _set.UsesDynamicImport = true;
+                _set.UsesModuleNamespaces = true;
                 _set.PotentiallyMaterializesUnknownCompactObjectRecordShape = true;
                 VisitExpr(dimp.PathExpression);
                 if (dimp.PathExpression is Expr.Literal lit2 && lit2.Value is string p)

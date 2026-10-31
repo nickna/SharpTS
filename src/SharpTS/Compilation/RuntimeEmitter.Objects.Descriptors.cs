@@ -1522,7 +1522,8 @@ public partial class RuntimeEmitter
             new GetOwnDescriptorFieldsReceiverInputs(
                 inputs.DescriptorStorage,
                 inputs.IHasFieldsFieldsGetter,
-                inputs.IHasFieldsInterface
+                inputs.IHasFieldsInterface,
+                inputs.ObjectStorage.ModuleNamespaces
             ),
             propNameLocal,
             resultDictLocal,
