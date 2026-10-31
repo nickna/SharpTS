@@ -1035,6 +1035,16 @@ public partial class Interpreter
         return RuntimeValue.FromObject(BuildArrayFromElements(evaluated));
     }
 
+    private IndexTarget.GlobalThis? ResolveGlobalIndexTarget(object? obj, object? index)
+        => obj is SharpTSGlobalThis global && index is string or double
+            ? new IndexTarget.GlobalThis(global, ToPropertyKeyString(index)) : null;
+
+    private void SetGlobalIndexValue(IndexTarget.GlobalThis target, object? value, bool strictMode)
+    {
+        if (!TryAssignThroughDescriptor(target.Target.GetOwnPropertyDescriptor(target.Key),
+                target.Target, target.Key, value, strictMode))
+            target.Target.SetProperty(target.Key, value);
+    }
     /// <summary>
     /// Resolves an (object, index) pair to a typed IndexTarget for dispatch.
     /// </summary>
@@ -1074,6 +1084,7 @@ public partial class Interpreter
         (SharpTSObject sharpObj, _) => new IndexTarget.ObjectString(sharpObj, ToPropertyKeyString(index)),
         (SharpTSInstance instance, _) => new IndexTarget.InstanceString(instance, ToPropertyKeyString(index)),
         (SharpTSGlobalThis globalThis, string globalKey) => new IndexTarget.GlobalThis(globalThis, globalKey),
+        (SharpTSGlobalThis globalThis, double) => new IndexTarget.GlobalThis(globalThis, ToPropertyKeyString(index)),
         (SharpTSClassPrototype prototype, SharpTSSymbol symbol) => new IndexTarget.ClassPrototypeSymbol(prototype, symbol),
         (ISharpTSMutableBuiltIn builtInPrototype, _) =>
             new IndexTarget.BuiltInPrototypeString(
@@ -1486,7 +1497,7 @@ public partial class Interpreter
             IndexTarget.ClassString t => EvaluateGetOnClass(t.Target, t.Key),
             IndexTarget.ClassSymbol t => GetClassSymbolValue(t.Target, t.Key),
             IndexTarget.ClassPrototypeSymbol t => GetSymbolPropertyValue(t.Target, t.Key),
-            IndexTarget.GlobalThis t => ResolveGlobalThisRead(t.Target, t.Key),
+            IndexTarget.GlobalThis t => GetPropertyValue(t.Target, t.Key),
             IndexTarget.BuiltInPrototypeString t => ReadBuiltInPrototypeIndex(t.Target, t.Key),
             IndexTarget.HeadersString t => (object?)t.Target.Get(t.Key) ?? SharpTSUndefined.Instance,
             IndexTarget.StringChar t when t.Index >= 0 => t.Index < t.Target.Length
@@ -2122,7 +2133,7 @@ public partial class Interpreter
                 break;
 
             case IndexTarget.GlobalThis t:
-                t.Target.SetProperty(t.Key, value);
+                SetGlobalIndexValue(t, value, strictMode);
                 break;
 
             case IndexTarget.BuiltInPrototypeString t:

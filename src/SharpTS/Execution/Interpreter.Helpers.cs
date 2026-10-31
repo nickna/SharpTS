@@ -151,6 +151,11 @@ public partial class Interpreter
     /// <returns><c>true</c> if the element was found; otherwise <c>false</c>.</returns>
     private bool TryGetIndex(object? obj, object? index, out object? value)
     {
+        if (ResolveGlobalIndexTarget(obj, index) is { } global)
+        {
+            value = GetPropertyValue(global.Target, global.Key);
+            return true;
+        }
         if (HasCanonicalIndexProperties(obj))
         {
             value = GetOwnPropertyObjectValue(obj!, ToPropertyKey(index));
@@ -180,6 +185,11 @@ public partial class Interpreter
     /// <returns><c>true</c> if the element was set; otherwise <c>false</c>.</returns>
     private bool TrySetIndex(object? obj, object? index, object? value)
     {
+        if (ResolveGlobalIndexTarget(obj, index) is { } global)
+        {
+            SetGlobalIndexValue(global, value, _environment.IsStrictMode);
+            return true;
+        }
         if (HasCanonicalIndexProperties(obj))
         {
             SetOwnPropertyObjectValue(obj!, ToPropertyKey(index), value, _environment.IsStrictMode);

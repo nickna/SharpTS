@@ -150,13 +150,15 @@ public partial class Interpreter
             ThrowCannotReadProperty(obj, index?.ToString() ?? "");
         }
 
-        if (HasCanonicalIndexProperties(obj) || obj is BuiltInMethod or SharpTSObject or SharpTSInstance)
+        var globalTarget = ResolveGlobalIndexTarget(obj, index);
+        if (globalTarget is not null || HasCanonicalIndexProperties(obj) || obj is BuiltInMethod or SharpTSObject or SharpTSInstance)
         {
-            object key = ToPropertyKey(index);
+            object key = globalTarget is null ? ToPropertyKey(index) : globalTarget.Key;
             RuntimeValue current = RuntimeValue.FromBoxed(GetOwnPropertyObjectValue(obj, key));
             RuntimeValue addValue = await ctx.EvaluateExprAsync(compound.Value);
             RuntimeValue newValue = ApplyCompoundOperatorRV(compound.Operator.Type, current, addValue);
-            SetOwnPropertyObjectValue(obj, key, newValue.ToObject(), _environment.IsStrictMode);
+            if (globalTarget is not null) SetGlobalIndexValue(globalTarget, newValue.ToObject(), _environment.IsStrictMode);
+            else SetOwnPropertyObjectValue(obj, key, newValue.ToObject(), _environment.IsStrictMode);
             return newValue;
         }
 
@@ -323,9 +325,10 @@ public partial class Interpreter
             ThrowCannotReadProperty(obj, index?.ToString() ?? "");
         }
 
-        if (obj is ISharpTSOwnPropertyObject or BuiltInMethod or SharpTSObjectNamespace)
+        var globalTarget = ResolveGlobalIndexTarget(obj, index);
+        if (globalTarget is not null || obj is ISharpTSOwnPropertyObject or BuiltInMethod or SharpTSObjectNamespace)
         {
-            object key = ToPropertyKey(index);
+            object key = globalTarget is null ? ToPropertyKey(index) : globalTarget.Key;
             RuntimeValue currentRV = RuntimeValue.FromBoxed(GetOwnPropertyObjectValue(obj, key));
             switch (logical.Operator.Type)
             {
@@ -341,7 +344,8 @@ public partial class Interpreter
             }
 
             RuntimeValue newValue = await ctx.EvaluateExprAsync(logical.Value);
-            SetOwnPropertyObjectValue(obj, key, newValue.ToObject(), _environment.IsStrictMode);
+            if (globalTarget is not null) SetGlobalIndexValue(globalTarget, newValue.ToObject(), _environment.IsStrictMode);
+            else SetOwnPropertyObjectValue(obj, key, newValue.ToObject(), _environment.IsStrictMode);
             return newValue;
         }
 
