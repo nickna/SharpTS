@@ -5,6 +5,10 @@ namespace SharpTS.Compilation;
 
 public partial class RuntimeEmitter
 {
+    // One fixed managed-runtime owner shared by VM export and boundary operations.
+    private const string VmCoreTypeName =
+        "SharpTS.Runtime.BuiltIns.Modules.Interpreter.VmModuleInterpreter, SharpTS";
+
     /// <summary>
     /// Emits vm module helper methods that delegate to VmModuleInterpreter via reflection.
     /// The vm module inherently requires the interpreter at runtime since it compiles
@@ -54,7 +58,7 @@ public partial class RuntimeEmitter
         var il = method.GetILGenerator();
 
         // Type moduleType = Type.GetType("...VmModuleInterpreter, SharpTS");
-        il.Emit(OpCodes.Ldstr, "SharpTS.Runtime.BuiltIns.Modules.Interpreter.VmModuleInterpreter, SharpTS");
+        il.Emit(OpCodes.Ldstr, VmCoreTypeName);
         il.Emit(OpCodes.Call, _types.GetMethod(_types.Type, "GetType", _types.String));
         var typeLocal = il.DeclareLocal(_types.Type);
         il.Emit(OpCodes.Stloc, typeLocal);

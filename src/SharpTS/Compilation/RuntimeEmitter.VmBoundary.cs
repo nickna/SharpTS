@@ -5,9 +5,6 @@ namespace SharpTS.Compilation;
 
 public partial class RuntimeEmitter
 {
-    private const string VmCoreTypeName =
-        "SharpTS.Runtime.BuiltIns.Modules.Interpreter.VmModuleInterpreter, SharpTS";
-
     private void EmitVmCoreInvoke(ILGenerator il, string name, params Action<ILGenerator>[] arguments)
     {
         il.Emit(OpCodes.Ldstr, VmCoreTypeName);
