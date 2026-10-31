@@ -62,7 +62,8 @@ public sealed class EmittedObjectConstructionRuntimeTests
             Assert.DoesNotContain(references, name => name!.StartsWith("object_construction_runtime_", StringComparison.Ordinal));
             var rt=loaded.GetType("$Runtime")!;
             object? Call(string methodName,params object?[] args)=>rt.GetMethod(methodName,BindingFlags.Public|BindingFlags.NonPublic|BindingFlags.Static)!.Invoke(null,args);
-            var methodNames=new[]{"CreateObject","MergeIntoTSObject","MergeIntoObject","DefineSymbolAccessor","TSObjectMergeEnumerable","ObjectRest"};
+            // MergeIntoTSObject consumes the previously declared own-data copy helper.
+            var methodNames=new[]{"CreateObject","MergeIntoObject","MergeIntoTSObject","DefineSymbolAccessor","TSObjectMergeEnumerable","ObjectRest"};
             var tokens=methodNames.Select(n=>rt.GetMethod(n)!.MetadataToken).ToArray();Assert.True(tokens.SequenceEqual(tokens.Order()),"Object construction declaration order changed");
             var undefined=loaded.GetType("$Undefined")!.GetField("Instance")!.GetValue(null);
             var target=new Dictionary<string,object?>();Call("MergeIntoObject",target,shared);
