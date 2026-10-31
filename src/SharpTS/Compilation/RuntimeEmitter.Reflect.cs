@@ -643,29 +643,9 @@ public partial class RuntimeEmitter
 
         il.MarkLabel(notFrozenLabel);
 
-        // The common no-explicit-receiver case can use the existing ordinary
-        // string property store directly. Symbol writes use DefineOwnProperty
-        // so a rejected addition returns false instead of SetIndex's void result.
-        var distinctReceiverLabel = il.DefineLabel();
-        il.Emit(OpCodes.Ldloc, keyLocal);
-        il.Emit(OpCodes.Call, inputs.IsSymbol);
-        il.Emit(OpCodes.Brtrue, distinctReceiverLabel);
-        il.Emit(OpCodes.Ldarg_0);
-        il.Emit(OpCodes.Ldarg_3);
-        il.Emit(OpCodes.Bne_Un, distinctReceiverLabel);
-        il.Emit(OpCodes.Ldarg_0);
-        il.Emit(OpCodes.Ldloc, keyLocal);
-        il.Emit(OpCodes.Castclass, _types.String);
-        il.Emit(OpCodes.Ldarg_2);
-        il.Emit(OpCodes.Call, inputs.SetProperty);
-        il.Emit(OpCodes.Ldc_I4_1);
-        il.Emit(OpCodes.Ret);
-
-        // With a distinct receiver, OrdinarySet defines/updates the property
-        // on Receiver. Probe its own descriptor first (observable for Proxy),
-        // then send a partial or complete descriptor through
-        // [[DefineOwnProperty]] as required.
-        il.MarkLabel(distinctReceiverLabel);
+        // OrdinarySet defines or updates the receiver through its actual
+        // [[DefineOwnProperty]] operation, including when Receiver is Target.
+        // The generic named-property store cannot update array element storage.
         // Only the data-property path requires an object Receiver. Accessor
         // invocation above preserves explicitly supplied null/undefined values.
         var receiverIsObject = il.DefineLabel();
