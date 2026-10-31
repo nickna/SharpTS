@@ -1481,6 +1481,8 @@ public partial class RuntimeEmitter
         runtime.ArrayOperations.Join = method;
 
         var il = method.GetILGenerator();
+        if (_features.UsesVm || _features.UsesArrayMethodValues || _features.UsesReflect)
+            EmitDeoptIfNumericArray(il, runtime, () => il.Emit(OpCodes.Ldarg_0));
 
         // separator = (arg1 is $Undefined) ? "," : ToString(arg1).
         // Explicit null therefore becomes "null", while all dispatch paths
