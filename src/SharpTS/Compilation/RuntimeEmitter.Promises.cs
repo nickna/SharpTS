@@ -316,6 +316,8 @@ public partial class RuntimeEmitter
             [_types.Object, _types.Object]);
         resolveStatic.DefineParameter(1, ParameterAttributes.None, "__this");
         resolveStatic.DefineParameter(2, ParameterAttributes.None, "value");
+        resolveStatic.SetCustomAttribute(
+            runtime.FunctionAttributes.PadUndefinedCtor, CustomAttributeEncoder.EmptyBlob);
         runtime.RequirePromise().ResolveStatic = resolveStatic;
         {
             var il = resolveStatic.GetILGenerator();
@@ -348,6 +350,8 @@ public partial class RuntimeEmitter
             [_types.Object, _types.Object]);
         rejectStatic.DefineParameter(1, ParameterAttributes.None, "__this");
         rejectStatic.DefineParameter(2, ParameterAttributes.None, "reason");
+        rejectStatic.SetCustomAttribute(
+            runtime.FunctionAttributes.PadUndefinedCtor, CustomAttributeEncoder.EmptyBlob);
         runtime.RequirePromise().RejectStatic = rejectStatic;
         {
             var il = rejectStatic.GetILGenerator();

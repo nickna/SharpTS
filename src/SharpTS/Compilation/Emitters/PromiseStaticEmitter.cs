@@ -53,7 +53,7 @@ public sealed class PromiseStaticEmitter : IStaticTypeEmitterStrategy
                 }
                 else
                 {
-                    il.Emit(OpCodes.Ldnull);
+                    il.Emit(OpCodes.Ldsfld, ctx.Runtime!.Sentinels.UndefinedInstance);
                 }
                 il.Emit(OpCodes.Call, ctx.Runtime!.RequirePromise().Resolve);
                 return true;
@@ -67,7 +67,7 @@ public sealed class PromiseStaticEmitter : IStaticTypeEmitterStrategy
                 }
                 else
                 {
-                    il.Emit(OpCodes.Ldnull);
+                    il.Emit(OpCodes.Ldsfld, ctx.Runtime!.Sentinels.UndefinedInstance);
                 }
                 il.Emit(OpCodes.Call, ctx.Runtime!.RequirePromise().Reject);
                 return true;
