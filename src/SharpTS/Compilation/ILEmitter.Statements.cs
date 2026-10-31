@@ -3367,6 +3367,10 @@ public partial class ILEmitter
     /// </summary>
     internal void InitializeCapturedLexicalTdzBindings(IEnumerable<Stmt> statements)
     {
+        // Ordinary callable bodies are raw lists, rather than EmitBlock scopes.
+        // Their resource cells must exist before hoisted closures are created;
+        // block scopes have already entered these bindings with restoration data.
+        EnterOrdinaryUsingCellScope(statements, [], preserveActiveDeclarations: true);
         RegisterRuntimeClassBindingScopes(statements);
         var names = new HashSet<string>(StringComparer.Ordinal);
         foreach (var statement in statements)
@@ -3544,9 +3548,7 @@ public partial class ILEmitter
     private UsingResourceLocals EmitUsingRegistration(Stmt.UsingBinding binding)
     {
         var runtime = _ctx.Runtime!;
-        var resource = binding.Name is not null
-            ? _ctx.Locals.DeclareLocal(binding.Name.Lexeme, _ctx.Types.Object)
-            : IL.DeclareLocal(_ctx.Types.Object);
+        var resource = IL.DeclareLocal(_ctx.Types.Object);
         var method = IL.DeclareLocal(_ctx.Types.Object);
         var registered = IL.DeclareLocal(_ctx.Types.Boolean);
 
@@ -3563,6 +3565,25 @@ public partial class ILEmitter
             () => IL.Emit(OpCodes.Ldloc, resource),
             () => IL.Emit(OpCodes.Ldloc, method),
             () => IL.Emit(OpCodes.Stloc, method));
+        // Acquisition can invoke a guest getter. Keep the lexical binding in
+        // TDZ until it succeeds, while cleanup retains the exact resource temp.
+        if (binding.Name is { } token && !TryInitializeLexicalShadow(token, resource))
+        {
+            if (_ctx.LexicalCellStorageNames.TryGetValue(token, out var storage)
+                && ReferenceEquals(_ctx.LoopBodyCellDeclarations.GetValueOrDefault(storage), token))
+            {
+                IL.Emit(OpCodes.Ldloc, resource);
+                TryInitializeLexicalCell(token);
+            }
+            else
+            {
+                var local = _ctx.Locals.GetCurrentScopeLocal(token.Lexeme)
+                    ?? _ctx.Locals.DeclareLocal(token.Lexeme, _ctx.Types.Object, token);
+                IL.Emit(OpCodes.Ldloc, resource);
+                IL.Emit(OpCodes.Stloc, local);
+                RefreshLexicalCaptureSnapshots(token.Lexeme, local);
+            }
+        }
         IL.Emit(OpCodes.Ldc_I4_1);
         IL.Emit(OpCodes.Stloc, registered);
         return new(resource, method, registered);
@@ -4543,6 +4564,15 @@ public partial class ILEmitter
     protected override bool IsSwitchDefaultUnreachable(Stmt.Switch statement)
         => _ctx.DeadCode?.GetSwitchResult(statement)?.DefaultIsUnreachable == true;
 
+    private void EmitOrdinaryHandlerStatements(List<Stmt> statements) =>
+        WithGeneratorLexicalScope(statements, () => EmitOrdinaryHandlerBody(statements), ordinaryHandler: true);
+
+    private void EmitOrdinaryHandlerBody(List<Stmt> statements)
+    {
+        if (statements.Any(statement => statement is Stmt.Using)) EmitStatements(statements);
+        else foreach (var statement in statements) EmitStatement(statement);
+    }
+
     protected override void EmitTryCatch(Stmt.TryCatch t)
     {
         if (t.FinallyBlock != null)
@@ -4574,7 +4604,7 @@ public partial class ILEmitter
             _iteratorLoopCompletionScopes.Count));
         try
         {
-            EmitGeneratorScopedStatements(t.TryBlock, ordinaryHandler: true);
+            EmitOrdinaryHandlerStatements(t.TryBlock);
         }
         finally
         {
@@ -4606,7 +4636,7 @@ public partial class ILEmitter
             {
                 if (t.CatchParam != null && !TryInitializeGeneratorCatchBinding(t.CatchParam, catchValue, ordinaryHandler: true))
                     _ctx.Locals.RegisterLocal(t.CatchParam.Lexeme, catchValue);
-                foreach (var stmt in t.CatchBlock) EmitStatement(stmt);
+                EmitOrdinaryHandlerBody(t.CatchBlock);
             }, t, t.CatchParam, ordinaryHandler: true);
         }
         finally
@@ -4660,7 +4690,7 @@ public partial class ILEmitter
         {
             _ctx.ExceptionBlockDepth++;
             builder.BeginExceptionBlock();
-            EmitGeneratorScopedStatements(t.TryBlock, ordinaryHandler: true);
+            EmitOrdinaryHandlerStatements(t.TryBlock);
 
             builder.BeginCatchBlock(_ctx.Types.Exception);
             _ctx.Locals.EnterScope();
@@ -4681,7 +4711,7 @@ public partial class ILEmitter
                 {
                     if (t.CatchParam != null && !TryInitializeGeneratorCatchBinding(t.CatchParam, caught!, ordinaryHandler: true))
                         _ctx.Locals.RegisterLocal(t.CatchParam.Lexeme, caught!);
-                    foreach (var stmt in t.CatchBlock) EmitStatement(stmt);
+                    EmitOrdinaryHandlerBody(t.CatchBlock);
                 }, t, t.CatchParam, ordinaryHandler: true);
             }
             finally
@@ -4693,7 +4723,7 @@ public partial class ILEmitter
         }
         else
         {
-            EmitGeneratorScopedStatements(t.TryBlock, ordinaryHandler: true);
+            EmitOrdinaryHandlerStatements(t.TryBlock);
         }
 
         builder.Emit_Leave(runFinally);
@@ -4707,7 +4737,7 @@ public partial class ILEmitter
 
         _abruptCompletionScopes.Pop();
         builder.MarkLabel(runFinally);
-        EmitGeneratorScopedStatements(t.FinallyBlock!, ordinaryHandler: true);
+        EmitOrdinaryHandlerStatements(t.FinallyBlock!);
 
         // A normal finally preserves and resumes the pending completion.
         IL.Emit(OpCodes.Ldloc, kind);

@@ -68,7 +68,8 @@ public abstract partial class StatementEmitterBase
         var body = statements as IReadOnlyList<Stmt> ?? statements.ToList();
         bool selected = binding is not null && Ctx.ClosureAnalyzer?.IsLoopBodyCellDeclaration(binding) == true
             || DirectLexicalDeclarations(body).Any(item => Ctx.ClosureAnalyzer?.IsLoopBodyCellDeclaration(item.Token) == true);
-        bool lexicalHandler = ordinaryHandler && (binding is not null || DirectLexicalDeclarations(body).Any());
+        bool lexicalHandler = ordinaryHandler && (binding is not null || DirectLexicalDeclarations(body).Any()
+            || DirectOrdinaryUsingBindings(body).Any());
         if (!selected && !lexicalHandler) { emit(); return; }
         var variables = new HandlerVarCollector();
         if (ordinaryHandler)
@@ -79,6 +80,7 @@ public abstract partial class StatementEmitterBase
         {
             if (binding is not null) EnterLexicalCellBinding(declaration!, binding, cells, ordinaryHandler);
             EnterLoopBodyCellScope(body, cells, ordinaryHandler);
+            if (ordinaryHandler) EnterOrdinaryUsingCellScope(body, cells);
             emit();
         }
         finally

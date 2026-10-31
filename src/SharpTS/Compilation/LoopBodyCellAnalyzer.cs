@@ -312,7 +312,7 @@ internal sealed class LoopBodyCellAnalyzer : AstVisitorBase
     private void Predeclare(Stmt statement, bool allowCandidates, bool unsupportedShadows, bool generatorLexicals,
         bool ordinaryHandler, bool ordinaryBlock)
     {
-        void Lexical(Token name)
+        void Lexical(Token name, bool ordinaryResource = false)
         {
             bool handlerCandidate = ordinaryHandler && _owners[^1].CanOwnCells;
             bool loopCandidate = allowCandidates && _loopBodyDepth > 0 && _owners[^1].CanOwnCells;
@@ -327,7 +327,8 @@ internal sealed class LoopBodyCellAnalyzer : AstVisitorBase
                 Stmt.Function { IsAsync: true, IsGenerator: false };
             bool blockCandidate = blockShadow && !loopCandidate &&
                 (_owners[^1].CanOwnCells || asyncFunctionBlock);
-            bool direct = handlerCandidate || loopCandidate || blockCandidate;
+            bool direct = handlerCandidate || loopCandidate || blockCandidate
+                || ordinaryResource && _owners[^1].CanOwnCells;
             var parent = !direct && allowCandidates && _owners[^1].CanOwnGeneratorCells
                 ? VisibleBinding(name.Lexeme) : null;
             bool relatedShadow = parent is { Candidate: true } or { Lexical: true };
@@ -349,7 +350,11 @@ internal sealed class LoopBodyCellAnalyzer : AstVisitorBase
             case Stmt.Namespace @namespace: Declare(@namespace.Name, unsupportedShadow: true); break;
             case Stmt.Using resource:
                 foreach (var binding in resource.Bindings)
-                    if (binding.Name is { } name) Declare(name, unsupportedShadow: true);
+                    if (binding.Name is { } name)
+                    {
+                        if (_owners[^1].CanOwnCells) Lexical(name, ordinaryResource: true);
+                        else Declare(name, unsupportedShadow: true);
+                    }
                     else foreach (var scope in _scopes)
                         foreach (var outer in scope.Values)
                         {
