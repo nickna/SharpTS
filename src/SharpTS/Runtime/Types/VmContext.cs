@@ -272,6 +272,8 @@ internal sealed class CompiledCallableAdapter : ISharpTSCallable
     private readonly MethodInfo _invokeMethod;
     private readonly MethodInfo? _invokeWithThisMethod;
     private readonly BuiltIns.Modules.Interpreter.VmExecutionHost? _host;
+    private readonly int _nativeCallbackRole;
+    internal bool IsNativePromiseCallback => _nativeCallbackRole is 1 or 2;
     internal object Original => _target;
 
     public CompiledCallableAdapter(object target, MethodInfo invokeMethod, MethodInfo? invokeWithThisMethod = null)
@@ -280,14 +282,19 @@ internal sealed class CompiledCallableAdapter : ISharpTSCallable
     // An explicit owner does not consult the ambient host while its cache gate is held.
     internal CompiledCallableAdapter(object target, MethodInfo invokeMethod, MethodInfo? invokeWithThisMethod,
         BuiltIns.Modules.Interpreter.VmExecutionHost? host)
+        : this(target, invokeMethod, invokeWithThisMethod, host, 0) { }
+
+    internal CompiledCallableAdapter(object target, MethodInfo invokeMethod, MethodInfo? invokeWithThisMethod,
+        BuiltIns.Modules.Interpreter.VmExecutionHost? host, int nativeCallbackRole)
     {
+        _nativeCallbackRole = nativeCallbackRole;
         _target = target;
         _invokeMethod = invokeMethod;
         _invokeWithThisMethod = invokeWithThisMethod;
         _host = host;
     }
 
-    public int Arity() => 0; // Unknown arity for compiled functions
+    public int Arity() => IsNativePromiseCallback ? 1 : 0; // Other compiled function arities retain the existing fallback.
 
     public object? Call(Interpreter interpreter, List<object?> arguments)
         => Invoke(arguments, null, explicitReceiver: false);

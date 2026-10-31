@@ -39,6 +39,14 @@ public static partial class VmModuleInterpreter
             throw new ArgumentException("Expected an owned VM execution host.", nameof(host));
         ownedHost.ConfigureThrownValueAdapter(isThrown, getThrown);
     }
+    /// <summary>Installs producer-proved native Promise callback roles before execution.</summary>
+    public static void ConfigureExecutionHostNativeCallbackRoles(object host, Func<object, int> getRole)
+    {
+        if (host is not VmExecutionHost ownedHost)
+            throw new ArgumentException("Expected an owned VM execution host.", nameof(host));
+        ownedHost.ConfigureNativeCallbackRoles(getRole);
+    }
+
     /// <summary>
     /// Gets all exported values for the vm module.
     /// </summary>

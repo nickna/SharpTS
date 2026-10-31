@@ -16,6 +16,8 @@ internal sealed class VmExecutionHost : IDisposable
     private Action? _refHandle, _unrefHandle, _checkCancellation;
     private Func<object?, object?>? _fromVm, _toVm;
     private bool _adapterConfigured;
+    private Func<object, int>? _getNativeCallbackRole;
+    private bool _nativeCallbackRolesConfigured, _hasCompiledCallables;
     private Func<Exception, bool>? _isThrownValue;
     private Func<Exception, object?>? _getThrownValue;
     private bool _thrownAdapterConfigured, _executionStarted;
@@ -112,6 +114,19 @@ internal sealed class VmExecutionHost : IDisposable
         }
     }
 
+    internal void ConfigureNativeCallbackRoles(Func<object, int> getRole)
+    {
+        ArgumentNullException.ThrowIfNull(getRole);
+        lock (_gate)
+        {
+            ObjectDisposedException.ThrowIf(_disposed, this);
+            if (_nativeCallbackRolesConfigured || _executionStarted || _leases.Count != 0 || _hasCompiledCallables)
+                throw new InvalidOperationException("VM native callback roles must be configured once before execution.");
+            _nativeCallbackRolesConfigured = true;
+            _getNativeCallbackRole = getRole;
+        }
+    }
+
     internal bool TryGetThrownValue(Exception exception, out object? value)
     {
         value = null;
@@ -132,11 +147,22 @@ internal sealed class VmExecutionHost : IDisposable
     // Weak keys preserve identity without rooting otherwise unreachable caller functions.
     internal Types.CompiledCallableAdapter GetCompiledCallable(object target, MethodInfo invoke, MethodInfo? invokeWithThis)
     {
+        Func<object, int>? getRole;
         lock (_gate)
         {
             ObjectDisposedException.ThrowIf(_disposed, this);
-            return _compiledCallables.GetValue(target,
-                value => new Types.CompiledCallableAdapter(value, invoke, invokeWithThis, this));
+            if (_compiledCallables.TryGetValue(target, out var cached)) return cached;
+            getRole = _getNativeCallbackRole;
+        }
+        int role = getRole?.Invoke(target) ?? 0;
+        if (role is not (1 or 2)) role = 0;
+        lock (_gate)
+        {
+            ObjectDisposedException.ThrowIf(_disposed, this);
+            var result = _compiledCallables.GetValue(target,
+                value => new Types.CompiledCallableAdapter(value, invoke, invokeWithThis, this, role));
+            _hasCompiledCallables = true;
+            return result;
         }
     }
 
@@ -203,6 +229,7 @@ internal sealed class VmExecutionHost : IDisposable
                 _refHandle = _unrefHandle = _checkCancellation = null;
                 _fromVm = _toVm = null;
                 _compiledCallables.Clear();
+                _getNativeCallbackRole = null;
                 _isThrownValue = null;
                 _getThrownValue = null;
             }

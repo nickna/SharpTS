@@ -1857,6 +1857,7 @@ public partial class Interpreter
     /// </summary>
     internal static bool IsNonConstructorWrapper(object? callable) => callable
         is ISharpTSNonConstructorCallable
+        or CompiledCallableAdapter { IsNativePromiseCallback: true }
         or SharpTSFunction { IsConstructible: false }
         or SharpTSArrowFunction { IsConstructible: false }
         or SharpTSAsyncFunction
@@ -2842,7 +2843,7 @@ public partial class Interpreter
         {
             if (memberName == "constructor")
                 return GetFunctionPrototype().GetMember(memberName);
-            if (callable is IBuiltInFunctionMetadata
+            if ((callable is IBuiltInFunctionMetadata or CompiledCallableAdapter { IsNativePromiseCallback: true })
                 && memberName is "name" or "length"
                 && FunctionBuiltIns.GetMember(callable, memberName, this) is { } metadataValue)
                 return metadataValue;
