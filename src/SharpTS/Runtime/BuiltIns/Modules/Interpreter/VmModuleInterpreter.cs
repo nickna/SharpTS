@@ -262,7 +262,7 @@ public static partial class VmModuleInterpreter
         {
             if (contextOptions is not { DrainMicrotasks: true })
                 lease = VmEvaluationLease.Create(subInterpreter, parentInterpreter,
-                    () => VmContext.WriteBack(contextObject, contextProps, subInterpreter.Environment, subInterpreter.GlobalThis));
+                    () => { subInterpreter.PublishVmLexicalValues(); VmContext.WriteBack(contextObject, contextProps, subInterpreter.Environment, subInterpreter.GlobalThis); });
             executionScope = lease?.Enter();
             // Resolve variables and execute
             var resolver = new VariableResolver(subInterpreter);
@@ -284,6 +284,7 @@ public static partial class VmModuleInterpreter
         }
         finally
         {
+            subInterpreter.PublishVmLexicalValues();
             subInterpreter.SetVmTimeoutToken(default);
             if (lease is null) subInterpreter.Dispose();
             else lease.FinishInitialEvaluation(succeeded);
@@ -359,7 +360,7 @@ public static partial class VmModuleInterpreter
         {
             if (contextOptions is not { DrainMicrotasks: true })
                 lease = VmEvaluationLease.Create(subInterpreter, parentInterpreter,
-                    () => VmContext.WriteBack(contextObject, contextProps, subInterpreter.Environment, subInterpreter.GlobalThis));
+                    () => { subInterpreter.PublishVmLexicalValues(); VmContext.WriteBack(contextObject, contextProps, subInterpreter.Environment, subInterpreter.GlobalThis); });
             executionScope = lease?.Enter();
             var resolver = new VariableResolver(subInterpreter);
             resolver.Resolve(statements);
@@ -378,6 +379,7 @@ public static partial class VmModuleInterpreter
         }
         finally
         {
+            subInterpreter.PublishVmLexicalValues();
             subInterpreter.SetVmTimeoutToken(default);
             if (lease is null) subInterpreter.Dispose();
             else lease.FinishInitialEvaluation(succeeded);

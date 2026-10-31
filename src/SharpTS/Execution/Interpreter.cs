@@ -1277,6 +1277,8 @@ public partial class Interpreter : IDisposable
     /// </summary>
     private RuntimeValue LookupVariableRV(Token name, Expr expr, bool allowUnresolvable = false)
     {
+        if (name.IsGeneratedTemporary && _environment.TryReadVmTemporary(name, out var temporary))
+            return temporary;
         // Fast path: resolved locals with known depth
         if (_locals.TryGetValue(expr, out int distance))
         {
@@ -1369,6 +1371,7 @@ public partial class Interpreter : IDisposable
 
     private void AssignVariableValue(Token name, RuntimeValue value)
     {
+        if (name.IsGeneratedTemporary && _environment.TryAssignVmTemporary(name, value)) return;
         if (!_environment.IsDefined(name.Lexeme) && _environment.VmGlobalObject is { } vmGlobal)
             WriteGlobalObjectVariable(vmGlobal, name.Lexeme, value, _environment.IsStrictMode);
         else if (!_environment.IsDefined(name.Lexeme) && IsMutableGlobalObjectBinding(name.Lexeme))

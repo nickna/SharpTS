@@ -4,6 +4,7 @@ namespace SharpTS.Execution;
 
 public partial class Interpreter
 {
+    private Runtime.VmGlobalLexicalState? _vmLexicalState;
     internal IReadOnlyDictionary<string, object?> CaptureVmGlobalIntrinsics()
     {
         var values = new Dictionary<string, object?>(StringComparer.Ordinal);
@@ -36,6 +37,7 @@ public partial class Interpreter
 
     internal void SeedVmGlobalObjectProperties(Dictionary<string, object?> properties, object? context = null)
     {
+        _vmLexicalState = Runtime.Types.VmContext.GetLexicalState(context);
         bool shared = Runtime.Types.VmContext.ApplyGlobalObjectState(context, this);
         _environment.VmGlobalObject = GlobalThis;
         if (shared) return;
@@ -50,11 +52,33 @@ public partial class Interpreter
     {
         if (DirectivePrologue.HasUseStrict(statements))
             _environment = new Runtime.RuntimeEnvironment(_environment, strictMode: true);
+        if (_vmLexicalState is { } lexicals)
+        {
+            lexicals.Prepare(statements, GlobalThis.HasRestrictedVmLexicalProperty);
+            _environment.VmLexicalBindings = lexicals;
+        }
         HoistFunctionDeclarations(statements);
+        var functions = Runtime.VmGlobalLexicalState.TopLevelFunctions(statements)
+            .Distinct(StringComparer.Ordinal)
+            .Select(name => (Name: name, Value: _environment.GetAt(0, name))).ToArray();
         HoistTopLevelVarDeclarations(statements);
         foreach (var name in InterpreterVarDeclarations.CollectLoopHeads(statements))
             RegisterClassicGlobalVar(name.Lexeme);
         ReserveLexicalDeclarations(statements);
         GlobalThis.BeginVmWriteTracking();
+        // Function declarations create initialized object bindings as well as
+        // private non-configurable records used by later declaration checks.
+        foreach (var (name, value) in functions)
+        {
+            RegisterClassicGlobalVar(name);
+            WriteClassicGlobalVariable(name, value, _environment.IsStrictMode);
+        }
+    }
+
+    internal void PublishVmLexicalValues()
+    {
+        if (_vmLexicalState is not { } lexicals) return;
+        foreach (var value in lexicals.InitializedValues().ToArray())
+            Runtime.BuiltIns.Modules.Interpreter.VmModuleInterpreter.RecordVmBoundaryValue(value.ToObject(), this);
     }
 }

@@ -220,6 +220,14 @@ public static partial class VmContext
         public VmContextOptions? Options { get; set; }
         internal PromiseIntrinsicState? PromiseRealm { get; set; }
         internal VmContextGlobalState? Globals { get; set; }
+        internal VmGlobalLexicalState? Lexicals { get; set; }
+    }
+
+    internal static VmGlobalLexicalState GetLexicalState(object? context)
+    {
+        if (context is null) return new VmGlobalLexicalState();
+        var marker = _contexts.GetOrCreateValue(context);
+        lock (marker) return marker.Lexicals ??= new VmGlobalLexicalState();
     }
 }
 

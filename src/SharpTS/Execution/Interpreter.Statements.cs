@@ -255,7 +255,10 @@ public partial class Interpreter
     private void ReserveLexicalDeclarations(IEnumerable<Stmt> statements)
     {
         foreach (var name in LexicalDeclarationBindings.Collect(statements))
+        {
+            if (name.IsGeneratedTemporary && _environment.VmLexicalBindings is not null) continue;
             _environment.ReserveLexical(name.Lexeme);
+        }
     }
 
     /// <summary>
@@ -2105,6 +2108,8 @@ public partial class Interpreter
                 .GetAwaiter().GetResult().ToObject();
         }
         var target = varStmt.IsVar ? _environment.VarDeclarationTarget ?? _environment : _environment;
+        if (target.TryDefineVmTemporary(varStmt.Name, RuntimeValue.FromBoxed(value)))
+            return ExecutionResult.Success();
         if (varStmt.IsVar && varStmt.Initializer is null && target.IsDefinedLocally(varStmt.Name.Lexeme))
             return ExecutionResult.Success();
         target.Define(varStmt.Name.Lexeme, value);

@@ -29,4 +29,8 @@ public sealed partial class SharpTSGlobalThis
     }
 
     internal object AccessorReceiver => _vmContext?.Context ?? this;
+
+    internal bool HasRestrictedVmLexicalProperty(string name) =>
+        name is "undefined" or "NaN" or "Infinity"
+        || _properties.GetOwnPropertyDescriptor(name) is { Configurable: false };
 }

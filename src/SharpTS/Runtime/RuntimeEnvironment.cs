@@ -24,6 +24,33 @@ public class RuntimeEnvironment : ScopeChain<RuntimeValue, RuntimeEnvironment>
     private RuntimeValue _directBindingValue;
     private bool _hasDirectBinding;
     private Dictionary<string, (Func<RuntimeValue> Read, Action<RuntimeValue, bool> Write)>? _objectBindings;
+    internal VmGlobalLexicalState? VmLexicalBindings { get; set; }
+    private Dictionary<Token, RuntimeValue>? _vmGeneratedBindings;
+
+    internal bool TryDefineVmTemporary(Token name, RuntimeValue value)
+    {
+        if (!name.IsGeneratedTemporary || VmLexicalBindings is null) return false;
+        (_vmGeneratedBindings ??= new(System.Collections.Generic.ReferenceEqualityComparer.Instance))[name] = value;
+        return true;
+    }
+
+    internal bool TryReadVmTemporary(Token name, out RuntimeValue value)
+    {
+        if (_vmGeneratedBindings?.TryGetValue(name, out value) == true) return true;
+        if (Enclosing is not null) return Enclosing.TryReadVmTemporary(name, out value);
+        value = default;
+        return false;
+    }
+
+    internal bool TryAssignVmTemporary(Token name, RuntimeValue value)
+    {
+        if (_vmGeneratedBindings?.ContainsKey(name) == true)
+        {
+            _vmGeneratedBindings[name] = value;
+            return true;
+        }
+        return Enclosing?.TryAssignVmTemporary(name, value) == true;
+    }
     private SharpTSClass? _privateClass;
     private bool? _staticSuper;
     private bool _ownsNewTarget;
@@ -121,12 +148,14 @@ public class RuntimeEnvironment : ScopeChain<RuntimeValue, RuntimeEnvironment>
     {
         get
         {
+            if (VmLexicalBindings is { } lexicals)
+                foreach (string name in lexicals.Names) yield return name;
             if (_hasDirectBinding)
                 yield return _directBindingName!;
             if (_values != null)
             {
                 foreach (string name in _values.Keys)
-                    yield return name;
+                    if (VmLexicalBindings?.Contains(name) != true) yield return name;
             }
         }
     }
@@ -137,6 +166,7 @@ public class RuntimeEnvironment : ScopeChain<RuntimeValue, RuntimeEnvironment>
     /// <summary>Reserves a missing local lexical binding until its declaration executes.</summary>
     internal void ReserveLexical(string name, bool replaceExisting = false)
     {
+        if (VmLexicalBindings?.Contains(name) == true) return;
         if (!replaceExisting && HasLocalBinding(name)) return;
         Values[name] = RuntimeValue.Undefined;
         (_uninitializedLexicalNames ??= new(StringComparer.Ordinal)).Add(name);
@@ -144,6 +174,7 @@ public class RuntimeEnvironment : ScopeChain<RuntimeValue, RuntimeEnvironment>
 
     private void DefineValue(string name, RuntimeValue value)
     {
+        if (VmLexicalBindings?.TryInitialize(name, value) == true) return;
         SetLocalValue(name, value);
         if (_uninitializedLexicalNames?.Remove(name) == true
             && _uninitializedLexicalNames.Count == 0)
@@ -164,6 +195,7 @@ public class RuntimeEnvironment : ScopeChain<RuntimeValue, RuntimeEnvironment>
 
     private void SetLocalValue(string name, RuntimeValue value, bool? strictMode = null)
     {
+        if (VmLexicalBindings?.TryAssign(name, value) == true) return;
         if (_objectBindings?.TryGetValue(name, out var binding) == true)
         {
             binding.Write(value, strictMode ?? IsStrictMode);
@@ -192,7 +224,7 @@ public class RuntimeEnvironment : ScopeChain<RuntimeValue, RuntimeEnvironment>
 
     /// <summary>Reports a reserved local binding without reading or initializing its value.</summary>
     internal bool IsUninitializedLocally(string name) =>
-        _uninitializedLexicalNames?.Contains(name) == true;
+        VmLexicalBindings?.IsUninitialized(name) == true || _uninitializedLexicalNames?.Contains(name) == true;
 
     public RuntimeValue Get(Token name)
     {
@@ -233,6 +265,7 @@ public class RuntimeEnvironment : ScopeChain<RuntimeValue, RuntimeEnvironment>
     private void AssignCore(Token name, RuntimeValue value, bool strictMode)
     {
         EnsureInitialized(name.Lexeme);
+        if (VmLexicalBindings?.TryAssign(name.Lexeme, value) == true) return;
         if (_objectBindings?.TryGetValue(name.Lexeme, out var binding) == true)
         {
             binding.Write(value, strictMode);
@@ -368,12 +401,13 @@ public class RuntimeEnvironment : ScopeChain<RuntimeValue, RuntimeEnvironment>
         DefineValue(name, RuntimeValue.FromBoxed(value));
 
     private bool HasLocalBinding(string name) =>
-        (_hasDirectBinding && name == _directBindingName)
+        VmLexicalBindings?.Contains(name) == true
+        || (_hasDirectBinding && name == _directBindingName)
         || _values?.ContainsKey(name) == true;
 
     private void EnsureInitialized(string name)
     {
-        if (_uninitializedLexicalNames?.Contains(name) == true)
+        if (IsUninitializedLocally(name))
             throw new ThrowException(new SharpTSReferenceError(
                 $"Cannot access '{name}' before initialization"));
     }
@@ -381,6 +415,7 @@ public class RuntimeEnvironment : ScopeChain<RuntimeValue, RuntimeEnvironment>
     private bool TryGetLocal(string name, out RuntimeValue value)
     {
         EnsureInitialized(name);
+        if (VmLexicalBindings?.TryRead(name, out value) == true) return true;
         if (_objectBindings?.TryGetValue(name, out var binding) == true)
         {
             value = binding.Read();
