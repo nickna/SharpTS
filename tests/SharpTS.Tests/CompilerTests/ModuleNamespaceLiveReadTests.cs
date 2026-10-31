@@ -42,4 +42,13 @@ public sealed class ModuleNamespaceLiveReadTests
     [Theory, MemberData(nameof(AdditionalCases))]
     public void RelatedDataConsumersReadLiveValues(string name, string producer, string barrel, string consumer, string expected)
         => HeldNamespacesReadTheirActualExportBindings(name, producer, barrel, consumer, expected);
+
+    [Theory, MemberData(nameof(Cases))]
+    [MemberData(nameof(AdditionalCases))]
+    public void InterpreterUsesTheSameLiveDataContract(string name, string producer, string barrel, string consumer, string expected)
+    {
+        Assert.NotEmpty(name);
+        var files = new Dictionary<string, string> { ["producer.ts"] = producer, ["barrel.ts"] = barrel, ["main.ts"] = consumer };
+        Assert.Equal(expected, TestHarness.RunModules(files, "main.ts", ExecutionMode.Interpreted));
+    }
 }
