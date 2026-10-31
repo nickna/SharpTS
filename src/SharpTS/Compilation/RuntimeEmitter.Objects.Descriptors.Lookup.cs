@@ -96,6 +96,7 @@ public partial class RuntimeEmitter
     private readonly record struct GetOwnDescriptorGlobalReceiverInputs(
         EmittedDescriptorStorageRuntime DescriptorStorage,
         MethodBuilder GlobalThisGetProperty,
+        MethodBuilder GlobalThisIntrinsicDescriptorKind,
         FieldBuilder GlobalThisSingletonField,
         EmittedObjectStateRuntime ObjectState
     );
@@ -304,34 +305,13 @@ public partial class RuntimeEmitter
         var writableGlobalLabel = il.DefineLabel();
         var constantGlobalLabel = il.DefineLabel();
 
-        void EmitGlobalDescriptorCheck(string name, Label matchedLabel)
-        {
-            il.Emit(OpCodes.Ldloc, propNameLocal);
-            il.Emit(OpCodes.Ldstr, name);
-            il.Emit(OpCodes.Call, _types.GetMethod(
-                _types.String, "op_Equality", _types.String, _types.String));
-            il.Emit(OpCodes.Brtrue, matchedLabel);
-        }
-        EmitGlobalDescriptorCheck("parseInt", writableGlobalLabel);
-        EmitGlobalDescriptorCheck("parseFloat", writableGlobalLabel);
-        EmitGlobalDescriptorCheck("isNaN", writableGlobalLabel);
-        EmitGlobalDescriptorCheck("isFinite", writableGlobalLabel);
-        EmitGlobalDescriptorCheck("eval", writableGlobalLabel);
-        EmitGlobalDescriptorCheck("NaN", constantGlobalLabel);
-        EmitGlobalDescriptorCheck("Infinity", constantGlobalLabel);
-        EmitGlobalDescriptorCheck("undefined", constantGlobalLabel);
-        EmitGlobalDescriptorCheck("globalThis", writableGlobalLabel);
-        foreach (var globalName in new[]
-        {
-            "Array", "ArrayBuffer", "Date", "RegExp", "Map", "Set", "WeakMap", "WeakSet",
-            "Promise", "Function", "Object", "Number", "String", "Boolean",
-            "Symbol", "Error", "TypeError", "RangeError", "ReferenceError",
-            "SyntaxError", "URIError", "EvalError", "AggregateError", "Math", "JSON",
-            "AbortController"
-        })
-        {
-            EmitGlobalDescriptorCheck(globalName, writableGlobalLabel);
-        }
+        il.Emit(OpCodes.Ldloc, propNameLocal);
+        il.Emit(OpCodes.Call, inputs.GlobalThisIntrinsicDescriptorKind);
+        il.Emit(OpCodes.Dup);
+        il.Emit(OpCodes.Ldc_I4_2);
+        il.Emit(OpCodes.Beq, writableGlobalLabel);
+        il.Emit(OpCodes.Ldc_I4_1);
+        il.Emit(OpCodes.Beq, constantGlobalLabel);
         il.Emit(OpCodes.Br, returnNullLabel);
 
         void EmitGlobalValue()
@@ -341,6 +321,7 @@ public partial class RuntimeEmitter
         }
 
         il.MarkLabel(writableGlobalLabel);
+        il.Emit(OpCodes.Pop);
         EmitBuiltinDataDescriptor(il, resultDictLocal, endLabel,
             EmitGlobalValue, writable: true, configurable: true);
         il.MarkLabel(constantGlobalLabel);

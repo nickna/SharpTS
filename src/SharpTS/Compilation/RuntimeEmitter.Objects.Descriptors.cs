@@ -109,6 +109,7 @@ public partial class RuntimeEmitter
         MethodBuilder GetOwnPropertyNames,
         MethodBuilder GetProperty,
         MethodBuilder GlobalThisGetProperty,
+        MethodBuilder GlobalThisIntrinsicDescriptorKind,
         FieldBuilder GlobalThisSingletonField,
         MethodInfo IHasFieldsFieldsGetter,
         Type IHasFieldsInterface,
@@ -1390,6 +1391,7 @@ public partial class RuntimeEmitter
             new GetOwnDescriptorGlobalReceiverInputs(
                 inputs.DescriptorStorage,
                 inputs.GlobalThisGetProperty,
+                inputs.GlobalThisIntrinsicDescriptorKind,
                 inputs.GlobalThisSingletonField,
                 inputs.ObjectState
             ),

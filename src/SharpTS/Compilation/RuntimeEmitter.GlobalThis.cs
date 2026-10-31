@@ -60,12 +60,10 @@ public partial class RuntimeEmitter
                 runtime.Math.SingletonField, runtime.Json.SingletonField, runtime.Process.GetObject,
                 runtime.Symbols.Type, runtime.UriComponents, runtime.FunctionConstruction.GetOrCreate,
                 runtime.FunctionConstruction.Constructor, runtime.Fetch.CachedFunction, optional));
+        EmitGlobalThisIntrinsicDescriptorKind(runtime.GlobalObject);
         EmitGlobalThisSetProperty(runtime.GlobalObject,
-            new GlobalPropertyWriteInputs(runtime.DescriptorStorage.DescriptorType,
-                runtime.DescriptorStorage.GetPropertyDescriptor,
-                runtime.DescriptorStorage.DescriptorWritable.GetGetMethod()!,
-                runtime.DescriptorStorage.DescriptorValue.GetSetMethod()!,
-                runtime.DescriptorStorage.TryGetSetter, runtime.Invocation.Method));
+            new GlobalPropertyWriteInputs(runtime.DescriptorStorage, runtime.ObjectState,
+                runtime.GlobalObject.IntrinsicDescriptorKind, runtime.Invocation.Method));
         EmitGlobalThisGetBinding(runtime.GlobalObject,
             runtime.ObjectOwnProperties.HasOwnProperty, runtime.Errors.ThrowUndefinedVariable);
         runtime.GlobalObject.CompleteEmission();
@@ -87,8 +85,8 @@ public partial class RuntimeEmitter
         GlobalPropertyOptionalInputs Optional);
 
     private readonly record struct GlobalPropertyWriteInputs(
-        Type DescriptorType, MethodBuilder GetPropertyDescriptor, MethodInfo GetWritable, MethodInfo SetValue,
-        MethodBuilder TryGetSetter, MethodBuilder InvokeMethod);
+        EmittedDescriptorStorageRuntime Storage, EmittedObjectStateRuntime State,
+        MethodBuilder IntrinsicDescriptorKind, MethodBuilder InvokeMethod);
 
     private readonly record struct UriComponentInputs(ConstructorBuilder? PadUndefinedCtor, MethodBuilder ToJsString);
 
@@ -714,7 +712,7 @@ public partial class RuntimeEmitter
         il.Emit(OpCodes.Ldsfld, globalObject.SingletonField);
         il.Emit(OpCodes.Ldarg_0);
         il.Emit(OpCodes.Ldloca, setter);
-        il.Emit(OpCodes.Call, inputs.TryGetSetter);
+        il.Emit(OpCodes.Call, inputs.Storage.TryGetSetter);
         il.Emit(OpCodes.Brfalse, noSetter);
         il.Emit(OpCodes.Ldsfld, globalObject.SingletonField);
         il.Emit(OpCodes.Ldloc, setter);
@@ -733,23 +731,66 @@ public partial class RuntimeEmitter
         // sentinel. A non-writable data property silently rejects sloppy-mode
         // assignment. For a writable descriptor, update its live [[Value]] so
         // subsequent descriptor reflection and ordinary reads agree.
-        var globalDescriptorLocal = il.DeclareLocal(inputs.DescriptorType);
+        var globalDescriptorLocal = il.DeclareLocal(inputs.Storage.DescriptorType);
         il.Emit(OpCodes.Ldsfld, globalObject.SingletonField);
         il.Emit(OpCodes.Ldarg_0);
-        il.Emit(OpCodes.Call, inputs.GetPropertyDescriptor);
+        il.Emit(OpCodes.Call, inputs.Storage.GetPropertyDescriptor);
         il.Emit(OpCodes.Stloc, globalDescriptorLocal);
         var noGlobalDescriptorLabel = il.DefineLabel();
+        var createGlobalDescriptorLabel = il.DefineLabel();
         il.Emit(OpCodes.Ldloc, globalDescriptorLocal);
-        il.Emit(OpCodes.Brfalse, noGlobalDescriptorLabel);
+        il.Emit(OpCodes.Brfalse, createGlobalDescriptorLabel);
         il.Emit(OpCodes.Ldloc, globalDescriptorLocal);
-        il.Emit(OpCodes.Callvirt, inputs.GetWritable);
+        il.Emit(OpCodes.Callvirt, inputs.Storage.DescriptorWritable.GetGetMethod()!);
         var globalDescriptorWritableLabel = il.DefineLabel();
         il.Emit(OpCodes.Brtrue, globalDescriptorWritableLabel);
         il.Emit(OpCodes.Ret);
         il.MarkLabel(globalDescriptorWritableLabel);
         il.Emit(OpCodes.Ldloc, globalDescriptorLocal);
         il.Emit(OpCodes.Ldarg_1);
-        il.Emit(OpCodes.Callvirt, inputs.SetValue);
+        il.Emit(OpCodes.Callvirt, inputs.Storage.DescriptorValue.GetSetMethod()!);
+        il.Emit(OpCodes.Br, noGlobalDescriptorLabel);
+
+        // New ordinary global properties participate in the same descriptor
+        // creation order as defineProperty. Existing synthesized intrinsics
+        // retain their non-enumerable attributes without reading their values.
+        il.MarkLabel(createGlobalDescriptorLabel);
+        var ordinaryGlobal = il.DefineLabel();
+        var writableIntrinsic = il.DefineLabel();
+        var createDescriptor = il.DefineLabel();
+        var enumerable = il.DeclareLocal(_types.Boolean);
+        il.Emit(OpCodes.Ldsfld, globalObject.SingletonField);
+        il.Emit(OpCodes.Ldarg_0);
+        il.Emit(OpCodes.Call, inputs.State.IsBuiltinDeleted);
+        il.Emit(OpCodes.Brtrue, ordinaryGlobal);
+        il.Emit(OpCodes.Ldarg_0);
+        il.Emit(OpCodes.Call, inputs.IntrinsicDescriptorKind);
+        il.Emit(OpCodes.Dup);
+        il.Emit(OpCodes.Ldc_I4_2);
+        il.Emit(OpCodes.Beq, writableIntrinsic);
+        il.Emit(OpCodes.Brfalse, ordinaryGlobal);
+        il.Emit(OpCodes.Ret); // Existing non-writable intrinsic.
+        il.MarkLabel(writableIntrinsic);
+        il.Emit(OpCodes.Pop);
+        il.Emit(OpCodes.Br, createDescriptor);
+        il.MarkLabel(ordinaryGlobal);
+        il.Emit(OpCodes.Ldc_I4_1);
+        il.Emit(OpCodes.Stloc, enumerable);
+        il.MarkLabel(createDescriptor);
+        il.Emit(OpCodes.Newobj, inputs.Storage.DescriptorConstructor);
+        il.Emit(OpCodes.Stloc, globalDescriptorLocal);
+        il.Emit(OpCodes.Ldloc, globalDescriptorLocal);
+        il.Emit(OpCodes.Ldarg_1);
+        il.Emit(OpCodes.Callvirt, inputs.Storage.DescriptorValue.GetSetMethod()!);
+        il.Emit(OpCodes.Ldloc, globalDescriptorLocal);
+        il.Emit(OpCodes.Ldloc, enumerable);
+        il.Emit(OpCodes.Callvirt, inputs.Storage.DescriptorEnumerable.GetSetMethod()!);
+        il.Emit(OpCodes.Ldsfld, globalObject.SingletonField);
+        il.Emit(OpCodes.Ldarg_0);
+        il.Emit(OpCodes.Ldloc, globalDescriptorLocal);
+        il.Emit(OpCodes.Call, inputs.Storage.DefineProperty);
+        il.Emit(OpCodes.Brtrue, noGlobalDescriptorLabel);
+        il.Emit(OpCodes.Ret);
         il.MarkLabel(noGlobalDescriptorLabel);
 
         // Lazily initialize the dictionary: if (_globalThisProperties == null) _globalThisProperties = new();

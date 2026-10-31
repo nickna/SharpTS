@@ -2175,6 +2175,7 @@ public partial class RuntimeEmitter
                 runtime.ObjectKeys.Names,
                 runtime.ObjectRead.Property,
                 runtime.GlobalObject.GetProperty,
+                runtime.GlobalObject.IntrinsicDescriptorKind,
                 runtime.GlobalObject.SingletonField,
                 runtime.ObjectFields.FieldsGetter,
                 runtime.ObjectFields.Interface,

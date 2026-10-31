@@ -144,6 +144,9 @@ public partial class RuntimeEmitter
             MethodAttributes.Public | MethodAttributes.Static,
             _types.Object,
             [_types.String]);
+        runtime.GlobalObject.IntrinsicDescriptorKind = typeBuilder.DefineMethod(
+            "GlobalThisIntrinsicDescriptorKind", MethodAttributes.Private | MethodAttributes.Static,
+            _types.Int32, [_types.String]);
         runtime.GlobalObject.SetProperty = typeBuilder.DefineMethod(
             "GlobalThisSetProperty",
             MethodAttributes.Public | MethodAttributes.Static,
