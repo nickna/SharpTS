@@ -244,7 +244,6 @@ public sealed class SharpTSObjectUnboundMethod : ISharpTSCallable, IBuiltInFunct
             // `Object.hasOwn(new C(), "someMethod")` is false. HasProperty would resolve
             // it through the class chain and answer true.
             SharpTSInstance inst => inst.HasField(key) || inst.GetOwnPropertyDescriptor(key) is not null,
-            SharpTSPromise promise => promise.HasOwnProperty(key),
             SharpTSArray array => array.HasOwnProperty(key),
             SharpTSMath math => math.HasExtra(key)
                 || (!math.IsBuiltInDeleted(key) && MathBuiltIns.GetMember(key) is not null),

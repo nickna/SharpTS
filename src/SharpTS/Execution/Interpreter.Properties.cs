@@ -476,6 +476,14 @@ public partial class Interpreter
                 current = ObjectBuiltIns.PrototypeOf(this, generatorFunction);
                 continue;
             }
+            if (current is SharpTSPromise promise)
+            {
+                if (TryReadDescriptor(promise.GetOwnPropertyDescriptor(name), receiver, out var promiseValue))
+                    return promiseValue;
+                current = ObjectBuiltIns.PrototypeOf(this, promise);
+                continue;
+            }
+
             if (current is ISharpTSOwnPropertyObject ownPropertyObject)
             {
                 if (TryReadDescriptor(ownPropertyObject.OwnProperties.GetOwnPropertyDescriptor(name),
@@ -582,14 +590,6 @@ public partial class Interpreter
                 if (TryReadDescriptor(instance.GetOwnPropertyDescriptor(name), receiver, out var instanceValue))
                     return instanceValue;
                 current = instance.Prototype;
-                continue;
-            }
-
-            if (current is SharpTSPromise promise)
-            {
-                if (TryReadDescriptor(promise.GetOwnPropertyDescriptor(name), receiver, out var promiseValue))
-                    return promiseValue;
-                current = ObjectBuiltIns.PrototypeOf(this, promise);
                 continue;
             }
 

@@ -13,7 +13,7 @@ namespace SharpTS.Runtime.Types;
 /// settling the backing task. A settled result can itself be a Promise object
 /// when that object's then property is noncallable.
 /// </remarks>
-public class SharpTSPromise : ITypeCategorized
+public class SharpTSPromise : ITypeCategorized, ISharpTSOwnPropertyObject
 {
     /// <inheritdoc />
     public TypeCategory RuntimeCategory => TypeCategory.Promise;
@@ -45,7 +45,7 @@ public class SharpTSPromise : ITypeCategorized
     // until user code adds one — a poisoned `constructor` getter
     // (Object.defineProperty(p, "constructor", { get() { throw … } }), test262
     // then/ctor-poisoned, #350) is the motivating case. The descriptor store is
-    // lazily allocated so plain promises stay allocation-free.
+    // lazily allocated so ordinary Promise member reads need no own storage.
     private SharpTSObject? _ownProperties;
 
     private SharpTSObject OwnProperties
@@ -68,6 +68,11 @@ public class SharpTSPromise : ITypeCategorized
             return properties;
         }
     }
+
+    SharpTSObject ISharpTSOwnPropertyObject.OwnProperties => OwnProperties;
+
+    internal bool IsExtensible => PropertyDescriptorStore.IsExtensible(this)
+        && (_ownProperties?.IsExtensible ?? true);
 
     internal bool DefineProperty(string name, SharpTSPropertyDescriptor descriptor)
         => OwnProperties.DefineProperty(name, descriptor);

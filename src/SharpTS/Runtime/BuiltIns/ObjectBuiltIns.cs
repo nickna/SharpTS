@@ -1196,7 +1196,6 @@ public static partial class ObjectBuiltIns
                 => arrayGlobal.GetOwnPropertyDescriptor(propertyKey)
                     ?? GetBuiltInOwnPropertyDescriptor(interpreter, target, propertyKey),
             SharpTSInstance inst => inst.GetOwnPropertyDescriptor(propertyKey),
-            SharpTSPromise promise => promise.GetOwnPropertyDescriptor(propertyKey),
             SharpTSArray arr => arr.GetOwnPropertyDescriptor(propertyKey),
             SharpTSArrayPrototype arrayPrototype when !arrayPrototype.HasOwnProperty(propertyKey) => null,
             SharpTSArrayPrototype arrayPrototype => arrayPrototype.GetOwnPropertyDescriptor(propertyKey)
@@ -2631,7 +2630,7 @@ public static partial class ObjectBuiltIns
 
             case SharpTSPromise promise:
                 if (ReferenceEquals(PrototypeOf(interpreter, promise), proto)) return true;
-                if (!PropertyDescriptorStore.IsExtensible(promise)) return false;
+                if (!promise.IsExtensible) return false;
                 if (WouldCreatePrototypeCycle(interpreter, promise, proto)) return false;
                 promise.SetExplicitPrototype(proto);
                 return true;
