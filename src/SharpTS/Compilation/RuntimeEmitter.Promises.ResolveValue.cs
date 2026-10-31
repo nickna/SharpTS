@@ -34,8 +34,7 @@ public partial class RuntimeEmitter
         var doneLabel = il.DefineLabel();
 
         il.BeginExceptionBlock();
-        il.Emit(OpCodes.Ldarg_0);
-        il.Emit(OpCodes.Brfalse, wrapValueLabel);
+        EmitPromisePrimitiveValueBranch(il, runtime, wrapValueLabel);
 
         il.Emit(OpCodes.Ldarg_0);
         il.Emit(OpCodes.Ldstr, "then");

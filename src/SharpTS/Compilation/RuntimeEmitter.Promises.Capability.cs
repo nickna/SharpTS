@@ -80,9 +80,7 @@ public partial class RuntimeEmitter
         il.Emit(OpCodes.Ret);
         il.MarkLabel(notPromiseLabel);
 
-        // if (value == null) goto wrap;
-        il.Emit(OpCodes.Ldarg_0);
-        il.Emit(OpCodes.Brfalse, wrapLabel);
+        EmitPromisePrimitiveValueBranch(il, runtime, wrapLabel);
 
         // then = GetProperty(value, "then");
         il.Emit(OpCodes.Ldarg_0);
