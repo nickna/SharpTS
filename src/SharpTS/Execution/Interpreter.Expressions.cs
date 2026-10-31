@@ -1653,7 +1653,8 @@ public partial class Interpreter
             ThrowCannotSetProperty(obj, index?.ToString() ?? "");
         }
 
-        if (HasArrayObjectKey(obj, index))
+        if (HasArrayObjectKey(obj, index)
+            || (obj is SharpTSObject && IsObjectLike(index)))
             index = ToPropertyKey(index);
         // Namespace assignment uses the same guest key conversion as ordinary
         // objects, after the already-evaluated RHS and before string dispatch.
