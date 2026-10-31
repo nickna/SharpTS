@@ -89,9 +89,22 @@ public sealed partial class SharpTSGlobalThis : ISharpTSPropertyAccessor
                 descriptor.HasConfigurable = true;
             }
         }
-        bool applied = _vmContext is { } context
-            ? context.Define(name, descriptor) : _properties.DefineProperty(name, descriptor);
-        if (applied) _vmWrittenProperties?.Add(name);
+        bool applied;
+        if (_vmContext is { } context)
+        {
+            bool contextApplied = context.Define(name, descriptor);
+            if (contextApplied)
+            {
+                _properties.MirrorCompletedPropertyDefinition(name, context.GetDescriptor(name)!);
+                applied = true;
+            }
+            else applied = context.GetDescriptor(name) is null && _properties.DefineProperty(name, descriptor);
+        }
+        else applied = _properties.DefineProperty(name, descriptor);
+        if (applied)
+        {
+            _vmWrittenProperties?.Add(name);
+        }
         return applied;
     }
 
@@ -257,28 +270,47 @@ public sealed partial class SharpTSGlobalThis : ISharpTSPropertyAccessor
     /// <param name="value">The value to set.</param>
     public void SetProperty(string name, object? value)
     {
-        _deletedProperties.Remove(name);
         if (_vmContext is { } context)
         {
-            context.Set(name, value);
-            if (_vmDeclaredVariables?.Contains(name) == true || context.GetDescriptor(name) is null)
-                _properties.SetProperty(name, value);
+            if (RejectsVmInternalDataWrite(name)) return;
+            bool applied = context.Set(name, value);
+            if (applied && !_properties.HasProperty(name))
+            {
+                var descriptor = context.GetDescriptor(name)!;
+                descriptor.Value = value;
+                descriptor.HasValue = true;
+                applied = _properties.DefineProperty(name, descriptor);
+            }
+            else if (applied || context.GetDescriptor(name) is null)
+                applied = _properties.TrySetProperty(name, value);
+            if (!applied) return;
         }
-        else _properties.SetProperty(name, value);
+        else
+        {
+            _deletedProperties.Remove(name);
+            _properties.SetProperty(name, value);
+        }
+        if (_vmContext is not null) _deletedProperties.Remove(name);
         _vmWrittenProperties?.Add(name);
     }
 
     internal bool DeleteProperty(string name)
     {
+        if (_vmContext is { } context)
+        {
+            if (!context.Delete(name)) return false;
+        }
         if (_properties.HasProperty(name) && !_properties.DeleteProperty(name))
             return false;
-        if (_vmContext is { } context && !context.Delete(name)) return false;
         _deletedProperties.Add(name);
         return true;
     }
 
     internal IEnumerable<string> VmDeletedProperties =>
-        _vmWrittenProperties is null ? [] : _deletedProperties;
+        _vmWrittenProperties is null ? []
+            : _vmContext is not null
+                ? _deletedProperties.Where(name => ContextDescriptor(name) is null)
+                : _deletedProperties;
 
     internal IEnumerable<string> OwnEnumerableKeys()
         => _vmContext is { } context
@@ -294,9 +326,15 @@ public sealed partial class SharpTSGlobalThis : ISharpTSPropertyAccessor
     internal IEnumerable<KeyValuePair<string, object?>> UserOwnDataProperties()
     {
         foreach (var name in _properties.PropertyNames)
-            if ((_vmWrittenProperties is null || _vmWrittenProperties.Contains(name))
-                && _properties.GetOwnPropertyDescriptor(name) is { HasValue: true } descriptor)
-                yield return new(name, descriptor.Value);
+            if (_vmWrittenProperties is null || _vmWrittenProperties.Contains(name))
+            {
+                if (ContextDescriptor(name) is { } live)
+                {
+                    if (live.HasValue) yield return new(name, VmContext.ReadContextValue(live.Value));
+                }
+                else if (_properties.GetOwnPropertyDescriptor(name) is { HasValue: true } descriptor)
+                    yield return new(name, descriptor.Value);
+            }
     }
 
     // Uninitialized var bindings exist inside the VM global, but Node does

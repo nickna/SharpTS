@@ -307,12 +307,17 @@ public class SharpTSObject(Dictionary<string, object?> fields) : ISharpTSPropert
 
     /// <inheritdoc />
     public void SetProperty(string name, object? value)
+        => TrySetProperty(name, value);
+
+    // The VM global mirror consumes the actual data-store result, without
+    // guessing success by comparing a caller-supplied value afterward.
+    internal bool TrySetProperty(string name, object? value)
     {
         if (IsFrozen)
         {
             // Frozen objects silently ignore property modifications (JavaScript behavior in non-strict mode)
             SloppyModeWarnings.Warn("write to frozen", $"Assignment to frozen object property '{name}' ignored");
-            return;
+            return false;
         }
 
         // An accessor without a setter rejects assignment, including a
@@ -320,7 +325,7 @@ public class SharpTSObject(Dictionary<string, object?> fields) : ISharpTSPropert
         if (IsAccessorProperty(name) && !HasSetter(name))
         {
             SloppyModeWarnings.Warn("write to getter-only", $"Assignment to getter-only property '{name}' ignored");
-            return;
+            return false;
         }
 
         bool exists = _fields.ContainsKey(name) || IsAccessorProperty(name);
@@ -328,18 +333,19 @@ public class SharpTSObject(Dictionary<string, object?> fields) : ISharpTSPropert
         {
             // Non-extensible objects silently ignore new property additions
             SloppyModeWarnings.Warn("add to non-extensible", $"Property addition to non-extensible object '{name}' ignored");
-            return;
+            return false;
         }
 
         // Check writable flag for properties defined via defineProperty
         if (exists && _descriptors?.TryGetValue(name, out var flags) == true && flags.HasExplicitDescriptor && !flags.Writable)
         {
             SloppyModeWarnings.Warn("write to non-writable", $"Assignment to non-writable property '{name}' ignored");
-            return;
+            return false;
         }
 
         if (!exists) EnsureStringPropertyOrder().Add(name);
         _fields[name] = value;
+        return true;
     }
 
     /// <summary>
@@ -849,6 +855,25 @@ public class SharpTSObject(Dictionary<string, object?> fields) : ISharpTSPropert
             return false;
         }
 
+        return ApplyPropertyDefinition(name, descriptor, hasExisting, existingIsAccessor, existingFlags);
+    }
+
+    // Only the VM's completed context definition projects a full record into
+    // its internal global mirror. Ordinary definitions keep validation above.
+    internal void MirrorCompletedPropertyDefinition(string name, SharpTSPropertyDescriptor descriptor)
+    {
+        if (!descriptor.HasEnumerable || !descriptor.HasConfigurable
+            || !(descriptor.HasValue && descriptor.HasWritable || descriptor.HasGet && descriptor.HasSet))
+            throw new ArgumentException("Expected a complete property descriptor.", nameof(descriptor));
+        bool hasExisting = _fields.ContainsKey(name) || IsAccessorProperty(name);
+        PropertyDescriptorFlags flags = default;
+        if (_descriptors?.TryGetValue(name, out flags) != true) flags = PropertyDescriptorFlags.Default;
+        ApplyPropertyDefinition(name, descriptor, hasExisting, IsAccessorProperty(name), flags);
+    }
+
+    private bool ApplyPropertyDefinition(string name, SharpTSPropertyDescriptor descriptor,
+        bool hasExisting, bool existingIsAccessor, PropertyDescriptorFlags existingFlags)
+    {
         // DefineProperty may convert a data property to an accessor and remove
         // its dictionary entry. Capture creation order before that mutation.
         List<string> propertyOrder = EnsureStringPropertyOrder();

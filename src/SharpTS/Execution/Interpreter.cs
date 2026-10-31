@@ -2374,7 +2374,7 @@ public partial class Interpreter : IDisposable
 
     private void RegisterClassicGlobalVar(string name)
     {
-        if (GlobalThis.GetOwnPropertyDescriptor(name) is null)
+        if (GlobalThis.GetOwnPropertyDescriptor(name) is null || GlobalThis.NeedsVmGlobalVariable(name))
         {
             object? initialValue = _environment.IsDefinedLocally(name) && !_environment.HasObjectBinding(name)
                 ? _environment.GetAt(0, name).ToObject()

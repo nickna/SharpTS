@@ -2333,6 +2333,14 @@ public partial class Interpreter
     {
         if (descriptor is null) return false;
 
+        if (!descriptor.HasGet && !descriptor.HasSet
+            && receiver is SharpTSGlobalThis globalData && globalData.RejectsVmInternalDataWrite(propertyName))
+        {
+            if (strictMode)
+                throw new ThrowException(new SharpTSTypeError($"Cannot assign to read only property '{propertyName}'"));
+            return true;
+        }
+
         if (descriptor.HasGet || descriptor.HasSet)
         {
             if (descriptor.Set is not null)

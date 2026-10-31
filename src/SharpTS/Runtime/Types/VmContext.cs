@@ -143,6 +143,7 @@ public static partial class VmContext
         var properties = new Dictionary<string, object?>();
         foreach (var name in originalProperties.Keys)
         {
+            if (globalObject?.IsInternalOnlyVmProperty(name) == true) continue;
             if (globalObject?.HasUserProperty(name) == true)
             {
                 if (globalObject.GetOwnPropertyDescriptor(name) is { HasValue: true } descriptor)
@@ -159,7 +160,14 @@ public static partial class VmContext
         // exposing lexical bindings and the intrinsic inventory.
         if (globalObject is not null)
             foreach (var (name, value) in globalObject.UserOwnDataProperties())
+            {
+                if (globalObject.IsInternalOnlyVmProperty(name))
+                {
+                    BuiltIns.Modules.Interpreter.VmModuleInterpreter.RecordVmPublishedValue(value);
+                    continue;
+                }
                 properties[name] = value;
+            }
 
         if (contextObject is not null)
             foreach (var value in properties.Values)

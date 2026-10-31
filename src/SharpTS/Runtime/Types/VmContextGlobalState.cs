@@ -21,12 +21,13 @@ internal sealed class VmContextGlobalState
 
     internal SharpTSPropertyDescriptor? GetDescriptor(string name) => Properties.GetOwnPropertyDescriptor(name);
 
-    internal void Set(string name, object? value)
+    internal bool Set(string name, object? value)
     {
-        if (Execution.VmEvaluationLease.CurrentInterpreter is { } owner)
-            BuiltIns.Modules.Interpreter.VmModuleInterpreter.RecordVmBoundaryValue(value, owner);
         var host = BuiltIns.Modules.Interpreter.VmExecutionHost.Current;
-        Properties.SetProperty(name, host is null ? value : host.FromVm(value));
+        bool applied = Properties.TrySetProperty(name, host is null ? value : host.FromVm(value));
+        if (applied && Execution.VmEvaluationLease.CurrentInterpreter is { } owner)
+            BuiltIns.Modules.Interpreter.VmModuleInterpreter.RecordVmBoundaryValue(value, owner);
+        return applied;
     }
 
     internal bool Delete(string name) => Properties.DeleteProperty(name);

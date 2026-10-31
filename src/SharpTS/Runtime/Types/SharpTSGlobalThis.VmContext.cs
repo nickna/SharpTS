@@ -3,7 +3,6 @@ namespace SharpTS.Runtime.Types;
 public sealed partial class SharpTSGlobalThis
 {
     private readonly VmContextGlobalState? _vmContext;
-    private HashSet<string>? _vmDeclaredVariables;
 
     internal SharpTSGlobalThis(VmContextGlobalState state) => _vmContext = state;
 
@@ -24,7 +23,6 @@ public sealed partial class SharpTSGlobalThis
     {
         if (_vmContext is null) return DefineProperty(name, descriptor);
         if (!_properties.DefineProperty(name, descriptor)) return false;
-        (_vmDeclaredVariables ??= new(StringComparer.Ordinal)).Add(name);
         return true;
     }
 
@@ -33,4 +31,12 @@ public sealed partial class SharpTSGlobalThis
     internal bool HasRestrictedVmLexicalProperty(string name) =>
         name is "undefined" or "NaN" or "Infinity"
         || _properties.GetOwnPropertyDescriptor(name) is { Configurable: false };
+
+    internal bool RejectsVmInternalDataWrite(string name) => _vmContext is not null
+        && _properties.GetOwnPropertyDescriptor(name) is { HasValue: true, Writable: false };
+
+    internal bool IsInternalOnlyVmProperty(string name) => _vmContext is not null
+        && ContextDescriptor(name) is null && _properties.HasProperty(name);
+
+    internal bool NeedsVmGlobalVariable(string name) => _vmContext is not null && !_properties.HasProperty(name);
 }
