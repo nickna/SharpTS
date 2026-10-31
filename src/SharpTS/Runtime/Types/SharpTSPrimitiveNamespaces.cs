@@ -215,9 +215,18 @@ public sealed class SharpTSStringPrototype : ISharpTSMutableBuiltIn, ISharpTSSym
         _methodCache = new(StringComparer.Ordinal);
     public bool HasExtra(string name) => _overlay.HasExtra(name);
     public object? TryGetExtra(string name) => _overlay.GetProperty(name);
-    public void SetExtra(string name, object? value) => _overlay.SetProperty(name, value);
+    public void SetExtra(string name, object? value)
+    {
+        if (!_overlay.IsExtensible && !_overlay.HasExtra(name))
+        {
+            DefineExtraProperty(name, new SharpTSPropertyDescriptor { Value = value, HasValue = true });
+            return;
+        }
+        _overlay.SetProperty(name, value);
+    }
     public bool DefineExtraProperty(string name, SharpTSPropertyDescriptor descriptor)
-        => _overlay.DefineProperty(name, descriptor);
+        => _overlay.DefinePropertyPreservingVirtualData(name, descriptor, GetMember);
+    internal void PreventExtensionsOwnProperties() => _overlay.PreventExtensions();
     public SharpTSPropertyDescriptor? GetOwnPropertyDescriptor(string name)
         => _overlay.GetOwnPropertyDescriptor(name);
     public ISharpTSCallable? GetExtraGetter(string name) => _overlay.GetGetter(name);
@@ -802,9 +811,18 @@ public sealed class SharpTSNumberPrototype : ISharpTSMutableBuiltIn, ISharpTSSym
         _methodCache = new(StringComparer.Ordinal);
     public bool HasExtra(string name) => _overlay.HasExtra(name);
     public object? TryGetExtra(string name) => _overlay.GetProperty(name);
-    public void SetExtra(string name, object? value) => _overlay.SetProperty(name, value);
+    public void SetExtra(string name, object? value)
+    {
+        if (!_overlay.IsExtensible && !_overlay.HasExtra(name))
+        {
+            DefineExtraProperty(name, new SharpTSPropertyDescriptor { Value = value, HasValue = true });
+            return;
+        }
+        _overlay.SetProperty(name, value);
+    }
     public bool DefineExtraProperty(string name, SharpTSPropertyDescriptor descriptor)
-        => _overlay.DefineProperty(name, descriptor);
+        => _overlay.DefinePropertyPreservingVirtualData(name, descriptor, GetMember);
+    internal void PreventExtensionsOwnProperties() => _overlay.PreventExtensions();
     public SharpTSPropertyDescriptor? GetOwnPropertyDescriptor(string name)
         => _overlay.GetOwnPropertyDescriptor(name);
     public ISharpTSCallable? GetExtraGetter(string name) => _overlay.GetGetter(name);
@@ -1072,9 +1090,18 @@ public sealed class SharpTSBooleanPrototype : ISharpTSMutableBuiltIn, ISharpTSSy
     private readonly PrototypePropertyOverlay _overlay = new(IsBuiltIn);
     public bool HasExtra(string name) => _overlay.HasExtra(name);
     public object? TryGetExtra(string name) => _overlay.GetProperty(name);
-    public void SetExtra(string name, object? value) => _overlay.SetProperty(name, value);
+    public void SetExtra(string name, object? value)
+    {
+        if (!_overlay.IsExtensible && !_overlay.HasExtra(name))
+        {
+            DefineExtraProperty(name, new SharpTSPropertyDescriptor { Value = value, HasValue = true });
+            return;
+        }
+        _overlay.SetProperty(name, value);
+    }
     public bool DefineExtraProperty(string name, SharpTSPropertyDescriptor descriptor)
-        => _overlay.DefineProperty(name, descriptor);
+        => _overlay.DefinePropertyPreservingVirtualData(name, descriptor, GetMember);
+    internal void PreventExtensionsOwnProperties() => _overlay.PreventExtensions();
     public SharpTSPropertyDescriptor? GetOwnPropertyDescriptor(string name)
         => _overlay.GetOwnPropertyDescriptor(name);
     public ISharpTSCallable? GetExtraGetter(string name) => _overlay.GetGetter(name);

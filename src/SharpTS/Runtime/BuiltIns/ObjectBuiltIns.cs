@@ -1235,10 +1235,13 @@ public static partial class ObjectBuiltIns
                 ?? GetBuiltInOwnPropertyDescriptor(interpreter, target, propertyKey),
             SharpTSDate date => date.GetOwnPropertyDescriptor(propertyKey)
                 ?? GetBuiltInOwnPropertyDescriptor(interpreter, target, propertyKey),
+            SharpTSStringPrototype stringPrototype when !stringPrototype.HasOwnProperty(propertyKey) => null,
             SharpTSStringPrototype stringPrototype => stringPrototype.GetOwnPropertyDescriptor(propertyKey)
                 ?? GetBuiltInOwnPropertyDescriptor(interpreter, target, propertyKey),
+            SharpTSNumberPrototype numberPrototype when !numberPrototype.HasOwnProperty(propertyKey) => null,
             SharpTSNumberPrototype numberPrototype => numberPrototype.GetOwnPropertyDescriptor(propertyKey)
                 ?? GetBuiltInOwnPropertyDescriptor(interpreter, target, propertyKey),
+            SharpTSBooleanPrototype booleanPrototype when !booleanPrototype.HasOwnProperty(propertyKey) => null,
             SharpTSBooleanPrototype booleanPrototype => booleanPrototype.GetOwnPropertyDescriptor(propertyKey)
                 ?? GetBuiltInOwnPropertyDescriptor(interpreter, target, propertyKey),
             SharpTSBigIntPrototype bigIntPrototype => bigIntPrototype.GetOwnPropertyDescriptor(propertyKey)
@@ -2281,6 +2284,7 @@ public static partial class ObjectBuiltIns
     /// </summary>
     private static object? PreventExtensions(Interpreter interpreter, List<object?> args)
     {
+        if (TryPreventExtensionsOwnedPrototype(args[0])) return args[0];
         if (interpreter.TryGetPromiseConstructorSymbolProperties(args[0], out var intrinsicProperties))
             intrinsicProperties.PreventExtensions();
         if (args[0] is SharpTSProxy proxy)
@@ -2347,8 +2351,32 @@ public static partial class ObjectBuiltIns
         }
     }
 
+    internal static bool TryPreventExtensionsOwnedPrototype(object? target)
+    {
+        switch (target)
+        {
+            case SharpTSStringPrototype prototype:
+                prototype.PreventExtensionsOwnProperties();
+                break;
+            case SharpTSNumberPrototype prototype:
+                prototype.PreventExtensionsOwnProperties();
+                break;
+            case SharpTSBooleanPrototype prototype:
+                prototype.PreventExtensionsOwnProperties();
+                break;
+            case SharpTSArrayPrototype prototype:
+                prototype.PreventExtensionsOwnProperties();
+                break;
+            default:
+                return false;
+        }
+        PropertyDescriptorStore.PreventExtensions(target);
+        return true;
+    }
+
     internal static bool PreventExtensionsTarget(Interpreter interpreter, object target)
     {
+        if (TryPreventExtensionsOwnedPrototype(target)) return true;
         if (interpreter.TryGetPromiseConstructorSymbolProperties(target, out var intrinsicProperties))
             intrinsicProperties.PreventExtensions();
         switch (target)

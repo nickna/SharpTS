@@ -380,6 +380,8 @@ public static class ReflectBuiltIns
                     SharpTSArray arr => arr.IsExtensible,
                     SharpTSObjectPrototype objectPrototype => PropertyDescriptorStore.IsExtensible(objectPrototype),
                     SharpTSClassPrototype prototype => PropertyDescriptorStore.IsExtensible(prototype),
+                    SharpTSStringPrototype or SharpTSNumberPrototype or SharpTSBooleanPrototype or SharpTSArrayPrototype
+                        => PropertyDescriptorStore.IsExtensible(target),
                     ISharpTSCallable callable => PropertyDescriptorStore.IsExtensible(callable),
                     Dictionary<string, object?> dict => PropertyDescriptorStore.IsExtensible(dict),
                     _ => false
@@ -398,6 +400,8 @@ public static class ReflectBuiltIns
                 }
                 if (target is SharpTSProxy proxy)
                     return RuntimeValue.FromBoolean(proxy.TrapPreventExtensions(interpreter));
+                if (ObjectBuiltIns.TryPreventExtensionsOwnedPrototype(target))
+                    return RuntimeValue.True;
                 if (FunctionObjectProperties.TryGetStorage(target, interpreter, out var properties))
                 {
                     properties.PreventExtensions();

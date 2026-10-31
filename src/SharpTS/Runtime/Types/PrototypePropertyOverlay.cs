@@ -75,6 +75,22 @@ internal sealed class PrototypePropertyOverlay(
         return defined;
     }
 
+    internal bool DefinePropertyPreservingVirtualData(
+        string name, SharpTSPropertyDescriptor descriptor, Func<string, object?> getMember,
+        bool configurable = true)
+    {
+        if (!IsExtensible && !HasExtra(name))
+        {
+            // Existing virtual data slots may change on a nonextensible object.
+            // Deleted or unknown names remain absent without clearing tombstones.
+            if (!HasOwnProperty(name)) return false;
+            var current = new SharpTSPropertyDescriptor(
+                getMember(name), writable: true, enumerable: false, configurable: configurable);
+            return DefineExistingBuiltInDataProperty(name, current, descriptor);
+        }
+        return DefineProperty(name, descriptor);
+    }
+
     internal bool DefineExistingBuiltInDataProperty(
         string name, SharpTSPropertyDescriptor current, SharpTSPropertyDescriptor change)
     {

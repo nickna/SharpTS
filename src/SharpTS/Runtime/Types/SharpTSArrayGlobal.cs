@@ -135,9 +135,18 @@ public sealed class SharpTSArrayPrototype : ISharpTSMutableBuiltIn, ISharpTSSymb
     internal bool HasIndexedExtra(long exclusiveLength)
         => _overlay.HasIndexedOwnProperty(exclusiveLength);
     public object? TryGetExtra(string name) => _overlay.GetProperty(name);
-    public void SetExtra(string name, object? value) => _overlay.SetProperty(name, value);
+    public void SetExtra(string name, object? value)
+    {
+        if (!_overlay.IsExtensible && !_overlay.HasExtra(name))
+        {
+            DefineExtraProperty(name, new SharpTSPropertyDescriptor { Value = value, HasValue = true });
+            return;
+        }
+        _overlay.SetProperty(name, value);
+    }
     public bool DefineExtraProperty(string name, SharpTSPropertyDescriptor descriptor)
-        => _overlay.DefineProperty(name, descriptor);
+        => _overlay.DefinePropertyPreservingVirtualData(name, descriptor, GetMember, configurable: name != "length");
+    internal void PreventExtensionsOwnProperties() => _overlay.PreventExtensions();
     public SharpTSPropertyDescriptor? GetOwnPropertyDescriptor(string name)
         => _overlay.GetOwnPropertyDescriptor(name);
     public ISharpTSCallable? GetExtraGetter(string name) => _overlay.GetGetter(name);
