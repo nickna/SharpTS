@@ -1,4 +1,5 @@
 using SharpTS.Tests.Infrastructure;
+using SharpTS.TypeSystem;
 using SharpTS.TypeSystem.Exceptions;
 using Xunit;
 
@@ -60,6 +61,6 @@ public class Round2ConformanceTests
             declare let optionalProperties: { k1?: string };
             stringDictionary = optionalProperties;
             """;
-        TestHarness.RunInterpreted(source);
+        new TypeChecker().Check(TestHarness.ParseOrThrow(source));
     }
 }

@@ -12,6 +12,7 @@ public partial class RuntimeEmitter
 {
     private readonly record struct AsyncFromSyncIteratorSupportInputs(
         EmittedGeneratorRuntime Generators,
+        EmittedErrorRuntime Errors,
         MethodBuilder GetIteratorDone,
         MethodBuilder GetIteratorFunction,
         MethodBuilder GetIteratorNextMethod,
@@ -58,6 +59,7 @@ public partial class RuntimeEmitter
 
     private readonly record struct AdaptSyncIterableToAsyncGeneratorInputs(
         MethodBuilder GetIteratorFunction,
+        EmittedErrorRuntime Errors,
         EmittedInvocationRuntime Invocation,
         MethodBuilder IterateToList,
         MethodBuilder NormalizeToEnumerator,
@@ -106,6 +108,7 @@ public partial class RuntimeEmitter
             fromSync,
             new AdaptSyncIterableToAsyncGeneratorInputs(
                 inputs.GetIteratorFunction,
+                inputs.Errors,
                 inputs.Invocation,
                 inputs.IterateToList,
                 inputs.NormalizeToEnumerator,
@@ -718,6 +721,13 @@ public partial class RuntimeEmitter
         // use IterateToList's existing JS-aware normalization, then iterate the
         // resulting dense object list.
         il.MarkLabel(materialize);
+        var nativeMaterialization = il.DefineLabel();
+        il.Emit(OpCodes.Ldarg_0);
+        il.Emit(OpCodes.Isinst, _types.Type);
+        il.Emit(OpCodes.Brfalse, nativeMaterialization);
+        GuestErrorEmitter.ThrowError(il, inputs.Errors.CreateException, inputs.Errors.TypeErrorConstructor,
+            "Value is not async iterable");
+        il.MarkLabel(nativeMaterialization);
         il.Emit(OpCodes.Ldarg_0);
         il.Emit(OpCodes.Ldsfld, inputs.Symbols.Iterator);
         il.Emit(OpCodes.Ldtoken, inputs.RuntimeType);

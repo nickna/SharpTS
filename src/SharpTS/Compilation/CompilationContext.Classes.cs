@@ -204,13 +204,9 @@ public partial class CompilationContext
             baseName = simpleClassName;
         }
 
-        // Apply .NET namespace if set
-        if (DotNetNamespace != null)
-        {
-            return $"{DotNetNamespace}.{baseName}";
-        }
-
-        return baseName;
+        // Apply .NET namespace if set, then resolve only registered source classes.
+        string qualified = DotNetNamespace != null ? $"{DotNetNamespace}.{baseName}" : baseName;
+        return NativeSourceTypeNames?.ResolveClassCandidate(qualified) ?? qualified;
     }
 
     internal IReadOnlyDictionary<int, string> CheckedClassNames { get; set; } = new Dictionary<int, string>();
@@ -249,7 +245,15 @@ public partial class CompilationContext
     /// context-specific state (CurrentModulePath) that varies per CompilationContext instance.
     /// The ClassRegistry's closure reads from _modules.CurrentPath which may not be in sync.
     /// </remarks>
+    internal NativeSourceTypeNames? NativeSourceTypeNames { get; set; }
+
     public string GetQualifiedClassName(string simpleClassName)
+    {
+        string logicalName = GetRawQualifiedName(simpleClassName);
+        return NativeSourceTypeNames?.ResolveClassCandidate(logicalName) ?? logicalName;
+    }
+
+    internal string GetRawQualifiedName(string simpleClassName)
     {
         // Do NOT delegate to ClassRegistry - this method depends on context-specific CurrentModulePath
         // which varies per CompilationContext instance. ClassRegistry's closure reads from

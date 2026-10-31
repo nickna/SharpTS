@@ -34,6 +34,8 @@ namespace SharpTS.Compilation;
 /// <seealso cref="Interpreter"/>
 public partial class ILCompiler
 {
+    private NativeSourceTypeNames? _nativeSourceTypeNames;
+
     /// <summary>
     /// The assembly builder. Concrete type is either <see cref="PersistedAssemblyBuilder"/>
     /// (default; supports <see cref="SaveToBytes"/> for shipping a standalone DLL) or the
@@ -58,6 +60,8 @@ public partial class ILCompiler
     // don't collide in a shared flat dictionary.
     // Null key = single-module / global bindings (legacy single-module Compile path).
     private readonly Dictionary<string, Dictionary<string, (string ModuleName, string MethodName)>> _builtInModuleMethodBindingsByModule = [];
+    private readonly Dictionary<BindingSymbol, (string ModuleName, string MemberName)> _nativeModuleConstructorBindings = new(ReferenceEqualityComparer.Instance);
+    private readonly Dictionary<BindingSymbol, string> _nativeModuleNamespaceBindings = new(ReferenceEqualityComparer.Instance);
     private static readonly Dictionary<string, (string ModuleName, string MethodName)> _emptyBindings = [];
     private readonly HashSet<string> _importedNames = [];  // Every named / default / namespace import, any module source. Used to shadow global call handlers.
 
@@ -511,7 +515,7 @@ public partial class ILCompiler
         }
 
         _moduleBuilder = _assemblyBuilder.DefineDynamicModule(assemblyName);
-        _typeMapper = new TypeMapper(_moduleBuilder, _types);
+        _typeMapper = new TypeMapper(_moduleBuilder, _types) { ExternalMetadata = _referenceLoader };
     }
 
     [System.Diagnostics.CodeAnalysis.UnconditionalSuppressMessage(
@@ -568,7 +572,8 @@ public partial class ILCompiler
             classToModule: _modules.ClassToModule,
             getCurrentModulePath: () => _modules.CurrentPath,
             getDotNetNamespace: () => _modules.CurrentDotNetNamespace,
-            getModuleName: path => GetDefinitionContext().GetSanitizedModuleName(path)
+            getModuleName: path => GetDefinitionContext().GetSanitizedModuleName(path),
+            qualifySourceClassName: name => _nativeSourceTypeNames?.ResolveClassCandidate(name) ?? name
         );
     }
 
@@ -651,10 +656,12 @@ public partial class ILCompiler
         _deadCodeInfo = deadCodeInfo;
         _isStrictMode = Parsing.DirectivePrologue.HasUseStrict(statements);
         _typeMapper.HeldClassConstructions = HeldClassConstructionInfo.Analyze(statements, typeMap, _typeMapper);
+        _nativeClrAdmission = _nativeAotProjectOutput ? NativeClrAdmission.Capture(statements, typeMap, _types, _referenceLoader?.CaptureCoreAliases()) : null;
         _rawCallStorage = RawCallStorageAnalysis.Capture(statements, typeMap);
-        statements = NestedFunctionLifter.Lift(statements, _entryPointDebugScope?.Spans, typeMap, _rawCallStorage.RecordRewrite);
+        statements = NestedFunctionLifter.Lift(statements, _entryPointDebugScope?.Spans, typeMap, RecordSourceRewrite);
+        _functionEmissionPolicy = FunctionEmissionPolicy.ForPreparedSource(statements, _nativeAotProjectOutput);
         _lexicalBindingNames = LexicalBindingNameCollector.Collect(statements);
-        _features ??= new RuntimeFeatureDetector().Detect(statements, _typeMap);
+        _features ??= new RuntimeFeatureDetector(_nativeAotProjectOutput).Detect(statements, _typeMap);
         // The stable iterator result shape must be known before Phase 1 emits its
         // result carrier. Closure-based eligibility is rechecked later.
         StableCustomIteratorAnalyzer.Analyze(statements, _typeMap, null, _features);
@@ -744,8 +751,65 @@ public partial class ILCompiler
     /// </summary>
     private void Phase1_EmitRuntimeTypes()
     {
-        _runtime = new RuntimeEmitter(_types, _hosted) { EntryModulePath = _entryModulePath }
-            .EmitAll(_moduleBuilder, _features ?? RuntimeFeatureSet.EmitEverything());
+        if (_nativeAotProjectOutput)
+        {
+            _nativeSourceTypeNames = new();
+            _nativeOwnedTypeDeclarations = NativeOwnedTypeDeclarations.Begin(_moduleBuilder);
+            _nativeSourceOwners = new(_moduleBuilder, _types);
+            _nativeClosedFamilies = new(_moduleBuilder, _types);
+            _nativeGenericMethodNormalization = new(_moduleBuilder, _types);
+            _nativeConstructedBodies = new(_moduleBuilder, _types);
+            _nativeConstructorFactories = new(_moduleBuilder, _types);
+            _nativeUnionArgumentConversion = new(_moduleBuilder, _types);
+            _nativeRuntimeClassInitialization = new(_moduleBuilder, _types);
+            _nativeStaticMemberPresence = new(_moduleBuilder, _types);
+            _nativeStaticFieldLookup = new(_moduleBuilder, _types);
+            _nativeConstructorMembers = new(_moduleBuilder, _types);
+            _nativeDeletionLookup = new(_moduleBuilder, _types);
+
+            _nativeReceiverBinding = new(_moduleBuilder, _types);
+            _nativePropertyLookup = new(_moduleBuilder, _types);
+            _nativeMethodLookup = new(_moduleBuilder, _types);
+            _nativeHasInMembers = new(_moduleBuilder, _types);
+            _nativeConstructorActivation = new(_moduleBuilder, _types);
+            _nativeReceiverInitializerLookup = new(_moduleBuilder, _types);
+            _nativeOwnerClosure = new(_moduleBuilder, _types);
+            _nativePrototypeFields = new(_moduleBuilder, _types);
+            _nativeTypedArrayBuffers = new(_moduleBuilder, _types);
+            _nativeEvaluatedConstructors = new(_moduleBuilder, _types);
+            _functionEmissionPolicy = _functionEmissionPolicy with
+            {
+                NativeGenericNormalizer = _nativeGenericMethodNormalization.Normalize,
+                NativeConstructedGenericResolver = _nativeGenericMethodNormalization.ResolveConstructed,
+                NativeConstructedBodies = _nativeConstructedBodies,
+                NativeUnionConverter = _nativeUnionArgumentConversion.Convert,
+                NativeUnionParameters = _nativeUnionArgumentConversion,
+                NativeReceiverBinder = _nativeReceiverBinding.Bind
+            };
+        }
+        if (_nativeAotProjectOutput && _functionEmissionPolicy.BindNumericRest4)
+        {
+            _nativeNumericRest4Binding = new NativeNumericRest4Binding(_moduleBuilder, _types);
+            _functionEmissionPolicy = _functionEmissionPolicy with
+            {
+                NativeNumericRest4Binder = _nativeNumericRest4Binding.Bind
+            };
+        }
+        _runtime = new RuntimeEmitter(_types, _hosted, _nativeAotProjectOutput,
+            _nativeAotProjectOutput && (_features?.UsesUserClasses ?? true),
+            _nativeStaticFieldLookup?.FindField, _nativeConstructorMembers?.GetMembers,
+            nativeDeletionLookup: _nativeDeletionLookup, nativeHasInMemberLookup: _nativeHasInMembers?.HasMember,
+            nativeConstructorFactories: _nativeConstructorFactories,
+            nativeConstructorActivation: _nativeConstructorActivation,
+            nativeReceiverInitializers: _nativeReceiverInitializerLookup,
+            nativeOwnerClosure: _nativeOwnerClosure, nativePrototypeFields: _nativePrototypeFields, nativeTypedArrayBuffers: _nativeTypedArrayBuffers) { EntryModulePath = _entryModulePath }
+            .EmitAll(_moduleBuilder, _features ?? RuntimeFeatureSet.EmitEverything(), _functionEmissionPolicy,
+                _nativeSourceOwners, nativeClassInitializer: _nativeRuntimeClassInitialization?.Initialize,
+                nativeStaticMemberPresence: _nativeStaticMemberPresence?.HasMember,
+                nativePropertyGetter: _nativePropertyLookup?.FindGetter,
+                nativeMethodLookup: _nativeMethodLookup?.Handles,
+                nativeConstructorMetadata: _nativeEvaluatedConstructors?.Handles);
+        if (_runtime.GuestOwnProperties is { } own) GetClassRegistry().BeginNativeOwnProperties(own);
         _typeMapper.SetRuntime(_runtime);
     }
 
@@ -791,7 +855,7 @@ public partial class ILCompiler
     /// </summary>
     private void Phase3_CreateProgramType()
     {
-        _programType = _moduleBuilder.DefineType(
+        _programType = EmitTypeDefinitions.DefineType(_moduleBuilder,
             "$Program",
             TypeAttributes.Public | TypeAttributes.Class | TypeAttributes.Sealed
         );
@@ -849,12 +913,16 @@ public partial class ILCompiler
                     if (import.DefaultImport != null)
                     {
                         _builtInModuleNamespaces[import.DefaultImport.Lexeme] = builtInModuleName;
+                        if (_typeMap.GetValueBinding(import.DefaultImport) is { } binding)
+                            _nativeModuleNamespaceBindings[binding] = builtInModuleName;
                     }
 
                     // Namespace import: import * as os from 'os' -> os maps to "os"
                     if (import.NamespaceImport != null)
                     {
                         _builtInModuleNamespaces[import.NamespaceImport.Lexeme] = builtInModuleName;
+                        if (_typeMap.GetValueBinding(import.NamespaceImport) is { } binding)
+                            _nativeModuleNamespaceBindings[binding] = builtInModuleName;
                     }
 
                     // Named imports: create static fields so they're accessible from functions
@@ -868,6 +936,8 @@ public partial class ILCompiler
 
                             // Track method binding for direct dispatch (scoped to this module)
                             bindings[localName] = (builtInModuleName, importedName);
+                            if (_typeMap.GetValueBinding(spec.LocalName ?? spec.Imported) is { } binding)
+                                _nativeModuleConstructorBindings[binding] = (builtInModuleName, importedName);
 
                             if (!_topLevelStaticVars.ContainsKey(localName))
                             {
@@ -1080,6 +1150,7 @@ public partial class ILCompiler
     private void Phase8_EmitEntryPoint(List<Stmt> statements)
     {
         EmitEntryPoint(statements);
+        EmitNativeAotEntryFacade();
     }
 
     /// <summary>
@@ -1171,6 +1242,7 @@ public partial class ILCompiler
     /// </summary>
     private void Phase9_FinalizeTypes()
     {
+        GetClassRegistry().NativeOwnProperties?.CompleteDeclarations(_nativeOwnSourceDeclarations.Keys);
         _classes.GenericParameters.CompleteEmission(_classes.Builders.Values
             .Concat(_classes.BlockScopedBuilders.Values).Concat(_classExprs.Builders.Values));
         _functions.GenericParameters.CompleteEmission();
@@ -1216,11 +1288,47 @@ public partial class ILCompiler
         {
             tb.CreateType();
         }
+        _nativeSourceOwners?.CompleteEmission(_classes.GenericParameters, _classes.Builders.Values
+            .Concat(_classes.BlockScopedBuilders.Values).Concat(_classExprs.Builders.Values));
+        // Source expression, constructor-value and CLR conversion recorders are
+        // finished here. Late native completions emit metadata dispatch only.
+        // Keep the source catalog's creation phase unchanged while sealing the
+        // actual producer inventories before consumers finalize their tables.
+        _nativeClrAdmission?.Complete(_moduleBuilder);
+        _nativeClassInitialization?.CompleteEmission();
+        _nativeConstructorActivation?.CompleteEmission(_nativeSourceOwners!, _runtime);
+        _nativeClosedFamilies?.CompleteEmission(_nativeSourceOwners!, _nativeConstructorActivation!.CompletedSnapshot, _nativeClrAdmission!);
+        _nativeConstructorFactories?.CompleteEmission(_nativeSourceOwners!, _runtime);
+        _nativeNumericRest4Binding?.CompleteEmission();
+        _nativeGenericMethodNormalization?.CompleteEmission(_functions.GenericParameters, _runtime.FunctionAttributes, _runtime.Errors);
+        _nativeConstructedBodies?.CompleteEmission(_functions.GenericParameters, _nativeGenericMethodNormalization!, _newTargetBodies,
+            _runtime.FunctionAttributes, _runtime.Errors);
+        _nativeRuntimeClassInitialization?.CompleteEmission(_nativeSourceOwners!, _runtime, _nativeClosedFamilies?.Completed);
+        _nativeStaticMemberPresence?.CompleteEmission(_nativeRuntimeClassInitialization!, _nativeSourceOwners!, _runtime);
+        _nativeStaticFieldLookup?.CompleteEmission(_nativeRuntimeClassInitialization!, _nativeSourceOwners!, _runtime);
+        _nativeConstructorMembers?.CompleteEmission(_nativeRuntimeClassInitialization!, _nativeSourceOwners!, _runtime);
+
+        _nativeReceiverBinding?.CompleteEmission(_runtime.Errors);
+        _nativePropertyLookup?.CompleteEmission(_nativeSourceOwners!, _runtime);
+        _nativeMethodLookup?.CompleteEmission(_nativePropertyLookup!, _nativeSourceOwners!, _runtime.Errors, _runtime.FunctionValues.Type);
+        _nativeDeletionLookup?.CompleteEmission(_nativeRuntimeClassInitialization!, _nativePropertyLookup!, _nativeSourceOwners!, _runtime, _nativeClosedFamilies?.Completed);
+        _nativeHasInMembers?.CompleteEmission(_nativeMethodLookup!, _nativeSourceOwners!, _runtime);
+        _nativeReceiverInitializerLookup?.CompleteEmission(_nativeSourceOwners!, _nativeConstructorActivation!.CompletedSnapshot, _runtime, _receiverInitializers, _nativeClosedFamilies?.Completed);
+        if (_nativeEvaluatedConstructors is not null)
+            _nativeEvaluatedConstructors.CompleteEmission(_nativeConstructorActivation!.CompletedSnapshot, _runtime);
         _programType.CreateType();
+        _nativeAotEntryFacade?.CreateType();
         _hostedRuntimeType?.CreateType();
         _hostedFactoryType?.CreateType();
         _runtime.JsonShapes.CompleteEmission();
+        GetClassRegistry().NativeOwnProperties?.CompleteEmission();
         _runtime.Deployment.CompleteEmission();
+        if (_nativeOwnerClosure is not null)
+            _nativeOwnerClosure.CompleteEmission(_nativeSourceOwners!, _nativeConstructorActivation!.CompletedSnapshot,
+                _nativeClrAdmission?.CompletedIngress, _runtime);
+        _nativeUnionArgumentConversion?.CompleteEmission(_unionGenerator!, _typeMapper, _runtime.UnionValues.Interface, _runtime.Errors, _runtime, _nativeClrAdmission?.CompletedIngress, _nativeMethodLookup, _nativeOwnerClosure);
+        _nativePrototypeFields?.CompleteEmission(_nativeSourceOwners!, _nativeClrAdmission?.CompletedIngress, _runtime, _nativeReceiverBinding!.RuntimeType, _nativeClosedFamilies?.Completed);
+        _nativeTypedArrayBuffers?.CompleteEmission(_nativeSourceOwners!, _nativeClrAdmission?.CompletedIngress, _runtime, _nativeOwnedTypeDeclarations);
     }
 
     /// <summary>
@@ -1314,6 +1422,8 @@ public partial class ILCompiler
         RegisterModuleDocuments(modules);
         _typeMapper.HeldClassConstructions = HeldClassConstructionInfo.Analyze(
             modules.SelectMany(module => module.Statements), typeMap, _typeMapper);
+        _nativeClrAdmission = _nativeAotProjectOutput
+            ? NativeClrAdmission.CaptureModules(modules, typeMap, _types, _referenceLoader?.CaptureCoreAliases()) : null;
         _rawCallStorage = RawCallStorageAnalysis.Capture(
             modules.SelectMany(module => module.Statements), typeMap,
             modules.Where(module => !module.IsCommonJs).Select(module => (IEnumerable<Stmt>)module.Statements));
@@ -1324,7 +1434,7 @@ public partial class ILCompiler
         // in place.
         foreach (var m in modules)
         {
-            var lifted = NestedFunctionLifter.Lift(m.Statements, m.Document?.Spans, typeMap, _rawCallStorage.RecordRewrite);
+            var lifted = NestedFunctionLifter.Lift(m.Statements, m.Document?.Spans, typeMap, RecordSourceRewrite);
             if (!ReferenceEquals(lifted, m.Statements))
             {
                 m.Statements.Clear();
@@ -1333,13 +1443,14 @@ public partial class ILCompiler
         }
 
         var allStatements = modules.SelectMany(m => m.Statements).ToList();
+        _functionEmissionPolicy = FunctionEmissionPolicy.ForPreparedSource(allStatements, _nativeAotProjectOutput);
         _lexicalBindingNames = LexicalBindingNameCollector.Collect(allStatements);
 
         // Detect features across the union of all modules' statements (any module
         // pulling in `crypto` makes the runtime emit crypto types).
         if (_features is null)
         {
-            var detector = new RuntimeFeatureDetector();
+            var detector = new RuntimeFeatureDetector(_nativeAotProjectOutput);
             _features = detector.Detect(allStatements, _typeMap);
             if (modules.Any(module => module.IsCommonJs))
                 _features.UsesCjsRequire = true;
@@ -1363,6 +1474,15 @@ public partial class ILCompiler
 
     private void AnalyzeModuleBindings(List<ParsedModule> modules)
     {
+        // The embedded events facade is a source module, not a native module
+        // registry entry. Its canonical constructor name still has the native
+        // EventEmitter result type and corresponding emitted method strategy.
+        foreach (var (declaration, _) in _typeMap.ClassDeclarations)
+            if (declaration.Name.Lexeme == "EventEmitter" &&
+                _typeMap.GetValueBinding(declaration.Name) is { } binding &&
+                binding.Declarations.Any(source =>
+                    Modules.Stdlib.Providers.EmbeddedStdlibProvider.TryExtractSpecifier(source.Document.Path) == "events"))
+                _nativeModuleConstructorBindings[binding] = ("stdlib:events", "EventEmitter");
         // Scope each module's named-import bindings to that module so local
         // aliases like __platform don't collide between stdlib modules.
         foreach (var m in modules)
@@ -1418,6 +1538,9 @@ public partial class ILCompiler
                 DefineModuleType(module);
             }
         }
+        PrepareLiveModuleBindings(modules);
+        foreach (var module in modules.Where(module => !module.IsCommonJs && _modules.Types.ContainsKey(module.Path)))
+            EmitModuleGetNamespace(module, _modules.Types[module.Path], _modules.ExportFields[module.Path]);
     }
 
     /// <summary>
@@ -1483,7 +1606,7 @@ public partial class ILCompiler
                 if (blockScoped && !_classes.BlockScopedNames.ContainsKey(classStmt))
                 {
                     string generated = $"$BlockClass_{_classes.BlockScopedNames.Count}_{classStmt.Name.Lexeme}";
-                    _classes.BlockScopedNames[classStmt] = GetDefinitionContext().GetQualifiedClassName(generated);
+                    _classes.BlockScopedNames[classStmt] = GetDefinitionContext().GetRawQualifiedName(generated);
                 }
                 DefineClass(classStmt);
                 break;
@@ -1515,7 +1638,7 @@ public partial class ILCompiler
         var ctx = GetDefinitionContext();
         return resolve
             ? ctx.ResolveClassName(classStmt.Name.Lexeme)
-            : ctx.GetQualifiedClassName(classStmt.Name.Lexeme);
+            : ctx.GetRawQualifiedName(classStmt.Name.Lexeme);
     }
 
     private void DefineRemainingClassDeclarations(IEnumerable<Stmt> statements)
@@ -1797,6 +1920,7 @@ public partial class ILCompiler
     private void ModulePhase10_EmitEntryPoint(List<ParsedModule> modules)
     {
         EmitModulesEntryPoint(modules);
+        EmitNativeAotEntryFacade();
     }
 
     /// <summary>
@@ -1804,6 +1928,7 @@ public partial class ILCompiler
     /// </summary>
     private void ModulePhase11_FinalizeTypes()
     {
+        GetClassRegistry().NativeOwnProperties?.CompleteDeclarations(_nativeOwnSourceDeclarations.Keys);
         _classes.GenericParameters.CompleteEmission(_classes.Builders.Values
             .Concat(_classes.BlockScopedBuilders.Values).Concat(_classExprs.Builders.Values));
         _functions.GenericParameters.CompleteEmission();
@@ -1853,11 +1978,47 @@ public partial class ILCompiler
         {
             tb.CreateType();
         }
+        _nativeSourceOwners?.CompleteEmission(_classes.GenericParameters, _classes.Builders.Values
+            .Concat(_classes.BlockScopedBuilders.Values).Concat(_classExprs.Builders.Values));
+        // Source expression, constructor-value and CLR conversion recorders are
+        // finished here. Late native completions emit metadata dispatch only.
+        // Keep the source catalog's creation phase unchanged while sealing the
+        // actual producer inventories before consumers finalize their tables.
+        _nativeClrAdmission?.Complete(_moduleBuilder);
+        _nativeClassInitialization?.CompleteEmission();
+        _nativeConstructorActivation?.CompleteEmission(_nativeSourceOwners!, _runtime);
+        _nativeClosedFamilies?.CompleteEmission(_nativeSourceOwners!, _nativeConstructorActivation!.CompletedSnapshot, _nativeClrAdmission!);
+        _nativeConstructorFactories?.CompleteEmission(_nativeSourceOwners!, _runtime);
+        _nativeNumericRest4Binding?.CompleteEmission();
+        _nativeGenericMethodNormalization?.CompleteEmission(_functions.GenericParameters, _runtime.FunctionAttributes, _runtime.Errors);
+        _nativeConstructedBodies?.CompleteEmission(_functions.GenericParameters, _nativeGenericMethodNormalization!, _newTargetBodies,
+            _runtime.FunctionAttributes, _runtime.Errors);
+        _nativeRuntimeClassInitialization?.CompleteEmission(_nativeSourceOwners!, _runtime, _nativeClosedFamilies?.Completed);
+        _nativeStaticMemberPresence?.CompleteEmission(_nativeRuntimeClassInitialization!, _nativeSourceOwners!, _runtime);
+        _nativeStaticFieldLookup?.CompleteEmission(_nativeRuntimeClassInitialization!, _nativeSourceOwners!, _runtime);
+        _nativeConstructorMembers?.CompleteEmission(_nativeRuntimeClassInitialization!, _nativeSourceOwners!, _runtime);
+
+        _nativeReceiverBinding?.CompleteEmission(_runtime.Errors);
+        _nativePropertyLookup?.CompleteEmission(_nativeSourceOwners!, _runtime);
+        _nativeMethodLookup?.CompleteEmission(_nativePropertyLookup!, _nativeSourceOwners!, _runtime.Errors, _runtime.FunctionValues.Type);
+        _nativeDeletionLookup?.CompleteEmission(_nativeRuntimeClassInitialization!, _nativePropertyLookup!, _nativeSourceOwners!, _runtime, _nativeClosedFamilies?.Completed);
+        _nativeHasInMembers?.CompleteEmission(_nativeMethodLookup!, _nativeSourceOwners!, _runtime);
+        _nativeReceiverInitializerLookup?.CompleteEmission(_nativeSourceOwners!, _nativeConstructorActivation!.CompletedSnapshot, _runtime, _receiverInitializers, _nativeClosedFamilies?.Completed);
+        if (_nativeEvaluatedConstructors is not null)
+            _nativeEvaluatedConstructors.CompleteEmission(_nativeConstructorActivation!.CompletedSnapshot, _runtime);
         _programType.CreateType();
+        _nativeAotEntryFacade?.CreateType();
         _hostedRuntimeType?.CreateType();
         _hostedFactoryType?.CreateType();
         _runtime.JsonShapes.CompleteEmission();
+        GetClassRegistry().NativeOwnProperties?.CompleteEmission();
         _runtime.Deployment.CompleteEmission();
+        if (_nativeOwnerClosure is not null)
+            _nativeOwnerClosure.CompleteEmission(_nativeSourceOwners!, _nativeConstructorActivation!.CompletedSnapshot,
+                _nativeClrAdmission?.CompletedIngress, _runtime);
+        _nativeUnionArgumentConversion?.CompleteEmission(_unionGenerator!, _typeMapper, _runtime.UnionValues.Interface, _runtime.Errors, _runtime, _nativeClrAdmission?.CompletedIngress, _nativeMethodLookup, _nativeOwnerClosure);
+        _nativePrototypeFields?.CompleteEmission(_nativeSourceOwners!, _nativeClrAdmission?.CompletedIngress, _runtime, _nativeReceiverBinding!.RuntimeType, _nativeClosedFamilies?.Completed);
+        _nativeTypedArrayBuffers?.CompleteEmission(_nativeSourceOwners!, _nativeClrAdmission?.CompletedIngress, _runtime, _nativeOwnedTypeDeclarations);
     }
 
     #endregion
@@ -1960,6 +2121,9 @@ public partial class ILCompiler
                 ? new DirectoryReferenceAssemblyIndex(_sdkPath)
                 : EmbeddedReferenceAssemblyIndex.Default;
 
+            if (_nativeReceiverBinding is not null)
+                referenceIndex = new NativeRuntimeTypeReferenceIndex(referenceIndex, _nativeReceiverBinding.RuntimeType, tempStream.ToArray());
+
             image = AssemblyReferenceRewriteCompatibility.Rewrite(
                 tempStream.ToArray(), referenceIndex, ReferencePolicy.DroppingReferences("SharpTS"));
         }
@@ -1968,8 +2132,13 @@ public partial class ILCompiler
             image = tempStream.ToArray();
         }
 
+        if (_nativeAotProjectOutput) NativeGuestAssemblyClosure.ValidateImage(image, _nativeManagedReferences);
+
         if (!EmitDebugSymbols)
+        {
+            _nativeReceiverBinding?.ValidateImage(image);
             return new CompilationArtifacts(image, null, null);
+        }
 
         // The rewriter rebuilds the PE from scratch; prove it kept MethodDef identities before
         // describing the result with symbols derived from the pre-rewrite emit.
@@ -1990,11 +2159,14 @@ public partial class ILCompiler
         image = DebugDirectoryInjector.Inject(
             image, pdb.ContentId, pdb.FormatVersion, pdbPath, pdb.Checksum, PdbEmitter.ChecksumAlgorithmName);
 
+        _nativeReceiverBinding?.ValidateImage(image);
+
         return new CompilationArtifacts(image, pdb.Bytes, Path.GetFileName(pdbPath));
     }
 
     public CompilationArtifacts SaveArtifacts(string? pdbPath = null)
     {
+        EnsureNativeClrAdmissionComplete();
         if (_timingCollector is null)
             return BuildArtifacts(pdbPath);
 
@@ -2033,6 +2205,7 @@ public partial class ILCompiler
 
     private void SaveCore(string outputPath, string? pdbPath)
     {
+        EnsureNativeClrAdmissionComplete();
         if (EmitDebugSymbols)
             pdbPath ??= Path.ChangeExtension(outputPath, ".pdb");
 
@@ -2193,9 +2366,11 @@ public partial class ILCompiler
                 return;
             }
 
+            if (path != null && _liveModuleDeclarations.Contains(stmt)) return;
+
             string? varName = stmt switch
             {
-                Stmt.Var v => v.Name.Lexeme,
+                Stmt.Var { IsDeclare: false } v => v.Name.Lexeme,
                 Stmt.Const c => c.Name.Lexeme,
                 _ => null
             };
@@ -2555,6 +2730,7 @@ public partial class ILCompiler
     /// </remarks>
     private void DefineModuleScopedTopLevelStaticField(Stmt stmt, string? modulePath, Dictionary<string, FieldBuilder>? moduleDict)
     {
+        if (modulePath != null && _liveModuleDeclarations.Contains(stmt)) return;
         if (stmt is Stmt.Sequence seq)
         {
             foreach (var inner in seq.Statements)
@@ -2578,7 +2754,7 @@ public partial class ILCompiler
 
         string? varName = stmt switch
         {
-            Stmt.Var v => v.Name.Lexeme,
+            Stmt.Var { IsDeclare: false } v => v.Name.Lexeme,
             Stmt.Const c => c.Name.Lexeme,
             _ => null
         };
@@ -2713,7 +2889,7 @@ public partial class ILCompiler
 
         foreach (var (name, field) in exports)
         {
-            if (name == "$default" || name == "$exportAssignment") continue;
+            if (name == "default" || name == "$exportAssignment") continue;
             result ??= new Dictionary<string, FieldBuilder>();
             // Don't overwrite a same-named module-scoped static or import — those
             // take precedence. ESM `export const X` without an accompanying

@@ -25,6 +25,7 @@ public partial class ILCompiler
             _types.Object, [_types.ObjectArray, _types.Object]);
         owner.SetCustomAttribute(_runtime.DynamicConstruction.FactoryAttributeConstructor,
             CustomAttributeEncoder.Encode(_runtime.DynamicConstruction.FactoryAttributeConstructor, name));
+        _nativeConstructorFactories?.Record(owner, factory);
 
         var parameters = constructor.GetParameters();
         var sourceParameters = ResolveConstructorFactorySourceParameters(owner, declaration);
@@ -37,7 +38,7 @@ public partial class ILCompiler
         var il = factory.GetILGenerator();
         var ctx = CreateModuleMemberContext(il, factory);
         var emitter = new ILEmitter(ctx);
-        if (abstractReceiverFactory || (UsesLiveSuperConstruction(declaration) && !owner.IsGenericTypeDefinition
+        if (abstractReceiverFactory || (UsesReceiverConstruction(declaration) && !owner.IsGenericTypeDefinition
             && !_classes.ErrorSubclasses.Contains(GetQualifiedClassDeclarationName(declaration))
             && !_classes.PromiseSubclasses.Contains(GetQualifiedClassDeclarationName(declaration))))
         {
@@ -156,7 +157,8 @@ public partial class ILCompiler
             ? EmitGenerics.MakeGenericType(owner, owner.GetGenericArguments()) : owner;
         var bodyConstructor = NewTargetConstructor(constructor);
         if (bodyConstructor != constructor) il.Emit(OpCodes.Ldarg_1);
-        il.Emit(OpCodes.Newobj, self == owner ? bodyConstructor : EmitterTypeHelpers.ResolveConstructor(self, bodyConstructor));
+        NativeClosedSourceFamilies.EmitAllocation(_nativeClosedFamilies, il,
+            self == owner ? bodyConstructor : EmitterTypeHelpers.ResolveConstructor(self, bodyConstructor), factory);
         il.Emit(OpCodes.Call, _runtime.DynamicConstruction.ResolveClassReturn);
         if (!publishesArguments)
         {

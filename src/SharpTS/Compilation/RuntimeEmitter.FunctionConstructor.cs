@@ -71,9 +71,13 @@ public partial class RuntimeEmitter
         il.Emit(OpCodes.Ldc_I4, (int)RegexOptions.NonBacktracking);
         il.Emit(OpCodes.Call, _types.GetMethod(typeof(Regex), "IsMatch", _types.String, _types.String, typeof(RegexOptions)));
         il.Emit(OpCodes.Brfalse, unsupported);
-        il.Emit(OpCodes.Ldnull);
-        il.Emit(OpCodes.Ldtoken, returnThisBody);
-        il.Emit(OpCodes.Br, create);
+        if (_nativeUnionParameters is not null) EmitKnownFunction(returnThisBody);
+        else
+        {
+            il.Emit(OpCodes.Ldnull);
+            il.Emit(OpCodes.Ldtoken, returnThisBody);
+            il.Emit(OpCodes.Br, create);
+        }
 
         il.MarkLabel(unsupported);
         il.Emit(OpCodes.Ldstr, FunctionConstructorContract.UnsupportedSourceMessage);
@@ -81,14 +85,32 @@ public partial class RuntimeEmitter
         il.Emit(OpCodes.Throw);
 
         il.MarkLabel(empty);
-        il.Emit(OpCodes.Ldnull);
-        il.Emit(OpCodes.Ldtoken, emptyBody);
-        il.MarkLabel(create);
-        il.Emit(OpCodes.Call, _types.GetMethod(typeof(MethodBase), "GetMethodFromHandle", _types.RuntimeMethodHandle));
-        il.Emit(OpCodes.Castclass, _types.MethodInfo);
-        il.Emit(OpCodes.Ldstr, "anonymous");
-        il.Emit(OpCodes.Ldc_I4_0);
-        il.Emit(OpCodes.Newobj, functionConstruction.CachedConstructor);
-        il.Emit(OpCodes.Ret);
+        if (_nativeUnionParameters is not null)
+        {
+            EmitKnownFunction(emptyBody);
+            il.MarkLabel(create);
+        }
+        else
+        {
+            il.Emit(OpCodes.Ldnull);
+            il.Emit(OpCodes.Ldtoken, emptyBody);
+            il.MarkLabel(create);
+            il.Emit(OpCodes.Call, _types.GetMethod(typeof(MethodBase), "GetMethodFromHandle", _types.RuntimeMethodHandle));
+            il.Emit(OpCodes.Castclass, _types.MethodInfo);
+            il.Emit(OpCodes.Ldstr, "anonymous");
+            il.Emit(OpCodes.Ldc_I4_0);
+            NativePrototypeFieldsLookup.EmitCarrierCreate(_nativePrototypeFields, il, functionConstruction.CachedConstructor);
+            il.Emit(OpCodes.Ret);
+        }
+
+        void EmitKnownFunction(MethodBuilder implementation)
+        {
+            il.Emit(OpCodes.Ldnull);
+            var producer = EmitReflectedMethodLiteralViaHandle(il, implementation);
+            il.Emit(OpCodes.Ldstr, "anonymous");
+            il.Emit(OpCodes.Ldc_I4_0);
+            EmitReflectedFunctionConstructor(il, functionConstruction.CachedConstructor, producer, cached: true);
+            il.Emit(OpCodes.Ret);
+        }
     }
 }

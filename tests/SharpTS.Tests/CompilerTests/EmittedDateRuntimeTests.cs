@@ -245,6 +245,9 @@ public sealed class EmittedDateRuntimeTests
         var features = Detect(supplied ? "const value=new Date(0);" : "const value=1;");
         var runtime = new RuntimeEmitter(TypeProvider.Runtime).EmitAll(module, features);
         features.UsesDate = !supplied;
+        // This probe supplies a stable, unshadowed constructor independently
+        // of the feature-presence bit it deliberately flips above.
+        features.UsesDateConstructorMutation = Detect($"Date.{name}();").UsesDateConstructorMutation;
         var type = module.DefineType("DateCallProbe", TypeAttributes.Public);
         var method = type.DefineMethod("Invoke", MethodAttributes.Public | MethodAttributes.Static, typeof(double), Type.EmptyTypes);
         var il = method.GetILGenerator();

@@ -225,6 +225,19 @@ public sealed partial class AsyncReturnThenableTests
         yield return ["locked-static-adoption", LockedAdoptionSource
             .Replace("async read(", "static async read(")
             .Replace("const owner=new Locked();", "const owner=Locked;"), expected];
+        yield return ["locked-instance-alias-adoption", LockedAdoptionSource
+            .Replace("const owner=new Locked();", "const owner=new Locked(); const read:any=owner.read;")
+            .Replace("owner.read(", "read.call(owner,"), expected];
+        yield return ["locked-instance-generic-alias-adoption", LockedAdoptionSource
+            .Replace("class Locked {", "class Locked<T> {")
+            .Replace("const owner=new Locked();", "const owner=new Locked<number>(); const read:any=owner.read;")
+            .Replace("owner.read(", "read.call(owner,"), expected];
+        var staticAlias = LockedAdoptionSource
+            .Replace("async read(", "static async read(")
+            .Replace("const owner=new Locked();", "const owner=Locked; const read:any=owner.read;")
+            .Replace("owner.read(", "read.call(owner,");
+        yield return ["locked-static-alias-adoption", staticAlias, expected];
+        yield return ["locked-static-generic-alias-adoption", staticAlias.Replace("class Locked {", "class Locked<T> {"), expected];
     }
 
     public static IEnumerable<object[]> SavedCases()

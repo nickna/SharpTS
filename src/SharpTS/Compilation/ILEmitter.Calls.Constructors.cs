@@ -14,6 +14,12 @@ public partial class ILEmitter
 {
     protected override void EmitNew(Expr.New n)
     {
+        if (TryEmitNativeModuleConstructor(n)) return;
+        if (_ctx.TypeMapper.RequiresReceiverConstruction(_ctx.TypeMap?.Get(n)))
+        {
+            EmitDynamicConstruction(n);
+            return;
+        }
         if (_ctx.RuntimeFeatures?.UsesClassPrototypeMutation == true
             && _ctx.TypeMapper.IsDynamicClassInstance(_ctx.TypeMap?.Get(n)))
         {
@@ -83,7 +89,9 @@ public partial class ILEmitter
         }
 
         // 1. Built-in constructors (Date, Map, Set, Promise, Headers, etc.) - handled by base
-        if (namespaceParts.Count == 0 && n.Callee is Expr.Variable && TryEmitBuiltInConstructor(className, n.Arguments))
+        if (namespaceParts.Count == 0 && n.Callee is Expr.Variable
+            && !_resolver.HasVariable(className) && !_ctx.HasVisibleValueBinding(className)
+            && TryEmitBuiltInConstructor(className, n.Arguments))
             return;
 
         // 2. Intl namespace constructors (Intl.NumberFormat, etc.) - handled by base
@@ -120,7 +128,7 @@ public partial class ILEmitter
         }
 
         // 7. ILEmitter-specific: class expression constructor
-        if (_ctx.VarToClassExpr != null &&
+        if (n.Callee is Expr.Variable && _ctx.VarToClassExpr != null &&
             _ctx.VarToClassExpr.TryGetValue(className, out var classExpr) &&
             _ctx.ClassExprConstructors != null &&
             _ctx.ClassExprConstructors.TryGetValue(classExpr, out var classExprCtor))
@@ -186,6 +194,16 @@ public partial class ILEmitter
         var genericParams = _ctx.ClassRegistry!.GetGenericParams(resolvedClassName);
         bool isGeneric = genericParams != null && genericParams.Count > 0;
 
+        // A spread has runtime positions, so one CLR slot per source expression
+        // cannot represent it. Capture the genuine source constructor value and
+        // use its existing source-aware factory after closing the evaluated type.
+        if (isGeneric && n.Arguments.Any(argument => argument is Expr.Spread))
+        {
+            EmitCalleeExprConstruction(n, normalizeSourceGeneric: true);
+            SetStackUnknown();
+            return;
+        }
+
         // Generic class with inferred type arguments (e.g. `new Box(5)` for `class Box<T>`).
         // Emitting Newobj against the open generic TypeDef throws TypeLoadException at load
         // time (ECMA-335 II.9.4 — the open definition is not a loadable type). Infer the
@@ -221,7 +239,7 @@ public partial class ILEmitter
             // observable through `arguments`, spreads expand once, and omitted
             // parameter slots receive the undefined sentinel before defaults run.
             EmitStaticCallArguments(n.Arguments, ctorBuilder);
-            IL.Emit(OpCodes.Newobj, targetCtor);
+            NativeClosedSourceFamilies.EmitAllocation(_ctx.NativeClosedFamilies, IL, targetCtor, _ctx.CurrentMethod);
             IL.Emit(OpCodes.Call, _ctx.Runtime!.DynamicConstruction.ResolveClassReturn);
             SetStackUnknown();
             return;
@@ -242,7 +260,7 @@ public partial class ILEmitter
         for (int i = n.Arguments.Count; i < expectedParamCount; i++)
             EmitOmittedArgument(ctorParams[i].ParameterType);
 
-        IL.Emit(OpCodes.Newobj, targetCtor);
+        NativeClosedSourceFamilies.EmitAllocation(_ctx.NativeClosedFamilies, IL, targetCtor, _ctx.CurrentMethod);
         IL.Emit(OpCodes.Call, _ctx.Runtime!.DynamicConstruction.ResolveClassReturn);
         SetStackUnknown();
     }
@@ -332,7 +350,7 @@ public partial class ILEmitter
             }
         }
 
-        IL.Emit(OpCodes.Newobj, targetCtor);
+        NativeClosedSourceFamilies.EmitAllocation(_ctx.NativeClosedFamilies, IL, targetCtor, _ctx.CurrentMethod);
         IL.Emit(OpCodes.Call, _ctx.Runtime!.DynamicConstruction.ResolveClassReturn);
         SetStackUnknown();
     }
@@ -377,7 +395,7 @@ public partial class ILEmitter
     private void EmitClassExprCtorCall(ConstructorInfo ctor, Expr.New n)
     {
         EmitStaticCallArguments(n.Arguments, ctor);
-        IL.Emit(OpCodes.Newobj, ctor);
+        NativeClosedSourceFamilies.EmitAllocation(_ctx.NativeClosedFamilies, IL, ctor, _ctx.CurrentMethod);
         IL.Emit(OpCodes.Call, _ctx.Runtime!.DynamicConstruction.ResolveClassReturn);
         SetStackUnknown();
     }
@@ -511,7 +529,7 @@ public partial class ILEmitter
     /// the unresolved-variable Ldnull branch above (that idiom always names the
     /// constructor as a bare variable), so routing here is safe.
     /// </summary>
-    private void EmitCalleeExprConstruction(Expr.New n)
+    private void EmitCalleeExprConstruction(Expr.New n, bool normalizeSourceGeneric = false)
     {
         EmitExpression(n.Callee);
         // Box value-typed callees (e.g. `new true;`, `new 1;`) before storing to an
@@ -531,6 +549,13 @@ public partial class ILEmitter
         // It's a Type — construct via reflection.
         IL.Emit(OpCodes.Ldloc, objTemp);
         IL.Emit(OpCodes.Castclass, _ctx.Types.Type);
+        if (normalizeSourceGeneric)
+        {
+            // As in the source constructor-value producer, a generic source
+            // owner denotes its definition even inside a closed CLR context.
+            // The existing evaluated-type closer applies this call's type args.
+            IL.Emit(OpCodes.Callvirt, _ctx.Types.GetMethodNoParams(_ctx.Types.Type, "GetGenericTypeDefinition"));
+        }
         EmitReflectionConstructFromType(n);
         IL.Emit(OpCodes.Br, doneLabel);
 
@@ -639,14 +664,29 @@ public partial class ILEmitter
             IL.MarkLabel(notPromiseType);
         }
 
-        List<LocalBuilder> argTemps = [];
-        foreach (var arg in n.Arguments)
+        // Expand each iterable at its source position, after capturing the
+        // constructor value and before any later argument or constructor body.
+        EmitArgsArrayWithSpread(n.Arguments);
+        var callerArguments = IL.DeclareLocal(_ctx.Types.ObjectArray);
+        IL.Emit(OpCodes.Stloc, callerArguments);
+
+        void EmitArgumentOrOmitted(int index, bool emptyString = false)
         {
-            EmitExpression(arg);
-            EmitBoxIfNeeded(arg);
-            var t = IL.DeclareLocal(_ctx.Types.Object);
-            IL.Emit(OpCodes.Stloc, t);
-            argTemps.Add(t);
+            var missing = IL.DefineLabel();
+            var ready = IL.DefineLabel();
+            IL.Emit(OpCodes.Ldloc, callerArguments);
+            IL.Emit(OpCodes.Ldlen);
+            IL.Emit(OpCodes.Conv_I4);
+            IL.Emit(OpCodes.Ldc_I4, index);
+            IL.Emit(OpCodes.Ble, missing);
+            IL.Emit(OpCodes.Ldloc, callerArguments);
+            IL.Emit(OpCodes.Ldc_I4, index);
+            IL.Emit(OpCodes.Ldelem_Ref);
+            IL.Emit(OpCodes.Br, ready);
+            IL.MarkLabel(missing);
+            if (emptyString) IL.Emit(OpCodes.Ldstr, "");
+            else IL.Emit(OpCodes.Ldsfld, _ctx.Runtime.Sentinels.UndefinedInstance);
+            IL.MarkLabel(ready);
         }
 
         // An aliased RegExp constructor is the emitted $RegExp Type token,
@@ -681,15 +721,8 @@ public partial class ILEmitter
             _ctx.Types.Type, "GetTypeFromHandle", _ctx.Types.RuntimeTypeHandle));
         IL.Emit(OpCodes.Bne_Un, notStringType);
         IL.Emit(OpCodes.Ldstr, "String");
-        if (argTemps.Count > 0)
-        {
-            IL.Emit(OpCodes.Ldloc, argTemps[0]);
-            IL.Emit(OpCodes.Call, _ctx.Runtime!.StringCoercion.ToJsString);
-        }
-        else
-        {
-            IL.Emit(OpCodes.Ldstr, "");
-        }
+        EmitArgumentOrOmitted(0, emptyString: true);
+        IL.Emit(OpCodes.Call, _ctx.Runtime!.StringCoercion.ToJsString);
         IL.Emit(OpCodes.Call, _ctx.Runtime!.BoxedPrimitives.New);
         IL.Emit(OpCodes.Br, constructionDone);
         IL.MarkLabel(notStringType);
@@ -702,14 +735,8 @@ public partial class ILEmitter
             IL.Emit(OpCodes.Ldtoken, regExpType);
             IL.Emit(OpCodes.Call, _ctx.Types.GetMethod(_ctx.Types.Type, "GetTypeFromHandle", _ctx.Types.RuntimeTypeHandle));
             IL.Emit(OpCodes.Bne_Un, notRegExpType);
-            if (argTemps.Count > 0)
-                IL.Emit(OpCodes.Ldloc, argTemps[0]);
-            else
-                IL.Emit(OpCodes.Ldsfld, _ctx.Runtime.Sentinels.UndefinedInstance);
-            if (argTemps.Count > 1)
-                IL.Emit(OpCodes.Ldloc, argTemps[1]);
-            else
-                IL.Emit(OpCodes.Ldsfld, _ctx.Runtime.Sentinels.UndefinedInstance);
+            EmitArgumentOrOmitted(0);
+            EmitArgumentOrOmitted(1);
             IL.Emit(OpCodes.Call, _ctx.Runtime.RegExps.RequireImplementation().FromArguments);
             IL.Emit(OpCodes.Br, constructionDone);
             IL.MarkLabel(notRegExpType);
@@ -720,15 +747,7 @@ public partial class ILEmitter
         // express those semantics, so route exact emitted error Type tokens
         // through the shared factory before the reflection fallback.
         IL.Emit(OpCodes.Ldloc, typeLocal);
-        IL.Emit(OpCodes.Ldc_I4, argTemps.Count);
-        IL.Emit(OpCodes.Newarr, _ctx.Types.Object);
-        for (int i = 0; i < argTemps.Count; i++)
-        {
-            IL.Emit(OpCodes.Dup);
-            IL.Emit(OpCodes.Ldc_I4, i);
-            IL.Emit(OpCodes.Ldloc, argTemps[i]);
-            IL.Emit(OpCodes.Stelem_Ref);
-        }
+        IL.Emit(OpCodes.Ldloc, callerArguments);
         IL.Emit(OpCodes.Call, _ctx.Runtime.Errors.CreateErrorFromTypeOrNull);
         IL.Emit(OpCodes.Dup);
         IL.Emit(OpCodes.Brtrue, constructionDone);
@@ -748,7 +767,7 @@ public partial class ILEmitter
             [typeof(Type), typeof(bool)])!);
         IL.Emit(OpCodes.Brfalse, useClrConstructor);
         IL.Emit(OpCodes.Ldloc, typeLocal);
-        EmitArgsArray(n.Arguments, argTemps.ToArray());
+        IL.Emit(OpCodes.Ldloc, callerArguments);
         IL.Emit(OpCodes.Call, _ctx.Runtime.DynamicConstruction.Value);
         IL.Emit(OpCodes.Br, constructionDone);
         IL.MarkLabel(useClrConstructor);
@@ -759,9 +778,14 @@ public partial class ILEmitter
             "GetConstructors",
             Type.EmptyTypes);
         IL.Emit(OpCodes.Ldloc, typeLocal);
-        IL.Emit(OpCodes.Callvirt, getConstructorsMethod);
-        IL.Emit(OpCodes.Ldc_I4_0);
-        IL.Emit(OpCodes.Ldelem_Ref);
+        if (_ctx.Runtime.DynamicConstruction.NativeMetadata is { } native)
+            IL.Emit(OpCodes.Call, native.FirstPublicConstructor);
+        else
+        {
+            IL.Emit(OpCodes.Callvirt, getConstructorsMethod);
+            IL.Emit(OpCodes.Ldc_I4_0);
+            IL.Emit(OpCodes.Ldelem_Ref);
+        }
         var ctorLocal = IL.DeclareLocal(typeof(ConstructorInfo));
         IL.Emit(OpCodes.Stloc, ctorLocal);
 
@@ -818,18 +842,33 @@ public partial class ILEmitter
         IL.Emit(OpCodes.Br, padCheckLabel);
         IL.MarkLabel(padDoneLabel);
 
-        for (int i = 0; i < argTemps.Count; i++)
-        {
-            var skipLabel = IL.DefineLabel();
-            IL.Emit(OpCodes.Ldc_I4, i);
-            IL.Emit(OpCodes.Ldloc, arityLocal);
-            IL.Emit(OpCodes.Bge, skipLabel);
-            IL.Emit(OpCodes.Ldloc, argsArrayLocal);
-            IL.Emit(OpCodes.Ldc_I4, i);
-            IL.Emit(OpCodes.Ldloc, argTemps[i]);
-            IL.Emit(OpCodes.Stelem_Ref);
-            IL.MarkLabel(skipLabel);
-        }
+        // CLR slots still use the selected constructor's arity and omission
+        // policy. Surplus expanded arguments have already run their effects.
+        IL.Emit(OpCodes.Ldc_I4_0);
+        IL.Emit(OpCodes.Stloc, padIndexLocal);
+        var copyCheck = IL.DefineLabel();
+        var copyDone = IL.DefineLabel();
+        IL.MarkLabel(copyCheck);
+        IL.Emit(OpCodes.Ldloc, padIndexLocal);
+        IL.Emit(OpCodes.Ldloc, arityLocal);
+        IL.Emit(OpCodes.Bge, copyDone);
+        IL.Emit(OpCodes.Ldloc, padIndexLocal);
+        IL.Emit(OpCodes.Ldloc, callerArguments);
+        IL.Emit(OpCodes.Ldlen);
+        IL.Emit(OpCodes.Conv_I4);
+        IL.Emit(OpCodes.Bge, copyDone);
+        IL.Emit(OpCodes.Ldloc, argsArrayLocal);
+        IL.Emit(OpCodes.Ldloc, padIndexLocal);
+        IL.Emit(OpCodes.Ldloc, callerArguments);
+        IL.Emit(OpCodes.Ldloc, padIndexLocal);
+        IL.Emit(OpCodes.Ldelem_Ref);
+        IL.Emit(OpCodes.Stelem_Ref);
+        IL.Emit(OpCodes.Ldloc, padIndexLocal);
+        IL.Emit(OpCodes.Ldc_I4_1);
+        IL.Emit(OpCodes.Add);
+        IL.Emit(OpCodes.Stloc, padIndexLocal);
+        IL.Emit(OpCodes.Br, copyCheck);
+        IL.MarkLabel(copyDone);
 
         // ctor.Invoke(args)
         var invokeMethod = typeof(ConstructorInfo).GetMethod("Invoke", [typeof(object[])])!;

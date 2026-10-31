@@ -26,6 +26,7 @@ public partial class ILCompiler
         bool needsReceiver = forceReceiver || visitor.HasReplacement || _typeMapper.IsDynamicClassInstance(sourceType);
         context.CapturesClassConstructorReturn = needsReceiver;
         context.IsDerivedClassConstructor = derived;
+        if (derived) context.ConstructorSuperBound = context.IL.DeclareLocal(context.Types.Boolean);
         if (needsReceiver)
         {
             context.ClassConstructorReceiver = context.IL.DeclareLocal(context.Types.Object);

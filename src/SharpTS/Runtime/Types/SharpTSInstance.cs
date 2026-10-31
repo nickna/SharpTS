@@ -34,6 +34,7 @@ public class SharpTSInstance(SharpTSClass klass) : ISharpTSPropertyAccessor, ITy
     private SharpTSObject? _symbolProperties;
     private Dictionary<string, PropertyDescriptorFlags>? _descriptors;
     private Interpreter? _interpreter;
+    internal Interpreter? OwningInterpreter => _interpreter;
 
     // Property lookup caches to avoid expensive inheritance chain walks
     private readonly Dictionary<string, PropertyResolution> _lookupCache = [];
@@ -194,6 +195,14 @@ public class SharpTSInstance(SharpTSClass klass) : ISharpTSPropertyAccessor, ITy
     public object? Get(Token name)
     {
         string propName = name.Lexeme;
+        if (_interpreter is not null)
+        {
+            if (GetOwnPropertyDescriptor(propName) is { } own)
+                return own.HasGet || own.HasSet
+                    ? own.Get is { } getter ? BuiltIns.FunctionBuiltIns.CallWithThis(_interpreter, getter, this, []) : SharpTSUndefined.Instance
+                    : own.Value;
+            return _interpreter.GetInstancePrototypeProperty(this, propName);
+        }
         if (propName == "constructor")
         {
             // Constructor is an ordinary live prototype property. Its default
@@ -427,6 +436,8 @@ public class SharpTSInstance(SharpTSClass klass) : ISharpTSPropertyAccessor, ITy
 
     public bool HasProperty(string name)
     {
+        if (_interpreter is not null)
+            return GetOwnPropertyDescriptor(name) is not null || _interpreter.HasProperty(Prototype, name);
         if (name == "constructor")
         {
             if (GetOwnPropertyDescriptor(name) != null) return true;

@@ -151,7 +151,10 @@ public sealed class ClassPrototypeGeneratorMethodTests
             }
             """;
 
-        Assert.Equal("eager\nReferenceError\nUndefined variable 'second'.\n", TestHarness.RunCompiled(source));
+        // The direct later-parameter read is invalid TypeScript (TS2373). Keep
+        // this JavaScript runtime regression, including complete saved-IL verification.
+        Assert.Equal("eager\nReferenceError\nUndefined variable 'second'.\n",
+            TestHarness.RunUnchecked(source, ExecutionMode.Compiled));
     }
 
     [Fact]

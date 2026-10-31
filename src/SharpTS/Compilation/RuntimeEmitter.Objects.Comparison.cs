@@ -212,6 +212,24 @@ public partial class RuntimeEmitter
 
         // Reference equality for objects
         il.MarkLabel(referenceEqualLabel);
+        if (_features.UsesBigInt || _features.UsesObjectDefinitionRuntime
+            || _features.UsesVm || _features.UsesSourceExecution)
+        {
+            var notBigInt = il.DefineLabel();
+            il.Emit(OpCodes.Ldarg_0);
+            il.Emit(OpCodes.Isinst, _types.BigInteger);
+            il.Emit(OpCodes.Brfalse, notBigInt);
+            il.Emit(OpCodes.Ldarg_1);
+            il.Emit(OpCodes.Isinst, _types.BigInteger);
+            il.Emit(OpCodes.Brfalse, returnFalseLabel);
+            il.Emit(OpCodes.Ldarg_0);
+            il.Emit(OpCodes.Unbox_Any, _types.BigInteger);
+            il.Emit(OpCodes.Ldarg_1);
+            il.Emit(OpCodes.Unbox_Any, _types.BigInteger);
+            il.Emit(OpCodes.Call, _types.GetMethod(_types.BigInteger, "op_Equality", _types.BigInteger, _types.BigInteger));
+            il.Emit(OpCodes.Br, endLabel);
+            il.MarkLabel(notBigInt);
+        }
         il.Emit(OpCodes.Ldarg_0);
         il.Emit(OpCodes.Ldarg_1);
         il.Emit(OpCodes.Ceq);
@@ -275,7 +293,6 @@ public partial class RuntimeEmitter
         var symbolSet = il.DefineLabel();
         var keySetDone = il.DefineLabel();
         var ordinaryEnumerableCheck = il.DefineLabel();
-        var ordinaryStringEnumerable = il.DefineLabel();
         var enumerableCheckDone = il.DefineLabel();
         var ordinarySourceGet = il.DefineLabel();
         var sourceValueReady = il.DefineLabel();
@@ -315,6 +332,9 @@ public partial class RuntimeEmitter
         il.Emit(OpCodes.Br, nextSource);
 
         il.MarkLabel(sourcePresent);
+        il.Emit(OpCodes.Ldloc, source);
+        il.Emit(OpCodes.Call, inputs.BoxedPrimitives.ToObject);
+        il.Emit(OpCodes.Stloc, source);
         EmitProxyTypeCheck(
             il, () => il.Emit(OpCodes.Ldloc, source),
             proxySource, ordinarySource);
@@ -329,9 +349,8 @@ public partial class RuntimeEmitter
         il.Emit(OpCodes.Ldc_I4_0);
         il.Emit(OpCodes.Stloc, sourceIsProxy);
         il.Emit(OpCodes.Ldloc, source);
-        // Preserve GetKeys' mature ordinary-object descriptor handling for
-        // enumerable strings, then append all Symbols for per-key filtering.
-        il.Emit(OpCodes.Call, inputs.ObjectKeys.Keys);
+        // Snapshot names before running getters; enumerability is checked live.
+        il.Emit(OpCodes.Call, inputs.ObjectKeys.Names);
         il.Emit(OpCodes.Stloc, keys);
         il.Emit(OpCodes.Ldloc, source);
         il.Emit(OpCodes.Call, inputs.ObjectKeys.Symbols);
@@ -378,18 +397,12 @@ public partial class RuntimeEmitter
         il.Emit(OpCodes.Brfalse, nextKey);
         il.Emit(OpCodes.Br, enumerableCheckDone);
 
-        // The shared descriptor carrier is authoritative for ordinary
-        // Symbol properties. Ordinary string keys were already filtered by
-        // GetKeys, including accessor placeholders and array indices.
+        // Earlier getters can delete or change any later own property.
         il.MarkLabel(ordinaryEnumerableCheck);
-        il.Emit(OpCodes.Ldloc, key);
-        il.Emit(OpCodes.Call, inputs.Symbols.IsSymbol);
-        il.Emit(OpCodes.Brfalse, ordinaryStringEnumerable);
         il.Emit(OpCodes.Ldloc, source);
         il.Emit(OpCodes.Ldloc, key);
         il.Emit(OpCodes.Call, inputs.ObjectOwnProperties.IsEnumerable);
         il.Emit(OpCodes.Brfalse, nextKey);
-        il.MarkLabel(ordinaryStringEnumerable);
         il.MarkLabel(enumerableCheckDone);
 
         // A trapless Proxy must preserve the source proxy as the accessor

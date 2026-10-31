@@ -23,6 +23,7 @@ public sealed class EmittedObjectDescriptorRuntimeTests
         Expect<InvalidOperationException>(() => property.GetValue(owner));
         Expect<ArgumentNullException>(() => property.SetValue(owner, null));
         Fill(owner, missing); owner.MarkGetOwnPropertyDescriptorBodyEmitted();
+        owner.MarkGetOwnPropertyDescriptorValueFormBodyEmitted();
         Assert.Throws<InvalidOperationException>(owner.CompleteEmission); Assert.False(owner.IsComplete);
         var handle = Handle(); property.SetValue(owner, handle); Assert.Same(handle, property.GetValue(owner));
         Expect<InvalidOperationException>(() => property.SetValue(owner, Handle()));
@@ -38,6 +39,9 @@ public sealed class EmittedObjectDescriptorRuntimeTests
         Assert.Same(forward, owner.GetOwnPropertyDescriptor);
         owner.MarkGetOwnPropertyDescriptorBodyEmitted();
         Assert.Throws<InvalidOperationException>(owner.MarkGetOwnPropertyDescriptorBodyEmitted);
+        Assert.Throws<InvalidOperationException>(owner.CompleteEmission);
+        owner.MarkGetOwnPropertyDescriptorValueFormBodyEmitted();
+        Assert.Throws<InvalidOperationException>(owner.MarkGetOwnPropertyDescriptorValueFormBodyEmitted);
         owner.CompleteEmission(); AssertFrozen(owner);
         Assert.Throws<InvalidOperationException>(owner.MarkGetOwnPropertyDescriptorBodyEmitted);
     }
@@ -48,7 +52,7 @@ public sealed class EmittedObjectDescriptorRuntimeTests
         var first = new EmittedRuntime(); var second = new EmittedRuntime();
         Assert.NotSame(first.ObjectDescriptors, second.ObjectDescriptors);
         Assert.Null(typeof(EmittedRuntime).GetProperty(nameof(EmittedRuntime.ObjectDescriptors))!.SetMethod);
-        Assert.Equal(4, Handles.Length); Assert.False(first.ObjectDescriptors.IsComplete);
+        Assert.Equal(5, Handles.Length); Assert.False(first.ObjectDescriptors.IsComplete);
     }
 
     [Theory]
@@ -196,8 +200,8 @@ public sealed class EmittedObjectDescriptorRuntimeTests
             "EmitDefinePropertyProxyReceiver",
             "EmitObjectDefineProperty",
             "EmitDefinePropertyArrayLengthCoercion",
-            "EmitDefinePropertyDescriptorTypeValidation",
-            "EmitDefinePropertyDescriptorNormalization",
+            "EmitConvertPropertyDescriptor",
+            "EmitDescriptorPropertyPresence",
             "EmitDefinePropertyDescriptorFields",
             "EmitDefinePropertyRedefinitionValidation",
             "DeclareObjectGetOwnPropertyDescriptor",
@@ -242,7 +246,8 @@ public sealed class EmittedObjectDescriptorRuntimeTests
             "EmitGetOwnDescriptorFieldsReceiver"
         })
         {
-            var method = typeof(RuntimeEmitter).GetMethod(name, Members)!;
+            var method = typeof(RuntimeEmitter).GetMethod(name, Members);
+            Assert.NotNull(method);
             Assert.DoesNotContain(method.GetParameters(), p => p.ParameterType == typeof(EmittedRuntime) || p.ParameterType == typeof(RuntimeFeatureSet));
             foreach (var parameter in method.GetParameters().Where(p => p.ParameterType.IsNestedPrivate))
                 Assert.DoesNotContain(parameter.ParameterType.GetFields(Members), f => f.FieldType == typeof(EmittedRuntime) || f.FieldType == typeof(RuntimeFeatureSet));

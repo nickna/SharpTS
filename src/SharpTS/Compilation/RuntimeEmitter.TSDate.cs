@@ -217,7 +217,7 @@ public partial class RuntimeEmitter
 
     private void EmitTSDateCtorNoArgs(TypeBuilder typeBuilder, EmittedDateImplementation date, DateTypeFields fields)
     {
-        // public $TSDate() { _utcDateTime = DateTime.UtcNow; _isInvalid = false; }
+        // Current time values have integral millisecond precision.
         var ctor = typeBuilder.DefineConstructor(
             MethodAttributes.Public,
             CallingConventions.Standard,
@@ -231,9 +231,18 @@ public partial class RuntimeEmitter
         il.Emit(OpCodes.Ldarg_0);
         il.Emit(OpCodes.Call, _types.GetConstructor(_types.Object, Type.EmptyTypes)!);
 
-        // _utcDateTime = DateTime.UtcNow
-        il.Emit(OpCodes.Ldarg_0);
+        var now = il.DeclareLocal(_types.DateTime);
         il.Emit(OpCodes.Call, _types.GetProperty(_types.DateTime, "UtcNow")!.GetGetMethod()!);
+        il.Emit(OpCodes.Stloc, now);
+        il.Emit(OpCodes.Ldarg_0);
+        il.Emit(OpCodes.Ldloca, now);
+        il.Emit(OpCodes.Call, _types.GetPropertyGetter(_types.DateTime, "Ticks"));
+        il.Emit(OpCodes.Ldc_I8, TimeSpan.TicksPerMillisecond);
+        il.Emit(OpCodes.Div);
+        il.Emit(OpCodes.Ldc_I8, TimeSpan.TicksPerMillisecond);
+        il.Emit(OpCodes.Mul);
+        il.Emit(OpCodes.Ldc_I4_1); // DateTimeKind.Utc
+        il.Emit(OpCodes.Newobj, _types.GetConstructor(_types.DateTime, [_types.Int64, _types.DateTimeKind])!);
         il.Emit(OpCodes.Stfld, fields.UtcDateTime);
 
         // _isInvalid = false
@@ -511,7 +520,7 @@ public partial class RuntimeEmitter
 
     private void EmitTSDateNowStatic(TypeBuilder typeBuilder, EmittedDateImplementation date, DateTypeFields fields)
     {
-        // public static double Now() => (DateTime.UtcNow - UnixEpoch).TotalMilliseconds
+        // Current time is an integral number of milliseconds since the epoch.
         var method = typeBuilder.DefineMethod(
             "Now",
             MethodAttributes.Public | MethodAttributes.Static,
@@ -542,6 +551,7 @@ public partial class RuntimeEmitter
         il.Emit(OpCodes.Stloc, timeSpanLocal);
         il.Emit(OpCodes.Ldloca, timeSpanLocal);
         il.Emit(OpCodes.Call, _types.GetProperty(_types.TimeSpan, "TotalMilliseconds")!.GetGetMethod()!);
+        il.Emit(OpCodes.Call, _types.GetMethod(_types.Math, "Floor", [_types.Double])!);
 
         il.Emit(OpCodes.Ret);
     }

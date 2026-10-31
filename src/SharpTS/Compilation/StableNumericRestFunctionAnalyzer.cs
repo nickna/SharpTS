@@ -87,7 +87,7 @@ internal static class StableNumericRestFunctionAnalyzer
                 int arity = call.Arguments.Count - regularCount;
                 if (call.Optional || arity < 0 || arity > MaximumRestArity
                     || call.Arguments.Any(arg => arg is Expr.Spread)
-                    || !call.Arguments.All(arg => IsNumeric(typeMap.Get(arg))))
+                    || !call.Arguments.All(arg => IsNumeric(typeMap.Get(arg)) && !typeMap.IsUndefinedReachableReturn(arg)))
                     continue;
 
                 var constants = new Dictionary<string, double>(StringComparer.Ordinal);
@@ -422,7 +422,7 @@ internal static class StableNumericRestFunctionAnalyzer
                 && variable.Name.Lexeme == functionName && arity > maximumIndex
                 && arity >= 0 && arity <= MaximumRestArity
                 && call.Arguments.All(arg => arg is not Expr.Spread)
-                && call.Arguments.Skip(regularCount).All(arg => IsNumeric(types.Get(arg))))
+                && call.Arguments.Skip(regularCount).All(arg => IsNumeric(types.Get(arg)) && !types.IsUndefinedReachableReturn(arg)))
                 Arities.Add(arity);
             base.VisitCall(call);
         }

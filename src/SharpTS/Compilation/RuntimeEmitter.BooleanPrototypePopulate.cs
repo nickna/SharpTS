@@ -53,8 +53,7 @@ public partial class RuntimeEmitter
         // bare `Boolean` resolves to typeof(bool).
         EmitInstallConstructorDescriptor(il, peers.Descriptors, booleans.PrototypeField, boolDescLocal, setItem, () =>
         {
-            il.Emit(OpCodes.Ldtoken, _types.Boolean);
-            il.Emit(OpCodes.Call, _types.GetMethod(_types.Type, "GetTypeFromHandle", _types.RuntimeTypeHandle));
+            EmitRuntimeConstructorValue(il, _types.Boolean);
         });
 
         // Wire with explicit JS-spec name + length per ECMA-262.

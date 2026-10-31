@@ -43,7 +43,8 @@ public partial class TypeChecker
         if (call.OriginalGeneratorCallee is { } originalGenerator)
             CheckClassOrderCallTarget(originalGenerator);
         using var immediateArguments = BeginImmediateArrowArguments(call);
-        TypeInfo calleeType = CheckClassOrderCallTarget(call.Callee);
+        TypeInfo sourceCalleeType = CheckClassOrderCallTarget(call.Callee);
+        TypeInfo calleeType = IndexedCallableConstraint(sourceCalleeType);
         if (call.Callee is Expr.Get extensionGet &&
             calleeType is not (TypeInfo.Function or TypeInfo.OverloadedFunction or
                 TypeInfo.GenericFunction) &&
@@ -121,6 +122,8 @@ public partial class TypeChecker
         {
             // Check each argument and collect their types
             List<TypeInfo> argTypes = CheckGenericInferenceArguments(call.Arguments);
+            if (call.TypeArgs is not { Count: > 0 })
+                argTypes = ContextualFreshCallArguments(call.Arguments, argTypes, genericFunc.ParamTypes, genericFunc.HasRestParam);
             List<GenericTupleCallSlot>? tupleSlots = genericFunc.HasRestParam &&
                 genericFunc.ParamTypes.LastOrDefault() is TypeInfo.Tuple
                     ? GenericTupleCallArguments(call, argTypes) : null;
@@ -141,7 +144,7 @@ public partial class TypeChecker
                     typeArgs = InferTypeArguments(
                         genericFunc,
                         tupleSlots is null
-                            ? PrepareFreshCallArgumentsForInference(genericFunc.ParamTypes, call.Arguments, argTypes)
+                            ? PrepareFreshCallArgumentsForInference(genericFunc, call.Arguments, argTypes)
                             : PrepareGenericTupleInferenceArguments(genericFunc, tupleSlots),
                         contextualResultType,
                         tupleRestArguments: tupleSlots is null ? null : GenericTupleCallType(
@@ -170,6 +173,7 @@ public partial class TypeChecker
             }
             if (instantiatedFunc is TypeInfo.Function instFunc)
             {
+                argTypes = ContextualFreshCallArguments(call.Arguments, argTypes, instFunc.ParamTypes, instFunc.HasRestParam, publish: true);
                 TypeInfo originalSignature = genericTupleOriginal ?? genericFunc;
                 RecordEditorInvocationInstantiation(originalSignature, instFunc);
                 if (tupleSlots is not null)
@@ -194,11 +198,12 @@ public partial class TypeChecker
                     argTypes = RefreshContextualizedGenericArguments(call.Arguments, argTypes);
                     instFunc = (TypeInfo.Function)InstantiateGenericFunction(genericFunc,
                         InferTypeArguments(genericFunc,
-                            PrepareFreshCallArgumentsForInference(genericFunc.ParamTypes, call.Arguments, argTypes),
+                            PrepareFreshCallArgumentsForInference(genericFunc, call.Arguments, argTypes),
                             contextualResultType));
                     ContextualizeGenericCallArguments(call.Arguments, instFunc.ParamTypes);
                 }
                 argTypes = RefreshContextualizedGenericArguments(call.Arguments, argTypes);
+                argTypes = ContextualFreshCallArguments(call.Arguments, argTypes, instFunc.ParamTypes, instFunc.HasRestParam, publish: true);
                 // An explicit instantiation establishes the callback property's assignment
                 // context. Conflicting inferred sibling candidates retain argument diagnostics.
                 CheckInstantiatedGenericCallArguments(call, instFunc, argTypes,
@@ -233,7 +238,10 @@ public partial class TypeChecker
             if (HasTupleRestParameter(funcType))
             {
                 var argumentTypes = CheckGenericInferenceArguments(call.Arguments);
+                argumentTypes = ContextualFreshCallArguments(call.Arguments, argumentTypes, funcType.ParamTypes, funcType.HasRestParam, publish: true);
                 CheckGenericTupleRestCall(call, funcType, GenericTupleCallArguments(call, argumentTypes));
+                ContextualFreshCallArguments(call.Arguments,
+                    RefreshContextualizedGenericArguments(call.Arguments, argumentTypes), funcType.ParamTypes, funcType.HasRestParam, publish: true);
                 InvalidateTupleCallArgumentNarrowings(call.Arguments);
                 RecordEditorInvocationSelection(funcType);
                 return funcType.ReturnType;
@@ -249,7 +257,7 @@ public partial class TypeChecker
             // untyped functions also count (the `.All` on an empty list is true
             // but the old `Count > 0` guard excluded them; lodash `function
             // shortOut() { return func.apply(undefined, arguments); }` falls here).
-            bool allParamsAny = funcType.WrittenCallSignature is null && tupleCallableOriginals?.ContainsKey(funcType) != true &&
+            bool allParamsAny = !funcType.HasExplicitArity && funcType.WrittenCallSignature is null && tupleCallableOriginals?.ContainsKey(funcType) != true &&
                 (funcType.ParamTypes.Count == 0 || funcType.ParamTypes.All(p => p is TypeInfo.Any));
             if (funcType.ParamTypes.Count == 0 && call.Callee is Expr.GetIndex)
                 allParamsAny = false;
@@ -364,6 +372,13 @@ public partial class TypeChecker
                     // retained array values still have an unknown length. Other iterables may
                     // start once the signature's required parameters have been supplied.
                     TypeInfo spreadType = CheckSpreadOperand(spread.Expression, paramIndex);
+                    if (sourceCalleeType is TypeInfo.IndexedAccess && !ReferenceEquals(sourceCalleeType, calleeType))
+                    {
+                        // The constraint selects the invocation signature, not a new
+                        // source type for a spread that was already checked as A.
+                        _typeMap.Set(spread, spreadType);
+                        RecordEditorExpressionType(spread, spreadType);
+                    }
                     if (spreadType is TypeInfo.Tuple tupleSpread)
                     {
                         tupleSpread = (TypeInfo.Tuple)FlattenTupleSpreads(tupleSpread);
@@ -437,7 +452,10 @@ public partial class TypeChecker
                         }
                         else
                         {
-                            argType = CheckExpr(arg);
+                            // Conditional branches consume the same parameter context as a
+                            // directly written literal; retained values keep their own types.
+                            argType = UnwrapTransparentForWidening(arg) is Expr.ObjectLiteral or Expr.ArrayLiteral or Expr.Ternary
+                                ? CheckExprWithContext(arg, expectedParamType) : CheckExpr(arg);
                             if (tupleCallableOriginals is not null && ContainsGenericTupleCallback(arg))
                             {
                                 ContextualizeNestedGenericCallback(arg, expectedParamType);
@@ -979,7 +997,7 @@ public partial class TypeChecker
         // (which return a proper Function with a concrete signature — generic
         // function-call validation handles them, so this block is skipped).
         if (call.Callee is Expr.Variable setTimeoutVar && setTimeoutVar.Name.Lexeme == "setTimeout"
-            && _environment.Get(setTimeoutVar.Name.Lexeme) is null or TypeInfo.Any)
+            && _environment.Get(setTimeoutVar.Name.Lexeme) is null)
         {
             if (call.Arguments.Count < 1)
                 throw new TypeCheckException("setTimeout() requires at least one argument (callback).", tsCode: "TS2554");
@@ -1000,11 +1018,11 @@ public partial class TypeChecker
         }
 
         if (call.Callee is Expr.Variable clearTimeoutVar && clearTimeoutVar.Name.Lexeme == "clearTimeout"
-            && _environment.Get(clearTimeoutVar.Name.Lexeme) is null or TypeInfo.Any)
+            && _environment.Get(clearTimeoutVar.Name.Lexeme) is null)
             { result = CheckClearTimerCall(call, "clearTimeout"); return true; }
 
         if (call.Callee is Expr.Variable setIntervalVar && setIntervalVar.Name.Lexeme == "setInterval"
-            && _environment.Get(setIntervalVar.Name.Lexeme) is null or TypeInfo.Any)
+            && _environment.Get(setIntervalVar.Name.Lexeme) is null)
         {
             if (call.Arguments.Count < 1)
                 throw new TypeCheckException("setInterval() requires at least one argument (callback).", tsCode: "TS2554");
@@ -1025,23 +1043,44 @@ public partial class TypeChecker
         }
 
         if (call.Callee is Expr.Variable clearIntervalVar && clearIntervalVar.Name.Lexeme == "clearInterval"
-            && _environment.Get(clearIntervalVar.Name.Lexeme) is null or TypeInfo.Any)
+            && _environment.Get(clearIntervalVar.Name.Lexeme) is null)
             { result = CheckClearTimerCall(call, "clearInterval"); return true; }
 
-        // Handle queueMicrotask(callback)
-        if (call.Callee is Expr.Variable queueMicrotaskVar && queueMicrotaskVar.Name.Lexeme == "queueMicrotask")
+        if (call.Callee is Expr.Variable setImmediateVar && setImmediateVar.Name.Lexeme == "setImmediate"
+            && _environment.Get(setImmediateVar.Name.Lexeme) is null)
         {
-            if (call.Arguments.Count != 1)
-            {
-                throw new TypeCheckException("queueMicrotask() requires exactly one argument (callback).", tsCode: "TS2554");
-            }
-
-            // Argument must be a function
+            if (call.Arguments.Count < 1)
+                throw new TypeCheckException("setImmediate() requires at least one argument (callback).", tsCode: "TS2554");
             var callbackType = CheckExpr(call.Arguments[0]);
             if (callbackType is not TypeInfo.Function && callbackType is not TypeInfo.Any)
-            {
-                throw new TypeCheckException($"queueMicrotask() callback must be a function, got '{callbackType}'.", tsCode: "TS2345");
-            }
+                throw new TypeCheckException($"setImmediate() callback must be a function, got '{callbackType}'.", tsCode: "TS2345");
+            for (int i = 1; i < call.Arguments.Count; i++) CheckExpr(call.Arguments[i]);
+            result = TypeInfo.Timeout.Shared;
+            return true;
+        }
+        if (call.Callee is Expr.Variable clearImmediateVar && clearImmediateVar.Name.Lexeme == "clearImmediate"
+            && _environment.Get(clearImmediateVar.Name.Lexeme) is null)
+        {
+            result = CheckClearTimerCall(call, "clearImmediate");
+            return true;
+        }
+
+        // Handle queueMicrotask(callback)
+        if (call.Callee is Expr.Variable queueMicrotaskVar && queueMicrotaskVar.Name.Lexeme == "queueMicrotask"
+            && _environment.Get(queueMicrotaskVar.Name.Lexeme) is null)
+        {
+            if (!call.Arguments.Any(argument => argument is Expr.Spread) && call.Arguments.Count != 1)
+                throw new TypeCheckException("queueMicrotask() requires exactly one argument (callback).", tsCode: "TS2554");
+
+            // Reuse checked argument slots so tuple spreads supply their elements.
+            // This void callback has no parameter context; retain checked callback facts.
+            var argumentTypes = call.Arguments.Select(argument => argument is Expr.Spread spread
+                ? CheckExpr(spread.Expression) : CheckExpr(argument)).ToList();
+            var callback = new TypeInfo.Function([], TypeInfo.Void.Shared);
+            var parameters = new TypeInfo.Tuple([new TypeInfo.TupleElement(callback, TupleElementKind.Required)], 1);
+            var signature = new TypeInfo.Function([parameters], TypeInfo.Void.Shared, HasRestParam: true);
+            CheckGenericTupleRestCall(call, signature, GenericTupleCallArguments(call, argumentTypes),
+                contextualizeCallbacks: false);
 
             { result = TypeInfo.Void.Shared; return true; } // queueMicrotask returns undefined
         }
@@ -1388,7 +1427,7 @@ public partial class TypeChecker
         List<TypeInfo.Function> rejectedSignatures = [];
 
         // Try each call signature
-        foreach (var callSig in callSignatures)
+        foreach (var callSig in PrioritizeSpecializedOverloads(callSignatures))
         {
             if (callSig.IsGeneric)
             {
@@ -1403,8 +1442,9 @@ public partial class TypeChecker
             {
                 // Non-generic - direct matching
                 var signature = new TypeInfo.Function(callSig.ParamTypes, callSig.ReturnType, callSig.MinArity, callSig.HasRestParam);
-                if (TryMatchSignature(signature, argTypes))
+                if (TryMatchSignature(signature, ContextualFreshCallArguments(arguments, argTypes, signature.ParamTypes, signature.HasRestParam)))
                 {
+                    ContextualFreshCallArguments(arguments, argTypes, signature.ParamTypes, signature.HasRestParam, publish: true);
                     RecordEditorInvocationSelection(callSig);
                     return callSig.ReturnType;
                 }
@@ -1454,11 +1494,13 @@ public partial class TypeChecker
             }
 
             List<TypeInfo> argTypes = arguments.Select(CheckExpr).ToList();
-            foreach (var callSig in gi.CallSignatures)
+            foreach (var callSig in PrioritizeSpecializedOverloads(gi.CallSignatures))
             {
                 var substitutedParamTypes = callSig.ParamTypes.Select(p => Substitute(p, subs)).ToList();
-                if (TryMatchSignature(new TypeInfo.Function(substitutedParamTypes, Substitute(callSig.ReturnType, subs), callSig.MinArity, callSig.HasRestParam), argTypes))
+                var candidateTypes = ContextualFreshCallArguments(arguments, argTypes, substitutedParamTypes, callSig.HasRestParam);
+                if (TryMatchSignature(new TypeInfo.Function(substitutedParamTypes, Substitute(callSig.ReturnType, subs), callSig.MinArity, callSig.HasRestParam), candidateTypes))
                 {
+                    ContextualFreshCallArguments(arguments, argTypes, substitutedParamTypes, callSig.HasRestParam, publish: true);
                     TypeInfo result = Substitute(callSig.ReturnType, subs);
                     if (_editorInvocationAttempt is { CanPublish: true })
                     {
@@ -1503,13 +1545,15 @@ public partial class TypeChecker
         }
         else
         {
+            var inferenceTypes = arguments is null ? argTypes :
+                ContextualFreshCallArguments(arguments, argTypes, callSig.ParamTypes, callSig.HasRestParam);
             // Try to infer from argument types
             for (int i = 0; i < callSig.ParamTypes.Count && i < argTypes.Count; i++)
             {
                 TypeInfo inferenceType = arguments is not null && i < arguments.Count
                     ? PrepareFreshCallArgumentForInference(
-                        callSig.ParamTypes[i], arguments[i], argTypes[i])
-                    : argTypes[i];
+                        callSig.ParamTypes[i], arguments[i], inferenceTypes[i])
+                    : inferenceTypes[i];
                 InferFromType(callSig.ParamTypes[i], inferenceType, inferred);
             }
         }
@@ -1541,14 +1585,19 @@ public partial class TypeChecker
             RecordEditorInvocationInstantiation(callSig, editorSignature);
         }
         var checkedSignature = new TypeInfo.Function(substitutedParamTypes, matchedReturn, callSig.MinArity, callSig.HasRestParam);
-        if (!TryMatchSignature(checkedSignature, argTypes))
+        var checkedTypes = arguments is null ? argTypes :
+            ContextualFreshCallArguments(arguments, argTypes, substitutedParamTypes, callSig.HasRestParam);
+        if (!TryMatchSignature(checkedSignature, checkedTypes))
         {
             rejectedSignature = checkedSignature;
             return null;
         }
 
         if (arguments is not null)
+        {
+            ContextualFreshCallArguments(arguments, argTypes, substitutedParamTypes, callSig.HasRestParam, publish: true);
             ContextualizeGenericCallArguments(arguments, substitutedParamTypes);
+        }
 
         TypeInfo result = Substitute(callSig.ReturnType, inferred);
         if (editorSignature is not null)
@@ -1625,9 +1674,10 @@ public partial class TypeChecker
         List<TypeInfo.Function> matchingSignatures = [];
 
 
-        foreach (var signature in overloadedFunc.Signatures)
+        foreach (var signature in PrioritizeSpecializedOverloads(overloadedFunc.Signatures))
         {
-            if (TryMatchSignature(signature, argTypes))
+            var candidateTypes = ContextualFreshCallArguments(call.Arguments, argTypes, signature.ParamTypes, signature.HasRestParam);
+            if (MatchFixedOverloadSpread(call, signature, candidateTypes) ?? TryMatchSignature(signature, candidateTypes))
             {
                 matchingSignatures.Add(signature);
             }
@@ -1644,7 +1694,8 @@ public partial class TypeChecker
         // practical difference here: an `any` argument is assignable to every parameter but is a
         // subtype only of any/unknown — so `foo(a)` with `a: any` picks a later `(x: any)`
         // overload over an earlier `(x: number)` one.
-        var subtypeMatches = matchingSignatures.Where(sig => ArgsSubtypeMatch(sig, argTypes)).ToList();
+        var subtypeMatches = matchingSignatures.Where(sig =>
+            MatchFixedOverloadSpread(call, sig, argTypes, subtype: true) ?? ArgsSubtypeMatch(sig, argTypes)).ToList();
         if (subtypeMatches.Count > 0)
         {
             matchingSignatures = subtypeMatches;
@@ -1655,6 +1706,8 @@ public partial class TypeChecker
         // `(x: E)` resolves to Object, not the more specific E.
         TypeInfo.Function bestMatch = matchingSignatures[0];
 
+        if (!PublishFixedOverloadSpread(call, bestMatch, argTypes))
+            ContextualFreshCallArguments(call.Arguments, argTypes, bestMatch.ParamTypes, bestMatch.HasRestParam, publish: true);
         RecordEditorInvocationSelection(bestMatch);
         return bestMatch.ReturnType;
     }
@@ -1681,7 +1734,7 @@ public partial class TypeChecker
         int arityCandidates = tupleArityArguments is null ? 0 : genericOverloadedFunc.Signatures.Count(signature =>
             GenericTupleCallArityCouldMatch(signature, tupleArityArguments));
 
-        foreach (var signature in genericOverloadedFunc.Signatures)
+        foreach (var signature in PrioritizeSpecializedOverloads(genericOverloadedFunc.Signatures))
         {
             TypeInfo.Function instantiatedSig;
             bool validatingTuple = false;
@@ -1694,14 +1747,17 @@ public partial class TypeChecker
                     signature.RequiredParams,
                     signature.HasRestParam,
                     signature.ThisType);
+                CopyOverloadPriority(signature, candidate);
+                var candidateTypes = call.TypeArgs is { Count: > 0 } ? argTypes :
+                    ContextualFreshCallArguments(call.Arguments, argTypes, candidate.ParamTypes, candidate.HasRestParam);
                 var tupleArguments = candidate.HasRestParam && candidate.ParamTypes.LastOrDefault() is TypeInfo.Tuple
-                    ? GenericTupleCallArguments(call, argTypes) : null;
+                    ? GenericTupleCallArguments(call, candidateTypes) : null;
                 List<TypeInfo> typeArgs = call.TypeArgs is { Count: > 0 }
                     ? call.TypeArgs.Select((_, i) => ResolveTypeArg(call.TypeArgs, call.TypeArgNodes, i)).ToList()
                     : InferTypeArguments(
                         candidate,
                         tupleArguments is null
-                            ? PrepareFreshCallArgumentsForInference(candidate.ParamTypes, call.Arguments, argTypes)
+                            ? PrepareOverloadInferenceArguments(call, candidate, candidateTypes)
                             : PrepareGenericTupleInferenceArguments(candidate, tupleArguments),
                         tupleRestArguments: tupleArguments is null ? null : GenericTupleCallType(
                             tupleArguments.Skip(candidate.ParamTypes.Count - 1), (TypeInfo.Tuple)candidate.ParamTypes[^1]));
@@ -1710,8 +1766,9 @@ public partial class TypeChecker
                 if (tupleArguments is not null)
                 {
                     validatingTuple = true;
-                    CheckGenericTupleRestCall(call, instantiatedSig, tupleArguments, contextualizeCallbacks: false,
-                        reportCallbackProperties: call.TypeArgs is { Count: > 0 });
+                    CheckGenericTupleRestCall(call, instantiatedSig, GenericTupleCallArguments(call,
+                        ContextualFreshCallArguments(call.Arguments, argTypes, instantiatedSig.ParamTypes, instantiatedSig.HasRestParam)), contextualizeCallbacks: false,
+                        reportCallbackProperties: call.TypeArgs is { Count: > 0 }, preferArgumentTypes: true);
                     tupleCandidates[instantiatedSig] = (candidate, signature);
                     matchingSignatures.Add(instantiatedSig);
                     continue;
@@ -1723,8 +1780,10 @@ public partial class TypeChecker
                 continue;
             }
 
-            if (TryMatchSignature(instantiatedSig, argTypes) ||
-                TryMatchSpreadSignature(instantiatedSig, argTypes, call.Arguments))
+            var instantiatedTypes = ContextualFreshCallArguments(call.Arguments, argTypes, instantiatedSig.ParamTypes, instantiatedSig.HasRestParam);
+            if (MatchFixedOverloadSpread(call, instantiatedSig, instantiatedTypes) ??
+                (TryMatchSignature(instantiatedSig, instantiatedTypes) ||
+                 TryMatchSpreadSignature(instantiatedSig, instantiatedTypes, call.Arguments)))
             {
                 matchingSignatures.Add(instantiatedSig);
             }
@@ -1746,7 +1805,8 @@ public partial class TypeChecker
         // practical difference here: an `any` argument is assignable to every parameter but is a
         // subtype only of any/unknown — so `foo(a)` with `a: any` picks a later `(x: any)`
         // overload over an earlier `(x: number)` one.
-        var subtypeMatches = matchingSignatures.Where(sig => ArgsSubtypeMatch(sig, argTypes)).ToList();
+        var subtypeMatches = matchingSignatures.Where(sig =>
+            MatchFixedOverloadSpread(call, sig, argTypes, subtype: true) ?? ArgsSubtypeMatch(sig, argTypes)).ToList();
         if (subtypeMatches.Count > 0)
         {
             matchingSignatures = subtypeMatches;
@@ -1757,11 +1817,15 @@ public partial class TypeChecker
         // `(x: E)` resolves to Object, not the more specific E.
         TypeInfo.Function bestMatch = matchingSignatures[0];
 
+        bool fixedSpread = PublishFixedOverloadSpread(call, bestMatch, argTypes);
+        if (!fixedSpread)
+            argTypes = ContextualFreshCallArguments(call.Arguments, argTypes, bestMatch.ParamTypes, bestMatch.HasRestParam, publish: true);
+
         // Ambient generic declarations can be collected once during the preparatory module pass
         // and again during the authoritative pass, which represents the same declaration as a
         // GenericOverloadedFunction. Fresh object literals still receive the ordinary excess-
         // property check against the selected instantiated signature.
-        for (int i = 0; i < call.Arguments.Count && i < bestMatch.ParamTypes.Count; i++)
+        for (int i = 0; !fixedSpread && i < call.Arguments.Count && i < bestMatch.ParamTypes.Count; i++)
         {
             if (call.Arguments[i] is Expr.ObjectLiteral && argTypes[i] is TypeInfo.Record freshRecord
                 && HasNamedSymbolMembers(bestMatch.ParamTypes[i]))
@@ -1775,7 +1839,7 @@ public partial class TypeChecker
             RecordEditorInvocationSelection(tupleCandidate.Original, bestMatch);
             return bestMatch.ReturnType;
         }
-        ContextualizeGenericCallArguments(call.Arguments, bestMatch.ParamTypes);
+        if (!fixedSpread) ContextualizeGenericCallArguments(call.Arguments, bestMatch.ParamTypes);
 
         RecordEditorInvocationSelection(bestMatch);
         return bestMatch.ReturnType;
@@ -1843,7 +1907,7 @@ public partial class TypeChecker
                 if (signature is not null && GenericTupleCallArityCouldMatch(signature, tupleArityArguments)) arityCandidates++;
             }
 
-        foreach (TypeInfo candidate in overloadSet.Signatures)
+        foreach (TypeInfo candidate in PrioritizeSpecializedOverloads(overloadSet.Signatures))
         {
             TypeInfo.Function? signature;
             bool validatingTuple = false;
@@ -1860,8 +1924,9 @@ public partial class TypeChecker
                 if (signature is not null && HasTupleRestParameter(signature))
                 {
                     validatingTuple = true;
-                    CheckGenericTupleRestCall(call, signature, GenericTupleCallArguments(call, argTypes), contextualizeCallbacks: false,
-                        reportCallbackProperties: candidate is not TypeInfo.GenericFunction || call.TypeArgs is { Count: > 0 });
+                    CheckGenericTupleRestCall(call, signature, GenericTupleCallArguments(call,
+                        ContextualFreshCallArguments(call.Arguments, argTypes, signature.ParamTypes, signature.HasRestParam)), contextualizeCallbacks: false,
+                        reportCallbackProperties: candidate is not TypeInfo.GenericFunction || call.TypeArgs is { Count: > 0 }, preferArgumentTypes: true);
                     if (candidate is TypeInfo.GenericFunction tupleGeneric) tupleCandidates[signature] = tupleGeneric;
                     matches.Add(signature);
                     continue;
@@ -1875,9 +1940,11 @@ public partial class TypeChecker
             }
 
             if (signature is not null) RecordEditorInvocationInstantiation(Original(candidate), signature);
-            if (signature is not null &&
-                (TryMatchSignature(signature, argTypes) ||
-                 TryMatchSpreadSignature(signature, argTypes, call.Arguments)))
+            var candidateTypes = signature is null ? argTypes :
+                ContextualFreshCallArguments(call.Arguments, argTypes, signature.ParamTypes, signature.HasRestParam);
+            if (signature is not null && (MatchFixedOverloadSpread(call, signature, candidateTypes) ??
+                (TryMatchSignature(signature, candidateTypes) ||
+                 TryMatchSpreadSignature(signature, candidateTypes, call.Arguments))))
             {
                 matches.Add(signature);
             }
@@ -1897,8 +1964,13 @@ public partial class TypeChecker
         }
 
         var subtypeMatches = matches.Where(sig => HasTupleRestParameter(sig)
-            ? TupleRestArgsSubtypeMatch(call, sig, argTypes) : ArgsSubtypeMatch(sig, argTypes)).ToList();
+            ? TupleRestArgsSubtypeMatch(call, sig,
+                ContextualFreshCallArguments(call.Arguments, argTypes, sig.ParamTypes, sig.HasRestParam))
+            : MatchFixedOverloadSpread(call, sig, argTypes, subtype: true) ?? ArgsSubtypeMatch(sig, argTypes)).ToList();
         TypeInfo.Function bestMatch = subtypeMatches.Count > 0 ? subtypeMatches[0] : matches[0];
+        bool fixedSpread = PublishFixedOverloadSpread(call, bestMatch, argTypes);
+        if (!fixedSpread)
+            argTypes = ContextualFreshCallArguments(call.Arguments, argTypes, bestMatch.ParamTypes, bestMatch.HasRestParam, publish: true);
         if (tupleCandidates.TryGetValue(bestMatch, out var tupleCandidate))
         {
             bestMatch = CompleteGenericTupleRestCall(call, tupleCandidate, bestMatch, argTypes);
@@ -1909,12 +1981,16 @@ public partial class TypeChecker
         if (HasTupleRestParameter(bestMatch))
         {
             CheckGenericTupleRestCall(call, bestMatch, GenericTupleCallArguments(call, argTypes));
+            ContextualFreshCallArguments(call.Arguments,
+                RefreshContextualizedGenericArguments(call.Arguments, argTypes), bestMatch.ParamTypes, bestMatch.HasRestParam, publish: true);
             InvalidateTupleCallArgumentNarrowings(call.Arguments);
         }
         else if (hasTupleRest || originalSignatures is not null)
         {
-            ContextualizeGenericCallArguments(call.Arguments, bestMatch.ParamTypes);
+            if (!fixedSpread) ContextualizeGenericCallArguments(call.Arguments, bestMatch.ParamTypes);
             argTypes = RefreshContextualizedGenericArguments(call.Arguments, argTypes);
+            if (!fixedSpread)
+                argTypes = ContextualFreshCallArguments(call.Arguments, argTypes, bestMatch.ParamTypes, bestMatch.HasRestParam, publish: true);
             CheckInstantiatedGenericCallArguments(call, bestMatch, argTypes,
                 reportCallbackProperties: !genericMatches.Contains(bestMatch) || call.TypeArgs is { Count: > 0 });
         }
@@ -1927,6 +2003,8 @@ public partial class TypeChecker
         Expr.Call call,
         List<TypeInfo> argTypes)
     {
+        if (call.TypeArgs is not { Count: > 0 })
+            argTypes = ContextualFreshCallArguments(call.Arguments, argTypes, generic.ParamTypes, generic.HasRestParam);
         var tupleArguments = generic.HasRestParam && generic.ParamTypes.LastOrDefault() is TypeInfo.Tuple
             ? GenericTupleCallArguments(call, argTypes) : null;
         List<TypeInfo> typeArgs = call.TypeArgs is { Count: > 0 }
@@ -1934,7 +2012,7 @@ public partial class TypeChecker
             : InferTypeArguments(
                 generic,
                 tupleArguments is null
-                    ? PrepareFreshCallArgumentsForInference(generic.ParamTypes, call.Arguments, argTypes)
+                    ? PrepareOverloadInferenceArguments(call, generic, argTypes)
                     : PrepareGenericTupleInferenceArguments(generic, tupleArguments),
                 tupleRestArguments: tupleArguments is null ? null : GenericTupleCallType(
                     tupleArguments.Skip(generic.ParamTypes.Count - 1), (TypeInfo.Tuple)generic.ParamTypes[^1]));
@@ -1942,10 +2020,13 @@ public partial class TypeChecker
     }
 
     private List<TypeInfo> PrepareFreshCallArgumentsForInference(
-        IReadOnlyList<TypeInfo> parameterTypes,
+        TypeInfo.GenericFunction signature,
         IReadOnlyList<Expr> arguments,
         List<TypeInfo> argumentTypes)
     {
+        var parameterTypes = signature.ParamTypes;
+        bool widenRest = signature.HasRestParam && parameterTypes.LastOrDefault() is
+            TypeInfo.TypeParameter { IsConst: false, Constraint: TypeInfo.Array { ElementType: TypeInfo.Any or TypeInfo.Unknown } };
         var prepared = new List<TypeInfo>(argumentTypes.Count);
         for (int i = 0; i < argumentTypes.Count; i++)
         {
@@ -1963,6 +2044,13 @@ public partial class TypeChecker
                         continue;
                 }
             }
+            if (widenRest && i >= parameterTypes.Count - 1 && i < arguments.Count)
+            {
+                // Mutable inferred rest tuples widen fresh values. Source assertions,
+                // literal annotations and const type parameters retain their facts.
+                prepared.Add(WidenClassFieldInitializerType(arguments[i], argumentTypes[i]));
+                continue;
+            }
             prepared.Add(i < parameterTypes.Count && i < arguments.Count
                 ? PrepareFreshCallArgumentForInference(
                     parameterTypes[i], arguments[i], argumentTypes[i])
@@ -1979,8 +2067,8 @@ public partial class TypeChecker
         // A plain generic parameter preserves a top-level primitive literal, but a fresh mutable
         // object literal widens its member literals (`useRef({ alive: true })` infers boolean).
         // Const type parameters and `as const` records retain their literal members.
-        return parameterType is TypeInfo.TypeParameter { IsConst: false } &&
-               argument is Expr.ObjectLiteral &&
+        return parameterType is TypeInfo.TypeParameter { IsConst: false, Constraint: null } &&
+               UnwrapTransparentForWidening(argument) is Expr.ObjectLiteral &&
                argumentType is TypeInfo.Record { IsReadonly: false }
             ? WidenLiteralType(argumentType)
             : argumentType;

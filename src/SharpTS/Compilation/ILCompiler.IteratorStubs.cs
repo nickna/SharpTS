@@ -17,6 +17,12 @@ public partial class ILCompiler
         var sourceTypes = method.GetParameters().Skip(receiverSkip)
             .Select(parameter => parameter.ParameterType).ToArray();
         var context = CreateModuleMemberContext(il, method);
+        // Defaults can create closures before the iterator exists. Their owner
+        // references must be populated from this invocation's newly created scope.
+        context.ArrowEntryPointDCFields = _closures.ArrowEntryPointDCFields;
+        context.ArrowFunctionDCFields = _closures.ArrowFunctionDCFields;
+        context.ArrowScopeDCFields = _closures.ArrowScopeDCFields;
+        context.ArrowScopeDCExtraFieldsByArrow = _arrowScopeDCExtraFields;
         context.IsInstanceMethod = true;
         context.IsStrictMode = _strictArrows.Contains(source) || _isStrictMode
             || BodyDeclaresUseStrict(source.BlockBody);
@@ -61,7 +67,7 @@ public partial class ILCompiler
                 context.ParentArrowCapturedLocals?.Remove(name);
             (context.ExtraArrowScopeBindings ??= [])[name] = new(reference, capture.TargetPath[1]);
         }
-        if (source.HasOwnThis) context.DefineParameter("__this", 1, _types.Object);
+        if (source.HasOwnThis) context.DefineParameter(CompilationContext.ThisParameterName, 1, _types.Object);
         for (int i = 0; i < source.Parameters.Count; i++)
             context.DefineParameter(source.Parameters[i].Name.Lexeme, i + argumentOffset, sourceTypes[i]);
         ApplyCapturedTopLevelVariableAccess(context);
@@ -87,7 +93,7 @@ public partial class ILCompiler
                 sourceTypes, argumentOffset, publishedArgsLeadingSkip: receiverSkip);
         new ILEmitter(context).EmitDefaultParameters(source.Parameters, argumentOffset, sourceTypes, source.BlockBody);
 
-        il.Emit(OpCodes.Newobj, iterator.Constructor);
+        NativePrototypeFieldsLookup.EmitCarrierCreate(_nativePrototypeFields, il, iterator.Constructor);
         EmitIteratorArgumentsStore(il, iterator, arguments);
         il.Emit(OpCodes.Dup);
         il.Emit(OpCodes.Ldarg_0);
@@ -177,7 +183,7 @@ public partial class ILCompiler
         var environment = EmitIteratorStubEnvironment(
             methodBuilder, funcStmt, isInstanceMethod: false, funcDCKey: qualifiedName);
 
-        il.Emit(OpCodes.Newobj, smBuilder.Constructor);
+        NativePrototypeFieldsLookup.EmitCarrierCreate(_nativePrototypeFields, il, smBuilder.Constructor);
         EmitIteratorArgumentsStore(il, smBuilder, environment.Arguments);
 
         // #775: capture the active dynamic `this` into <>4__this. The receiver is the thread-local
@@ -194,7 +200,7 @@ public partial class ILCompiler
                 var useGlobalThis = il.DefineLabel();
                 il.Emit(OpCodes.Dup);
                 il.Emit(OpCodes.Brfalse, useGlobalThis);
-                if (!(_isStrictMode || BodyDeclaresUseStrict(funcStmt.Body)))
+                if (!IsStrictFunction(funcStmt))
                 {
                     il.Emit(OpCodes.Dup);
                     il.Emit(OpCodes.Isinst, _runtime.Sentinels.UndefinedType);
@@ -269,7 +275,7 @@ public partial class ILCompiler
             currentClassName,
             funcDCKey);
 
-        il.Emit(OpCodes.Newobj, smBuilder.Constructor);
+        NativePrototypeFieldsLookup.EmitCarrierCreate(_nativePrototypeFields, il, smBuilder.Constructor);
         EmitIteratorArgumentsStore(il, smBuilder, environment.Arguments);
 
         if (smBuilder.ThisField != null)
@@ -342,6 +348,7 @@ public partial class ILCompiler
         List<Stmt>? body, CompilationContext? context)
     {
         if (context is null) return;
+        EmitIteratorParameterCaptureCellStores(il, builder, context);
         var resolver = new LocalVariableResolver(il, context, _types);
         foreach (var (declaration, name) in ParameterPatternBindings.Declarations(body))
         {
@@ -383,7 +390,7 @@ public partial class ILCompiler
         var ctx = CreateModuleMemberContext(methodBuilder.GetILGenerator(), methodBuilder);
         ctx.FieldsField = fieldsField;
         ctx.IsInstanceMethod = isInstanceMethod;
-        ctx.IsStrictMode = _isStrictMode || BodyDeclaresUseStrict(function.Body);
+        ctx.IsStrictMode = IsStrictFunction(function);
         ctx.CurrentClassName = currentClassName;
         ctx.CurrentClassBuilder = methodBuilder.DeclaringType as TypeBuilder;
         ctx.EmittingTypeBuilder = methodBuilder.DeclaringType as TypeBuilder;

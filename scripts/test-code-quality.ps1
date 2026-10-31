@@ -4,6 +4,7 @@ param()
 Set-StrictMode -Version Latest
 $ErrorActionPreference = 'Stop'
 $root = Split-Path $PSScriptRoot -Parent
+& (Join-Path $PSScriptRoot 'test-native-type-definitions.ps1')
 $fixture = Join-Path $root ('artifacts/code-quality-' + [Guid]::NewGuid().ToString('N'))
 New-Item -ItemType Directory -Path $fixture -Force | Out-Null
 

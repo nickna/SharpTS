@@ -284,7 +284,7 @@ public abstract partial class StatementEmitterBase : ExpressionEmitterBase
                 break;
 
             case Stmt.Var v:
-                EmitVarDeclaration(v);
+                if (!v.IsDeclare) EmitVarDeclaration(v);
                 break;
 
             case Stmt.Const c:
@@ -657,7 +657,7 @@ public abstract partial class StatementEmitterBase : ExpressionEmitterBase
         var cellNames = Ctx.ClosureAnalyzer?.GetForLoopCells(f);
         List<(string Name, LocalBuilder? Prior)>? activeCells = null;
         if (cellNames != null && cellNames.Count > 0)
-            activeCells = EmitForLoopCellInit(cellNames);
+            activeCells = EmitForLoopCellInit(cellNames.Select(name => GetForLoopCellStorageName(f, name)));
 
         var startLabel = IL.DefineLabel();
         var endLabel = IL.DefineLabel();
@@ -1009,6 +1009,8 @@ public abstract partial class StatementEmitterBase : ExpressionEmitterBase
         IL.MarkLabel(notCancelled);
     }
 
+    protected virtual string GetForLoopCellStorageName(Stmt.For loop, string name) => name;
+
     /// <summary>
     /// For each per-iteration cell binding (#650), wraps the loop variable's initial value
     /// (already stored in its plain local by the initializer) in a fresh
@@ -1163,6 +1165,30 @@ public abstract partial class StatementEmitterBase : ExpressionEmitterBase
         IL.Emit(OpCodes.Br, ready);
 
         IL.MarkLabel(fallback);
+        var noOwnIteratorClaim = IL.DefineLabel();
+        IL.Emit(OpCodes.Ldloc, source);
+        IL.Emit(OpCodes.Ldsfld, runtime.Symbols.Iterator);
+        IL.Emit(OpCodes.Call, runtime.ObjectOwnProperties.HasOwnProperty);
+        IL.Emit(OpCodes.Brfalse, noOwnIteratorClaim);
+        GuestErrorEmitter.ThrowTypeError(IL, runtime, "Symbol.iterator is not callable");
+        IL.MarkLabel(noOwnIteratorClaim);
+        void EmitNativeCollectionFallback(Type representation, System.Reflection.MethodInfo factory)
+        {
+            var notNativeCollection = IL.DefineLabel();
+            IL.Emit(OpCodes.Ldloc, source);
+            IL.Emit(OpCodes.Isinst, representation);
+            IL.Emit(OpCodes.Brfalse, notNativeCollection);
+            // Intrinsic factories preserve guest entry arrays and native
+            // iteration behavior after an own iterator override has been ruled out.
+            IL.Emit(OpCodes.Ldloc, source);
+            IL.Emit(OpCodes.Call, factory);
+            IL.Emit(OpCodes.Call, runtime.IteratorHelpers.NormalizeToEnumerator);
+            IL.Emit(OpCodes.Stloc, enumerator);
+            IL.Emit(OpCodes.Br, ready);
+            IL.MarkLabel(notNativeCollection);
+        }
+        if (runtime.Map is { } map) EmitNativeCollectionFallback(Types.DictionaryObjectObject, map.Entries);
+        if (runtime.Set is { } set) EmitNativeCollectionFallback(Types.HashSetOfObject, set.Values);
         var nativeEnumerable = IL.DeclareLocal(Types.IEnumerable);
         var nativeIterable = IL.DefineLabel();
         IL.Emit(OpCodes.Ldloc, source);
@@ -1511,7 +1537,7 @@ public abstract partial class StatementEmitterBase : ExpressionEmitterBase
     {
         emitReceiver();
         emitKey();
-        IL.Emit(OpCodes.Call, Ctx.Runtime!.ObjectOwnProperties.IsEnumerable);
+        IL.Emit(OpCodes.Call, Ctx.Runtime!.ObjectKeys.ForInEnumerable);
         IL.Emit(OpCodes.Brfalse, continueLabel);
     }
 
@@ -1524,7 +1550,7 @@ public abstract partial class StatementEmitterBase : ExpressionEmitterBase
         var receiver = IL.DeclareLocal(Types.Object);
         IL.Emit(OpCodes.Stloc, receiver);
         IL.Emit(OpCodes.Ldloc, receiver);
-        IL.Emit(OpCodes.Call, Ctx.Runtime!.ObjectKeys.Keys);
+        IL.Emit(OpCodes.Call, Ctx.Runtime!.ObjectKeys.ForIn);
         var keys = IL.DeclareLocal(Types.ListOfObject);
         IL.Emit(OpCodes.Stloc, keys);
         var index = IL.DeclareLocal(Types.Int32);
@@ -2017,9 +2043,7 @@ public abstract partial class StatementEmitterBase : ExpressionEmitterBase
             return;
 
         EmitClassHeritageExpression(classStmt.SuperclassExpr, classStmt.Name.Lexeme);
-        IL.Emit(OpCodes.Ldtoken, builder);
-        IL.Emit(OpCodes.Call, Types.TypeGetTypeFromHandle);
-        IL.Emit(OpCodes.Call, Ctx.Runtime!.ClassInitialization.RunDefinition);
+        EmitClassDefinitionInitialization(builder);
 
         if (Ctx.DeferredClassDefinitions?.TryGet(classStmt, out var deferred) == true)
             EmitDeferredComputedKeys(deferred.Registrar, deferred.Keys);
@@ -2029,16 +2053,14 @@ public abstract partial class StatementEmitterBase : ExpressionEmitterBase
         if (field != null)
         {
             IL.Emit(OpCodes.Ldarg_0);
-            IL.Emit(OpCodes.Ldtoken, builder);
-            IL.Emit(OpCodes.Call, Types.TypeGetTypeFromHandle);
+            EmitConstructorTypeValue(builder, NativeConstructorValueProducerKind.SourceClass);
             IL.Emit(OpCodes.Stfld, field);
             return;
         }
 
         var local = Ctx.Locals.GetLocal(storageName)
             ?? Ctx.Locals.DeclareLocal(storageName, Types.Object, classStmt);
-        IL.Emit(OpCodes.Ldtoken, builder);
-        IL.Emit(OpCodes.Call, Types.TypeGetTypeFromHandle);
+        EmitConstructorTypeValue(builder, NativeConstructorValueProducerKind.SourceClass);
         IL.Emit(OpCodes.Stloc, local);
     }
 
@@ -2094,11 +2116,12 @@ public abstract partial class StatementEmitterBase : ExpressionEmitterBase
                 break;
 
             case Expr.GetIndex getIndex:
-                // delete obj[key] - use DeleteIndex with strict mode
-                EmitExpression(getIndex.Object);
-                EnsureBoxed();
-                EmitExpression(getIndex.Index);
-                EnsureBoxed();
+                // Preserve the receiver across an awaited or yielded key, and leave
+                // key conversion to the delete helper after both expressions finish.
+                var receiver = SpillBoxed(getIndex.Object);
+                var key = SpillBoxed(getIndex.Index);
+                IL.Emit(OpCodes.Ldloc, receiver);
+                IL.Emit(OpCodes.Ldloc, key);
                 if (Ctx.IsStrictMode)
                 {
                     IL.Emit(OpCodes.Ldc_I4_1); // true for strict mode

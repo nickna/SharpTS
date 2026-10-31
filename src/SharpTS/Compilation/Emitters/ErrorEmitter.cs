@@ -63,32 +63,35 @@ public sealed class ErrorEmitter : ITypeEmitterStrategy
         emitter.EmitExpression(receiver);
         emitter.EmitBoxIfNeeded(receiver);
 
-        switch (propertyName)
+        var getter = propertyName switch
         {
-            case "name":
-                il.Emit(OpCodes.Call, ctx.Runtime!.Errors.GetName);
-                return true;
+            "name" => ctx.Runtime!.Errors.GetName,
+            "message" => ctx.Runtime!.Errors.GetMessage,
+            "stack" => ctx.Runtime!.Errors.GetStack,
+            "cause" => ctx.Runtime!.Errors.GetCause,
+            "errors" => ctx.Runtime!.Errors.AggregateErrorGetErrors,
+            _ => null
+        };
+        if (getter is null) return false;
 
-            case "message":
-                il.Emit(OpCodes.Call, ctx.Runtime!.Errors.GetMessage);
-                return true;
-
-            case "stack":
-                il.Emit(OpCodes.Call, ctx.Runtime!.Errors.GetStack);
-                return true;
-
-            case "cause":
-                il.Emit(OpCodes.Call, ctx.Runtime!.Errors.GetCause);
-                return true;
-
-            case "errors":
-                // For AggregateError, get the errors array
-                il.Emit(OpCodes.Call, ctx.Runtime!.Errors.AggregateErrorGetErrors);
-                return true;
-
-            default:
-                return false;
+        if (ctx.Runtime!.Vm is { } vm)
+        {
+            var native = il.DefineLabel();
+            var done = il.DefineLabel();
+            il.Emit(OpCodes.Dup);
+            il.Emit(OpCodes.Call, vm.IsErrorValue);
+            il.Emit(OpCodes.Brfalse, native);
+            il.Emit(OpCodes.Ldstr, propertyName);
+            il.Emit(OpCodes.Call, vm.ReadErrorProperty);
+            il.Emit(OpCodes.Br, done);
+            il.MarkLabel(native);
+            il.Emit(OpCodes.Call, getter);
+            il.MarkLabel(done);
+            emitter.SetStackUnknown();
+            return true;
         }
+        il.Emit(OpCodes.Call, getter);
+        return true;
     }
 
     /// <summary>

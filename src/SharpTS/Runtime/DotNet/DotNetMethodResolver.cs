@@ -1,4 +1,5 @@
 using System.Numerics;
+using System.Diagnostics.CodeAnalysis;
 using System.Reflection;
 using SharpTS.Declaration;
 using SharpTS.Runtime.Types;
@@ -37,6 +38,16 @@ internal readonly record struct RuntimeMethodCandidate(
 /// </remarks>
 internal static class DotNetMethodResolver
 {
+    [UnconditionalSuppressMessage("Trimming", "IL2026", Justification = "The ReflectionOnly branch resolves the attribute from the actual metadata System.Array base assembly; executable parameter attributes use the existing literal runtime check.")]
+    internal static bool IsParamArray(ParameterInfo parameter)
+    {
+        if (!parameter.Member.Module.Assembly.ReflectionOnly)
+            return parameter.IsDefined(typeof(ParamArrayAttribute), inherit: false);
+        if (!parameter.ParameterType.IsArray) return false;
+        var attribute = parameter.ParameterType.BaseType?.Assembly.GetType(typeof(ParamArrayAttribute).FullName!, throwOnError: false);
+        return attribute is not null && parameter.GetCustomAttributesData().Any(value => ReferenceEquals(value.AttributeType, attribute));
+    }
+
     public static RuntimeMethodCandidate ResolveMethod(
         MethodInfo[] candidates,
         IReadOnlyList<object?> arguments,
@@ -104,7 +115,7 @@ internal static class DotNetMethodResolver
                 continue;
             var inputParameters = GetInputParameters(parameters);
             bool hasParams = parameters.Length > 0 &&
-                             parameters[^1].IsDefined(typeof(ParamArrayAttribute), false);
+                             DotNetMethodResolver.IsParamArray(parameters[^1]);
 
             if (hasParams)
             {

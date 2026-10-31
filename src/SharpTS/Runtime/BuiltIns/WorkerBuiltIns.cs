@@ -1,4 +1,5 @@
 using SharpTS.Execution;
+using SharpTS.Runtime.Exceptions;
 using SharpTS.Runtime.Types;
 
 namespace SharpTS.Runtime.BuiltIns;
@@ -249,17 +250,6 @@ internal class TypedArrayConstructorImpl<T> : ISharpTSCallable, IBuiltInTypeCons
             return _createFromArrayBuffer(ab, byteOffset, len);
         }
 
-        // new Int32Array(array) - copy from another array
-        if (arguments[0] is SharpTSArray arr)
-        {
-            var result = _createFromLength(arr.Length);
-            for (int i = 0; i < arr.Length; i++)
-            {
-                result[i] = arr[i];
-            }
-            return result;
-        }
-
         // new Int32Array(typedArray) - copy from another typed array
         if (arguments[0] is SharpTSTypedArray other)
         {
@@ -271,7 +261,41 @@ internal class TypedArrayConstructorImpl<T> : ISharpTSCallable, IBuiltInTypeCons
             return result;
         }
 
+        if (RuntimeValue.FromBoxed(arguments[0]).IsObject)
+        {
+            var source = arguments[0];
+            // Iterable constructors exhaust the iterator before converting any
+            // values. Array-likes instead Get and convert each index in order.
+            if (interpreter.TryGetIterableElements(source, out var iterable))
+            {
+                var values = iterable.ToList();
+                return Copy(values.Count, index => values[index]);
+            }
+
+            long count = ArrayBuiltIns.ToLength(interpreter.GetPropertyValue(source, "length"), interpreter);
+            if (count > Array.MaxLength / GetBytesPerElement())
+                throw new ThrowException(new SharpTSRangeError("Invalid typed array length"));
+            return Copy((int)count, index => interpreter.GetPropertyValue(source,
+                index.ToString(System.Globalization.CultureInfo.InvariantCulture)));
+        }
+
         throw new Exception("Invalid arguments for TypedArray constructor");
+
+        T Copy(int count, Func<int, object?> read)
+        {
+            if (count > Array.MaxLength / GetBytesPerElement())
+                throw new ThrowException(new SharpTSRangeError("Invalid typed array length"));
+            var result = _createFromLength(count);
+            bool bigInt = result is SharpTSBigInt64Array or SharpTSBigUint64Array;
+            for (int index = 0; index < count; index++)
+            {
+                object? value = read(index);
+                result[index] = bigInt
+                    ? interpreter.ToPrimitiveForBuiltIn(value)
+                    : interpreter.ToNumberWithPrimitive(value);
+            }
+            return result;
+        }
     }
 
     public object? GetProperty(string name)

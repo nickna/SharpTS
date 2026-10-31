@@ -92,9 +92,11 @@ public partial class TypeChecker
             CheckStmt(exportStmt.Declaration);
             if (_currentModule != null)
             {
-                string name = GetDeclarationName(exportStmt.Declaration);
-                var type = GetDeclaredType(exportStmt.Declaration);
-                _currentModule.ExportedTypes[name] = type;
+                foreach (var declaration in ExportDeclarationSequence.Declarations(exportStmt.Declaration))
+                {
+                    string name = GetDeclarationName(declaration);
+                    _currentModule.ExportedTypes[name] = GetDeclaredType(declaration);
+                }
             }
         }
         else if (exportStmt.NamedExports != null && exportStmt.FromModulePath == null)
@@ -494,6 +496,13 @@ public partial class TypeChecker
         {
             // Module uses export = value - import the assignment value directly
             importedType = exportAssignment;
+        }
+        else if (importedModule.IsCommonJs)
+        {
+            // Runtime module.exports can replace the entire CJS value. Match
+            // the dynamic default/named CJS import profile, keeping typed
+            // export= assignments in the precise branch above.
+            importedType = TypeInfo.Any.Shared;
         }
         else
         {

@@ -48,6 +48,8 @@ internal static class GlobalFunctionHandlers
         registry.RegisterV2(BuiltInNames.ClearTimeout, HandleClearTimeout);
         registry.RegisterV2(BuiltInNames.SetInterval, HandleSetInterval);
         registry.RegisterV2(BuiltInNames.ClearInterval, HandleClearInterval);
+        registry.RegisterV2(BuiltInNames.SetImmediate, HandleSetImmediate);
+        registry.RegisterV2(BuiltInNames.ClearImmediate, HandleClearImmediate);
 
         // Microtask function
         registry.RegisterV2(BuiltInNames.QueueMicrotask, HandleQueueMicrotask);
@@ -197,11 +199,8 @@ internal static class GlobalFunctionHandlers
         if (arguments.Count < 1) return RuntimeValue.True;
 
         var argRV = await evaluateArg(arguments[0]);
-        if (argRV.IsNumber) return RuntimeValue.FromBoolean(double.IsNaN(Interpreter.ToNumber(argRV)));
-        if (argRV.IsString) return RuntimeValue.FromBoolean(!double.TryParse(argRV.AsString(), out _));
-        if (argRV.IsNull) return RuntimeValue.True;
-        if (argRV.IsBoolean) return RuntimeValue.False;
-        return RuntimeValue.True;
+        return RuntimeValue.FromBoolean(double.IsNaN(
+            interpreter.ToNumberWithPrimitive(argRV.ToObject())));
     }
 
     private static async ValueTask<RuntimeValue> HandleIsFinite(
@@ -390,17 +389,50 @@ internal static class GlobalFunctionHandlers
         return RuntimeValue.Undefined;
     }
 
+    private static async ValueTask<RuntimeValue> HandleSetImmediate(
+        Func<Expr, ValueTask<RuntimeValue>> evaluateArg,
+        IReadOnlyList<Expr> arguments,
+        Interpreter interpreter)
+    {
+        object? callbackValue = null;
+        List<object?> callbackArgs = [];
+        for (int i = 0; i < arguments.Count; i++)
+        {
+            object? value = (await evaluateArg(arguments[i])).ToObject();
+            if (i == 0) callbackValue = value;
+            else callbackArgs.Add(value);
+        }
+        if (callbackValue is not ISharpTSCallable callback)
+            throw new ThrowException(new SharpTSTypeError("setImmediate() callback must be a function."));
+        return RuntimeValue.FromBoxed(TimerBuiltIns.SetTimeout(interpreter, callback, 0, callbackArgs));
+    }
+
+    private static async ValueTask<RuntimeValue> HandleClearImmediate(
+        Func<Expr, ValueTask<RuntimeValue>> evaluateArg,
+        IReadOnlyList<Expr> arguments,
+        Interpreter interpreter)
+    {
+        object? handle = null;
+        for (int i = 0; i < arguments.Count; i++)
+        {
+            object? value = (await evaluateArg(arguments[i])).ToObject();
+            if (i == 0) handle = value;
+        }
+        TimerBuiltIns.ClearTimeout(handle);
+        return RuntimeValue.Undefined;
+    }
+
     private static async ValueTask<RuntimeValue> HandleQueueMicrotask(
         Func<Expr, ValueTask<RuntimeValue>> evaluateArg,
         IReadOnlyList<Expr> arguments,
         Interpreter interpreter)
     {
         if (arguments.Count < 1)
-            throw new InterpreterException($"{BuiltInNames.QueueMicrotask}() requires exactly one argument (callback).");
+            throw new ThrowException(new SharpTSTypeError($"{BuiltInNames.QueueMicrotask}() requires a callback."));
 
         var callbackValue = (await evaluateArg(arguments[0])).ToObject();
-        if (callbackValue is not ISharpTSCallable callback)
-            throw new InterpreterException($"{BuiltInNames.QueueMicrotask}() callback must be a function.");
+        if (callbackValue is not ISharpTSCallable callback || callbackValue is SharpTSProxy { IsCallable: false })
+            throw new ThrowException(new SharpTSTypeError($"{BuiltInNames.QueueMicrotask}() callback must be a function."));
 
         interpreter.QueueMicrotask(callback);
         return RuntimeValue.Undefined;

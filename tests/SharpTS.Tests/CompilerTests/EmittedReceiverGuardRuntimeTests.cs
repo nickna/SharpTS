@@ -46,7 +46,7 @@ public sealed class EmittedReceiverGuardRuntimeTests
         Assert.Null(typeof(EmittedRuntime).GetProperty("ReceiverGuard")!.SetMethod);
         Assert.Null(typeof(EmittedRuntime).GetProperty("RequireObjectCoercibleThis"));
         var helper = typeof(RuntimeEmitter).GetMethod("EmitRequireObjectCoercibleThis", Members)!;
-        Assert.Equal(new[] { typeof(TypeBuilder), typeof(EmittedReceiverGuardRuntime), typeof(Type), typeof(Type), typeof(MethodInfo), typeof(ConstructorInfo) },
+        Assert.Equal(new[] { typeof(EmittedReceiverGuardRuntime), typeof(Type), typeof(Type), typeof(MethodInfo), typeof(ConstructorInfo) },
             helper.GetParameters().Select(p => p.ParameterType));
         var builder = NewAssembly(); var type = builder.DefineDynamicModule("main").DefineType("Probe", TypeAttributes.Public);
         var calls = type.DefineField("Calls", typeof(int), FieldAttributes.Public | FieldAttributes.Static);
@@ -55,8 +55,10 @@ public sealed class EmittedReceiverGuardRuntimeTests
         il.Emit(OpCodes.Ldsfld, calls); il.Emit(OpCodes.Ldc_I4_1); il.Emit(OpCodes.Add); il.Emit(OpCodes.Stsfld, calls);
         il.Emit(OpCodes.Ldarg_0); il.Emit(OpCodes.Castclass, typeof(Exception)); il.Emit(OpCodes.Ret);
         var owner = new EmittedRuntime().ReceiverGuard;
-        helper.Invoke(new RuntimeEmitter(TypeProvider.Runtime),
-            [type, owner, typeof(string), typeof(Uri), wrapper, typeof(ArgumentException).GetConstructor([typeof(string)])!]);
+        var emitter = new RuntimeEmitter(TypeProvider.Runtime);
+        typeof(RuntimeEmitter).GetMethod("DeclareRequireObjectCoercibleThis", Members)!.Invoke(emitter, [type, owner]);
+        helper.Invoke(emitter,
+            [owner, typeof(string), typeof(Uri), wrapper, typeof(ArgumentException).GetConstructor([typeof(string)])!]);
         Assert.Same(type, owner.RequireObjectCoercibleThis.DeclaringType); Assert.False(owner.IsComplete);
         type.CreateType(); Complete(owner);
         var loaded = SaveVerifyLoad(builder).GetType("Probe")!; var guard = loaded.GetMethod("RequireObjectCoercibleThis")!;
@@ -72,7 +74,7 @@ public sealed class EmittedReceiverGuardRuntimeTests
     [Theory]
     [InlineData(false)]
     [InlineData(true)]
-    public void ReusedEmitterPreservesOwnReflectionCacheReceiverIdentityAndGuestErrors(bool hosted)
+    public void ReusedEmitterPreservesDirectGuardReceiverIdentityAndGuestErrors(bool hosted)
     {
         var emitter = new RuntimeEmitter(TypeProvider.Runtime, emitHosted: hosted);
         var owners = new HashSet<EmittedReceiverGuardRuntime>(); var handles = new HashSet<MethodBuilder>();
@@ -97,14 +99,12 @@ public sealed class EmittedReceiverGuardRuntimeTests
                 AssertGuestError(() => guard.Invoke(null, [value]), ReferenceEquals(value, symbol));
 
             var function = loaded.GetType("$TSFunction")!;
-            var cache = function.GetField("_requireObjectCoercibleThisCache", BindingFlags.NonPublic | BindingFlags.Static)!;
             var coerce = function.GetMethod("CoercePrimitiveArgs", BindingFlags.NonPublic | BindingFlags.Static)!;
-            Assert.Null(cache.GetValue(null));
+            Assert.Null(function.GetField("_requireObjectCoercibleThisCache", BindingFlags.NonPublic | BindingFlags.Static));
+            Assert.Contains(guard, TSFunctionCoercionTests.CalledMethods(coerce));
             var parameters = typeof(EmittedReceiverGuardRuntimeTests).GetMethod(nameof(ReceiverEcho))!.GetParameters();
             object?[] numberArgs = [123.0]; coerce.Invoke(null, [parameters, numberArgs, true]);
             Assert.Equal("123", Assert.IsType<string>(numberArgs[0]));
-            var resolved = Assert.IsAssignableFrom<MethodInfo>(cache.GetValue(null));
-            Assert.Same(type, resolved.DeclaringType); Assert.Equal(guard.MetadataToken, resolved.MetadataToken);
             foreach (object? value in new object?[] { null, undefined, symbol })
             {
                 object?[] receiverArgs = [value];

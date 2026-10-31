@@ -262,12 +262,12 @@ public class TypeInspector
         p.Name ?? $"arg{p.Position}",
         p.ParameterType,
         p.IsOptional,
-        p.HasDefaultValue ? p.DefaultValue : null,
+        p.HasDefaultValue ? (p.Member.Module.Assembly.ReflectionOnly ? p.RawDefaultValue : p.DefaultValue) : null,
         IsByRef: p.ParameterType.IsByRef,
         // `out` and `in` are both by-ref; distinguish for a faithful signature.
         IsOut: p.IsOut,
         IsIn: p.ParameterType.IsByRef && p.IsIn,
-        IsParams: p.IsDefined(typeof(ParamArrayAttribute), inherit: false)
+        IsParams: DotNetMethodResolver.IsParamArray(p)
     );
 
     private MethodMetadata ExtractMethod(MethodInfo method)
@@ -324,6 +324,7 @@ public class TypeInspector
 
     private static ObsoleteMetadata? ExtractObsoleteInfo(MemberInfo member)
     {
+        if (member.Module.Assembly.ReflectionOnly) return ExtractMetadataObsoleteInfo(member);
         var obsoleteAttr = member.GetCustomAttribute<ObsoleteAttribute>();
         if (obsoleteAttr == null)
             return null;
@@ -331,8 +332,18 @@ public class TypeInspector
         return new ObsoleteMetadata(obsoleteAttr.Message, obsoleteAttr.IsError);
     }
 
+    private static ObsoleteMetadata? ExtractMetadataObsoleteInfo(MemberInfo member)
+    {
+        var attribute = member.GetCustomAttributesData().SingleOrDefault(value =>
+            value.AttributeType.FullName == typeof(ObsoleteAttribute).FullName);
+        if (attribute is null) return null;
+        return new(attribute.ConstructorArguments.Count > 0 ? attribute.ConstructorArguments[0].Value as string : null,
+            attribute.ConstructorArguments.Count > 1 && attribute.ConstructorArguments[1].Value is true);
+    }
+
     private static ObsoleteMetadata? ExtractObsoleteInfo(Type type)
     {
+        if (type.Assembly.ReflectionOnly) return ExtractMetadataObsoleteInfo(type);
         var obsoleteAttr = type.GetCustomAttribute<ObsoleteAttribute>();
         if (obsoleteAttr == null)
             return null;

@@ -17,6 +17,10 @@ namespace SharpTS.Runtime.Types;
 public class SharpTSObject(Dictionary<string, object?> fields) : ISharpTSPropertyAccessor, ITypeCategorized
 {
     private readonly Dictionary<string, object?> _fields = fields;
+    // Only actual ES module namespace producers install this hidden data read.
+    // Guest descriptors remain data descriptors, with no visible getter.
+    internal Func<string, object?, object?>? NamespaceDataReader { get; init; }
+    private IReadOnlyDictionary<string, object?>? _namespaceFields;
     // Dictionary preserves insertion order for the untouched, descriptor-free
     // object-literal shape. Keep the permanent side table lazy so the common
     // JSON record never pays for a second collection per object. Mutations that
@@ -204,7 +208,32 @@ public class SharpTSObject(Dictionary<string, object?> fields) : ISharpTSPropert
     /// <summary>
     /// Expose fields for Object.keys() and object rest patterns
     /// </summary>
-    public IReadOnlyDictionary<string, object?> Fields => _fields;
+    public IReadOnlyDictionary<string, object?> Fields => NamespaceDataReader is null
+        ? _fields
+        : _namespaceFields ??= new NamespaceFieldView(this);
+
+    private object? ReadDataProperty(string name, object? value)
+        => NamespaceDataReader is { } read ? read(name, value) : value;
+
+    private sealed class NamespaceFieldView(SharpTSObject owner) : IReadOnlyDictionary<string, object?>
+    {
+        public object? this[string key] => owner.ReadDataProperty(key, owner._fields[key]);
+        public IEnumerable<string> Keys => owner._fields.Keys;
+        public IEnumerable<object?> Values => Keys.Select(key => this[key]);
+        public int Count => owner._fields.Count;
+        public bool ContainsKey(string key) => owner._fields.ContainsKey(key);
+        public bool TryGetValue(string key, out object? value)
+        {
+            if (!owner._fields.TryGetValue(key, out value)) return false;
+            value = owner.ReadDataProperty(key, value);
+            return true;
+        }
+        public IEnumerator<KeyValuePair<string, object?>> GetEnumerator()
+        {
+            foreach (string key in Keys) yield return new(key, this[key]);
+        }
+        System.Collections.IEnumerator System.Collections.IEnumerable.GetEnumerator() => GetEnumerator();
+    }
 
     /// <inheritdoc />
     public IEnumerable<string> PropertyNames => _fields.Keys;
@@ -224,15 +253,7 @@ public class SharpTSObject(Dictionary<string, object?> fields) : ISharpTSPropert
     {
         if (_fields.TryGetValue(name, out object? value))
         {
-            return value;
-        }
-        // Map the implicit `__proto__` slot to the Prototype property so the
-        // interpreter's prototype-chain walk (Interpreter.Properties.cs) reaches
-        // inherited own properties without us mirroring Prototype into _fields
-        // (which would leak __proto__ into Object.keys / for-in).
-        if (name == "__proto__" && Prototype != null)
-        {
-            return Prototype;
+            return ReadDataProperty(name, value);
         }
         // Non-existent properties return undefined, not null (JavaScript semantics)
         return SharpTSUndefined.Instance;
@@ -251,7 +272,11 @@ public class SharpTSObject(Dictionary<string, object?> fields) : ISharpTSPropert
         out object? value)
     {
         if (_accessorProperties is null)
-            return _fields.TryGetValue(name, out value);
+        {
+            if (!_fields.TryGetValue(name, out value)) return false;
+            value = ReadDataProperty(name, value);
+            return true;
+        }
 
         value = null;
         return false;
@@ -269,17 +294,22 @@ public class SharpTSObject(Dictionary<string, object?> fields) : ISharpTSPropert
     /// </summary>
     public object? GetMember(string name)
     {
-        return _fields.TryGetValue(name, out var value) ? value : SharpTSUndefined.Instance;
+        return _fields.TryGetValue(name, out var value) ? ReadDataProperty(name, value) : SharpTSUndefined.Instance;
     }
 
     /// <inheritdoc />
     public void SetProperty(string name, object? value)
+        => TrySetProperty(name, value);
+
+    // The VM global mirror consumes the actual data-store result, without
+    // guessing success by comparing a caller-supplied value afterward.
+    internal bool TrySetProperty(string name, object? value)
     {
         if (IsFrozen)
         {
             // Frozen objects silently ignore property modifications (JavaScript behavior in non-strict mode)
             SloppyModeWarnings.Warn("write to frozen", $"Assignment to frozen object property '{name}' ignored");
-            return;
+            return false;
         }
 
         // An accessor without a setter rejects assignment, including a
@@ -287,7 +317,7 @@ public class SharpTSObject(Dictionary<string, object?> fields) : ISharpTSPropert
         if (IsAccessorProperty(name) && !HasSetter(name))
         {
             SloppyModeWarnings.Warn("write to getter-only", $"Assignment to getter-only property '{name}' ignored");
-            return;
+            return false;
         }
 
         bool exists = _fields.ContainsKey(name) || IsAccessorProperty(name);
@@ -295,18 +325,19 @@ public class SharpTSObject(Dictionary<string, object?> fields) : ISharpTSPropert
         {
             // Non-extensible objects silently ignore new property additions
             SloppyModeWarnings.Warn("add to non-extensible", $"Property addition to non-extensible object '{name}' ignored");
-            return;
+            return false;
         }
 
         // Check writable flag for properties defined via defineProperty
         if (exists && _descriptors?.TryGetValue(name, out var flags) == true && flags.HasExplicitDescriptor && !flags.Writable)
         {
             SloppyModeWarnings.Warn("write to non-writable", $"Assignment to non-writable property '{name}' ignored");
-            return;
+            return false;
         }
 
         if (!exists) EnsureStringPropertyOrder().Add(name);
         _fields[name] = value;
+        return true;
     }
 
     /// <summary>
@@ -372,6 +403,7 @@ public class SharpTSObject(Dictionary<string, object?> fields) : ISharpTSPropert
     /// </summary>
     public bool DeleteProperty(string name)
     {
+        if (GetOwnPropertyDescriptor(name) is null) return true;
         if (IsFrozen || IsSealed)
         {
             // Frozen and sealed objects silently ignore property deletions
@@ -390,6 +422,7 @@ public class SharpTSObject(Dictionary<string, object?> fields) : ISharpTSPropert
     /// <returns>True if the property was deleted, false otherwise.</returns>
     public bool DeletePropertyStrict(string name, bool strictMode)
     {
+        if (GetOwnPropertyDescriptor(name) is null) return true;
         if (IsFrozen || IsSealed)
         {
             if (strictMode)
@@ -439,9 +472,6 @@ public class SharpTSObject(Dictionary<string, object?> fields) : ISharpTSPropert
     {
         if (_fields.ContainsKey(name)) return true;
         if (IsAccessorProperty(name)) return true;
-        // Treat __proto__ as a virtual own slot mirroring the Prototype
-        // property — see GetProperty for the matching read.
-        if (name == "__proto__" && Prototype != null) return true;
         return false;
     }
 
@@ -814,6 +844,25 @@ public class SharpTSObject(Dictionary<string, object?> fields) : ISharpTSPropert
             return false;
         }
 
+        return ApplyPropertyDefinition(name, descriptor, hasExisting, existingIsAccessor, existingFlags);
+    }
+
+    // Only the VM's completed context definition projects a full record into
+    // its internal global mirror. Ordinary definitions keep validation above.
+    internal void MirrorCompletedPropertyDefinition(string name, SharpTSPropertyDescriptor descriptor)
+    {
+        if (!descriptor.HasEnumerable || !descriptor.HasConfigurable
+            || !(descriptor.HasValue && descriptor.HasWritable || descriptor.HasGet && descriptor.HasSet))
+            throw new ArgumentException("Expected a complete property descriptor.", nameof(descriptor));
+        bool hasExisting = _fields.ContainsKey(name) || IsAccessorProperty(name);
+        PropertyDescriptorFlags flags = default;
+        if (_descriptors?.TryGetValue(name, out flags) != true) flags = PropertyDescriptorFlags.Default;
+        ApplyPropertyDefinition(name, descriptor, hasExisting, IsAccessorProperty(name), flags);
+    }
+
+    private bool ApplyPropertyDefinition(string name, SharpTSPropertyDescriptor descriptor,
+        bool hasExisting, bool existingIsAccessor, PropertyDescriptorFlags existingFlags)
+    {
         // DefineProperty may convert a data property to an accessor and remove
         // its dictionary entry. Capture creation order before that mutation.
         List<string> propertyOrder = EnsureStringPropertyOrder();
@@ -848,7 +897,7 @@ public class SharpTSObject(Dictionary<string, object?> fields) : ISharpTSPropert
         // Apply the descriptor
         if (descHasRealAccessor
             || descSpecifiesAccessor
-            || (!descSpecifiesAccessor && !descriptor.HasValue && existingIsAccessor))
+            || (!descSpecifiesAccessor && !descriptor.HasValue && !descriptor.HasWritable && existingIsAccessor))
         {
             // Accessor property - remove any data property value
             _fields.Remove(name);
@@ -883,7 +932,7 @@ public class SharpTSObject(Dictionary<string, object?> fields) : ISharpTSPropert
             {
                 _fields[name] = descriptor.Value;
             }
-            else if (!hasExisting)
+            else if (!hasExisting || existingIsAccessor)
             {
                 // A brand-new data property whose descriptor omits `value` defaults
                 // to undefined per spec — store the sentinel (not C# null, which
@@ -940,7 +989,7 @@ public class SharpTSObject(Dictionary<string, object?> fields) : ISharpTSPropert
             // Data property
             return new SharpTSPropertyDescriptor
             {
-                Value = fieldValue,
+                Value = ReadDataProperty(name, fieldValue),
                 HasValue = true,
                 Writable = flags.Writable,
                 HasWritable = true,
@@ -1095,6 +1144,7 @@ public class SharpTSObject(Dictionary<string, object?> fields) : ISharpTSPropert
         out IReadOnlyDictionary<string, object?> fields)
     {
         if (!IsPrimitiveWrapper
+            && NamespaceDataReader is null
             && _descriptors is null
             && _accessorProperties is null
             && _stringPropertyOrder is null)
@@ -1125,6 +1175,7 @@ public class SharpTSObject(Dictionary<string, object?> fields) : ISharpTSPropert
     internal bool TryCopyPlainSpreadFields(Dictionary<string, object?> destination)
     {
         if (GetType() != typeof(SharpTSObject) || IsPrimitiveWrapper
+            || NamespaceDataReader is not null
             || _descriptors is not null || _accessorProperties is not null
             || _stringPropertyOrder is not null || _symbolFields is not null
             || _symbolAccessors is not null || _symbolDescriptors is not null)

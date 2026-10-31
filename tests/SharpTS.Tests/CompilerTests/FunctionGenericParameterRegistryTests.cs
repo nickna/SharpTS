@@ -75,6 +75,29 @@ public sealed class FunctionGenericParameterRegistryTests
         Assert.True(empty.IsComplete);
     }
 
+    [Fact]
+    public void ErasedValueTargetsAreDeclarationOwnedAndNeverFirstCallSpecializations()
+    {
+        var owner = Owner();
+        var method = Method(owner, "identity");
+        var parameter = method.DefineGenericParameters("T")[0];
+        var registry = new FunctionGenericParameterRegistry();
+        registry.Declare(method, [parameter]);
+        Assert.False(registry.TryGetErasedValueInvocationTarget(method, out _));
+        Assert.Throws<InvalidOperationException>(() => registry.DeclareErasedValueInvocationTarget(method, []));
+        Assert.Throws<InvalidOperationException>(() => registry.DeclareErasedValueInvocationTarget(method, [parameter]));
+        Assert.False(registry.TryGetErasedValueInvocationTarget(method, out _));
+        Type[] canonical = [typeof(object)];
+        registry.DeclareErasedValueInvocationTarget(method, canonical);
+        canonical[0] = typeof(int);
+        Assert.True(registry.TryGetErasedValueInvocationTarget(method, out var target));
+        Assert.Same(method, target.GetGenericMethodDefinition());
+        Assert.Equal(new[] { typeof(object) }, target.GetGenericArguments());
+        Assert.Throws<InvalidOperationException>(() => registry.DeclareErasedValueInvocationTarget(method, [typeof(string)]));
+        registry.CompleteEmission();
+        Assert.Throws<InvalidOperationException>(() => registry.DeclareErasedValueInvocationTarget(method, [typeof(object)]));
+    }
+
     [Theory]
     [InlineData(false)]
     [InlineData(true)]

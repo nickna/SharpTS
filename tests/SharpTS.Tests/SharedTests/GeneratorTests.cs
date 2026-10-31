@@ -1628,12 +1628,8 @@ public class GeneratorTests
         Assert.Equal("[5]\n", TestHarness.RunCompiled(source));
     }
 
-    // Decline cases: a capturing generator expression the lambda-lift cannot faithfully forward stays
-    // nested and fails cleanly in compiled mode ("Yield not supported in this context"), never a
-    // miscompile. The interpreter runs all of them natively.
-
-    [Fact]
-    public void GeneratorExpression_ClosesOverLocal_WithRestParam_CompiledFailsCleanly()
+    [Theory, ModeData]
+    public void GeneratorExpression_ClosesOverLocal_WithRestParam(ExecutionMode mode)
     {
         var source = """
             function outer() {
@@ -1644,13 +1640,11 @@ public class GeneratorTests
             console.log(outer());
             """;
 
-        Assert.Equal("[5]\n", TestHarness.Run(source, ExecutionMode.Interpreted));
-        var ex = Assert.Throws<CompileException>(() => TestHarness.RunCompiled(source));
-        Assert.Contains("Yield not supported", ex.Message);
+        Assert.Equal("[5]\n", TestHarness.Run(source, mode));
     }
 
-    [Fact]
-    public void GeneratorExpression_ClosesOverLocal_WithDefaultParam_CompiledFailsCleanly()
+    [Theory, ModeData]
+    public void GeneratorExpression_ClosesOverLocal_WithDefaultParam(ExecutionMode mode)
     {
         var source = """
             function outer() {
@@ -1661,13 +1655,11 @@ public class GeneratorTests
             console.log(outer());
             """;
 
-        Assert.Equal("[7]\n", TestHarness.Run(source, ExecutionMode.Interpreted));
-        var ex = Assert.Throws<CompileException>(() => TestHarness.RunCompiled(source));
-        Assert.Contains("Yield not supported", ex.Message);
+        Assert.Equal("[7]\n", TestHarness.Run(source, mode));
     }
 
-    [Fact]
-    public void GeneratorExpression_ClosesOverLocal_UsingArguments_CompiledFailsCleanly()
+    [Theory, ModeData]
+    public void GeneratorExpression_ClosesOverLocal_UsingArguments(ExecutionMode mode)
     {
         var source = """
             function outer() {
@@ -1678,10 +1670,7 @@ public class GeneratorTests
             console.log(outer());
             """;
 
-        // The interpreter's generator-expression `arguments` binding is a separate existing gap; this
-        // test pins the compiler's conservative decline only.
-        var ex = Assert.Throws<CompileException>(() => TestHarness.RunCompiled(source));
-        Assert.Contains("Yield not supported", ex.Message);
+        Assert.Equal("[5, 2]\n", TestHarness.Run(source, mode));
     }
 
     [Theory, ModeData]

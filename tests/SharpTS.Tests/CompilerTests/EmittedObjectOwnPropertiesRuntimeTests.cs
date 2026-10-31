@@ -159,6 +159,9 @@ public sealed class EmittedObjectOwnPropertiesRuntimeTests
                 runtime.FunctionValues, runtime.FunctionAttributes, runtime.GeneratorPrototypes.Kind)!;
             if (name == "GlobalThisSingletonField") return runtime.GlobalObject.SingletonField;
             if (name == "LookupBuiltInStaticMember") return runtime.BuiltInStatics.Lookup;
+            if (name == "NativeProxyRejection") return runtime.ReflectedMethods.NativeProxyRejection;
+            if (name == "SourceOwners") return runtime.ClassInitialization.SourceOwners;
+            if (name == "NativeStaticMemberPresence") return runtime.ClassInitialization.NativeStaticMemberPresence;
             return name switch
             {
                 "GetOwnPropertyDescriptor" => runtime.ObjectDescriptors.GetOwnPropertyDescriptor,

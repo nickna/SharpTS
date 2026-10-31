@@ -150,6 +150,7 @@ public class VariableResolver : AstVisitorBase
 
     protected override void VisitVar(Stmt.Var stmt)
     {
+        if (stmt.IsDeclare) return;
         Dictionary<string, bool>? target = _scopes.TryPeek(out var current) ? current : null;
         if (stmt.IsVar && target is not null && _handlerVarTargets.TryGetValue(target, out var markedTarget))
             target = markedTarget;
@@ -204,13 +205,15 @@ public class VariableResolver : AstVisitorBase
         {
             Declare(param.Name.Lexeme);
             Define(param.Name.Lexeme);
+            if (initializers?.TryGetValue(param.Name.Lexeme, out var initializer) == true)
+                PredeclareLexicalBindings([initializer]);
+        }
+        foreach (var param in parameters)
+        {
             if (param.DefaultValue != null)
                 Visit(param.DefaultValue);
             if (initializers?.TryGetValue(param.Name.Lexeme, out var initializer) == true)
-            {
-                PredeclareLexicalBindings([initializer]);
                 Visit(initializer);
-            }
         }
     }
 
@@ -575,15 +578,17 @@ public class VariableResolver : AstVisitorBase
         var enclosingFunction = _currentFunction;
         _currentFunction = FunctionType.Function;
 
+        // Ordinary synchronous expressions have a separate private self owner.
+        // Async/generator runtimes retain their existing single call scope.
+        bool separateSelf = expr.Name != null && !expr.IsAsync && !expr.IsGenerator;
         BeginScope();
-
-        // For named function expressions, declare the name in the function scope
         if (expr.Name != null)
         {
             Declare(expr.Name.Lexeme);
             Define(expr.Name.Lexeme);
         }
 
+        if (separateSelf) BeginScope();
         ResolveParameters(expr.Parameters, expr.BlockBody ?? []);
         var statements = ParameterBinder.BodyStatements(expr.BlockBody ?? []);
         bool separateBody = BeginParameterBodyScope(expr.Parameters, statements);
@@ -599,6 +604,7 @@ public class VariableResolver : AstVisitorBase
 
         if (separateBody) EndScope();
         EndScope();
+        if (separateSelf) EndScope();
 
         _currentFunction = enclosingFunction;
     }

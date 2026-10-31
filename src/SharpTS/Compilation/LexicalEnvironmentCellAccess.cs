@@ -30,7 +30,7 @@ internal static class LexicalEnvironmentCellAccess
         }
         string sourceName = ctx.LoopBodyCellDeclarations.GetValueOrDefault(name)?.Lexeme
             ?? ctx.LoopBodyCellShadows.GetValueOrDefault(name)?.Lexeme ?? name;
-        ctx.EmitLexicalTdzValueCheck(il, sourceName);
+        ctx.EmitLexicalTdzValueCheck(il, sourceName, provenCell: true);
         return true;
     }
 

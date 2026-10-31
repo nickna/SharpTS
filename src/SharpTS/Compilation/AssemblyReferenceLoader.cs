@@ -21,6 +21,22 @@ public sealed class AssemblyReferenceLoader : IDisposable
     private readonly ConcurrentDictionary<string, Type?> _typeCache = new();
     private readonly ConcurrentDictionary<string, string> _metadataFailures = new(StringComparer.OrdinalIgnoreCase);
     private bool _disposed;
+    private ExternalMemberEmission? _emission;
+    private ExternalMetadataTypes? _metadataTypes;
+    private ExternalMetadataTypes MetadataTypes => _metadataTypes ??= new(_mlc);
+    internal ExternalMetadataTypes.CoreSnapshot CaptureCoreAliases() => MetadataTypes.CaptureCoreAliases();
+    internal object? DefaultForEmission(ParameterInfo parameter) =>
+        parameter.GetType().Assembly == typeof(MetadataLoadContext).Assembly && MetadataTypes.Owns(parameter.Member.Module.Assembly)
+            ? parameter.RawDefaultValue : parameter.DefaultValue;
+    internal bool TryGenericSelectionType(Type type, out Type selected) => MetadataTypes.TrySelectionType(type, out selected);
+    internal MethodInfo[] CloseGenericCandidates(IEnumerable<MethodInfo> methods, IReadOnlyList<Type?> arguments,
+        IReadOnlyList<Type>? explicitArguments, Type? expectedReturn) =>
+        new ExternalGenericMethodSelection(MetadataTypes).CloseCandidates(methods, arguments, explicitArguments, expectedReturn);
+    internal MethodInfo ForEmission(MethodInfo member) => (_emission ??= new(_mlc, MetadataTypes)).Method(member);
+    internal ConstructorInfo ForEmission(ConstructorInfo member) => (_emission ??= new(_mlc, MetadataTypes)).Constructor(member);
+    internal FieldInfo ForEmission(FieldInfo member) => (_emission ??= new(_mlc, MetadataTypes)).Field(member);
+    internal Type CoreAtomForEmission(Type type) => (_emission ??= new(_mlc, MetadataTypes)).CoreAtom(type);
+    internal Type ForEmission(Type type) => (_emission ??= new(_mlc, MetadataTypes)).Type(type);
 
     /// <summary>
     /// Creates a new loader with the specified assembly paths.
@@ -111,6 +127,10 @@ public sealed class AssemblyReferenceLoader : IDisposable
 
         private CapturedAssemblySet(Dictionary<string, byte[]> images, Dictionary<string, string> readErrors)
         { _images = images; _readErrors = readErrors; }
+
+        internal static CapturedAssemblySet FromImages(IEnumerable<KeyValuePair<string, byte[]>> images) =>
+            new(images.ToDictionary(pair => Path.GetFullPath(pair.Key), pair => (byte[])pair.Value.Clone(), StringComparer.OrdinalIgnoreCase),
+                new(StringComparer.OrdinalIgnoreCase));
 
         public static CapturedAssemblySet Capture(IEnumerable<string> paths)
         {

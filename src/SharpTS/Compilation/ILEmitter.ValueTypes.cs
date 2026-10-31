@@ -1,4 +1,5 @@
 using System.Reflection.Emit;
+using SharpTS.Parsing;
 
 namespace SharpTS.Compilation;
 
@@ -18,8 +19,9 @@ public partial class ILEmitter
     /// </summary>
     /// <param name="type">The target type to prepare the receiver as.</param>
     /// <returns>True if the type is a value type (caller should use Call instead of Callvirt).</returns>
-    private bool PrepareReceiverForMemberAccess(Type type)
+    private bool PrepareReceiverForMemberAccess(Type type, Expr receiver)
     {
+        RecordExternalInput(receiver, type, NativeClrAdmission.InputConversion.Receiver);
         if (type.IsValueType)
         {
             IL.Emit(OpCodes.Unbox_Any, type);
@@ -43,6 +45,7 @@ public partial class ILEmitter
     /// <param name="type">The type of the value on the stack.</param>
     private void BoxResultIfValueType(Type type)
     {
+        type = _ctx.TypeMapper.CoreAtomForEmission(type);
         if (type == _ctx.Types.Object)
             ClrNumericInteropEmitter.EmitNormalizeBoxed(IL, _ctx.Types);
         else if (type == typeof(decimal))

@@ -347,7 +347,9 @@ internal sealed class NestedFunctionLifter
     {
         forwarded = [];
 
-        if (!f.IsAsync || f.IsGenerator)
+        bool usesLiveClosure = f.IsAsync || f.IsGenerator || externalCaptures.Any(name =>
+            analyzer.GetCaptureSource(f, name) is Stmt.Function { IsAsync: true, IsGenerator: false });
+        if (!usesLiveClosure)
         {
             foreach (var p in f.Parameters)
                 if (p.IsRest || p.DefaultValue != null)

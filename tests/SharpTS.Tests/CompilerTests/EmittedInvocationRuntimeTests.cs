@@ -74,7 +74,7 @@ public sealed class EmittedInvocationRuntimeTests
         object? Read(ParameterInfo p)
         {
             if (p.ParameterType == typeof(bool)) return p.Name == feature && selected;
-            if (p.Name == "CheckCancellationMethod") return null;
+            if (p.Name is "CheckCancellationMethod" or "ReflectiveCallRejection") return null;
             if (p.Name == "TypedArrays") return typedArrays;
             if (p.Name == key) return selected ? null : key == "NodeStreams" ? new EmittedNodeStreamRuntime(hasAbortSignal: false) : Activator.CreateInstance(p.ParameterType, nonPublic: true);
             return (p.Name! switch { "IHasFieldsInterface" => runtime.ObjectFields.Interface, "UndefinedType" => runtime.Sentinels.UndefinedType, "UndefinedInstance" => runtime.Sentinels.UndefinedInstance, _ => typeof(EmittedRuntime).GetProperty(p.Name!)!.GetValue(runtime) });

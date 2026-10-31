@@ -46,7 +46,9 @@ public partial class AsyncStateAnalyzer
             return;
         }
 
+        int count = _awaitPoints.Count;
         base.VisitForOf(stmt);
+        PreserveLoopBackedgeLocals(stmt.Body, count);
     }
 
     protected override void VisitForIn(Stmt.ForIn stmt)
@@ -54,7 +56,18 @@ public partial class AsyncStateAnalyzer
         // Loop variable is declared and potentially survives await
         _declaredVariables.Add(StorageName(stmt, stmt.Variable.Lexeme));
 
+        int count = _awaitPoints.Count;
         base.VisitForIn(stmt);
+        PreserveLoopBackedgeLocals(stmt.Body, count);
+    }
+
+    private void PreserveLoopBackedgeLocals(Stmt body, int priorAwaitCount)
+    {
+        if (_awaitPoints.Count == priorAwaitCount) return;
+        var usages = new LoopBackedgeVariableCollector(_renames);
+        usages.Visit(body);
+        foreach (string name in usages.Names)
+            if (_declaredVariables.Contains(name)) _variablesUsedAfterAwait.Add(name);
     }
 
     protected override void VisitFor(Stmt.For stmt)

@@ -1,4 +1,5 @@
 using SharpTS.Compilation;
+using SharpTS.Execution;
 using SharpTS.Runtime.Types;
 
 namespace SharpTS.Runtime.BuiltIns;
@@ -13,6 +14,18 @@ namespace SharpTS.Runtime.BuiltIns;
 // to this class, and nothing else called them (2026-07 cleanup audit).
 public static partial class ObjectBuiltIns
 {
+    internal static object? RuntimeGetOwnPropertyDescriptorInRealm(
+        Interpreter? interpreter, object? target, object? propertyKey)
+    {
+        if (interpreter != null && propertyKey is SharpTSSymbol symbol
+            && interpreter.TryGetPromiseConstructorSymbolProperties(target, out var properties))
+        {
+            return (object?)properties.GetOwnPropertyDescriptor(symbol)?.ToObject()
+                ?? SharpTSUndefined.Instance;
+        }
+        return RuntimeGetOwnPropertyDescriptor(target, propertyKey);
+    }
+
     /// <summary>
     /// Runtime helper for Object.getPrototypeOf; used by SharpTSObjectPrototype.
     /// </summary>
@@ -87,7 +100,6 @@ public static partial class ObjectBuiltIns
             SharpTSClassPrototype prototype => GetClassPrototypeOwnPropertyDescriptor(prototype, propKey),
             ISharpTSPrimitiveConstructor primitiveConstructor => primitiveConstructor.GetOwnPropertyDescriptor(propKey),
             SharpTSInstance inst => inst.GetOwnPropertyDescriptor(propKey),
-            SharpTSPromise promise => promise.GetOwnPropertyDescriptor(propKey),
             SharpTSArray arr => arr.GetOwnPropertyDescriptor(propKey),
             System.Collections.IDictionary idict => GetDescriptorFromIDictionary(idict, propKey),
             System.Collections.IList list => GetDescriptorFromList(list, propKey),

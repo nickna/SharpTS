@@ -30,7 +30,7 @@ internal sealed class DotNetMethod : ISharpTSCallable
         {
             var ps = DotNetMethodResolver.GetInputParameters(m.GetParameters());
             int required = ps.Count(p => !p.HasDefaultValue &&
-                !p.IsDefined(typeof(ParamArrayAttribute), false));
+                !DotNetMethodResolver.IsParamArray(p));
             if (required < min) min = required;
         }
         return min == int.MaxValue ? 0 : min;

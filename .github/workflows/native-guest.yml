@@ -1,0 +1,101 @@
+name: Native generated programs
+
+on:
+  pull_request:
+    paths:
+      - '.github/workflows/native-guest.yml'
+      - 'src/SharpTS/**'
+      - 'src/SharpTS.Sdk/**'
+      - 'src/SharpTS.Sdk.Tasks/**'
+      - 'src/SharpTS.Hosting.Abstractions/**'
+      - 'scripts/test-native-guest.ps1'
+      - 'scripts/test-packaged-sdk.ps1'
+      - 'tests/native-guest/**'
+      - 'global.json'
+      - 'Directory.*'
+  push:
+    branches: [main]
+    paths:
+      - '.github/workflows/native-guest.yml'
+      - 'src/SharpTS/**'
+      - 'src/SharpTS.Sdk/**'
+      - 'src/SharpTS.Sdk.Tasks/**'
+      - 'src/SharpTS.Hosting.Abstractions/**'
+      - 'scripts/test-native-guest.ps1'
+      - 'scripts/test-packaged-sdk.ps1'
+      - 'tests/native-guest/**'
+      - 'global.json'
+      - 'Directory.*'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: native-guest-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  native-guest:
+    name: native-guest (${{ matrix.rid }})
+    runs-on: ${{ matrix.os }}
+    timeout-minutes: 50
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - { rid: win-x64, os: windows-2025 }
+          - { rid: win-arm64, os: windows-11-vs2026-arm }
+          - { rid: linux-x64, os: ubuntu-24.04 }
+          - { rid: linux-arm64, os: ubuntu-24.04-arm }
+          - { rid: osx-x64, os: macos-15-intel }
+          - { rid: osx-arm64, os: macos-15 }
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - name: Setup .NET
+        uses: actions/setup-dotnet@a98b56852c35b8e3190ac28c8c2271da59106c68 # v6.0.0
+        with:
+          global-json-file: global.json
+      - name: Build managed compiler
+        run: dotnet build src/SharpTS/SharpTS.csproj --configuration Release
+      - name: Publish and execute genuine native guests
+        shell: pwsh
+        env:
+          DOTNET_PROCESSOR_COUNT: 2
+          DOTNET_CLI_UI_LANGUAGE: en
+        run: >-
+          ./scripts/test-native-guest.ps1 -RuntimeIdentifier '${{ matrix.rid }}'
+          -Cases @('language', 'classes', 'arguments', 'modules', 'collections', 'generators', 'async', 'parameter-defaults', 'exceptions', 'crypto', 'networking', 'bcl', 'typedarray-iterator', 'generic-inheritance', 'bigint-unary')
+      - name: Pack the candidate SDK
+        shell: pwsh
+        run: |
+          dotnet build src/SharpTS.Sdk.Tasks/SharpTS.Sdk.Tasks.csproj --configuration Release
+          if ($LASTEXITCODE -ne 0) { throw 'SDK task build failed.' }
+          dotnet publish src/SharpTS/SharpTS.csproj --configuration Release
+          if ($LASTEXITCODE -ne 0) { throw 'SDK compiler payload publication failed.' }
+          dotnet pack src/SharpTS.Sdk/SharpTS.Sdk.csproj --configuration Release -p:MinVerVersionOverride=0.0.0-native-ci --output artifacts/native-sdk-feed
+          if ($LASTEXITCODE -ne 0) { throw 'Candidate SDK packaging failed.' }
+      - name: Publish and execute a native program with the packaged SDK
+        shell: pwsh
+        env:
+          DOTNET_PROCESSOR_COUNT: 2
+          DOTNET_CLI_UI_LANGUAGE: en
+        run: >-
+          ./scripts/test-packaged-sdk.ps1
+          -PackagePath artifacts/native-sdk-feed/SharpTS.Sdk.0.0.0-native-ci.nupkg
+          -PackageVersion 0.0.0-native-ci
+          -NativeRuntimeIdentifier '${{ matrix.rid }}'
+      - name: Upload guest diagnostics and execution evidence
+        if: always()
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7
+        with:
+          name: native-guests-${{ matrix.rid }}
+          path: |
+            artifacts/native-guest/**/*.json
+            artifacts/native-guest/**/*.txt
+            artifacts/sdk-native/**/*.json
+            artifacts/sdk-native/**/*.txt
+          if-no-files-found: error
+          retention-days: 7

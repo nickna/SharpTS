@@ -109,7 +109,7 @@ public sealed class EmittedRuntimeClassTests
             Assert.Same(owner.Type, runtime.DynamicConstruction.Function.DeclaringType);
             Assert.Same(owner.Type, runtime.Workers.ReceiveMessageOnPort.DeclaringType);
             var loaded = SaveVerifyLoad(builder); var saved = loaded.GetType("$Runtime")!;
-            Assert.Equal(new[] { "Stringify", "FormatNumber", "CreateException" }, saved.GetMethods(BindingFlags.Public | BindingFlags.NonPublic | BindingFlags.Static | BindingFlags.DeclaredOnly).OrderBy(m => m.MetadataToken).Take(3).Select(m => m.Name));
+            Assert.Equal(new[] { "InitializeArguments", "Stringify", "FormatNumber", "CreateException" }, saved.GetMethods(BindingFlags.Public | BindingFlags.NonPublic | BindingFlags.Static | BindingFlags.DeclaredOnly).OrderBy(m => m.MetadataToken).Take(4).Select(m => m.Name));
             Assert.Equal("7", saved.GetMethod("Stringify")!.Invoke(null, [7d]));
             Assert.DoesNotContain(loaded.GetReferencedAssemblies(), a => a.Name == "SharpTS");
             Assert.Equal(hosted, loaded.GetReferencedAssemblies().Any(a => a.Name == "SharpTS.Hosting.Abstractions"));

@@ -87,7 +87,7 @@ public sealed class EmittedIteratorRecordRuntimeTests
         Assert.Contains(helper.GetParameters(), p => p.ParameterType == typeof(EmittedIteratorRecordRuntime));
         Assert.DoesNotContain(helper.GetParameters(), p => p.ParameterType == typeof(EmittedRuntime) || p.ParameterType == typeof(RuntimeFeatureSet));
         var peers = helper.GetParameters().Single(p => p.Name == "inputs").ParameterType;
-        Assert.Equal(new[] { "Errors", "Invocation", "ObjectRead", "Symbols", "UndefinedType" }, peers.GetProperties().Select(p => p.Name).Order());
+        Assert.Equal(new[] { "Attributes", "Construction", "Errors", "GeneratorType", "HasIn", "Invocation", "ObjectRead", "Symbols", "UndefinedInstance", "UndefinedType" }, peers.GetProperties().Select(p => p.Name).Order());
         Assert.DoesNotContain(peers.GetFields(Members), f => f.FieldType == typeof(EmittedRuntime) || f.FieldType == typeof(RuntimeFeatureSet));
     }
 

@@ -35,7 +35,8 @@ public partial class TypeChecker
                 BuiltInTypes.GetWeakRefMemberType(memberName, wr.TargetType),
             TypeCategory.FinalizationRegistry when objType is TypeInfo.FinalizationRegistry fr =>
                 BuiltInTypes.GetFinalizationRegistryMemberType(memberName, fr.TargetType),
-            TypeCategory.Date => BuiltInTypes.GetDateInstanceMemberType(memberName),
+            TypeCategory.Date => BuiltInTypes.GetDateInstanceMemberType(memberName)
+                ?? ResolveObjectPrototypeMember(memberName),
             TypeCategory.RegExp => ResolveRegExpMemberType(memberName),
             TypeCategory.Error when objType is TypeInfo.Error err =>
                 BuiltInTypes.GetErrorMemberType(memberName, err.Name)
@@ -362,8 +363,11 @@ public partial class TypeChecker
     /// not an Object.prototype member. Used as a fallback by the object-like member-access paths
     /// before reporting TS2339.
     /// </summary>
-    private static TypeInfo? ResolveObjectPrototypeMember(string name)
+    private TypeInfo? ResolveObjectPrototypeMember(string name)
     {
+        if (_hasDefaultLibraries && _defaultLibraryObjectType is { } loadedObject &&
+            ResolveNamedInterfaceMember(loadedObject, name) is { } declared)
+            return declared;
         var boolean = TypeInfo.Primitive.Boolean;
         var str = TypeInfo.String.Shared;
         var anyArg = new List<TypeInfo> { TypeInfo.Any.Shared };

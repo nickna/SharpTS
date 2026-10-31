@@ -393,9 +393,9 @@ public class SharpTSRegExp : ITypeCategorized
     /// shorthands are Unicode-broad in .NET, so pinning them to the JS sets there
     /// is also a fix, not a regression. The rewrite is context-aware: the
     /// positive forms expand both inside and outside <c>[…]</c> classes; the
-    /// negated forms (<c>\D \W \S</c>) expand only *outside* a class — a negated
-    /// shorthand inside a class can't be expressed without engine-level class
-    /// nesting, so those pass through unchanged (tracked by #749). Backslash
+    /// negated forms (<c>\D \W \S</c>) expand outside a class and when they are
+    /// its sole element, including an outer negation. Larger character-class
+    /// unions retain their original engine behavior (tracked by #1280). Backslash
     /// escapes are respected, so <c>\\d</c>, <c>\cd</c>, backreferences, etc. are
     /// left untouched. <c>iu</c>-mode case-folding edge cases (K U+212A, ſ U+017F
     /// folding into <c>\w</c>) remain out of scope.
@@ -410,6 +410,17 @@ public class SharpTSRegExp : ITypeCategorized
         for (int i = 0; i < n; i++)
         {
             char c = pattern[i];
+            if (!inClass && c == '[' && ExpandSoleNegatedClass(pattern, i) is { } soleClass)
+            {
+                if (sb == null)
+                {
+                    sb = new StringBuilder(n + 16);
+                    sb.Append(pattern, 0, i);
+                }
+                sb.Append(soleClass);
+                i += pattern[i + 1] == '^' ? 4 : 3;
+                continue;
+            }
             if (c == '\\' && i + 1 < n)
             {
                 char next = pattern[i + 1];
@@ -438,6 +449,19 @@ public class SharpTSRegExp : ITypeCategorized
             sb?.Append(c);
         }
         return sb == null ? pattern : sb.ToString();
+    }
+
+    private static string? ExpandSoleNegatedClass(string pattern, int index)
+    {
+        int escapeIndex = index + 1;
+        if (escapeIndex >= pattern.Length) return null;
+        bool negated = pattern[escapeIndex] == '^';
+        if (negated) escapeIndex++;
+        if (escapeIndex + 2 >= pattern.Length || pattern[escapeIndex] != '\\'
+            || pattern[escapeIndex + 2] != ']') return null;
+        char escape = pattern[escapeIndex + 1];
+        if (escape is not ('D' or 'W' or 'S')) return null;
+        return ExpandShorthand(negated ? (char)(escape | 0x20) : escape, inClass: false);
     }
 
     /// <summary>
@@ -548,7 +572,8 @@ public class SharpTSRegExp : ITypeCategorized
 
     /// <summary>Returns the index just past the matching <c>]</c> of a character
     /// class beginning at <paramref name="i"/> (<c>p[i] == '['</c>), honoring
-    /// <c>\]</c>. Unterminated → end of string (.NET surfaces the error).</summary>
+    /// <c>\]</c>. Unterminated classes throw a guest SyntaxError before the
+    /// framework parser, which can throw host bounds errors for <c>[^</c>.</summary>
     private static int SkipCharClass(string p, int i)
     {
         int n = p.Length, k = i + 1;
@@ -558,7 +583,8 @@ public class SharpTSRegExp : ITypeCategorized
             if (p[k] == ']') return k + 1;
             k++;
         }
-        return n;
+        throw new Exceptions.ThrowException(
+            new SharpTSSyntaxError("Invalid regular expression: unterminated character class"));
     }
 
     /// <summary>Validates the flag text between <c>(?</c> and <c>:</c> (e.g.

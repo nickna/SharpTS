@@ -1,5 +1,6 @@
 using System.Collections.Frozen;
 using SharpTS.Parsing;
+using SharpTS.Runtime.BuiltIns;
 using SharpTS.TypeSystem.Exceptions;
 
 namespace SharpTS.TypeSystem;
@@ -945,6 +946,15 @@ public partial class TypeChecker
                 {
                     AddBase(extendInterface);
                 }
+                else if (extendType is TypeInfo.FunctionSupertype functionBase)
+                {
+                    var functionMembers = new[] { "apply", "call", "bind", "prototype", "length", "name", "arguments", "caller" }
+                        .ToFrozenDictionary(name => name, name => BuiltInTypes.GetFunctionMemberType(name, functionBase)!, StringComparer.Ordinal);
+                    AddBase(new TypeInfo.Interface("Function", functionMembers, FrozenSet<string>.Empty,
+                        ReadonlyMembers: new[] { "length", "name" }.ToFrozenSet(StringComparer.Ordinal),
+                        MethodMembers: new[] { "apply", "call", "bind" }.ToFrozenSet(StringComparer.Ordinal))
+                    { HasFunctionTypeofFacet = true });
+                }
                 else if (extendType is TypeInfo.InstantiatedGeneric extendIG &&
                          FlattenInstantiatedInterface(extendIG) is { } flattened)
                 {
@@ -1056,6 +1066,7 @@ public partial class TypeChecker
                     bool hasRestParam = sig.Parameters.Any(p => p.IsRest);
                     var paramNames = sig.Parameters.Select(p => p.Name.Lexeme).ToList();
                     var signature = new TypeInfo.CallSignature(sigTypeParams, paramTypes, returnType, requiredParams, hasRestParam, paramNames);
+                    RegisterSpecializedOverload(signature, sig.Parameters.Select(parameter => parameter.TypeAnnotationNode));
                     RecordEditorResolvedSignature(signature, signatureVersion);
                     callSignatures.Add(signature);
                 }

@@ -229,10 +229,11 @@ Diagnostics match on `(line, tsCode)` tuples. Column is intentionally dropped â€
 
 Diagnostics with no `tsCode` (SharpTS-only â€” e.g. `@DotNetType` integration errors) are excluded from baseline matching for that test rather than forcing a fail.
 
-## Inferred-type baseline infrastructure
+## Inferred-type pilot
 
-Phase 1 of [#88](https://github.com/nickna/SharpTS/issues/88) provides the
-non-semantic infrastructure for the future `*.types` track:
+The independent `*.types` track for [#88](https://github.com/nickna/SharpTS/issues/88)
+compares checked source types with TypeScript's committed observations. It never
+executes a guest program, invokes `tsc`, or regenerates upstream references.
 
 - `TypeScriptBaselineResolver` selects plain or target/module-configured
   `.errors.txt` and `.types` files through the same deterministic algorithm.
@@ -247,10 +248,59 @@ non-semantic infrastructure for the future `*.types` track:
   coordinate authority. This distinguishes real blank source lines from blank
   separators inserted only for baseline readability.
 
-This infrastructure does not yet produce SharpTS observations or compare
-inferred types. Those semantic query, display, walking, and pilot-runner steps
-remain later phases of #88. Neither parser nor resolver invokes `tsc` at test
-time.
+`TypeScriptTypesConformanceRunner` uses the diagnostic runner's same program
+construction, compiler options, libraries, directives and virtual file roots.
+Every pilot file must still pass its diagnostic comparison, including matching
+expected errors. Only the type track opts into checker source metadata.
+`EditorSemanticIndex.GetSourceTypeObservations` copies immutable checked displays
+for exact source documents; it performs no new checking or name resolution.
+Aliases use naturally requested expansions. Unresolved lazy aliases, unavailable
+facts and unsupported shapes stay visible instead of becoming `any`.
+
+The shared checked-type renderer also serves declaration emit. Conformance mode
+retains literals, union/intersection order, public overloads and generator type
+domains. It is culture invariant, does not truncate, detects anonymous cycles,
+and returns `UnsupportedTypeDisplay` when a faithful representation is unavailable.
+Source order puts a parent before contained expressions. Match keys combine
+virtual file, one-based line, exact node text and its occurrence ordinal; ambiguous
+keys are harness failures. Only line endings and path separators are normalized.
+
+The fixed 12-file cohort is `config/types-subset.json`. It covers aliases,
+conditional inference, intersections, literals, logical assignment, libraries,
+bigint and symbol property accesses. Its report is [types-pilot.md](types-pilot.md).
+Run it explicitly after acquiring the pinned corpus:
+
+```powershell
+dotnet test tests/conformance/SharpTS.TypeScriptConformance/SharpTS.TypeScriptConformance.csproj -c Release `
+  --filter FullyQualifiedName~TypeScriptTypesConformanceTests
+```
+
+`baselines/types.txt` has its own `suite=TypeScriptTypes` versioned header,
+per-file counts and a SHA-256 fingerprint of each complete comparison result.
+It does not modify `baselines/interpreted.txt` or the diagnostic
+vocabulary consumed by the website. The type outcomes are:
+
+| Outcome | Meaning |
+|---|---|
+| `Pass` | Every expected observation matches; no extra observations. |
+| `Mismatch` | Type text, missing coverage or extra coverage differs. |
+| `Unsupported` | All differences are explicitly unsupported checked displays. |
+| `NoBaseline` | The pin has no compatible `.types` reference. |
+| `HarnessError` | Setup, ambiguous keys, checking or diagnostic prerequisite failed. |
+
+Individual differences retain `TypeTextMismatch`, `MissingSharpTSObservation`,
+`ExtraSharpTSObservation`, `UnsupportedSharpTSType` and `HarnessError`, plus source
+keys and expected/actual text. `SHARPTS_TSTYPES_DUMP_FAILURES=1` prints those diffs;
+`SHARPTS_TSTYPES_REPORT_DIR=<directory>` writes one structured JSON report per file.
+Missing and unsupported observations never count as matches. A text mismatch may
+be semantic or display-only; the report records that distinction after triage.
+
+Every baseline row, count and result fingerprint must match exactly on normal
+runs, so even a changed mismatch with unchanged counts requires review. To review an intentional
+change, set `SHARPTS_TSTYPES_UPDATE_BASELINE=1` and rerun the same filter. Inspect
+the structured diffs and commit the reviewed baseline with the change. Generate
+twice and require no diff before committing. Clear the update variable before
+normal verification. The diagnostic update variable has no effect on this track.
 
 ## JavaScript inputs
 

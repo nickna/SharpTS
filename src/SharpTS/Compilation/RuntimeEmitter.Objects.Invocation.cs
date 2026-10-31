@@ -8,6 +8,7 @@ public partial class RuntimeEmitter
 {
     private readonly record struct IteratorProtocolCallInputs(
         EmittedGeneratorRuntime Generators,
+        EmittedDescriptorStorageRuntime Descriptors,
         EmittedInvocationRuntime Invocation,
         EmittedObjectReadRuntime ObjectRead,
         FieldInfo UndefinedInstance
@@ -72,7 +73,8 @@ public partial class RuntimeEmitter
         bool UsesPromise,
         bool UsesTextEncoding,
         EmittedFunctionPrototypeRuntime FunctionPrototypes,
-        FieldInfo UndefinedInstance
+        FieldInfo UndefinedInstance,
+        MethodInfo? ReflectiveCallRejection = null
     );
 
     /// <summary>
@@ -157,11 +159,18 @@ public partial class RuntimeEmitter
         // Handle push - wrap List.Add as TSFunction
         il.MarkLabel(pushLabel);
         il.Emit(OpCodes.Ldarg_0);
-        il.Emit(OpCodes.Ldtoken, _types.GetMethod(_types.ListOfObject, "Add", _types.Object));
-        il.Emit(OpCodes.Ldtoken, _types.ListOfObject);
-        il.Emit(OpCodes.Call, _types.MethodBaseGetMethodFromHandleWithType);
-        il.Emit(OpCodes.Castclass, _types.MethodInfo);
-        il.Emit(OpCodes.Newobj, runtime.FunctionConstruction.Constructor);
+        NativeUnionArgumentConversion.ReflectionMethodEmission? parameterProducer = null;
+        var add = _types.GetMethod(_types.ListOfObject, "Add", _types.Object);
+        if (_nativeUnionParameters is { } conversion)
+            parameterProducer = conversion.EmitListAddParameters(il, add, _types.ListOfObject);
+        else
+        {
+            il.Emit(OpCodes.Ldtoken, add);
+            il.Emit(OpCodes.Ldtoken, _types.ListOfObject);
+            il.Emit(OpCodes.Call, _types.MethodBaseGetMethodFromHandleWithType);
+            il.Emit(OpCodes.Castclass, _types.MethodInfo);
+        }
+        EmitReflectedFunctionConstructor(il, runtime.FunctionConstruction.Constructor, parameterProducer, cached: false);
         il.Emit(OpCodes.Ret);
 
         // Handle pop - need special handling since pop returns removed element
@@ -1137,52 +1146,60 @@ public partial class RuntimeEmitter
         il.Emit(OpCodes.Brfalse, noCallMethodLabel);
         il.Emit(OpCodes.Ldarg_1);
         il.Emit(OpCodes.Callvirt, _types.GetMethodNoParams(_types.Object, "GetType"));
-        il.Emit(OpCodes.Ldstr, "Call");
-        il.Emit(OpCodes.Callvirt, _types.GetMethod(_types.Type, "GetMethod", _types.String));
-        var callMiLocal = il.DeclareLocal(typeof(MethodInfo));
-        il.Emit(OpCodes.Stloc, callMiLocal);
-        il.Emit(OpCodes.Ldloc, callMiLocal);
-        il.Emit(OpCodes.Brfalse, noCallMethodLabel);
+        if (inputs.ReflectiveCallRejection is not null)
+        {
+            il.Emit(OpCodes.Pop); // retain the original GetType/null behavior before the boundary
+            EmitReflectiveCallableRejection(il, method.Module, inputs.ReflectiveCallRejection);
+        }
+        else
+        {
+            il.Emit(OpCodes.Ldstr, "Call");
+            il.Emit(OpCodes.Callvirt, _types.GetMethod(_types.Type, "GetMethod", _types.String));
+            var callMiLocal = il.DeclareLocal(typeof(MethodInfo));
+            il.Emit(OpCodes.Stloc, callMiLocal);
+            il.Emit(OpCodes.Ldloc, callMiLocal);
+            il.Emit(OpCodes.Brfalse, noCallMethodLabel);
 
-        // Call(interpreter=null, args=new List<object?>(object[]))
-        // Wrapped in try/catch so a guest error thrown by the BuiltInMethod (which
-        // reflection re-wraps in TargetInvocationException) is unwrapped to the real
-        // guest exception — without this, a throwing cross-boundary BuiltInMethod (e.g.
-        // vm.Module.link/evaluate failing) escapes guest try/catch as a raw
-        // TargetInvocationException and crashes the program.
-        var reflectResultLocal = il.DeclareLocal(_types.Object);
-        il.BeginExceptionBlock();
-        il.Emit(OpCodes.Ldloc, callMiLocal);
-        il.Emit(OpCodes.Ldarg_1); // the callable object
-        il.Emit(OpCodes.Ldc_I4_2);
-        il.Emit(OpCodes.Newarr, _types.Object);
-        il.Emit(OpCodes.Dup);
-        il.Emit(OpCodes.Ldc_I4_0);
-        il.Emit(OpCodes.Ldnull); // interpreter = null
-        il.Emit(OpCodes.Stelem_Ref);
-        il.Emit(OpCodes.Dup);
-        il.Emit(OpCodes.Ldc_I4_1);
-        // Convert object[] to List<object?>
-        il.Emit(OpCodes.Ldarg_2);
-        il.Emit(OpCodes.Newobj, _types.ListObjectNullableCtor_IEnumerable);
-        il.Emit(OpCodes.Stelem_Ref);
-        il.Emit(OpCodes.Callvirt, _types.GetMethod(_types.MethodInfo, "Invoke", _types.Object, _types.ObjectArray));
-        il.Emit(OpCodes.Stloc, reflectResultLocal);
-        il.BeginCatchBlock(typeof(TargetInvocationException));
-        // ex on stack → rethrow ex.InnerException (the real guest error) if present.
-        il.Emit(OpCodes.Callvirt, typeof(Exception).GetProperty("InnerException")!.GetGetMethod()!);
-        var innerLocal = il.DeclareLocal(typeof(Exception));
-        il.Emit(OpCodes.Stloc, innerLocal);
-        var rethrowOriginal = il.DefineLabel();
-        il.Emit(OpCodes.Ldloc, innerLocal);
-        il.Emit(OpCodes.Brfalse, rethrowOriginal);
-        il.Emit(OpCodes.Ldloc, innerLocal);
-        il.Emit(OpCodes.Throw);
-        il.MarkLabel(rethrowOriginal);
-        il.Emit(OpCodes.Rethrow);
-        il.EndExceptionBlock();
-        il.Emit(OpCodes.Ldloc, reflectResultLocal);
-        il.Emit(OpCodes.Ret);
+            // Call(interpreter=null, args=new List<object?>(object[]))
+            // Wrapped in try/catch so a guest error thrown by the BuiltInMethod (which
+            // reflection re-wraps in TargetInvocationException) is unwrapped to the real
+            // guest exception — without this, a throwing cross-boundary BuiltInMethod (e.g.
+            // vm.Module.link/evaluate failing) escapes guest try/catch as a raw
+            // TargetInvocationException and crashes the program.
+            var reflectResultLocal = il.DeclareLocal(_types.Object);
+            il.BeginExceptionBlock();
+            il.Emit(OpCodes.Ldloc, callMiLocal);
+            il.Emit(OpCodes.Ldarg_1); // the callable object
+            il.Emit(OpCodes.Ldc_I4_2);
+            il.Emit(OpCodes.Newarr, _types.Object);
+            il.Emit(OpCodes.Dup);
+            il.Emit(OpCodes.Ldc_I4_0);
+            il.Emit(OpCodes.Ldnull); // interpreter = null
+            il.Emit(OpCodes.Stelem_Ref);
+            il.Emit(OpCodes.Dup);
+            il.Emit(OpCodes.Ldc_I4_1);
+            // Convert object[] to List<object?>
+            il.Emit(OpCodes.Ldarg_2);
+            il.Emit(OpCodes.Newobj, _types.ListObjectNullableCtor_IEnumerable);
+            il.Emit(OpCodes.Stelem_Ref);
+            il.Emit(OpCodes.Callvirt, _types.GetMethod(_types.MethodInfo, "Invoke", _types.Object, _types.ObjectArray));
+            il.Emit(OpCodes.Stloc, reflectResultLocal);
+            il.BeginCatchBlock(typeof(TargetInvocationException));
+            // ex on stack → rethrow ex.InnerException (the real guest error) if present.
+            il.Emit(OpCodes.Callvirt, typeof(Exception).GetProperty("InnerException")!.GetGetMethod()!);
+            var innerLocal = il.DeclareLocal(typeof(Exception));
+            il.Emit(OpCodes.Stloc, innerLocal);
+            var rethrowOriginal = il.DefineLabel();
+            il.Emit(OpCodes.Ldloc, innerLocal);
+            il.Emit(OpCodes.Brfalse, rethrowOriginal);
+            il.Emit(OpCodes.Ldloc, innerLocal);
+            il.Emit(OpCodes.Throw);
+            il.MarkLabel(rethrowOriginal);
+            il.Emit(OpCodes.Rethrow);
+            il.EndExceptionBlock();
+            il.Emit(OpCodes.Ldloc, reflectResultLocal);
+            il.Emit(OpCodes.Ret);
+        }
 
         // Unrecognized non-callable (plain object, number, $Undefined, …):
         // throw TypeError per ECMA-262 instead of silently returning null (#260).
@@ -1232,6 +1249,11 @@ public partial class RuntimeEmitter
 
         var notEnumeratorLabel = il.DefineLabel();
         var returnBranchLabel = il.DefineLabel();
+        var ordinaryGeneratorMember = il.DefineLabel();
+        il.Emit(OpCodes.Ldarg_0);
+        il.Emit(OpCodes.Ldarg_1);
+        il.Emit(OpCodes.Call, inputs.Descriptors.GetPropertyDescriptor);
+        il.Emit(OpCodes.Brtrue, ordinaryGeneratorMember);
 
         // SharpTS generators implement $IGenerator. For an explicit next(v), call
         // $IGenerator.next(value) directly so the sent value reaches the suspended
@@ -1296,6 +1318,7 @@ public partial class RuntimeEmitter
             il.MarkLabel(notGeneratorThrowLabel);
         }
 
+        il.MarkLabel(ordinaryGeneratorMember);
         // Resolve the JS-level member first. Generators and user-defined
         // iterators expose a real `next`/`return` callable here; only when the
         // receiver has NO such member (a bare BCL enumerator) do we synthesize

@@ -72,8 +72,7 @@ public partial class RuntimeEmitter
         // bare `Error` resolves to typeof($Error).
         il.Emit(OpCodes.Ldsfld, errors.Prototype);
         il.Emit(OpCodes.Ldstr, "constructor");
-        il.Emit(OpCodes.Ldtoken, errors.Type);
-        il.Emit(OpCodes.Call, _types.GetMethod(_types.Type, "GetTypeFromHandle", _types.RuntimeTypeHandle));
+        EmitRuntimeConstructorValue(il, errors.Type);
         il.Emit(OpCodes.Callvirt, setItem);
 
         // ECMA-262 20.5.3 Error.prototype.name === "Error" and message === "".
@@ -93,10 +92,10 @@ public partial class RuntimeEmitter
         catch { /* already named — ignore */ }
         var errToStringWrapperLocal = il.DeclareLocal(_types.Object);
         il.Emit(OpCodes.Ldnull);
-        _types.EmitLoadMethodInfo(il, errorToStringSpec);
+        var parameterProducer = EmitReflectedMethodLiteral(il, errorToStringSpec);
         il.Emit(OpCodes.Ldstr, "toString");
         il.Emit(OpCodes.Ldc_I4_0);
-        il.Emit(OpCodes.Newobj, inputs.TSFunctionCtorWithCache);
+        EmitReflectedFunctionConstructor(il, inputs.TSFunctionCtorWithCache, parameterProducer, cached: true);
         il.Emit(OpCodes.Stloc, errToStringWrapperLocal);
         il.Emit(OpCodes.Ldsfld, errors.Prototype);
         il.Emit(OpCodes.Ldstr, "toString");
@@ -111,8 +110,7 @@ public partial class RuntimeEmitter
             => EmitInstallNonEnumerableDescriptor(il, descriptors, errors.Prototype, errDescLocal, jsName, emitValue);
         InstallNonEnumerableErr("constructor", () =>
         {
-            il.Emit(OpCodes.Ldtoken, errors.Type);
-            il.Emit(OpCodes.Call, _types.GetMethod(_types.Type, "GetTypeFromHandle", _types.RuntimeTypeHandle));
+            EmitRuntimeConstructorValue(il, errors.Type);
         });
         InstallNonEnumerableErr("name", () => il.Emit(OpCodes.Ldstr, "Error"));
         InstallNonEnumerableErr("message", () => il.Emit(OpCodes.Ldstr, ""));
@@ -382,8 +380,7 @@ public partial class RuntimeEmitter
         // constructor = typeof(<ctorType>)
         il.Emit(OpCodes.Ldsfld, protoField);
         il.Emit(OpCodes.Ldstr, "constructor");
-        il.Emit(OpCodes.Ldtoken, ctorType);
-        il.Emit(OpCodes.Call, _types.GetMethod(_types.Type, "GetTypeFromHandle", _types.RuntimeTypeHandle));
+        EmitRuntimeConstructorValue(il, ctorType);
         il.Emit(OpCodes.Callvirt, setItem);
 
         // name = "<errorName>" and message = "".
@@ -403,8 +400,7 @@ public partial class RuntimeEmitter
             => EmitInstallNonEnumerableDescriptor(il, descriptors, protoField, descLocal, jsName, emitValue);
         InstallNonEnum("constructor", () =>
         {
-            il.Emit(OpCodes.Ldtoken, ctorType);
-            il.Emit(OpCodes.Call, _types.GetMethod(_types.Type, "GetTypeFromHandle", _types.RuntimeTypeHandle));
+            EmitRuntimeConstructorValue(il, ctorType);
         });
         InstallNonEnum("name", () => il.Emit(OpCodes.Ldstr, errorName));
         InstallNonEnum("message", () => il.Emit(OpCodes.Ldstr, ""));

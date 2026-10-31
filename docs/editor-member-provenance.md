@@ -80,7 +80,8 @@ owners/subtrees and unsupported declaration shapes refuse the whole domain. The 
 only exact selected tokens and the proven owner's private declarations for collision checks;
 it performs no checker lookup or spelling-based occurrence search. Checked private compound and
 logical field assignments retain read/write operation evidence and participate in the domain.
-Private prefix/postfix updates currently fail ordinary parsing and remain refusal cases.
+Private field prefix/postfix updates retain the same checked read/write operation evidence.
+Private accessor declarations remain unsupported.
 
 The LSP private operation requires a known captured version and negotiated versioned document
 changes. Prepare covers the whole `#old` token with that placeholder; rename accepts bare or

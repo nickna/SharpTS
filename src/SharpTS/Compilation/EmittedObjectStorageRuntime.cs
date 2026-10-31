@@ -18,6 +18,13 @@ public sealed class EmittedObjectStorageRuntime
         internal set => Set(ref _type, value);
     }
 
+    private EmittedModuleNamespaceRuntime? _moduleNamespaces;
+    public EmittedModuleNamespaceRuntime? ModuleNamespaces
+    {
+        get => _moduleNamespaces;
+        internal set { if (value is not null) Set(ref _moduleNamespaces, value); }
+    }
+
     private ConstructorBuilder? _constructor;
     public ConstructorBuilder Constructor
     {

@@ -18,6 +18,8 @@ public partial class TypeChecker
     // are JSX list splices, not JavaScript array spreads, so CheckArray must not require the
     // operand to be iterable while that synthetic props object is being checked.
     private readonly HashSet<Expr.Spread> _jsxSpreadChildren = [];
+    private readonly HashSet<Expr.ObjectLiteral> _jsxAttributeObjects = [];
+    private readonly Dictionary<Expr.ObjectLiteral, TypeInfo> _jsxAttributeContexts = new(ReferenceEqualityComparer.Instance);
 
     private TypeInfo CheckJsxExpression(Expr.Call call, JsxCallInfo jsx)
     {
@@ -93,10 +95,15 @@ public partial class TypeChecker
         }
 
         TypeInfo propsType;
+        var attributeObjects = JsxAttributeObjects(jsx.PropsExpr).ToArray();
+        foreach (var attributes in attributeObjects) _jsxAttributeObjects.Add(attributes);
         foreach (Expr.Spread spreadChild in jsx.ChildExprs.OfType<Expr.Spread>())
             _jsxSpreadChildren.Add(spreadChild);
         try
         {
+            TypeInfo? attributeContext = InitialJsxAttributeContext(componentType, jsx, jsxNamespace);
+            if (attributeContext is not null)
+                foreach (var attributes in attributeObjects) _jsxAttributeContexts[attributes] = attributeContext;
             propsType = jsx.PropsExpr is not null
                 ? CheckExpr(jsx.PropsExpr)
                 : new TypeInfo.Record(FrozenDictionary<string, TypeInfo>.Empty);
@@ -108,6 +115,8 @@ public partial class TypeChecker
         }
         finally
         {
+            foreach (var attributes in attributeObjects) _jsxAttributeObjects.Remove(attributes);
+            foreach (var attributes in attributeObjects) _jsxAttributeContexts.Remove(attributes);
             foreach (Expr.Spread spreadChild in jsx.ChildExprs.OfType<Expr.Spread>())
                 _jsxSpreadChildren.Remove(spreadChild);
         }
@@ -188,6 +197,56 @@ public partial class TypeChecker
         }
 
         return ResolveJsxElementType(jsxNamespace);
+    }
+
+    private static IEnumerable<Expr.ObjectLiteral> JsxAttributeObjects(Expr? expression)
+    {
+        if (expression is null || UnwrapTransparentForWidening(expression) is not Expr.ObjectLiteral literal)
+            yield break;
+        // The lowered attribute bag and inline spreads receive JSX's contextual literal
+        // treatment. A retained spread value keeps the ordinary type of its binding.
+        yield return literal;
+        foreach (var property in literal.Properties.Where(property => property.IsSpread))
+            foreach (var nested in JsxAttributeObjects(property.Value)) yield return nested;
+    }
+
+    private TypeInfo? InitialJsxAttributeContext(TypeInfo component, JsxCallInfo jsx, TypeInfo.Namespace? jsxNamespace)
+    {
+        // Nested object/array attribute values need their written props domain before fresh
+        // members widen. Collect declaration-owned candidates without instantiating a
+        // signature; the existing JSX pipeline still selects overloads and direct callbacks.
+        if (jsx.Kind == JsxElementKind.Intrinsic)
+            return jsxNamespace?.Types.GetValueOrDefault("IntrinsicElements") is { } intrinsics
+                ? LookupJsxObjectMember(intrinsics, jsx.TagName!) : null;
+        List<TypeInfo> contexts = [];
+        HashSet<TypeInfo> active = new(ReferenceEqualityComparer.Instance);
+        void Signature(IReadOnlyList<TypeInfo> parameters) { if (parameters.Count > 0) contexts.Add(parameters[0]); }
+        void Visit(TypeInfo type)
+        {
+            if (!active.Add(type)) return;
+            switch (type)
+            {
+                case TypeInfo.Function function: Signature(function.ParamTypes); break;
+                case TypeInfo.GenericFunction function: Signature(function.ParamTypes); break;
+                case TypeInfo.OverloadedFunction overloads: foreach (var signature in overloads.Signatures) Visit(signature); break;
+                case TypeInfo.GenericOverloadedFunction overloads: foreach (var signature in overloads.Signatures) Visit(signature); break;
+                case TypeInfo.OverloadSet overloads: foreach (var signature in overloads.Signatures) Visit(signature); break;
+                case TypeInfo.Union union: foreach (var member in union.FlattenedTypes) Visit(member); break;
+                case TypeInfo.Intersection intersection: foreach (var member in intersection.FlattenedTypes) Visit(member); break;
+                default:
+                    if (GetCallSignatures(type) is { } calls)
+                        foreach (var signature in calls) Signature(signature.ParamTypes);
+                    if (GetConstructorSignatures(type) is { } constructors)
+                        foreach (var signature in constructors) Visit(signature.ReturnType);
+                    string? property = jsxNamespace is null ? null : GetJsxAttributesPropertyName(jsxNamespace);
+                    TypeInfo? props = property is null ? null : LookupJsxInstanceMember(type, property);
+                    props ??= LookupJsxGenericBaseProps(type);
+                    if (props is not null) contexts.Add(props);
+                    break;
+            }
+        }
+        Visit(component);
+        return contexts.Count == 0 ? null : CollapseOrCreateUnion(contexts);
     }
 
     private static bool IsValidJsxSpreadChild(TypeInfo type) => type switch

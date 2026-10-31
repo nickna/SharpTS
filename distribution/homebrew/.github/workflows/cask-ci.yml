@@ -1,0 +1,62 @@
+name: Cask CI
+
+on:
+  pull_request:
+  push:
+    branches: [main]
+
+permissions:
+  contents: read
+
+jobs:
+  cask:
+    name: Apple Silicon (${{ matrix.token }})
+    runs-on: macos-15
+    timeout-minutes: 30
+    strategy:
+      fail-fast: false
+      matrix:
+        token: [sharpts, sharpts-native]
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - uses: actions/setup-dotnet@a98b56852c35b8e3190ac28c8c2271da59106c68 # v6.0.0
+        with:
+          global-json-file: global.json
+      - name: Audit, install, execute, conflict, and uninstall
+        shell: bash
+        env:
+          TOKEN: ${{ matrix.token }}
+          HOMEBREW_NO_AUTO_UPDATE: '1'
+        run: |
+          set -euo pipefail
+          brew tap nickna/tap "$GITHUB_WORKSPACE"
+          cask="nickna/tap/$TOKEN"
+          other=sharpts-native
+          [ "$TOKEN" = sharpts-native ] && other=sharpts
+          brew audit --new --cask "$cask"
+          brew style --cask "$cask"
+          brew install --cask "$cask"
+          trap 'brew uninstall --cask "$cask" >/dev/null 2>&1 || true' EXIT
+          exe="$(brew --prefix)/bin/sharpts"
+          version=$(brew info --json=v2 --cask "$cask" | jq -r '.casks[0].version')
+          [ "$("$exe" --version)" = "sharpts $version" ]
+          codesign --verify --deep --strict "$exe"
+          spctl --assess --type execute --verbose=4 "$exe"
+          printf 'console.log([1, 2, 3].map(x => x * 2).join(","));\n' > "$RUNNER_TEMP/smoke.ts"
+          [ "$("$exe" --no-tsconfig "$RUNNER_TEMP/smoke.ts")" = '2,4,6' ]
+          if [ "$TOKEN" = sharpts ]; then
+            "$exe" --no-tsconfig --compile "$RUNNER_TEMP/smoke.ts" --verify -o "$RUNNER_TEMP/smoke.dll"
+          else
+            "$exe" --no-tsconfig --compile "$RUNNER_TEMP/smoke.ts" --ref-asm -o "$RUNNER_TEMP/smoke.dll"
+            if "$exe" --no-tsconfig --compile "$RUNNER_TEMP/smoke.ts" --verify -o "$RUNNER_TEMP/unsupported.dll" > "$RUNNER_TEMP/managed-only.log" 2>&1; then exit 1; fi
+            grep -Fq 'requires a managed SharpTS build' "$RUNNER_TEMP/managed-only.log"
+            test ! -f "$RUNNER_TEMP/unsupported.dll"
+          fi
+          [ "$(dotnet "$RUNNER_TEMP/smoke.dll")" = '2,4,6' ]
+          if brew install --cask "nickna/tap/$other" > "$RUNNER_TEMP/conflict.log" 2>&1; then exit 1; fi
+          grep -iq 'conflict' "$RUNNER_TEMP/conflict.log"
+          brew uninstall --cask "$cask"
+          test ! -e "$exe" && test ! -L "$exe"
+          trap - EXIT

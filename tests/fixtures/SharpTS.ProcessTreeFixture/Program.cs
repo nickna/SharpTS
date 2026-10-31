@@ -21,6 +21,7 @@ internal static class Program
             return args switch
             {
                 [ParentMode] => RunParent(),
+                ["parent-with-pid-file", var pidPath] => RunParent(pidPath),
                 [ChildMode] => RunChild(),
                 ["output"] => RunOutput(),
                 ["dual-output"] => RunDualOutput(),
@@ -41,10 +42,12 @@ internal static class Program
         }
     }
 
-    private static int RunParent()
+    private static int RunParent(string? pidPath = null)
     {
         using Process child = Process.Start(CreateSelfStartInfo(ChildMode))
             ?? throw new InvalidOperationException("Failed to start the process-tree fixture child.");
+
+        if (pidPath is not null) File.WriteAllText(pidPath, child.Id.ToString());
 
         Console.Out.WriteLine(child.Id);
         Console.Out.Flush();

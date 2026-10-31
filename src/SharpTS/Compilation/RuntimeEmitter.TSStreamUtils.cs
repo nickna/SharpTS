@@ -46,7 +46,7 @@ public partial class RuntimeEmitter
     /// </summary>
     private void EmitStreamFinishedCleanupClass(ModuleBuilder moduleBuilder, EmittedRuntime runtime)
     {
-        var typeBuilder = moduleBuilder.DefineType(
+        var typeBuilder = EmitTypeDefinitions.DefineType(moduleBuilder,
             "$StreamFinishedCleanup",
             TypeAttributes.Public | TypeAttributes.BeforeFieldInit
         );
@@ -78,6 +78,7 @@ public partial class RuntimeEmitter
             MethodAttributes.Public,
             _types.Object,
             [_types.ObjectArray]);
+        runtime.NativeCallables?.Register(typeBuilder, runtime.RequireNodeStreams().FinishedCleanupInvokeMethod);
         {
             var il = runtime.RequireNodeStreams().FinishedCleanupInvokeMethod.GetILGenerator();
 

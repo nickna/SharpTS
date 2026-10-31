@@ -60,6 +60,15 @@ public partial class ILCompiler
         Dictionary<string, FieldBuilder> exportFields = [];
         bool hasExportAssignment = false;
 
+        FieldBuilder DefineExportField(string publicName, string? preferredName = null)
+        {
+            string baseName = preferredName ?? publicName;
+            string fieldName = baseName;
+            for (int suffix = 1; exportFields.Values.Any(field => field.Name == fieldName); suffix++)
+                fieldName = $"{baseName}$export{suffix}";
+            return moduleType.DefineField(fieldName, typeof(object), FieldAttributes.Public | FieldAttributes.Static);
+        }
+
         // First pass: check for export = syntax
         foreach (var stmt in module.Statements)
         {
@@ -98,6 +107,12 @@ public partial class ILCompiler
         if (!hasExportAssignment)
         foreach (var stmt in module.Statements)
         {
+            if (stmt is Stmt.ImportRequire { IsExported: true } importRequire)
+            {
+                string name = importRequire.AliasName.Lexeme;
+                if (!exportFields.ContainsKey(name))
+                    exportFields[name] = DefineExportField(name);
+            }
             if (stmt is Stmt.Export export)
             {
                 if (export.IsTypeOnly)
@@ -106,25 +121,20 @@ public partial class ILCompiler
                 if (export.IsDefaultExport)
                 {
                     // Default export field
-                    var field = moduleType.DefineField(
-                        "$default",
-                        typeof(object),
-                        FieldAttributes.Public | FieldAttributes.Static
-                    );
-                    exportFields["$default"] = field;
+                    var field = DefineExportField("default", "$default");
+                    exportFields["default"] = field;
                 }
                 else if (export.Declaration != null)
                 {
                     // Named export from declaration
-                    string? exportName = GetExportDeclarationName(export.Declaration);
-                    if (exportName != null && !exportFields.ContainsKey(exportName))
+                    foreach (var declaration in ExportDeclarationSequence.Declarations(export.Declaration))
                     {
-                        var field = moduleType.DefineField(
-                            exportName,
-                            typeof(object),
-                            FieldAttributes.Public | FieldAttributes.Static
-                        );
-                        exportFields[exportName] = field;
+                        string? exportName = GetExportDeclarationName(declaration);
+                        if (exportName != null && !exportFields.ContainsKey(exportName))
+                        {
+                            var field = DefineExportField(exportName);
+                            exportFields[exportName] = field;
+                        }
                     }
                 }
                 else if (export.NamedExports != null && export.FromModulePath == null)
@@ -137,11 +147,7 @@ public partial class ILCompiler
                         string exportedName = spec.ExportedName?.Lexeme ?? spec.LocalName.Lexeme;
                         if (!exportFields.ContainsKey(exportedName))
                         {
-                            var field = moduleType.DefineField(
-                                exportedName,
-                                typeof(object),
-                                FieldAttributes.Public | FieldAttributes.Static
-                            );
+                            var field = DefineExportField(exportedName);
                             exportFields[exportedName] = field;
                         }
                     }
@@ -162,11 +168,7 @@ public partial class ILCompiler
                             string exportedName = spec.ExportedName?.Lexeme ?? spec.LocalName.Lexeme;
                             if (!exportFields.ContainsKey(exportedName))
                             {
-                                var field = moduleType.DefineField(
-                                    exportedName,
-                                    typeof(object),
-                                    FieldAttributes.Public | FieldAttributes.Static
-                                );
+                                var field = DefineExportField(exportedName);
                                 exportFields[exportedName] = field;
                             }
                         }
@@ -179,14 +181,10 @@ public partial class ILCompiler
                         {
                             foreach (var (name, _) in sourceFields)
                             {
-                                if (name == "$default") continue;  // * doesn't include default
+                                if (name == "default") continue;  // * doesn't include default
                                 if (!exportFields.ContainsKey(name))
                                 {
-                                    var field = moduleType.DefineField(
-                                        name,
-                                        typeof(object),
-                                        FieldAttributes.Public | FieldAttributes.Static
-                                    );
+                                    var field = DefineExportField(name);
                                     exportFields[name] = field;
                                 }
                             }
@@ -205,8 +203,7 @@ public partial class ILCompiler
         // Track which exports are classes (for direct constructor calls in importing modules)
         TrackClassExports(module);
 
-        // Create $GetNamespace method that returns all exports as SharpTSObject
-        EmitModuleGetNamespace(module, moduleType, exportFields);
+        // Namespace bodies are emitted after live export aliases are resolved.
     }
 
     /// <summary>
@@ -227,6 +224,36 @@ public partial class ILCompiler
         );
         _moduleGetNamespaceMethods[module.Path] = method;
 
+        MethodBuilder? reader = null;
+        var namespaces = _runtime.ObjectStorage.ModuleNamespaces;
+        if (namespaces is not null && IsLiveBindingModule(module))
+        {
+            reader = moduleType.DefineMethod("$ReadNamespaceData", MethodAttributes.Assembly | MethodAttributes.Static,
+                _types.Object, [_types.String, _types.Object]);
+            var readIl = reader.GetILGenerator();
+            foreach (var (name, field) in exportFields)
+            {
+                var next = readIl.DefineLabel();
+                readIl.Emit(OpCodes.Ldarg_0);
+                readIl.Emit(OpCodes.Ldstr, name);
+                readIl.Emit(OpCodes.Call, _types.GetMethod(_types.String, "op_Equality", _types.String, _types.String));
+                readIl.Emit(OpCodes.Brfalse, next);
+                if (GetLiveModuleSourceBinding(field) is { Initialized: { } initialized } binding)
+                {
+                    var ready = readIl.DefineLabel();
+                    readIl.Emit(OpCodes.Ldsfld, initialized);
+                    readIl.Emit(OpCodes.Brtrue, ready);
+                    GuestErrorEmitter.ThrowError(readIl, _runtime, _runtime.Errors.ReferenceErrorConstructor,
+                        $"Cannot access '{binding.Name}' before initialization");
+                    readIl.MarkLabel(ready);
+                }
+                readIl.Emit(OpCodes.Ldsfld, field);
+                readIl.Emit(OpCodes.Ret);
+                readIl.MarkLabel(next);
+            }
+            readIl.Emit(OpCodes.Ldarg_1);
+            readIl.Emit(OpCodes.Ret);
+        }
         var il = method.GetILGenerator();
 
         // var dict = new Dictionary<string, object?>();
@@ -251,7 +278,7 @@ public partial class ILCompiler
             {
                 // dict[exportName] = exportField;
                 il.Emit(OpCodes.Ldloc, dictLocal);
-                il.Emit(OpCodes.Ldstr, exportName == "$default" ? "default" : exportName);
+                il.Emit(OpCodes.Ldstr, exportName);
                 il.Emit(OpCodes.Ldsfld, field);
                 il.Emit(OpCodes.Callvirt, dictType.GetMethod("set_Item")!);
             }
@@ -259,7 +286,14 @@ public partial class ILCompiler
 
         // return $Runtime.CreateObject(dict);
         il.Emit(OpCodes.Ldloc, dictLocal);
-        il.Emit(OpCodes.Call, _runtime.ObjectConstruction.Create);
+        if (reader is not null)
+        {
+            il.Emit(OpCodes.Ldnull);
+            il.Emit(OpCodes.Ldftn, reader);
+            NativePrototypeFieldsLookup.EmitCarrierCreate(_runtime.NativePrototypeFields, il, namespaces!.ReaderConstructor);
+            il.Emit(OpCodes.Call, namespaces.Create);
+        }
+        else il.Emit(OpCodes.Call, _runtime.ObjectConstruction.Create);
         il.Emit(OpCodes.Ret);
     }
 
@@ -270,7 +304,7 @@ public partial class ILCompiler
     {
         Stmt.Function f => f.Name.Lexeme,
         Stmt.Class c => c.Name.Lexeme,
-        Stmt.Var v => v.Name.Lexeme,
+        Stmt.Var { IsDeclare: false } v => v.Name.Lexeme,
         Stmt.Const ct => ct.Name.Lexeme,
         Stmt.Enum e => e.Name.Lexeme,
         Stmt.Namespace ns => ns.Name.Lexeme,
@@ -695,6 +729,7 @@ public partial class ILCompiler
         // BuildTopLevelStaticVarsForModule in CreateModuleTopLevelContext.
 
         var emitter = new ILEmitter(ctx);
+        EmitLiveModuleFunctionInitialization(module, emitter);
         bool hasHostedTopLevelAwait = _hosted && TopLevelAwaitDetector.Contains(module.Statements);
         if (hasHostedTopLevelAwait)
         {
@@ -920,7 +955,7 @@ public partial class ILCompiler
             {
                 MethodBuilder asyncStep = EmitHostedAsyncModuleStep(
                     _functions.Builders[runnerKey],
-                    module.Path,
+                    module,
                     _moduleInitializedFields.GetValueOrDefault(module.Path),
                     wrapperIndex++);
                 Stmt[] importPrelude = module.Statements
@@ -1028,7 +1063,7 @@ public partial class ILCompiler
 
     private MethodBuilder EmitHostedAsyncModuleStep(
         MethodBuilder runner,
-        string modulePath,
+        ParsedModule module,
         FieldBuilder? initializedField,
         int index)
     {
@@ -1049,8 +1084,10 @@ public partial class ILCompiler
             il.Emit(OpCodes.Ldc_I4_1);
             il.Emit(OpCodes.Stsfld, initializedField);
         }
+        var emitter = new ILEmitter(CreateHostedModuleStepContext(module, il, method));
+        EmitLiveModuleFunctionInitialization(module, emitter);
         il.Emit(OpCodes.Call, runner);
-        il.Emit(OpCodes.Ldstr, modulePath);
+        il.Emit(OpCodes.Ldstr, module.Path);
         il.Emit(OpCodes.Call, typeof(SharpTSHostedRuntimeBase).GetMethod(
             nameof(SharpTSHostedRuntimeBase.AttributeModuleInitialization))!);
         il.Emit(OpCodes.Ret);
@@ -1166,7 +1203,7 @@ public partial class ILCompiler
             GetDefinitionContext().GetSanitizedModuleName(module.Path);
         var nameToken = new Token(TokenType.IDENTIFIER, name, null, 0);
         string? defaultBinding = RegisterHostedExportBinding(
-            module, "$default", "$HostedDefault_");
+            module, "default", "$HostedDefault_");
         string? exportAssignmentBinding = RegisterHostedExportBinding(
             module, "$exportAssignment", "$HostedExportAssignment_");
         var body = new List<Stmt>();
@@ -1623,8 +1660,8 @@ public partial class ILCompiler
             {
                 string qualifiedClassName = GetQualifiedClassName(defaultClass.Name.Lexeme, module.Path);
                 _modules.DefaultExportClasses[module.Path] = qualifiedClassName;
-                // Also add to exportedClasses under $default for consistency
-                exportedClasses["$default"] = qualifiedClassName;
+                // Also add to exportedClasses under the public default key for consistency
+                exportedClasses["default"] = qualifiedClassName;
             }
             // Named export of a class declaration (export class Foo { ... })
             else if (!export.IsDefaultExport && export.Declaration is Stmt.Class namedClass)
@@ -1681,7 +1718,7 @@ public partial class ILCompiler
                         // Re-export all (export * from './module')
                         foreach (var (name, qualifiedClassName) in sourceExportedClasses)
                         {
-                            if (name == "$default") continue; // * doesn't include default
+                            if (name == "default") continue; // * doesn't include default
                             if (!exportedClasses.ContainsKey(name))
                             {
                                 exportedClasses[name] = qualifiedClassName;

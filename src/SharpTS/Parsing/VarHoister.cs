@@ -110,7 +110,7 @@ public static class VarHoister
     {
         switch (stmt)
         {
-            case Stmt.Var v when v.IsVar:
+            case Stmt.Var v when v.IsVar && !v.IsDeclare:
             {
                 // Top-level vars: keep the first declaration, rewrite duplicates to assignments.
                 // JavaScript allows `var x = 1; var x = 2;` — duplicates silently merge.

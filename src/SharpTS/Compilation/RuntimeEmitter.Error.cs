@@ -300,42 +300,42 @@ public partial class RuntimeEmitter
         // Create TypeError
         il.MarkLabel(typeErrorLabel);
         il.Emit(OpCodes.Ldloc, messageLocal);
-        il.Emit(OpCodes.Newobj, errors.TypeErrorConstructor);
+        NativePrototypeFieldsLookup.EmitCarrierCreate(_nativePrototypeFields, il, errors.TypeErrorConstructor);
         il.Emit(OpCodes.Stloc, errorLocal);
         il.Emit(OpCodes.Br, applyOptionsLabel);
 
         // Create RangeError
         il.MarkLabel(rangeErrorLabel);
         il.Emit(OpCodes.Ldloc, messageLocal);
-        il.Emit(OpCodes.Newobj, errors.RangeErrorConstructor);
+        NativePrototypeFieldsLookup.EmitCarrierCreate(_nativePrototypeFields, il, errors.RangeErrorConstructor);
         il.Emit(OpCodes.Stloc, errorLocal);
         il.Emit(OpCodes.Br, applyOptionsLabel);
 
         // Create ReferenceError
         il.MarkLabel(referenceErrorLabel);
         il.Emit(OpCodes.Ldloc, messageLocal);
-        il.Emit(OpCodes.Newobj, errors.ReferenceErrorConstructor);
+        NativePrototypeFieldsLookup.EmitCarrierCreate(_nativePrototypeFields, il, errors.ReferenceErrorConstructor);
         il.Emit(OpCodes.Stloc, errorLocal);
         il.Emit(OpCodes.Br, applyOptionsLabel);
 
         // Create SyntaxError
         il.MarkLabel(syntaxErrorLabel);
         il.Emit(OpCodes.Ldloc, messageLocal);
-        il.Emit(OpCodes.Newobj, errors.SyntaxErrorConstructor);
+        NativePrototypeFieldsLookup.EmitCarrierCreate(_nativePrototypeFields, il, errors.SyntaxErrorConstructor);
         il.Emit(OpCodes.Stloc, errorLocal);
         il.Emit(OpCodes.Br, applyOptionsLabel);
 
         // Create URIError
         il.MarkLabel(uriErrorLabel);
         il.Emit(OpCodes.Ldloc, messageLocal);
-        il.Emit(OpCodes.Newobj, errors.URIErrorConstructor);
+        NativePrototypeFieldsLookup.EmitCarrierCreate(_nativePrototypeFields, il, errors.URIErrorConstructor);
         il.Emit(OpCodes.Stloc, errorLocal);
         il.Emit(OpCodes.Br, applyOptionsLabel);
 
         // Create EvalError
         il.MarkLabel(evalErrorLabel);
         il.Emit(OpCodes.Ldloc, messageLocal);
-        il.Emit(OpCodes.Newobj, errors.EvalErrorConstructor);
+        NativePrototypeFieldsLookup.EmitCarrierCreate(_nativePrototypeFields, il, errors.EvalErrorConstructor);
         il.Emit(OpCodes.Stloc, errorLocal);
         il.Emit(OpCodes.Br, applyOptionsLabel);
 
@@ -406,14 +406,14 @@ public partial class RuntimeEmitter
         // Pass (errors, message) to constructor
         il.Emit(OpCodes.Ldloc, aggregateErrorsLocal);
         il.Emit(OpCodes.Ldloc, aggregateMessageLocal);
-        il.Emit(OpCodes.Newobj, errors.AggregateErrorConstructor);
+        NativePrototypeFieldsLookup.EmitCarrierCreate(_nativePrototypeFields, il, errors.AggregateErrorConstructor);
         il.Emit(OpCodes.Stloc, errorLocal);
         il.Emit(OpCodes.Br, applyAggOptionsLabel);
 
         // Create base Error
         il.MarkLabel(defaultErrorLabel);
         il.Emit(OpCodes.Ldloc, messageLocal);
-        il.Emit(OpCodes.Newobj, errors.MessageConstructor);
+        NativePrototypeFieldsLookup.EmitCarrierCreate(_nativePrototypeFields, il, errors.MessageConstructor);
         il.Emit(OpCodes.Stloc, errorLocal);
         il.Emit(OpCodes.Br, applyOptionsLabel);
 

@@ -980,8 +980,9 @@ public sealed class StablePrimitivePromiseThenTests
             """;
 
         Assembly assembly = Compile(source);
-        Assert.Equal(4, FindCallers(
-            assembly, "PromiseThenPrimitiveWithRejection").Count);
+        // Capturing callbacks keep an object return slot because captured storage
+        // can receive unchecked values. The noncapturing reaction remains typed.
+        Assert.Single(FindCallers(assembly, "PromiseThenPrimitiveWithRejection"));
         Assert.Empty(TestHarness.CompileAndVerifyOnly(source));
         Assert.Equal(
             "sync|fulfilled:1|microtask|rejected:source-error|" +

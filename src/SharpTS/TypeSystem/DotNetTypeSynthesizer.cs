@@ -559,7 +559,7 @@ public static class DotNetTypeSynthesizer
             Type parameterType = parameter.ParameterType.IsByRef
                 ? parameter.ParameterType.GetElementType()!
                 : parameter.ParameterType;
-            if (parameter.IsDefined(typeof(ParamArrayAttribute), inherit: false))
+            if (DotNetMethodResolver.IsParamArray(parameter))
             {
                 parameterTypes.Add(new TypeInfo.Array(
                     MapGenericSlot(

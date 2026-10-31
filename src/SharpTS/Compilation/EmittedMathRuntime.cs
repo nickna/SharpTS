@@ -20,8 +20,8 @@ public sealed class EmittedMathRuntime
 
     private MethodBuilder? _singletonPopulateMethod;
     /// <summary>
-    /// Populates <see cref="SingletonField"/> with $TSFunction wrappers for
-    /// the Math static methods (max/min/floor/…) so value-form access
+    /// Populates <see cref="SingletonField"/> with readonly numeric constants
+    /// and $TSFunction wrappers for the Math static methods so value-form access
     /// (<c>const m = Math; m.max(1,2)</c>) resolves. Idempotent. See issue #276.
     /// </summary>
     public MethodBuilder SingletonPopulateMethod

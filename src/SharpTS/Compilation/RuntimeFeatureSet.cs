@@ -131,6 +131,9 @@ public sealed class RuntimeFeatureSet
     // Emission-only reachability of the public Object descriptor-definition helpers.
     // Keep separate from mutation guards, which control semantic optimizations.
     public bool UsesObjectDefinitionRuntime { get; set; } = true;
+    // Emission-only reachability of ordinary property assignment, including
+    // opaque keys. This does not prove anything about a receiver or descriptor.
+    public bool UsesPropertyWrites { get; set; } = true;
     public bool UsesDate { get; set; } = true;              // new Date(), Date.now(), Date.X
     public bool UsesRegExp { get; set; } = true;            // /pattern/ or new RegExp()
     public bool UsesBuffer { get; set; } = true;            // Buffer.from(), new Buffer() — also implied by crypto/fs/zlib/http/fetch/dgram
@@ -144,6 +147,7 @@ public sealed class RuntimeFeatureSet
     public bool UsesAbortController { get; set; } = true;   // AbortController / AbortSignal identifiers
     public bool UsesAbortSignalAny { get; set; } = true;    // AbortSignal.any([...]) — late-binds to SharpTS runtime, needs SharpTS.dll co-located
     public bool UsesProxy { get; set; } = true;             // `new Proxy(...)` / bare `Proxy` identifier
+    public bool UsesModuleNamespaces { get; set; } = true;
     public bool UsesDynamicImport { get; set; } = true;     // `import(specifier)` syntax (Expr.DynamicImport)
     public bool UsesAsyncGenerator { get; set; } = true;    // `async function*` / async generators
     public bool UsesForAwaitOf { get; set; } = true;        // `for await (... of ...)`
@@ -170,6 +174,12 @@ public sealed class RuntimeFeatureSet
     // calls observable, so the direct DateEmitter fast path is unsafe. The historical
     // property name is retained because it is part of the emitted-runtime feature API.
     public bool UsesDatePrototypeMutation { get; set; } = true;
+    // Static Date calls require live lookup after constructor mutation or escape.
+    public bool UsesDateConstructorMutation { get; set; } = true;
+    // Reachability only: global timer values use actual emitted module wrappers.
+    public bool UsesTimerFunctionValues { get; set; } = true;
+    // Reachability only: the actual emitted microtask method owns its value.
+    public bool UsesMicrotaskFunctionValues { get; set; } = true;
     // Promise method/constructor/species mutation makes direct then lowering
     // observable through ordinary property lookup. Such programs must retain
     // value dispatch for then/catch/finally calls.
@@ -178,6 +188,9 @@ public sealed class RuntimeFeatureSet
     // prototype-chain mutation API, or __proto__ access makes a backing-list-only
     // array append unsafe. The discarded-result push fast path requires this false.
     public bool UsesArrayPrototypeMutation { get; set; } = true;
+    // A method value can be called with a different receiver. Retain canonical
+    // prototype functions instead of the compact receiver-bound transport.
+    public bool UsesArrayMethodValues { get; set; } = true;
     // Typed array helpers scope their receiver during nested calls. Keep these
     // adapters only when the source can select a method using that transport.
     public bool UsesArrayReceiverScopes { get; set; } = true;

@@ -31,7 +31,8 @@ public partial class RuntimeEmitter
         EmittedSymbolRuntime Symbols,
         TypeBuilder TSFunctionType,
         Type UndefinedType,
-        Type FunctionPrototypeType
+        Type FunctionPrototypeType,
+        MethodInfo? NativeProxyRejection
     );
 
     private readonly record struct ObjectProtoValueOfHelperInputs(EmittedErrorRuntime Errors, Type UndefinedType);
@@ -134,7 +135,8 @@ public partial class RuntimeEmitter
                 Symbols: runtime.Symbols,
                 TSFunctionType: runtime.FunctionValues.Type,
                 UndefinedType: runtime.Sentinels.UndefinedType,
-                FunctionPrototypeType: runtime.FunctionPrototypes.Type
+                FunctionPrototypeType: runtime.FunctionPrototypes.Type,
+                NativeProxyRejection: runtime.ReflectedMethods.NativeProxyRejection
             )
         );
         runtime.ObjectPrototypes.ValueOf = EmitObjectProtoValueOfHelper(
@@ -677,7 +679,7 @@ public partial class RuntimeEmitter
             {
                 il.Emit(OpCodes.Ldc_I4_0);
                 il.Emit(OpCodes.Newarr, _types.Object);
-            });
+            }, inputs.NativeProxyRejection);
             il.Emit(OpCodes.Unbox_Any, _types.Boolean);
             il.Emit(OpCodes.Brfalse, proxyNotCallableLabel);
             EmitTag("[object Function]");

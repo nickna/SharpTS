@@ -58,6 +58,9 @@ public class TypeMap
     private readonly HashSet<object> _undefinedReachableNumericLocals = new(ReferenceEqualityComparer.Instance);
     private readonly HashSet<Stmt.Parameter> _undefinedReachableNumericParams = new(ReferenceEqualityComparer.Instance);
     private readonly HashSet<Token> _rawCallStorage = new(ReferenceEqualityComparer.Instance);
+    private readonly HashSet<Expr> _rawNumericResults = new(ReferenceEqualityComparer.Instance);
+    private readonly HashSet<Token> _rawNumericStorage = new(ReferenceEqualityComparer.Instance);
+    private readonly HashSet<BindingSymbol> _rawNumericStorageBindings = new(ReferenceEqualityComparer.Instance);
     private readonly HashSet<BindingSymbol> _assertedAssignmentStorage = new(ReferenceEqualityComparer.Instance);
     private readonly HashSet<BindingSymbol> _constBindings = new(ReferenceEqualityComparer.Instance);
     private readonly HashSet<BindingSymbol> _sourceConstCaptureBindings = new(ReferenceEqualityComparer.Instance);
@@ -78,6 +81,19 @@ public class TypeMap
     // source slot. Optimizer exceptions must not erase this representation evidence.
     internal void MarkRawCallStorage(Token token) => _rawCallStorage.Add(token);
     internal bool IsRawCallStorage(Token token) => _rawCallStorage.Contains(token);
+    internal bool MarkRawNumericResult(Expr expression)
+    {
+        _undefinedReachableReturns.Add(expression);
+        return _rawNumericResults.Add(expression);
+    }
+    internal bool IsRawNumericResult(Expr expression) => _rawNumericResults.Contains(expression);
+    internal void MarkRawNumericStorage(Token token)
+    {
+        _rawNumericStorage.Add(token);
+        if (GetValueBinding(token) is { } binding) _rawNumericStorageBindings.Add(binding);
+    }
+    internal bool IsRawNumericStorage(Token token) => _rawNumericStorage.Contains(token)
+        || GetValueBinding(token) is { } binding && _rawNumericStorageBindings.Contains(binding);
     private readonly Dictionary<Token, TokenType> _promotableArrayLocals = new(ReferenceEqualityComparer.Instance);
     private readonly HashSet<Token> _promotableNumericMapLocals = new(ReferenceEqualityComparer.Instance);
     private readonly HashSet<Token> _promotableStringAccumulators = new(ReferenceEqualityComparer.Instance);

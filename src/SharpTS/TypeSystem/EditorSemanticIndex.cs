@@ -6,7 +6,7 @@ using SharpTS.Parsing;
 namespace SharpTS.TypeSystem;
 
 /// <summary>Opt-in build facts. Publication projects types into bounded immutable values.</summary>
-public sealed class EditorSemanticIndex
+public sealed partial class EditorSemanticIndex
 {
     private static long _nextGeneration;
     internal static EditorSemanticIndex Empty { get; } = new(false);
@@ -36,6 +36,8 @@ public sealed class EditorSemanticIndex
         _callableSurfaces.Clear();
         _signatureProofs.Clear();
         _annotationProofs.Clear();
+        _resolvedAliasDefinitions.Clear();
+        _memberReadTypes.Clear();
         _scopes.Clear(); _scopesById.Clear(); _enteredBodies.Clear(); _signatureIds.Clear(); _nextScope = 1;
         Generation = Interlocked.Increment(ref _nextGeneration);
     }
@@ -45,6 +47,7 @@ public sealed class EditorSemanticIndex
     {
         if (!IsEnabled) return;
         foreach (var key in _occurrences.Keys.Where(key => ReferenceEquals(key.Document, document)).ToArray()) _occurrences.Remove(key);
+        foreach (var key in _memberReadTypes.Keys.Where(key => ReferenceEquals(key.Document, document)).ToArray()) _memberReadTypes.Remove(key);
         foreach (var key in _typeUses.Keys.Where(key => ReferenceEquals(key.Document, document)).ToArray()) _typeUses.Remove(key);
         foreach (var key in _declarations.Keys.Where(key => ReferenceEquals(key.Document, document)).ToArray()) _declarations.Remove(key);
         foreach (var key in _receivers.Keys.Where(key => ReferenceEquals(key.Document, document)).ToArray()) _receivers.Remove(key);
@@ -62,6 +65,7 @@ public sealed class EditorSemanticIndex
         if (!IsEnabled || document is null) return;
         var key = new OwnerKey(document, owner);
         _occurrences[key] = new(null, EditorFactAvailability.Unavailable);
+        _memberReadTypes.Remove(key);
         _receivers.Remove(key);
     }
 

@@ -189,7 +189,7 @@ public class EmittedNumericCoercionRuntimeTests
     }
 
     [Fact]
-    public void ReusedEmitterKeepsIndirectNumberLookupAndDeclarationsInTheirOwnSavedAssemblies()
+    public void ReusedEmitterKeepsDirectNumberCallsAndDeclarationsInTheirOwnSavedAssemblies()
     {
         var emitter = new RuntimeEmitter(TypeProvider.Runtime);
         var owners = new List<EmittedNumericCoercionRuntime>();
@@ -206,21 +206,20 @@ public class EmittedNumericCoercionRuntimeTests
             Assert.DoesNotContain(assembly.GetReferencedAssemblies(), reference => reference.Name!.StartsWith("numeric_", StringComparison.Ordinal));
             var type = assembly.GetType("$Runtime")!;
             var wrapper = assembly.GetType("$TSFunction")!;
-            var cache = wrapper.GetField("_toNumberCache", BindingFlags.NonPublic | BindingFlags.Static)!;
+            Assert.Null(wrapper.GetField("_toNumberCache", BindingFlags.NonPublic | BindingFlags.Static));
             var coerce = wrapper.GetMethod("CoercePrimitiveArgs", BindingFlags.NonPublic | BindingFlags.Static)!;
             var parameters = type.GetMethod("JsNumberToInt32")!.GetParameters();
             object[] arguments = ["7"];
             coerce.Invoke(null, [parameters, arguments, false]);
             Assert.Equal(7d, arguments[0]);
-            var resolved = Assert.IsAssignableFrom<MethodInfo>(cache.GetValue(null));
+            var resolved = type.GetMethod("ToNumber")!;
             Assert.Same(assembly, resolved.DeclaringType!.Assembly);
-            Assert.Equal(type.GetMethod("ToNumber"), resolved);
+            Assert.Contains(resolved, TSFunctionCoercionTests.CalledMethods(coerce));
             Assert.DoesNotContain(resolved, resolvedMethods);
             resolvedMethods.Add(resolved);
             arguments[0] = "8";
             coerce.Invoke(null, [parameters, arguments, false]);
             Assert.Equal(8d, arguments[0]);
-            Assert.Same(resolved, cache.GetValue(null));
             Assert.Equal(1d, Call(type, runtime.NumericCoercion.ConvertToNumber, BigInteger.One));
         }
     }

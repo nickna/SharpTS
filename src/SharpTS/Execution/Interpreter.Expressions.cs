@@ -557,11 +557,7 @@ public partial class Interpreter
             Expr.IdentifierKey ik => ik.Name.Lexeme,
             Expr.LiteralKey lk when lk.Literal.Type == TokenType.STRING => (string)lk.Literal.Literal!,
             Expr.LiteralKey lk when lk.Literal.Type == TokenType.NUMBER => lk.Literal.Literal!.ToString()!,
-            Expr.ComputedKey ck => Evaluate(ck.Expression) switch
-            {
-                SharpTSSymbol symbol => symbol,
-                var value => ToPropertyKeyString(value),
-            },
+            Expr.ComputedKey ck => ToPropertyKey(Evaluate(ck.Expression)),
             _ => throw new InterpreterException("Invalid property key for accessor.")
         };
     }
@@ -575,7 +571,7 @@ public partial class Interpreter
         if (key is Expr.ComputedKey computed)
         {
             object? value = (await ctx.EvaluateExprAsync(computed.Expression)).ToObject();
-            return value is SharpTSSymbol symbol ? symbol : ToPropertyKeyString(value);
+            return ToPropertyKey(value);
         }
 
         return key switch
@@ -664,10 +660,12 @@ public partial class Interpreter
     /// <returns>A ValueTask containing the evaluated object.</returns>
     private async ValueTask<object?> EvaluateObjectCore(IEvaluationContext ctx, Expr.ObjectLiteral obj)
     {
+        if (obj.Properties.Any(property => property.Kind is Expr.ObjectPropertyKind.Getter or Expr.ObjectPropertyKind.Setter))
+            return await EvaluateAccessorLiteralCore(ctx, obj);
         Dictionary<string, object?> stringFields = [];
+        object? literalPrototype = null;
+        bool hasLiteralPrototype = false;
         Dictionary<SharpTSSymbol, object?>? symbolFields = null;
-        List<(object key, ISharpTSCallable getter)>? getters = null;
-        List<(object key, ISharpTSCallable setter)>? setters = null;
 
         foreach (var prop in obj.Properties)
         {
@@ -676,19 +674,23 @@ public partial class Interpreter
                 object? spreadValue = (await ctx.EvaluateExprAsync(prop.Value)).ToObject();
                 symbolFields = ApplySpreadToFields(spreadValue, stringFields, symbolFields);
             }
-            else if (prop.Kind == Expr.ObjectPropertyKind.Getter)
+            else if (prop.IsPrototypeSetter)
             {
-                object name = await GetPropertyKeyNameCore(ctx, prop.Key!);
-                var getter = CreateAccessorFunction(prop.Value);
-                getters ??= [];
-                getters.Add((name, getter));
+                var prototype = await ctx.EvaluateExprAsync(prop.Value);
+                if (prototype.Kind is ValueKind.Null or ValueKind.Object)
+                {
+                    literalPrototype = prototype.ToObject();
+                    hasLiteralPrototype = true;
+                }
             }
-            else if (prop.Kind == Expr.ObjectPropertyKind.Setter)
+            else if (prop.Key is Expr.ComputedKey computed)
             {
-                object name = await GetPropertyKeyNameCore(ctx, prop.Key!);
-                var setter = CreateSetterFunction(prop.Value, prop.SetterParam!);
-                setters ??= [];
-                setters.Add((name, setter));
+                object key = await GetPropertyKeyNameCore(ctx, computed);
+                object? value = (await ctx.EvaluateExprAsync(prop.Value)).ToObject();
+                if (key is SharpTSSymbol symbol)
+                    (symbolFields ??= [])[symbol] = value;
+                else
+                    stringFields[(string)key] = value;
             }
             else
             {
@@ -699,33 +701,12 @@ public partial class Interpreter
         }
 
         var result = BuildObjectFromFields(stringFields, symbolFields);
-
-        // Apply getters and setters
-        if (getters != null)
+        if (hasLiteralPrototype)
         {
-            foreach (var (name, getter) in getters)
-            {
-                if (name is SharpTSSymbol symbol)
-                {
-                    result.TryGetSymbolAccessor(symbol, out _, out var setter);
-                    result.DefineSymbolAccessor(symbol, getter, setter);
-                }
-                else
-                    result.DefineGetter((string)name, getter);
-            }
-        }
-        if (setters != null)
-        {
-            foreach (var (name, setter) in setters)
-            {
-                if (name is SharpTSSymbol symbol)
-                {
-                    result.TryGetSymbolAccessor(symbol, out var getter, out _);
-                    result.DefineSymbolAccessor(symbol, getter, setter);
-                }
-                else
-                    result.DefineSetter((string)name, setter);
-            }
+            // The actual literal result is still fresh: install the internal slot,
+            // without looking up the public accessor or traversing the prototype.
+            result.Prototype = literalPrototype;
+            result.IsNullPrototype = literalPrototype is null;
         }
 
         return result;
@@ -743,10 +724,12 @@ public partial class Interpreter
     /// <seealso href="https://www.typescriptlang.org/docs/handbook/2/objects.html">TypeScript Object Types</seealso>
     private RuntimeValue EvaluateObject(Expr.ObjectLiteral obj)
     {
+        if (obj.Properties.Any(property => property.Kind is Expr.ObjectPropertyKind.Getter or Expr.ObjectPropertyKind.Setter))
+            return RuntimeValue.FromBoxed(EvaluateAccessorLiteralCore(_syncContext, obj).GetAwaiter().GetResult());
         Dictionary<string, object?> stringFields = [];
+        object? literalPrototype = null;
+        bool hasLiteralPrototype = false;
         Dictionary<SharpTSSymbol, object?>? symbolFields = null;
-        List<(object key, ISharpTSCallable getter)>? getters = null;
-        List<(object key, ISharpTSCallable setter)>? setters = null;
 
         foreach (var prop in obj.Properties)
         {
@@ -755,19 +738,23 @@ public partial class Interpreter
                 object? spreadValue = Evaluate(prop.Value);
                 symbolFields = ApplySpreadToFields(spreadValue, stringFields, symbolFields);
             }
-            else if (prop.Kind == Expr.ObjectPropertyKind.Getter)
+            else if (prop.IsPrototypeSetter)
             {
-                object name = GetPropertyKeyName(prop.Key!);
-                var getter = CreateAccessorFunction(prop.Value);
-                getters ??= [];
-                getters.Add((name, getter));
+                var prototype = EvaluateRV(prop.Value);
+                if (prototype.Kind is ValueKind.Null or ValueKind.Object)
+                {
+                    literalPrototype = prototype.ToObject();
+                    hasLiteralPrototype = true;
+                }
             }
-            else if (prop.Kind == Expr.ObjectPropertyKind.Setter)
+            else if (prop.Key is Expr.ComputedKey computed)
             {
-                object name = GetPropertyKeyName(prop.Key!);
-                var setter = CreateSetterFunction(prop.Value, prop.SetterParam!);
-                setters ??= [];
-                setters.Add((name, setter));
+                object key = GetPropertyKeyName(computed);
+                object? value = Evaluate(prop.Value);
+                if (key is SharpTSSymbol symbol)
+                    (symbolFields ??= [])[symbol] = value;
+                else
+                    stringFields[(string)key] = value;
             }
             else
             {
@@ -778,33 +765,12 @@ public partial class Interpreter
         }
 
         var result = BuildObjectFromFields(stringFields, symbolFields);
-
-        // Apply getters and setters
-        if (getters != null)
+        if (hasLiteralPrototype)
         {
-            foreach (var (name, getter) in getters)
-            {
-                if (name is SharpTSSymbol symbol)
-                {
-                    result.TryGetSymbolAccessor(symbol, out _, out var setter);
-                    result.DefineSymbolAccessor(symbol, getter, setter);
-                }
-                else
-                    result.DefineGetter((string)name, getter);
-            }
-        }
-        if (setters != null)
-        {
-            foreach (var (name, setter) in setters)
-            {
-                if (name is SharpTSSymbol symbol)
-                {
-                    result.TryGetSymbolAccessor(symbol, out var getter, out _);
-                    result.DefineSymbolAccessor(symbol, getter, setter);
-                }
-                else
-                    result.DefineSetter((string)name, setter);
-            }
+            // The actual literal result is still fresh: install the internal slot,
+            // without looking up the public accessor or traversing the prototype.
+            result.Prototype = literalPrototype;
+            result.IsNullPrototype = literalPrototype is null;
         }
 
         return RuntimeValue.FromObject(result);
@@ -862,7 +828,15 @@ public partial class Interpreter
             or SharpTSSymbol or SharpTSBigInt or System.Numerics.BigInteger)
             return symbolFields;
 
-        if (spreadValue is ISharpTSOwnPropertyObject ownPropertyObject)
+        if (spreadValue is SharpTSObjectNamespace objectNamespace)
+        {
+            foreach (var entry in ObjectBuiltIns.EnumerateObjectNamespaceOwnEnumerable(this, objectNamespace))
+                if (entry.Key is SharpTSSymbol symbol)
+                    (symbolFields ??= [])[symbol] = entry.Value;
+                else
+                    stringFields[(string)entry.Key] = entry.Value;
+        }
+        else if (spreadValue is ISharpTSOwnPropertyObject ownPropertyObject)
         {
             var properties = ownPropertyObject.OwnProperties;
             var stringKeys = properties.OwnVisibleStringKeys().ToList();
@@ -894,6 +868,20 @@ public partial class Interpreter
                 if (!spreadObj.IsOwnEnumerableProperty(symbol))
                     continue;
                 (symbolFields ??= [])[symbol] = GetSymbolPropertyValue(spreadObj, symbol);
+            }
+        }
+        else if (spreadValue is SharpTSClass klass)
+        {
+            foreach (var key in ObjectBuiltIns.GetClassConstructorOwnKeys(klass))
+            {
+                var descriptor = key is SharpTSSymbol symbolKey
+                    ? klass.GetOwnStaticSymbolPropertyDescriptor(symbolKey)
+                    : klass.GetOwnStaticPropertyDescriptor((string)key);
+                if (descriptor?.Enumerable != true) continue;
+                if (key is SharpTSSymbol symbol)
+                    (symbolFields ??= [])[symbol] = GetSymbolPropertyValue(klass, symbol);
+                else
+                    stringFields[(string)key] = GetPropertyValue(klass, (string)key);
             }
         }
         else if (spreadValue is SharpTSClassPrototype prototype)
@@ -1013,6 +1001,16 @@ public partial class Interpreter
         return RuntimeValue.FromObject(BuildArrayFromElements(evaluated));
     }
 
+    private IndexTarget.GlobalThis? ResolveGlobalIndexTarget(object? obj, object? index)
+        => obj is SharpTSGlobalThis global && ToPropertyKey(index) is string key
+            ? new IndexTarget.GlobalThis(global, key) : null;
+
+    private void SetGlobalIndexValue(IndexTarget.GlobalThis target, object? value, bool strictMode)
+    {
+        if (!TryAssignThroughDescriptor(target.Target.GetOwnPropertyDescriptor(target.Key),
+                target.Target, target.Key, value, strictMode))
+            target.Target.SetProperty(target.Key, value);
+    }
     /// <summary>
     /// Resolves an (object, index) pair to a typed IndexTarget for dispatch.
     /// </summary>
@@ -1022,6 +1020,10 @@ public partial class Interpreter
     [MethodImpl(MethodImplOptions.AggressiveOptimization)]
     private IndexTarget ResolveIndexTarget(object? obj, object? index)
     {
+        if (obj is SharpTSGlobalThis)
+            return ResolveGlobalIndexTarget(obj, index) is { } global
+                ? global : new IndexTarget.Unsupported(obj, index);
+
         if (obj is SharpTSArray array)
         {
             if (index is SharpTSSymbol symbol)
@@ -1051,7 +1053,6 @@ public partial class Interpreter
         // the Unsupported bucket).
         (SharpTSObject sharpObj, _) => new IndexTarget.ObjectString(sharpObj, ToPropertyKeyString(index)),
         (SharpTSInstance instance, _) => new IndexTarget.InstanceString(instance, ToPropertyKeyString(index)),
-        (SharpTSGlobalThis globalThis, string globalKey) => new IndexTarget.GlobalThis(globalThis, globalKey),
         (SharpTSClassPrototype prototype, SharpTSSymbol symbol) => new IndexTarget.ClassPrototypeSymbol(prototype, symbol),
         (ISharpTSMutableBuiltIn builtInPrototype, _) =>
             new IndexTarget.BuiltInPrototypeString(
@@ -1201,6 +1202,12 @@ public partial class Interpreter
     [MethodImpl(MethodImplOptions.AggressiveOptimization)]
     private RuntimeValue PerformIndexGetCore(Expr objectExpr, object? obj, object? index)
     {
+        if (obj is VmInputPropertyView inputView)
+        {
+            object key = ToPropertyKey(index);
+            return RuntimeValue.FromBoxed(key is string inputKey
+                ? inputView.Read(inputKey) : GetSymbolPropertyValue(inputView, (SharpTSSymbol)key));
+        }
         // ECMA-262 §13.3.3 RequireObjectCoercible: a bracket read on a nullish base
         // throws a guest TypeError. The optional `?.[]` case is short-circuited by
         // callers (EvaluateGetIndex/EvaluateGetIndexAsync) before reaching here, so
@@ -1226,6 +1233,8 @@ public partial class Interpreter
             ThrowCannotReadProperty(obj, key);
         }
 
+        if (HasArrayObjectKey(obj, index))
+            index = ToPropertyKey(index);
         // Proxy: intercept index access via get trap
         if (obj is SharpTSProxy proxy)
         {
@@ -1254,7 +1263,7 @@ public partial class Interpreter
             }
         }
 
-        if (obj is ISharpTSOwnPropertyObject)
+        if (obj is ISharpTSOwnPropertyObject or SharpTSObjectNamespace or SharpTSPromise { HasExplicitPrototype: true })
         {
             object key = ToPropertyKey(index);
             return RuntimeValue.FromBoxed(key is SharpTSSymbol symbol
@@ -1270,6 +1279,9 @@ public partial class Interpreter
         if (obj is ISharpTSPrimitiveConstructor primitiveConstructor && index is SharpTSSymbol constructorSymbol)
             return RuntimeValue.FromBoxed(GetPrimitiveConstructorSymbolValue(
                 primitiveConstructor, constructorSymbol, primitiveConstructor));
+
+        if (obj is SharpTSDate date && index is SharpTSSymbol dateSymbol)
+            return RuntimeValue.FromBoxed(GetSymbolPropertyValue(date, dateSymbol));
 
         if (obj is ISharpTSSymbolPropertyBag symbolBag
             && index is SharpTSSymbol bagSymbol)
@@ -1461,7 +1473,7 @@ public partial class Interpreter
             IndexTarget.ClassString t => EvaluateGetOnClass(t.Target, t.Key),
             IndexTarget.ClassSymbol t => GetClassSymbolValue(t.Target, t.Key),
             IndexTarget.ClassPrototypeSymbol t => GetSymbolPropertyValue(t.Target, t.Key),
-            IndexTarget.GlobalThis t => ResolveGlobalThisRead(t.Target, t.Key),
+            IndexTarget.GlobalThis t => GetPropertyValue(t.Target, t.Key),
             IndexTarget.BuiltInPrototypeString t => ReadBuiltInPrototypeIndex(t.Target, t.Key),
             IndexTarget.HeadersString t => (object?)t.Target.Get(t.Key) ?? SharpTSUndefined.Instance,
             IndexTarget.StringChar t when t.Index >= 0 => t.Index < t.Target.Length
@@ -1617,6 +1629,20 @@ public partial class Interpreter
     private RuntimeValue PerformIndexSet(object? obj, object? index, object? value)
     {
         bool strictMode = _environment.IsStrictMode;
+        if (obj is VmInputPropertyView inputView)
+        {
+            if (inputView.CanWrite)
+            {
+                object key = ToPropertyKey(index);
+                if (key is string name)
+                {
+                    WriteVmInputProperty(inputView, name, value, strictMode);
+                    return RuntimeValue.FromBoxed(value);
+                }
+                index = key;
+            }
+            obj = inputView.Original;
+        }
 
         // ECMA-262 PutValue: RequireObjectCoercible throws a guest TypeError on a
         // null/undefined base before any setter dispatch (#733). Operands (obj,
@@ -1627,10 +1653,28 @@ public partial class Interpreter
             ThrowCannotSetProperty(obj, index?.ToString() ?? "");
         }
 
+        if (HasArrayObjectKey(obj, index)
+            || (obj is SharpTSObject && IsObjectLike(index)))
+            index = ToPropertyKey(index);
+        // Namespace assignment uses the same guest key conversion as ordinary
+        // objects, after the already-evaluated RHS and before string dispatch.
+        if (obj is SharpTSObjectNamespace)
+            index = ToPropertyKey(index);
+
+        if (TryGetPromiseConstructorSymbolProperties(obj, out _))
+        {
+            index = ToPropertyKey(index);
+            if (index is SharpTSSymbol intrinsicSymbol)
+            {
+                SetOwnPropertyObjectValue(obj!, intrinsicSymbol, value, strictMode);
+                return RuntimeValue.FromBoxed(value);
+            }
+        }
+
         // Proxy: intercept index assignment via set trap
         if (obj is SharpTSProxy proxy)
         {
-            string key = index?.ToString() ?? "";
+            object key = ToPropertyKey(index);
             bool assigned = proxy.TrapSetProperty(key, value, this, proxy);
             if (!assigned && strictMode)
                 throw new ThrowException(new SharpTSTypeError(
@@ -1638,7 +1682,7 @@ public partial class Interpreter
             return RuntimeValue.FromBoxed(value);
         }
 
-        if (obj is ISharpTSOwnPropertyObject)
+        if (obj is ISharpTSOwnPropertyObject or SharpTSPromise { HasExplicitPrototype: true })
         {
             SetOwnPropertyObjectValue(obj, ToPropertyKey(index), value, strictMode);
             return RuntimeValue.FromBoxed(value);
@@ -1687,6 +1731,13 @@ public partial class Interpreter
                 FunctionObjectProperties.TryGetStorage(obj, this, out var storage);
                 storage.SetPropertyStrict(key, value, strictMode);
             }
+            return RuntimeValue.FromBoxed(value);
+        }
+
+        if (obj is SharpTSDate or SharpTSObjectNamespace && index is SharpTSSymbol dateSymbol)
+        {
+            if (!SharpTSProxy.OrdinarySet(this, obj, dateSymbol, value, obj) && strictMode)
+                throw StrictModeErrors.TypeError($"Cannot assign to symbol property '{dateSymbol}'");
             return RuntimeValue.FromBoxed(value);
         }
 
@@ -1814,7 +1865,7 @@ public partial class Interpreter
             if (ownDescriptor is { HasGet: true } or { HasSet: true }
                 && TryAssignThroughDescriptor(ownDescriptor, regexStringSet, key, value, strictMode))
                 return RuntimeValue.FromBoxed(value);
-            regexStringSet.SetProperty(key, value);
+            SetRegExpProperty(regexStringSet, key, value, strictMode);
             return RuntimeValue.FromBoxed(value);
         }
 
@@ -2075,7 +2126,7 @@ public partial class Interpreter
                 break;
 
             case IndexTarget.GlobalThis t:
-                t.Target.SetProperty(t.Key, value);
+                SetGlobalIndexValue(t, value, strictMode);
                 break;
 
             case IndexTarget.BuiltInPrototypeString t:
@@ -2252,6 +2303,7 @@ public partial class Interpreter
 
         // Resolve superclass if present
         object? superclass = null;
+        SharpTSBuiltInConstructor? intrinsicPromiseParent = null;
         if (classExpr.SuperclassExpr != null)
         {
             superclass = (await ctx.EvaluateExprAsync(classExpr.SuperclassExpr)).ToObject();
@@ -2262,8 +2314,9 @@ public partial class Interpreter
                 superclass = SharpTSArrayClass.ArrayBase;
             }
             // `extends Promise` (#242): same substitution, mirroring VisitClass.
-            if (superclass is SharpTSBuiltInConstructor { Name: BuiltInNames.Promise })
+            if (superclass is SharpTSBuiltInConstructor { Name: BuiltInNames.Promise } promiseParent)
             {
+                intrinsicPromiseParent = promiseParent;
                 superclass = SharpTSPromiseClass.PromiseBase;
             }
             if (superclass is not SharpTSClass)
@@ -2531,6 +2584,8 @@ public partial class Interpreter
             klass.SetInferredName(inferredName);
             klass.BindPrivateMemberOwners();
             klass.InitializerEnvironment = classEnv;
+            if (klass is SharpTSPromiseClass promiseClass)
+                promiseClass.IntrinsicParentConstructor = intrinsicPromiseParent;
             klass.OrderedInstanceFields = classExpr.Fields.Where(field => !field.IsStatic && !field.IsDeclare)
                 .SelectMany(field => (field.IsPrivate ? instancePrivateFields : instanceFields)
                     .Where(captured => captured.Name == field.Name)).ToList();

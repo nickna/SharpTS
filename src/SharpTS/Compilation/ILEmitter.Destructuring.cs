@@ -33,7 +33,8 @@ public partial class ILEmitter
     private void RegisterStableCompactRecordLocal(Stmt.Var declaration, LocalBuilder local)
     {
         if (declaration.Initializer is Expr.ObjectLiteral literal &&
-            _ctx.RuntimeFeatures?.CompactObjectRecordStableLocalLiterals.Contains(literal) == true)
+            _ctx.RuntimeFeatures?.CompactObjectRecordStableLocalLiterals.Contains(literal) == true &&
+            JsonSerializationShapeAnalyzer.TryAnalyzeCompactObjectLiteral(literal, _ctx.TypeMap, out _))
         {
             _stableCompactRecordLocals.Add(local);
         }

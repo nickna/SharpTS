@@ -9,7 +9,7 @@ namespace SharpTS.Runtime.Types;
 /// Tracks which objects have been "contextified" via vm.createContext().
 /// Uses a ConditionalWeakTable so objects can be garbage collected normally.
 /// </summary>
-public static class VmContext
+public static partial class VmContext
 {
     private static readonly ConditionalWeakTable<object, VmContextMarker> _contexts = new();
 
@@ -54,7 +54,13 @@ public static class VmContext
     public static Dictionary<string, object?> ExtractProperties(object? contextObject)
     {
         var props = new Dictionary<string, object?>();
-        if (contextObject is SharpTSObject tsObj)
+        if (contextObject is not null && GetContextStorage(contextObject) is { } storage)
+        {
+            foreach (var name in storage.OwnNames(contextObject))
+                if (storage.ReadDescriptor(contextObject, name) is { HasValue: true } descriptor)
+                    props[name] = descriptor.Value;
+        }
+        else if (contextObject is SharpTSObject tsObj)
         {
             foreach (var kv in tsObj.Fields)
                 props[kv.Key] = kv.Value;
@@ -83,6 +89,8 @@ public static class VmContext
         }
         // Wrap any compiled callables (e.g. $TSFunction) so the sub-interpreter can call them
         WrapCompiledCallables(props);
+        foreach (var value in props.Values)
+            BuiltIns.Modules.Interpreter.VmModuleInterpreter.RecordVmInputValue(value);
 
         return props;
     }
@@ -94,55 +102,116 @@ public static class VmContext
     /// </summary>
     private static void WrapCompiledCallables(Dictionary<string, object?> props)
     {
+        var host = BuiltIns.Modules.Interpreter.VmExecutionHost.Current;
         foreach (var key in props.Keys.ToList())
-        {
-            var value = props[key];
-            if (value == null || value is ISharpTSCallable || value is BuiltInMethod)
-                continue;
+            props[key] = WrapCompiledCallable(host is null ? props[key] : host.ToVm(props[key]));
+    }
 
-            // Compiler-emitted functions use the managed-shape boundary. Keep
-            // accepting arbitrary CLR Invoke(object[]) objects through the
-            // managed-only structural compatibility seam.
-            var type = value.GetType();
-            var invokeMethod = ManagedEmittedShapeReflection.IsShape(
-                    type, ManagedEmittedShape.Function)
-                ? ManagedEmittedShapeReflection.GetPublicMethod(
-                    type, ManagedEmittedShape.Function, "Invoke", [typeof(object[])])
-                : ManagedStructuralClrReflection.TryGetPublicMethodBySignature(
-                    type, "Invoke", [typeof(object[])]);
-            if (invokeMethod != null)
-            {
-                props[key] = new CompiledCallableAdapter(value, invokeMethod);
-            }
-        }
+    internal static object? WrapCompiledCallable(object? value)
+    {
+        if (value == null || value is ISharpTSCallable || value is BuiltInMethod) return value;
+        // Preserve the existing managed shape/structural compatibility boundary.
+        var type = value.GetType();
+        bool emittedFunction = ManagedEmittedShapeReflection.IsShape(type, ManagedEmittedShape.Function);
+        var invokeMethod = emittedFunction
+            ? ManagedEmittedShapeReflection.GetPublicMethod(type, ManagedEmittedShape.Function, "Invoke", [typeof(object[])])
+            : ManagedStructuralClrReflection.TryGetPublicMethodBySignature(type, "Invoke", [typeof(object[])]);
+        var invokeWithThis = emittedFunction ? ManagedEmittedShapeReflection.GetPublicMethod(type,
+            ManagedEmittedShape.Function, "InvokeWithThis", [typeof(object), typeof(object[])]) : null;
+        if (invokeMethod is null) return value;
+        return emittedFunction && BuiltIns.Modules.Interpreter.VmExecutionHost.Current is { } host
+            ? host.GetCompiledCallable(value, invokeMethod, invokeWithThis)
+            : new CompiledCallableAdapter(value, invokeMethod, invokeWithThis);
+    }
+
+    internal static object? WrapVmCompiledCallable(object? value)
+        => WrapVmCompiledCallableForHost(value, BuiltIns.Modules.Interpreter.VmExecutionHost.Current);
+
+    internal static object? WrapVmCompiledCallableForHost(object? value, BuiltIns.Modules.Interpreter.VmExecutionHost? host)
+    {
+        if (value is null or ISharpTSCallable) return value;
+        var type = value.GetType();
+        if (!ManagedEmittedShapeReflection.IsShape(type, ManagedEmittedShape.Function)) return value;
+        var invoke = ManagedEmittedShapeReflection.GetPublicMethod(type, ManagedEmittedShape.Function, "Invoke", [typeof(object[])]);
+        var invokeWithThis = ManagedEmittedShapeReflection.GetPublicMethod(type, ManagedEmittedShape.Function,
+            "InvokeWithThis", [typeof(object), typeof(object[])]);
+        if (invoke is null) return value;
+        return host is null ? new CompiledCallableAdapter(value, invoke, invokeWithThis)
+            : host.GetCompiledCallable(value, invoke, invokeWithThis);
     }
 
     /// <summary>
     /// Writes mutations back from a RuntimeEnvironment to the context object.
     /// </summary>
-    public static void WriteBack(object? contextObject, Dictionary<string, object?> originalProperties, RuntimeEnvironment env)
+    public static void WriteBack(object? contextObject, Dictionary<string, object?> originalProperties,
+        RuntimeEnvironment env, SharpTSGlobalThis? globalObject = null)
     {
+        if (contextObject is not null && HasExternalGlobalStorage(contextObject, globalObject))
+        {
+            foreach (var (_, value) in globalObject!.UserOwnDataProperties())
+                BuiltIns.Modules.Interpreter.VmModuleInterpreter.RecordVmPublishedValue(value);
+            return;
+        }
+        var properties = new Dictionary<string, object?>();
+        foreach (var name in originalProperties.Keys)
+        {
+            if (globalObject?.IsInternalOnlyVmProperty(name) == true) continue;
+            if (globalObject?.HasUserProperty(name) == true)
+            {
+                if (globalObject.GetOwnPropertyDescriptor(name) is { HasValue: true } descriptor)
+                    properties[name] = descriptor.Value;
+                continue;
+            }
+            if (globalObject?.IsDeletedProperty(name) == true) continue;
+            if (env.TryGet(name, out var value))
+                properties[name] = value.ToObject();
+        }
+        var deleted = globalObject?.VmDeletedProperties.ToArray() ?? [];
+        // The actual global object owns classic var storage. Its user data
+        // records include newly declared globals without reading accessors or
+        // exposing lexical bindings and the intrinsic inventory.
+        if (globalObject is not null)
+            foreach (var (name, value) in globalObject.UserOwnDataProperties())
+            {
+                if (globalObject.IsInternalOnlyVmProperty(name))
+                {
+                    BuiltIns.Modules.Interpreter.VmModuleInterpreter.RecordVmPublishedValue(value);
+                    continue;
+                }
+                properties[name] = value;
+            }
+
+        if (contextObject is not null)
+            foreach (var value in properties.Values)
+                BuiltIns.Modules.Interpreter.VmModuleInterpreter.RecordVmPublishedValue(value);
+
+        if (BuiltIns.Modules.Interpreter.VmExecutionHost.Current is { } host)
+            foreach (var name in properties.Keys.ToArray())
+                properties[name] = host.FromVm(properties[name]);
+
         if (contextObject is SharpTSObject tsObj)
         {
-            foreach (var name in originalProperties.Keys)
-            {
-                if (env.TryGet(name, out var value))
-                    tsObj.SetProperty(name, value.ToObject());
-            }
+            foreach (var name in deleted) tsObj.DeleteProperty(name);
+            foreach (var (name, value) in properties)
+                tsObj.SetProperty(name, value);
         }
         else if (contextObject is Dictionary<string, object?> dict)
         {
-            foreach (var name in originalProperties.Keys)
-            {
-                if (env.TryGet(name, out var value))
-                    dict[name] = value.ToObject();
-            }
+            foreach (var name in deleted) dict.Remove(name);
+            foreach (var (name, value) in properties)
+                dict[name] = value;
         }
         else if (contextObject != null)
         {
             // Compiler-emitted $Object uses the managed-shape boundary. Preserve
             // custom CLR SetProperty shapes as the managed interop fallback.
             var type = contextObject.GetType();
+            if (deleted.Length != 0 && ManagedEmittedShapeReflection.IsShape(type, ManagedEmittedShape.HasFields))
+            {
+                var delete = ManagedEmittedShapeReflection.GetPublicMethod(type, ManagedEmittedShape.HasFields,
+                    "DeleteProperty", [typeof(string)]);
+                foreach (var name in deleted) delete?.Invoke(contextObject, [name]);
+            }
             var setMethod = ManagedEmittedShapeReflection.IsShape(
                     type, ManagedEmittedShape.HasFields)
                 ? ManagedEmittedShapeReflection.GetPublicMethod(
@@ -152,18 +221,33 @@ public static class VmContext
                     type, "SetProperty", [typeof(string), typeof(object)]);
             if (setMethod != null)
             {
-                foreach (var name in originalProperties.Keys)
-                {
-                    if (env.TryGet(name, out var value))
-                        setMethod.Invoke(contextObject, [name, value.ToObject()]);
-                }
+                foreach (var (name, value) in properties)
+                    setMethod.Invoke(contextObject, [name, value]);
             }
         }
+    }
+
+    internal static void ApplyPromiseIntrinsicState(object? contextObject, Interpreter interpreter)
+    {
+        if (contextObject is null) return;
+        var marker = _contexts.GetOrCreateValue(contextObject);
+        marker.PromiseRealm ??= interpreter.PromiseRealmState;
+        interpreter.UsePromiseIntrinsicState(marker.PromiseRealm);
     }
 
     private sealed class VmContextMarker
     {
         public VmContextOptions? Options { get; set; }
+        internal PromiseIntrinsicState? PromiseRealm { get; set; }
+        internal VmContextGlobalState? Globals { get; set; }
+        internal VmGlobalLexicalState? Lexicals { get; set; }
+    }
+
+    internal static VmGlobalLexicalState GetLexicalState(object? context)
+    {
+        if (context is null) return new VmGlobalLexicalState();
+        var marker = _contexts.GetOrCreateValue(context);
+        lock (marker) return marker.Lexicals ??= new VmGlobalLexicalState();
     }
 }
 
@@ -194,15 +278,66 @@ public sealed record VmContextOptions(
 /// interpreter can invoke it. Used at the vm module boundary when compiled functions
 /// are passed in context objects.
 /// </summary>
-internal sealed class CompiledCallableAdapter(object target, MethodInfo invokeMethod) : ISharpTSCallable
+internal sealed class CompiledCallableAdapter : ISharpTSCallable
 {
-    public int Arity() => 0; // Unknown arity for compiled functions
+    private readonly object _target;
+    private readonly MethodInfo _invokeMethod;
+    private readonly MethodInfo? _invokeWithThisMethod;
+    private readonly BuiltIns.Modules.Interpreter.VmExecutionHost? _host;
+    private readonly int _nativeCallbackRole;
+    internal bool IsNativePromiseCallback => _nativeCallbackRole is 1 or 2;
+    internal object Original => _target;
 
-    public object? Call(Interpreter interpreter, List<object?> arguments)
+    public CompiledCallableAdapter(object target, MethodInfo invokeMethod, MethodInfo? invokeWithThisMethod = null)
+        : this(target, invokeMethod, invokeWithThisMethod, BuiltIns.Modules.Interpreter.VmExecutionHost.Current) { }
+
+    // An explicit owner does not consult the ambient host while its cache gate is held.
+    internal CompiledCallableAdapter(object target, MethodInfo invokeMethod, MethodInfo? invokeWithThisMethod,
+        BuiltIns.Modules.Interpreter.VmExecutionHost? host)
+        : this(target, invokeMethod, invokeWithThisMethod, host, 0) { }
+
+    internal CompiledCallableAdapter(object target, MethodInfo invokeMethod, MethodInfo? invokeWithThisMethod,
+        BuiltIns.Modules.Interpreter.VmExecutionHost? host, int nativeCallbackRole)
     {
-        var args = arguments.ToArray();
-        return invokeMethod.Invoke(target, [args]);
+        _nativeCallbackRole = nativeCallbackRole;
+        _target = target;
+        _invokeMethod = invokeMethod;
+        _invokeWithThisMethod = invokeWithThisMethod;
+        _host = host;
     }
 
-    public override string ToString() => target.ToString() ?? "<compiled function>";
+    public int Arity() => IsNativePromiseCallback ? 1 : 0; // Other compiled function arities retain the existing fallback.
+
+    public object? Call(Interpreter interpreter, List<object?> arguments)
+        => Invoke(arguments, null, explicitReceiver: false);
+
+    internal object? CallWithThis(object? receiver, List<object?> arguments)
+        => Invoke(arguments, receiver, explicitReceiver: true);
+
+    private object? Invoke(List<object?> arguments, object? receiver, bool explicitReceiver)
+    {
+        using var scope = _host?.Enter();
+        var owner = Execution.VmEvaluationLease.CurrentInterpreter;
+        object? Adapt(object? value)
+        {
+            if (owner is not null) BuiltIns.Modules.Interpreter.VmModuleInterpreter.RecordVmBoundaryValue(value, owner);
+            return _host is null ? value : _host.FromVm(value);
+        }
+        var args = arguments.Select(Adapt).ToArray();
+        object? result;
+        try
+        {
+            result = explicitReceiver && _invokeWithThisMethod is not null
+                ? _invokeWithThisMethod.Invoke(_target, [Adapt(receiver), args])
+                : _invokeMethod.Invoke(_target, [args]);
+        }
+        catch (Exception exception) when (_host is not null)
+        {
+            var carrier = exception is TargetInvocationException { InnerException: { } inner } ? inner : exception;
+            if (!_host.TryGetThrownValue(carrier, out var value)) throw;
+            throw new Exceptions.ThrowException(_host.ToVm(value));
+        }
+        return _host is null ? result : _host.ToVm(result);
+    }
+    public override string ToString() => _target.ToString() ?? "<compiled function>";
 }

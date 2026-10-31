@@ -12,6 +12,9 @@ public partial class TypeChecker
             .Select((_, index) => ResolveTypeArg(expression.TypeArgs, expression.TypeArgNodes, index)).ToList();
         if (operand is TypeInfo.GenericFunction function)
             return InstantiateGenericFunction(function, arguments, preserveCallableMetadata: true);
+        if (operand is TypeInfo.GenericClass genericClass && arguments.Count <= genericClass.TypeParams.Count
+            && arguments.Count >= genericClass.TypeParams.TakeWhile(parameter => parameter.Default is null).Count())
+            return InstantiateGenericClass(genericClass, arguments);
 
         // Other callable representations do not retain enough per-signature generic origin
         // information for this specialization path. Never erase their arguments into Any.

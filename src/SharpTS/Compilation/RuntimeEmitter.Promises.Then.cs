@@ -16,7 +16,7 @@ public partial class RuntimeEmitter
         ModuleBuilder moduleBuilder,
         EmittedRuntime runtime)
     {
-        var awaiter = moduleBuilder.DefineType(
+        var awaiter = EmitTypeDefinitions.DefineType(moduleBuilder,
             "$PromiseJobAwaiter",
             TypeAttributes.Public | TypeAttributes.Sealed |
                 TypeAttributes.SequentialLayout | TypeAttributes.BeforeFieldInit,
@@ -77,7 +77,7 @@ public partial class RuntimeEmitter
         var awaiterType = typeof(TaskAwaiter<object?>);
 
         // Define state machine struct: $PromiseThen_SM
-        var smType = moduleBuilder.DefineType(
+        var smType = EmitTypeDefinitions.DefineType(moduleBuilder,
             "$PromiseThen_SM",
             TypeAttributes.Public | TypeAttributes.Sealed | TypeAttributes.BeforeFieldInit,
             typeof(ValueType),
@@ -732,7 +732,7 @@ public partial class RuntimeEmitter
     {
         var builderType = typeof(AsyncTaskMethodBuilder<object>);
         var awaiterType = typeof(TaskAwaiter<object?>);
-        var smType = moduleBuilder.DefineType(
+        var smType = EmitTypeDefinitions.DefineType(moduleBuilder,
             typeName,
             TypeAttributes.Public | TypeAttributes.Sealed | TypeAttributes.BeforeFieldInit,
             typeof(ValueType),
@@ -1130,7 +1130,7 @@ public partial class RuntimeEmitter
         TypeBuilder runtimeType,
         EmittedRuntime runtime)
     {
-        var chainType = moduleBuilder.DefineType(
+        var chainType = EmitTypeDefinitions.DefineType(moduleBuilder,
             "$PrimitivePromiseChain",
             TypeAttributes.Public | TypeAttributes.Sealed |
                 TypeAttributes.BeforeFieldInit,

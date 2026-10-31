@@ -94,9 +94,9 @@ public partial class RuntimeEmitter
         GuestErrorEmitter.ThrowError(il, errors.CreateException, errors.TypeErrorConstructor,
             "Dynamic generator function source construction is not supported");
         il.MarkLabel(empty); il.Emit(OpCodes.Ldnull);
-        _types.EmitLoadMethodInfo(il, kind.EmptyFunction);
+        var parameterProducer = EmitReflectedMethodLiteral(il, kind.EmptyFunction);
         il.Emit(OpCodes.Ldstr, "anonymous"); il.Emit(OpCodes.Ldc_I4_0);
-        il.Emit(OpCodes.Newobj, graph.Construction.CachedConstructor); il.Emit(OpCodes.Ret);
+        EmitReflectedFunctionConstructor(il, graph.Construction.CachedConstructor, parameterProducer, cached: true); il.Emit(OpCodes.Ret);
         prototypes.MarkBodyEmitted(kind.ConstructorMethod);
 
         void EmitResult(ILGenerator body, bool returned)

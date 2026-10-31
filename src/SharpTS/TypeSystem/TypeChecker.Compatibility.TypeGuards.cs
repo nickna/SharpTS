@@ -405,7 +405,10 @@ public partial class TypeChecker
                     narrowed = new TypeInfo.Intersection([parameter, new TypeInfo.Union([TypeInfo.Object.Shared, TypeInfo.Null.Shared])]);
                 // Keep the source parameter itself, rather than manufacturing a new
                 // parameter/owner or replacing its declaration with its constraint.
-                TypeInfo excluded = projected.ExcludedType is TypeInfo.Never ? TypeInfo.Never.Shared : parameter;
+                TypeInfo excluded = projected.ExcludedType is null or TypeInfo.Never
+                    ? TypeInfo.Never.Shared
+                    : openConstraint ? parameter
+                    : new TypeInfo.Intersection([parameter, projected.ExcludedType]);
                 return negated ? (excluded, narrowed) : (narrowed, excluded);
             }
             finally { activeParameters.Remove(parameter); }
@@ -606,6 +609,20 @@ public partial class TypeChecker
         TypeInfo nullishType = checkBoth
             ? new TypeInfo.Union([TypeInfo.Null.Shared, TypeInfo.Undefined.Shared])
             : checkingForNull ? TypeInfo.Null.Shared : TypeInfo.Undefined.Shared;
+
+        if (currentType is TypeInfo.Intersection intersection &&
+            intersection.FlattenedTypes.Any(t => t is TypeInfo.Union facet && facet.FlattenedTypes.Any(IsNullish)))
+        {
+            // Generic typeof projections retain T alongside their selected domain.
+            // Exclude null from that domain without replacing the source parameter.
+            var nonNullishFacets = intersection.FlattenedTypes.Select(t => t is TypeInfo.Union facet
+                ? UnionTypeofProjections(facet.FlattenedTypes.Where(member => !IsNullish(member)))
+                : t).ToList();
+            TypeInfo nonNullishType = nonNullishFacets.Any(t => t is TypeInfo.Never)
+                ? TypeInfo.Never.Shared : new TypeInfo.Intersection(nonNullishFacets);
+            TypeInfo nullishResult = new TypeInfo.Intersection([currentType, nullishType]);
+            return negated ? (varName, nonNullishType, nullishResult) : (varName, nullishResult, nonNullishType);
+        }
 
         if (currentType is TypeInfo.Union union)
         {

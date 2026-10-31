@@ -1,6 +1,7 @@
 using System.Reflection;
 using System.Runtime.CompilerServices;
 using SharpTS.Diagnostics.Exceptions;
+using SharpTS.Compilation;
 using SharpTS.IO;
 
 namespace SharpTS.References;
@@ -43,12 +44,21 @@ public static class DotNetReferences
     public static ReferenceSet ResolveReadOnly(string startDirectory, IReadOnlyList<string> cliReferences)
         => ResolveCore(startDirectory, cliReferences, allowRestore: false);
 
+    internal static ReferenceSet ResolveNativeExplicit(string directory, IReadOnlyList<string> references)
+    {
+        try { return ResolveCore(directory, references, allowRestore: false, allowPackages: false); }
+        catch (Exception error) when (error is not SharpTSException)
+        { throw NativeManagedReferenceClosure.Refuse("explicit references", error.Message); }
+    }
+
     private static ReferenceSet ResolveCore(
         string startDirectory,
         IReadOnlyList<string> cliReferences,
-        bool allowRestore)
+        bool allowRestore, bool allowPackages = true)
     {
         var manifest = SharpTsManifestLoader.FindAndLoad(startDirectory);
+        if (!allowPackages && manifest?.Packages is { Count: > 0 })
+            throw NativeManagedReferenceClosure.Refuse(manifest.ManifestPath, "contains unsupported NuGet package assets");
         if (manifest == null && cliReferences.Count == 0)
             return ReferenceSet.Empty;
 

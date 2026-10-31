@@ -7,6 +7,23 @@ namespace SharpTS.Tests.CompilerTests;
 
 public class RuntimeFeatureDetectorTests
 {
+    [Theory]
+    [InlineData("const a:any=[];const f=a.push;", true)]
+    [InlineData("const a:any=[];const f=a['pop'];", true)]
+    [InlineData("const a:any=[];let k:any='push';const f=a[k];", true)]
+    [InlineData("export const a:number[]=[];", true)]
+    [InlineData("const a:number[]=[1];console.log(a[0]);", false)]
+    [InlineData("console.log(1);", false)]
+    public void ArrayMethodValuesSelectCanonicalFunctions(string source, bool expected)
+    {
+        var statements = new Parser(new Lexer(source).ScanTokens()).ParseOrThrow();
+        var typeMap = new TypeChecker().Check(statements);
+        var features = new RuntimeFeatureDetector().Detect(statements, typeMap);
+
+        Assert.Equal(expected, features.UsesArrayMethodValues);
+        Assert.False(features.UsesArrayPrototypeMutation);
+    }
+
     [Fact]
     public void AnyTypedArrayIteratorMutation_DisablesBackingStorageShortcut()
     {

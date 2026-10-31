@@ -13,13 +13,13 @@ public partial class RuntimeEmitter
     /// <see cref="EmittedObjectStateRuntime.IsBuiltinDeleted"/> consults it. Used
     /// for ECMA-262 §17 configurable-name/length semantics on $TSFunction.
     /// </summary>
-    private void EmitDeletedBuiltinsHelpers(TypeBuilder typeBuilder, EmittedObjectStateRuntime objectState)
+    private void EmitDeletedBuiltinsHelpers(TypeBuilder typeBuilder, EmittedObjectStateRuntime objectState, EmittedObjectKeysRuntime keys)
     {
-        EmitMarkBuiltinDeleted(typeBuilder, objectState);
+        EmitMarkBuiltinDeleted(typeBuilder, objectState, keys);
         EmitIsBuiltinDeleted(typeBuilder, objectState);
     }
 
-    private void EmitMarkBuiltinDeleted(TypeBuilder typeBuilder, EmittedObjectStateRuntime objectState)
+    private void EmitMarkBuiltinDeleted(TypeBuilder typeBuilder, EmittedObjectStateRuntime objectState, EmittedObjectKeysRuntime keys)
     {
         var method = typeBuilder.DefineMethod(
             "MarkBuiltinDeleted",
@@ -39,6 +39,7 @@ public partial class RuntimeEmitter
         il.Emit(OpCodes.Brtrue, bodyLabel);
         il.Emit(OpCodes.Ret);
         il.MarkLabel(bodyLabel);
+        il.Emit(OpCodes.Ldarg_0); il.Emit(OpCodes.Ldarg_1); il.Emit(OpCodes.Call, keys.ForgetConstructorKey);
 
         // var existing = null; _deletedBuiltins.TryGetValue(obj, out existing);
         var existingLocal = il.DeclareLocal(_types.Object);

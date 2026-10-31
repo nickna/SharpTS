@@ -46,6 +46,7 @@ public class EmittedJsonDependencyTests
             if (parameter.Name == "TSFunctionInvokeWithThis") return runtime.FunctionValues.InvokeWithThis;
             if (parameter.Name == "TSFunctionType") return runtime.FunctionValues.Type;
             if (parameter.Name == "InvokeMethodUnwrapped") return runtime.ReflectedMethods.InvokeUnwrapped;
+            if (parameter.Name == "NativeProxyRejection") return runtime.ReflectedMethods.NativeProxyRejection;
             if (parameter.Name == "InvokeValue") return runtime.Invocation.Value;
             if (parameter.Name == "InvokeMethodValue") return runtime.Invocation.Method;
             if (parameter.Name == "InvokeMethodValue0") return runtime.Invocation.Method0;

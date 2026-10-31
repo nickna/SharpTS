@@ -126,6 +126,13 @@ public sealed class EmittedDescriptorStorageRuntime
     }
 
     private MethodBuilder? _freeze;
+    private MethodBuilder? _defineValidatedProperty;
+    public MethodBuilder DefineValidatedProperty
+    {
+        get => Require(_defineValidatedProperty);
+        internal set => Set(ref _defineValidatedProperty, value);
+    }
+
     public MethodBuilder Freeze
     {
         get => Require(_freeze);
@@ -307,6 +314,7 @@ public sealed class EmittedDescriptorStorageRuntime
         _ = GetPrototype;
         _ = HasPrototypeEntry;
         _ = DefineProperty;
+        _ = DefineValidatedProperty;
         _ = DeleteProperty;
         _ = GetPropertyDescriptor;
         _ = HasPropertyDescriptors;

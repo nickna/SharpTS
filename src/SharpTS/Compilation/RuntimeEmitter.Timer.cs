@@ -822,13 +822,18 @@ public partial class RuntimeEmitter
         il.Emit(OpCodes.Call, microtasks.QueuePromiseJob);
         il.Emit(OpCodes.Ret);
 
+        if (_features.UsesMicrotaskFunctionValues)
+            EmitQueueMicrotaskValueAdapter(runtimeType, runtime);
+
         // Emit ProcessMicrotasks method
         EmitProcessMicrotasksMethod(
             runtimeType,
             microtasks,
             microtaskQueueField,
             microtaskDrainScheduledField,
-            queueType);
+            queueType, runtime.Vm);
+        if (runtime.Vm is not null)
+            EmitVmAfterCheckpointQueue(runtimeType, runtime.RequireVm(), microtasks, queueType);
         EmitHasMicrotasksMethod(runtimeType, microtasks, microtaskQueueField, queueType);
     }
 
@@ -870,7 +875,7 @@ public partial class RuntimeEmitter
         EmittedMicrotaskRuntime microtasks,
         FieldBuilder microtaskQueueField,
         FieldBuilder microtaskDrainScheduledField,
-        Type queueType)
+        Type queueType, EmittedVmRuntime? vm)
     {
         var method = microtasks.ProcessMicrotasks;
 
@@ -916,6 +921,8 @@ public partial class RuntimeEmitter
         il.Emit(OpCodes.Br, loopStartLabel);
 
         il.MarkLabel(doneLabel);
+        if (vm is not null)
+            EmitVmAfterCheckpointBatch(il, vm, queueType, loopStartLabel);
         il.Emit(OpCodes.Ldc_I4_0);
         il.Emit(OpCodes.Stsfld, microtaskDrainScheduledField);
         il.Emit(OpCodes.Ret);
@@ -958,6 +965,7 @@ public partial class RuntimeEmitter
         var hasCallbackLabel = il.DefineLabel();
         var hasDelayLabel = il.DefineLabel();
         var callLabel = il.DefineLabel();
+        var extractExtraArgsLabel = il.DefineLabel();
 
         // Extract callback from args[0]
         // if (args == null || args.Length == 0) callback = null; else callback = args[0];
@@ -995,17 +1003,16 @@ public partial class RuntimeEmitter
         il.Emit(OpCodes.Ldelem_Ref);
         il.Emit(OpCodes.Call, _types.ConvertToDoubleFromObject);
         il.Emit(OpCodes.Stloc, delayLocal);
-        il.Emit(OpCodes.Br_S, extractExtraArgs());
+        il.Emit(OpCodes.Br_S, extractExtraArgsLabel);
 
         il.MarkLabel(callLabel);
         il.Emit(OpCodes.Ldc_R8, 0.0);
         il.Emit(OpCodes.Stloc, delayLocal);
 
         // Extract extra args (args[2..])
-        Label extractExtraArgs()
+        void EmitExtraArgs()
         {
-            var label = il.DefineLabel();
-            il.MarkLabel(label);
+            il.MarkLabel(extractExtraArgsLabel);
 
             var hasExtraArgsLabel = il.DefineLabel();
             var noExtraArgsLabel = il.DefineLabel();
@@ -1046,8 +1053,10 @@ public partial class RuntimeEmitter
             il.Emit(OpCodes.Stloc, extraArgsLocal);
 
             il.MarkLabel(afterExtraArgsLabel);
-            return label;
+
         }
+
+        EmitExtraArgs();
 
         // Call SetTimeout(callback, delay, extraArgs)
         il.Emit(OpCodes.Ldloc, callbackLocal);

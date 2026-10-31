@@ -8,7 +8,8 @@ public partial class RuntimeEmitter
     private void EmitTSFunctionInvokeConstructed(TypeBuilder owner, EmittedFunctionValueRuntime functions,
         EmittedFunctionAttributesRuntime attributes, FieldInfo? currentArguments, FieldBuilder methodField,
         FieldBuilder targetField, FieldBuilder expectsThisField, FieldBuilder currentThisField,
-        MethodBuilder adjustArguments, Action<ILGenerator, LocalBuilder> convertArguments)
+        MethodBuilder adjustArguments, Action<ILGenerator, LocalBuilder> convertArguments,
+        MethodInfo? nativeGenericResolver, MethodInfo? nativeCoreLookup)
     {
         var method = owner.DefineMethod("InvokeConstructed", MethodAttributes.Public, _types.Object,
             [_types.Object, _types.ObjectArray, _types.Object]);
@@ -24,11 +25,16 @@ public partial class RuntimeEmitter
         il.Emit(OpCodes.Stloc, markers);
         il.Emit(OpCodes.Ldloc, markers); il.Emit(OpCodes.Ldlen); il.Emit(OpCodes.Brfalse, ordinary);
         il.Emit(OpCodes.Ldarg_0); il.Emit(OpCodes.Ldfld, methodField);
-        il.Emit(OpCodes.Callvirt, _types.GetProperty(typeof(MemberInfo), "DeclaringType")!.GetGetMethod()!);
+        if (nativeCoreLookup is null)
+            il.Emit(OpCodes.Callvirt, _types.GetProperty(typeof(MemberInfo), "DeclaringType")!.GetGetMethod()!);
         il.Emit(OpCodes.Ldloc, markers); il.Emit(OpCodes.Ldc_I4_0); il.Emit(OpCodes.Ldelem_Ref);
         il.Emit(OpCodes.Castclass, attributes.NewTargetCoreType); il.Emit(OpCodes.Ldfld, attributes.NewTargetCoreName);
-        il.Emit(OpCodes.Ldc_I4, (int)(BindingFlags.Instance | BindingFlags.Static | BindingFlags.Public | BindingFlags.NonPublic | BindingFlags.DeclaredOnly));
-        il.Emit(OpCodes.Callvirt, _types.GetMethod(_types.Type, "GetMethod", _types.String, typeof(BindingFlags)));
+        if (nativeCoreLookup is null)
+        {
+            il.Emit(OpCodes.Ldc_I4, (int)(BindingFlags.Instance | BindingFlags.Static | BindingFlags.Public | BindingFlags.NonPublic | BindingFlags.DeclaredOnly));
+            il.Emit(OpCodes.Callvirt, _types.GetMethod(_types.Type, "GetMethod", _types.String, typeof(BindingFlags)));
+        }
+        else il.Emit(OpCodes.Call, nativeCoreLookup);
         il.Emit(OpCodes.Stloc, core);
         var notGeneric = il.DefineLabel();
         il.Emit(OpCodes.Ldloc, core);
@@ -36,8 +42,20 @@ public partial class RuntimeEmitter
         il.Emit(OpCodes.Brfalse, notGeneric);
         il.Emit(OpCodes.Ldloc, core);
         il.Emit(OpCodes.Ldarg_0); il.Emit(OpCodes.Ldfld, methodField);
-        il.Emit(OpCodes.Callvirt, _types.GetMethodNoParams(_types.MethodInfo, "GetGenericArguments"));
-        il.Emit(OpCodes.Callvirt, _types.GetMethod(_types.MethodInfo, "MakeGenericMethod", _types.MakeArrayType(_types.Type)));
+        if (nativeGenericResolver is null)
+        {
+            il.Emit(OpCodes.Callvirt, _types.GetMethodNoParams(_types.MethodInfo, "GetGenericArguments"));
+            il.Emit(OpCodes.Callvirt, _types.GetMethod(_types.MethodInfo, "MakeGenericMethod", _types.MakeArrayType(_types.Type)));
+        }
+        else
+        {
+            if (!nativeGenericResolver.IsStatic || nativeGenericResolver.IsGenericMethod ||
+                nativeGenericResolver.ReturnType != _types.MethodInfo ||
+                !nativeGenericResolver.GetParameters().Select(parameter => parameter.ParameterType)
+                    .SequenceEqual([_types.MethodInfo, _types.MethodInfo]))
+                throw new InvalidOperationException("Native constructed generic resolution requires an exact static (core, entry) MethodInfo helper.");
+            il.Emit(OpCodes.Call, nativeGenericResolver);
+        }
         il.Emit(OpCodes.Stloc, core);
         il.MarkLabel(notGeneric);
 
@@ -90,7 +108,7 @@ public partial class RuntimeEmitter
 
     private void EmitNewTargetCoreAttribute(ModuleBuilder module, EmittedFunctionAttributesRuntime attributes)
     {
-        var type = module.DefineType("$NewTargetCore", TypeAttributes.Public | TypeAttributes.Sealed, typeof(Attribute));
+        var type = EmitTypeDefinitions.DefineType(module, "$NewTargetCore", TypeAttributes.Public | TypeAttributes.Sealed, typeof(Attribute));
         var name = type.DefineField("Name", _types.String, FieldAttributes.Public | FieldAttributes.InitOnly);
         var constructor = type.DefineConstructor(MethodAttributes.Public, CallingConventions.Standard, [_types.String]);
         var il = constructor.GetILGenerator();

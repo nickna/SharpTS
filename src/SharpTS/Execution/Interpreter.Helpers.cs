@@ -23,6 +23,13 @@ public partial class Interpreter
     {
         switch (obj)
         {
+            case VmInputPropertyView inputView:
+                if (!inputView.CanWrite) return TryGetProperty(inputView.Original, name, out value);
+                value = inputView.Read(name.Lexeme);
+                return true;
+            case SharpTSObjectNamespace objectNamespace:
+                value = GetPropertyValue(objectNamespace, name.Lexeme);
+                return true;
             case SharpTSProxy proxy:
                 value = proxy.TrapGet(name.Lexeme, this);
                 return true;
@@ -61,6 +68,13 @@ public partial class Interpreter
     {
         switch (obj)
         {
+            case VmInputPropertyView inputView:
+                if (!inputView.CanWrite) return TryGetPropertyRV(inputView.Original, name, out value);
+                value = RuntimeValue.FromBoxed(inputView.Read(name.Lexeme));
+                return true;
+            case SharpTSObjectNamespace objectNamespace:
+                value = RuntimeValue.FromBoxed(GetPropertyValue(objectNamespace, name.Lexeme));
+                return true;
             case SharpTSProxy proxy:
                 value = proxy.TrapGetRV(name.Lexeme, this);
                 return true;
@@ -101,6 +115,13 @@ public partial class Interpreter
     {
         switch (obj)
         {
+            case VmInputPropertyView inputView:
+                if (!inputView.CanWrite) return TrySetProperty(inputView.Original, name, value);
+                WriteVmInputProperty(inputView, name.Lexeme, value, _environment.IsStrictMode);
+                return true;
+            case SharpTSObjectNamespace objectNamespace:
+                SetOwnPropertyObjectValue(objectNamespace, name.Lexeme, value, _environment.IsStrictMode);
+                return true;
             case SharpTSProxy proxy:
                 proxy.TrapSet(name.Lexeme, value, this);
                 return true;
@@ -142,6 +163,24 @@ public partial class Interpreter
     /// <returns><c>true</c> if the element was found; otherwise <c>false</c>.</returns>
     private bool TryGetIndex(object? obj, object? index, out object? value)
     {
+        if (obj is VmInputPropertyView inputView)
+        {
+            if (!inputView.CanWrite) return TryGetIndex(inputView.Original, index, out value);
+            object key = ToPropertyKey(index);
+            if (key is not string name) return TryGetIndex(inputView.Original, key, out value);
+            value = inputView.Read(name);
+            return true;
+        }
+        if (HasArrayObjectKey(obj, index))
+        {
+            value = GetOwnPropertyObjectValue(obj!, ToPropertyKey(index));
+            return true;
+        }
+        if (ResolveGlobalIndexTarget(obj, index) is { } global)
+        {
+            value = GetPropertyValue(global.Target, global.Key);
+            return true;
+        }
         if (HasCanonicalIndexProperties(obj))
         {
             value = GetOwnPropertyObjectValue(obj!, ToPropertyKey(index));
@@ -171,6 +210,22 @@ public partial class Interpreter
     /// <returns><c>true</c> if the element was set; otherwise <c>false</c>.</returns>
     private bool TrySetIndex(object? obj, object? index, object? value)
     {
+        if (obj is VmInputPropertyView inputView)
+        {
+            if (!inputView.CanWrite) return TrySetIndex(inputView.Original, index, value);
+            PerformIndexSet(inputView, index, value);
+            return true;
+        }
+        if (HasArrayObjectKey(obj, index))
+        {
+            PerformIndexSet(obj, index, value);
+            return true;
+        }
+        if (ResolveGlobalIndexTarget(obj, index) is { } global)
+        {
+            SetGlobalIndexValue(global, value, _environment.IsStrictMode);
+            return true;
+        }
         if (HasCanonicalIndexProperties(obj))
         {
             SetOwnPropertyObjectValue(obj!, ToPropertyKey(index), value, _environment.IsStrictMode);
@@ -189,8 +244,11 @@ public partial class Interpreter
         return false;
     }
 
+    private static bool HasArrayObjectKey(object? target, object? key)
+        => target is SharpTSArray && RuntimeValue.FromBoxed(key).IsObject;
+
     private bool HasCanonicalIndexProperties(object? target)
-        => target is ISharpTSOwnPropertyObject
+        => target is ISharpTSOwnPropertyObject or SharpTSObject or SharpTSObjectNamespace
             || FunctionObjectProperties.TryGetStorage(target, this, out _);
 
     // Callers supply an already normalized string or Symbol property key.
@@ -218,6 +276,9 @@ public partial class Interpreter
         {
             case Expr.Variable variable:
                 return IncrementVariable(variable, delta, returnOld);
+
+            case Expr.GetPrivate field:
+                return IncrementPrivateField(Evaluate(field.Object), field.Name.Lexeme, delta, returnOld);
 
             case Expr.Get get:
                 return IncrementProperty(Evaluate(get.Object), get.Name, delta, returnOld);
@@ -248,6 +309,9 @@ public partial class Interpreter
             case Expr.Variable variable:
                 return IncrementVariable(variable, delta, returnOld);
 
+            case Expr.GetPrivate field:
+                return IncrementPrivateField((await EvaluateAsync(field.Object)).ToObject(), field.Name.Lexeme, delta, returnOld);
+
             case Expr.Get get:
                 return IncrementProperty((await EvaluateAsync(get.Object)).ToObject(), get.Name, delta, returnOld);
 
@@ -265,29 +329,27 @@ public partial class Interpreter
     /// <summary>Increments a variable l-value, returning the old or new value.</summary>
     private RuntimeValue IncrementVariable(Expr.Variable variable, double delta, bool returnOld)
     {
-        RuntimeValue oldValue = _environment.Get(variable.Name);
+        RuntimeValue oldValue = LookupVariableRV(variable.Name, variable);
         if (TryEvaluateDotNetIncrement(
                 oldValue,
                 delta > 0 ? TokenType.PLUS_PLUS : TokenType.MINUS_MINUS,
                 out var clrValue))
         {
-            _environment.Assign(variable.Name, clrValue);
+            AssignVariableValue(variable.Name, clrValue);
             return returnOld ? oldValue : clrValue;
         }
+        oldValue = ToNumericRV(oldValue);
         if (oldValue.IsBigInt)
         {
             var newBigInt = new SharpTSBigInt(
                 oldValue.AsBigInt().Value + (delta > 0 ? 1 : -1));
-            _environment.Assign(variable.Name, RuntimeValue.FromBigInt(newBigInt));
+            AssignVariableValue(variable.Name, RuntimeValue.FromBigInt(newBigInt));
             return returnOld ? oldValue : RuntimeValue.FromBigInt(newBigInt);
         }
 
-        // ECMA-262 13.4 (postfix)/13.5.7 (prefix): apply ToNumber to the operand's current
-        // value before adding ±1. A widened (`any`) variable can hold a non-number — a numeric
-        // string ("5"→5), undefined (→NaN), etc. — so coerce rather than asserting a boxed double.
-        double current = CoerceToNumber(oldValue);
+        double current = oldValue.AsNumber();
         double newValue = current + delta;
-        _environment.Assign(variable.Name, RuntimeValue.FromNumber(newValue));
+        AssignVariableValue(variable.Name, RuntimeValue.FromNumber(newValue));
         return RuntimeValue.FromNumber(returnOld ? current : newValue);
     }
 
@@ -340,6 +402,9 @@ public partial class Interpreter
             {
                 return returnOld ? oldValue : externalValue;
             }
+            // Conversion can run guest code or throw. Complete it once, before
+            // writing, and retain its Number/BigInt result for postfix return.
+            oldValue = ToNumericRV(oldValue);
             if (oldValue.IsBigInt)
             {
                 var newBigInt = new SharpTSBigInt(
@@ -348,10 +413,7 @@ public partial class Interpreter
                     return returnOld ? oldValue : RuntimeValue.FromBigInt(newBigInt);
             }
 
-            // ECMA-262 ToNumber on the member's current value (matches the variable path and
-            // compiled mode's ConvertToNumber): a non-numeric `any` member ("5"→5, undefined→NaN)
-            // follows JS semantics instead of throwing on a failed hard cast (#471).
-            double current = CoerceToNumber(currentObj);
+            double current = oldValue.AsNumber();
             double newValue = current + delta;
             if (TrySetProperty(obj, name, newValue))
             {
@@ -381,6 +443,7 @@ public partial class Interpreter
             {
                 return returnOld ? oldValue : externalValue;
             }
+            oldValue = ToNumericRV(oldValue);
             if (oldValue.IsBigInt)
             {
                 var newBigInt = new SharpTSBigInt(
@@ -389,10 +452,7 @@ public partial class Interpreter
                     return returnOld ? oldValue : RuntimeValue.FromBigInt(newBigInt);
             }
 
-            // ECMA-262 ToNumber on the element's current value (see IncrementProperty): a
-            // non-numeric element in an `any[]` ("7"→7, undefined→NaN) follows JS semantics
-            // instead of throwing on a failed hard cast (#471).
-            double current = CoerceToNumber(currentObj);
+            double current = oldValue.AsNumber();
             double newValue = current + delta;
             if (TrySetIndex(obj, index, newValue))
             {
@@ -537,11 +597,11 @@ public partial class Interpreter
     /// </summary>
     /// <param name="executor">The executor function that receives resolve and reject callbacks.</param>
     /// <returns>A SharpTSPromise that will be resolved or rejected based on the executor's behavior.</returns>
-    private SharpTSPromise CreatePromiseFromExecutor(object? executor)
+    private SharpTSPromise CreatePromiseFromExecutor(object? executor, SharpTSBuiltInConstructor? constructor = null)
     {
         if (executor is not ISharpTSCallable callable)
         {
-            throw new InterpreterException("Promise executor must be callable.");
+            throw new Runtime.Exceptions.ThrowException(new SharpTSTypeError("Promise executor must be callable."));
         }
 
         // The executor wiring (host resolve/reject callbacks, promise
@@ -549,7 +609,7 @@ public partial class Interpreter
         // subclass bridge's super(executor) path (#242).
         var tcs = new TaskCompletionSource<object?>();
         SharpTSPromiseClass.RunExecutor(this, callable, tcs);
-        return new SharpTSPromise(tcs.Task);
+        return new SharpTSPromise(tcs.Task) { IntrinsicConstructor = constructor ?? PromiseGlobalValue };
     }
 
     #endregion

@@ -13,6 +13,8 @@ public class ConsoleMethodHandler : ICallHandler
 
     public bool TryHandle(IEmitterContext emitter, Expr.Call call)
     {
-        return emitter.TryEmitConsoleMethod(call);
+        if (!emitter.TryEmitConsoleMethod(call)) return false;
+        emitter.Context.NativeClosedFamilies?.SelectNonConstructingCall(call, emitter.Context.IL);
+        return true;
     }
 }

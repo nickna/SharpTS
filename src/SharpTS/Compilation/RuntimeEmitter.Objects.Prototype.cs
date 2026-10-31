@@ -15,7 +15,8 @@ public partial class RuntimeEmitter
         ProxyDescriptorCallInputs ProxyDescriptor,
         ProxyOwnKeysCallInputs ProxyOwnKeys,
         EmittedSymbolRuntime Symbols,
-        Type UndefinedType
+        Type UndefinedType,
+        EmittedGuestOwnPropertyRuntime? GuestOwnProperties = null
     );
 
     private readonly record struct ObjectCreateInputs(
@@ -30,6 +31,8 @@ public partial class RuntimeEmitter
     private readonly record struct ObjectGetPrototypeOfInputs(
         EmittedClassDefinitionRuntime ClassDefinitions,
         EmittedArrayOperationsRuntime ArrayOperations,
+        Type NativeArrayType,
+        Type? NativePromiseType,
         EmittedBooleanRuntime Booleans,
         TypeBuilder BoundTSFunctionType,
         TypeBuilder BoundAnyFunctionType,
@@ -54,7 +57,10 @@ public partial class RuntimeEmitter
         EmittedRegExpRuntime RegExps,
         EmittedStringRuntime Strings,
         TypeBuilder TSFunctionType,
-        Type UndefinedType
+        Type UndefinedType,
+        MethodInfo? NativeProxyRejection,
+        EmittedGuestOwnPropertyRuntime? GuestOwnProperties = null,
+        EmittedVmRuntime? Vm = null
     );
 
     private readonly record struct ObjectSetPrototypeOfInputs(
@@ -69,11 +75,12 @@ public partial class RuntimeEmitter
         EmittedObjectStorageRuntime ObjectStorage,
         EmittedRecordStorageRuntime Records,
         EmittedSymbolRuntime Symbols,
-        Type UndefinedType
+        Type UndefinedType,
+        MethodInfo? NativeProxyRejection
     );
 
-    private readonly record struct ObjectPreventExtensionsInputs(EmittedArrayStorageRuntime ArrayStorage, MethodBuilder CreateException, EmittedDescriptorStorageRuntime DescriptorStorage, MethodBuilder GetProperty, MethodBuilder InvokeMethodUnwrapped, EmittedObjectStorageRuntime ObjectStorage, ConstructorBuilder TSTypeErrorCtor);
-    private readonly record struct ObjectIsExtensibleInputs(EmittedDescriptorStorageRuntime DescriptorStorage, MethodBuilder GetProperty, MethodBuilder InvokeMethodUnwrapped);
+    private readonly record struct ObjectPreventExtensionsInputs(EmittedArrayStorageRuntime ArrayStorage, MethodBuilder CreateException, EmittedDescriptorStorageRuntime DescriptorStorage, MethodBuilder GetProperty, MethodBuilder InvokeMethodUnwrapped, EmittedObjectStorageRuntime ObjectStorage, ConstructorBuilder TSTypeErrorCtor, MethodInfo? NativeProxyRejection, MethodBuilder GetOwnPropertyNames, MethodBuilder MaterializeOwnDescriptor);
+    private readonly record struct ObjectIsExtensibleInputs(EmittedDescriptorStorageRuntime DescriptorStorage, MethodBuilder GetProperty, MethodBuilder InvokeMethodUnwrapped, MethodInfo? NativeProxyRejection);
 
     /// <summary>
     /// Emits Object.create(proto, propertiesObject?) - creates a new object with prototype.
@@ -132,7 +139,7 @@ public partial class RuntimeEmitter
         var noPropsLabel = il.DefineLabel();
 
         // result = new Dictionary<string, object?>()
-        il.Emit(OpCodes.Newobj, _types.DictionaryStringObjectCtor);
+        NativePrototypeFieldsLookup.EmitCarrierCreate(_nativePrototypeFields, il, _types.DictionaryStringObjectCtor);
         il.Emit(OpCodes.Stloc, resultLocal);
 
         // Set prototype: $PropertyDescriptorStore.SetPrototype(result, proto)
@@ -276,7 +283,7 @@ public partial class RuntimeEmitter
                 il.Emit(OpCodes.Newobj, _types.GetConstructor(
                     typeof(Func<object, string, object?>), _types.Object, _types.IntPtr));
                 il.Emit(OpCodes.Stelem_Ref);
-            });
+            }, inputs.NativeProxyRejection);
         il.Emit(OpCodes.Unbox_Any, _types.Boolean);
         var proxyPreventExtensionsSucceededLabel = il.DefineLabel();
         il.Emit(OpCodes.Brtrue, proxyPreventExtensionsSucceededLabel);
@@ -286,6 +293,15 @@ public partial class RuntimeEmitter
         il.Emit(OpCodes.Ldarg_0);
         il.Emit(OpCodes.Ret);
         il.MarkLabel(notProxyForPreventExtensionsLabel);
+
+        var afterNativeObject = il.DefineLabel();
+        il.Emit(OpCodes.Ldarg_0);
+        il.Emit(OpCodes.Ldtoken, _types.Object);
+        il.Emit(OpCodes.Call, _types.TypeGetTypeFromHandle);
+        il.Emit(OpCodes.Bne_Un, afterNativeObject);
+        EmitNativeObjectOwnDescriptors(il, inputs.GetOwnPropertyNames,
+            inputs.MaterializeOwnDescriptor, seal: false, freeze: false);
+        il.MarkLabel(afterNativeObject);
 
         // If obj is a $Object, set its instance _isNonExtensible flag so the
         // instance-method SetProperty path honors non-extensibility for new
@@ -417,7 +433,7 @@ public partial class RuntimeEmitter
                 il.Emit(OpCodes.Newobj, _types.GetConstructor(
                     typeof(Func<object, string, object?>), _types.Object, _types.IntPtr)!);
                 il.Emit(OpCodes.Stelem_Ref);
-            });
+            }, inputs.NativeProxyRejection);
         il.Emit(OpCodes.Unbox_Any, _types.Boolean);
         il.Emit(OpCodes.Ret);
         il.MarkLabel(notProxyLabel);
@@ -485,6 +501,7 @@ public partial class RuntimeEmitter
         objectKeys.Symbols = method;
 
         var il = method.GetILGenerator();
+        EmitGuestOwnKeyQuery(il, inputs.GuestOwnProperties, symbolsOnly: true);
 
         // ECMA-262 §20.1.2.11 step 1: Let obj be ? ToObject(O). ToObject throws
         // TypeError on null/undefined.
@@ -660,7 +677,7 @@ public partial class RuntimeEmitter
                 il.Emit(OpCodes.Newobj, _types.GetConstructor(
                     typeof(Func<object, string, object?>), _types.Object, _types.IntPtr));
                 il.Emit(OpCodes.Stelem_Ref);
-            });
+            }, inputs.NativeProxyRejection);
         il.Emit(OpCodes.Ret);
         il.MarkLabel(notProxyForGpoLabel);
 
@@ -677,8 +694,24 @@ public partial class RuntimeEmitter
         il.Emit(OpCodes.Call, inputs.DescriptorStorage.GetPrototype);
         il.Emit(OpCodes.Ret);
 
-        // Also check local _prototypeStore table for backward compatibility
         il.MarkLabel(checkLocalTableLabel);
+        if (inputs.Vm is not null)
+        {
+            var ordinaryVmPrototype = il.DefineLabel();
+            il.Emit(OpCodes.Ldarg_0);
+            il.Emit(OpCodes.Call, inputs.Vm.IsMappedValue);
+            var recordedVmPrototype = il.DefineLabel();
+            il.Emit(OpCodes.Brtrue, recordedVmPrototype);
+            il.Emit(OpCodes.Ldarg_0);
+            il.Emit(OpCodes.Call, inputs.Vm.IsRelatedValue);
+            il.Emit(OpCodes.Brfalse, ordinaryVmPrototype);
+            il.MarkLabel(recordedVmPrototype);
+            il.Emit(OpCodes.Ldarg_0);
+            il.Emit(OpCodes.Call, inputs.Vm.MappedPrototype);
+            il.Emit(OpCodes.Ret);
+            il.MarkLabel(ordinaryVmPrototype);
+        }
+        // Also check local _prototypeStore table for backward compatibility
         var notAssociatedInstance = il.DefineLabel();
         il.Emit(OpCodes.Ldarg_0);
         il.Emit(OpCodes.Isinst, inputs.ClassDefinitions.InstanceInterface);
@@ -698,6 +731,13 @@ public partial class RuntimeEmitter
         var tryGetValue = _types.GetMethod(_types.ConditionalWeakTable, "TryGetValue");
         il.Emit(OpCodes.Callvirt, tryGetValue!);
         il.Emit(OpCodes.Brtrue, foundInLocalLabel);
+        if (inputs.GuestOwnProperties is { } own)
+        {
+            var legacy = EmitGuestOwnReceiverGuard(il, own, () => il.Emit(OpCodes.Ldarg_0));
+            il.Emit(OpCodes.Ldarg_0); il.Emit(OpCodes.Castclass, own.Contract);
+            il.Emit(OpCodes.Callvirt, own.InitialPrototype); il.Emit(OpCodes.Ret);
+            il.MarkLabel(legacy);
+        }
 
         // The compact JSON scalar carrier implements IHasFields for ordinary
         // object operations, but it is not a user class instance. Its default
@@ -959,6 +999,33 @@ public partial class RuntimeEmitter
         il.Emit(OpCodes.Ldtoken, _types.Object);
         il.Emit(OpCodes.Call, _types.TypeGetTypeFromHandle);
         il.Emit(OpCodes.Beq, notUserClassCtorForProtoLabel);
+        var ordinaryUserParent = il.DefineLabel();
+        il.Emit(OpCodes.Ldloc, userClassBaseTypeLocal);
+        il.Emit(OpCodes.Ldtoken, inputs.NativeArrayType);
+        il.Emit(OpCodes.Call, _types.TypeGetTypeFromHandle);
+        il.Emit(OpCodes.Bne_Un, ordinaryUserParent);
+        EmitRuntimeConstructorValue(il, _types.IListOfObject);
+        il.Emit(OpCodes.Ret);
+        il.MarkLabel(ordinaryUserParent);
+        if (inputs.NativePromiseType != null)
+        {
+            var ordinaryPromiseParent = il.DefineLabel();
+            il.Emit(OpCodes.Ldloc, userClassBaseTypeLocal);
+            il.Emit(OpCodes.Ldtoken, inputs.NativePromiseType);
+            il.Emit(OpCodes.Call, _types.TypeGetTypeFromHandle);
+            il.Emit(OpCodes.Bne_Un, ordinaryPromiseParent);
+            EmitRuntimeConstructorValue(il, _types.TaskOfObject);
+            il.Emit(OpCodes.Ret);
+            il.MarkLabel(ordinaryPromiseParent);
+        }
+        var canonicalUserParent = il.DefineLabel();
+        il.Emit(OpCodes.Ldloc, userClassBaseTypeLocal);
+        il.Emit(OpCodes.Callvirt, _types.GetProperty(_types.Type, "IsConstructedGenericType").GetGetMethod()!);
+        il.Emit(OpCodes.Brfalse, canonicalUserParent);
+        il.Emit(OpCodes.Ldloc, userClassBaseTypeLocal);
+        NativeOwnerClosure.EmitNormalization(_nativeOwnerClosure, _types, il, method, NativeOwnerNormalization.ConstructorBase);
+        il.Emit(OpCodes.Ret);
+        il.MarkLabel(canonicalUserParent);
         il.Emit(OpCodes.Ldloc, userClassBaseTypeLocal);
         il.Emit(OpCodes.Ret);
         il.MarkLabel(notUserClassCtorForProtoLabel);
@@ -1291,7 +1358,7 @@ public partial class RuntimeEmitter
                 il.Emit(OpCodes.Newobj, _types.GetConstructor(
                     typeof(Func<object, string, object?>), _types.Object, _types.IntPtr));
                 il.Emit(OpCodes.Stelem_Ref);
-            });
+            }, inputs.NativeProxyRejection);
         il.Emit(OpCodes.Unbox_Any, _types.Boolean);
         var proxySetSucceeded = il.DefineLabel();
         il.Emit(OpCodes.Brtrue, proxySetSucceeded);
@@ -1330,36 +1397,6 @@ public partial class RuntimeEmitter
         var notExtensibleLabel = il.DefineLabel();
         il.Emit(OpCodes.Ldarg_0);
         il.Emit(OpCodes.Brfalse, nullCheckDoneLabel);
-
-        // Check if object is a class instance (IHasFields but not $Object) - throw TypeError
-        var notClassInstanceLabel = il.DefineLabel();
-        il.Emit(OpCodes.Ldarg_0);
-        il.Emit(OpCodes.Isinst, inputs.IHasFieldsInterface);
-        il.Emit(OpCodes.Brfalse, notClassInstanceLabel);
-        if (inputs.Records.Scalars is not null)
-        {
-            il.Emit(OpCodes.Ldarg_0);
-            il.Emit(OpCodes.Isinst, inputs.Records.MarkerInterface);
-            il.Emit(OpCodes.Brtrue, notClassInstanceLabel);
-        }
-        il.Emit(OpCodes.Ldarg_0);
-        il.Emit(OpCodes.Isinst, inputs.ObjectStorage.Type);
-        il.Emit(OpCodes.Brtrue, notClassInstanceLabel);
-        // Array subclass instances retain their exotic storage while their
-        // ordinary prototype can change.
-        il.Emit(OpCodes.Ldarg_0);
-        il.Emit(OpCodes.Isinst, inputs.ArrayStorage.Type);
-        il.Emit(OpCodes.Brtrue, notClassInstanceLabel);
-        // A declaration's stable prototype uses the same CLR carrier as its
-        // instances, but has an ordinary mutable internal prototype of its own.
-        il.Emit(OpCodes.Ldarg_0);
-        il.Emit(OpCodes.Callvirt, _types.GetMethodNoParams(_types.Object, "GetType"));
-        il.Emit(OpCodes.Call, inputs.ClassPrototypes.Get);
-        il.Emit(OpCodes.Ldarg_0);
-        il.Emit(OpCodes.Beq, notClassInstanceLabel);
-        // It's a class instance - throw TypeError
-        GuestErrorEmitter.ThrowError(il, inputs.Errors.CreateException, inputs.Errors.TypeErrorConstructor, "Cannot set prototype of class instance");
-        il.MarkLabel(notClassInstanceLabel);
 
         // Check if object is extensible - if not, throw TypeError
         il.Emit(OpCodes.Ldarg_0);

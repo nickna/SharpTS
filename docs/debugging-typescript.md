@@ -3,7 +3,9 @@
 `sharpts --compile app.ts -g` (or `--debug`) emits `app.dll` plus a portable `app.pdb` whose
 documents and sequence points refer to the original `.ts` files. Any debugger that understands
 portable PDBs — the C# extension for VS Code, Rider, Visual Studio, `netcoredbg` — can then bind
-breakpoints in TypeScript source and step through it.
+breakpoints in TypeScript source and step through it. This describes managed DLL output;
+[NativeAOT guests](#nativeaot-guest-debugging-windows-x64) use a native debugger and have a
+separate measured contract.
 
 ```bash
 sharpts --compile app.ts -g       # app.dll + app.pdb
@@ -166,3 +168,56 @@ function, a generator, and an `import`.
    while inside and outer values or unavailable names after leaving the scope.
 8. Break in an imported module's function and confirm the debugger opens that file, not the entry file.
 9. Rebuild without `-g`, confirm no `.pdb` is produced and the program still runs.
+
+## NativeAOT guest debugging (Windows x64)
+
+The experimental native guest has a verified Windows x64 source-debugging path through the
+Microsoft C++ extension's `cppvsdbg` engine. Export the guest with its original TypeScript
+portable PDB, then publish a Debug native executable with the supported SDK pipeline:
+
+```powershell
+sharpts --compile main.ts --ref-asm --debug --verify --emit-native-project out/native-project --runtime win-x64
+dotnet publish out/native-project/NativeApp.csproj -c Debug -r win-x64 -o out/native
+```
+
+Keep the original `.ts` files and the matching native executable/PDB pair. With the official
+`ms-vscode.cpptools` extension installed, use a native launch configuration:
+
+```json
+{
+  "version": "0.2.0",
+  "configurations": [{
+    "name": "SharpTS native guest",
+    "type": "cppvsdbg",
+    "request": "launch",
+    "program": "${workspaceFolder}/out/native/NativeApp.exe",
+    "cwd": "${workspaceFolder}",
+    "args": ["40"],
+    "console": "internalConsole",
+    "requireExactSource": true,
+    "symbolSearchPath": "${workspaceFolder}/out/native"
+  }]
+}
+```
+
+The [real native debugger acceptance](../scripts/editor-smoke/native-guest-debugger/README.md)
+verified original entry and imported helper TypeScript breakpoints, TypeScript caller frames,
+and actual source-line Step Over in both files. It used VS Code 1.143.1, C++ extension 1.34.4
+and .NET SDK 10.0.403; the [verification record](../scripts/editor-smoke/native-guest-debugger/last-verified.json)
+retains the exact image/symbol hashes and stops. Strict publish and IL verification passed;
+the same native image printed `native-debug=42` with no `dotnet` on PATH.
+
+Step In at the imported call first entered NativeAOT's `RhpNewPtrArrayFast` allocation helper
+in `AllocFast.asm`, with the calling TypeScript line still in the stack. Continuing hit the
+helper's TypeScript breakpoint; Step Over then reached its return line. Runtime, reflection
+and generated wrapper frames remain visible. Native breakpoints can bind several instruction
+addresses on one source line and may stop there again while stepping; disable a hit breakpoint
+when stepping past it. There is no measured TypeScript-only Step In or managed Just My Code
+contract. The observed helper locals and Watch values were native doubles; managed hoisted-local
+projection, Release optimization, suspending functions and other platforms remain unverified
+by this fixture. The SharpTS editor command above still launches managed `coreclr` output.
+
+A guest portable PDB alone does not establish native debugging support. The SDK transforms
+that information into platform native symbols; use the native executable and its matching
+symbols with a native debugger. See [.NET NativeAOT diagnostics](https://learn.microsoft.com/en-us/dotnet/core/deploying/native-aot/diagnostics)
+and the [C++ launch configuration reference](https://code.visualstudio.com/docs/cpp/launch-json-reference).

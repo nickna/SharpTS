@@ -131,7 +131,7 @@ public partial class RuntimeEmitter
         var valueTaskAwaiterType = _types.ValueTaskAwaiterOfBool;
 
         // --- State machine type ---
-        var smType = moduleBuilder.DefineType(
+        var smType = EmitTypeDefinitions.DefineType(moduleBuilder,
             "$AsyncGeneratorBuildResult_StateMachine",
             TypeAttributes.Public | TypeAttributes.Sealed | TypeAttributes.BeforeFieldInit,
             typeof(ValueType),
@@ -303,7 +303,7 @@ public partial class RuntimeEmitter
         var taskAwaiterType = typeof(TaskAwaiter<object>);
         var valueTaskAwaiterType = typeof(ValueTaskAwaiter<bool>);
 
-        var typeBuilder = moduleBuilder.DefineType(
+        var typeBuilder = EmitTypeDefinitions.DefineType(moduleBuilder,
             "$AsyncGeneratorAwaitContinue_StateMachine",
             TypeAttributes.Public | TypeAttributes.Sealed | TypeAttributes.BeforeFieldInit,
             typeof(ValueType),

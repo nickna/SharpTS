@@ -9,7 +9,8 @@ namespace SharpTS.Tests.CompilerTests;
 public sealed class EmittedReflectedMethodRuntimeTests
 {
     private const BindingFlags Members = BindingFlags.Public | BindingFlags.NonPublic | BindingFlags.Instance | BindingFlags.Static;
-    private static PropertyInfo[] Properties => typeof(EmittedReflectedMethodRuntime).GetProperties().Where(p => typeof(MemberInfo).IsAssignableFrom(p.PropertyType)).ToArray();
+    private static PropertyInfo[] Properties => typeof(EmittedReflectedMethodRuntime).GetProperties()
+        .Where(p => typeof(MemberInfo).IsAssignableFrom(p.PropertyType) && p.Name != nameof(EmittedReflectedMethodRuntime.NativeProxyRejection)).ToArray();
     public static IEnumerable<object[]> Declarations => Properties.Select(p => new object[] { p.Name });
 
     [Theory]

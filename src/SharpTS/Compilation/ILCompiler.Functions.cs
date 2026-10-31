@@ -190,6 +190,7 @@ public partial class ILCompiler
         {
             string[] typeParamNames = funcStmt.TypeParams!.Select(tp => tp.Name.Lexeme).ToArray();
             genericParams = methodBuilder.DefineGenericParameters(typeParamNames);
+            _nativeGenericMethodNormalization?.RecordDefinition(methodBuilder, genericParams);
 
             // Apply constraints
             for (int i = 0; i < funcStmt.TypeParams!.Count; i++)
@@ -207,6 +208,17 @@ public partial class ILCompiler
         }
 
         _functions.GenericParameters.Declare(methodBuilder, genericParams);
+
+        if (_nativeAotProjectOutput && isGeneric && !FunctionGenericParameterRegistry.ContainsUnboundType(returnType) &&
+            paramTypes.All(type => !FunctionGenericParameterRegistry.ContainsUnboundType(type)))
+        {
+            // Match the callable value's existing erased semantics. These are
+            // declaration-time arguments, never the first invocation's T.
+            Type[] canonicalArguments = funcStmt.TypeParams!.Select(parameter => parameter.Constraint is { } constraint
+                ? ResolveConstraintType(constraint) : _types.Object).ToArray();
+            if (canonicalArguments.All(type => !FunctionGenericParameterRegistry.ContainsUnboundType(type)))
+                _functions.GenericParameters.DeclareErasedValueInvocationTarget(methodBuilder, canonicalArguments);
+        }
 
         _functions.Builders[qualifiedFunctionName] = methodBuilder;
 
@@ -273,7 +285,8 @@ public partial class ILCompiler
                         // floating-point argument shuffle on Windows x64.
                         var entry = _programType.DefineMethod(
                             $"{qualifiedFunctionName}$numericRest4<Entry>",
-                            MethodAttributes.Private | MethodAttributes.Static | MethodAttributes.HideBySig,
+                            (_nativeNumericRest4Binding is null ? MethodAttributes.Private : MethodAttributes.Assembly)
+                                | MethodAttributes.Static | MethodAttributes.HideBySig,
                             _types.Double,
                             [_types.Object, _types.Double, _types.Double, _types.Double, _types.Double]);
                         MarkCompilerGenerated(entry);
@@ -283,8 +296,12 @@ public partial class ILCompiler
                             entryIL.Emit(OpCodes.Ldarg, argument);
                         entryIL.Emit(OpCodes.Call, companion);
                         entryIL.Emit(OpCodes.Ret);
-                        methodBuilder.SetCustomAttribute(_runtime!.FunctionAttributes.NumericRest4Ctor,
-                            CustomAttributeEncoder.Encode(_runtime.FunctionAttributes.NumericRest4Ctor, entry.Name));
+                        _functionEmissionPolicy.RequireNumericRest4Producer();
+                        if (_nativeNumericRest4Binding is { } nativeBinding)
+                            nativeBinding.RegisterProducer(methodBuilder, entry, _runtime!.FunctionAttributes.NumericRest4Ctor);
+                        else
+                            methodBuilder.SetCustomAttribute(_runtime!.FunctionAttributes.NumericRest4Ctor,
+                                CustomAttributeEncoder.Encode(_runtime.FunctionAttributes.NumericRest4Ctor, entry.Name));
                     }
                     companions[variantIndex] = companion;
                     foreach (var call in variant.Calls)
@@ -549,7 +566,7 @@ public partial class ILCompiler
         ApplyCommonJsModuleAccess(ctx);
         ctx.UnionGenerator = _unionGenerator;
         // Check for function-level "use strict" directive
-        ctx.IsStrictMode = _isStrictMode || BodyDeclaresUseStrict(funcStmt.Body);
+        ctx.IsStrictMode = IsStrictFunction(funcStmt);
         // Entry-point display class for captured top-level variables. TopLevelStaticVars uses
         // the pre-computed per-function map rather than the module-wide default.
         ApplyCapturedTopLevelVariableAccess(ctx);
@@ -730,7 +747,7 @@ public partial class ILCompiler
             ctx.AsyncArrowBuilders = _async.ArrowBuilders.Count > 0 ? _async.ArrowBuilders : null;
             ApplyCommonJsModuleAccess(ctx);
             ctx.UnionGenerator = _unionGenerator;
-            ctx.IsStrictMode = _isStrictMode || BodyDeclaresUseStrict(function.Body);
+            ctx.IsStrictMode = IsStrictFunction(function);
             ApplyCapturedTopLevelVariableAccess(ctx);
             ctx.TopLevelStaticVars = topLevelVars;
             ctx.ArrowEntryPointDCFields = _closures.ArrowEntryPointDCFields.Count > 0
@@ -1085,6 +1102,8 @@ public partial class ILCompiler
             il.Emit(OpCodes.Ldloc, argsLocal);
             il.Emit(OpCodes.Callvirt, ctx.Types.GetPropertyGetter(ctx.Types.ListOfObject, "Count"));
             il.Emit(OpCodes.Stfld, argsLengthField);
+            il.Emit(OpCodes.Ldloc, argsLocal);
+            il.Emit(OpCodes.Call, ctx.Runtime.Arguments.Initialize);
             il.MarkLabel(skipLengthSetLabel);
         }
 
@@ -1317,6 +1336,8 @@ public partial class ILCompiler
 
     private void EmitTerminateOwnedChildProcesses(ILGenerator il)
     {
+        if (_runtime.Vm is not null)
+            il.Emit(OpCodes.Call, _runtime.RequireVm().DisposeExecutionHost);
         if (_runtime.ChildProcess is not null)
             il.Emit(OpCodes.Call, _runtime.RequireChildProcess().TerminateOwned);
     }
@@ -1494,7 +1515,7 @@ public partial class ILCompiler
         {
             switch (statement)
             {
-                case Stmt.Var { IsVar: true } variable:
+                case Stmt.Var { IsVar: true, IsDeclare: false } variable:
                     yield return variable;
                     break;
                 case Stmt.Sequence sequence:
@@ -1712,8 +1733,9 @@ public partial class ILCompiler
         {
             if (returnsExitCode)
             {
-                // Unbox double, convert to int, call Environment.Exit
-                il.Emit(OpCodes.Unbox_Any, _types.Double);
+                // Numeric user methods may use a native double return slot.
+                if (userMainMethod.ReturnType != _types.Double)
+                    il.Emit(OpCodes.Unbox_Any, _types.Double);
                 il.Emit(OpCodes.Conv_I4);
                 EmitTerminateOwnedChildProcesses(il);
                 il.Emit(OpCodes.Call, _types.GetMethod(_types.Environment, "Exit", _types.Int32));
@@ -1779,7 +1801,7 @@ public partial class ILCompiler
             var il = overload.GetILGenerator();
 
             // Create a minimal context just for emitting default value expressions
-            var ctx = CreateOverloadDefaultsContext(il, _isStrictMode || BodyDeclaresUseStrict(funcStmt.Body));
+            var ctx = CreateOverloadDefaultsContext(il, IsStrictFunction(funcStmt));
             var emitter = new ILEmitter(ctx);
 
             // Make the provided parameters resolvable so a default value that references an
@@ -1822,8 +1844,11 @@ public partial class ILCompiler
     internal void MarkPadsUndefined(MethodBuilder method)
     {
         if (_runtime?.FunctionAttributes.PadUndefinedCtor != null)
+        {
             method.SetCustomAttribute(
                 _runtime.FunctionAttributes.PadUndefinedCtor, CustomAttributeEncoder.EmptyBlob);
+            _nativeGenericMethodNormalization?.RecordSourceMarker(method, NativeGenericMethodNormalization.SourceMarker.PadUndefined);
+        }
     }
 
     /// <summary>
@@ -1849,15 +1874,19 @@ public partial class ILCompiler
         method.SetCustomAttribute(
             _runtime.FunctionAttributes.FunctionLengthCtor,
             CustomAttributeEncoder.Encode(_runtime.FunctionAttributes.FunctionLengthCtor, length));
+        _nativeGenericMethodNormalization?.RecordSourceMarker(method, NativeGenericMethodNormalization.SourceMarker.FunctionLength);
     }
 
     internal void MarkFunctionName(MethodBuilder method, string name)
     {
         _functions.Names[method] = name;
         if (_runtime?.FunctionAttributes.FunctionNameCtor != null)
+        {
             method.SetCustomAttribute(
                 _runtime.FunctionAttributes.FunctionNameCtor,
                 CustomAttributeEncoder.Encode(_runtime.FunctionAttributes.FunctionNameCtor, name));
+            _nativeGenericMethodNormalization?.RecordSourceMarker(method, NativeGenericMethodNormalization.SourceMarker.FunctionName);
+        }
     }
 
     internal void MarkNonConstructible(MethodBuilder method)

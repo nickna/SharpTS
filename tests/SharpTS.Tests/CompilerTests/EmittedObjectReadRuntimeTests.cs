@@ -123,7 +123,12 @@ public sealed class EmittedObjectReadRuntimeTests
         var probe = runtime.RuntimeClass.Type.DefineNestedType("SuppliedRead", TypeAttributes.NestedPublic);
         var propertyOwner = ObjectReadTestSupport.EmitProperty(emitter, probe, runtime, inputs);
         AssertFrozen(propertyOwner);
-        var indexOwner = new EmittedObjectReadRuntime { Property = propertyOwner.Property };
+        var indexOwner = new EmittedObjectReadRuntime
+        {
+            Property = propertyOwner.Property,
+            Index = probe.DefineMethod("GetIndex", MethodAttributes.Public | MethodAttributes.Static,
+                typeof(object), [typeof(object), typeof(object)])
+        };
         var indexHelper = typeof(RuntimeEmitter).GetMethod("EmitGetIndex", Members)!;
         indexHelper.Invoke(emitter, [probe, indexOwner, ObjectReadTestSupport.MakeInputs(indexHelper.GetParameters()[2].ParameterType, runtime, inputs)]);
         probe.CreateType(); var loaded = SaveVerifyLoad(builder); var saved = loaded.GetType(probe.FullName!)!;
@@ -178,7 +183,7 @@ public sealed class EmittedObjectReadRuntimeTests
         var probe = module.DefineType("SuppliedList", TypeAttributes.Public); var owner = new EmittedObjectReadRuntime();
         var helper = typeof(RuntimeEmitter).GetMethod("EmitGetListProperty", Members)!;
         var inputs = ObjectReadTestSupport.MakeInputs(helper.GetParameters()[2].ParameterType, runtime,
-            new Dictionary<string, object?> { ["ArrayPrototypeMutation"] = (supplied & 1) != 0, ["DynamicPropertyDescriptors"] = (supplied & 2) != 0 });
+            new Dictionary<string, object?> { ["ArrayPrototypeMutation"] = (supplied & 1) != 0, ["DynamicPropertyDescriptors"] = (supplied & 2) != 0, ["ExposeArrayMethodValues"] = false });
         helper.Invoke(emitter, [probe, owner, inputs]); probe.CreateType(); var loaded = SaveVerifyLoad(builder);
         var method = loaded.GetType("SuppliedList")!.GetMethod("GetListProperty")!;
         Assert.Equal(supplied == 0, ReadOperands(method).Any(p => p.OpCode == OpCodes.Newobj && p.Member.DeclaringType!.Name == runtime.ArrayOperations.BoundMethodCtor.DeclaringType!.Name));

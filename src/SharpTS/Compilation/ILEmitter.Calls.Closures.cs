@@ -128,7 +128,9 @@ public partial class ILEmitter
                 else if (LexicalEnvironmentCellAccess.TryEmitCaptureReference(IL, _ctx, af, captureName)) { }
                 else if (arrowBuilder.StandaloneLiveCaptureFields.TryGetValue(captureName, out var liveField))
                 {
-                    StandaloneAsyncCaptureEmitter.EmitReference(IL, _ctx, liveField, captureName);
+                    if (!StandaloneAsyncCaptureEmitter.TryEmitOwnerReference(IL, _ctx, liveField.DeclaringType!, captureName)
+                        && !TryEmitClassDefinitionEnvironment(liveField.DeclaringType!))
+                        StandaloneAsyncCaptureEmitter.EmitReference(IL, _ctx, liveField, captureName);
                 }
                 else if (captureName == "this")
                 {
@@ -171,7 +173,8 @@ public partial class ILEmitter
         IL.Emit(OpCodes.Castclass, _ctx.Types.MethodInfo);
 
         // Call $TSFunction constructor
-        IL.Emit(OpCodes.Newobj, _ctx.Runtime!.FunctionConstruction.Constructor);
+        NativeSourceFunctionEmission.EmitConstructor(IL, _ctx.Types, _ctx.Runtime!, method,
+            generics: _ctx.FunctionGenericParameters);
     }
 
     /// <summary>
@@ -359,7 +362,7 @@ public partial class ILEmitter
                 if (!_ctx.LexicalCaptureWriteBacks.TryGetValue(
                         capturedVar, out var lexicalWriteBacks))
                     _ctx.LexicalCaptureWriteBacks[capturedVar] = lexicalWriteBacks = [];
-                lexicalWriteBacks.Add((lexicalDcInstance, field));
+                lexicalWriteBacks.Add((_ctx.Locals.GetLocal(capturedVar)!, lexicalDcInstance, field));
             }
 
             // Self-referential capture (issue #421): this arrow captures the
@@ -623,7 +626,8 @@ public partial class ILEmitter
         IL.Emit(OpCodes.Ldtoken, displayClass);
         IL.Emit(OpCodes.Call, _ctx.Types.MethodBaseGetMethodFromHandleWithType);
         IL.Emit(OpCodes.Castclass, _ctx.Types.MethodInfo);
-        IL.Emit(OpCodes.Newobj, _ctx.Runtime!.FunctionConstruction.Constructor);
+        NativeSourceFunctionEmission.EmitConstructor(IL, _ctx.Types, _ctx.Runtime!, method,
+            actualOwner: displayClass, generics: _ctx.FunctionGenericParameters);
 
         if (selfRefField != null && displayClassLocal != null)
         {

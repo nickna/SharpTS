@@ -71,6 +71,13 @@ public partial class TypeChecker
         try
         {
             ValidateAliasBodyNode(body, inferLegal: false, infersOutOfScope: null);
+            if (ShouldCaptureEditorFacts)
+            {
+                // A lazy alias is not an evaluated declaration body. The source-query
+                // index substitutes an expansion only if checking naturally requests it.
+                EditorFacts.RecordDeclaration(CurrentSourceDocument, stmt, stmt.Name,
+                    _environment.GetTypeSymbol(stmt.Name.Lexeme), BindingNamespace.Type, null);
+            }
         }
         finally
         {

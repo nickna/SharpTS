@@ -378,7 +378,9 @@ public partial class GeneratorMoveNextEmitter
     /// are emitted at the top level (outside any protected region) so their resume labels are
     /// reachable from the state-dispatch switch and their `ret`/`br` are legal.
     /// </summary>
-    private void EmitTryCatchWithYields(Stmt.TryCatch t, Stmt.TryCatch lexicalDeclaration)
+    private void EmitTryCatchWithYields(Stmt.TryCatch t, Stmt.TryCatch lexicalDeclaration,
+        Action<LocalBuilder, LocalBuilder, Label>? emitTryBody = null,
+        Action<LocalBuilder>? emitFinally = null)
     {
         var caughtExceptionLocal = _il.DeclareLocal(typeof(object));
         // Whether the try body raised an exception, tracked separately from caughtExceptionLocal's
@@ -448,7 +450,10 @@ public partial class GeneratorMoveNextEmitter
         var previousTryBody = _tryBodyContext;
         _inHandlerBody = false;
         _tryBodyContext = (afterTryBodyLabel, caughtExceptionLocal, exceptionPresentLocal, _exitScopes.Count);
-        EmitScopedTryBodyWithYields(t.TryBlock, caughtExceptionLocal, exceptionPresentLocal, afterTryBodyLabel);
+        if (emitTryBody is null)
+            EmitScopedTryBodyWithYields(t.TryBlock, caughtExceptionLocal, exceptionPresentLocal, afterTryBodyLabel);
+        else
+            emitTryBody(caughtExceptionLocal, exceptionPresentLocal, afterTryBodyLabel);
         _tryBodyContext = previousTryBody;
         _inHandlerBody = previousInHandler;
 
@@ -509,7 +514,10 @@ public partial class GeneratorMoveNextEmitter
             }
 
             _inHandlerBody = true;
-            EmitHandlerBodyWithCapture(t.FinallyBlock);
+            if (emitFinally is null)
+                EmitHandlerBodyWithCapture(t.FinallyBlock);
+            else
+                EmitHandlerBodyWithCaptureCore([], () => emitFinally(exceptionPresentLocal));
             _inHandlerBody = previousInHandler;
 
             // After the finally, dispatch any pending non-local exit that routed through here. (A real
@@ -594,6 +602,13 @@ public partial class GeneratorMoveNextEmitter
     /// that records any thrown exception into <paramref name="caughtExceptionLocal"/>.
     /// </summary>
     private void EmitSyncSegmentInTry(List<Stmt> statements, LocalBuilder caughtExceptionLocal, LocalBuilder exceptionPresentLocal)
+        => EmitSyncSegmentInTry(() =>
+        {
+            foreach (var stmt in statements)
+                EmitStatement(stmt);
+        }, caughtExceptionLocal, exceptionPresentLocal);
+
+    private void EmitSyncSegmentInTry(Action emitBody, LocalBuilder caughtExceptionLocal, LocalBuilder exceptionPresentLocal)
     {
         // An earlier segment may already have thrown — don't run this one. Gate on the present flag so
         // a prior thrown null/undefined still suppresses this segment (#619).
@@ -604,8 +619,7 @@ public partial class GeneratorMoveNextEmitter
         // A real IL protected region is open across the segment body (see _protectedRegionDepth).
         _protectedRegionDepth++;
         _il.BeginExceptionBlock();
-        foreach (var stmt in statements)
-            EmitStatement(stmt);
+        emitBody();
 
         _il.BeginCatchBlock(typeof(Exception));
         _il.Emit(OpCodes.Call, _ctx!.Runtime!.Errors.WrapException);
@@ -643,7 +657,7 @@ public partial class GeneratorMoveNextEmitter
     private void EmitHandlerBodyWithCapture(List<Stmt> body)
         => WithGeneratorLexicalScope(body, () => EmitHandlerBodyWithCaptureCore(body));
 
-    private void EmitHandlerBodyWithCaptureCore(List<Stmt> body)
+    private void EmitHandlerBodyWithCaptureCore(List<Stmt> body, Action? emitBody = null)
     {
         var handlerCaught = _il.DeclareLocal(typeof(object));
         var handlerPresent = _il.DeclareLocal(typeof(bool));
@@ -680,6 +694,9 @@ public partial class GeneratorMoveNextEmitter
 
         if (syncSegment.Count > 0)
             EmitSyncSegmentInTry(syncSegment, handlerCaught, handlerPresent);
+
+        if (emitBody is not null)
+            EmitSyncSegmentInTry(emitBody, handlerCaught, handlerPresent);
 
         _il.MarkLabel(afterHandlerLabel);
 

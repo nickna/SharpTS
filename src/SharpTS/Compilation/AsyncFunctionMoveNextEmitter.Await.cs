@@ -131,16 +131,23 @@ public abstract partial class AsyncFunctionMoveNextEmitter
         GuestErrorEmitter.ThrowTypeError(IL, Ctx.Runtime, "Chaining cycle detected for promise");
         IL.MarkLabel(distinct);
 
+        // The builder can replace its initial Task while boxing at the first await.
+        // Queued thenable jobs share this cell, published after that boxing below.
+        var rootType = EmitGenerics.MakeGenericType(Types.StrongBoxOpen, Types.TaskOfObject);
+        var publicRoot = IL.DeclareLocal(rootType);
+        IL.Emit(OpCodes.Newobj, Types.GetConstructor(rootType, Type.EmptyTypes));
+        IL.Emit(OpCodes.Stloc, publicRoot);
         IL.Emit(OpCodes.Ldloc, value);
-        IL.Emit(OpCodes.Call, Ctx.Runtime.RequirePromise().ResolveValueMethod);
-        EmitAwaitTaskOnStack(stateNumber);
+        IL.Emit(OpCodes.Ldloc, publicRoot);
+        IL.Emit(OpCodes.Call, Ctx.Runtime.RequirePromise().ResolveValueWithRootMethod);
+        EmitAwaitTaskOnStack(stateNumber, publicRoot);
         IL.Emit(OpCodes.Stloc, value);
         IL.MarkLabel(completed);
     }
 
     // Shared suspension machinery for an already-normalized Task<object>. Completion resolution
     // and explicit await have different normalization policies but identical resume ownership.
-    private void EmitAwaitTaskOnStack(int stateNumber)
+    private void EmitAwaitTaskOnStack(int stateNumber, LocalBuilder? publicRoot = null)
     {
         var continueLabel = IL.DefineLabel();
         var awaiterField = AwaiterFieldForState(stateNumber);
@@ -184,6 +191,17 @@ public abstract partial class AsyncFunctionMoveNextEmitter
         IL.Emit(OpCodes.Ldflda, awaiterField);
         IL.Emit(OpCodes.Ldarg_0);
         IL.Emit(OpCodes.Call, BuilderAwaitUnsafeOnCompletedMethod());
+
+        if (publicRoot is not null)
+        {
+            // Promise jobs only enqueue work; none can observe this cell until the
+            // current guest turn returns, after the final public Task is published.
+            IL.Emit(OpCodes.Ldloc, publicRoot);
+            IL.Emit(OpCodes.Ldarg_0);
+            IL.Emit(OpCodes.Ldflda, AsyncBuilderField);
+            IL.Emit(OpCodes.Call, AsyncBuilder.GetBuilderTaskGetter());
+            IL.Emit(OpCodes.Stfld, Types.GetField(publicRoot.LocalType, "Value"));
+        }
 
         IL.Emit(OpCodes.Leave, AwaitExitLabel);
 

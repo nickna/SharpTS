@@ -33,7 +33,7 @@ public partial class ILCompiler
             var ctx = CreateModuleMemberContext(method.GetILGenerator(), method);
             ctx.IsStrictMode = true; ctx.CurrentClassName = owner.FullName; ctx.CurrentClassBuilder = owner;
             ctx.EmittingTypeBuilder = type; ctx.IsInstanceMethod = !accessor.IsStatic;
-            ctx.IsStaticSuperContext = accessor.IsStatic; ctx.HasGuestReceiver = true; ctx.GuestThisVariableName = "__this";
+            ctx.IsStaticSuperContext = accessor.IsStatic; ctx.HasGuestReceiver = true; ctx.GuestThisVariableName = CompilationContext.ThisParameterName;
             var genericParameters = _classes.GenericParameters.Require(owner);
             var canonicalArguments = owner.IsGenericTypeDefinition
                 ? CanonicalGenericClassOwner(owner).GetGenericArguments() : Type.EmptyTypes;
@@ -58,17 +58,7 @@ public partial class ILCompiler
         // Evaluated class expressions install descriptors on their owned definition/prototype.
         if (_classExprs.Builders.Values.Any(builder => ReferenceEquals(builder, owner)) || accessor.IsAbstract) return;
         var registrationDone = il.DefineLabel();
-        if (accessor.IsStatic && owner.IsGenericTypeDefinition && descriptorOwner == null)
-        {
-            // Constructor reflection uses the open owner token. Only its canonical
-            // erased initializer installs those slots; typed instance initialization
-            // must not resurrect deleted or redefined JavaScript properties.
-            il.Emit(OpCodes.Ldtoken, EmitGenerics.MakeGenericType(owner, owner.GetGenericArguments()));
-            il.Emit(OpCodes.Call, _types.TypeGetTypeFromHandle);
-            il.Emit(OpCodes.Ldtoken, CanonicalGenericClassOwner(owner));
-            il.Emit(OpCodes.Call, _types.TypeGetTypeFromHandle);
-            il.Emit(OpCodes.Bne_Un, registrationDone);
-        }
+        EmitCanonicalClassMemberRegistrationGuard(il, owner, descriptorOwner, registrationDone);
         var storage = _runtime.DescriptorStorage;
         var receiver = il.DeclareLocal(_types.Object);
         Type self = accessor.IsStatic ? owner : descriptorOwner ?? (owner.IsGenericTypeDefinition
@@ -109,14 +99,14 @@ public partial class ILCompiler
         var metadata = il.DeclareLocal(_runtime.FunctionValues.Type);
         il.Emit(OpCodes.Ldloc, target);
         EmitMethodInfoLiteral(il, adapter.Method, adapter.Type);
-        il.Emit(OpCodes.Newobj, _runtime.FunctionConstruction.Constructor);
+        NativeSourceFunctionEmission.EmitConstructor(il, _types, _runtime, adapter.Method, actualOwner: adapter.Type);
         il.Emit(OpCodes.Stloc, metadata);
         il.Emit(OpCodes.Ldloc, target);
         EmitMethodInfoLiteral(il, adapter.Method, adapter.Type);
         EmitAccessorFunctionName(il, key, accessor.Kind.Type == TokenType.GET);
         il.Emit(OpCodes.Ldloc, metadata);
         il.Emit(OpCodes.Callvirt, _runtime.FunctionValues.LengthGetter);
-        il.Emit(OpCodes.Newobj, _runtime.FunctionConstruction.CachedConstructor);
+        NativeSourceFunctionEmission.EmitCachedConstructor(il, _types, _runtime, adapter.Method, actualOwner: adapter.Type);
         il.Emit(OpCodes.Stsfld, adapter.Value);
         il.MarkLabel(haveValue);
         il.Emit(OpCodes.Ldloc, descriptor);

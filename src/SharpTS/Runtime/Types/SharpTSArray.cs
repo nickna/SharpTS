@@ -81,6 +81,9 @@ public class SharpTSArray : ITypeCategorized, IReadOnlyList<object?>
     private int _numericCount;
     private Dictionary<uint, object?>? _sparse;
     private object? _explicitPrototype;
+    // The actual allocation realm's prototype is data, independent of the
+    // evaluator that later reads or receives this array as a VM input.
+    internal SharpTSArrayPrototype? IntrinsicPrototype { get; init; }
 
     /// <summary>
     /// Whether Object.setPrototypeOf has replaced this array's intrinsic

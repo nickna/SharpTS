@@ -32,7 +32,11 @@ public partial class RuntimeEmitter
         EmittedSymbolRuntime Symbols,
         TypeBuilder TSFunctionType,
         EmittedTypedArrayRuntime TypedArrays,
-        Type UndefinedType
+        MethodInfo ToPropertyKey,
+        Type UndefinedType,
+        MethodInfo? NativeProxyRejection,
+        EmittedGuestOwnPropertyRuntime? GuestOwnProperties = null,
+        MethodInfo? GuestOwnSetProperty = null
     );
 
     private readonly record struct GetIndexInputs(
@@ -68,7 +72,11 @@ public partial class RuntimeEmitter
         Type UndefinedType,
         EmittedBooleanRuntime Booleans,
         EmittedNumberRuntime Numbers,
-        EmittedBigIntRuntime BigInt
+        EmittedBigIntRuntime BigInt,
+        MethodInfo ToPropertyKey,
+        EmittedErrorRuntime Errors,
+        MethodInfo? NativeProxyRejection,
+        EmittedGuestOwnPropertyRuntime? GuestOwnProperties = null
     );
 
     private readonly record struct RegExpSymbolDispatchInputs(
@@ -81,50 +89,47 @@ public partial class RuntimeEmitter
         EmittedArrayStorageRuntime ArrayStorage,
         EmittedDescriptorStorageRuntime DescriptorStorage,
         EmittedErrorRuntime Errors,
-        EmittedJsonRuntime Json,
-        EmittedMathRuntime Math,
         EmittedObjectStateRuntime ObjectState,
         EmittedPromiseRuntime? Promise,
         EmittedStringCoercionRuntime StringCoercion,
         EmittedSymbolRuntime Symbols,
-        TypeBuilder TSFunctionType
+        TypeBuilder TSFunctionType,
+        MethodInfo ToPropertyKey,
+        ProxyDeleteCheckInputs ProxyDelete,
+        EmittedGuestOwnPropertyRuntime? GuestOwnProperties = null
     );
 
     private readonly record struct DeleteIndexCoreInputs(
         EmittedArrayStorageRuntime ArrayStorage,
         EmittedDescriptorStorageRuntime DescriptorStorage,
         EmittedErrorRuntime Errors,
-        EmittedJsonRuntime Json,
-        EmittedMathRuntime Math,
         EmittedObjectStateRuntime ObjectState,
         EmittedPromiseRuntime? Promise,
         EmittedStringCoercionRuntime StringCoercion,
         EmittedSymbolRuntime Symbols,
-        TypeBuilder TSFunctionType
+        TypeBuilder TSFunctionType,
+        MethodInfo ToPropertyKey,
+        ProxyDeleteCheckInputs ProxyDelete,
+        EmittedGuestOwnPropertyRuntime? GuestOwnProperties = null
     );
 
     private readonly record struct DeleteIndexStrictInputs(
         EmittedArrayStorageRuntime ArrayStorage,
         EmittedDescriptorStorageRuntime DescriptorStorage,
         EmittedErrorRuntime Errors,
-        EmittedJsonRuntime Json,
-        EmittedMathRuntime Math,
         EmittedObjectStateRuntime ObjectState,
         EmittedPromiseRuntime? Promise,
         EmittedStringCoercionRuntime StringCoercion,
         EmittedSymbolRuntime Symbols,
-        TypeBuilder TSFunctionType
+        TypeBuilder TSFunctionType,
+        MethodInfo ToPropertyKey,
+        ProxyDeleteCheckInputs ProxyDelete,
+        EmittedGuestOwnPropertyRuntime? GuestOwnProperties = null
     );
 
     private void EmitGetIndex(TypeBuilder typeBuilder, EmittedObjectReadRuntime objectRead, GetIndexInputs inputs)
     {
-        var method = typeBuilder.DefineMethod(
-            "GetIndex",
-            MethodAttributes.Public | MethodAttributes.Static,
-            _types.Object,
-            [_types.Object, _types.Object]
-        );
-        objectRead.Index = method;
+        var method = (MethodBuilder)objectRead.Index;
 
         var il = method.GetILGenerator();
         var arrayLabel = il.DefineLabel();
@@ -147,13 +152,16 @@ public partial class RuntimeEmitter
         il.Emit(OpCodes.Ldarg_0);
         il.Emit(OpCodes.Isinst, inputs.UndefinedType);
         il.Emit(OpCodes.Brtrue, nullLabel);
+        il.Emit(OpCodes.Ldarg_1);
+        il.Emit(OpCodes.Call, inputs.ToPropertyKey);
+        il.Emit(OpCodes.Starg_S, (byte)1);
 
         // Proxy check: uses obj.GetType().FullName comparison (no SharpTS.dll dependency)
         var notProxyLabel = il.DefineLabel();
         EmitProxyGetIndexCheck(
             il,
             objectRead,
-            new ProxyGetIndexCheckInputs(inputs.InvokeMethodUnwrapped, inputs.ObjectDescriptors),
+            new ProxyGetIndexCheckInputs(inputs.InvokeMethodUnwrapped, inputs.ObjectDescriptors, inputs.Errors, NativeProxyRejection: inputs.NativeProxyRejection),
             () => il.Emit(OpCodes.Ldarg_0),
             () => il.Emit(OpCodes.Ldarg_1),
             notProxyLabel
@@ -161,6 +169,7 @@ public partial class RuntimeEmitter
 
         il.MarkLabel(notProxyLabel);
 
+        EmitGuestOwnNamedIndex(il, inputs.GuestOwnProperties, objectRead.Property, write: false);
         // Check if index is a symbol first (symbols work on any object type)
         il.Emit(OpCodes.Ldarg_1);
         il.Emit(OpCodes.Call, inputs.Symbols.IsSymbol);
@@ -308,8 +317,7 @@ public partial class RuntimeEmitter
             il.Emit(OpCodes.Brfalse, next);
             emitOwner();
             il.Emit(OpCodes.Ldarg_1);
-            il.Emit(OpCodes.Call, inputs.SymbolAccessors.FindOwnMethod);
-            il.Emit(OpCodes.Stloc, symMethodLocal);
+            EmitSymbolParameterQuery(il, inputs.SymbolAccessors.FindOwnMethod, symMethodLocal);
             il.Emit(OpCodes.Ldloc, symMethodLocal);
             il.Emit(OpCodes.Brtrue, symbolMethodFound);
             il.MarkLabel(next);
@@ -438,8 +446,7 @@ public partial class RuntimeEmitter
             var noSymMethodLabel = il.DefineLabel();
             il.Emit(OpCodes.Ldarg_0);
             il.Emit(OpCodes.Ldarg_1);
-            il.Emit(OpCodes.Call, inputs.SymbolAccessors.FindMethod);
-            il.Emit(OpCodes.Stloc, symMethodLocal);
+            EmitSymbolParameterQuery(il, inputs.SymbolAccessors.FindMethod, symMethodLocal);
             il.Emit(OpCodes.Ldloc, symMethodLocal);
             il.Emit(OpCodes.Brfalse, noSymMethodLabel);
             il.MarkLabel(symbolMethodFound);
@@ -453,7 +460,9 @@ public partial class RuntimeEmitter
             il.Emit(OpCodes.Ldloc, symMethodLocal);
             il.Emit(OpCodes.Castclass, _types.MethodInfo);
             il.Emit(OpCodes.Ldarg_1);
-            il.Emit(OpCodes.Call, inputs.SymbolAccessors.GetOrCreateStaticMethod);
+            if (_nativeUnionParameters is { } symbolConversion)
+                symbolConversion.EmitSymbolParameterFactory(il, symbolConversion.SymbolParameterQuery(il, symMethodLocal));
+            else il.Emit(OpCodes.Call, inputs.SymbolAccessors.GetOrCreateStaticMethod);
             il.Emit(OpCodes.Ret);
 
             il.MarkLabel(instanceMethod);
@@ -461,7 +470,7 @@ public partial class RuntimeEmitter
             il.Emit(OpCodes.Ldarg_0);
             il.Emit(OpCodes.Ldloc, symMethodLocal);
             il.Emit(OpCodes.Castclass, _types.MethodInfo);
-            il.Emit(OpCodes.Newobj, inputs.TSFunctionCtor);
+            EmitReflectedFunctionConstructor(il, inputs.TSFunctionCtor, _nativeUnionParameters?.SymbolParameterQuery(il, symMethodLocal), cached: false);
             il.Emit(OpCodes.Stloc, staticValue);
             il.Emit(OpCodes.Ldarg_0);                          // obj — receiver to bind
             il.Emit(OpCodes.Ldloc, symMethodLocal);            // found MethodInfo (typed object)
@@ -472,7 +481,7 @@ public partial class RuntimeEmitter
             il.Emit(OpCodes.Call, inputs.Symbols.MethodName);
             il.Emit(OpCodes.Ldloc, staticValue);
             il.Emit(OpCodes.Callvirt, inputs.TSFunctionLengthGetter);
-            il.Emit(OpCodes.Newobj, inputs.TSFunctionCachedCtor);
+            EmitReflectedFunctionConstructor(il, inputs.TSFunctionCachedCtor, _nativeUnionParameters?.SymbolParameterQuery(il, symMethodLocal), cached: true);
             il.Emit(OpCodes.Ret);
             il.MarkLabel(noSymMethodLabel);
         }
@@ -657,8 +666,8 @@ public partial class RuntimeEmitter
         il.Emit(OpCodes.Isinst, inputs.Generators.Type);
         il.Emit(OpCodes.Brfalse, notGeneratorIteratorLabel);
         il.Emit(OpCodes.Ldarg_0);
-        EmitInstanceMethodInfoLiteral(il, inputs.Generators.Iterator, inputs.Generators.Type);
-        il.Emit(OpCodes.Newobj, inputs.TSFunctionCtor);
+        var generatorParameterProducer = EmitReflectedMethodLiteral(il, inputs.Generators.Iterator);
+        EmitReflectedFunctionConstructor(il, inputs.TSFunctionCtor, generatorParameterProducer, cached: false);
         il.Emit(OpCodes.Ret);
         il.MarkLabel(notGeneratorIteratorLabel);
 
@@ -1361,6 +1370,10 @@ public partial class RuntimeEmitter
         il.Emit(OpCodes.Ldarg_0);
         il.Emit(OpCodes.Brfalse, nullLabel);
 
+        il.Emit(OpCodes.Ldarg_1);
+        il.Emit(OpCodes.Call, inputs.ToPropertyKey);
+        il.Emit(OpCodes.Starg_S, (byte)1);
+
         if (inputs.ProxySelected)
         {
             var notProxyLabel = il.DefineLabel();
@@ -1371,7 +1384,7 @@ public partial class RuntimeEmitter
                     inputs.ObjectDescriptors,
                     inputs.ObjectRead,
                     inputs.ReflectAssignment,
-                    inputs.StringCoercion
+                    NativeProxyRejection: inputs.NativeProxyRejection
                 ),
                 () => il.Emit(OpCodes.Ldarg_0),
                 () => il.Emit(OpCodes.Ldarg_1),
@@ -1385,6 +1398,8 @@ public partial class RuntimeEmitter
         il.Emit(OpCodes.Ldarg_1);
         il.Emit(OpCodes.Call, inputs.Symbols.IsSymbol);
         il.Emit(OpCodes.Brtrue, symbolKeyLabel);
+
+        EmitGuestOwnNamedIndex(il, inputs.GuestOwnProperties, inputs.GuestOwnSetProperty, write: true);
 
         // A missing indexed own property may resolve to an inherited Proxy.
         // OrdinarySet must invoke that proxy's [[Set]] with the original
@@ -1409,7 +1424,7 @@ public partial class RuntimeEmitter
                 inheritedProxyLabel, inheritedNotProxyLabel);
             il.MarkLabel(inheritedProxyLabel);
             EmitProxySetCompiledCall(
-                il, new ProxySetCallInputs(inputs.ReflectAssignment!.Set, inputs.ObjectDescriptors.GetOwnPropertyDescriptor, inputs.ObjectRead.Property, inputs.InvokeMethodUnwrapped),
+                il, new ProxySetCallInputs(inputs.ReflectAssignment!.Set, inputs.ObjectDescriptors.GetOwnPropertyDescriptor, inputs.ObjectRead.Property, inputs.InvokeMethodUnwrapped, NativeProxyRejection: inputs.NativeProxyRejection),
                 () => il.Emit(OpCodes.Ldloc, indexPrototypeLocal),
                 () =>
                 {
@@ -1514,6 +1529,9 @@ public partial class RuntimeEmitter
         var tsFunctionIdxSetLabel = il.DefineLabel();
         il.Emit(OpCodes.Ldarg_0);
         il.Emit(OpCodes.Isinst, inputs.TSFunctionType);
+        il.Emit(OpCodes.Brtrue, tsFunctionIdxSetLabel);
+        il.Emit(OpCodes.Ldarg_0);
+        il.Emit(OpCodes.Isinst, inputs.ClassDefinitions.Type);
         il.Emit(OpCodes.Brtrue, tsFunctionIdxSetLabel);
 
         if (_features.UsesUserClasses)
@@ -1643,7 +1661,7 @@ public partial class RuntimeEmitter
         il.Emit(OpCodes.Ldarg_1);
         il.Emit(OpCodes.Call, inputs.StringCoercion.ToJsString);
         il.Emit(OpCodes.Ldarg_2);
-        il.Emit(OpCodes.Call, objectWrite.FieldsProperty);
+        il.Emit(OpCodes.Call, objectWrite.Property);
         il.Emit(OpCodes.Ret);
 
         // $Array handler: unwrap to List<object?> elements, then set
@@ -1720,7 +1738,7 @@ public partial class RuntimeEmitter
             il, new ArrayIndexPrototypeSetInputs(inputs.DescriptorStorage,
                 inputs.InvokeMethodUnwrapped, inputs.InvokeMethodValue, inputs.ObjectDescriptors,
                 inputs.ObjectPrototypes, inputs.ObjectRead, inputs.ProxySelected,
-                inputs.ReflectAssignment, inputs.UndefinedType),
+                inputs.ReflectAssignment, inputs.UndefinedType, NativeProxyRejection: inputs.NativeProxyRejection),
             () => il.Emit(OpCodes.Ldloc, tsArraySetKeyLocal),
             tsArraySetRawStorage, nullLabel);
 
@@ -1935,6 +1953,16 @@ public partial class RuntimeEmitter
     private void EmitSetSymbolIndexBody(MethodBuilder method, SetIndexInputs inputs)
     {
         var il = method.GetILGenerator();
+        void EmitRejectedWrite()
+        {
+            var ignored = il.DefineLabel();
+            il.Emit(OpCodes.Ldarg_3);
+            il.Emit(OpCodes.Brfalse, ignored);
+            GuestErrorEmitter.ThrowError(il, inputs.Errors.CreateException, inputs.Errors.TypeErrorConstructor,
+                "Cannot assign to a read-only or non-extensible property");
+            il.MarkLabel(ignored);
+            il.Emit(OpCodes.Ret);
+        }
         // The strict and sloppy adapters share one prototype walk and setter
         // invocation. Inherited non-writable data properties reject creation.
         if (inputs.ProxySelected)
@@ -1942,9 +1970,9 @@ public partial class RuntimeEmitter
             var notProxy = il.DefineLabel();
             EmitProxySetIndexCheck(il,
                 new ProxySetIndexCheckInputs(inputs.InvokeMethodUnwrapped, inputs.ObjectDescriptors,
-                    inputs.ObjectRead, inputs.ReflectAssignment, inputs.StringCoercion),
+                    inputs.ObjectRead, inputs.ReflectAssignment, NativeProxyRejection: inputs.NativeProxyRejection),
                 () => il.Emit(OpCodes.Ldarg_0), () => il.Emit(OpCodes.Ldarg_1),
-                () => il.Emit(OpCodes.Ldarg_2), notProxy);
+                () => il.Emit(OpCodes.Ldarg_2), notProxy, inputs.Errors);
             il.MarkLabel(notProxy);
         }
         EmitInheritedSymbolSetter(il, inputs.ObjectPrototypes, inputs.Symbols, inputs.DescriptorStorage,
@@ -1952,7 +1980,7 @@ public partial class RuntimeEmitter
             inputs.ProxySelected
                 ? new ProxySetCallInputs(inputs.ReflectAssignment!.Set,
                     inputs.ObjectDescriptors.GetOwnPropertyDescriptor, inputs.ObjectRead.Property,
-                    inputs.InvokeMethodUnwrapped)
+                    inputs.InvokeMethodUnwrapped, NativeProxyRejection: inputs.NativeProxyRejection)
                 : null);
         // #266: symbol-keyed class accessor setter (`set [Symbol.x](v) {...}`).
         // A registered setter takes the write (accessor semantics) instead of
@@ -1985,7 +2013,7 @@ public partial class RuntimeEmitter
         var symExistingValueLocal = il.DeclareLocal(_types.Object);
         var symExistingDescriptorLocal = il.DeclareLocal(inputs.DescriptorStorage.DescriptorType);
         il.Emit(OpCodes.Ldarg_0);
-        il.Emit(OpCodes.Call, inputs.Symbols.GetStorage);
+        il.Emit(OpCodes.Call, inputs.Symbols.TryGetStorage);
         il.Emit(OpCodes.Stloc, symDictLocal);
 
         // Frozen state restricts data stores, not calling an existing accessor setter.
@@ -2001,7 +2029,7 @@ public partial class RuntimeEmitter
                 _types.ConditionalWeakTable, "TryGetValue",
                 _types.Object, _types.Object.MakeByRefType()));
             il.Emit(OpCodes.Brfalse, notFrozen);
-            il.Emit(OpCodes.Ret);
+            EmitRejectedWrite();
             il.MarkLabel(notFrozen);
         }
 
@@ -2010,6 +2038,8 @@ public partial class RuntimeEmitter
         var symRawSetLabel = il.DefineLabel();
         var symCreateLabel = il.DefineLabel();
         var symCheckExtensibilityLabel = il.DefineLabel();
+        il.Emit(OpCodes.Ldloc, symDictLocal);
+        il.Emit(OpCodes.Brfalse, symCheckExtensibilityLabel);
         il.Emit(OpCodes.Ldloc, symDictLocal);
         il.Emit(OpCodes.Ldarg_1);
         il.Emit(OpCodes.Ldloca, symExistingValueLocal);
@@ -2050,7 +2080,7 @@ public partial class RuntimeEmitter
         il.Emit(OpCodes.Ldloc, symExistingDescriptorLocal);
         il.Emit(OpCodes.Callvirt, inputs.DescriptorStorage.DescriptorGetter.GetGetMethod()!);
         il.Emit(OpCodes.Brfalse, symDataDescriptorLabel);
-        il.Emit(OpCodes.Ret);
+        EmitRejectedWrite();
         il.MarkLabel(symDataDescriptorLabel);
         var symReturnWithoutSetLabel = il.DefineLabel();
         il.Emit(OpCodes.Ldloc, symExistingDescriptorLocal);
@@ -2065,10 +2095,18 @@ public partial class RuntimeEmitter
         il.Emit(OpCodes.Callvirt, inputs.DescriptorStorage.DescriptorValue.GetSetMethod()!);
         il.Emit(OpCodes.Ret);
         il.MarkLabel(symReturnWithoutSetLabel);
-        il.Emit(OpCodes.Ret);
+        EmitRejectedWrite();
 
         // Check extensibility (frozen/sealed/preventExt). On hit, no-op.
         il.MarkLabel(symCheckExtensibilityLabel);
+        var notDeclaredMethod = il.DefineLabel();
+        il.Emit(OpCodes.Ldarg_0);
+        il.Emit(OpCodes.Ldarg_1);
+        il.Emit(OpCodes.Call, inputs.SymbolAccessors.FindOwnMethod);
+        il.Emit(OpCodes.Brfalse, notDeclaredMethod);
+        EmitFrozenSymbolDataWriteGuard();
+        il.Emit(OpCodes.Br, symCreateLabel);
+        il.MarkLabel(notDeclaredMethod);
         var symExtTmp = il.DeclareLocal(_types.Object);
         var symNotNonExtLabel = il.DefineLabel();
         il.Emit(OpCodes.Ldsfld, inputs.ObjectState.NonExtensibleObjects);
@@ -2076,7 +2114,7 @@ public partial class RuntimeEmitter
         il.Emit(OpCodes.Ldloca, symExtTmp);
         il.Emit(OpCodes.Callvirt, _types.GetMethod(_types.ConditionalWeakTable, "TryGetValue", _types.Object, _types.Object.MakeByRefType()));
         il.Emit(OpCodes.Brfalse, symNotNonExtLabel);
-        il.Emit(OpCodes.Ret);
+        EmitRejectedWrite();
         il.MarkLabel(symNotNonExtLabel);
 
         var symNotFrozenLabel = il.DefineLabel();
@@ -2085,7 +2123,7 @@ public partial class RuntimeEmitter
         il.Emit(OpCodes.Ldloca, symExtTmp);
         il.Emit(OpCodes.Callvirt, _types.GetMethod(_types.ConditionalWeakTable, "TryGetValue", _types.Object, _types.Object.MakeByRefType()));
         il.Emit(OpCodes.Brfalse, symNotFrozenLabel);
-        il.Emit(OpCodes.Ret);
+        EmitRejectedWrite();
         il.MarkLabel(symNotFrozenLabel);
 
         var symNotSealedLabel = il.DefineLabel();
@@ -2094,7 +2132,7 @@ public partial class RuntimeEmitter
         il.Emit(OpCodes.Ldloca, symExtTmp);
         il.Emit(OpCodes.Callvirt, _types.GetMethod(_types.ConditionalWeakTable, "TryGetValue", _types.Object, _types.Object.MakeByRefType()));
         il.Emit(OpCodes.Brfalse, symNotSealedLabel);
-        il.Emit(OpCodes.Ret);
+        EmitRejectedWrite();
         il.MarkLabel(symNotSealedLabel);
 
         // A newly-created symbol property is an ordinary data descriptor,
@@ -2107,9 +2145,17 @@ public partial class RuntimeEmitter
         il.Emit(OpCodes.Ldarg_1);
         il.Emit(OpCodes.Ldarg_2);
         il.Emit(OpCodes.Callvirt, _types.GetMethod(_types.DictionaryObjectObject, "set_Item"));
+        EmitGuestOwnMutation(il, inputs.GuestOwnProperties, false, () => il.Emit(OpCodes.Ldarg_0), () => il.Emit(OpCodes.Ldarg_1));
         il.Emit(OpCodes.Ret);
 
         il.MarkLabel(symCreateLabel);
+        var haveSymbolStorage = il.DefineLabel();
+        il.Emit(OpCodes.Ldloc, symDictLocal);
+        il.Emit(OpCodes.Brtrue, haveSymbolStorage);
+        il.Emit(OpCodes.Ldarg_0);
+        il.Emit(OpCodes.Call, inputs.Symbols.GetStorage);
+        il.Emit(OpCodes.Stloc, symDictLocal);
+        il.MarkLabel(haveSymbolStorage);
         var newSymbolDescriptorLocal = il.DeclareLocal(
             inputs.DescriptorStorage.DescriptorType);
         il.Emit(OpCodes.Newobj, inputs.DescriptorStorage.DescriptorConstructor);
@@ -2123,6 +2169,7 @@ public partial class RuntimeEmitter
         il.Emit(OpCodes.Ldloc, newSymbolDescriptorLocal);
         il.Emit(OpCodes.Callvirt, _types.GetMethod(
             _types.DictionaryObjectObject, "set_Item"));
+        EmitGuestOwnMutation(il, inputs.GuestOwnProperties, false, () => il.Emit(OpCodes.Ldarg_0), () => il.Emit(OpCodes.Ldarg_1));
         il.Emit(OpCodes.Ret);
     }
 
@@ -2135,12 +2182,19 @@ public partial class RuntimeEmitter
         var prototype = il.DeclareLocal(_types.Object);
         var value = il.DeclareLocal(_types.Object);
         var descriptor = il.DeclareLocal(storage.DescriptorType);
+        var ownStorage = il.DeclareLocal(_types.DictionaryObjectObject);
+        var checkConstructor = il.DefineLabel();
         il.Emit(OpCodes.Ldarg_0);
-        il.Emit(OpCodes.Call, symbols.GetStorage);
+        il.Emit(OpCodes.Call, symbols.TryGetStorage);
+        il.Emit(OpCodes.Stloc, ownStorage);
+        il.Emit(OpCodes.Ldloc, ownStorage);
+        il.Emit(OpCodes.Brfalse, checkConstructor);
+        il.Emit(OpCodes.Ldloc, ownStorage);
         il.Emit(OpCodes.Ldarg_1);
         il.Emit(OpCodes.Ldloca, value);
         il.Emit(OpCodes.Callvirt, _types.GetMethod(_types.DictionaryObjectObject, "TryGetValue"));
         il.Emit(OpCodes.Brtrue, done);
+        il.MarkLabel(checkConstructor);
         // A declared static method is an existing own writable property even
         // while its value remains backed by the method registry.
         var notConstructor = il.DefineLabel();
@@ -2183,13 +2237,19 @@ public partial class RuntimeEmitter
             il.Emit(OpCodes.Ret);
             il.MarkLabel(notProxy);
         }
+        var checkGenericSource = il.DefineLabel();
         il.Emit(OpCodes.Ldloc, prototype);
-        il.Emit(OpCodes.Call, symbols.GetStorage);
+        il.Emit(OpCodes.Call, symbols.TryGetStorage);
+        il.Emit(OpCodes.Stloc, ownStorage);
+        il.Emit(OpCodes.Ldloc, ownStorage);
+        il.Emit(OpCodes.Brfalse, checkGenericSource);
+        il.Emit(OpCodes.Ldloc, ownStorage);
         il.Emit(OpCodes.Ldarg_1);
         il.Emit(OpCodes.Ldloca, value);
         il.Emit(OpCodes.Callvirt, _types.GetMethod(_types.DictionaryObjectObject, "TryGetValue"));
         var propertyFound = il.DefineLabel();
         il.Emit(OpCodes.Brtrue, propertyFound);
+        il.MarkLabel(checkGenericSource);
         // Match the read path: a closed generic base shares the descriptors
         // installed on its source constructor, after its exact own storage.
         var prototypeType = il.DeclareLocal(_types.Type);
@@ -2205,7 +2265,11 @@ public partial class RuntimeEmitter
         il.Emit(OpCodes.Ldloc, prototype);
         il.Emit(OpCodes.Beq, next);
         il.Emit(OpCodes.Ldloc, prototypeType);
-        il.Emit(OpCodes.Call, symbols.GetStorage);
+        il.Emit(OpCodes.Call, symbols.TryGetStorage);
+        il.Emit(OpCodes.Stloc, ownStorage);
+        il.Emit(OpCodes.Ldloc, ownStorage);
+        il.Emit(OpCodes.Brfalse, next);
+        il.Emit(OpCodes.Ldloc, ownStorage);
         il.Emit(OpCodes.Ldarg_1);
         il.Emit(OpCodes.Ldloca, value);
         il.Emit(OpCodes.Callvirt, _types.GetMethod(_types.DictionaryObjectObject, "TryGetValue"));
@@ -2287,13 +2351,14 @@ public partial class RuntimeEmitter
                 inputs.ArrayStorage,
                 inputs.DescriptorStorage,
                 inputs.Errors,
-                inputs.Json,
-                inputs.Math,
                 inputs.ObjectState,
                 inputs.Promise,
                 inputs.StringCoercion,
                 inputs.Symbols,
-                inputs.TSFunctionType
+                inputs.TSFunctionType,
+                inputs.ToPropertyKey,
+                inputs.ProxyDelete,
+                inputs.GuestOwnProperties
             ),
             strict: false
         );
@@ -2301,12 +2366,10 @@ public partial class RuntimeEmitter
     /// <summary>
     /// Emits DeleteIndex(object obj, object key) -> bool (non-strict) or
     /// DeleteIndexStrict(object obj, object key, bool strictMode) -> bool.
-    /// Handles both symbol keys and string keys. On a frozen/sealed dictionary
-    /// receiver the non-strict variant returns false; the strict variant throws
-    /// a TypeError when strictMode is set, else returns false. Callable
-    /// deletion likewise applies strictness to the ordinary deletion result.
-    /// Other branches ($Array, symbol keys, System.Type, PDS
-    /// configurability, Math/JSON singletons) are identical in both variants.
+    /// Handles symbol and string keys. Ordinary records share the complete
+    /// named-property deletion path; existing non-configurable properties
+    /// return false or throw TypeError according to strictMode, while absent
+    /// properties succeed regardless of the receiver's integrity level.
     /// </summary>
     private void EmitDeleteIndexCore(
         TypeBuilder typeBuilder,
@@ -2344,14 +2407,30 @@ public partial class RuntimeEmitter
             il.Emit(OpCodes.Ret);
         }
         var dictLabel = il.DefineLabel();
-        var dictStringKeyLabel = il.DefineLabel();
-        var dictNumericKeyLabel = il.DefineLabel();
         var symbolKeyLabel = il.DefineLabel();
         var trueLabel = il.DefineLabel();
 
         // null check on obj - return true (deleting from null is allowed in JS)
         il.Emit(OpCodes.Ldarg_0);
         il.Emit(OpCodes.Brfalse, trueLabel);
+
+        il.Emit(OpCodes.Ldarg_1);
+        il.Emit(OpCodes.Call, inputs.ToPropertyKey);
+        il.Emit(OpCodes.Starg_S, (byte)1);
+        var notProxyDelete = il.DefineLabel();
+        EmitProxyDeleteCheck(il, objectDeletion, inputs.ProxyDelete,
+            () => il.Emit(OpCodes.Ldarg_0), () => il.Emit(OpCodes.Ldarg_1),
+            notProxyDelete, objectKey: true);
+        if (strict)
+        {
+            il.Emit(OpCodes.Brtrue, trueLabel);
+            EmitDeleteIndexFail("Cannot delete property of proxy");
+        }
+        else
+        {
+            il.Emit(OpCodes.Ret);
+        }
+        il.MarkLabel(notProxyDelete);
 
         // Check if index is a symbol first
         il.Emit(OpCodes.Ldarg_1);
@@ -2722,130 +2801,26 @@ public partial class RuntimeEmitter
         il.Emit(OpCodes.Conv_I4);
         il.Emit(OpCodes.Blt, compactLoop);
         il.MarkLabel(symbolDeleteDone);
+        EmitGuestOwnMutation(il, inputs.GuestOwnProperties, true, () => il.Emit(OpCodes.Ldarg_0), () => il.Emit(OpCodes.Ldarg_1));
         il.Emit(OpCodes.Ldc_I4_1);
         il.Emit(OpCodes.Ret);
 
+        // The complete named-property path owns effective configurability,
+        // absent sealed keys and removal bookkeeping for ordinary records and
+        // Math/JSON singletons. ToPropertyKey above has already produced a string.
         il.MarkLabel(dictLabel);
-        // Check if frozen
-        var valueLocal = il.DeclareLocal(_types.Object);
-        il.Emit(OpCodes.Ldsfld, inputs.ObjectState.FrozenObjects);
         il.Emit(OpCodes.Ldarg_0);
-        il.Emit(OpCodes.Ldloca, valueLocal);
-        il.Emit(OpCodes.Callvirt, _types.GetMethod(_types.ConditionalWeakTable, "TryGetValue", _types.Object, _types.Object.MakeByRefType()));
-        var notFrozenLabel = il.DefineLabel();
-        il.Emit(OpCodes.Brfalse, notFrozenLabel);
-        // Frozen - fail (strict throws / sloppy returns false)
-        EmitDeleteIndexFail("Cannot delete property of a frozen object");
-
-        // Check if sealed
-        il.MarkLabel(notFrozenLabel);
-        il.Emit(OpCodes.Ldsfld, inputs.ObjectState.SealedObjects);
-        il.Emit(OpCodes.Ldarg_0);
-        il.Emit(OpCodes.Ldloca, valueLocal);
-        il.Emit(OpCodes.Callvirt, _types.GetMethod(_types.ConditionalWeakTable, "TryGetValue", _types.Object, _types.Object.MakeByRefType()));
-        var notSealedLabel = il.DefineLabel();
-        il.Emit(OpCodes.Brfalse, notSealedLabel);
-        // Sealed - fail (strict throws / sloppy returns false)
-        EmitDeleteIndexFail("Cannot delete property of a sealed object");
-
-        // Coerce key to string, then PDS-check before dict.Remove. Bracket-
-        // access delete on RegExp.prototype["dotAll"] (or similar PDS-installed
-        // accessor) needs the same configurability check + PDS+dict cleanup
-        // as `delete obj.name` (DeleteProperty); without this the dict-only
-        // Remove returns false and the PDS entry survives. ECMA-262 §10.1.10.
-        il.MarkLabel(notSealedLabel);
-        var didxKeyStrLocal = il.DeclareLocal(_types.String);
-        il.Emit(OpCodes.Ldarg_1);
-        il.Emit(OpCodes.Isinst, _types.String);
-        il.Emit(OpCodes.Brtrue, dictStringKeyLabel);
-        il.Emit(OpCodes.Ldarg_1);
-        il.Emit(OpCodes.Isinst, _types.Double);
-        il.Emit(OpCodes.Brtrue, dictNumericKeyLabel);
-        il.Emit(OpCodes.Br, trueLabel);
-
-        il.MarkLabel(dictStringKeyLabel);
         il.Emit(OpCodes.Ldarg_1);
         il.Emit(OpCodes.Castclass, _types.String);
-        il.Emit(OpCodes.Stloc, didxKeyStrLocal);
-        var didxAfterKeyLabel = il.DefineLabel();
-        il.Emit(OpCodes.Br, didxAfterKeyLabel);
-
-        il.MarkLabel(dictNumericKeyLabel);
-        il.Emit(OpCodes.Ldarg_1);
-        il.Emit(OpCodes.Callvirt, _types.GetMethodNoParams(_types.Object, "ToString"));
-        il.Emit(OpCodes.Stloc, didxKeyStrLocal);
-
-        il.MarkLabel(didxAfterKeyLabel);
-        // PDS lookup for configurability + PDS cleanup.
-        var didxDescLocal = il.DeclareLocal(inputs.DescriptorStorage.DescriptorType);
-        il.Emit(OpCodes.Ldarg_0);
-        il.Emit(OpCodes.Ldloc, didxKeyStrLocal);
-        il.Emit(OpCodes.Call, inputs.DescriptorStorage.GetPropertyDescriptor);
-        il.Emit(OpCodes.Stloc, didxDescLocal);
-        var didxNoPdsLabel = il.DefineLabel();
-        il.Emit(OpCodes.Ldloc, didxDescLocal);
-        il.Emit(OpCodes.Brfalse, didxNoPdsLabel);
-        il.Emit(OpCodes.Ldloc, didxDescLocal);
-        il.Emit(OpCodes.Callvirt, inputs.DescriptorStorage.DescriptorConfigurable.GetGetMethod()!);
-        var didxConfigurableLabel = il.DefineLabel();
-        il.Emit(OpCodes.Brtrue, didxConfigurableLabel);
-        // Non-configurable PDS descriptor — return false without removing.
-        il.Emit(OpCodes.Ldc_I4_0);
-        il.Emit(OpCodes.Ret);
-        il.MarkLabel(didxConfigurableLabel);
-        il.Emit(OpCodes.Ldarg_0);
-        il.Emit(OpCodes.Ldloc, didxKeyStrLocal);
-        il.Emit(OpCodes.Call, inputs.DescriptorStorage.DeleteProperty);
-        il.Emit(OpCodes.Pop);
-        il.MarkLabel(didxNoPdsLabel);
-
-        // Always also remove from the dict (data entry without PDS).
-        il.Emit(OpCodes.Ldarg_0);
-        il.Emit(OpCodes.Castclass, _types.DictionaryStringObject);
-        il.Emit(OpCodes.Ldloc, didxKeyStrLocal);
-        il.Emit(OpCodes.Callvirt, _types.GetMethod(_types.DictionaryStringObject, "Remove", _types.String));
-        il.Emit(OpCodes.Pop);
-        // Math singleton: reject delete on non-configurable spec constants
-        // (E/LN10/.../SQRT2 per ECMA-262 §21.3.1 — C:F).
-        var didxNotMathConstLabel = il.DefineLabel();
-        il.Emit(OpCodes.Ldarg_0);
-        il.Emit(OpCodes.Ldsfld, inputs.Math.SingletonField);
-        il.Emit(OpCodes.Bne_Un, didxNotMathConstLabel);
-        var didxFalseRetLabel = il.DefineLabel();
-        void DidxRejectIfMathConst(string n)
+        if (strict)
         {
-            il.Emit(OpCodes.Ldloc, didxKeyStrLocal);
-            il.Emit(OpCodes.Ldstr, n);
-            il.Emit(OpCodes.Call, _types.GetMethod(_types.String, "op_Equality", _types.String, _types.String));
-            il.Emit(OpCodes.Brtrue, didxFalseRetLabel);
+            il.Emit(OpCodes.Ldarg_2);
+            il.Emit(OpCodes.Call, objectDeletion.PropertyStrict);
         }
-        DidxRejectIfMathConst("E"); DidxRejectIfMathConst("LN10"); DidxRejectIfMathConst("LN2");
-        DidxRejectIfMathConst("LOG10E"); DidxRejectIfMathConst("LOG2E"); DidxRejectIfMathConst("PI");
-        DidxRejectIfMathConst("SQRT1_2"); DidxRejectIfMathConst("SQRT2");
-        il.MarkLabel(didxNotMathConstLabel);
-
-        // Math/JSON singleton: also mark the deletion in the per-receiver
-        // tracker so HasOwnPropertyHelper's synth-name check stops reporting
-        // the property as own (the dicts are empty; the static names are
-        // what makes them "own").
-        var didxMarkDelLabel = il.DefineLabel();
-        var didxAfterMarkLabel = il.DefineLabel();
-        il.Emit(OpCodes.Ldarg_0);
-        il.Emit(OpCodes.Ldsfld, inputs.Math.SingletonField);
-        il.Emit(OpCodes.Beq, didxMarkDelLabel);
-        il.Emit(OpCodes.Ldarg_0);
-        il.Emit(OpCodes.Ldsfld, inputs.Json.SingletonField);
-        il.Emit(OpCodes.Beq, didxMarkDelLabel);
-        il.Emit(OpCodes.Br, didxAfterMarkLabel);
-        il.MarkLabel(didxMarkDelLabel);
-        il.Emit(OpCodes.Ldarg_0);
-        il.Emit(OpCodes.Ldloc, didxKeyStrLocal);
-        il.Emit(OpCodes.Call, inputs.ObjectState.MarkBuiltinDeleted);
-        il.MarkLabel(didxAfterMarkLabel);
-        il.Emit(OpCodes.Ldc_I4_1);
-        il.Emit(OpCodes.Ret);
-        il.MarkLabel(didxFalseRetLabel);
-        il.Emit(OpCodes.Ldc_I4_0);
+        else
+        {
+            il.Emit(OpCodes.Call, objectDeletion.Property);
+        }
         il.Emit(OpCodes.Ret);
 
         // Return true (default)
@@ -2866,13 +2841,14 @@ public partial class RuntimeEmitter
                 inputs.ArrayStorage,
                 inputs.DescriptorStorage,
                 inputs.Errors,
-                inputs.Json,
-                inputs.Math,
                 inputs.ObjectState,
                 inputs.Promise,
                 inputs.StringCoercion,
                 inputs.Symbols,
-                inputs.TSFunctionType
+                inputs.TSFunctionType,
+                inputs.ToPropertyKey,
+                inputs.ProxyDelete,
+                inputs.GuestOwnProperties
             ),
             strict: true
         );
@@ -2940,8 +2916,8 @@ public partial class RuntimeEmitter
 
         // return new $TSFunction(rx, MethodInfo of helper)
         il.Emit(OpCodes.Ldarg_0);
-        _types.EmitLoadMethodInfo(il, helperMethod);
-        il.Emit(OpCodes.Newobj, tSFunctionCtor);
+        var parameterProducer = EmitReflectedMethodLiteral(il, helperMethod);
+        EmitReflectedFunctionConstructor(il, tSFunctionCtor, parameterProducer, cached: false);
         il.Emit(OpCodes.Ret);
 
         il.MarkLabel(notMatchLabel);

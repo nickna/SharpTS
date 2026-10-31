@@ -41,6 +41,7 @@
   </ItemGroup>
 
   <ItemGroup>
+    <ProjectReference Include="..\fixtures\SharpTS.ExternalSignatureFixture\SharpTS.ExternalSignatureFixture.csproj" />
     <ProjectReference Include="..\fixtures\SharpTS.ConsoleRestorationFixture\SharpTS.ConsoleRestorationFixture.csproj" />
     <ProjectReference Include="..\fixtures\SharpTS.DebuggerReferenceFixture\SharpTS.DebuggerReferenceFixture.csproj" />
     <ProjectReference Include="..\fixtures\SharpTS.HostedInitializationFixture\SharpTS.HostedInitializationFixture.csproj" />

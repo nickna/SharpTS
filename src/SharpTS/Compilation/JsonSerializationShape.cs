@@ -91,7 +91,8 @@ internal static class JsonSerializationShapeAnalyzer
         var active = new HashSet<TypeInfo>(ReferenceEqualityComparer.Instance);
         foreach (var property in literal.Properties)
         {
-            if (property.IsSpread || property.Kind is not Expr.ObjectPropertyKind.Value ||
+            if (typeMap?.IsUndefinedReachableReturn(property.Value) == true ||
+                property.IsSpread || property.IsPrototypeSetter || property.Kind is not Expr.ObjectPropertyKind.Value ||
                 property.Key is Expr.ComputedKey)
             {
                 shape = null!;
@@ -129,6 +130,11 @@ internal static class JsonSerializationShapeAnalyzer
         TypeMap? typeMap,
         out JsonSerializationShape.Record shape)
     {
+        if (literal.Properties.Any(property => typeMap?.IsUndefinedReachableReturn(property.Value) == true))
+        {
+            shape = null!;
+            return false;
+        }
         if (typeMap?.Get(literal) is TypeInfo.Record contextualRecord &&
             TryAnalyze(contextualRecord, out var contextual) &&
             contextual is JsonSerializationShape.Record contextualShape &&
@@ -234,7 +240,7 @@ internal static class JsonSerializationShapeAnalyzer
         for (int index = 0; index < literal.Properties.Count; index++)
         {
             var property = literal.Properties[index];
-            if (property.IsSpread || property.Kind is not Expr.ObjectPropertyKind.Value ||
+            if (property.IsSpread || property.IsPrototypeSetter || property.Kind is not Expr.ObjectPropertyKind.Value ||
                 property.Key is Expr.ComputedKey)
                 return false;
             string key = property.Key switch

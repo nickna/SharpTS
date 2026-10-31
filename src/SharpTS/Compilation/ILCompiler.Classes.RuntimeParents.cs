@@ -19,10 +19,39 @@ public partial class ILCompiler
             ("Promise" or "Map" or "Set" or "WeakMap" or "WeakSet" or "Date" or "RegExp" or "Buffer")
         && !Runtime.BuiltIns.BuiltInNames.IsErrorTypeName(Expr.GetSuperclassLeafName(declaration.SuperclassExpr) ?? "");
 
+    private static bool RequiresConstructorReturnAdapter(Stmt.Class declaration)
+    {
+        if (declaration.SuperclassExpr == null || !SupportsReceiverInitialization(declaration)) return false;
+        var leaf = Expr.GetSuperclassLeafName(declaration.SuperclassExpr);
+        if (leaf is "Array" or "Promise" or "Map" or "Set" or "WeakMap" or "WeakSet" or "Date" or "RegExp" or "Buffer"
+            || Runtime.BuiltIns.BuiltInNames.IsErrorTypeName(leaf ?? "")) return false;
+        var visitor = new EarlyConstructorReturnVisitor();
+        foreach (var statement in declaration.Methods.FirstOrDefault(method =>
+            !method.IsStatic && method.Name.Lexeme == "constructor" && method.Body != null)?.Body ?? [])
+            visitor.Visit(statement);
+        return visitor.Found;
+    }
+
+    private bool UsesReceiverConstruction(Stmt.Class declaration) => UsesLiveSuperConstruction(declaration)
+        || RequiresConstructorReturnAdapter(declaration)
+        || (_typeMapper.RequiresReceiverConstruction(_typeMap.GetClassType(declaration)
+                ?? _typeMap.GetClassType(declaration.Name.Lexeme)) && SupportsReceiverInitialization(declaration))
+        || (declaration.IsAbstract && SupportsReceiverInitialization(declaration));
+
     private void RegisterLiveSuperConstruction(Stmt.Class declaration, TypeSystem.TypeInfo? type)
     {
-        if (!UsesLiveSuperConstruction(declaration)) return;
+        if (!UsesReceiverConstruction(declaration)) return;
         _usesRuntimeParents = true;
+        if (RequiresConstructorReturnAdapter(declaration))
+        {
+            var id = type switch
+            {
+                TypeSystem.TypeInfo.Class c => c.Core.DeclarationId,
+                TypeSystem.TypeInfo.GenericClass c => c.Core.DeclarationId,
+                _ => 0
+            };
+            _typeMapper.RegisterReceiverConstruction(id);
+        }
         var visited = new HashSet<TypeSystem.TypeInfo>(ReferenceEqualityComparer.Instance);
         while (type != null && visited.Add(type))
         {
@@ -64,7 +93,7 @@ public partial class ILCompiler
                 || declaration.Fields.Any(field => field.Decorators is { Count: > 0 })
                 || (declaration.Accessors?.Any(accessor => accessor.Decorators is { Count: > 0 }) ?? false)
                 || Runtime.BuiltIns.BuiltInNames.IsErrorTypeName(leaf ?? "")
-                || leaf is "Array" or "Promise" or "Map" or "Set" or "WeakMap" or "WeakSet" or "Date" or "RegExp" or "Buffer")
+                || leaf is "Array" or "Map" or "Set" or "WeakMap" or "WeakSet" or "Date" or "RegExp" or "Buffer")
                 continue;
             _repeatingClassDeclarations.Add(declaration);
             _runtimeClassDeclarations.TryAdd(declaration, CreateRuntimeClassExpression(declaration));
@@ -114,7 +143,8 @@ public partial class ILCompiler
             _runtimeClassDeclarations.Add(declaration, expression = CreateRuntimeClassExpression(declaration));
         if (_typeMap.GetClassType(declaration) is { } checkedType) _typeMap.SetClassExprType(expression, checkedType);
         CollectClassExpression(expression);
-        _classExprs.Names[expression] = GetDefinitionContext().GetQualifiedClassName(_classExprs.Names[expression]);
+        if (_nativeSourceTypeNames is null)
+            _classExprs.Names[expression] = GetDefinitionContext().GetQualifiedClassName(_classExprs.Names[expression]);
         if (_classes.DeclarationLexicalOwners.TryGetValue(declaration, out var lexicalOwner))
         {
             string ownerName;
@@ -160,17 +190,16 @@ public partial class ILCompiler
         return false;
     }
 
-    private static bool SupportsReceiverInitialization(Stmt.Class declaration)
+    private static bool SupportsReceiverInitialization(Stmt.Class declaration, bool allowGenericOwner = false)
     {
         // The finite runtime-parent path supports ordinary fields, synchronous
         // methods (including generators) and accessors through guest-receiver adapters.
         // Other templates keep their existing CLR construction path.
-        if (declaration.TypeParams is { Count: > 0 }
+        if ((!allowGenericOwner && declaration.TypeParams is { Count: > 0 })
             || declaration.AutoAccessors is { Count: > 0 }
             || declaration.Fields.Any(field => field.IsPrivate || field.ComputedKey != null)
             || declaration.Methods.Any(method => method.IsPrivate || method.IsAsync
-                || method.TypeParams is { Count: > 0 } || method.ComputedKey != null
-                || method.Parameters.Any(parameter => parameter.IsParameterProperty || parameter.DestructuredProperties != null))) return false;
+                || method.TypeParams is { Count: > 0 } || method.ComputedKey != null)) return false;
         return true;
     }
 
@@ -236,6 +265,98 @@ public partial class ILCompiler
         });
     }
 
+    private sealed class EarlyConstructorReturnVisitor : AstVisitorBase
+    {
+        private bool _superBound;
+        public bool Found { get; private set; }
+        protected override void VisitCall(Expr.Call expression)
+        {
+            base.VisitCall(expression);
+            if (expression.Callee is Expr.Super { Method: null }) _superBound = true;
+        }
+        protected override void VisitReturn(Stmt.Return statement)
+        {
+            base.VisitReturn(statement);
+            Found |= statement.Value != null && !_superBound;
+        }
+        protected override void VisitIf(Stmt.If statement)
+        {
+            Visit(statement.Condition);
+            bool before = _superBound;
+            Visit(statement.ThenBranch);
+            bool afterThen = _superBound;
+            _superBound = before;
+            if (statement.ElseBranch != null) Visit(statement.ElseBranch);
+            _superBound &= afterThen;
+        }
+        protected override void VisitTernary(Expr.Ternary expression)
+        {
+            Visit(expression.Condition);
+            bool before = _superBound;
+            Visit(expression.ThenBranch);
+            bool afterThen = _superBound;
+            _superBound = before;
+            Visit(expression.ElseBranch);
+            _superBound &= afterThen;
+        }
+        protected override void VisitLogical(Expr.Logical expression)
+        {
+            Visit(expression.Left);
+            bool beforeRight = _superBound;
+            Visit(expression.Right);
+            _superBound = beforeRight;
+        }
+        protected override void VisitNullishCoalescing(Expr.NullishCoalescing expression)
+        {
+            Visit(expression.Left);
+            bool beforeRight = _superBound;
+            Visit(expression.Right);
+            _superBound = beforeRight;
+        }
+        protected override void VisitTryCatch(Stmt.TryCatch statement)
+        {
+            bool before = _superBound;
+            foreach (var child in statement.TryBlock) Visit(child);
+            bool afterTry = _superBound;
+            if (statement.CatchBlock != null)
+            {
+                _superBound = before;
+                foreach (var child in statement.CatchBlock) Visit(child);
+                _superBound &= afterTry;
+            }
+            if (statement.FinallyBlock != null)
+                foreach (var child in statement.FinallyBlock) Visit(child);
+        }
+        protected override void VisitWhile(Stmt.While statement) { bool before = _superBound; base.VisitWhile(statement); _superBound = before; }
+        protected override void VisitFor(Stmt.For statement)
+        {
+            if (statement.Initializer != null) Visit(statement.Initializer);
+            if (statement.Condition != null) Visit(statement.Condition);
+            bool beforeBody = _superBound;
+            Visit(statement.Body);
+            if (statement.Increment != null) Visit(statement.Increment);
+            _superBound = beforeBody;
+        }
+        protected override void VisitForOf(Stmt.ForOf statement) { bool before = _superBound; base.VisitForOf(statement); _superBound = before; }
+        protected override void VisitForIn(Stmt.ForIn statement) { bool before = _superBound; base.VisitForIn(statement); _superBound = before; }
+        protected override void VisitSwitch(Stmt.Switch statement)
+        {
+            Visit(statement.Subject);
+            bool before = _superBound;
+            foreach (var clause in statement.Clauses)
+            {
+                _superBound = before;
+                if (clause.Value != null) Visit(clause.Value);
+                foreach (var child in clause.Body) Visit(child);
+            }
+            _superBound = before;
+        }
+        protected override void VisitFunction(Stmt.Function statement) { }
+        protected override void VisitArrowFunction(Expr.ArrowFunction expression) { }
+        protected override void VisitClass(Stmt.Class statement) { }
+        protected override void VisitClassExpr(Expr.ClassExpr expression) { }
+    }
+
     private sealed class ConstructorReplacementVisitor : AstVisitorBase
     {
         public bool HasReplacement { get; private set; }
@@ -252,6 +373,7 @@ public partial class ILCompiler
         var method = owner.DefineMethod("$InitializeReceiver", MethodAttributes.Public | MethodAttributes.Static,
             _types.Object, [_types.Object, _types.ObjectArray, _types.Object, _types.Object]);
         _receiverInitializers.Add(owner, method);
+        _nativeReceiverInitializerLookup?.Record(owner, method);
         return method;
     }
 
@@ -269,10 +391,14 @@ public partial class ILCompiler
         ctx.EmittingTypeBuilder = owner;
         ctx.IsInstanceMethod = true;
         ctx.HasGuestReceiver = true;
-        ctx.GuestThisVariableName = "__this";
+        ctx.GuestThisVariableName = CompilationContext.ThisParameterName;
         ctx.ClassDefinitionParameterIndex = 2;
         ctx.NewTargetParameterIndex = 3;
-        ctx.DefineParameter("__this", 0, _types.Object);
+        // The adapter stays inside its actual generic owner. Do not transplant
+        // these class parameters into a nongeneric method-value wrapper.
+        foreach (var parameter in _classes.GenericParameters.Require(owner))
+            ctx.GenericTypeParameters[parameter.Name] = parameter;
+        ctx.DefineParameter(CompilationContext.ThisParameterName, 0, _types.Object);
         ApplyCapturedTopLevelVariableAccess(ctx);
         var constructor = declaration.Methods.FirstOrDefault(source => source.Body != null && source.Name.Lexeme == "constructor" && !source.IsStatic);
         if (constructor != null)
@@ -280,11 +406,33 @@ public partial class ILCompiler
         var emitter = new ILEmitter(ctx);
         ctx.CurrentMethodReturnType = _types.Void;
         ctx.IsRuntimeReceiverInitializer = true;
+        emitter.PrepareParameterCaptureCells(constructor?.Parameters ?? []);
         ConfigureClassConstructorReturns(ctx, constructor, declaration.SuperclassExpr != null, forceReceiver: true);
         if (declaration.SuperclassExpr == null)
             EmitConstructedClassPrototype(ctx);
-        EmitOnceOnlyConstructorElements(ctx, () => EmitEffectiveClassElements(ctx, declaration.Fields, null, null,
-            _ => throw new InvalidOperationException("Runtime receiver initializer cannot have computed fields.")));
+        var parameterLocals = new Dictionary<string, LocalBuilder>(StringComparer.Ordinal);
+        var parameterProperties = declaration.SuperclassExpr != null
+            ? constructor?.Body?.Where(statement => IsConstructorParameterProperty(statement, constructor)).ToList() ?? [] : [];
+        EmitOnceOnlyConstructorElements(ctx, () =>
+        {
+            EmitEffectiveClassElements(ctx, declaration.Fields, null, null,
+                _ => throw new InvalidOperationException("Runtime receiver initializer cannot have computed fields."));
+            var parameterEmitter = new ILEmitter(ctx);
+            foreach (var assignment in parameterProperties)
+            {
+                var value = (Expr.Variable)((Expr.Set)((Stmt.Expression)assignment).Expr).Value;
+                parameterEmitter.EmitConstructorParameterProperty(assignment, parameterLocals[value.Name.Lexeme]);
+            }
+        });
+        if (declaration.SuperclassExpr == null)
+        {
+            // Base fields run with their bound receiver before parameter defaults.
+            // Derived elements remain attached to the successful super operation.
+            il.Emit(OpCodes.Ldarg_0);
+            il.Emit(OpCodes.Stloc, ctx.ClassConstructorReceiver!);
+            SetReceiverCell();
+            ctx.EmitConstructorOwnElements!();
+        }
         if (constructor?.Body != null && ReferencesArgumentsIdentifier(constructor.Body)
             && !constructor.Parameters.Any(parameter => parameter.Name.Lexeme == "arguments"))
         {
@@ -297,6 +445,7 @@ public partial class ILCompiler
         foreach (var (parameter, index) in (constructor?.Parameters ?? []).Select((parameter, index) => (parameter, index)))
         {
             var local = ctx.Locals.DeclareLocal(parameter.Name.Lexeme, _types.Object);
+            parameterLocals[parameter.Name.Lexeme] = local;
             il.Emit(OpCodes.Ldarg_1);
             if (parameter.IsRest)
             {
@@ -331,9 +480,13 @@ public partial class ILCompiler
             }
             emitter.EmitParameterBindingInitializer(parameter, parameterInitializers,
                 ILEmitter.ParameterTdzNames(constructor!.Parameters.Skip(index + 1), parameterInitializers));
+            if (emitter.HasParameterCaptureCell(parameter.Name))
+            {
+                il.Emit(OpCodes.Ldloc, parameterLocals[parameter.Name.Lexeme]);
+                emitter.PublishParameterCaptureCell(parameter.Name);
+            }
+            SeedCapturedLocal(parameter.Name.Lexeme, parameterLocals[parameter.Name.Lexeme], publishParameter: true);
         }
-        foreach (var parameter in constructor?.Parameters ?? [])
-            SeedCapturedLocal(parameter.Name.Lexeme, ctx.Locals.GetLocal(parameter.Name.Lexeme)!);
         ctx.UseOwnedCapturedParameterStorage = true;
         ctx.InitializedParameterNames = constructor?.Parameters.Select(parameter => parameter.Name.Lexeme)
             .Concat((parameterInitializers?.Values.AsEnumerable() ?? [])
@@ -361,20 +514,14 @@ public partial class ILCompiler
             il.Emit(OpCodes.Stloc, ctx.ClassConstructorReceiver!);
             SetReceiverCell();
         }
-        else if (declaration.SuperclassExpr == null)
-        {
-            il.Emit(OpCodes.Ldarg_0);
-            il.Emit(OpCodes.Stloc, ctx.ClassConstructorReceiver!);
-            SetReceiverCell();
-        }
-        if (implicitSuper || declaration.SuperclassExpr == null) ctx.EmitConstructorOwnElements!();
+        if (implicitSuper) ctx.EmitConstructorOwnElements!();
         foreach (var statement in constructor?.Body ?? [])
-            emitter.EmitStatement(statement);
+            if (!parameterProperties.Contains(statement)) emitter.EmitStatement(statement);
         emitter.EmitClassConstructorFallthrough();
         il.Emit(OpCodes.Ret);
         emitter.FinalizeReturns();
 
-        void SeedCapturedLocal(string name, LocalBuilder local)
+        void SeedCapturedLocal(string name, LocalBuilder local, bool publishParameter = false)
         {
             if (ctx.FunctionDisplayClassLocal == null
                 || ctx.CapturedFunctionLocals?.Contains(name) != true
@@ -384,6 +531,13 @@ public partial class ILCompiler
             il.Emit(OpCodes.Ldloc, local);
             EmitBoxedFieldConversion(il, field.FieldType);
             il.Emit(OpCodes.Stfld, field);
+            if (publishParameter)
+            {
+                // A later default can invoke or mutate this parameter through an
+                // arrow. Publish once now; the original local may become stale.
+                (ctx.PublishedCapturedParameterNames ??= new(StringComparer.Ordinal)).Add(name);
+                ctx.UseOwnedCapturedParameterStorage = true;
+            }
         }
 
         void SetReceiverCell()
@@ -428,7 +582,7 @@ public partial class ILCompiler
             ctx.CurrentClassBuilder = owner; ctx.CurrentClassName = owner.FullName;
             ctx.EmittingTypeBuilder = type; ctx.IsStrictMode = true; ctx.IsInstanceMethod = !source.IsStatic;
             ctx.IsStaticSuperContext = source.IsStatic;
-            ctx.HasGuestReceiver = true; ctx.GuestThisVariableName = "__this";
+            ctx.HasGuestReceiver = true; ctx.GuestThisVariableName = CompilationContext.ThisParameterName;
             ApplyCapturedTopLevelVariableAccess(ctx);
             return ctx;
         }, owner.FullName!);

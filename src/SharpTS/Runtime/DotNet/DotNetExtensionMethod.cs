@@ -21,7 +21,7 @@ internal sealed class DotNetExtensionMethod(
                 .Skip(1)
                 .Count(p => !p.IsOptional &&
                             !p.IsOut &&
-                            !p.IsDefined(typeof(ParamArrayAttribute), false));
+                            !DotNetMethodResolver.IsParamArray(p));
             minimum = Math.Min(minimum, required);
         }
         return minimum == int.MaxValue ? 0 : minimum;

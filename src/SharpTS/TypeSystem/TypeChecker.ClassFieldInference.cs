@@ -402,6 +402,8 @@ public partial class TypeChecker
                 WidenClassFieldObjectLiteral(literal, record),
             Expr.ArrayLiteral literal when type is TypeInfo.Array array =>
                 WidenClassFieldArrayLiteral(literal, array),
+            Expr.ArrayLiteral literal when type is TypeInfo.Tuple tuple =>
+                WidenFreshArrayTuple(literal, tuple),
             Expr.ArrowFunction arrow when arrow.ReturnType == null && arrow.ReturnTypeNode == null && !arrow.IsGenerator =>
                 WidenClassFieldArrowReturn(arrow, type),
             Expr.Call call when call.TypeArgs is not { Count: > 0 }

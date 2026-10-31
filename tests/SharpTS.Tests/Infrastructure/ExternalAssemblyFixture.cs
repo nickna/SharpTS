@@ -25,6 +25,12 @@ public sealed class ExternalAssemblyFixture : IDisposable
     /// <summary>Path to the built classlib DLL (SharpTsExternalFixture.dll).</summary>
     public string GreeterDllPath { get; }
 
+    /// <summary>A complete library whose implementation intentionally triggers upstream trim/AOT diagnostics.</summary>
+    public string NativeWarningDllPath { get; }
+
+    /// <summary>A real AnyCPU implementation containing an unproved P/Invoke; tests never execute it.</summary>
+    public string NativeImportDllPath { get; }
+
     /// <summary>Folder containing TestPkg.Main/TestPkg.Base .nupkg files (a NuGet folder source).</summary>
     public string PackageSourceDir { get; }
 
@@ -60,6 +66,38 @@ public sealed class ExternalAssemblyFixture : IDisposable
             throw new InvalidOperationException($"Fixture build produced no DLL at {GreeterDllPath}");
 
         // Two packages, Main depending on Base — exercises transitive restore + closure copy.
+        string warningDir = WriteProject("native-warning", """
+            <Project Sdk="Microsoft.NET.Sdk"><PropertyGroup><TargetFramework>net10.0</TargetFramework>
+              <AssemblyName>ExternalNativeWarning</AssemblyName></PropertyGroup></Project>
+            """, ("Warning.cs", """
+            using System.Diagnostics.CodeAnalysis;
+            namespace ExternalNativeWarning;
+            public static class Entry
+            {
+                public static string Run() => Hidden();
+                [RequiresUnreferencedCode("external-closure-trim-probe")]
+                [RequiresDynamicCode("external-closure-aot-probe")]
+                private static string Hidden() => "unreachable after strict rejection";
+            }
+            """));
+        RunDotnet(warningDir, "build -c Release --nologo -v q");
+        NativeWarningDllPath = Path.Combine(warningDir, "bin", "Release", "net10.0", "ExternalNativeWarning.dll");
+
+        string importDir = WriteProject("native-import", """
+            <Project Sdk="Microsoft.NET.Sdk"><PropertyGroup><TargetFramework>net10.0</TargetFramework>
+              <AssemblyName>UnprovedNativeAssets</AssemblyName></PropertyGroup></Project>
+            """, ("NativeProbe.cs", """
+            using System.Runtime.InteropServices;
+            namespace UnprovedNativeAssets;
+            public static class NativeProbe
+            {
+                [DllImport("sharpts_unproved_native_assets", EntryPoint = "answer", ExactSpelling = true)]
+                public static extern int Answer();
+            }
+            """));
+        RunDotnet(importDir, "build -c Release --nologo -v q");
+        NativeImportDllPath = Path.Combine(importDir, "bin", "Release", "net10.0", "UnprovedNativeAssets.dll");
+
         string baseDir = WriteProject("pkgbase", $"""
             <Project Sdk="Microsoft.NET.Sdk">
               <PropertyGroup>

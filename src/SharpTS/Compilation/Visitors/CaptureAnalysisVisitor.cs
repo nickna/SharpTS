@@ -113,6 +113,7 @@ internal class CaptureAnalysisVisitor : ControlledAstVisitor
 
     protected override void VisitVar(Stmt.Var stmt)
     {
+        if (stmt.IsDeclare) return;
         _locals.Add(stmt.Name.Lexeme);
         base.VisitVar(stmt);
     }

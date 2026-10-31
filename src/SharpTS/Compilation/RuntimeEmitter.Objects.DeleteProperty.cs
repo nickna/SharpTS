@@ -26,7 +26,10 @@ public partial class RuntimeEmitter
         EmittedObjectStorageRuntime ObjectStorage,
         EmittedRecordStorageRuntime Records,
         TypeBuilder TSFunctionType,
-        Type UndefinedType
+        Type UndefinedType,
+        MethodInfo? NativeProxyRejection,
+        EmittedGuestOwnPropertyRuntime? GuestOwnProperties = null,
+        Type? DateConstructor = null
     );
 
     private readonly record struct DeletePropertyCoreInputs(
@@ -47,7 +50,10 @@ public partial class RuntimeEmitter
         EmittedObjectStorageRuntime ObjectStorage,
         EmittedRecordStorageRuntime Records,
         TypeBuilder TSFunctionType,
-        Type UndefinedType
+        Type UndefinedType,
+        MethodInfo? NativeProxyRejection,
+        EmittedGuestOwnPropertyRuntime? GuestOwnProperties = null,
+        Type? DateConstructor = null
     );
 
     private readonly record struct DeletePropertyStrictInputs(
@@ -68,7 +74,10 @@ public partial class RuntimeEmitter
         EmittedObjectStorageRuntime ObjectStorage,
         EmittedRecordStorageRuntime Records,
         TypeBuilder TSFunctionType,
-        Type UndefinedType
+        Type UndefinedType,
+        MethodInfo? NativeProxyRejection,
+        EmittedGuestOwnPropertyRuntime? GuestOwnProperties = null,
+        Type? DateConstructor = null
     );
 
     /// <summary>
@@ -105,7 +114,10 @@ public partial class RuntimeEmitter
                 inputs.ObjectStorage,
                 inputs.Records,
                 inputs.TSFunctionType,
-                inputs.UndefinedType
+                inputs.UndefinedType,
+                NativeProxyRejection: inputs.NativeProxyRejection,
+                GuestOwnProperties: inputs.GuestOwnProperties,
+                DateConstructor: inputs.DateConstructor
             ),
             strict: false
         );
@@ -297,7 +309,8 @@ public partial class RuntimeEmitter
                 inputs.GetProperty,
                 inputs.InvokeMethodUnwrapped,
                 inputs.ObjectDescriptors,
-                inputs.ObjectState
+                inputs.ObjectState,
+                NativeProxyRejection: inputs.NativeProxyRejection
             ),
             () => il.Emit(OpCodes.Ldarg_0),
             () => il.Emit(OpCodes.Ldarg_1),
@@ -613,8 +626,8 @@ public partial class RuntimeEmitter
             // Object/Array/String constructor static method names: per ECMA-262
             // §17, every other data property has configurable:true. Mark the
             // deletion in the per-Type tracker so subsequent gOPD/hasOwn report
-            // the property as absent, then return true. (prototype/name/length
-            // and Number constants caught above are non-configurable.)
+            // the property as absent, then return true. The non-configurable
+            // prototype and Number constants have already been handled above.
             var objTypeDelLabel = il.DefineLabel();
             il.Emit(OpCodes.Ldarg_0);
             il.Emit(OpCodes.Ldtoken, _types.Object);
@@ -646,6 +659,25 @@ public partial class RuntimeEmitter
             EmitObjectMethodDelCheck("preventExtensions"); EmitObjectMethodDelCheck("seal");
             EmitObjectMethodDelCheck("setPrototypeOf"); EmitObjectMethodDelCheck("values");
             il.MarkLabel(objTypeDelLabel);
+
+            foreach (var (constructor, names) in new (Type?, string[])[]
+            {
+                (_types.IListOfObject, ["from", "fromAsync", "isArray", "of"]),
+                (_types.Double, ["isFinite", "isInteger", "isNaN", "isSafeInteger", "parseFloat", "parseInt"]),
+                (_types.String, ["fromCharCode", "fromCodePoint", "raw"]),
+                (inputs.DateConstructor, ["now", "UTC", "parse"])
+            })
+            {
+                if (constructor is null) continue;
+                var nextConstructor = il.DefineLabel();
+                il.Emit(OpCodes.Ldarg_0);
+                il.Emit(OpCodes.Ldtoken, constructor);
+                il.Emit(OpCodes.Call, _types.TypeGetTypeFromHandle);
+                il.Emit(OpCodes.Bne_Un, nextConstructor);
+                foreach (var name in names)
+                    EmitObjectMethodDelCheck(name);
+                il.MarkLabel(nextConstructor);
+            }
 
             // Runtime-backed Promise/Error statics are configurable built-in
             // own properties, but are not discoverable through reflection on
@@ -704,12 +736,13 @@ public partial class RuntimeEmitter
             il.Emit(OpCodes.Ldloc, typeDelLocal);
             il.Emit(OpCodes.Ldarg_1);
             il.Emit(OpCodes.Ldc_I4, (int)typeDelStaticPub);
-            il.Emit(OpCodes.Callvirt, _types.GetMethod(_types.Type, "GetField", _types.String, typeof(System.Reflection.BindingFlags)));
+            EmitStaticFieldLookup(il);
             il.Emit(OpCodes.Brtrue, typeBuiltinNameTrueLabel);
             il.Emit(OpCodes.Ldloc, typeDelLocal);
             il.Emit(OpCodes.Ldarg_1);
             il.Emit(OpCodes.Ldc_I4, (int)typeDelStaticPub);
-            il.Emit(OpCodes.Callvirt, _types.GetMethod(_types.Type, "GetProperty", _types.String, typeof(System.Reflection.BindingFlags)));
+            if (_nativeDeletionLookup is { } staticLookup) il.Emit(OpCodes.Call, staticLookup.FindStaticProperty);
+            else il.Emit(OpCodes.Callvirt, _types.GetMethod(_types.Type, "GetProperty", _types.String, typeof(System.Reflection.BindingFlags)));
             il.Emit(OpCodes.Brtrue, typeBuiltinNameTrueLabel);
             // Not a built-in own property — return true (delete-missing = success).
             il.Emit(OpCodes.Ldc_I4_1);
@@ -802,7 +835,8 @@ public partial class RuntimeEmitter
         il.Emit(OpCodes.Callvirt, _types.GetMethod(_types.Object, "GetType"));
         il.Emit(OpCodes.Ldstr, "$EnsureFields");
         il.Emit(OpCodes.Ldc_I4, (int)(BindingFlags.Instance | BindingFlags.NonPublic | BindingFlags.DeclaredOnly));
-        il.Emit(OpCodes.Callvirt, _types.GetMethod(_types.Type, "GetMethod", _types.String, typeof(BindingFlags)));
+        if (_nativeDeletionLookup is { } dynamicLookup) il.Emit(OpCodes.Call, dynamicLookup.FindDynamicFields);
+        else il.Emit(OpCodes.Callvirt, _types.GetMethod(_types.Type, "GetMethod", _types.String, typeof(BindingFlags)));
         il.Emit(OpCodes.Stloc, dynamicStore);
         il.Emit(OpCodes.Ldloc, dynamicStore);
         il.Emit(OpCodes.Brfalse, trueLabel);
@@ -1146,6 +1180,12 @@ public partial class RuntimeEmitter
         il.MarkLabel(dictLabel);
         var valueLocal = il.DeclareLocal(_types.Object);
 
+        il.Emit(OpCodes.Ldloc, ordinaryDeleteDescriptorLocal);
+        il.Emit(OpCodes.Brfalse, trueLabel);
+        il.Emit(OpCodes.Ldloc, ordinaryDeleteDescriptorLocal);
+        il.Emit(OpCodes.Isinst, inputs.UndefinedType);
+        il.Emit(OpCodes.Brtrue, trueLabel);
+
         // Check if frozen
         il.Emit(OpCodes.Ldsfld, inputs.ObjectState.FrozenObjects);
         il.Emit(OpCodes.Ldarg_0);
@@ -1217,6 +1257,7 @@ public partial class RuntimeEmitter
 
         // Return true (default for null and other types)
         il.MarkLabel(trueLabel);
+        EmitGuestOwnMutation(il, inputs.GuestOwnProperties, true, () => il.Emit(OpCodes.Ldarg_0), () => il.Emit(OpCodes.Ldarg_1));
         il.Emit(OpCodes.Ldc_I4_1);
         il.Emit(OpCodes.Ret);
 
@@ -1250,7 +1291,10 @@ public partial class RuntimeEmitter
                 inputs.ObjectStorage,
                 inputs.Records,
                 inputs.TSFunctionType,
-                inputs.UndefinedType
+                inputs.UndefinedType,
+                NativeProxyRejection: inputs.NativeProxyRejection,
+                GuestOwnProperties: inputs.GuestOwnProperties,
+                DateConstructor: inputs.DateConstructor
             ),
             strict: true
         );

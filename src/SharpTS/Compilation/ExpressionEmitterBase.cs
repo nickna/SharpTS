@@ -100,6 +100,10 @@ public abstract partial class ExpressionEmitterBase : IEmitterContext
     protected abstract ILGenerator IL { get; }
     protected abstract CompilationContext Ctx { get; }
     protected abstract TypeProvider Types { get; }
+
+    private protected void EmitConstructorTypeValue(Type owner, NativeConstructorValueProducerKind kind) =>
+        NativeConstructorActivationLookup.EmitValue(Ctx.Runtime?.NativeConstructorActivation, Types, IL,
+            owner, kind, Ctx.CurrentMethod, Ctx.CurrentClassBuilder);
     protected abstract IVariableResolver Resolver { get; }
 
     bool IEmitterContext.HasVariable(string name) => Resolver.HasVariable(name);
@@ -208,10 +212,22 @@ public abstract partial class ExpressionEmitterBase : IEmitterContext
     #endregion
 
     #region Core Expression Dispatch
+    protected Expr? CurrentSourceExpression { get; private set; }
+
     /// <summary>
     /// Dispatches expression emission to the appropriate handler method.
     /// </summary>
     public virtual void EmitExpression(Expr expr)
+    {
+        using var familyInvocation = Ctx.NativeClosedFamilies?.Enter(expr, IL, Ctx.CurrentMethod);
+        if (Ctx.NativeClrAdmission is null) { EmitExpressionCore(expr); return; }
+        var previousExpression = CurrentSourceExpression;
+        CurrentSourceExpression = expr;
+        try { EmitExpressionCore(expr); }
+        finally { CurrentSourceExpression = previousExpression; }
+    }
+
+    private void EmitExpressionCore(Expr expr)
     {
         switch (expr)
         {
@@ -340,9 +356,10 @@ public abstract partial class ExpressionEmitterBase : IEmitterContext
                 else
                 {
                     EmitArrowFunction(af);
-                    if (af.IsAsync && af.HasOwnThis && af.RuntimeName != null)
+                    if (Ctx.Runtime != null)
                     {
-                        // Lowered declarations own properties and integrity state per activation.
+                        // Every evaluation creates a function with its own properties,
+                        // even when its code reuses one emitted method.
                         var function = IL.DeclareLocal(Ctx.Runtime!.FunctionValues.Type);
                         IL.Emit(OpCodes.Castclass, Ctx.Runtime.FunctionValues.Type);
                         IL.Emit(OpCodes.Stloc, function);
@@ -718,6 +735,22 @@ public abstract partial class ExpressionEmitterBase : IEmitterContext
         }
     }
 
+    protected void EmitGlobalPropertyStore()
+    {
+        if (Ctx.IsStrictMode)
+        {
+            IL.Emit(OpCodes.Ldc_I4_1);
+            IL.Emit(OpCodes.Call, Ctx.Runtime!.GlobalObject.SetPropertyStrict);
+        }
+        else IL.Emit(OpCodes.Call, Ctx.Runtime!.GlobalObject.SetProperty);
+    }
+
+    /// <summary>
+    /// Emits a completed property write with an empty evaluation stack at entry and exit.
+    /// Generator suspension can leave this step outside the surrounding synchronous try segment.
+    /// </summary>
+    protected virtual void EmitPropertyWriteOperation(Action emit) => emit();
+
     /// <summary>
     /// Emits an index set expression (obj[index] = value). Default saves value to local (SetIndex is void),
     /// emits obj + index, calls SetIndex, then pushes value back as expression result.
@@ -728,20 +761,18 @@ public abstract partial class ExpressionEmitterBase : IEmitterContext
         // globalThis[key] = value → GlobalThisSetProperty(key, value)
         if (si.Object is Expr.Variable gtSetIdx && gtSetIdx.Name.Lexeme == "globalThis")
         {
-            // Evaluate the reference (base + key expression) before the RHS;
-            // ToPropertyKey remains deferred to the runtime store.
-            EmitExpression(si.Index);
-            EnsureBoxed();
-            var indexTemp = IL.DeclareLocal(typeof(object));
-            IL.Emit(OpCodes.Stloc, indexTemp);
-            EmitExpression(si.Value);
-            EnsureBoxed();
-            var valueTemp = IL.DeclareLocal(typeof(object));
-            IL.Emit(OpCodes.Stloc, valueTemp);
-            IL.Emit(OpCodes.Ldloc, indexTemp);
-            IL.Emit(OpCodes.Callvirt, Types.GetMethodNoParams(Types.Object, "ToString"));
-            IL.Emit(OpCodes.Ldloc, valueTemp);
-            IL.Emit(OpCodes.Call, Ctx.Runtime!.GlobalObject.SetProperty);
+            // Evaluate the raw key before the RHS and retain it across any
+            // suspension. Property-key coercion stays after RHS evaluation.
+            var indexTemp = SpillBoxed(si.Index);
+            var valueTemp = SpillBoxed(si.Value);
+            EmitPropertyWriteOperation(() =>
+            {
+                IL.Emit(OpCodes.Ldloc, indexTemp);
+                IL.Emit(OpCodes.Call, Ctx.Runtime!.Reflect.ToPropertyKey);
+                IL.Emit(OpCodes.Callvirt, Types.GetMethodNoParams(Types.Object, "ToString"));
+                IL.Emit(OpCodes.Ldloc, valueTemp);
+                EmitGlobalPropertyStore();
+            });
             IL.Emit(OpCodes.Ldloc, valueTemp);
             SetStackUnknown();
             return;
@@ -756,13 +787,16 @@ public abstract partial class ExpressionEmitterBase : IEmitterContext
         // RequireObjectCoercible (PutValue): a null/undefined base throws a guest
         // TypeError ("Cannot set properties of undefined|null (setting '<key>')")
         // instead of silently no-op'ing (#733). Null-placeholder globals are exempt.
-        if (!IsNullPlaceholderGlobal(si.Object))
-            EmitThrowIfUndefinedIndexReceiver(objLocal, idxLocal, isWrite: true);
+        EmitPropertyWriteOperation(() =>
+        {
+            if (!IsNullPlaceholderGlobal(si.Object))
+                EmitThrowIfUndefinedIndexReceiver(objLocal, idxLocal, isWrite: true);
 
-        IL.Emit(OpCodes.Ldloc, objLocal);
-        IL.Emit(OpCodes.Ldloc, idxLocal);
-        IL.Emit(OpCodes.Ldloc, valueLocal);
-        IL.Emit(OpCodes.Call, Ctx.Runtime!.ObjectWrite.Index);
+            IL.Emit(OpCodes.Ldloc, objLocal);
+            IL.Emit(OpCodes.Ldloc, idxLocal);
+            IL.Emit(OpCodes.Ldloc, valueLocal);
+            IL.Emit(OpCodes.Call, Ctx.Runtime!.ObjectWrite.Index);
+        });
 
         IL.Emit(OpCodes.Ldloc, valueLocal);
         SetStackUnknown();
@@ -978,9 +1012,12 @@ public abstract partial class ExpressionEmitterBase : IEmitterContext
             EnsureBoxed();
             var gtResultTemp = IL.DeclareLocal(typeof(object));
             IL.Emit(OpCodes.Stloc, gtResultTemp);
-            IL.Emit(OpCodes.Ldstr, s.Name.Lexeme);
-            IL.Emit(OpCodes.Ldloc, gtResultTemp);
-            IL.Emit(OpCodes.Call, Ctx.Runtime!.GlobalObject.SetProperty);
+            EmitPropertyWriteOperation(() =>
+            {
+                IL.Emit(OpCodes.Ldstr, s.Name.Lexeme);
+                IL.Emit(OpCodes.Ldloc, gtResultTemp);
+                EmitGlobalPropertyStore();
+            });
             IL.Emit(OpCodes.Ldloc, gtResultTemp);
             SetStackUnknown();
             return;
@@ -1013,13 +1050,16 @@ public abstract partial class ExpressionEmitterBase : IEmitterContext
         // RequireObjectCoercible (PutValue): a null/undefined base throws a guest
         // TypeError ("Cannot set properties of undefined|null (setting 'X')") (#733).
         // Null-placeholder globals (e.g. `process`) are exempt.
-        if (!IsNullPlaceholderGlobal(s.Object))
-            EmitThrowIfReceiverUndefined(objLocal, s.Name.Lexeme, isWrite: true);
+        EmitPropertyWriteOperation(() =>
+        {
+            if (!IsNullPlaceholderGlobal(s.Object))
+                EmitThrowIfReceiverUndefined(objLocal, s.Name.Lexeme, isWrite: true);
 
-        IL.Emit(OpCodes.Ldloc, objLocal);
-        IL.Emit(OpCodes.Ldstr, s.Name.Lexeme);
-        IL.Emit(OpCodes.Ldloc, valueLocal);
-        IL.Emit(OpCodes.Call, Ctx.Runtime!.ObjectWrite.Property);
+            IL.Emit(OpCodes.Ldloc, objLocal);
+            IL.Emit(OpCodes.Ldstr, s.Name.Lexeme);
+            IL.Emit(OpCodes.Ldloc, valueLocal);
+            IL.Emit(OpCodes.Call, Ctx.Runtime!.ObjectWrite.Property);
+        });
         IL.Emit(OpCodes.Ldloc, valueLocal);
         SetStackUnknown();
     }
@@ -1546,127 +1586,179 @@ public abstract partial class ExpressionEmitterBase : IEmitterContext
         SetStackUnknown();
     }
 
+    // This call follows an actual fresh source literal allocation, never a
+    // declaration, input conversion, or arbitrary CLR object observation.
+    protected void RecordVmSourceObjectLiteral()
+    {
+        if (Ctx.Runtime?.Vm is { } vm)
+        {
+            // Preserve the constructor result's exact verifier type beneath
+            // the receipt operation's object ABI.
+            IL.Emit(OpCodes.Dup);
+            IL.Emit(OpCodes.Call, vm.RecordSourceObject);
+            IL.Emit(OpCodes.Pop);
+        }
+    }
+
     /// <summary>
     /// Emits an object literal with support for spreads, computed keys, and accessors.
     /// ILEmitter overrides with stack-type-tracked implementation.
     /// </summary>
     protected virtual void EmitObjectLiteral(Expr.ObjectLiteral o)
     {
-        bool hasSpreads = o.Properties.Any(p => p.IsSpread);
-        bool hasComputedKeys = o.Properties.Any(p => p.Key is Expr.ComputedKey);
-        bool hasAccessors = o.Properties.Any(p => p.Kind is Expr.ObjectPropertyKind.Getter or Expr.ObjectPropertyKind.Setter);
-
-        if (hasAccessors)
-        {
+        if (o.Properties.Any(p => p.Kind is Expr.ObjectPropertyKind.Getter or Expr.ObjectPropertyKind.Setter))
             EmitObjectLiteralWithAccessors(o);
-        }
-        else if (!hasSpreads && !hasComputedKeys)
-        {
-            // Spill values first so an await inside any value suspends with an empty stack.
-            var valueLocals = o.Properties.Select(p => SpillBoxed(p.Value)).ToList();
-
-            IL.Emit(OpCodes.Newobj, Types.DictionaryStringObjectCtor);
-
-            for (int i = 0; i < o.Properties.Count; i++)
-            {
-                IL.Emit(OpCodes.Dup);
-                EmitStaticPropertyKey(o.Properties[i].Key!);
-                IL.Emit(OpCodes.Ldloc, valueLocals[i]);
-                IL.Emit(OpCodes.Callvirt, Types.DictionaryStringObjectSetItem);
-            }
-
-            IL.Emit(OpCodes.Call, Ctx.Runtime!.ObjectConstruction.Create);
-        }
         else
-        {
-            // Spill computed keys and values first (evaluation order: key before value, per property).
-            var keyLocals = new LocalBuilder?[o.Properties.Count];
-            var valueLocals = new LocalBuilder[o.Properties.Count];
-            for (int i = 0; i < o.Properties.Count; i++)
-            {
-                if (o.Properties[i].Key is Expr.ComputedKey ck)
-                    keyLocals[i] = SpillBoxed(ck.Expression);
-                valueLocals[i] = SpillBoxed(o.Properties[i].Value);
-            }
-
-            IL.Emit(OpCodes.Newobj, Types.DictionaryStringObjectNullableCtor);
-
-            for (int i = 0; i < o.Properties.Count; i++)
-            {
-                var prop = o.Properties[i];
-                IL.Emit(OpCodes.Dup);
-
-                if (prop.IsSpread)
-                {
-                    IL.Emit(OpCodes.Ldloc, valueLocals[i]);
-                    IL.Emit(OpCodes.Call, Ctx.Runtime!.ObjectConstruction.MergeIntoDictionary);
-                }
-                else if (prop.Key is Expr.ComputedKey)
-                {
-                    IL.Emit(OpCodes.Ldloc, keyLocals[i]!);
-                    IL.Emit(OpCodes.Ldloc, valueLocals[i]);
-                    IL.Emit(OpCodes.Call, Ctx.Runtime!.ObjectWrite.Index);
-                }
-                else
-                {
-                    EmitStaticPropertyKey(prop.Key!);
-                    IL.Emit(OpCodes.Ldloc, valueLocals[i]);
-                    IL.Emit(OpCodes.Callvirt, Types.DictionaryStringObjectNullableSetItem);
-                }
-            }
-
-            IL.Emit(OpCodes.Call, Ctx.Runtime!.ObjectConstruction.Create);
-        }
+            EmitDictionaryObjectLiteral(o);
+        RecordVmSourceObjectLiteral();
         SetStackUnknown();
     }
 
-    /// <summary>
-    /// Emits an object literal with getter/setter accessors using the $Object type.
-    /// </summary>
-    protected virtual void EmitObjectLiteralWithAccessors(Expr.ObjectLiteral o)
+    // Keep the actual fresh target in the existing persistent-spill transport.
+    // Each property is completed before evaluating the next property, including
+    // spread getters and computed-key conversion across await/yield.
+    protected void EmitDictionaryObjectLiteral(Expr.ObjectLiteral literal)
     {
-        IL.Emit(OpCodes.Newobj, Types.DictionaryStringObjectNullableCtor);
-        IL.Emit(OpCodes.Newobj, Ctx.Runtime!.ObjectStorage.Constructor);
-
-        var objLocal = IL.DeclareLocal(Ctx.Runtime!.ObjectStorage.Type);
-        IL.Emit(OpCodes.Stloc, objLocal);
-
-        foreach (var prop in o.Properties)
+        IL.Emit(OpCodes.Newobj, Types.DictionaryStringObjectCtor);
+        var target = _helpers.SpillStoreObject();
+        foreach (var property in literal.Properties)
         {
-            // Spill the value first so an await inside it suspends with an empty stack.
-            var valueLocal = SpillBoxed(prop.Value);
-
-            if (prop.IsSpread)
+            if (property.IsSpread)
             {
-                IL.Emit(OpCodes.Ldloc, objLocal);
-                IL.Emit(OpCodes.Ldloc, valueLocal);
-                IL.Emit(OpCodes.Call, Ctx.Runtime!.ObjectConstruction.MergeIntoObject);
-                continue;
+                var source = SpillBoxed(property.Value);
+                EmitPropertyWriteOperation(() =>
+                {
+                    IL.Emit(OpCodes.Ldloc, target);
+                    IL.Emit(OpCodes.Castclass, Types.DictionaryStringObject);
+                    IL.Emit(OpCodes.Ldloc, source);
+                    IL.Emit(OpCodes.Call, Ctx.Runtime!.ObjectConstruction.MergeIntoDictionary);
+                });
             }
-
-            string propKey = GetPropertyKeyString(prop.Key!);
-
-            IL.Emit(OpCodes.Ldloc, objLocal);
-            IL.Emit(OpCodes.Ldstr, propKey);
-            IL.Emit(OpCodes.Ldloc, valueLocal);
-
-            switch (prop.Kind)
+            else if (property.IsPrototypeSetter)
             {
-                case Expr.ObjectPropertyKind.Getter:
-                    IL.Emit(OpCodes.Callvirt, Ctx.Runtime!.ObjectStorage.DefineGetter);
-                    break;
-
-                case Expr.ObjectPropertyKind.Setter:
-                    IL.Emit(OpCodes.Callvirt, Ctx.Runtime!.ObjectStorage.DefineSetter);
-                    break;
-
-                default:
-                    IL.Emit(OpCodes.Callvirt, Ctx.Runtime!.ObjectStorage.SetProperty);
-                    break;
+                var prototype = SpillBoxed(property.Value);
+                EmitLiteralPrototypeSet(target, prototype);
+            }
+            else
+            {
+                var key = SpillObjectLiteralKey(property.Key!);
+                var value = SpillBoxed(property.Value);
+                if (Ctx.RuntimeFeatures?.UsesObjectDefinitionRuntime == false)
+                {
+                    // This actual fresh dictionary has only ordinary data slots.
+                    // Direct insertion creates an own property without consulting
+                    // inherited setters or an omitted descriptor-definition body.
+                    EmitPropertyWriteOperation(() =>
+                    {
+                        IL.Emit(OpCodes.Ldloc, target);
+                        IL.Emit(OpCodes.Castclass, Types.DictionaryStringObject);
+                        IL.Emit(OpCodes.Ldloc, key);
+                        IL.Emit(OpCodes.Castclass, Types.String);
+                        IL.Emit(OpCodes.Ldloc, value);
+                        IL.Emit(OpCodes.Callvirt, Types.DictionaryStringObjectSetItem);
+                    });
+                }
+                else
+                    EmitLiteralDataDefinition(target, key, value);
             }
         }
+        IL.Emit(OpCodes.Ldloc, target);
+        SetStackUnknown();
+    }
 
-        IL.Emit(OpCodes.Ldloc, objLocal);
+    protected LocalBuilder SpillObjectLiteralKey(Expr.PropertyKey key)
+    {
+        if (key is Expr.ComputedKey computed)
+        {
+            var result = SpillBoxed(computed.Expression);
+            EmitPropertyWriteOperation(() =>
+            {
+                IL.Emit(OpCodes.Ldloc, result);
+                IL.Emit(OpCodes.Call, Ctx.Runtime!.Reflect.ToPropertyKey);
+                IL.Emit(OpCodes.Stloc, result);
+            });
+            return result;
+        }
+        EmitStaticPropertyKey(key);
+        return _helpers.SpillStoreObject();
+    }
+
+    protected void EmitLiteralPrototypeSet(LocalBuilder target, LocalBuilder prototype)
+    {
+        EmitPropertyWriteOperation(() =>
+        {
+            var kind = IL.DeclareLocal(Types.String);
+            var set = IL.DefineLabel();
+            var done = IL.DefineLabel();
+            IL.Emit(OpCodes.Ldloc, prototype);
+            IL.Emit(OpCodes.Call, Ctx.Runtime!.Operators.TypeOf);
+            IL.Emit(OpCodes.Stloc, kind);
+            foreach (var objectKind in new[] { "object", "function" })
+            {
+                IL.Emit(OpCodes.Ldloc, kind);
+                IL.Emit(OpCodes.Ldstr, objectKind);
+                IL.Emit(OpCodes.Call, Types.StringOpEquality);
+                IL.Emit(OpCodes.Brtrue, set);
+            }
+            IL.Emit(OpCodes.Br, done);
+            IL.MarkLabel(set);
+            IL.Emit(OpCodes.Ldloc, target);
+            IL.Emit(OpCodes.Ldloc, prototype);
+            IL.Emit(OpCodes.Call, Ctx.Runtime.DescriptorStorage.SetPrototype);
+            IL.MarkLabel(done);
+        });
+    }
+
+    protected void EmitLiteralDataDefinition(LocalBuilder target, LocalBuilder key, LocalBuilder value)
+    {
+        EmitPropertyWriteOperation(() => LiteralPropertyEmitter.Emit(
+            Types, IL, Ctx.Runtime!.DescriptorStorage, Ctx.Runtime.ObjectDescriptors.DefineProperty,
+            () => IL.Emit(OpCodes.Ldloc, target),
+            () => IL.Emit(OpCodes.Ldloc, key),
+            () => IL.Emit(OpCodes.Ldloc, value)));
+    }
+
+    protected virtual void EmitObjectLiteralWithAccessors(Expr.ObjectLiteral literal)
+    {
+        IL.Emit(OpCodes.Newobj, Types.DictionaryStringObjectNullableCtor);
+        NativePrototypeFieldsLookup.EmitCarrierCreate(Ctx.Runtime!.NativePrototypeFields, IL, Ctx.Runtime.ObjectStorage.Constructor);
+        var target = _helpers.SpillStoreObject();
+        foreach (var property in literal.Properties)
+        {
+            if (property.IsSpread)
+            {
+                var source = SpillBoxed(property.Value);
+                EmitPropertyWriteOperation(() =>
+                {
+                    IL.Emit(OpCodes.Ldloc, target);
+                    IL.Emit(OpCodes.Castclass, Ctx.Runtime.ObjectStorage.Type);
+                    IL.Emit(OpCodes.Ldloc, source);
+                    IL.Emit(OpCodes.Call, Ctx.Runtime.ObjectConstruction.MergeIntoObject);
+                });
+            }
+            else if (property.IsPrototypeSetter)
+            {
+                var prototype = SpillBoxed(property.Value);
+                EmitLiteralPrototypeSet(target, prototype);
+            }
+            else
+            {
+                var key = SpillObjectLiteralKey(property.Key!);
+                var value = SpillBoxed(property.Value);
+                if (property.Kind is Expr.ObjectPropertyKind.Getter or Expr.ObjectPropertyKind.Setter)
+                {
+                    EmitPropertyWriteOperation(() => LiteralPropertyEmitter.EmitAccessor(
+                        Types, IL, Ctx.Runtime!.DescriptorStorage, Ctx.Runtime.ObjectDescriptors.DefineProperty,
+                        () => IL.Emit(OpCodes.Ldloc, target),
+                        () => IL.Emit(OpCodes.Ldloc, key),
+                        () => IL.Emit(OpCodes.Ldloc, value),
+                        property.Kind == Expr.ObjectPropertyKind.Getter));
+                }
+                else
+                    EmitLiteralDataDefinition(target, key, value);
+            }
+        }
+        IL.Emit(OpCodes.Ldloc, target);
         SetStackUnknown();
     }
 
@@ -1713,6 +1805,7 @@ public abstract partial class ExpressionEmitterBase : IEmitterContext
     /// </summary>
     protected virtual void EmitNew(Expr.New n)
     {
+        if (TryEmitNativeModuleConstructor(n)) return;
         if (Ctx.RuntimeFeatures?.UsesClassPrototypeMutation == true
             && Ctx.TypeMapper.IsDynamicClassInstance(Ctx.TypeMap?.Get(n)))
         {
@@ -1731,7 +1824,9 @@ public abstract partial class ExpressionEmitterBase : IEmitterContext
         }
         var (namespaceParts, className) = ExtractQualifiedNameFromCallee(n.Callee);
 
-        if (namespaceParts.Count == 0 && n.Callee is Expr.Variable && TryEmitBuiltInConstructor(className, n.Arguments))
+        if (namespaceParts.Count == 0 && n.Callee is Expr.Variable
+            && !Resolver.HasVariable(className) && !Ctx.HasVisibleValueBinding(className)
+            && TryEmitBuiltInConstructor(className, n.Arguments))
             return;
 
         if (TryEmitIntlConstructor(namespaceParts, className, n.Arguments))
@@ -1829,7 +1924,7 @@ public abstract partial class ExpressionEmitterBase : IEmitterContext
                 EmitOmittedArgument(ctorParams[i].ParameterType);
             }
 
-            IL.Emit(OpCodes.Newobj, targetCtor);
+            NativeClosedSourceFamilies.EmitAllocation(Ctx.NativeClosedFamilies, IL, targetCtor, Ctx.CurrentMethod);
             IL.Emit(OpCodes.Call, Ctx.Runtime!.DynamicConstruction.ResolveClassReturn);
             SetStackUnknown();
         }
@@ -1855,12 +1950,28 @@ public abstract partial class ExpressionEmitterBase : IEmitterContext
         if (typeArg == "string") return Types.String;
         if (typeArg == "boolean") return Types.Boolean;
         string qualified = Ctx.ResolveClassName(typeArg);
+        if (Ctx.GenericTypeParameters.TryGetValue(typeArg, out var owned)) return owned;
         if (Ctx.TypeMapper.ExternalTypes.TryGetValue(typeArg, out var external)
             || Ctx.TypeMapper.ExternalTypes.TryGetValue(qualified, out external)) return external;
-        if (Ctx.GenericTypeParameters.TryGetValue(typeArg, out var owned)) return owned;
         if (Ctx.Classes.TryGetValue(qualified, out var builder))
             return Ctx.TypeMapper.IsDynamicClassInstance(Ctx.TypeMap?.GetClassType(qualified)) ? Types.Object : builder;
-        return SharpTS.Runtime.DotNet.DotNetTypeRegistry.ResolveFriendly(typeArg) ?? Types.Object;
+        // Friendly CLR spellings may use this compilation's references and framework
+        // metadata, but never the interpreter's ambient loaded-assembly/name cache.
+        // In particular, an unsupported source spelling such as T[] must not bind
+        // to a class named T left behind by a different guest compilation.
+        return SharpTS.Runtime.DotNet.DotNetTypeRegistry.ResolveFriendly(typeArg, ResolveExternalTypeArgument) ?? Types.Object;
+    }
+
+    private Type? ResolveExternalTypeArgument(string name)
+    {
+        // Composite source arguments keep their existing erasure; an outer CLR
+        // alias cannot replace a parameter owned by the current generic context.
+        if (Ctx.GenericTypeParameters.ContainsKey(name)) return null;
+        if (Ctx.TypeMapper.ExternalTypes.TryGetValue(name, out var declared)) return declared;
+        if (Ctx.TypeMapper.ExternalMetadata?.TryResolve(name) is { } referenced)
+            return Ctx.TypeMapper.ForEmission(referenced);
+        try { return Types.Resolve(name); }
+        catch (CompileException) { return null; }
     }
 
     /// <summary>
@@ -1931,7 +2042,7 @@ public abstract partial class ExpressionEmitterBase : IEmitterContext
         for (int i = n.Arguments.Count; i < expectedParamCount; i++)
             EmitOmittedArgument(ctorParams[i].ParameterType);
 
-        IL.Emit(OpCodes.Newobj, classExprCtor);
+        NativeClosedSourceFamilies.EmitAllocation(Ctx.NativeClosedFamilies, IL, classExprCtor, Ctx.CurrentMethod);
         IL.Emit(OpCodes.Call, Ctx.Runtime!.DynamicConstruction.ResolveClassReturn);
         SetStackUnknown();
     }
@@ -1995,7 +2106,8 @@ public abstract partial class ExpressionEmitterBase : IEmitterContext
         // state trips ILVerify PathStackDepth into an InvalidProgramException.
         IL.Emit(OpCodes.Ldnull);
         Types.EmitLoadMethodInfoViaHandle(IL, method);
-        IL.Emit(OpCodes.Newobj, Ctx.Runtime!.FunctionConstruction.Constructor);
+        NativeSourceFunctionEmission.EmitConstructor(IL, Types, Ctx.Runtime!, method,
+            generics: Ctx.FunctionGenericParameters);
         SetStackUnknown();
     }
 
@@ -2034,7 +2146,8 @@ public abstract partial class ExpressionEmitterBase : IEmitterContext
     {
         EmitCapturingArrowDisplayViaHooks(af, displayCtor);
         Types.EmitLoadMethodInfoViaHandle(IL, method);
-        IL.Emit(OpCodes.Newobj, Ctx.Runtime!.FunctionConstruction.Constructor);
+        NativeSourceFunctionEmission.EmitConstructor(IL, Types, Ctx.Runtime!, method,
+            generics: Ctx.FunctionGenericParameters);
         SetStackUnknown();
     }
 
@@ -2286,8 +2399,7 @@ public abstract partial class ExpressionEmitterBase : IEmitterContext
         // the built-in arms so a user class shadowing a built-in name wins.
         if (Ctx.Classes.TryGetValue(Ctx.ResolveClassName(name), out var userClassType))
         {
-            IL.Emit(OpCodes.Ldtoken, userClassType);
-            IL.Emit(OpCodes.Call, Types.GetMethod(Types.Type, "GetTypeFromHandle", Types.RuntimeTypeHandle));
+            EmitConstructorTypeValue(userClassType, NativeConstructorValueProducerKind.SourceClass);
             SetStackUnknown();
             return true;
         }
@@ -2311,6 +2423,8 @@ public abstract partial class ExpressionEmitterBase : IEmitterContext
         // including state-machine bodies; direct static eval keeps its own lowering.
         if (TryEmitIndirectEvalValue(name)) return true;
 
+        if (TryEmitGlobalTimerFunctionValue(name)) return true;
+
         if (name == "parseInt")
         {
             EmitGlobalParseIntRead(IL, Ctx);
@@ -2331,6 +2445,15 @@ public abstract partial class ExpressionEmitterBase : IEmitterContext
         return false;
     }
 
+    protected bool TryEmitGlobalTimerFunctionValue(string name)
+    {
+        if (name is not ("setTimeout" or "clearTimeout" or "setInterval" or "clearInterval"
+            or "setImmediate" or "clearImmediate" or "queueMicrotask") || Ctx.HasVisibleValueBinding(name)) return false;
+        IL.Emit(OpCodes.Ldstr, name);
+        IL.Emit(OpCodes.Call, Ctx.Runtime!.GlobalObject.GetBinding);
+        SetStackUnknown();
+        return true;
+    }
     // A global identifier read must distinguish a missing binding from a present
     // property whose value is undefined. Qualified property reads remain unchecked.
     internal static void EmitGlobalParseIntRead(
@@ -2342,15 +2465,17 @@ public abstract partial class ExpressionEmitterBase : IEmitterContext
             : ctx.Runtime!.GlobalObject.GetBinding);
     }
 
-    protected bool TryEmitGlobalParseIntTypeOf(Expr operand)
+    protected bool TryEmitMutableGlobalFunctionTypeOf(Expr operand)
     {
-        if (ExpressionUnwrapper.Unwrap(operand) is not Expr.Variable { Name.Lexeme: "parseInt" }
-            || Resolver.HasVariable("parseInt") || Ctx.HasVisibleValueBinding("parseInt"))
+        if (ExpressionUnwrapper.Unwrap(operand) is not Expr.Variable variable
+            || variable.Name.Lexeme is not ("parseInt" or "queueMicrotask")
+            || Resolver.HasVariable(variable.Name.Lexeme) || Ctx.HasVisibleValueBinding(variable.Name.Lexeme))
             return false;
 
         // Parentheses preserve an identifier reference's typeof exemption.
         // Still perform the property read so present accessors run normally.
-        EmitGlobalParseIntRead(IL, Ctx, allowMissing: true);
+        IL.Emit(OpCodes.Ldstr, variable.Name.Lexeme);
+        IL.Emit(OpCodes.Call, Ctx.Runtime!.GlobalObject.GetProperty);
         IL.Emit(OpCodes.Call, Ctx.Runtime!.Operators.TypeOf);
         SetStackType(StackType.String);
         return true;
@@ -2482,8 +2607,7 @@ public abstract partial class ExpressionEmitterBase : IEmitterContext
             "AggregateError" => Ctx.Runtime!.Errors.AggregateErrorType,
             _ => Ctx.Runtime!.Errors.Type
         };
-        IL.Emit(OpCodes.Ldtoken, errorType);
-        IL.Emit(OpCodes.Call, Types.GetMethod(Types.Type, "GetTypeFromHandle", Types.RuntimeTypeHandle));
+        EmitConstructorTypeValue(errorType, NativeConstructorValueProducerKind.BuiltInConstructor);
         SetStackUnknown();
         return true;
     }
@@ -2553,8 +2677,7 @@ public abstract partial class ExpressionEmitterBase : IEmitterContext
             _ => null
         };
         if (t == null) return false;
-        IL.Emit(OpCodes.Ldtoken, t);
-        IL.Emit(OpCodes.Call, Types.GetMethod(Types.Type, "GetTypeFromHandle", Types.RuntimeTypeHandle));
+        EmitConstructorTypeValue(t, NativeConstructorValueProducerKind.BuiltInConstructor);
         SetStackUnknown();
         return true;
     }
@@ -2844,6 +2967,7 @@ public abstract partial class ExpressionEmitterBase : IEmitterContext
     /// </summary>
     protected virtual void EmitUnary(Expr.Unary u)
     {
+        if (TryEmitRawNumericUnary(u)) return;
         if (u.Operator.Type == TokenType.INTERNAL_TO_PROPERTY_KEY)
         {
             EmitExpression(u.Right);
@@ -2882,7 +3006,7 @@ public abstract partial class ExpressionEmitterBase : IEmitterContext
                 break;
             case TokenType.TYPEOF:
                 // typeof never throws on undeclared variables - returns "undefined"
-                if (TryEmitGlobalParseIntTypeOf(u.Right))
+                if (TryEmitMutableGlobalFunctionTypeOf(u.Right))
                 {
                     break;
                 }
@@ -2950,6 +3074,7 @@ public abstract partial class ExpressionEmitterBase : IEmitterContext
             or "parseFloat" or "parseInt" or "isNaN" or "isFinite"
             or "encodeURIComponent" or "decodeURIComponent"
             or "setTimeout" or "clearTimeout" or "setInterval" or "clearInterval"
+            or "setImmediate" or "clearImmediate"
             or "queueMicrotask" or "structuredClone") return true;
         if (Ctx.TopLevelStaticVars?.ContainsKey(name) == true) return true;
         if (Ctx.Classes.ContainsKey(Ctx.ResolveClassName(name))) return true;

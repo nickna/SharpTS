@@ -1,14 +1,15 @@
 name: Publish to NuGet
 
-# Ordering is the release gate: build/pack and every managed/native smoke test
-# run first, then `publish-nuget` uploads the packages, `verify-nuget` waits for
-# consumer-facing NuGet availability, and only then does `release` create the
+# Ordering is the release gate: build/pack, every managed/native smoke test,
+# and the complete standalone shards run first. Then `publish-nuget` uploads
+# packages, `verify-nuget` waits for consumer-facing NuGet availability,
+# and only then does `release` create the
 # GitHub Release with all archives attached. A failing RID or unavailable NuGet
 # package therefore blocks downstream release work.
 #
-# workflow_dispatch is the dry-run mode: it exercises the full matrix (including
-# the six native RIDs and their runner labels) without publishing anything —
-# run it before the first real tag, and after runner-label or matrix changes.
+# workflow_dispatch is the dry-run mode: it exercises the current five-RID
+# managed/native matrix (#1324) without publishing anything, even on a tag. Run it before
+# the first real tag, and after runner-label or matrix changes.
 on:
   push:
     tags:
@@ -25,7 +26,9 @@ concurrency:
 jobs:
   build:
     runs-on: ubuntu-24.04
-    timeout-minutes: 30
+    # Match CI's core/build/pack budget; standalone child-process tests have
+    # their own complete six-shard gate below.
+    timeout-minutes: 50
 
     outputs:
       version: ${{ steps.version.outputs.VERSION }}
@@ -45,7 +48,7 @@ jobs:
         id: version
         run: |
           IS_STABLE=false
-          if [[ "$GITHUB_REF" == refs/tags/v* ]]; then
+          if [[ "$GITHUB_EVENT_NAME" == push && "$GITHUB_REF" == refs/tags/v* ]]; then
             VERSION=${GITHUB_REF_NAME#v}
             if [[ "$GITHUB_REF_NAME" =~ ^v[0-9]+\.[0-9]+\.[0-9]+$ ]]; then
               IS_STABLE=true
@@ -75,16 +78,34 @@ jobs:
       - name: Build
         run: dotnet build --no-restore --configuration Release
 
-      # Same exclusions as ci.yml: LiveNetwork tests make real outbound DNS/HTTP
+      # Same core partition as ci.yml: LiveNetwork tests make real outbound DNS/HTTP
       # calls and npm tests run a real `npm install`; both can false-red on runner
       # network hiccups — which here would block a tagged release after build but
-      # before pack/push.
-      - name: Test
-        run: dotnet test --no-build --configuration Release --verbosity normal --filter "Category!=LiveNetwork&Category!=LoadSensitive&Category!=npm"
+      # before pack/push. The standalone job covers the complementary class.
+      - name: Test core
+        run: dotnet test tests/SharpTS.Tests/SharpTS.Tests.csproj --no-build --configuration Release --verbosity normal --filter "Category!=LiveNetwork&Category!=LoadSensitive&Category!=npm&FullyQualifiedName!~SharpTS.Tests.CompilerTests.StandaloneDllTests." --blame-hang-timeout 120s --blame-hang-dump-type mini
+        timeout-minutes: 30
+
+      # Run the other solution test project after core, as CI does. SharpPaint's
+      # owned workflow deadline is 180s, so a 120s VSTest inactivity watchdog
+      # would kill its host before the helper can time out and clean up.
+      - name: Test GUI conformance
+        run: dotnet test tests/gui-conformance/SharpTS.Gui.Conformance.Tests/SharpTS.Gui.Conformance.Tests.csproj --no-build --configuration Release --verbosity normal --filter "Category!=LiveNetwork&Category!=LoadSensitive&Category!=npm&FullyQualifiedName!~SharpTS.Tests.CompilerTests.StandaloneDllTests."
+        timeout-minutes: 10
 
       - name: Test NuGet release helper
         shell: pwsh
-        run: ./scripts/test-nuget-release.ps1
+        run: |
+          ./scripts/test-nuget-release.ps1
+          ./scripts/test-release-dispatch.ps1
+
+      - name: Test Homebrew cask generation
+        shell: pwsh
+        run: ./scripts/test-homebrew-casks.ps1
+
+      - name: Test initial WinGet manifest preparation
+        shell: pwsh
+        run: ./scripts/test-winget-manifests.ps1
 
       - name: Publish SharpTS for SDK bundling
         run: dotnet publish src/SharpTS/SharpTS.csproj --configuration Release --no-build
@@ -138,16 +159,33 @@ jobs:
           -PackageVersion "${{ steps.version.outputs.VERSION }}"
           -PackageOnly
 
-      # A new package ID must be onboarded under the Trusted Publishing policy's
-      # NuGet owner before a tag can publish it. This also keeps every package
-      # artifact tied to a package ID that NuGet already serves.
+      # Every run checks local package identity and inventory. The binary dry
+      # run must not depend on onboarding a new package ID for publication.
+      - name: Validate NuGet package artifacts
+        shell: pwsh
+        run: >-
+          ./scripts/nuget-release.ps1
+          -Action ValidateArtifacts
+          -Version "${{ steps.version.outputs.VERSION }}"
+          -PackageDirectory ./nupkg
+
+      # Tags additionally require public package registration before any
+      # dependent job can publish. Publish repeats both checks before pushing.
       - name: Preflight NuGet package IDs and artifacts
+        if: github.event_name == 'push' && startsWith(github.ref, 'refs/tags/v')
         shell: pwsh
         run: >-
           ./scripts/nuget-release.ps1
           -Action Preflight
           -Version "${{ steps.version.outputs.VERSION }}"
           -PackageDirectory ./nupkg
+
+      - name: Summarize dry-run validation boundary
+        if: github.event_name == 'workflow_dispatch'
+        shell: pwsh
+        run: |
+          Add-Content -LiteralPath $env:GITHUB_STEP_SUMMARY -Value '### Release dry run'
+          Add-Content -LiteralPath $env:GITHUB_STEP_SUMMARY -Value 'Local package IDs, versions and artifact inventory were validated. NuGet registration and publication credentials were not validated. A successful dry run does not establish publication readiness.'
 
       - name: Smoke test packaged SDK
         shell: pwsh
@@ -164,23 +202,55 @@ jobs:
           if-no-files-found: error
           retention-days: 7
 
+  # Keep every standalone method, balanced by the same discovery-based planner
+  # as CI. Both public-write jobs require the entire matrix to succeed.
+  standalone:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 40
+    strategy:
+      fail-fast: false
+      matrix:
+        shard: [0, 1, 2, 3, 4, 5]
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - name: Setup .NET
+        uses: actions/setup-dotnet@a98b56852c35b8e3190ac28c8c2271da59106c68 # v6.0.0
+        with:
+          global-json-file: global.json
+      - name: Restore standalone tests
+        run: dotnet restore tests/SharpTS.Tests/SharpTS.Tests.csproj
+      - name: Build standalone tests
+        run: dotnet build tests/SharpTS.Tests/SharpTS.Tests.csproj --no-restore --configuration Release
+      - name: Test standalone
+        shell: pwsh
+        run: ./scripts/test-standalone-shard.ps1 -ShardIndex ${{ matrix.shard }} -ShardCount 6 -ResultsDirectory artifacts/release-standalone/${{ matrix.shard }}
+        timeout-minutes: 35
+      - name: Upload standalone shard evidence
+        if: always()
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7
+        with:
+          name: release-standalone-${{ matrix.shard }}
+          path: artifacts/release-standalone/
+          if-no-files-found: warn
+          retention-days: 7
+
   # Managed SKU (#1324 Track 0): self-contained single-file binaries per RID,
   # attached to the GitHub Release. No .NET install required on the target
   # machine; full feature set (interop, -r, --verify, --gen-decl). When the
   # managed self-contained CLI handles child_process.fork it launches its own
   # Environment.ProcessPath, so the child does not require a separate SDK.
   #
-  # Runner selection: self-contained *managed* publishing is cross-RID capable,
-  # but four RIDs run on their own architecture so the published binary is
-  # executed before release (win/linux on x64 and arm64 runners). macOS
-  # binaries are cross-published (macOS runner minutes bill at 10x); the SDK
-  # ad-hoc-signs single-file Mach-O bundles during publish, but if Gatekeeper
-  # still rejects a downloaded binary, `codesign -s - sharpts` re-signs it.
+  # Every RID publishes and executes its final archive on a matching runner.
+  # Enable MACOS_CLI_SIGNING_ENABLED after configuring the protected macOS
+  # environment described in docs/homebrew-distribution.md.
   binaries:
     name: Managed SKU (${{ matrix.rid }})
     needs: build
     runs-on: ${{ matrix.os }}
-    timeout-minutes: 30
+    timeout-minutes: 60
+    environment: ${{ matrix.rid == 'osx-arm64' && 'macos-cli-distribution' || 'binary-release' }}
     env:
       MinVerVersionOverride: ${{ needs.build.outputs.version }}
     strategy:
@@ -191,7 +261,7 @@ jobs:
           - { rid: win-arm64,   os: windows-11-vs2026-arm,    smoke: true }
           - { rid: linux-x64,   os: ubuntu-24.04,            smoke: true }
           - { rid: linux-arm64, os: ubuntu-24.04-arm,         smoke: true }
-          - { rid: osx-arm64,   os: ubuntu-24.04,            smoke: false }
+          - { rid: osx-arm64,   os: macos-15,                smoke: true }
 
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
@@ -225,6 +295,18 @@ jobs:
             -p:PlatformTarget=AnyCPU \
             -p:Version=${{ needs.build.outputs.version }} \
             -o ./sku/${{ matrix.rid }}
+
+      - name: Sign and notarize macOS CLI
+        if: matrix.rid == 'osx-arm64' && vars.MACOS_CLI_SIGNING_ENABLED == 'true'
+        shell: pwsh
+        env:
+          MACOS_DEVELOPER_ID_P12_BASE64: ${{ secrets.MACOS_DEVELOPER_ID_P12_BASE64 }}
+          MACOS_DEVELOPER_ID_P12_PASSWORD: ${{ secrets.MACOS_DEVELOPER_ID_P12_PASSWORD }}
+          MACOS_DEVELOPER_ID_APPLICATION: ${{ secrets.MACOS_DEVELOPER_ID_APPLICATION }}
+          MACOS_NOTARY_KEY_BASE64: ${{ secrets.MACOS_NOTARY_KEY_BASE64 }}
+          MACOS_NOTARY_KEY_ID: ${{ secrets.MACOS_NOTARY_KEY_ID }}
+          MACOS_NOTARY_ISSUER_ID: ${{ secrets.MACOS_NOTARY_ISSUER_ID }}
+        run: ./scripts/sign-cli-macos.ps1 -Executable ./sku/osx-arm64/SharpTS -Sku Managed -ResultsDirectory ./macos-signing-managed
 
       # Embedded-resource smoke: the interpreter and compiler both depend on
       # resources bundled into the single-file exe (stdlib/*.ts via
@@ -291,6 +373,22 @@ jobs:
               ;;
           esac
 
+      - name: Smoke test final archive
+        if: matrix.smoke
+        shell: pwsh
+        env:
+          RELEASE_VERSION: ${{ needs.build.outputs.version }}
+          RELEASE_RID: ${{ matrix.rid }}
+          REQUIRE_SIGNED: ${{ matrix.rid == 'osx-arm64' && vars.MACOS_CLI_SIGNING_ENABLED == 'true' }}
+        run: |
+          $windows = $env:RELEASE_RID.StartsWith('win-')
+          $suffix = if ($windows) { '.zip' } else { '.tar.gz' }
+          $exe = if ($windows) { 'SharpTS.exe' } else { 'SharpTS' }
+          $hash = (Get-FileHash "./sku/$($env:RELEASE_RID)/$exe" -Algorithm SHA256).Hash
+          ./scripts/test-cli-release-archive.ps1 -ArchivePath "./sharpts-$($env:RELEASE_VERSION)-$($env:RELEASE_RID)$suffix" `
+            -Sku Managed -Version $env:RELEASE_VERSION -ExpectedExecutableSha256 $hash `
+            -RequireSigned:($env:REQUIRE_SIGNED -eq 'true') -ResultsDirectory ./archive-smoke-managed
+
       - name: Upload archive artifact
         uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7
         with:
@@ -308,7 +406,8 @@ jobs:
     name: Native SKU (${{ matrix.rid }})
     needs: build
     runs-on: ${{ matrix.os }}
-    timeout-minutes: 30
+    timeout-minutes: 60
+    environment: ${{ matrix.rid == 'osx-arm64' && 'macos-cli-distribution' || 'binary-release' }}
     env:
       MinVerVersionOverride: ${{ needs.build.outputs.version }}
     strategy:
@@ -363,6 +462,18 @@ jobs:
             -p:Version=${{ needs.build.outputs.version }} \
             -p:SharpTSManagedRuntimePayloadPath="$PWD/sku/managed-runtime/SharpTS.dll" \
             -o ./sku/${{ matrix.rid }} 2>&1 | tee native-publish-${{ matrix.rid }}.log
+
+      - name: Sign and notarize macOS CLI
+        if: matrix.rid == 'osx-arm64' && vars.MACOS_CLI_SIGNING_ENABLED == 'true'
+        shell: pwsh
+        env:
+          MACOS_DEVELOPER_ID_P12_BASE64: ${{ secrets.MACOS_DEVELOPER_ID_P12_BASE64 }}
+          MACOS_DEVELOPER_ID_P12_PASSWORD: ${{ secrets.MACOS_DEVELOPER_ID_P12_PASSWORD }}
+          MACOS_DEVELOPER_ID_APPLICATION: ${{ secrets.MACOS_DEVELOPER_ID_APPLICATION }}
+          MACOS_NOTARY_KEY_BASE64: ${{ secrets.MACOS_NOTARY_KEY_BASE64 }}
+          MACOS_NOTARY_KEY_ID: ${{ secrets.MACOS_NOTARY_KEY_ID }}
+          MACOS_NOTARY_ISSUER_ID: ${{ secrets.MACOS_NOTARY_ISSUER_ID }}
+        run: ./scripts/sign-cli-macos.ps1 -Executable ./sku/osx-arm64/SharpTS -Sku Native -ResultsDirectory ./macos-signing-native
 
       # ILC closures differ per RID; a SharpTS-owned warning that only appears on
       # one platform must fail that platform's release job, not ship silently.
@@ -517,6 +628,21 @@ jobs:
               ;;
           esac
 
+      - name: Smoke test final archive
+        shell: pwsh
+        env:
+          RELEASE_VERSION: ${{ needs.build.outputs.version }}
+          RELEASE_RID: ${{ matrix.rid }}
+          REQUIRE_SIGNED: ${{ matrix.rid == 'osx-arm64' && vars.MACOS_CLI_SIGNING_ENABLED == 'true' }}
+        run: |
+          $windows = $env:RELEASE_RID.StartsWith('win-')
+          $suffix = if ($windows) { '.zip' } else { '.tar.gz' }
+          $exe = if ($windows) { 'SharpTS.exe' } else { 'SharpTS' }
+          $hash = (Get-FileHash "./sku/$($env:RELEASE_RID)/$exe" -Algorithm SHA256).Hash
+          ./scripts/test-cli-release-archive.ps1 -ArchivePath "./sharpts-native-$($env:RELEASE_VERSION)-$($env:RELEASE_RID)$suffix" `
+            -Sku Native -Version $env:RELEASE_VERSION -ExpectedExecutableSha256 $hash `
+            -RequireSigned:($env:REQUIRE_SIGNED -eq 'true') -ResultsDirectory ./archive-smoke-native
+
       - name: Upload archive artifact
         uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7
         with:
@@ -542,8 +668,8 @@ jobs:
   # index can be retried without republishing. --skip-duplicate makes a rerun of
   # this job safe after a partial or ambiguous upload response.
   publish-nuget:
-    needs: [build, binaries, native-binaries]
-    if: startsWith(github.ref, 'refs/tags/v')
+    needs: [build, standalone, binaries, native-binaries]
+    if: github.event_name == 'push' && startsWith(github.ref, 'refs/tags/v')
     permissions:
       contents: read
       id-token: write
@@ -619,8 +745,8 @@ jobs:
   # Create public release assets only after NuGet's catalog/search view exposes
   # every uploaded package. WinGet remains downstream of this job.
   release:
-    needs: [build, binaries, native-binaries, verify-nuget]
-    if: startsWith(github.ref, 'refs/tags/v')
+    needs: [build, standalone, binaries, native-binaries, verify-nuget]
+    if: github.event_name == 'push' && startsWith(github.ref, 'refs/tags/v')
     permissions:
       contents: write
     runs-on: ubuntu-24.04
@@ -667,7 +793,7 @@ jobs:
   winget:
     name: WinGet (${{ matrix.package_id }})
     needs: [build, release]
-    if: needs.build.outputs.is_stable == 'true' && vars.WINGET_AUTOMATION_ENABLED == 'true'
+    if: github.event_name == 'push' && startsWith(github.ref, 'refs/tags/v') && needs.build.outputs.is_stable == 'true' && vars.WINGET_AUTOMATION_ENABLED == 'true'
     permissions:
       contents: read
     runs-on: windows-2025

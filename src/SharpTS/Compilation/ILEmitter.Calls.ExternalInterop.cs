@@ -81,12 +81,13 @@ public partial class ILEmitter
         var resolver = new ExternalMethodResolver(_ctx.TypeMap, _ctx.Types);
         var candidate = resolver.ResolveMethod(getters, arguments);
         var getter = (MethodInfo)candidate.Method;
+        RecordExternalSelection(getter, getter.ReturnType, NativeClrAdmission.Marshalling.BoxedSlot, receiver, arguments);
 
         EmitExpression(receiver);
         EmitBoxIfNeeded(receiver);
-        bool isValueType = PrepareReceiverForMemberAccess(externalType);
+        bool isValueType = PrepareReceiverForMemberAccess(externalType, receiver);
         EmitExternalCallArguments(arguments, getter, candidate);
-        IL.Emit(isValueType ? OpCodes.Call : OpCodes.Callvirt, getter);
+        IL.Emit(isValueType ? OpCodes.Call : OpCodes.Callvirt, _ctx.TypeMapper.ForEmission(getter));
         BoxResultIfValueType(getter.ReturnType);
         SetStackUnknown();
         return true;
@@ -112,25 +113,26 @@ public partial class ILEmitter
         var resolver = new ExternalMethodResolver(_ctx.TypeMap, _ctx.Types);
         var candidate = resolver.ResolveMethod(setters, arguments);
         var setter = (MethodInfo)candidate.Method;
+        RecordExternalSelection(setter, typeof(void), NativeClrAdmission.Marshalling.OriginalAssignment, receiver: receiver, arguments: arguments);
         var parameters = setter.GetParameters();
 
         EmitExpression(receiver);
         EmitBoxIfNeeded(receiver);
-        bool isValueType = PrepareReceiverForMemberAccess(externalType);
+        bool isValueType = PrepareReceiverForMemberAccess(externalType, receiver);
 
-        EmitExpression(index);
+        EmitExpression(index); RecordExternalInput(index, parameters[0].ParameterType);
         EmitExternalTypeConversion(parameters[0].ParameterType);
 
         // Preserve the original TypeScript RHS as the assignment-expression result. The CLR
         // setter may narrow it (for example number -> int), but JS assignment returns the RHS.
-        EmitExpression(value);
+        EmitExpression(value); RecordExternalInput(value, parameters[1].ParameterType);
         EnsureBoxed();
         var result = IL.DeclareLocal(_ctx.Types.Object);
         IL.Emit(OpCodes.Stloc, result);
         IL.Emit(OpCodes.Ldloc, result);
         EmitExternalTypeConversion(parameters[1].ParameterType);
 
-        IL.Emit(isValueType ? OpCodes.Call : OpCodes.Callvirt, setter);
+        IL.Emit(isValueType ? OpCodes.Call : OpCodes.Callvirt, _ctx.TypeMapper.ForEmission(setter));
         IL.Emit(OpCodes.Ldloc, result);
         SetStackUnknown();
         return true;
@@ -181,9 +183,12 @@ public partial class ILEmitter
         string? hint = _ctx.TypeMapper.GetOverloadHint(externalType, methodName);
         var candidate = resolver.ResolveMethod(methods, arguments, hint);
         var method = (MethodInfo)candidate.Method;
+        RecordExternalSelection(method, method.ReturnType, receiver: receiver, arguments: arguments);
 
         // Emit receiver and prepare for member access
         EmitExpression(receiver);
+        if (externalType.IsValueType && !method.DeclaringType!.IsValueType)
+            RecordExternalInput(receiver, method.DeclaringType, NativeClrAdmission.InputConversion.Receiver);
         EmitBoxIfNeeded(receiver);
         bool isValueType;
         if (externalType.IsValueType && !method.DeclaringType!.IsValueType)
@@ -197,14 +202,14 @@ public partial class ILEmitter
         }
         else
         {
-            isValueType = PrepareReceiverForMemberAccess(externalType);
+            isValueType = PrepareReceiverForMemberAccess(externalType, receiver);
         }
 
         // Emit arguments with type conversion (handles params arrays)
         var byRefOutputs = EmitExternalCallArguments(arguments, method, candidate);
 
         // Emit the call - use Call for value types (with address), Callvirt for reference types
-        IL.Emit(isValueType ? OpCodes.Call : OpCodes.Callvirt, method);
+        IL.Emit(isValueType ? OpCodes.Call : OpCodes.Callvirt, _ctx.TypeMapper.ForEmission(method));
 
         EmitExternalCallResult(method, byRefOutputs);
         SetStackUnknown();
@@ -237,9 +242,10 @@ public partial class ILEmitter
         var resolver = new ExternalMethodResolver(_ctx.TypeMap, _ctx.Types);
         var candidate = resolver.ResolveMethod(methods, allArguments);
         var method = (MethodInfo)candidate.Method;
+        RecordExternalSelection(method, method.ReturnType, receiver: receiver, arguments: allArguments);
         var byRefOutputs = EmitExternalCallArguments(
             allArguments, method, candidate);
-        IL.Emit(OpCodes.Call, method);
+        IL.Emit(OpCodes.Call, _ctx.TypeMapper.ForEmission(method));
         EmitExternalCallResult(method, byRefOutputs);
         SetStackUnknown();
         return true;
@@ -279,12 +285,13 @@ public partial class ILEmitter
         string? hint = _ctx.TypeMapper.GetOverloadHint(externalType, "constructor");
         var candidate = resolver.ResolveConstructor(ctors, arguments, hint);
         var ctor = (ConstructorInfo)candidate.Method;
+        RecordExternalSelection(ctor, externalType, NativeClrAdmission.Marshalling.Constructed, arguments: arguments);
 
         // Emit arguments with type conversion (handles params arrays)
         EmitExternalCallArguments(arguments, ctor, candidate);
 
         // Emit newobj instruction
-        IL.Emit(OpCodes.Newobj, ctor);
+        IL.Emit(OpCodes.Newobj, _ctx.TypeMapper.ForEmission(ctor));
         SetStackUnknown();
     }
 
@@ -326,12 +333,13 @@ public partial class ILEmitter
         string? hint = _ctx.TypeMapper.GetOverloadHint(externalType, methodName);
         var candidate = resolver.ResolveMethod(methods, arguments, hint);
         var method = (MethodInfo)candidate.Method;
+        RecordExternalSelection(method, method.ReturnType, arguments: arguments);
 
         // Emit arguments with type conversion (handles params arrays)
         var byRefOutputs = EmitExternalCallArguments(arguments, method, candidate);
 
         // Emit the static call
-        IL.Emit(OpCodes.Call, method);
+        IL.Emit(OpCodes.Call, _ctx.TypeMapper.ForEmission(method));
 
         EmitExternalCallResult(method, byRefOutputs);
         SetStackUnknown();
@@ -350,7 +358,7 @@ public partial class ILEmitter
             ? explicitTypeArguments.Select(ResolveTypeArg).ToArray()
             : null;
         Type? expectedReturnType = TryGetExternalClrType(contextualResultType);
-        var closed = DotNetGenericMethodInference.CloseCandidates(
+        var closed = _ctx.TypeMapper.CloseExternalGenericCandidates(
             methods, argumentTypes,
             explicitTypes, expectedReturnType);
         if (closed.Length == 0)
@@ -390,7 +398,8 @@ public partial class ILEmitter
                     }
                     else
                     {
-                        EmitExpression(arguments[argumentIndex++]);
+                        var argument = arguments[argumentIndex++];
+                        EmitExpression(argument); RecordExternalInput(argument, elementType);
                         EmitExternalTypeConversion(elementType);
                         IL.Emit(OpCodes.Stloc, local);
                     }
@@ -402,7 +411,8 @@ public partial class ILEmitter
 
                 if (argumentIndex < arguments.Count)
                 {
-                    EmitExpression(arguments[argumentIndex++]);
+                    var argument = arguments[argumentIndex++];
+                    EmitExpression(argument); RecordExternalInput(argument, parameter.ParameterType);
                     EmitExternalTypeConversion(parameter.ParameterType);
                 }
                 else
@@ -428,7 +438,8 @@ public partial class ILEmitter
                     }
                     else
                     {
-                        EmitExpression(arguments[argumentIndex++]);
+                        var argument = arguments[argumentIndex++];
+                        EmitExpression(argument); RecordExternalInput(argument, byRefElementType);
                         EmitExternalTypeConversion(byRefElementType);
                         IL.Emit(OpCodes.Stloc, local);
                     }
@@ -438,7 +449,8 @@ public partial class ILEmitter
                 }
                 else
                 {
-                    EmitExpression(arguments[argumentIndex++]);
+                    var argument = arguments[argumentIndex++];
+                    EmitExpression(argument); RecordExternalInput(argument, parameter.ParameterType);
                     EmitExternalTypeConversion(parameter.ParameterType);
                 }
             }
@@ -459,6 +471,7 @@ public partial class ILEmitter
                 IL.Emit(OpCodes.Dup);                    // Duplicate array reference
                 IL.Emit(OpCodes.Ldc_I4, i);              // Push index
                 EmitExpression(arguments[argumentIndex + i]);
+                RecordExternalInput(arguments[argumentIndex + i], elementType);
 
                 // For object[], box value types but leave reference types as-is
                 if (isObjectArray)
@@ -497,9 +510,10 @@ public partial class ILEmitter
         MethodInfo method,
         List<(ParameterInfo Parameter, LocalBuilder Local)> byRefOutputs)
     {
+        RecordExternalSelection(method, method.ReturnType);
         if (byRefOutputs.Count == 0)
         {
-            if (method.ReturnType == typeof(void))
+            if (_ctx.TypeMapper.CoreAtomForEmission(method.ReturnType) == typeof(void))
                 IL.Emit(OpCodes.Ldnull);
             else if (method.ReturnType.IsArray)
                 EmitExternalArrayReturn(method.ReturnType);
@@ -509,7 +523,7 @@ public partial class ILEmitter
         }
 
         LocalBuilder? returnLocal = null;
-        if (method.ReturnType != typeof(void))
+        if (_ctx.TypeMapper.CoreAtomForEmission(method.ReturnType) != typeof(void))
         {
             returnLocal = IL.DeclareLocal(method.ReturnType);
             IL.Emit(OpCodes.Stloc, returnLocal);
@@ -550,7 +564,7 @@ public partial class ILEmitter
 
     private void EmitExternalDefaultValue(ParameterInfo parameter)
     {
-        object? value = parameter.HasDefaultValue ? parameter.DefaultValue : null;
+        object? value = parameter.HasDefaultValue ? _ctx.TypeMapper.DefaultForEmission(parameter) : null;
         Type targetType = parameter.ParameterType;
         if (value == null || value == DBNull.Value || value == Missing.Value)
         {
@@ -593,6 +607,7 @@ public partial class ILEmitter
     /// </summary>
     private void EmitExternalTypeConversion(Type targetType)
     {
+        targetType = _ctx.TypeMapper.CoreAtomForEmission(targetType);
         var nullableUnderlying = Nullable.GetUnderlyingType(targetType);
         if (nullableUnderlying != null)
         {
@@ -849,7 +864,7 @@ public partial class ILEmitter
     /// </summary>
     private void EmitExternalArrayConversion(Type targetType)
     {
-        Type elementType = targetType.GetElementType()!;
+        Type elementType = _ctx.TypeMapper.CoreAtomForEmission(targetType.GetElementType()!);
         var source = IL.DeclareLocal(_ctx.Types.Object);
         var list = IL.DeclareLocal(typeof(System.Collections.IList));
         var result = IL.DeclareLocal(targetType);
@@ -909,7 +924,8 @@ public partial class ILEmitter
             typeof(System.Collections.IList).GetMethod("get_Item", [typeof(int)])!);
         SetStackUnknown();
         EmitExternalTypeConversion(elementType);
-        IL.Emit(OpCodes.Stelem, elementType);
+        if (ReferenceEquals(elementType, typeof(bool))) IL.Emit(OpCodes.Stelem_I1);
+        else IL.Emit(OpCodes.Stelem, elementType);
 
         IL.Emit(OpCodes.Ldloc, index);
         IL.Emit(OpCodes.Ldc_I4_1);
@@ -925,7 +941,7 @@ public partial class ILEmitter
     /// <summary>Materializes a CLR array on the stack as an emitted guest <c>$Array</c>.</summary>
     private void EmitExternalArrayReturn(Type arrayType)
     {
-        ClrArrayEmitter.EmitToGuest(IL, arrayType, _ctx.Types, _ctx.Runtime!, BoxResultIfValueType);
+        ClrArrayEmitter.EmitToGuest(IL, arrayType, _ctx.Types, _ctx.Runtime!, BoxResultIfValueType, _ctx.TypeMapper.CoreAtomForEmission);
         SetStackUnknown();
     }
 
@@ -1007,9 +1023,11 @@ public partial class ILEmitter
             ?? throw new CompileException(
                 $"Event '{eventName}' on '{externalType.FullName}' has no {(isAdd ? "add" : "remove")} accessor.");
 
+        RecordExternalSelection(accessor, typeof(void), receiver: receiver, arguments: [handlerExpr]);
+
         // Evaluate handler (tsFunction) into a local.
         var tsFuncLocal = IL.DeclareLocal(_ctx.Types.Object);
-        EmitExpression(handlerExpr);
+        EmitExpression(handlerExpr); RecordExternalInput(handlerExpr, handlerDelegateType);
         EmitBoxIfNeeded(handlerExpr);
         IL.Emit(OpCodes.Stloc, tsFuncLocal);
 
@@ -1021,7 +1039,7 @@ public partial class ILEmitter
         }
         else
         {
-            EmitExpression(receiver);
+            EmitExpression(receiver); RecordExternalInput(receiver, accessor.DeclaringType!, NativeClrAdmission.InputConversion.Receiver);
             EmitBoxIfNeeded(receiver);
         }
         IL.Emit(OpCodes.Stloc, receiverLocal);
@@ -1029,6 +1047,7 @@ public partial class ILEmitter
         if (isAdd)
         {
             // Build the delegate via a per-handler-type adapter.
+            _ctx.NativeClrAdmission?.RecordCallback(handlerDelegateType);
             var adapter = _ctx.TypeMapper.DelegateAdapters.GetOrEmit(handlerDelegateType);
             var delegateLocal = IL.DeclareLocal(handlerDelegateType);
 
@@ -1132,7 +1151,7 @@ public partial class ILEmitter
 
         // For instance accessors on reference types, callvirt gives proper dispatch even
         // though event accessors aren't typically virtual. For static accessors, call.
-        IL.Emit(accessor.IsStatic ? OpCodes.Call : OpCodes.Callvirt, accessor);
+        IL.Emit(accessor.IsStatic ? OpCodes.Call : OpCodes.Callvirt, _ctx.TypeMapper.ForEmission(accessor));
     }
 
     /// <summary>
@@ -1267,6 +1286,7 @@ public partial class ILEmitter
     /// </remarks>
     private void EmitDelegateConversion(Type delegateType)
     {
+        _ctx.NativeClrAdmission?.RecordCallback(delegateType);
         var adapter = _ctx.TypeMapper.DelegateAdapters.GetOrEmit(delegateType);
 
         // Optional handlers must stay null; an adapter around null is a non-null

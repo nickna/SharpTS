@@ -14,9 +14,17 @@ namespace SharpTS.Runtime.Types;
 public sealed class SharpTSObjectPrototype : ISharpTSMutableBuiltIn
 {
     public static readonly SharpTSObjectPrototype Instance = new();
-    internal SharpTSObjectPrototype() { }
+    internal SharpTSObjectPrototype()
+    {
+        _overlay.DefineProperty("__proto__", new SharpTSPropertyDescriptor(
+            getter: SharpTSObjectUnboundMethod.GetPrototype.CloneUnbound(),
+            setter: SharpTSObjectUnboundMethod.SetPrototype.CloneUnbound(),
+            enumerable: false, configurable: true));
+    }
 
-    private readonly PrototypePropertyOverlay _overlay = new(IsBuiltIn);
+    private readonly PrototypePropertyOverlay _overlay = new(IsBuiltIn, initialStringKeys:
+        ["constructor", "__defineGetter__", "__defineSetter__", "hasOwnProperty", "__lookupGetter__",
+         "__lookupSetter__", "isPrototypeOf", "propertyIsEnumerable", "toString", "valueOf", "__proto__", "toLocaleString"]);
     internal SharpTSObjectNamespace? RealmConstructor { get; set; }
 
     public bool HasExtra(string name) => _overlay.HasExtra(name);
@@ -48,6 +56,7 @@ public sealed class SharpTSObjectPrototype : ISharpTSMutableBuiltIn
 
     /// <summary>Own enumerable string keys — the for-in / Object.keys surface.</summary>
     public IEnumerable<string> OwnEnumerableKeys() => _overlay.OwnEnumerableKeys();
+    public IEnumerable<string> OwnStringKeys() => _overlay.OwnVisibleStringKeys();
 
     public object? GetMember(string name)
     {
@@ -108,6 +117,11 @@ public sealed class SharpTSObjectUnboundMethod : ISharpTSCallable, IBuiltInFunct
         new("__lookupGetter__", (i, t, a) => LookupAccessorImpl(i, t, a, isGetter: true), 1);
     public static readonly SharpTSObjectUnboundMethod LookupSetter =
         new("__lookupSetter__", (i, t, a) => LookupAccessorImpl(i, t, a, isGetter: false), 1);
+    internal static readonly SharpTSObjectUnboundMethod GetPrototype =
+        new("get __proto__", GetPrototypeImpl, 0);
+    internal static readonly SharpTSObjectUnboundMethod SetPrototype =
+        new("set __proto__", (i, t, a) => ObjectBuiltIns.SetLegacyPrototype(
+            i ?? throw new InvalidOperationException("Prototype assignment requires an interpreter"), t, a), 1);
 
     private readonly string _name;
     private readonly Func<Interp?, object?, List<object?>, object?> _impl;
@@ -204,6 +218,9 @@ public sealed class SharpTSObjectUnboundMethod : ISharpTSCallable, IBuiltInFunct
         // symbol-keyed dispatch instead of being stringified.
         if (args[0] is SharpTSSymbol sym)
         {
+            if (interpreter != null
+                && interpreter.TryGetPromiseConstructorSymbolProperties(target, out var intrinsicProperties))
+                return intrinsicProperties.GetOwnPropertyDescriptor(sym) is not null;
             if (target is ISharpTSOwnPropertyObject ownPropertyObject)
                 return ownPropertyObject.OwnProperties.HasSymbolProperty(sym);
             if (FunctionObjectProperties.TryGetStorage(target, interpreter, out var properties))
@@ -241,7 +258,6 @@ public sealed class SharpTSObjectUnboundMethod : ISharpTSCallable, IBuiltInFunct
             // `Object.hasOwn(new C(), "someMethod")` is false. HasProperty would resolve
             // it through the class chain and answer true.
             SharpTSInstance inst => inst.HasField(key) || inst.GetOwnPropertyDescriptor(key) is not null,
-            SharpTSPromise promise => promise.HasOwnProperty(key),
             SharpTSArray array => array.HasOwnProperty(key),
             SharpTSMath math => math.HasExtra(key)
                 || (!math.IsBuiltInDeleted(key) && MathBuiltIns.GetMember(key) is not null),
@@ -292,31 +308,31 @@ public sealed class SharpTSObjectUnboundMethod : ISharpTSCallable, IBuiltInFunct
 
     private static object? ToStringImpl(Interp? interpreter, object? target, List<object?> args)
     {
-        // ECMA-262 20.1.3.6: toString uses the @@toStringTag tag of the
-        // receiver. Kept conservative — extending this to every built-in tag
-        // broke Lodash's typeof detection (it uses `Object.prototype.toString.call`
-        // on functions and expected "[object Object]" back). Add new tags
-        // only when a specific spec test needs them.
         if (target == null) return "[object Null]";
         if (target is SharpTSUndefined) return "[object Undefined]";
-        if (target is SharpTSObject or SharpTSFunction or SharpTSArrowFunction
-            or SharpTSArray or SharpTSProxy or SharpTSInstance or SharpTSClass
-            or ISharpTSSymbolPropertyBag or SharpTSMath or SharpTSStringPrototype
-            or SharpTSRegExp or ISharpTSGeneratorFunctionValue or SharpTSGenerator or SharpTSAsyncGenerator
-            && interpreter?.GetSymbolPropertyValue(target, SharpTSSymbol.ToStringTag) is string customTag)
-            return $"[object {customTag}]";
+        if (interpreter is not null)
+        {
+            object tagReceiver = target switch
+            {
+                string => interpreter.GetStringPrototype(),
+                bool => interpreter.GetBooleanPrototype(),
+                double or int => interpreter.GetNumberPrototype(),
+                SharpTSBigInt or System.Numerics.BigInteger => interpreter.GetBigIntPrototype(),
+                SharpTSSymbol => interpreter.GetSymbolPrototype(),
+                _ => target,
+            };
+            if (interpreter.GetSymbolPropertyValue(tagReceiver, SharpTSSymbol.ToStringTag, target) is string customTag)
+                return $"[object {customTag}]";
+        }
         if (target is string) return "[object String]";
         if (target is double or int) return "[object Number]";
         if (target is bool) return "[object Boolean]";
-        if (target is SharpTSBigInt or System.Numerics.BigInteger)
-        {
-            object? tag = interpreter?.GetSymbolPropertyValue(
-                interpreter.GetBigIntPrototype(), SharpTSSymbol.ToStringTag);
-            return tag is string text
-                ? $"[object {text}]"
-                : "[object Object]";
-        }
+        if (target is SharpTSBigInt or System.Numerics.BigInteger) return "[object Object]";
         if (target is SharpTSArguments) return "[object Arguments]";
+        if (target is VmInputPropertyView { NativeRole: 1 }
+            || target is SharpTSProxy inputProxy && inputProxy.HasVmInputArrayTarget())
+            return "[object Array]";
+        if (target is VmInputPropertyView { NativeRole: 2 }) return "[object Error]";
         if (target is SharpTSArray) return "[object Array]";
         if (target is SharpTSDate) return "[object Date]";
         if (target is SharpTSRegExp) return "[object RegExp]";
@@ -384,6 +400,20 @@ public sealed class SharpTSObjectUnboundMethod : ISharpTSCallable, IBuiltInFunct
         return target;
     }
 
+    private static object? GetPrototypeImpl(Interp? interpreter, object? target, List<object?> args)
+    {
+        RequireObjectCoercible(target, "get __proto__");
+        return target switch
+        {
+            string => interpreter?.GetStringPrototype(),
+            bool => interpreter?.GetBooleanPrototype(),
+            double or int or long or float or decimal => interpreter?.GetNumberPrototype(),
+            SharpTSBigInt or System.Numerics.BigInteger => interpreter?.GetBigIntPrototype(),
+            SharpTSSymbol => interpreter?.GetSymbolPrototype(),
+            _ => ObjectBuiltIns.PrototypeOf(interpreter, target),
+        };
+    }
+
     private static void RequireObjectCoercible(object? target, string methodName)
     {
         if (target is null or SharpTSUndefined)
@@ -445,6 +475,9 @@ public sealed class SharpTSObjectUnboundMethod : ISharpTSCallable, IBuiltInFunct
         if (args.Count == 0) return false;
         if (args[0] is SharpTSSymbol symbol)
         {
+            if (interpreter != null
+                && interpreter.TryGetPromiseConstructorSymbolProperties(target, out var intrinsicProperties))
+                return intrinsicProperties.GetOwnPropertyDescriptor(symbol) is { Enumerable: true };
             if (target is ISharpTSOwnPropertyObject ownPropertyObject)
                 return ownPropertyObject.OwnProperties.GetOwnPropertyDescriptor(symbol) is { Enumerable: true };
             if (FunctionObjectProperties.TryGetStorage(target, interpreter, out var properties))
@@ -458,6 +491,8 @@ public sealed class SharpTSObjectUnboundMethod : ISharpTSCallable, IBuiltInFunct
                         && SharpTSPropertyDescriptor.FromAnyObject(descriptor).Enumerable,
                 SharpTSObject obj
                     => obj.GetOwnPropertyDescriptor(symbol) is { Enumerable: true },
+                SharpTSObjectNamespace objectNamespace
+                    => objectNamespace.GetOwnPropertyDescriptor(symbol) is { Enumerable: true },
                 SharpTSInstance instance => instance.HasSymbolProperty(symbol),
                 SharpTSMath math
                     => math.GetOwnPropertyDescriptor(symbol) is { Enumerable: true },

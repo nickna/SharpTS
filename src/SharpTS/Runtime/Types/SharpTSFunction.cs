@@ -718,21 +718,19 @@ public class SharpTSArrowFunction : ISharpTSCallable, ITypeCategorized
     {
         // Check for function-level "use strict" directive in block body
         bool functionStrict = IsStrict;
+        RuntimeEnvironment closure = _closure;
+        if (_declaration.Name != null)
+        {
+            closure = new RuntimeEnvironment(_closure);
+            closure.Define(_declaration.Name.Lexeme, _selfReference ?? this);
+        }
         RuntimeEnvironment environment = functionStrict
-            ? new RuntimeEnvironment(_closure, strictMode: true)
-            : new RuntimeEnvironment(_closure);
+            ? new RuntimeEnvironment(closure, strictMode: true)
+            : new RuntimeEnvironment(closure);
         if (HasOwnThis)
         {
             environment.NewTarget = newTarget;
             environment.ConstructionFrame = null;
-        }
-
-        // Named function expression: bind the self-reference in the same scope
-        // as parameters so recursion works (`function f(n) { return f(n-1); }`)
-        // while keeping outer-variable distances consistent with the resolver.
-        if (_declaration.Name != null)
-        {
-            environment.Define(_declaration.Name.Lexeme, _selfReference ?? this);
         }
 
         // Defaults can observe their own arguments binding before the body runs.
@@ -804,21 +802,19 @@ public class SharpTSArrowFunction : ISharpTSCallable, ITypeCategorized
     public RuntimeValue CallV2(Interpreter interpreter, ReadOnlySpan<RuntimeValue> arguments)
     {
         bool functionStrict = IsStrict;
+        RuntimeEnvironment closure = _closure;
+        if (_declaration.Name != null)
+        {
+            closure = new RuntimeEnvironment(_closure);
+            closure.Define(_declaration.Name.Lexeme, _selfReference ?? this);
+        }
         RuntimeEnvironment environment = functionStrict
-            ? new RuntimeEnvironment(_closure, strictMode: true)
-            : new RuntimeEnvironment(_closure);
+            ? new RuntimeEnvironment(closure, strictMode: true)
+            : new RuntimeEnvironment(closure);
         if (HasOwnThis)
         {
             environment.NewTarget = RuntimeValue.Undefined;
             environment.ConstructionFrame = null;
-        }
-
-        // Named function expression: bind the self-reference in the same scope as
-        // parameters so recursion works (`function f(n) { return f(n-1); }`) while
-        // keeping outer-variable distances consistent with the resolver.
-        if (_declaration.Name != null)
-        {
-            environment.Define(_declaration.Name.Lexeme, _selfReference ?? this);
         }
 
         // True arrows inherit arguments; own-this expressions snapshot before defaults.

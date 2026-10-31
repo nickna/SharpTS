@@ -801,7 +801,12 @@ public partial class Parser
                 // (T extends U ? X : Y). Use ParseConditionalType so the grouped body can contain
                 // `extends ? :` rather than stopping at `extends`.
                 typeName = "(" + ParseConditionalType() + ")";
-                typeNode = TakeTypeNode(); // parens are semantically transparent
+                var grouped = TakeTypeNode();
+                typeNode = grouped is LiteralTypeNode or TemplateLiteralTypeNode { InterpolatedTypes.Count: 0 } or
+                    NamedTypeNode { NameToken.Type: TokenType.NULL }
+                    ? grouped with { IsParenthesizedLiteral = true } : grouped;
+                if (grouped is not null && !ReferenceEquals(grouped, typeNode))
+                    _spans.CopySpan(grouped, typeNode!);
                 Consume(TokenType.RIGHT_PAREN, "Expect ')' after grouped type.");
                 RecordEditorRange(typeNode, new SourceSpan(groupingStart, ConsumedSourceEnd),
                     EditorSyntaxKind.Grouping, origin: EditorSyntaxOrigin.Grouping);

@@ -10358,8 +10358,8 @@ public partial class StandaloneDllTests
             "class_set",
             "main.ts",
             new string[] { "main.ts" },
-            new string[] { "class MyClass {\n    x: number = 1;\n}\nlet obj = new MyClass();\nlet threw = false;\ntry {\n    Object.setPrototypeOf(obj, { y: 2 });\n} catch (e) {\n    threw = true;\n}\nconsole.log(threw);" },
-            "true\n",
+            new string[] { "class MyClass {\n    x: number = 1;\n}\nconst obj: any = new MyClass();\nconst parent = { y: 2 };\nconsole.log(Object.setPrototypeOf(obj, parent) === obj);\nconsole.log(Object.getPrototypeOf(obj) === parent, obj.x, obj.y);" },
+            "true\ntrue 1 2\n",
             false,
             true
         },
@@ -13918,7 +13918,7 @@ public partial class StandaloneDllTests
             console.log(typeof vm.constants === 'object');
             console.log(vm.constants.USE_MAIN_CONTEXT_DEFAULT_LOADER === vm.constants.USE_MAIN_CONTEXT_DEFAULT_LOADER);
             """,
-            "3\ntrue false\n42\ncurrent-context-error\ntrue\ntrue\n", "main.ts", false
+            "3\ntrue false\n42\n42\ntrue\ntrue\n", "main.ts", false
         },
         new object[]
         {
@@ -13973,7 +13973,7 @@ public partial class StandaloneDllTests
             console.log(typeof vm, typeof vm.runInNewContext, typeof vm.Script, typeof vm.constants);
             try {console.log(vm.runInNewContext('4+5'));} catch(e) {console.log('cjs-call-error');}
             """,
-            "object object object object\ncjs-call-error\n", "main.cjs", false
+            "object object function object\ncjs-call-error\n", "main.cjs", false
         },
         new object[]
         {
@@ -14027,7 +14027,8 @@ public partial class StandaloneDllTests
                     """,
             },
             "main.ts",
-            "3\n3\n"
+            // Named imports read the binding updated by bump.
+            "3\n4\n"
         },
         new object[]
         {
@@ -14041,7 +14042,8 @@ public partial class StandaloneDllTests
                     """,
             },
             "main.cjs",
-            "object string string\nfalse true true\n2\n2\n"
+            // Indexed module.exports writes share the same mutable module record.
+            "object string string\nfalse true true\n2\n3\n"
         },
         new object[]
         {
@@ -17861,7 +17863,7 @@ public partial class StandaloneDllTests
         new object[]
         {
             "array_missing_receiver",
-            "try{\n// @ts-expect-error Deliberately omit the call receiver to verify the runtime TypeError.\nArray.prototype.join.call();\n}catch(e){console.log(e instanceof TypeError);}\n",
+            "const join:any=Array.prototype.join;try{join.call();}catch(e){console.log(e instanceof TypeError);}\n",
             "true\n",
             false,
         },
@@ -17896,7 +17898,7 @@ public partial class StandaloneDllTests
         new object[]
         {
             "hosted_array",
-            "export function check(){try{\n// @ts-expect-error Deliberately omit the call receiver to verify the runtime TypeError.\nArray.prototype.join.call();\n}catch(e){return e instanceof TypeError;}}\n",
+            "export function check(){const join:any=Array.prototype.join;try{join.call();}catch(e){return e instanceof TypeError;}}\n",
             "",
             true,
         },

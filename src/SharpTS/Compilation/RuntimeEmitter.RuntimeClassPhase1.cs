@@ -25,6 +25,8 @@ public partial class RuntimeEmitter
             _types.Object
         );
         runtime.RuntimeClass.Type = typeBuilder;
+        runtime.Arguments.Initialize = typeBuilder.DefineMethod("InitializeArguments",
+            MethodAttributes.Public | MethodAttributes.Static, _types.Void, [_types.Object]);
 
         // Reserve Stringify(object) → string. EmitStringify fills the body
         // later; it must skip its own DefineMethod call when this signature
@@ -62,6 +64,9 @@ public partial class RuntimeEmitter
         // Both apply wrappers are emitted before ordinary object reads and numeric
         // coercion bodies. Reserve their shared CreateListFromArrayLike helper now.
         DefinePrepareApplyArguments(typeBuilder, runtime.FunctionPrototypes);
+        runtime.CallArguments.FromArrayLike = typeBuilder.DefineMethod(
+            "CreateListFromArrayLike", MethodAttributes.Public | MethodAttributes.Static,
+            _types.ObjectArray, [_types.Object]);
 
         // Preserve the leading runtime declarations while reserving the event-loop guard.
         DefineCancellationCheck(typeBuilder, runtime.Cancellation);
@@ -74,6 +79,9 @@ public partial class RuntimeEmitter
             MethodAttributes.Public | MethodAttributes.Static,
             _types.Void,
             [typeof(Action)]);
+
+        if (runtime.Vm is not null)
+            DefineVmValueBridge(typeBuilder, runtime.RequireVm());
 
         // Reserve GetProperty(object, string) → object — generic property
         // reader used by $RegExp's Symbol.* protocol slow path to read
@@ -139,11 +147,19 @@ public partial class RuntimeEmitter
             MethodAttributes.Public | MethodAttributes.Static,
             _types.Object,
             [_types.String]);
+        runtime.GlobalObject.IntrinsicDescriptorKind = typeBuilder.DefineMethod(
+            "GlobalThisIntrinsicDescriptorKind", MethodAttributes.Private | MethodAttributes.Static,
+            _types.Int32, [_types.String]);
         runtime.GlobalObject.SetProperty = typeBuilder.DefineMethod(
             "GlobalThisSetProperty",
             MethodAttributes.Public | MethodAttributes.Static,
             _types.Void,
             [_types.String, _types.Object]);
+        runtime.GlobalObject.SetPropertyStrict = typeBuilder.DefineMethod(
+            "GlobalThisSetPropertyStrict",
+            MethodAttributes.Public | MethodAttributes.Static,
+            _types.Void,
+            [_types.String, _types.Object, _types.Boolean]);
 
         // Reserve the native-error Type-token adapter before Reflect.construct
         // is emitted. EmitErrorMethods fills its body later, after CreateError
@@ -198,6 +214,11 @@ public partial class RuntimeEmitter
             MethodAttributes.Public | MethodAttributes.Static,
             _types.String,
             [_types.Object]);
+
+        // $TSFunction is finalized before runtime bodies. Reserve its exact
+        // coercion callees under their existing owners so it can call directly.
+        DeclareArrayLikeMaterialize(typeBuilder, runtime.ArrayOperations);
+        DeclareRequireObjectCoercibleThis(typeBuilder, runtime.ReceiverGuard);
 
         // Reserve the full RegExp.prototype[@@split] protocol. $RegExp is
         // emitted before the runtime helpers it needs (dynamic construction,

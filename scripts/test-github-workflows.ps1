@@ -98,6 +98,32 @@ if ($ciGateJob -notmatch '(?m)^    needs: \[[^\r\n]*\bstandalone\b' -or
 }
 $coreJob = Get-WorkflowJob $ci 'build' 'ci.yml'
 $standaloneJob = Get-WorkflowJob $ci 'standalone' 'ci.yml'
+foreach ($requiredText in @('name: Acquire pinned independent Authenticode verifier', 'id: signature-verifier',
+    "if: runner.os == 'Windows'", './scripts/get-osslsigncode.ps1',
+    '"executable=$verifier" >> $env:GITHUB_OUTPUT',
+    'SHARPTS_TEST_OSSLSIGNCODE: ${{ steps.signature-verifier.outputs.executable }}')) {
+    if (-not $coreJob.Contains($requiredText, [StringComparison]::Ordinal)) {
+        $errors.Add("ci.yml Windows core tests are missing independent signature verification: $requiredText")
+    }
+}
+if ($coreJob.IndexOf('name: Acquire pinned independent Authenticode verifier', [StringComparison]::Ordinal) -gt
+    $coreJob.IndexOf('name: Test core', [StringComparison]::Ordinal)) {
+    $errors.Add('ci.yml must acquire the independent signature verifier before running core tests.')
+}
+$signatureTool = Get-Content -LiteralPath (Join-Path $PSScriptRoot 'get-osslsigncode.ps1') -Raw
+foreach ($requiredText in @("`$version = '2.14'",
+    'https://github.com/mtrojnar/osslsigncode/releases/download/2.14/osslsigncode-2.14-windows-x64-mingw.zip',
+    '9a1722aaf62a27852c4eb9c35749a0248065052d0ae0a93d4ed6bb49def027f2',
+    'Get-FileHash -LiteralPath $archivePath -Algorithm SHA256', 'archive checksum mismatch',
+    'Expand-Archive -LiteralPath $archivePath', '& $executable --version', '$LASTEXITCODE -ne 0')) {
+    if (-not $signatureTool.Contains($requiredText, [StringComparison]::Ordinal)) {
+        $errors.Add("Independent signature verifier acquisition is missing its pinned/fail-closed contract: $requiredText")
+    }
+}
+if ($signatureTool.IndexOf('Get-FileHash', [StringComparison]::Ordinal) -gt
+    $signatureTool.IndexOf('Expand-Archive', [StringComparison]::Ordinal)) {
+    $errors.Add('Independent signature verifier acquisition must validate SHA256 before extracting or executing.')
+}
 $coreFilter = 'Category!=LiveNetwork&Category!=LoadSensitive&Category!=npm&FullyQualifiedName!~SharpTS.Tests.CompilerTests.StandaloneDllTests.'
 $standaloneFilter = $coreFilter.Replace('FullyQualifiedName!~', 'FullyQualifiedName~')
 foreach ($partition in @($coreJob, $standaloneJob)) {
@@ -258,6 +284,62 @@ $publishNuGetJob = Get-PublishJob 'publish-nuget'
 $verifyNuGetJob = Get-PublishJob 'verify-nuget'
 $releaseJob = Get-PublishJob 'release'
 $publishBuildJob = Get-PublishJob 'build'
+$publishStandaloneJob = Get-PublishJob 'standalone'
+$releaseTestArguments = '--no-build --configuration Release --verbosity normal --filter "' + $coreFilter + '"'
+$releaseCoreStep = [regex]::Match($publishBuildJob, '(?ms)^      - name: Test core\r?\n.*?(?=^      - |\z)').Value
+$releaseGuiStep = [regex]::Match($publishBuildJob, '(?ms)^      - name: Test GUI conformance\r?\n.*?(?=^      - |\z)').Value
+foreach ($test in @(
+    @{ Step = $releaseCoreStep; Project = 'tests/SharpTS.Tests/SharpTS.Tests.csproj'; Arguments = $releaseTestArguments + ' --blame-hang-timeout 120s --blame-hang-dump-type mini'; Minutes = 30 },
+    @{ Step = $releaseGuiStep; Project = 'tests/gui-conformance/SharpTS.Gui.Conformance.Tests/SharpTS.Gui.Conformance.Tests.csproj'; Arguments = $releaseTestArguments; Minutes = 10 }
+)) {
+    $command = '        run: dotnet test ' + $test.Project + ' ' + $test.Arguments
+    if ($test.Step -notmatch ('(?m)^' + [regex]::Escape($command) + '\r?$') -or
+        $test.Step -notmatch ('(?m)^        timeout-minutes: ' + $test.Minutes + '\r?$') -or
+        $test.Step -match '(?m)^        if:') {
+        $errors.Add("Publish must run the complete bounded '$($test.Project)' cohort with its unchanged filter and watchdog policy.")
+    }
+}
+if ($publishBuildJob.IndexOf('name: Test core', [StringComparison]::Ordinal) -ge
+    $publishBuildJob.IndexOf('name: Test GUI conformance', [StringComparison]::Ordinal)) {
+    $errors.Add('Publish must finish core validation before starting GUI conformance.')
+}
+# Discover the solution's actual test projects so splitting the invocations
+# cannot silently drop an existing or newly added solution test cohort.
+$solution = Get-Content -LiteralPath (Join-Path $repositoryRoot 'SharpTS.sln') -Raw
+$solutionTestProjects = @(
+    foreach ($project in [regex]::Matches($solution, '(?m)^Project\([^\r\n]+ = "[^"]+", "(?<path>[^"]+\.csproj)"')) {
+        $projectPath = $project.Groups['path'].Value.Replace('\', '/')
+        [xml]$projectXml = Get-Content -LiteralPath (Join-Path $repositoryRoot $projectPath) -Raw
+        if ($projectXml.SelectNodes("//*[local-name()='IsTestProject' and translate(normalize-space(.), 'TRUE', 'true')='true']").Count -gt 0 -or
+            $projectXml.SelectNodes("//*[local-name()='PackageReference' and @Include='Microsoft.NET.Test.Sdk']").Count -gt 0) {
+            $projectPath
+        }
+    }
+)
+$releaseTestProjects = @([regex]::Matches($publishBuildJob, '(?m)^        run: dotnet test (?<path>\S+\.csproj) ').ForEach({ $_.Groups['path'].Value }))
+if ($releaseTestProjects.Count -ne $solutionTestProjects.Count -or
+    @(Compare-Object ($solutionTestProjects | Sort-Object) ($releaseTestProjects | Sort-Object)).Count -gt 0 -or
+    [regex]::Matches($publishBuildJob, '(?m)^        run: dotnet test ').Count -ne $releaseTestProjects.Count) {
+    $errors.Add('Publish must explicitly run every solution test project exactly once, without an implicit overlapping solution invocation.')
+}
+if (-not $publishBuildJob.Contains($coreFilter, [StringComparison]::Ordinal) -or
+    -not $standaloneScript.Contains('$baseFilter = ''' + $standaloneFilter + '''', [StringComparison]::Ordinal)) {
+    $errors.Add('Publish core and standalone discovery must retain the complete complementary CI partitions.')
+}
+foreach ($requiredText in @('timeout-minutes: 50', '--blame-hang-timeout 120s', '--blame-hang-dump-type mini')) {
+    if (-not $publishBuildJob.Contains($requiredText, [StringComparison]::Ordinal)) {
+        $errors.Add("Publish build must retain its bounded core budget and per-test hang guard: $requiredText")
+    }
+}
+foreach ($requiredText in @('runs-on: ubuntu-24.04', 'shard: [0, 1, 2, 3, 4, 5]', 'shell: pwsh',
+    './scripts/test-standalone-shard.ps1 -ShardIndex ${{ matrix.shard }} -ShardCount 6',
+    '-ResultsDirectory artifacts/release-standalone/${{ matrix.shard }}',
+    'timeout-minutes: 35', 'timeout-minutes: 40', 'fail-fast: false', 'if: always()',
+    'name: release-standalone-${{ matrix.shard }}', 'path: artifacts/release-standalone/', 'retention-days: 7')) {
+    if (-not $publishStandaloneJob.Contains($requiredText, [StringComparison]::Ordinal)) {
+        $errors.Add("Publish standalone job is missing its complete shard contract: $requiredText")
+    }
+}
 foreach ($requiredText in @('./scripts/test-smoke-process.ps1', './scripts/test-debug-adapter-package.ps1',
     '-PackagePath "./nupkg/SharpTS.DebugAdapter.${{ steps.version.outputs.VERSION }}.nupkg"')) {
     if (-not $publishBuildJob.Contains($requiredText, [StringComparison]::Ordinal)) {
@@ -265,15 +347,33 @@ foreach ($requiredText in @('./scripts/test-smoke-process.ps1', './scripts/test-
     }
 }
 $adapterSmokePosition = $publishBuildJob.IndexOf('./scripts/test-debug-adapter-package.ps1', [StringComparison]::Ordinal)
-foreach ($boundary in @('Preflight NuGet package IDs and artifacts', 'Upload package artifacts')) {
+foreach ($boundary in @('Validate NuGet package artifacts', 'Preflight NuGet package IDs and artifacts', 'Upload package artifacts')) {
     if ($adapterSmokePosition -lt 0 -or $adapterSmokePosition -gt $publishBuildJob.IndexOf($boundary, [StringComparison]::Ordinal)) {
         $errors.Add("The exact debug adapter package must pass protocol smoke before $boundary.")
     }
 }
 
+$artifactValidationStep = [regex]::Match($publishBuildJob, '(?ms)^      - name: Validate NuGet package artifacts\r?\n.*?(?=^      - |\z)').Value
+if (-not $artifactValidationStep.Contains('-Action ValidateArtifacts', [StringComparison]::Ordinal) -or
+    $artifactValidationStep -match '(?m)^        if:') {
+    $errors.Add('Every Publish build must validate local package artifacts without a conditional guard.')
+}
+$registrationStep = [regex]::Match($publishBuildJob, '(?ms)^      - name: Preflight NuGet package IDs and artifacts\r?\n.*?(?=^      - |\z)').Value
+if (-not $registrationStep.Contains("if: github.event_name == 'push' && startsWith(github.ref, 'refs/tags/v')", [StringComparison]::Ordinal) -or
+    -not $registrationStep.Contains('-Action Preflight', [StringComparison]::Ordinal)) {
+    $errors.Add('Tagged Publish builds must retain full NuGet registration preflight; dispatches must reach binary validation without it.')
+}
+$dryRunSummaryStep = [regex]::Match($publishBuildJob, '(?ms)^      - name: Summarize dry-run validation boundary\r?\n.*?(?=^      - |\z)').Value
+foreach ($requiredText in @("if: github.event_name == 'workflow_dispatch'", 'GITHUB_STEP_SUMMARY',
+    'NuGet registration and publication credentials were not validated', 'does not establish publication readiness')) {
+    if (-not $dryRunSummaryStep.Contains($requiredText, [StringComparison]::Ordinal)) {
+        $errors.Add("Publish dry runs must disclose their validation boundary: $requiredText")
+    }
+}
+
 foreach ($requiredText in @(
-    'needs: [build, binaries, native-binaries]',
-    "if: startsWith(github.ref, 'refs/tags/v')",
+    'needs: [build, standalone, binaries, native-binaries]',
+    "if: github.event_name == 'push' && startsWith(github.ref, 'refs/tags/v')",
     'contents: read',
     'id-token: write',
     'timeout-minutes: 15',
@@ -311,7 +411,8 @@ foreach ($forbiddenText in @('id-token:', 'contents: write', 'environment:', 'se
 }
 
 foreach ($requiredText in @(
-    'needs: [build, binaries, native-binaries, verify-nuget]',
+    'needs: [build, standalone, binaries, native-binaries, verify-nuget]',
+    "if: github.event_name == 'push' && startsWith(github.ref, 'refs/tags/v')",
     'contents: write',
     'timeout-minutes: 20',
     "pattern: 'managed-*'",
@@ -351,6 +452,7 @@ else {
 }
 
 $wingetRequiredText = @(
+    "if: github.event_name == 'push' && startsWith(github.ref, 'refs/tags/v') && needs.build.outputs.is_stable == 'true'",
     'is_stable: ${{ steps.version.outputs.IS_STABLE }}',
     'IS_STABLE=false',
     'IS_STABLE=$IS_STABLE',
@@ -396,4 +498,6 @@ if ($errors.Count -gt 0) {
     throw "GitHub workflow policy failed:`n - $($errors -join "`n - ")"
 }
 
+& (Join-Path $PSScriptRoot 'test-native-guest-corpus-contract.ps1')
+& (Join-Path $PSScriptRoot 'test-release-dispatch.ps1')
 Write-Host "Validated $($workflowFiles.Count) workflows: immutable actions, least-privilege declarations, fixed runners, and pinned toolchains."

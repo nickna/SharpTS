@@ -11,6 +11,7 @@ namespace SharpTS.Compilation;
 public partial class ILCompiler
 {
     private readonly Dictionary<TypeBuilder, HashSet<string>> _autoAccessorFieldNames = new(ReferenceEqualityComparer.Instance);
+    private readonly Dictionary<Stmt.AutoAccessor, FieldBuilder> _autoAccessorBackingFields = new(ReferenceEqualityComparer.Instance);
 
     /// <summary>
     /// Defines an auto-accessor as a .NET property with private backing field.
@@ -56,6 +57,7 @@ public partial class ILCompiler
             propertyType,
             fieldAttrs
         );
+        _autoAccessorBackingFields.Add(autoAccessor, backingField);
 
         // Track backing field
         _typedInterop.PropertyBackingFields[className][pascalName] = backingField;
@@ -202,8 +204,14 @@ public partial class ILCompiler
                 classSetters[pascalName] = setter;
             }
         }
-        if (!autoAccessor.IsStatic && ClassNeedsConstructorReceiver(className))
+        if (!autoAccessor.IsStatic)
+        {
             DefineReceiverAutoAccessor(typeBuilder, autoAccessor, backingField);
+            if (_classExprs.Names.ContainsValue(className))
+                DefineStaticAutoAccessorValue(typeBuilder, autoAccessor, backingField);
+        }
+        else
+            DefineStaticAutoAccessorValue(typeBuilder, autoAccessor, backingField);
     }
 
     /// <summary>
@@ -263,16 +271,30 @@ public partial class ILCompiler
         string className,
         bool isStatic)
     {
-        string pascalName = NamingConventions.ToPascalCase(autoAccessor.Name.Lexeme);
-
-        if (!_typedInterop.PropertyBackingFields[className].TryGetValue(pascalName, out var backingField))
+        if (!_autoAccessorBackingFields.TryGetValue(autoAccessor, out var backingField))
             return;
+
+        if (!isStatic && _receiverAutoAccessors.ContainsKey(autoAccessor))
+        {
+            var context = emitter.Context;
+            var previous = context.ClassConstructorReceiver;
+            if (previous == null)
+            {
+                var receiver = emitter.ILGen.DeclareLocal(_types.Object);
+                emitter.ILGen.Emit(OpCodes.Ldarg_0);
+                emitter.ILGen.Emit(OpCodes.Stloc, receiver);
+                context.ClassConstructorReceiver = receiver;
+            }
+            EmitReceiverAutoAccessorInitializer(context, autoAccessor, className);
+            context.ClassConstructorReceiver = previous;
+            return;
+        }
 
         if (autoAccessor.Initializer == null)
             return;
 
         var il = emitter.ILGen;
-        Type targetType = _typedInterop.PropertyTypes[className][pascalName];
+        Type targetType = backingField.FieldType;
 
         if (isStatic)
         {

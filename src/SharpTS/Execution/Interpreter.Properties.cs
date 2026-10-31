@@ -81,22 +81,22 @@ public partial class Interpreter
     /// <returns>A ValueTask containing the instantiated object.</returns>
     private async ValueTask<object?> EvaluateNewCore(IEvaluationContext ctx, Expr.New newExpr)
     {
+        using var errorOrigin = EnterVmErrorOrigin(newExpr);
         // Built-in types only apply when callee is a simple identifier
         bool isSimpleName = IsSimpleIdentifier(newExpr.Callee);
         string? simpleClassName = GetSimpleClassName(newExpr.Callee);
 
         // Handle built-in constructors via factory
-        if (isSimpleName && simpleClassName != null)
+        if (isSimpleName && simpleClassName != null
+            && newExpr.Callee is Expr.Variable intrinsicReference
+            && !_locals.ContainsKey(intrinsicReference) && !_environment.IsDefined(simpleClassName)
+            && !GlobalThis.HasUserProperty(simpleClassName) && !GlobalThis.IsDeletedProperty(simpleClassName))
         {
             // Special case: Promise needs executor function evaluation, not standard arg evaluation
             if (simpleClassName == BuiltInNames.Promise)
             {
                 var promiseArgs = await EvaluateNewArgumentsCore(ctx, newExpr.Arguments);
-                if (promiseArgs.Count != 1)
-                {
-                    throw new InterpreterException($"{BuiltInNames.Promise} constructor requires exactly 1 argument (executor function), got {promiseArgs.Count}.");
-                }
-                return CreatePromiseFromExecutor(promiseArgs[0]);
+                return CreatePromiseFromExecutor(promiseArgs.Count > 0 ? promiseArgs[0] : SharpTSUndefined.Instance);
             }
 
             // Try factory for all other built-in constructors
@@ -167,10 +167,24 @@ public partial class Interpreter
         {
             if (sharpClass.IsAbstract)
                 throw new InterpreterException($"Cannot create an instance of abstract class '{sharpClass.Name}'.");
+            if (sharpClass.NativeConstructionTarget is { } nativeTarget)
+                return nativeTarget.CallBoxed(this, [.. args]);
             return sharpClass.Construct(this, [.. args], newTarget);
         }
-        if (callable is SharpTSBuiltInConstructor { Name: BuiltInNames.Promise })
-            return CreatePromiseFromExecutor(args.Count > 0 ? args[0] : SharpTSUndefined.Instance);
+        if (callable is SharpTSBlobConstructor)
+            return BuiltInConstructorFactory.TryCreate(BuiltInNames.Blob, [.. args], this);
+        if (callable is SharpTSFileConstructor)
+            return BuiltInConstructorFactory.TryCreate(BuiltInNames.File, [.. args], this);
+        if (callable is SharpTSBuiltInConstructor { Name: BuiltInNames.Promise } promiseConstructor)
+            return CreatePromiseFromExecutor(args.Count > 0 ? args[0] : SharpTSUndefined.Instance, promiseConstructor);
+        if (callable is SharpTSArrayGlobal or SharpTSBuiltInConstructor { Name: BuiltInNames.Array })
+        {
+            var prototype = GetPropertyValue(newTarget, "prototype");
+            var array = (SharpTSArray)GetArrayGlobal().Call(this, [.. args])!;
+            if (IsConstructorReturnObject(prototype) && !ReferenceEquals(prototype, GetArrayPrototype()))
+                array.SetExplicitPrototype(prototype);
+            return array;
+        }
         if (callable is SharpTSBuiltInConstructor builtIn && BuiltInConstructorFactory.IsBuiltIn(builtIn.Name))
             return BuiltInConstructorFactory.TryCreate(builtIn.Name, [.. args], this);
         if (callable is SharpTSStringNamespace)
@@ -223,22 +237,22 @@ public partial class Interpreter
 
     private RuntimeValue EvaluateNew(Expr.New newExpr)
     {
+        using var errorOrigin = EnterVmErrorOrigin(newExpr);
         // Built-in types only apply when callee is a simple identifier
         bool isSimpleName = IsSimpleIdentifier(newExpr.Callee);
         string? simpleClassName = GetSimpleClassName(newExpr.Callee);
 
         // Handle built-in constructors via factory
-        if (isSimpleName && simpleClassName != null)
+        if (isSimpleName && simpleClassName != null
+            && newExpr.Callee is Expr.Variable intrinsicReference
+            && !_locals.ContainsKey(intrinsicReference) && !_environment.IsDefined(simpleClassName)
+            && !GlobalThis.HasUserProperty(simpleClassName) && !GlobalThis.IsDeletedProperty(simpleClassName))
         {
             // Special case: Promise needs executor function evaluation, not standard arg evaluation
             if (simpleClassName == BuiltInNames.Promise)
             {
                 var promiseArgs = EvaluateNewArguments(newExpr.Arguments);
-                if (promiseArgs.Count != 1)
-                {
-                    throw new InterpreterException($"{BuiltInNames.Promise} constructor requires exactly 1 argument (executor function), got {promiseArgs.Count}.");
-                }
-                return RuntimeValue.FromObject(CreatePromiseFromExecutor(promiseArgs[0]));
+                return RuntimeValue.FromObject(CreatePromiseFromExecutor(promiseArgs.Count > 0 ? promiseArgs[0] : SharpTSUndefined.Instance));
             }
 
             // Try factory for all other built-in constructors
@@ -368,10 +382,15 @@ public partial class Interpreter
             && !_environment.IsDefined(reference.Name.Lexeme);
 
     private bool CanUseGlobalThisRegistryNamespace(Expr.Variable reference, string name)
-        => IsRegistryOnlyNamespace(name)
-            && !_locals.ContainsKey(reference)
-            && !_environment.IsDefined(reference.Name.Lexeme)
-            && !GlobalThis.HasUserProperty(name);
+    {
+        if (!IsRegistryOnlyNamespace(name) || _locals.ContainsKey(reference)
+            || _environment.IsDefined(reference.Name.Lexeme)) return false;
+        var globalObject = _environment.VmGlobalObject ?? GlobalThis;
+        return !globalObject.HasUserProperty(reference.Name.Lexeme)
+            && !globalObject.IsDeletedProperty(reference.Name.Lexeme)
+            && !globalObject.HasUserProperty(name)
+            && !globalObject.IsDeletedProperty(name);
+    }
 
     /// <summary>
     /// ECMA-262 §7.3.3 Get(O, P) abstract operation. Reads a string-named
@@ -397,13 +416,16 @@ public partial class Interpreter
     {
         // Match value-position namespace reads before selecting the canonical
         // guest function (notably process.hrtime and its native child methods).
-        if (member is BuiltInMethod && _globalConstants.TryGetValue(namespaceName, out var owner))
+        if (member is BuiltInMethod promiseMethod && namespaceName == BuiltInNames.Promise)
+            return PromiseRealmState.LocalizeMethod(promiseMethod);
+        else if (member is BuiltInMethod && _globalConstants.TryGetValue(namespaceName, out var owner))
             member = BindBuiltInMember(member, owner);
         return LocalizeBuiltInValue(member);
     }
 
     internal object? LocalizeBuiltInValue(object? value)
         => value is BuiltInMethod { IsConstant: false, IsRealmOwned: false } method
+            && !Runtime.BuiltIns.Modules.Interpreter.VmModuleInterpreter.IsVmInputValue(method)
             ? (method.HasRealmOwnedReceiver ? _ownerBuiltInMethods : _realmBuiltInMethods)
                 .GetValue(method, static template => template.CloneForRealm())
             : value;
@@ -440,6 +462,7 @@ public partial class Interpreter
     private object? GetPropertyValueFromChainCore(
         object? current, string name, object? receiver)
     {
+        if (current is VmInputPropertyView inputView) return inputView.Read(name);
         for (int depth = 0; depth < 64 && current is not (null or SharpTSUndefined); depth++)
         {
             if (current is SharpTSProxy proxy)
@@ -453,11 +476,27 @@ public partial class Interpreter
                 current = ObjectBuiltIns.PrototypeOf(this, generatorFunction);
                 continue;
             }
+            if (current is SharpTSPromise promise)
+            {
+                if (TryReadDescriptor(promise.GetOwnPropertyDescriptor(name), receiver, out var promiseValue))
+                    return promiseValue;
+                current = ObjectBuiltIns.PrototypeOf(this, promise);
+                continue;
+            }
+
             if (current is ISharpTSOwnPropertyObject ownPropertyObject)
             {
                 if (TryReadDescriptor(ownPropertyObject.OwnProperties.GetOwnPropertyDescriptor(name),
                         receiver, out var ownValue))
                     return ownValue;
+                var collectionMember = current switch
+                {
+                    SharpTSMap map => MapBuiltIns.GetMember(map, name),
+                    SharpTSSet set => SetBuiltIns.GetMember(set, name),
+                    _ => null
+                };
+                if (collectionMember is not null)
+                    return collectionMember;
                 current = ObjectBuiltIns.PrototypeOf(this, current);
                 continue;
             }
@@ -479,6 +518,16 @@ public partial class Interpreter
                 if (stringPrototype.HasOwnProperty(name))
                     return stringPrototype.GetMember(name);
                 current = ObjectBuiltIns.PrototypeOf(this, stringPrototype);
+                continue;
+            }
+
+            if (current is SharpTSSymbolPrototype symbolPrototype)
+            {
+                if (TryReadDescriptor(symbolPrototype.GetOwnPropertyDescriptor(name), receiver, out var prototypeValue))
+                    return prototypeValue;
+                if (symbolPrototype.HasOwnProperty(name))
+                    return symbolPrototype.GetMember(name);
+                current = ObjectBuiltIns.PrototypeOf(this, symbolPrototype);
                 continue;
             }
 
@@ -541,6 +590,16 @@ public partial class Interpreter
                 if (TryReadDescriptor(instance.GetOwnPropertyDescriptor(name), receiver, out var instanceValue))
                     return instanceValue;
                 current = instance.Prototype;
+                continue;
+            }
+
+            if (current is SharpTSPromisePrototype promisePrototype)
+            {
+                if (TryReadDescriptor(promisePrototype.GetOwnPropertyDescriptor(name), receiver, out var prototypeValue))
+                    return prototypeValue;
+                if (promisePrototype.HasOwnProperty(name))
+                    return promisePrototype.GetMember(name);
+                current = ObjectBuiltIns.PrototypeOf(this, promisePrototype);
                 continue;
             }
 
@@ -674,21 +733,23 @@ public partial class Interpreter
                     && nativeConstructor.GetMember(name) is { } nativeStatic)
                     return nativeStatic is BuiltInMethod { IsConstant: true } constant
                         ? constant.ConstantValue
-                        : nativeStatic;
+                        : nativeStatic is BuiltInMethod intrinsicMethod
+                            && GetPromiseConstructorState(nativeConstructor) is { } realm
+                            ? realm.LocalizeMethod(intrinsicMethod) : nativeStatic;
             }
 
             if (current is ISharpTSCallable callable)
             {
                 // Built-in callable metadata is an own property even when it
                 // is stored outside the ordinary function property bag.
-                if (callable is IBuiltInFunctionMetadata
-                    && name is "name" or "length"
+                if (((callable is IBuiltInFunctionMetadata && name is "name" or "length")
+                        || (callable is SharpTSFunctionGlobal && name == "length"))
                     && FunctionBuiltIns.GetMember(callable, name, this) is { } metadataValue)
                     return metadataValue;
 
                 // Continue ordinary Get through the live intrinsic chain with
                 // the original Receiver, including an explicit null parent.
-                current = GetFunctionPrototype();
+                current = GetPromiseConstructorState(callable)?.FunctionPrototype ?? GetFunctionPrototype();
                 continue;
             }
 
@@ -715,8 +776,17 @@ public partial class Interpreter
         object? current = obj;
         for (int depth = 0; depth < 64 && current is not (null or SharpTSUndefined); depth++)
         {
+            if (current is VmInputPropertyView inputView && ReferenceEquals(symbol, SharpTSSymbol.ToStringTag))
+                return inputView.ReadToStringTag(receiver);
             if (current is SharpTSProxy proxy)
                 return proxy.TrapGet(symbol, this, receiver);
+            if (TryGetPromiseConstructorSymbolProperties(current, out var intrinsicProperties))
+            {
+                if (TryReadDescriptor(intrinsicProperties.GetOwnPropertyDescriptor(symbol), receiver, out var value))
+                    return value;
+                current = ObjectBuiltIns.PrototypeOf(this, current);
+                continue;
+            }
             if (current is ISharpTSGeneratorFunctionValue generatorFunction)
             {
                 if (TryReadDescriptor(generatorFunction.FunctionProperties.GetProperties(this)
@@ -730,6 +800,11 @@ public partial class Interpreter
                 if (TryReadDescriptor(ownPropertyObject.OwnProperties.GetOwnPropertyDescriptor(symbol),
                         receiver, out var ownValue))
                     return ownValue;
+                if (symbol == SharpTSSymbol.Iterator)
+                {
+                    if (current is SharpTSMap map) return MapBuiltIns.GetMember(map, "entries");
+                    if (current is SharpTSSet set) return SetBuiltIns.GetMember(set, "values");
+                }
                 current = ObjectBuiltIns.PrototypeOf(this, current);
                 continue;
             }
@@ -752,9 +827,7 @@ public partial class Interpreter
                 if (ReferenceEquals(symbol, SharpTSSymbol.Iterator))
                 {
                     var iterator = arrayPrototype.GetMember("values");
-                    return iterator is ArrayPrototypeMethodWrapper wrapper && receiver is SharpTSArray
-                        ? wrapper.Bind(receiver)
-                        : iterator ?? SharpTSUndefined.Instance;
+                    return iterator ?? SharpTSUndefined.Instance;
                 }
                 current = GetObjectPrototype();
                 continue;
@@ -840,6 +913,27 @@ public partial class Interpreter
                 continue;
             }
 
+            if (current is SharpTSPromise { HasExplicitPrototype: true } promise)
+            {
+                current = promise.ExplicitPrototype;
+                continue;
+            }
+
+            if (current is SharpTSDate date)
+            {
+                if (TryReadDescriptor(date.GetOwnPropertyDescriptor(symbol), receiver, out var value))
+                    return value;
+                current = ObjectBuiltIns.PrototypeOf(this, date);
+                continue;
+            }
+
+            if (current is SharpTSObjectNamespace objectNamespace)
+            {
+                if (TryReadDescriptor(objectNamespace.GetOwnPropertyDescriptor(symbol), receiver, out var value))
+                    return value;
+                current = ObjectBuiltIns.PrototypeOf(this, objectNamespace);
+                continue;
+            }
             if (current is ISharpTSSymbolPropertyBag symbolBag)
             {
                 if (symbolBag.TryGetSymbolAccessor(symbol, out var getter, out _))
@@ -855,8 +949,6 @@ public partial class Interpreter
             {
                 if (TryReadDescriptor(klass.GetOwnStaticSymbolPropertyDescriptor(symbol), receiver, out var value))
                     return value;
-                if (ReferenceEquals(klass, SharpTSPromiseClass.PromiseBase) && symbol == SharpTSSymbol.Species)
-                    return receiver;
                 current = ObjectBuiltIns.PrototypeOf(this, klass);
                 continue;
             }
@@ -980,7 +1072,7 @@ public partial class Interpreter
                 obj = GetRecordPrototype(so);
                 continue;
             }
-            if (obj is SharpTSInstance constructorInstance && name == "constructor")
+            if (obj is SharpTSInstance constructorInstance && !constructorInstance.UsesDynamicPrototypeChain)
             {
                 constructorInstance.SetInterpreter(this);
                 return constructorInstance.HasProperty(name);
@@ -1030,6 +1122,12 @@ public partial class Interpreter
         {
             if (current is SharpTSProxy prototypeProxy)
                 return prototypeProxy.TrapHas(symbol, this);
+            if (TryGetPromiseConstructorSymbolProperties(current, out var intrinsicProperties))
+            {
+                if (intrinsicProperties.GetOwnPropertyDescriptor(symbol) is not null) return true;
+                current = ObjectBuiltIns.PrototypeOf(this, current);
+                continue;
+            }
             if (current is ISharpTSOwnPropertyObject ownPropertyObject)
             {
                 if (ownPropertyObject.OwnProperties.GetOwnPropertyDescriptor(symbol) is not null) return true;
@@ -1051,8 +1149,6 @@ public partial class Interpreter
             if (current is SharpTSClass klass)
             {
                 if (klass.GetOwnStaticSymbolPropertyDescriptor(symbol) is not null) return true;
-                if (ReferenceEquals(klass, SharpTSPromiseClass.PromiseBase) && symbol == SharpTSSymbol.Species)
-                    return true;
                 current = ObjectBuiltIns.PrototypeOf(this, klass);
                 continue;
             }
@@ -1114,6 +1210,12 @@ public partial class Interpreter
             if (current is SharpTSArrayGlobal arrayGlobal)
             {
                 current = ObjectBuiltIns.PrototypeOf(this, arrayGlobal);
+                continue;
+            }
+            if (current is SharpTSObjectNamespace objectNamespace)
+            {
+                if (objectNamespace.GetOwnPropertyDescriptor(symbol) is not null) return true;
+                current = ObjectBuiltIns.PrototypeOf(this, objectNamespace);
                 continue;
             }
             if (current is ISharpTSSymbolPropertyBag symbolBag
@@ -1179,8 +1281,8 @@ public partial class Interpreter
     /// </summary>
     private object? GetRecordPrototype(SharpTSObject obj)
     {
-        if (obj.HasProperty("__proto__"))
-            return obj.GetProperty("__proto__");
+        if (obj.Prototype is not null)
+            return obj.Prototype;
         if (obj.IsNullPrototype)
             return null;
         if (obj.Fields.TryGetValue("__primitiveType", out var type))
@@ -1208,6 +1310,7 @@ public partial class Interpreter
     [MethodImpl(MethodImplOptions.AggressiveOptimization)]
     private RuntimeValue EvaluateGetOnObjectCore(Expr.Get get, object? obj)
     {
+        if (obj is VmInputPropertyView inputView) return RuntimeValue.FromBoxed(inputView.Read(get.Name.Lexeme));
         // Handle optional chaining - return undefined if object is null or undefined
         if (get.Optional && (obj == null || obj is Runtime.Types.SharpTSUndefined))
         {
@@ -1283,7 +1386,8 @@ public partial class Interpreter
         if (obj is ISharpTSPrimitiveConstructor primitiveConstructor)
             return RuntimeValue.FromBoxed(GetPropertyValue(primitiveConstructor, get.Name.Lexeme));
 
-        if (obj is ISharpTSGeneratorFunctionValue or SharpTSGenerator or SharpTSAsyncGenerator)
+        if (obj is ISharpTSGeneratorFunctionValue or SharpTSGenerator or SharpTSAsyncGenerator
+            or SharpTSMap or SharpTSSet)
             return RuntimeValue.FromBoxed(GetPropertyValue(obj, get.Name.Lexeme));
 
         if (NeedsLiveFunctionPrototypeRead(obj, get.Name.Lexeme))
@@ -1575,39 +1679,10 @@ public partial class Interpreter
                 return RuntimeValue.FromBoxed(RegExpConstructorObject);
         }
 
-        // Promise instances: own accessor/data properties installed via
-        // Object.defineProperty resolve first, so a poisoned `constructor`
-        // getter fires and propagates (test262 then/ctor-poisoned, #350). For
-        // subclass instances (#242), declared fields/class getters/methods then
-        // resolve before the built-in Promise members so user overrides win;
-        // then/catch/finally fall through to the category dispatch
-        // (PromiseBuiltIns wraps their results per SpeciesConstructor).
-        if (obj is SharpTSPromise promise)
-        {
-            if (promise.TryGetAccessor(memberName, out var ownGetter, out _))
-                return RuntimeValue.FromBoxed(ownGetter != null
-                    ? FunctionBuiltIns.CallWithThis(this, ownGetter, promise, [])
-                    : SharpTSUndefined.Instance);
-            if (promise.TryGetOwnProperty(memberName, out var ownProp))
-                return RuntimeValue.FromBoxed(ownProp);
-            if (promise is SharpTSPromiseSubclassInstance promiseSub)
-            {
-                if (memberName == "constructor")
-                    return RuntimeValue.FromObject(promiseSub.Klass);
-                var promiseGetter = promiseSub.Klass.FindGetter(memberName);
-                if (promiseGetter != null)
-                    return RuntimeValue.FromBoxed(promiseGetter.BindThis(promiseSub).CallBoxed(this, []));
-                var promiseMethod = promiseSub.Klass.FindMethod(memberName);
-                if (promiseMethod != null)
-                    return RuntimeValue.FromObject(SharpTSClass.BindMethodToReceiver(promiseMethod, promiseSub));
-            }
-            if (memberName is "then" or "catch" or "finally")
-            {
-                return RuntimeValue.FromBoxed(
-                    GetPromisePrototype().GetMember(memberName)
-                    ?? SharpTSUndefined.Instance);
-            }
-        }
+        // Promise data methods and getters come from the live descriptor chain.
+        // Member invocation supplies this; reading a method preserves its identity.
+        if (obj is SharpTSPromise)
+            return RuntimeValue.FromBoxed(GetPropertyValue(obj, memberName));
 
         // Number primitives inherit from this realm's mutable Number.prototype.
         // Consult it before the process-wide category registry so borrowed methods
@@ -1710,15 +1785,10 @@ public partial class Interpreter
             return GetArrayIndexValue(arrIdx, idx);
         }
 
-        if (obj is SharpTSArray arrayWithPrototype
-            && arrayWithPrototype.HasExplicitPrototype)
-        {
-            object? inherited = GetPropertyValueFromChain(
-                arrayWithPrototype.ExplicitPrototype, memberName, obj);
-            return RuntimeValue.FromBoxed(
-                TryBindReceiverForMethodAccess(inherited, obj) ?? inherited);
-        }
+        if (obj is SharpTSArray)
+            return RuntimeValue.FromBoxed(GetPropertyValue(obj, memberName));
 
+        // Other Array-category carriers retain their dedicated built-in dispatch.
         if (GetArrayPrototype().GetExtraGetter(memberName) is { } prototypeGetter)
             return BindAccessorToObject(prototypeGetter, obj).CallV2(
                 this, ReadOnlySpan<RuntimeValue>.Empty);
@@ -1779,6 +1849,7 @@ public partial class Interpreter
     /// </summary>
     internal static bool IsNonConstructorWrapper(object? callable) => callable
         is ISharpTSNonConstructorCallable
+        or CompiledCallableAdapter { IsNativePromiseCallback: true }
         or SharpTSFunction { IsConstructible: false }
         or SharpTSArrowFunction { IsConstructible: false }
         or SharpTSAsyncFunction
@@ -1923,6 +1994,7 @@ public partial class Interpreter
         if (receiver is null or SharpTSUndefined) return null;
         return callee switch
         {
+            SharpTSTextDecoder.TextDecoderDecodeMethod decode => decode.BindTo(receiver),
             SharpTSObjectUnboundMethod m when !m.HasBoundThis => m.BindTo(receiver),
             SharpTSArrayUnboundMethod m when !m.HasBoundThis => m.BindTo(receiver),
             ArrayPrototypeMethodWrapper m when receiver is SharpTSArray => m.Bind(receiver),
@@ -1948,6 +2020,8 @@ public partial class Interpreter
     /// </summary>
     private static object? BindMemberCallReceiver(object? callee, object? receiver)
     {
+        if (receiver is VmInputPropertyView inputView && callee is CompiledCallableAdapter inputMethod)
+            return VmInputPropertyView.BindMember(inputMethod, inputView);
         if (receiver is null) return callee;
         // Class properties expose the canonical callable. Install the resolver's
         // receiver scope only for the invocation, including borrowed methods.
@@ -2042,8 +2116,8 @@ public partial class Interpreter
             return RuntimeValue.FromBoxed(simpleObj.GetProperty(memberName));
         }
 
-        // Prototype-chain fallback. Walks via __proto__ (which SharpTSObject
-        // maps from its Prototype property for Object.create-linked objects).
+        // Follow the internal prototype slot independently of any own
+        // __proto__ property on the objects in this chain.
         // Handles both SharpTSObject and SharpTSInstance prototypes — the
         // latter is the case for `Object.create(new Point(...))`.
         object? current = GetRecordPrototype(simpleObj);
@@ -2065,7 +2139,7 @@ public partial class Interpreter
                 {
                     return RuntimeValue.FromBoxed(proto.GetProperty(memberName));
                 }
-                object? next = proto.HasProperty("__proto__") ? proto.GetProperty("__proto__") : null;
+                object? next = GetRecordPrototype(proto);
                 if (ReferenceEquals(next, proto)) break;
                 current = next;
                 continue;
@@ -2211,6 +2285,8 @@ public partial class Interpreter
         {
             return arrow.Bind(obj);
         }
+        if (accessor is SharpTSObjectUnboundMethod method && !method.HasBoundThis)
+            return method.BindTo(obj);
         // Built-in accessor getters (e.g. the generic RegExp.prototype `flags`
         // getter) carry their receiver through Bind so direct access like
         // `RegExp.prototype.flags` invokes them with the right `this`.
@@ -2254,11 +2330,21 @@ public partial class Interpreter
     {
         if (descriptor is null) return false;
 
+        if (!descriptor.HasGet && !descriptor.HasSet
+            && receiver is SharpTSGlobalThis globalData && globalData.RejectsVmInternalDataWrite(propertyName))
+        {
+            if (strictMode)
+                throw new ThrowException(new SharpTSTypeError($"Cannot assign to read only property '{propertyName}'"));
+            return true;
+        }
+
         if (descriptor.HasGet || descriptor.HasSet)
         {
             if (descriptor.Set is not null)
             {
-                FunctionBuiltIns.CallWithThis(this, descriptor.Set, receiver, [value]);
+                var actualReceiver = receiver is SharpTSGlobalThis global
+                    ? global.AccessorReceiver : receiver;
+                FunctionBuiltIns.CallWithThis(this, descriptor.Set, actualReceiver, [value]);
             }
             else if (strictMode)
             {
@@ -2344,7 +2430,7 @@ public partial class Interpreter
             // A Proxy requires its [[Set]] protocol rather than ordinary
             // descriptor probing, which would expose the wrong traps (#2221).
             if (current is SharpTSProxy) return null;
-            object? descriptor = ObjectBuiltIns.RuntimeGetOwnPropertyDescriptor(current, symbol);
+            object? descriptor = ObjectBuiltIns.RuntimeGetOwnPropertyDescriptorInRealm(this, current, symbol);
             if (descriptor is not (null or SharpTSUndefined))
                 return SharpTSPropertyDescriptor.FromAnyObject(descriptor);
             current = ObjectBuiltIns.PrototypeOf(this, current);
@@ -2551,6 +2637,7 @@ public partial class Interpreter
         if (obj is SharpTSFunctionGlobal fnGlobal)
         {
             return fnGlobal.GetMember(memberName)
+                ?? (memberName == "length" ? FunctionBuiltIns.GetMember(fnGlobal, memberName, this) : null)
                 ?? InheritedObjectPrototypeMember(fnGlobal, memberName)
                 ?? SharpTSUndefined.Instance;
         }
@@ -2589,19 +2676,21 @@ public partial class Interpreter
             // ECMA-262 §27.2.3.1: %Promise%.prototype. Without this, `Promise.prototype`
             // read as undefined and every Promise/prototype/* access died on it.
             if (memberName == "prototype" && ctor.Name == BuiltInNames.Promise)
-                return GetPromisePrototype();
+                return GetPromiseConstructorState(ctor)?.Prototype ?? GetPromisePrototype();
             if (memberName == "prototype" && ctor.Name == BuiltInNames.Symbol)
                 return GetSymbolPrototype();
             if (memberName == "prototype" && ctor.Name == BuiltInNames.Date)
                 return GetDatePrototype();
             var ctorMember = ctor.GetMember(memberName);
+            if (ctorMember is BuiltInMethod intrinsicMethod && GetPromiseConstructorState(ctor) is { } promiseRealm)
+                ctorMember = promiseRealm.LocalizeMethod(intrinsicMethod);
             // Materialize constant-wrapping members (e.g. Symbol.species via an
             // alias: `const S = Symbol; S.species`) the same way the syntactic
             // path in EvaluateGet does — otherwise the alias path returns the
             // BuiltInMethod wrapper and identity with the direct form breaks.
             if (ctorMember is BuiltInMethod { IsConstant: true } ctorConstant)
                 return ctorConstant.CallBoxed(this, []);
-            var functionPrototype = GetFunctionPrototype();
+            var functionPrototype = GetPromiseConstructorState(ctor)?.FunctionPrototype ?? GetFunctionPrototype();
             if (functionPrototype.GetExtraGetter(memberName) is { } inheritedGetter)
                 return BindAccessorToObject(inheritedGetter, ctor).CallBoxed(this, []);
             if (functionPrototype.HasExtra(memberName))
@@ -2626,11 +2715,13 @@ public partial class Interpreter
         {
             return globalGetter is null
                 ? SharpTSUndefined.Instance
-                : BindAccessorToObject(globalGetter, globalObject).CallBoxed(this, []);
+                : BindAccessorToObject(globalGetter, globalObject.AccessorReceiver).CallBoxed(this, []);
         }
         if (obj is SharpTSGlobalThis gtAccessor
             && !gtAccessor.HasUserProperty(memberName)
-            && TryGetRealmIntrinsic(memberName, out var gtIntrinsic))
+            && !gtAccessor.IsDeletedProperty(memberName)
+            && (gtAccessor.TryGetContextIntrinsic(memberName, out var gtIntrinsic)
+                || TryGetRealmIntrinsic(memberName, out gtIntrinsic)))
         {
             return gtIntrinsic;
         }
@@ -2663,29 +2754,8 @@ public partial class Interpreter
             }
         }
 
-        // Promise instances: mirror the RV-path arm — own accessor/data
-        // properties (poisoned `constructor` getter, #350) before subclass
-        // fields/getters/methods, all before the built-in Promise members.
-        if (obj is SharpTSPromise promise)
-        {
-            if (promise.TryGetAccessor(memberName, out var ownGetter, out _))
-                return ownGetter != null
-                    ? FunctionBuiltIns.CallWithThis(this, ownGetter, promise, [])
-                    : SharpTSUndefined.Instance;
-            if (promise.TryGetOwnProperty(memberName, out var promiseOwnProp))
-                return promiseOwnProp;
-            if (promise is SharpTSPromiseSubclassInstance promiseSub)
-            {
-                if (memberName == "constructor")
-                    return promiseSub.Klass;
-                var promiseGetter = promiseSub.Klass.FindGetter(memberName);
-                if (promiseGetter != null)
-                    return promiseGetter.BindThis(promiseSub).CallBoxed(this, []);
-                var promiseMethod = promiseSub.Klass.FindMethod(memberName);
-                if (promiseMethod != null)
-                    return SharpTSClass.BindMethodToReceiver(promiseMethod, promiseSub);
-            }
-        }
+        if (obj is SharpTSPromise)
+            return GetPropertyValue(obj, memberName);
 
         // Callable objects inherit guest-defined fields from this realm's
         // Function.prototype. Resolve that layer before the registry: registered
@@ -2743,7 +2813,7 @@ public partial class Interpreter
         {
             if (memberName == "constructor")
                 return GetFunctionPrototype().GetMember(memberName);
-            if (callable is IBuiltInFunctionMetadata
+            if ((callable is IBuiltInFunctionMetadata or CompiledCallableAdapter { IsNativePromiseCallback: true })
                 && memberName is "name" or "length"
                 && FunctionBuiltIns.GetMember(callable, memberName, this) is { } metadataValue)
                 return metadataValue;
@@ -2761,6 +2831,11 @@ public partial class Interpreter
         throw new InterpreterException("Only instances and objects have properties.");
     }
 
+    private static void WriteVmInputProperty(VmInputPropertyView input, string name, object? value, bool strictMode)
+    {
+        if (!input.Write(name, value) && strictMode)
+            throw new ThrowException(new SharpTSTypeError($"Cannot assign to read only property '{name}'"));
+    }
     /// <summary>
     /// Evaluates a property assignment expression (dot notation with assignment).
     /// </summary>
@@ -2827,6 +2902,15 @@ public partial class Interpreter
         }
 
         bool strictMode = forceStrict || _environment.IsStrictMode;
+        if (obj is VmInputPropertyView inputView)
+        {
+            if (inputView.CanWrite)
+            {
+                WriteVmInputProperty(inputView, set.Name.Lexeme, value, strictMode);
+                return value;
+            }
+            obj = inputView.Original;
+        }
         bool mutableFunctionPrototype = UsesMutableFunctionPrototype(obj);
 
         // Proxy interception - must be before any other dispatch
@@ -2840,7 +2924,7 @@ public partial class Interpreter
             return value;
         }
 
-        if (obj is ISharpTSOwnPropertyObject)
+        if (obj is ISharpTSOwnPropertyObject or SharpTSPromise { HasExplicitPrototype: true })
         {
             SetOwnPropertyObjectValue(obj, set.Name.Lexeme, value, strictMode);
             return value;
@@ -3027,27 +3111,7 @@ public partial class Interpreter
                 return EvaluateSetOnRecord(set, obj!, memberName, value, strictMode);
 
             case TypeCategory.RegExp when obj is SharpTSRegExp regex:
-                // User-installed accessor (Object.defineProperty path) wins
-                // over configurable built-in slots, so a throwing setter MUST
-                // fire and propagate.
-                if (regex.TryGetAccessor(memberName, out _, out var userSetter)
-                    && userSetter != null)
-                {
-                    FunctionBuiltIns.CallWithThis(this, userSetter, regex, [value]);
-                    return value;
-                }
-                if (memberName == "lastIndex")
-                {
-                    // Route through RegExpBuiltIns.SetMember so the setter does
-                    // ECMA ToLength coercion (handles `undefined`, string, bool,
-                    // boxed objects) instead of a hard (double) cast that throws.
-                    Runtime.BuiltIns.RegExpBuiltIns.SetMember(
-                        regex, memberName, value, strictMode);
-                    return value;
-                }
-                // JS: RegExp instances are objects; allow arbitrary property assignment
-                // (minimatch stores `_src`/`_glob` this way).
-                regex.SetPropertyStrict(memberName, value, strictMode);
+                SetRegExpProperty(regex, memberName, value, strictMode);
                 return value;
 
             case TypeCategory.Error when obj is SharpTSError error:
@@ -3171,6 +3235,35 @@ public partial class Interpreter
         }
     }
 
+    private void SetRegExpProperty(SharpTSRegExp regex, string name, object? value, bool strictMode)
+    {
+        var own = regex.GetOwnPropertyDescriptor(name);
+        if (TryAssignThroughDescriptor(own, regex, name, value, strictMode)) return;
+        if (own is null)
+        {
+            object? current = GetRegExpPrototype();
+            for (int depth = 0; depth < 64 && current is not (null or SharpTSUndefined); depth++)
+            {
+                if (current is SharpTSProxy proxy)
+                {
+                    if (!proxy.TrapSetProperty(name, value, this, regex) && strictMode)
+                        throw StrictModeErrors.TypeError($"Cannot assign to property '{name}'");
+                    return;
+                }
+                if (ObjectBuiltIns.OwnPropertyDescriptorOf(this, current, name) is { } descriptor)
+                {
+                    if (TryAssignThroughDescriptor(descriptor, regex, name, value, strictMode)) return;
+                    break;
+                }
+                current = ObjectBuiltIns.PrototypeOf(this, current);
+            }
+        }
+        if (name == "lastIndex")
+            RegExpBuiltIns.SetMember(regex, name, value, strictMode);
+        else
+            regex.SetPropertyStrict(name, value, strictMode);
+    }
+
     private object? GetArrayNamedProperty(
         SharpTSArray array, string name, object? receiver)
     {
@@ -3225,6 +3318,11 @@ public partial class Interpreter
             return;
         }
 
+        if (!array.HasNamedProperty(name))
+        {
+            SetOwnPropertyObjectValue(array, name, value, strictMode);
+            return;
+        }
         array.SetNamedProperty(name, value);
     }
 
@@ -3316,12 +3414,18 @@ public partial class Interpreter
         SharpTSObject receiver, string name, object? value, bool strictMode)
     {
         if (receiver.GetOwnPropertyDescriptor(name) is not null) return false;
-        object? current = receiver.Prototype;
-        while (current is SharpTSObject prototype)
+        object? current = GetRecordPrototype(receiver);
+        for (int depth = 0; depth < 64 && current is not null; depth++)
         {
-            if (prototype.GetOwnPropertyDescriptor(name) is { } descriptor)
+            if (current is SharpTSProxy proxy)
+            {
+                if (!proxy.TrapSetProperty(name, value, this, receiver) && strictMode)
+                    throw StrictModeErrors.TypeError($"Proxy set trap rejected property '{name}'");
+                return true;
+            }
+            if (ObjectBuiltIns.OwnPropertyDescriptorOf(this, current, name) is { } descriptor)
                 return TryAssignThroughDescriptor(descriptor, receiver, name, value, strictMode);
-            current = prototype.Prototype;
+            current = ObjectBuiltIns.PrototypeOf(this, current);
         }
         return false;
     }
@@ -3376,7 +3480,7 @@ public partial class Interpreter
             if (globalThis.TryGetUserAccessor(memberName, out _, out var setter))
             {
                 if (setter != null)
-                    BindAccessorToObject(setter, globalThis).CallBoxed(this, [value]);
+                    BindAccessorToObject(setter, globalThis.AccessorReceiver).CallBoxed(this, [value]);
                 return value;
             }
             globalThis.SetProperty(memberName, value);
@@ -3454,7 +3558,7 @@ public partial class Interpreter
         }
         else
         {
-            _environment.Assign(assign.Name, value);
+            AssignVariableValue(assign.Name, value);
         }
 
         return value;

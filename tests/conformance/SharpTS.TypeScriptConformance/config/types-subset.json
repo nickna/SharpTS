@@ -1,0 +1,20 @@
+{
+  "folders": [],
+  "timeoutSeconds": 30,
+  "skipDirectivesFile": null,
+  "skipTestsFile": null,
+  "files": [
+    "tests/cases/conformance/es2019/globalThisTypeIndexAccess.ts",
+    "tests/cases/conformance/es2021/logicalAssignment/logicalAssignment9.ts",
+    "tests/cases/conformance/types/conditional/inferTypes1.ts",
+    "tests/cases/conformance/types/conditional/inferTypesWithExtends2.ts",
+    "tests/cases/conformance/types/keyof/keyofIntersection.ts",
+    "tests/cases/conformance/types/literal/literalTypes1.ts",
+    "tests/cases/conformance/types/typeRelationships/assignmentCompatibility/intersectionIncludingPropFromGlobalAugmentation.ts",
+    "tests/cases/conformance/types/typeRelationships/subtypesAndSuperTypes/stringLiteralTypeIsSubtypeOfString.ts",
+    "tests/cases/conformance/types/typeRelationships/subtypesAndSuperTypes/subtypesOfUnion.ts",
+    "tests/cases/conformance/es2017/es2017DateAPIs.ts",
+    "tests/cases/conformance/es2020/constructBigint.ts",
+    "tests/cases/conformance/es6/Symbols/symbolDeclarationEmit1.ts"
+  ]
+}

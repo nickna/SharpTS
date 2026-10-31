@@ -193,7 +193,7 @@ public class NumericRestOptimizationTests
             async function run(): Promise<void> {
                 console.log(pick(10, await Promise.resolve(20), 30));
             }
-            function* gen(): Generator<number> {
+            function* gen(): Generator<number, void, number> {
                 yield pick(10, yield 20, 30);
             }
             const g = gen();

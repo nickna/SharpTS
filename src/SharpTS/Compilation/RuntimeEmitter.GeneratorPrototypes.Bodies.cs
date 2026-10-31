@@ -127,9 +127,9 @@ public partial class RuntimeEmitter
                 il.Emit(OpCodes.Newobj, _types.DictionaryStringObjectCtor);
                 il.Emit(OpCodes.Newobj, inputs.Objects.Constructor); il.Emit(OpCodes.Stsfld, field);
             }
-            _types.EmitLoadMethodInfo(il, kind.ConstructorMethod);
+            var constructorParameters = EmitReflectedMethodLiteral(il, kind.ConstructorMethod);
             il.Emit(OpCodes.Ldstr, kind == prototypes.Sync ? "GeneratorFunction" : "AsyncGeneratorFunction");
-            il.Emit(OpCodes.Ldc_I4_1); il.Emit(OpCodes.Call, inputs.Construction.GetOrCreate);
+            il.Emit(OpCodes.Ldc_I4_1); EmitReflectedFunctionFactory(il, inputs.Construction.GetOrCreate, constructorParameters);
             il.Emit(OpCodes.Stsfld, kind.Constructor);
         }
         // Publish every node before cyclic constructor/prototype edges are installed.
@@ -140,7 +140,7 @@ public partial class RuntimeEmitter
             Parent(kind.FunctionPrototype, () => il.Emit(OpCodes.Ldsfld, inputs.FunctionPrototypes.Prototype));
             Parent(kind.GeneratorPrototype, () => il.Emit(OpCodes.Ldsfld, kind.IteratorPrototype));
             Parent(kind.IteratorPrototype, () => il.Emit(OpCodes.Ldsfld, inputs.ObjectPrototypes.Prototype));
-            Parent(kind.Constructor, () => { il.Emit(OpCodes.Ldtoken, inputs.Functions.Type); il.Emit(OpCodes.Call, _types.TypeGetTypeFromHandle); });
+            Parent(kind.Constructor, () => EmitRuntimeConstructorValue(il, inputs.Functions.Type));
             Named(kind.FunctionPrototype, "prototype", () => il.Emit(OpCodes.Ldsfld, kind.GeneratorPrototype), false, true);
             Named(kind.FunctionPrototype, "constructor", () => il.Emit(OpCodes.Ldsfld, kind.Constructor), false, true);
             Named(kind.GeneratorPrototype, "constructor", () => il.Emit(OpCodes.Ldsfld, kind.FunctionPrototype), false, true);
@@ -174,8 +174,9 @@ public partial class RuntimeEmitter
         }
         void Callable(MethodInfo method, string name, int length)
         {
-            _types.EmitLoadMethodInfo(il, method); il.Emit(OpCodes.Ldstr, name); il.Emit(OpCodes.Ldc_I4, length);
-            il.Emit(OpCodes.Call, inputs.Construction.GetOrCreate);
+            var parameterProducer = EmitReflectedMethodLiteral(il, method);
+            il.Emit(OpCodes.Ldstr, name); il.Emit(OpCodes.Ldc_I4, length);
+            EmitReflectedFunctionFactory(il, inputs.Construction.GetOrCreate, parameterProducer);
         }
         void Descriptor(Action value, bool writable, bool configurable)
         {

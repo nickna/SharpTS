@@ -13,6 +13,12 @@ internal static class EmitTypeDefinitions
     private const string EmitMetadataJustification =
         "The type relationship is recorded in a persisted generated assembly, not inspected or instantiated by the native host. Native builds generate complete compiler metadata, and native compile smoke tests exercise this seam.";
 
+    internal static TypeBuilder DefineType(ModuleBuilder module, string name, TypeAttributes attributes) =>
+        NativeOwnedTypeDeclarations.Record(module, module.DefineType(name, attributes));
+
+    internal static TypeBuilder DefineNestedType(TypeBuilder containingType, string name, TypeAttributes attributes) =>
+        NativeOwnedTypeDeclarations.Record((ModuleBuilder)containingType.Module, containingType.DefineNestedType(name, attributes));
+
     [UnconditionalSuppressMessage(
         "Trimming",
         "IL2067",
@@ -27,7 +33,7 @@ internal static class EmitTypeDefinitions
         TypeAttributes attributes,
         Type? parent)
     {
-        return module.DefineType(name, attributes, parent);
+        return NativeOwnedTypeDeclarations.Record(module, module.DefineType(name, attributes, parent));
     }
 
     [UnconditionalSuppressMessage(
@@ -41,7 +47,7 @@ internal static class EmitTypeDefinitions
         Type? parent,
         Type[]? interfaces)
     {
-        return module.DefineType(name, attributes, parent, interfaces);
+        return NativeOwnedTypeDeclarations.Record(module, module.DefineType(name, attributes, parent, interfaces));
     }
 
     [UnconditionalSuppressMessage(
@@ -59,7 +65,7 @@ internal static class EmitTypeDefinitions
         Type? parent,
         Type[]? interfaces)
     {
-        return containingType.DefineNestedType(name, attributes, parent, interfaces);
+        return NativeOwnedTypeDeclarations.Record((ModuleBuilder)containingType.Module, containingType.DefineNestedType(name, attributes, parent, interfaces));
     }
 
     [UnconditionalSuppressMessage(

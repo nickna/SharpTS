@@ -12,8 +12,11 @@ namespace SharpTS.Runtime.Types;
 /// - Object values are compared by reference (same object identity)
 /// Methods match the JavaScript Set API: add, has, delete, clear, keys, values, entries, forEach.
 /// </remarks>
-public class SharpTSSet : ITypeCategorized, IEnumerable<object?>
+public class SharpTSSet : ITypeCategorized, IEnumerable<object?>, ISharpTSOwnPropertyObject
 {
+    private SharpTSObject? _ownProperties;
+    SharpTSObject ISharpTSOwnPropertyObject.OwnProperties => _ownProperties ??= new([]);
+
     /// <inheritdoc />
     public TypeCategory RuntimeCategory => TypeCategory.Set;
 

@@ -33,7 +33,9 @@ public partial class RuntimeEmitter
         EmittedArrayOperationsRuntime ArrayOperations,
         EmittedMapRuntime? Map,
         EmittedSetRuntime? Set,
-        EmittedInvocationRuntime Invocation
+        EmittedInvocationRuntime Invocation,
+        EmittedNativeCallableRuntime? NativeCallables = null,
+        MethodInfo? NativeProxyRejection = null
     );
 
     private readonly record struct FunctionBindWrapperClassInputs(
@@ -44,7 +46,9 @@ public partial class RuntimeEmitter
         EmittedSetRuntime? Set,
         FieldInfo UndefinedInstance,
         EmittedErrorRuntime Errors,
-        Type FunctionPrototypeType
+        Type FunctionPrototypeType,
+        EmittedNativeCallableRuntime? NativeCallables = null,
+        MethodInfo? NativeProxyRejection = null
     );
 
     private readonly record struct FunctionCallWrapperClassInputs(
@@ -56,7 +60,9 @@ public partial class RuntimeEmitter
         EmittedTypedArrayRuntime TypedArrays,
         EmittedTextEncodingRuntime? TextEncoding,
         FieldInfo UndefinedInstance,
-        EmittedErrorRuntime Errors
+        EmittedErrorRuntime Errors,
+        EmittedNativeCallableRuntime? NativeCallables = null,
+        MethodInfo? NativeProxyRejection = null
     );
 
     private readonly record struct FunctionApplyWrapperClassInputs(
@@ -69,7 +75,9 @@ public partial class RuntimeEmitter
         EmittedTypedArrayRuntime TypedArrays,
         EmittedTextEncodingRuntime? TextEncoding,
         FieldInfo UndefinedInstance,
-        EmittedErrorRuntime Errors
+        EmittedErrorRuntime Errors,
+        EmittedNativeCallableRuntime? NativeCallables = null,
+        MethodInfo? NativeProxyRejection = null
     );
 
     private readonly record struct DispatchToTargetInputs(
@@ -77,7 +85,8 @@ public partial class RuntimeEmitter
         EmittedArrayOperationsRuntime ArrayOperations,
         EmittedMapRuntime? Map,
         EmittedSetRuntime? Set,
-        EmittedInvocationRuntime Invocation
+        EmittedInvocationRuntime Invocation,
+        MethodInfo? NativeProxyRejection
     );
 
     private void DefineBoundFunctionMetadata(TypeBuilder runtimeType, EmittedFunctionBindingRuntime bindings)
@@ -164,7 +173,8 @@ public partial class RuntimeEmitter
     private void EmitBoundTSFunctionClass(
         ModuleBuilder moduleBuilder,
         EmittedFunctionBindingRuntime functionBindings,
-        EmittedFunctionValueRuntime functionValues
+        EmittedFunctionValueRuntime functionValues,
+        EmittedNativeCallableRuntime? nativeCallables = null
     )
     {
         // Define class: public sealed class $BoundTSFunction
@@ -342,6 +352,7 @@ public partial class RuntimeEmitter
         toStringIL.Emit(OpCodes.Ret);
 
         // Finalize the type
+        nativeCallables?.Register(typeBuilder, invokeBuilder);
         typeBuilder.CreateType();
     }
 
@@ -506,7 +517,7 @@ public partial class RuntimeEmitter
         EmitDispatchToTarget(
             il,
             functionBindings,
-            new DispatchToTargetInputs(inputs.FunctionValues, inputs.ArrayOperations, inputs.Map, inputs.Set, inputs.Invocation),
+            new DispatchToTargetInputs(inputs.FunctionValues, inputs.ArrayOperations, inputs.Map, inputs.Set, inputs.Invocation, NativeProxyRejection: inputs.NativeProxyRejection),
             targetField,
             combinedLocal,
             boundThisLocal
@@ -527,6 +538,7 @@ public partial class RuntimeEmitter
         iwtIL.Emit(OpCodes.Callvirt, invokeBuilder);
         iwtIL.Emit(OpCodes.Ret);
 
+        inputs.NativeCallables?.Register(typeBuilder, invokeBuilder);
         typeBuilder.CreateType();
     }
 
@@ -644,7 +656,7 @@ public partial class RuntimeEmitter
 
         if (thisArgLocal != null)
             EmitProxyInvokeWithThisFallback(
-                il, targetField, thisArgLocal, argsLocal);
+                il, targetField, thisArgLocal, argsLocal, inputs.NativeProxyRejection);
 
         // Nested call/apply/bind wrappers and built-in values are dispatched by
         // the canonical helper, whose signature is declared before these types.
@@ -763,7 +775,7 @@ public partial class RuntimeEmitter
         il.Emit(OpCodes.Ldfld, targetField);
         il.Emit(OpCodes.Castclass, arrays.BoundMethodType);
         il.Emit(OpCodes.Ldfld, arrays.BoundMethodNameField);
-        il.Emit(OpCodes.Newobj, arrays.BoundMethodCtor);
+        NativePrototypeFieldsLookup.EmitCarrierCreate(_nativePrototypeFields, il, arrays.BoundMethodCtor);
         il.Emit(OpCodes.Ldloc, args);
         il.Emit(OpCodes.Callvirt, arrays.BoundMethodInvoke);
         il.Emit(OpCodes.Ret);
@@ -774,7 +786,8 @@ public partial class RuntimeEmitter
         ILGenerator il,
         FieldBuilder targetField,
         LocalBuilder thisArgLocal,
-        LocalBuilder argsLocal)
+        LocalBuilder argsLocal,
+        MethodInfo? nativeProxyRejection)
     {
         var proxyLabel = il.DefineLabel();
         var notProxyLabel = il.DefineLabel();
@@ -789,6 +802,13 @@ public partial class RuntimeEmitter
             notProxyLabel);
 
         il.MarkLabel(proxyLabel);
+        if (nativeProxyRejection is not null)
+        {
+            il.Emit(OpCodes.Call, nativeProxyRejection);
+            il.Emit(OpCodes.Ret);
+            il.MarkLabel(notProxyLabel);
+            return;
+        }
         var methodLocal = il.DeclareLocal(_types.MethodInfo);
         var resultLocal = il.DeclareLocal(_types.Object);
         il.Emit(OpCodes.Ldarg_0);
@@ -1008,6 +1028,17 @@ public partial class RuntimeEmitter
         il.Emit(OpCodes.Ret);
         il.MarkLabel(ownGetterIsBound);
         il.Emit(OpCodes.Pop);
+        var ownGetterIsBoundAny = il.DefineLabel();
+        il.Emit(OpCodes.Ldloc, ownGetter);
+        il.Emit(OpCodes.Isinst, inputs.FunctionBindings.BoundType);
+        il.Emit(OpCodes.Dup);
+        il.Emit(OpCodes.Brfalse, ownGetterIsBoundAny);
+        il.Emit(OpCodes.Ldc_I4_0);
+        il.Emit(OpCodes.Newarr, _types.Object);
+        il.Emit(OpCodes.Callvirt, inputs.FunctionBindings.BoundInvoke);
+        il.Emit(OpCodes.Ret);
+        il.MarkLabel(ownGetterIsBoundAny);
+        il.Emit(OpCodes.Pop);
         il.Emit(OpCodes.Ldloc, ownGetter);
         il.Emit(OpCodes.Castclass, inputs.FunctionBindings.AnyType);
         il.Emit(OpCodes.Ldc_I4_0);
@@ -1141,8 +1172,8 @@ public partial class RuntimeEmitter
             il.Emit(OpCodes.Call, _types.GetMethod(_types.String, "op_Equality", _types.String, _types.String));
             il.Emit(OpCodes.Brfalse, skipLabel);
             il.Emit(OpCodes.Ldarg_0);
-            _types.EmitLoadMethodInfo(il, helper);
-            il.Emit(OpCodes.Newobj, inputs.FunctionConstruction.Constructor);
+            var parameterProducer = EmitReflectedMethodLiteral(il, helper);
+            EmitReflectedFunctionConstructor(il, inputs.FunctionConstruction.Constructor, parameterProducer, cached: false);
             il.Emit(OpCodes.Ret);
             il.MarkLabel(skipLabel);
         }
@@ -1321,12 +1352,18 @@ public partial class RuntimeEmitter
         il.Emit(OpCodes.Ret);
         il.MarkLabel(notRuntimeMethodLabel);
 
+        // Declaration receiver views share their prototype by MethodInfo.
+        // Evaluated function expressions own independent prototype objects.
+        var needCreate = il.DefineLabel();
+        il.Emit(OpCodes.Ldloc, tsfuncLocal);
+        il.Emit(OpCodes.Ldfld, inputs.FunctionValues.PropertyIdentityField);
+        il.Emit(OpCodes.Brtrue, needCreate);
+
         // if (_prototypeCache.TryGetValue(methodKey, out cached)) return cached
         il.Emit(OpCodes.Ldsfld, inputs.FunctionValues.PrototypeCacheField);
         il.Emit(OpCodes.Ldloc, methodKeyLocal);
         il.Emit(OpCodes.Ldloca, cachedProto);
         il.Emit(OpCodes.Callvirt, tryGetValueM);
-        var needCreate = il.DefineLabel();
         il.Emit(OpCodes.Brfalse, needCreate);
         il.Emit(OpCodes.Ldloc, cachedProto);
         il.Emit(OpCodes.Ret);
@@ -1346,7 +1383,7 @@ public partial class RuntimeEmitter
         il.Emit(OpCodes.Ldarg_0);
         il.Emit(OpCodes.Callvirt, _types.GetMethod(_types.DictionaryStringObject, "set_Item", _types.String, _types.Object));
         il.Emit(OpCodes.Ldloc, protoDictLocal);
-        il.Emit(OpCodes.Newobj, inputs.ObjectStorage.Constructor);
+        NativePrototypeFieldsLookup.EmitCarrierCreate(_nativePrototypeFields, il, inputs.ObjectStorage.Constructor);
         il.Emit(OpCodes.Stloc, newProto);
 
         // The auto-created prototype object's `constructor` is an own
@@ -1396,6 +1433,13 @@ public partial class RuntimeEmitter
         il.Emit(OpCodes.Call, inputs.DescriptorStorage.DefineProperty);
         il.Emit(OpCodes.Pop);
 
+        var useSharedPrototypeCache = il.DefineLabel();
+        il.Emit(OpCodes.Ldloc, tsfuncLocal);
+        il.Emit(OpCodes.Ldfld, inputs.FunctionValues.PropertyIdentityField);
+        il.Emit(OpCodes.Brfalse, useSharedPrototypeCache);
+        il.Emit(OpCodes.Ldloc, newProto);
+        il.Emit(OpCodes.Ret);
+        il.MarkLabel(useSharedPrototypeCache);
         il.Emit(OpCodes.Ldsfld, inputs.FunctionValues.PrototypeCacheField);
         il.Emit(OpCodes.Ldloc, methodKeyLocal);
         il.Emit(OpCodes.Ldloc, newProto);
@@ -1405,19 +1449,19 @@ public partial class RuntimeEmitter
         // bind: return new $FunctionBindWrapper(func)
         il.MarkLabel(bindLabel);
         il.Emit(OpCodes.Ldarg_0);
-        il.Emit(OpCodes.Newobj, inputs.FunctionBindings.BindCtor);
+        NativePrototypeFieldsLookup.EmitCarrierCreate(_nativePrototypeFields, il, inputs.FunctionBindings.BindCtor);
         il.Emit(OpCodes.Ret);
 
         // call: return new $FunctionCallWrapper(func)
         il.MarkLabel(callLabel);
         il.Emit(OpCodes.Ldarg_0);
-        il.Emit(OpCodes.Newobj, inputs.FunctionBindings.CallCtor);
+        NativePrototypeFieldsLookup.EmitCarrierCreate(_nativePrototypeFields, il, inputs.FunctionBindings.CallCtor);
         il.Emit(OpCodes.Ret);
 
         // apply: return new $FunctionApplyWrapper(func)
         il.MarkLabel(applyLabel);
         il.Emit(OpCodes.Ldarg_0);
-        il.Emit(OpCodes.Newobj, inputs.FunctionBindings.ApplyCtor);
+        NativePrototypeFieldsLookup.EmitCarrierCreate(_nativePrototypeFields, il, inputs.FunctionBindings.ApplyCtor);
         il.Emit(OpCodes.Ret);
 
         // length: ordinary functions expose their declared arity; bound
@@ -1776,7 +1820,7 @@ public partial class RuntimeEmitter
         {
             il.Emit(OpCodes.Ldc_I4_0);
             il.Emit(OpCodes.Newarr, _types.Object);
-        });
+        }, inputs.NativeProxyRejection);
         il.Emit(OpCodes.Unbox_Any, _types.Boolean);
         il.Emit(OpCodes.Brtrue, callableTargetLabel);
         il.MarkLabel(nonProxyTargetLabel);
@@ -1813,7 +1857,7 @@ public partial class RuntimeEmitter
         il.Emit(OpCodes.Ldfld, targetField);
         il.Emit(OpCodes.Ldloc, thisArgLocal);
         il.Emit(OpCodes.Ldloc, boundArgsLocal);
-        il.Emit(OpCodes.Newobj, functionBindings.AnyCtor);
+        NativePrototypeFieldsLookup.EmitCarrierCreate(_nativePrototypeFields, il, functionBindings.AnyCtor);
         il.Emit(OpCodes.Ret);
 
         // Recreate the implementation wrapper with the explicit bound receiver,
@@ -1825,10 +1869,10 @@ public partial class RuntimeEmitter
         il.Emit(OpCodes.Ldfld, targetField);
         il.Emit(OpCodes.Castclass, inputs.ArrayOperations.BoundMethodType);
         il.Emit(OpCodes.Ldfld, inputs.ArrayOperations.BoundMethodNameField);
-        il.Emit(OpCodes.Newobj, inputs.ArrayOperations.BoundMethodCtor);
+        NativePrototypeFieldsLookup.EmitCarrierCreate(_nativePrototypeFields, il, inputs.ArrayOperations.BoundMethodCtor);
         il.Emit(OpCodes.Ldloc, thisArgLocal);
         il.Emit(OpCodes.Ldloc, boundArgsLocal);
-        il.Emit(OpCodes.Newobj, functionBindings.AnyCtor);
+        NativePrototypeFieldsLookup.EmitCarrierCreate(_nativePrototypeFields, il, functionBindings.AnyCtor);
         il.Emit(OpCodes.Ret);
 
         // return new $BoundTSFunction(($TSFunction)_target, thisArg, boundArgs)
@@ -1838,7 +1882,7 @@ public partial class RuntimeEmitter
         il.Emit(OpCodes.Castclass, inputs.FunctionValues.Type);
         il.Emit(OpCodes.Ldloc, thisArgLocal);
         il.Emit(OpCodes.Ldloc, boundArgsLocal);
-        il.Emit(OpCodes.Newobj, functionBindings.BoundCtor);
+        NativePrototypeFieldsLookup.EmitCarrierCreate(_nativePrototypeFields, il, functionBindings.BoundCtor);
         il.Emit(OpCodes.Ret);
 
         // InvokeWithThis (not used but needed for consistency)
@@ -1855,6 +1899,7 @@ public partial class RuntimeEmitter
         iwtIL.Emit(OpCodes.Ret);
 
         // Finalize the type
+        inputs.NativeCallables?.Register(typeBuilder, invokeBuilder);
         typeBuilder.CreateType();
     }
 
@@ -2029,7 +2074,7 @@ public partial class RuntimeEmitter
         EmitDispatchToTarget(
             il,
             functionBindings,
-            new DispatchToTargetInputs(inputs.FunctionValues, inputs.ArrayOperations, inputs.Map, inputs.Set, inputs.Invocation),
+            new DispatchToTargetInputs(inputs.FunctionValues, inputs.ArrayOperations, inputs.Map, inputs.Set, inputs.Invocation, NativeProxyRejection: inputs.NativeProxyRejection),
             targetField,
             callArgsLocal,
             thisArgLocal
@@ -2065,7 +2110,7 @@ public partial class RuntimeEmitter
         il.Emit(OpCodes.Ldfld, targetField);
         il.Emit(OpCodes.Castclass, inputs.ArrayOperations.BoundMethodType);
         il.Emit(OpCodes.Ldfld, inputs.ArrayOperations.BoundMethodNameField);
-        il.Emit(OpCodes.Newobj, inputs.ArrayOperations.BoundMethodCtor);
+        NativePrototypeFieldsLookup.EmitCarrierCreate(_nativePrototypeFields, il, inputs.ArrayOperations.BoundMethodCtor);
         il.Emit(OpCodes.Ldloc, callArgsLocal);
         il.Emit(OpCodes.Callvirt, inputs.ArrayOperations.BoundMethodInvoke);
         il.Emit(OpCodes.Ret);
@@ -2079,7 +2124,7 @@ public partial class RuntimeEmitter
             il.Emit(OpCodes.Ldfld, targetField);
             il.Emit(OpCodes.Castclass, inputs.Map!.BoundMethodType);
             il.Emit(OpCodes.Ldfld, inputs.Map!.BoundNameField);
-            il.Emit(OpCodes.Newobj, inputs.Map!.BoundMethodConstructor);
+            NativePrototypeFieldsLookup.EmitCarrierCreate(_nativePrototypeFields, il, inputs.Map!.BoundMethodConstructor);
             il.Emit(OpCodes.Ldloc, callArgsLocal);
             il.Emit(OpCodes.Callvirt, inputs.Map!.BoundMethodInvoke);
             il.Emit(OpCodes.Ret);
@@ -2094,7 +2139,7 @@ public partial class RuntimeEmitter
             il.Emit(OpCodes.Ldfld, targetField);
             il.Emit(OpCodes.Castclass, inputs.Set!.BoundMethodType);
             il.Emit(OpCodes.Ldfld, inputs.Set!.BoundNameField);
-            il.Emit(OpCodes.Newobj, inputs.Set!.BoundMethodConstructor);
+            NativePrototypeFieldsLookup.EmitCarrierCreate(_nativePrototypeFields, il, inputs.Set!.BoundMethodConstructor);
             il.Emit(OpCodes.Ldloc, callArgsLocal);
             il.Emit(OpCodes.Callvirt, inputs.Set!.BoundMethodInvoke);
             il.Emit(OpCodes.Ret);
@@ -2114,6 +2159,7 @@ public partial class RuntimeEmitter
         iwtIL.Emit(OpCodes.Ret);
 
         // Finalize the type
+        inputs.NativeCallables?.Register(typeBuilder, invokeBuilder);
         typeBuilder.CreateType();
     }
 
@@ -2241,7 +2287,7 @@ public partial class RuntimeEmitter
         EmitDispatchToTarget(
             il,
             functionBindings,
-            new DispatchToTargetInputs(inputs.FunctionValues, inputs.ArrayOperations, inputs.Map, inputs.Set, inputs.Invocation),
+            new DispatchToTargetInputs(inputs.FunctionValues, inputs.ArrayOperations, inputs.Map, inputs.Set, inputs.Invocation, NativeProxyRejection: inputs.NativeProxyRejection),
             targetField,
             callArgsLocal,
             thisArgLocal
@@ -2279,6 +2325,7 @@ public partial class RuntimeEmitter
         iwtIL.Emit(OpCodes.Ret);
 
         // Finalize the type
+        inputs.NativeCallables?.Register(typeBuilder, invokeBuilder);
         typeBuilder.CreateType();
     }
 }

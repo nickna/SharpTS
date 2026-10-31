@@ -26,6 +26,7 @@ public partial class RuntimeEmitter
 
     private readonly record struct UnwrapPrimitiveInputs(
         Type ObjectType,
+        Type HasFieldsType,
         FieldInfo SymbolToPrimitive,
         MethodInfo GetIndex,
         Type UndefinedType,
@@ -160,7 +161,7 @@ public partial class RuntimeEmitter
 
         // obj = new $Object(dict)
         il.Emit(OpCodes.Ldloc, dictLocal);
-        il.Emit(OpCodes.Newobj, peers.ObjectCtor);
+        NativePrototypeFieldsLookup.EmitCarrierCreate(_nativePrototypeFields, il, peers.ObjectCtor);
         il.Emit(OpCodes.Stloc, objLocal);
 
         // String exotic own properties have fixed descriptors: length is
@@ -389,7 +390,7 @@ public partial class RuntimeEmitter
         il.Emit(OpCodes.Ldarg_0);
         il.Emit(OpCodes.Brtrue, notNullLabel);
         il.Emit(OpCodes.Newobj, _types.GetDefaultConstructor(_types.DictionaryStringObject));
-        il.Emit(OpCodes.Newobj, objectCtor);
+        NativePrototypeFieldsLookup.EmitCarrierCreate(_nativePrototypeFields, il, objectCtor);
         il.Emit(OpCodes.Ret);
         il.MarkLabel(notNullLabel);
 
@@ -399,7 +400,7 @@ public partial class RuntimeEmitter
         il.Emit(OpCodes.Isinst, undefinedType);
         il.Emit(OpCodes.Brfalse, notUndefLabel);
         il.Emit(OpCodes.Newobj, _types.GetDefaultConstructor(_types.DictionaryStringObject));
-        il.Emit(OpCodes.Newobj, objectCtor);
+        NativePrototypeFieldsLookup.EmitCarrierCreate(_nativePrototypeFields, il, objectCtor);
         il.Emit(OpCodes.Ret);
         il.MarkLabel(notUndefLabel);
 
@@ -616,13 +617,30 @@ public partial class RuntimeEmitter
             MethodAttributes.Public | MethodAttributes.Static,
             _types.Object,
             [_types.Object]);
+        boxed.UnwrapIfBoxedOrdinary = typeBuilder.DefineMethod(
+            "UnwrapIfBoxedOrdinary", MethodAttributes.Public | MethodAttributes.Static,
+            _types.Object, [_types.Object]);
     }
 
     private void EmitUnwrapIfBoxedBody(EmittedBoxedPrimitiveRuntime boxed,
         UnwrapPrimitiveInputs peers,
         BoxedDateInputs? date)
     {
-        var method = (MethodBuilder)boxed.UnwrapIfBoxed;
+        var owner = (TypeBuilder)boxed.UnwrapIfBoxed.DeclaringType!;
+        var method = owner.DefineMethod("UnwrapPrimitiveCore", MethodAttributes.Private | MethodAttributes.Static,
+            _types.Object, [_types.Object, _types.Boolean]);
+        EmitForwarder(boxed.UnwrapIfBoxed, skipExotic: false);
+        EmitForwarder(boxed.UnwrapIfBoxedOrdinary, skipExotic: true);
+
+        void EmitForwarder(MethodBuilder wrapper, bool skipExotic)
+        {
+            var body = wrapper.GetILGenerator();
+            body.Emit(OpCodes.Ldarg_0);
+            body.Emit(skipExotic ? OpCodes.Ldc_I4_1 : OpCodes.Ldc_I4_0);
+            body.Emit(OpCodes.Call, method);
+            body.Emit(OpCodes.Ret);
+        }
+
         var il = method.GetILGenerator();
         var passThruLabel = il.DefineLabel();
 
@@ -641,6 +659,9 @@ public partial class RuntimeEmitter
         }
         il.Emit(OpCodes.Ldarg_0);
         il.Emit(OpCodes.Isinst, _types.DictionaryStringObject);
+        il.Emit(OpCodes.Brtrue, objectLikeLabel);
+        il.Emit(OpCodes.Ldarg_0);
+        il.Emit(OpCodes.Isinst, peers.HasFieldsType);
         il.Emit(OpCodes.Brfalse, passThruLabel);
         il.MarkLabel(objectLikeLabel);
 
@@ -652,6 +673,8 @@ public partial class RuntimeEmitter
         // different from the interpreter.
         var ordinaryToPrimitiveLabel = il.DefineLabel();
         var toPrimitiveFn = il.DeclareLocal(_types.Object);
+        il.Emit(OpCodes.Ldarg_1);
+        il.Emit(OpCodes.Brtrue, ordinaryToPrimitiveLabel);
         il.Emit(OpCodes.Ldarg_0);
         il.Emit(OpCodes.Ldsfld, peers.SymbolToPrimitive);
         il.Emit(OpCodes.Call, peers.GetIndex);

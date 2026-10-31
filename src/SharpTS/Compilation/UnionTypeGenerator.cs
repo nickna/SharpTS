@@ -26,6 +26,8 @@ public class UnionTypeGenerator
     private readonly Dictionary<string, Type> _unionTypes = new(StringComparer.Ordinal);
     private readonly Dictionary<(string unionKey, Type fromType), MethodBuilder> _implicitConversions = new();
     private readonly TypeMapper _typeMapper;
+    private readonly List<TypeBuilder> _declaredOwners = [];
+    private readonly List<UnionConversionOperatorReceipt> _operatorReceipts = [];
 
     /// <summary>
     /// The union type marker interface to implement. When compiling to standalone DLLs,
@@ -111,6 +113,48 @@ public class UnionTypeGenerator
         IsComplete = true;
     }
 
+    /// <summary>Returns this completed owner's exact declarations, never a name-based ownership guess.</summary>
+    internal IReadOnlyList<Type> RequireCompletedTypes(TypeMapper mapper, ModuleBuilder module, Type unionTypeInterface)
+    {
+        if (!ReferenceEquals(_typeMapper, mapper) || !ReferenceEquals(mapper.ModuleBuilder, module) ||
+            !ReferenceEquals(UnionTypeInterface, unionTypeInterface))
+            throw new InvalidOperationException("Completed union metadata must match its exact mapper, module and interface owner.");
+        if (!IsComplete)
+            throw new InvalidOperationException("Union type emission has not completed.");
+        var types = _unionTypes.Values.ToArray();
+        if (types.Any(type => type.Module.ModuleVersionId != module.ModuleVersionId || !type.IsValueType))
+            throw new InvalidOperationException("Completed union declarations must be value types in this output's module.");
+        return Array.AsReadOnly(types);
+    }
+
+    internal IReadOnlyList<CompletedUnionConversion> RequireCompletedConversions(TypeMapper mapper, ModuleBuilder module, Type unionTypeInterface)
+    {
+        var owners = RequireCompletedTypes(mapper, module, unionTypeInterface);
+        if (owners.Count != _declaredOwners.Count)
+            throw new InvalidOperationException("Completed union conversion owners must match actual declaration operations.");
+        var result = new List<CompletedUnionConversion>();
+        foreach (var definition in _declaredOwners)
+        {
+            if (!ReferenceEquals(definition.Module, module) || !definition.IsCreated() ||
+                !owners.Any(owner => owner.MetadataToken == definition.MetadataToken && owner.Module.ModuleVersionId == module.ModuleVersionId))
+                throw new InvalidOperationException("Union conversion receipts require their actual completed output definition.");
+            var operations = _operatorReceipts.Where(row => ReferenceEquals(row.Owner, definition)).ToArray();
+            foreach (var operation in operations)
+            {
+                var method = operation.Method;
+                if (!ReferenceEquals(method.DeclaringType, definition) || !method.IsPublic || !method.IsStatic ||
+                    method.IsGenericMethod || method.Name != "op_Implicit" || method.ReturnType != definition ||
+                    method.GetParameters() is not [{ ParameterType: var argument }] || argument != operation.Argument ||
+                    !ReferenceEquals(method.GetILGenerator(), operation.Body) || operation.CompletedBodyLength == 0 || operation.Body.ILOffset != operation.CompletedBodyLength ||
+                    operation.Tag.DeclaringType != definition || operation.Value.DeclaringType != definition ||
+                    operation.Tag.IsStatic || operation.Value.IsStatic || operation.Tag.FieldType != _typeMapper.Types.Byte || operation.Value.FieldType != argument)
+                    throw new InvalidOperationException("Union conversion receipts require the actual completed operator and storage ABI.");
+            }
+            result.Add(new(definition, Array.AsReadOnly(operations.Select(row => row.Method).ToArray())));
+        }
+        return result.AsReadOnly();
+    }
+
     /// <summary>
     /// Generates a unique key for a union type based on its member types.
     /// </summary>
@@ -153,12 +197,13 @@ public class UnionTypeGenerator
         string typeName = $"Union_{key}";
 
         // Define the union as a struct implementing the union type marker interface
-        var typeBuilder = moduleBuilder.DefineType(
+        var typeBuilder = EmitTypeDefinitions.DefineType(moduleBuilder,
             typeName,
             TypeAttributes.Public | TypeAttributes.Sealed | TypeAttributes.BeforeFieldInit,
             typeof(ValueType),
             [UnionTypeInterface]
         );
+        _declaredOwners.Add(typeBuilder);
 
         // No StructLayout attribute needed: layout is a TypeDef flag, not a real CA row, and
         // DefineType without SequentialLayout/ExplicitLayout already produces AutoLayout (0x0)
@@ -448,6 +493,7 @@ public class UnionTypeGenerator
         // Return the local
         il.Emit(OpCodes.Ldloc, local);
         il.Emit(OpCodes.Ret);
+        _operatorReceipts.Add(new(typeBuilder, method, il, il.ILOffset, tagField, valueFields[index], fromType));
 
         return method;
     }
@@ -464,7 +510,6 @@ public class UnionTypeGenerator
 
         var il = method.GetILGenerator();
         var labels = new Label[valueFields.Count];
-        var endLabel = il.DefineLabel();
 
         for (int i = 0; i < valueFields.Count; i++)
             labels[i] = il.DefineLabel();
@@ -476,7 +521,7 @@ public class UnionTypeGenerator
 
         // default: return ""
         il.Emit(OpCodes.Ldstr, "");
-        il.Emit(OpCodes.Br_S, endLabel);
+        il.Emit(OpCodes.Ret);
 
         // case N: return value.ToString() (just the value, no type prefix for TypeScript semantics)
         for (int i = 0; i < valueFields.Count; i++)
@@ -493,11 +538,8 @@ public class UnionTypeGenerator
             var toStringMethod = typeof(object).GetMethod("ToString", Type.EmptyTypes)!;
             il.Emit(OpCodes.Callvirt, toStringMethod);
 
-            il.Emit(OpCodes.Br_S, endLabel);
+            il.Emit(OpCodes.Ret);
         }
-
-        il.MarkLabel(endLabel);
-        il.Emit(OpCodes.Ret);
 
         // Override object.ToString
         typeBuilder.DefineMethodOverride(method, typeof(object).GetMethod("ToString")!);
@@ -594,3 +636,7 @@ public class UnionTypeGenerator
         typeBuilder.DefineMethodOverride(method, _typeMapper.Types.ObjectGetHashCode);
     }
 }
+
+internal sealed record UnionConversionOperatorReceipt(TypeBuilder Owner, MethodBuilder Method, ILGenerator Body, int CompletedBodyLength,
+    FieldBuilder Tag, FieldBuilder Value, Type Argument);
+internal sealed record CompletedUnionConversion(TypeBuilder Owner, IReadOnlyList<MethodBuilder> Operators);

@@ -47,6 +47,10 @@ internal sealed partial class ForwardedReturnValueAnalyzer(TypeMap map, RuntimeF
             analysis._visiting.Clear(); analysis._nativeVisiting.Clear();
             int expressions = analysis._rawExpressions.Count;
             changed = storage?.Propagate(analysis.PassesRawCall) == true;
+            if (storage?.HasMutableDateStaticProducer == true || storage?.HasErasedGenericFieldProducer == true)
+                foreach (var call in storage.Calls)
+                    foreach (var expression in storage.EquivalentExpressions(call))
+                        _ = analysis.PassesRawCall(expression, RawCallStorageAnalysis.Evidence.Numeric);
             foreach (var expression in (IEnumerable<Expr>?)storage?.Returns ?? inventory.Returns)
                 _ = analysis.PassesRawCall(expression);
             changed |= expressions != analysis._rawExpressions.Count;
@@ -70,44 +74,75 @@ internal sealed partial class ForwardedReturnValueAnalyzer(TypeMap map, RuntimeF
         ResolveIntrinsicCalls(statements);
     }
 
-    private bool PassesRawCall(Expr expression) => PassesRawCall(expression, false);
+    private bool PassesRawCall(Expr expression) => PassesRawCall(expression, RawCallStorageAnalysis.Evidence.Any);
 
-    private bool PassesRawCall(Expr expression, bool callEvidenceOnly)
+    private bool PassesRawCall(Expr expression, RawCallStorageAnalysis.Evidence evidence)
     {
         bool raw = expression switch
         {
-            Expr.Call call => IsPrimitive(map.Get(call)) && !CallReturnsNative(call),
-            Expr.Variable variable => storage?.IsRawBinding(variable.Name, callEvidenceOnly) == true,
-            Expr.Grouping group => PassesRawCall(group.Expression, callEvidenceOnly),
-            Expr.TypeAssertion assertion => PassesRawCall(assertion.Expression, callEvidenceOnly),
-            Expr.NonNullAssertion assertion => PassesRawCall(assertion.Expression, callEvidenceOnly),
-            Expr.Satisfies satisfies => PassesRawCall(satisfies.Expression, callEvidenceOnly),
+            Expr.Call call => (evidence != RawCallStorageAnalysis.Evidence.Numeric || storage?.HasNumericProducer == true)
+                && (IsPrimitive(map.Get(call)) && !CallReturnsNative(call)
+                    || map.Get(call) is TypeInfo.Any or TypeInfo.Unknown or TypeInfo.Inferred
+                    || call.Arguments.Any(argument => PassesRawCall(argument, evidence))),
+            Expr.Variable variable => storage?.IsRawBinding(variable.Name, evidence) == true,
+            Expr.Grouping group => PassesRawCall(group.Expression, evidence),
+            Expr.TypeAssertion assertion => PassesRawCall(assertion.Expression, evidence),
+            Expr.NonNullAssertion assertion => PassesRawCall(assertion.Expression, evidence),
+            Expr.Satisfies satisfies => PassesRawCall(satisfies.Expression, evidence),
             // Visit both sides: nested conditional merges also need their own hint.
-            Expr.Ternary conditional => PassesRawCall(conditional.ThenBranch, callEvidenceOnly) | PassesRawCall(conditional.ElseBranch, callEvidenceOnly),
-            Expr.Logical logical => PassesRawCall(logical.Left, callEvidenceOnly) | PassesRawCall(logical.Right, callEvidenceOnly),
-            Expr.NullishCoalescing nullish => PassesRawCall(nullish.Left, callEvidenceOnly) | PassesRawCall(nullish.Right, callEvidenceOnly),
-            Expr.Comma comma => PassesRawCall(comma.Right, callEvidenceOnly),
-            Expr.Assign assignment => PassesRawCall(assignment.Value, callEvidenceOnly),
-            Expr.AssertedAssignment assignment => !callEvidenceOnly | PassesRawCall(assignment.LoweredAssignment, callEvidenceOnly),
-            Expr.Set assignment => PassesRawCall(assignment.Value, callEvidenceOnly),
-            Expr.SetSuper assignment => PassesRawCall(assignment.Value, callEvidenceOnly),
-            Expr.SetIndex assignment => PassesRawCall(assignment.Value, callEvidenceOnly),
-            Expr.SetPrivate assignment => PassesRawCall(assignment.Value, callEvidenceOnly),
-            Expr.DestructuringAssign assignment => PassesRawCall(assignment.ResultValue, callEvidenceOnly),
-            Expr.LogicalAssign assignment => storage?.IsRawBinding(assignment.Name, callEvidenceOnly) == true
-                | PassesRawCall(assignment.Value, callEvidenceOnly),
-            Expr.LogicalSet assignment => PassesRawCall(assignment.Value, callEvidenceOnly),
-            Expr.LogicalSetPrivate assignment => PassesRawCall(assignment.Value, callEvidenceOnly),
-            Expr.LogicalSetIndex assignment => PassesRawCall(assignment.Value, callEvidenceOnly),
-            // Operators perform their own conversions; their operands are not returned.
+            Expr.Ternary conditional => PassesRawCall(conditional.ThenBranch, evidence) | PassesRawCall(conditional.ElseBranch, evidence),
+            Expr.Logical logical => PassesRawCall(logical.Left, evidence) | PassesRawCall(logical.Right, evidence),
+            Expr.NullishCoalescing nullish => PassesRawCall(nullish.Left, evidence) | PassesRawCall(nullish.Right, evidence),
+            Expr.Comma comma => PassesRawCall(comma.Right, evidence),
+            Expr.Assign assignment => PassesRawCall(assignment.Value, evidence),
+            Expr.AssertedAssignment assignment => evidence == RawCallStorageAnalysis.Evidence.Any | PassesRawCall(assignment.LoweredAssignment, evidence),
+            Expr.Set assignment => PassesRawCall(assignment.Value, evidence),
+            Expr.SetSuper assignment => PassesRawCall(assignment.Value, evidence),
+            Expr.SetIndex assignment => PassesRawCall(assignment.Value, evidence),
+            Expr.SetPrivate assignment => PassesRawCall(assignment.Value, evidence),
+            Expr.DestructuringAssign assignment => PassesRawCall(assignment.ResultValue, evidence),
+            Expr.LogicalAssign assignment => storage?.IsRawBinding(assignment.Name, evidence) == true
+                | PassesRawCall(assignment.Value, evidence),
+            Expr.LogicalSet assignment => PassesRawCall(assignment.Value, evidence),
+            Expr.LogicalSetPrivate assignment => PassesRawCall(assignment.Value, evidence),
+            Expr.LogicalSetIndex assignment => PassesRawCall(assignment.Value, evidence),
+            Expr.Binary binary when NumericResultMayRetainBigInt(binary.Operator.Type) => evidence != RawCallStorageAnalysis.Evidence.Call
+                && (PassesRawCall(binary.Left, RawCallStorageAnalysis.Evidence.Numeric)
+                    | PassesRawCall(binary.Right, RawCallStorageAnalysis.Evidence.Numeric)),
+            Expr.Unary unary when unary.Operator.Type is TokenType.MINUS or TokenType.TILDE => evidence != RawCallStorageAnalysis.Evidence.Call
+                && (map.IsRawNumericResult(unary) || PassesRawCall(unary.Right, RawCallStorageAnalysis.Evidence.Numeric)),
+            Expr.TaggedTemplateLiteral tagged => (evidence != RawCallStorageAnalysis.Evidence.Numeric || storage?.HasNumericProducer == true)
+                && (IsPrimitive(map.Get(tagged)) || map.Get(tagged) is TypeInfo.Any or TypeInfo.Unknown or TypeInfo.Inferred
+                    || tagged.Expressions.Any(argument => PassesRawCall(argument, evidence))),
+            Expr.ArrayLiteral array => array.Elements.Any(value => PassesRawCall(value is Expr.Spread spread ? spread.Expression : value, evidence)),
+            Expr.ObjectLiteral literal => literal.Properties.Any(property => PassesRawCall(property.Value, evidence)),
+            Expr.New creation => creation.Arguments.Any(argument => PassesRawCall(argument, evidence)),
+            Expr.Get member => (evidence != RawCallStorageAnalysis.Evidence.Call
+                    && PrimitiveFieldValueAnalysis.IsErasedGenericField(member, map))
+                | PassesRawCall(member.Object, evidence),
+            Expr.GetIndex member => (evidence != RawCallStorageAnalysis.Evidence.Call
+                    && PrimitiveFieldValueAnalysis.IsErasedGenericField(member, map))
+                | PassesRawCall(member.Object, evidence),
+            Expr.Spread spread => PassesRawCall(spread.Expression, evidence),
+            // Other operators perform their own conversions; their operands are not returned.
             _ => false
         };
         // Existing checker representation facts survive cloning independently of whether
         // their cause was a call. They must not become raw-CALL optimizer veto evidence.
-        raw |= !callEvidenceOnly && map.IsUndefinedReachableReturn(expression);
-        if (raw) _rawExpressions.Add(expression);
+        raw |= evidence == RawCallStorageAnalysis.Evidence.Any && map.IsUndefinedReachableReturn(expression)
+            || evidence == RawCallStorageAnalysis.Evidence.Numeric && map.IsRawNumericResult(expression);
+        if (raw)
+        {
+            _rawExpressions.Add(expression);
+            if (evidence == RawCallStorageAnalysis.Evidence.Numeric) _ = map.MarkRawNumericResult(expression);
+        }
         return raw;
     }
+
+    private static bool NumericResultMayRetainBigInt(TokenType operation) => operation is
+        TokenType.PLUS or TokenType.MINUS or TokenType.STAR or TokenType.SLASH or TokenType.PERCENT or TokenType.STAR_STAR or
+        TokenType.AMPERSAND or TokenType.PIPE or TokenType.CARET or TokenType.LESS_LESS or TokenType.GREATER_GREATER or
+        TokenType.GREATER_GREATER_GREATER;
 
     private bool FunctionReturnsRaw(Stmt.Function function)
     {

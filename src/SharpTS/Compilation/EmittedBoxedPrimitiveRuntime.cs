@@ -59,6 +59,14 @@ public sealed class EmittedBoxedPrimitiveRuntime
         internal set => Set(ref _unwrapIfBoxed, value);
     }
 
+    private MethodBuilder? _unwrapIfBoxedOrdinary;
+    /// <summary>Ordinary wrapper conversion after numeric coercion has already observed the exotic conversion hook.</summary>
+    public MethodBuilder UnwrapIfBoxedOrdinary
+    {
+        get => Require(_unwrapIfBoxedOrdinary);
+        internal set => Set(ref _unwrapIfBoxedOrdinary, value);
+    }
+
     private static T Require<T>(T? handle, [CallerMemberName] string name = "") where T : class =>
         handle ?? throw new InvalidOperationException($"boxed primitive metadata '{name}' has not been declared.");
 
@@ -84,6 +92,7 @@ public sealed class EmittedBoxedPrimitiveRuntime
         _ = IsOfType;
         _ = UnwrapStringReceiver;
         _ = UnwrapIfBoxed;
+        _ = UnwrapIfBoxedOrdinary;
         IsComplete = true;
     }
 }

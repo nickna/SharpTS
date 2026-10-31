@@ -16,6 +16,10 @@ Release archives are named `sharpts-<version>-<rid>` for managed self-contained 
 `sharpts-native-<version>-<rid>` for Native AOT builds. Built-in `--target exe` output is supported
 on Windows and Linux; DLL output remains portable to compatible .NET hosts.
 
+The experimental [`--emit-native-project` guest exporter](native-guest-projects.md)
+prepares a separate SDK project to NativeAOT-compile the generated program itself.
+Its current trim/AOT compatibility work remains tracked in #1351.
+
 ## Native command-line usage
 
 The native executable accepts the normal interpreter, project, and compiler commands where they

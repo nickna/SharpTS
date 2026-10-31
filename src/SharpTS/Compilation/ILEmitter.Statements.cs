@@ -823,7 +823,7 @@ public partial class ILEmitter
             return false;
         if (_ctx.TypeMap?.IsAssertedAssignmentStorage(v.Name) == true)
             return false;
-        if (_ctx.TypeMap?.IsRawCallStorage(v.Name) == true)
+        if (_ctx.TypeMap?.IsRawCallStorage(v.Name) == true || _ctx.TypeMap?.IsRawNumericStorage(v.Name) == true)
             return false;
 
         // Stable custom iteration proves its value binding is numeric. For the
@@ -2231,12 +2231,12 @@ public partial class ILEmitter
         if (iterableType is TypeInfo.Map)
         {
             // Map iteration yields [key, value] entries
-            IL.Emit(OpCodes.Call, _ctx.Runtime!.RequireMap().Entries);
+            EmitCallUnknown(_ctx.Runtime!.RequireMap().Entries);
         }
         else if (iterableType is TypeInfo.Set)
         {
             // Set iteration yields values
-            IL.Emit(OpCodes.Call, _ctx.Runtime!.RequireSet().Values);
+            EmitCallUnknown(_ctx.Runtime!.RequireSet().Values);
         }
 
         if (iterableType is TypeInfo.Map or TypeInfo.Set)
@@ -2299,7 +2299,7 @@ public partial class ILEmitter
             IL.Emit(OpCodes.Isinst, _ctx.Types.DictionaryObjectObject);
             builder.Emit_Brfalse(notDynamicMap);
             IL.Emit(OpCodes.Ldloc, iterableLocal);
-            IL.Emit(OpCodes.Call, _ctx.Runtime!.RequireMap().Entries);
+            EmitCallUnknown(_ctx.Runtime!.RequireMap().Entries);
             var start = builder.DefineLabel("forof_dynamic_map_start");
             var end = builder.DefineLabel("forof_dynamic_map_end");
             var cont = builder.DefineLabel("forof_dynamic_map_continue");
@@ -2316,7 +2316,7 @@ public partial class ILEmitter
             IL.Emit(OpCodes.Isinst, _ctx.Types.HashSetOfObject);
             builder.Emit_Brfalse(notDynamicSet);
             IL.Emit(OpCodes.Ldloc, iterableLocal);
-            IL.Emit(OpCodes.Call, _ctx.Runtime!.RequireSet().Values);
+            EmitCallUnknown(_ctx.Runtime!.RequireSet().Values);
             var start = builder.DefineLabel("forof_dynamic_set_start");
             var end = builder.DefineLabel("forof_dynamic_set_end");
             var cont = builder.DefineLabel("forof_dynamic_set_continue");
@@ -2335,7 +2335,9 @@ public partial class ILEmitter
         // run through the existing slow path — their runtime
         // representation can be a typed list OR a List<object> depending
         // on construction site, and the slow path already handles both.
-        if (arrayDesc != null && arrayDesc.Kind == ArrayElementsKind.Object)
+        if (arrayDesc != null && arrayDesc.Kind == ArrayElementsKind.Object
+            && _ctx.RuntimeFeatures?.UsesArrayPrototypeMutation != true
+            && _ctx.RuntimeFeatures?.UsesDynamicPropertyDescriptors != true)
         {
             EmitForOfArrayDirect(f, iterableLocal, arrayDesc, labelNames);
             _ctx.Locals.ExitScope();
@@ -2357,6 +2359,13 @@ public partial class ILEmitter
         IL.Emit(OpCodes.Isinst, _ctx.Runtime!.Sentinels.UndefinedType);
         var presentIteratorMethod = builder.DefineLabel("forof_present_iterator_method");
         builder.Emit_Brfalse(presentIteratorMethod);
+        var noOwnIteratorClaim = builder.DefineLabel("forof_no_own_iterator_claim");
+        IL.Emit(OpCodes.Ldloc, iterableLocal);
+        IL.Emit(OpCodes.Ldsfld, _ctx.Runtime.Symbols.Iterator);
+        IL.Emit(OpCodes.Call, _ctx.Runtime.ObjectOwnProperties.HasOwnProperty);
+        builder.Emit_Brfalse(noOwnIteratorClaim);
+        GuestErrorEmitter.ThrowTypeError(IL, _ctx.Runtime, "Symbol.iterator is not callable");
+        builder.MarkLabel(noOwnIteratorClaim);
         // Constructor values have no indexed/CLR enumerable fallback. Reject
         // a missing method here instead of materializing and reading the
         // same observable iterator getter for a second time.
@@ -3231,7 +3240,7 @@ public partial class ILEmitter
         var sourceLocal = IL.DeclareLocal(_ctx.Types.Object);
         IL.Emit(OpCodes.Stloc, sourceLocal);
         IL.Emit(OpCodes.Ldloc, sourceLocal);
-        IL.Emit(OpCodes.Call, _ctx.Runtime!.ObjectKeys.Keys);
+        IL.Emit(OpCodes.Call, _ctx.Runtime!.ObjectKeys.ForIn);
         var keysLocal = IL.DeclareLocal(_ctx.Types.ListOfObject);
         IL.Emit(OpCodes.Stloc, keysLocal);
 
@@ -3399,7 +3408,7 @@ public partial class ILEmitter
                 case Stmt.Const constant:
                     names.Add(constant.Name.Lexeme);
                     break;
-                case Stmt.Var { IsVar: false } lexical:
+                case Stmt.Var { IsVar: false, IsDeclare: false } lexical:
                     names.Add(lexical.Name.Lexeme);
                     break;
                 case Stmt.Class declaration when _ctx.RuntimeClassDeclarations?.ContainsKey(declaration) == true
@@ -3452,10 +3461,7 @@ public partial class ILEmitter
         // the emitted .cctor alongside static fields/blocks/computed keys. Force
         // every class definition, including classes whose only members are methods
         // or private instance fields, so `C.prototype` exists immediately.
-        IL.Emit(OpCodes.Ldtoken, builder!);
-        IL.Emit(OpCodes.Call, _ctx.Types.GetMethod(
-            _ctx.Types.Type, "GetTypeFromHandle", _ctx.Types.RuntimeTypeHandle));
-        IL.Emit(OpCodes.Call, _ctx.Runtime!.ClassInitialization.RunDefinition);
+        EmitClassDefinitionInitialization(builder!);
         if (_ctx.DeferredClassDefinitions?.TryGet(classStmt, out var deferred) == true)
             EmitDeferredComputedKeys(deferred.Registrar, deferred.Keys);
 
@@ -3474,9 +3480,7 @@ public partial class ILEmitter
             else
                 goto skipCapturedClassStore;
 
-            IL.Emit(OpCodes.Ldtoken, builder!);
-            IL.Emit(OpCodes.Call, _ctx.Types.GetMethod(
-                _ctx.Types.Type, "GetTypeFromHandle", _ctx.Types.RuntimeTypeHandle));
+            EmitConstructorTypeValue(builder!, NativeConstructorValueProducerKind.SourceClass);
             IL.Emit(OpCodes.Stfld, displayField);
         }
     skipCapturedClassStore:
@@ -3489,8 +3493,7 @@ public partial class ILEmitter
             return;
 
         var local = _ctx.Locals.GetLocal(classStmt.Name.Lexeme)!;
-        IL.Emit(OpCodes.Ldtoken, builder!);
-        IL.Emit(OpCodes.Call, _ctx.Types.GetMethod(_ctx.Types.Type, "GetTypeFromHandle", _ctx.Types.RuntimeTypeHandle));
+        EmitConstructorTypeValue(builder!, NativeConstructorValueProducerKind.SourceClass);
         IL.Emit(OpCodes.Stloc, local);
     }
 

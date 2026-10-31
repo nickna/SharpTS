@@ -195,11 +195,16 @@ public sealed class EmittedObjectWriteRuntimeTests
         return constructor.Invoke(constructor.GetParameters().Select(parameter =>
         {
             if (overrides.TryGetValue(parameter.Name!, out var value)) return value;
+            if (parameter.Name == "NativeProxyRejection") return runtime.ReflectedMethods.NativeProxyRejection;
+            if (parameter.Name == "SourceOwners") return runtime.ClassInitialization.SourceOwners;
             if (parameter.Name == "CommonJs") return runtime.Modules.CommonJs;
             if (parameter.Name == "ReflectAssignment") return runtime.Reflect.Assignment;
             if (parameter.Name == "GlobalThisSingletonField") return runtime.GlobalObject.SingletonField;
             if (parameter.Name == "GlobalThisSetProperty") return runtime.GlobalObject.SetProperty;
+            if (parameter.Name == "GlobalThisSetPropertyStrict") return runtime.GlobalObject.SetPropertyStrict;
             if (parameter.Name == "LookupBuiltInStaticMember") return runtime.BuiltInStatics.Lookup;
+            if (parameter.Name == "ToPropertyKey") return runtime.Reflect.ToPropertyKey;
+            if (parameter.Name == "GuestOwnSetProperty") return runtime.GuestOwnProperties == null ? null : runtime.ObjectWrite.Property;
             return (parameter.Name switch { "ArgumentsLengthField" => runtime.Arguments.LengthField, "ArgumentsType" => runtime.Arguments.Type, "BoundAnyFunctionType" => runtime.FunctionBindings.AnyType, "BoundTSFunctionType" => runtime.FunctionBindings.BoundType, "TSFunctionInvokeWithThis" => runtime.FunctionValues.InvokeWithThis, "TSFunctionType" => runtime.FunctionValues.Type, _ => (parameter.Name switch { "InvokeMethodUnwrapped" => runtime.ReflectedMethods.InvokeUnwrapped, "SafeGetMethod" => runtime.ReflectedMethods.FindMethod, _ => (parameter.Name switch { "InvokeValue" => runtime.Invocation.Value, "InvokeMethodValue" => runtime.Invocation.Method, "InvokeMethodValue0" => runtime.Invocation.Method0, _ => (parameter.Name! switch { "IHasFieldsInterface" => runtime.ObjectFields.Interface, "IHasFieldsHasProperty" => runtime.ObjectFields.HasProperty, "IHasFieldsSetProperty" => runtime.ObjectFields.SetProperty, "UndefinedType" => runtime.Sentinels.UndefinedType, "UndefinedInstance" => runtime.Sentinels.UndefinedInstance, _ => typeof(EmittedRuntime).GetProperty(parameter.Name!)!.GetValue(runtime) }) }) }) });
         }).ToArray());
     }

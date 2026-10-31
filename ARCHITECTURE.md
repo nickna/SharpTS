@@ -682,18 +682,20 @@ primitive prototype hooks and borrowed receivers) are retained separately;
 preserving them establishes refactor parity, not passing language conformance.
 Shared reflection metadata and local builders remain in the full ownership audit.
 
-Required `ReceiverGuard` owns the receiver-validation helper. Its emitter takes
-the destination type, owner, undefined and Symbol types, exception wrapper and
-TypeError constructor. Completion follows the original helper emission point.
+Required `ReceiverGuard` owns the receiver-validation helper. Its declaration
+receives the destination type and owner during the early runtime phase; body
+emission takes the owner, undefined and Symbol types, exception wrapper and
+TypeError constructor. Completion follows the original body emission point.
 Missing/null/duplicate declarations are rejected, failed completion can be
 repaired, and completed metadata is frozen. The helper preserves receiver
-identity and the original null, undefined and Symbol errors, signature,
-instructions and declaration order. `$TSFunction` continues resolving the helper
-by name in its own emitted assembly, with a fresh cache for each emitted type.
+identity and the original null, undefined and Symbol errors and signature.
+`$TSFunction` receives this exact method handle together with ToJsString,
+ToNumber and ArrayLikeMaterialize through scoped coercion inputs. These calls
+use early declarations owned by their existing families; no helper-name
+reflection lookup, invocation wrapper or coercion method cache is emitted.
 Tests cover these contracts, borrowed and bound methods, primitive conversion,
 custom conversion hooks, standalone execution and hosted declarations. Shared
-reflection metadata, local builders and the reflection cache remain in the full
-ownership audit.
+reflection metadata and local builders remain in the full ownership audit.
 
 Required `Enums` owns the enum reverse-lookup declaration. Its emitter receives
 only the destination type and owner; completion follows the original helper
@@ -788,6 +790,20 @@ identity, emitter reuse, wrapped primitive/null/undefined values, typed union pr
 and standalone/hosted output. Generator dictionaries and shared reflection caches
 remain part of the complete construction and shared-infrastructure audit.
 
+Native guest orchestration may supply `$TSFunction` an exact optional union-conversion
+handle through its function-emission policy. The compiler-owned late body requires
+the completed generator's exact mapper, module and emitted union interface before
+selecting behavior; its immutable snapshot comes from the sole declaration owner,
+not type names. Both compiler finalization paths finish union declarations before
+completing this body and serializing the guest. Any declaration retains the full
+legacy conversion body, including declarations whose eventual slots widen to object.
+An empty completed snapshot retains the existing value-type, prefix, non-null and
+already-exact guards, then throws a guest TypeError at the old `op_Implicit` lookup
+boundary for unsupported foreign `Union_` conversion. Ordinary managed output and
+runtime-emitter calls without this optional certificate retain the original body.
+The prefix predicate defines the existing conversion boundary; it proves no ownership.
+Cached signature/conversion flags and the wrapped source MethodInfo remain unchanged.
+
 Required `Sentinels` owns the distinct `$Undefined` and `$LexicalUninitialized`
 singleton types and fields. Both helpers receive only the module and this owner.
 They publish the baked declarations once; temporary builders remain local.
@@ -810,6 +826,31 @@ lookup keeps its original emission point, hierarchy search and fresh-wrapper
 behavior. Tests preserve overload selection, stable cached wrappers, cache
 isolation, exception identity, inherited lookup, generator and async super values, Invoke/Call
 fallback behavior and standalone crypto/event dispatch.
+
+Prepared native source output selects an optional reflective-call refusal through
+`FunctionEmissionPolicy`. Orchestration declares its static object-returning shell
+on the already-declared runtime type, fills its TypeError body after errors exist,
+and passes the exact nullable handle to scoped invocation/finalization inputs.
+Helpers check module and signature rather than reading ambient feature state.
+`$MethodCallable` keeps actual native-capability and exact delegate fast paths,
+including their numeric normalization and exception behavior, then preserves the
+original GetType/null dereference before refusing the residual Invoke/Call lookup.
+`InvokeMethodValue` retains its receiver-sensitive dispatch and rejects only its
+last Call reflection operation; it gains no general delegate/interface dispatch.
+The boundary names an unsupported operation, not alleged foreign ownership: even
+a source class's named Call method can reach the old duck-Call path (#3052).
+Ordinary output and default/uncertified runtime emission keep both legacy bodies
+and declaration order. Other CLR reflection remains separate and unchanged.
+
+For native guest output, orchestration declares an optional, checked
+`ReflectedMethods.NativeProxyRejection` helper before its consumers and fills its
+guest TypeError body after error metadata is available. Scoped Proxy bridge inputs
+carry that exact nullable handle; they do not read the output profile themselves.
+After the existing Proxy type check, a supplied helper rejects the operation before
+reading a trap or invoking the interpreter. This includes callable wrappers, JSON
+materialization/revivers and array classification. A null handle emits the existing
+managed bridge unchanged. General opaque CLR reflection remains available; this
+boundary implements the native profile's explicit Proxy refusal only.
 
 Instance `super` property values use `ClassDefinitions.ReadSuper` with the lexical
 class home and actual receiver, including captured arrows and state machines.
@@ -869,6 +910,16 @@ and wrapper-cache readers take that owner directly. Compiler marker paths preser
 their absent-runtime behavior and require declared attributes when a runtime exists.
 Saved-output, marker payload, numeric-rest allocation, reuse and reference-assembly
 tests cover this boundary; invocation and per-output function caches remain separate.
+
+Native numeric-rest binding has a compiler-owned late helper, declared before
+function-wrapper emission and completed before the program type is created.
+`FunctionEmissionPolicy` supplies its exact optional method handle to the wrapper
+constructors. The sole eligible source-marker producer validates and atomically
+records its original method and exact closed-static entry while attaching the
+marker. The helper compares literal method tokens and constructs a known delegate;
+unknown methods return null and retain ordinary invocation. Captured targets still
+skip the optimization. The no-producer proof omits the helper, and ordinary/default
+runtime emission retains its reflective binding and private entry visibility.
 
 Readline helper emission relies on its supplied required declarations; feature
 selection remains at the orchestration boundary. AbortSignal.any receives its
@@ -2187,6 +2238,46 @@ consumers receive a read-only view. Registration remains open through guest body
 module initializer emission and completes immediately before type finalization in both
 compiler pipelines. Completion revalidates declarations and rejects later writes.
 Nested erased functions and non-generic suspension stubs retain their existing signatures.
+
+Native generic-method normalization uses a compiler-owned late certificate. Both
+method-generic definition sites record their exact builders and parameters; the
+late body cross-checks the completed function registry before program finalization
+and serialization. An exact optional `FunctionEmissionPolicy` handle supplies its
+forward declaration to the already-created function wrappers. With no producers,
+the native helper preserves nongeneric, closed-generic and unmarked foreign method
+identity and explicitly rejects foreign generic definitions carrying this output's
+public source markers. With a producer or without the certificate it emits the
+full legacy normalization body. Ordinary managed emission remains unchanged.
+
+Native runtime class initialization is a separate late capability. It completes
+against the exact source-owner catalog and emits literal initializer calls for
+registered nongeneric owners, their resolved bases and intrinsic constructor
+identities. Registration never executes an initializer. An unknown owner has an
+explicit native error boundary; generic or unresolved source ownership retains
+the full legacy operation. The optional handle is passed through class and
+Symbol initialization inputs rather than inferred by a runtime helper. Ordinary
+managed and default runtime-emitter output retain their existing operations.
+
+Native receiver binding has a separate per-output producer session. The actual
+arrow display-field declaration registers a mutable public object `this` field
+and adds its exact direct setter interface implementation. Both finalization
+pipelines freeze producers before serialization. The late receiver helper trusts
+that interface only after comparing actual assembly objects; external types do
+not gain ownership from a name or an interface alone.
+
+`BuildArtifacts` checks the final PE after reference/debug rewriting, before any
+save API returns bytes or writes files. Every public instance exact-name `this`
+field and direct interface implementation must match its registered owner,
+field, setter signature, override and direct store. All owned base chains must
+end in fixed literal roots queried by the helper; dependent foreign generic
+ancestry and unregistered or unusual fields refuse with SHARPTS406. Base
+witnesses require the final `isinst` and queried `ldtoken` to be identical,
+including constructed TypeSpecs after facade rewriting. Framework fields are
+queried through literal types, including inherited fields, rather
+than assumed absent. External receivers require exact type equality with a
+finite framework set; all other targets get a guest TypeError. The private
+CoreLib RuntimeType literal has a native-only checked reference-index seam;
+ordinary retargeting and the default reflective BindThis body remain unchanged.
 
 ### Generated union metadata
 

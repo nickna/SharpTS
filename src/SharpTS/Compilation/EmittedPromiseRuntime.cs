@@ -254,6 +254,13 @@ public sealed class EmittedPromiseRuntime
     }
 
     private MethodBuilder? _withResolvers;
+    private MethodBuilder? _withResolversStatic;
+    public MethodBuilder WithResolversStatic
+    {
+        get => Require(_withResolversStatic);
+        internal set => Set(ref _withResolversStatic, value);
+    }
+
     public MethodBuilder WithResolvers
     {
         get => Require(_withResolvers);
@@ -360,7 +367,7 @@ public sealed class EmittedPromiseRuntime
     }
 
     private MethodBuilder? _resolveValueWithRootMethod;
-    /// <summary>Recursive thenable resolution retaining the original public capability's task identity.</summary>
+    /// <summary>Recursive thenable resolution retaining a public Task or the async return's exact Task cell.</summary>
     public MethodBuilder ResolveValueWithRootMethod
     {
         get => Require(_resolveValueWithRootMethod);
@@ -672,6 +679,7 @@ public sealed class EmittedPromiseRuntime
         _ = FromExecutor;
         _ = FromDirectExecutor;
         _ = WithResolvers;
+        _ = WithResolversStatic;
         _ = UnwrapPromiseReceiverMethod;
         _ = NormalizePromiseListMethod;
         _ = PrepareDerivedPromiseCapabilityMethod;

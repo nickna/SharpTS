@@ -3976,7 +3976,7 @@ public partial class RuntimeEmitter
     private (ConstructorBuilder ctor, MethodBuilder worker) EmitDnsAsyncClosure(
         TypeBuilder parentType, EmittedRuntime runtime, string methodName, string rrtype)
     {
-        var closureType = ((ModuleBuilder)parentType.Module).DefineType(
+        var closureType = EmitTypeDefinitions.DefineType(((ModuleBuilder)parentType.Module),
             "$DnsAsyncClosure_" + methodName,
             TypeAttributes.Public | TypeAttributes.Sealed | TypeAttributes.BeforeFieldInit,
             typeof(object));

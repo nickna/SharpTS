@@ -10,7 +10,24 @@ namespace SharpTS.Compilation;
 public partial class RuntimeEmitter
 {
     private readonly TypeProvider _types;
+    private NativeUnionArgumentConversion? _nativeUnionParameters;
     private readonly bool _emitHosted;
+    private readonly bool _emitNativeCallables;
+    private readonly bool _emitNativeOwnProperties;
+    private readonly MethodInfo? _nativeStaticFieldLookup;
+    private readonly MethodInfo? _nativeConstructorMembers;
+    private readonly NativeDeletionLookup? _nativeDeletionLookup;
+    private readonly MethodInfo? _nativeHasInMemberLookup;
+    private readonly NativeConstructorFactoryLookup? _nativeConstructorFactories;
+    private readonly NativeConstructorActivationLookup? _nativeConstructorActivation;
+    private readonly NativeReceiverInitializerLookup? _nativeReceiverInitializers;
+    private readonly NativeOwnerClosure? _nativeOwnerClosure;
+    private readonly NativePrototypeFieldsLookup? _nativePrototypeFields;
+    private readonly NativeTypedArrayBufferLookup? _nativeTypedArrayBuffers;
+
+    private void EmitRuntimeConstructorValue(ILGenerator il, Type type) =>
+        NativeConstructorActivationLookup.EmitValue(_nativeConstructorActivation, _types, il, type,
+            NativeConstructorValueProducerKind.RuntimeConstructorValue);
 
     /// <summary>
     /// Feature gating set — populated by <see cref="EmitAll(ModuleBuilder, RuntimeFeatureSet)"/>
@@ -21,9 +38,37 @@ public partial class RuntimeEmitter
     private RuntimeFeatureSet _features = RuntimeFeatureSet.EmitEverything();
 
     public RuntimeEmitter(TypeProvider types, bool emitHosted = false)
+        : this(types, emitHosted, emitNativeCallables: false)
+    {
+    }
+
+    internal RuntimeEmitter(TypeProvider types, bool emitHosted, bool emitNativeCallables)
+        : this(types, emitHosted, emitNativeCallables, emitNativeOwnProperties: false)
+    {
+    }
+
+    internal RuntimeEmitter(TypeProvider types, bool emitHosted, bool emitNativeCallables, bool emitNativeOwnProperties,
+        MethodInfo? nativeStaticFieldLookup = null, MethodInfo? nativeConstructorMembers = null,
+        NativeDeletionLookup? nativeDeletionLookup = null, MethodInfo? nativeHasInMemberLookup = null,
+        NativeConstructorFactoryLookup? nativeConstructorFactories = null,
+        NativeConstructorActivationLookup? nativeConstructorActivation = null,
+        NativeReceiverInitializerLookup? nativeReceiverInitializers = null,
+        NativeOwnerClosure? nativeOwnerClosure = null, NativePrototypeFieldsLookup? nativePrototypeFields = null, NativeTypedArrayBufferLookup? nativeTypedArrayBuffers = null)
     {
         _types = types;
         _emitHosted = emitHosted;
+        _emitNativeCallables = emitNativeCallables;
+        _emitNativeOwnProperties = emitNativeOwnProperties;
+        _nativeStaticFieldLookup = nativeStaticFieldLookup;
+        _nativeConstructorMembers = nativeConstructorMembers;
+        _nativeDeletionLookup = nativeDeletionLookup;
+        _nativeHasInMemberLookup = nativeHasInMemberLookup;
+        _nativeConstructorFactories = nativeConstructorFactories;
+        _nativeConstructorActivation = nativeConstructorActivation;
+        _nativeReceiverInitializers = nativeReceiverInitializers;
+        _nativeOwnerClosure = nativeOwnerClosure;
+        _nativePrototypeFields = nativePrototypeFields;
+        _nativeTypedArrayBuffers = nativeTypedArrayBuffers;
     }
 
     /// <summary>
@@ -35,11 +80,63 @@ public partial class RuntimeEmitter
         => EmitAll(moduleBuilder, RuntimeFeatureSet.EmitEverything());
 
     public EmittedRuntime EmitAll(ModuleBuilder moduleBuilder, RuntimeFeatureSet features)
+        => EmitAll(moduleBuilder, features, FunctionEmissionPolicy.Full);
+
+    internal EmittedRuntime EmitAll(ModuleBuilder moduleBuilder, RuntimeFeatureSet features, FunctionEmissionPolicy functionPolicy,
+        NativeSourceOwnerCatalog? sourceOwners = null, MethodInfo? nativeClassInitializer = null,
+        MethodInfo? nativeStaticMemberPresence = null, MethodBuilder? nativePropertyGetter = null,
+        EmittedNativeMethodLookupRuntime? nativeMethodLookup = null,
+        EmittedNativeConstructorMetadataRuntime? nativeConstructorMetadata = null)
     {
+        _nativeUnionParameters = functionPolicy.NativeUnionParameters;
+        _nativeDeletionLookup?.ValidateForEmitter(moduleBuilder, _emitNativeCallables);
+        _nativeConstructorFactories?.ValidateForEmitter(moduleBuilder, _emitNativeCallables);
+        _nativeConstructorActivation?.ValidateForEmitter(moduleBuilder, _emitNativeCallables);
+        _nativeReceiverInitializers?.ValidateForEmitter(moduleBuilder, _emitNativeCallables);
+        _nativeOwnerClosure?.ValidateForEmitter(moduleBuilder, _emitNativeCallables, features.UsesUserClasses);
+        _nativePrototypeFields?.ValidateForEmitter(moduleBuilder, _emitNativeCallables);
+        _nativeTypedArrayBuffers?.ValidateForEmitter(moduleBuilder, _emitNativeCallables);
+        functionPolicy.NativeConstructedBodies?.ValidateForEmitter(moduleBuilder, _emitNativeCallables);
+        if (_nativeStaticFieldLookup is { } fields &&
+            (!_emitNativeCallables || !ReferenceEquals(fields.Module, moduleBuilder) || !fields.IsStatic || fields.IsGenericMethod ||
+             (fields.CallingConvention & CallingConventions.VarArgs) != 0 || fields.ReturnType != _types.FieldInfo ||
+             !fields.GetParameters().Select(parameter => parameter.ParameterType).SequenceEqual([_types.Type, _types.String, typeof(BindingFlags)])))
+            throw new InvalidOperationException("Native static field lookup must have the exact native output module and signature.");
+        if (_nativeConstructorMembers is { } members &&
+            (!_emitNativeCallables || !ReferenceEquals(members.Module, moduleBuilder) || !members.IsStatic || members.IsGenericMethod ||
+             (members.CallingConvention & CallingConventions.VarArgs) != 0 || members.ReturnType != typeof(MemberInfo[]) ||
+             !members.GetParameters().Select(parameter => parameter.ParameterType).SequenceEqual([_types.Type, typeof(BindingFlags)])))
+            throw new InvalidOperationException("Native constructor members must have the exact native output module and signature.");
+        if (_nativeHasInMemberLookup is { } inMembers &&
+            (!_emitNativeCallables || !ReferenceEquals(inMembers.Module, moduleBuilder) || !inMembers.IsStatic || inMembers.IsGenericMethod ||
+             (inMembers.CallingConvention & CallingConventions.VarArgs) != 0 || inMembers.ReturnType != _types.Boolean ||
+             !inMembers.GetParameters().Select(parameter => parameter.ParameterType).SequenceEqual([_types.Type, _types.String])))
+            throw new InvalidOperationException("Native in-operator member lookup must have the exact native output module and signature.");
         _features = features;
         if (_emitHosted)
             _features.UsesPromise = true;
-        var runtime = new EmittedRuntime();
+        var runtime = new EmittedRuntime
+        {
+            NativeConstructorActivation = _nativeConstructorActivation,
+            NativeReceiverInitializers = _nativeReceiverInitializers,
+            NativePrototypeFields = _nativePrototypeFields,
+            NativeTypedArrayBuffers = _nativeTypedArrayBuffers
+        };
+        if (nativeConstructorMetadata is not null)
+        {
+            if (!_emitNativeCallables)
+                throw new InvalidOperationException("Native constructor metadata requires native output mode.");
+            runtime.DynamicConstruction.DeclareNativeMetadata(moduleBuilder, nativeConstructorMetadata);
+        }
+        if (nativePropertyGetter is not null) runtime.ReflectedMethods.DeclareNativePropertyGetter(moduleBuilder, nativePropertyGetter);
+        if (nativeMethodLookup is not null) runtime.ReflectedMethods.DeclareNativeMethodLookup(moduleBuilder, nativeMethodLookup);
+        if (sourceOwners != null) runtime.ClassInitialization.DeclareSourceOwners(sourceOwners);
+        if (nativeClassInitializer != null)
+            runtime.ClassInitialization.DeclareNativeInitializer(nativeClassInitializer);
+        if (nativeStaticMemberPresence != null)
+            runtime.ClassInitialization.DeclareNativeStaticMemberPresence(nativeStaticMemberPresence);
+        if (_emitNativeCallables)
+            DeclareNativeCallableCatalog(moduleBuilder, runtime);
         runtime.BuiltInModules.BeginEmission(moduleBuilder, features);
         if (features.UsesRegExp)
             runtime.RegExps.BeginImplementationEmission();
@@ -59,7 +156,7 @@ public partial class RuntimeEmitter
             runtime.BeginSetEmission();
         if (features.UsesJSON)
             runtime.Json.BeginImplementationEmission();
-        if (features.UsesReflect || features.UsesProxy)
+        if (features.UsesReflect || features.UsesProxy || features.UsesVm)
             runtime.Reflect.BeginAssignmentEmission();
         if (features.UsesReflect)
             runtime.Reflect.BeginNamespaceEmission();
@@ -154,7 +251,7 @@ public partial class RuntimeEmitter
 
         // Emit $Undefined singleton class first (other methods need this type)
         EmitUndefinedClass(moduleBuilder, runtime.Sentinels);
-        EmitFunctionPrototypeType(moduleBuilder, runtime.FunctionPrototypes, runtime.Sentinels.UndefinedInstance);
+        EmitFunctionPrototypeType(moduleBuilder, runtime.FunctionPrototypes, runtime.Sentinels.UndefinedInstance, runtime.NativeCallables);
         runtime.ArrayStorage.NumberQueue = EmitArrayQueue(moduleBuilder, runtime, ArrayElements.Double);
         runtime.ArrayStorage.BooleanQueue = EmitArrayQueue(moduleBuilder, runtime, ArrayElements.Bool);
         runtime.ArrayStorage.NumberQueueWithHoles = EmitArrayQueue(moduleBuilder, runtime, ArrayElements.Double, true);
@@ -173,6 +270,14 @@ public partial class RuntimeEmitter
         // during EmitRuntimeClass / EmitStringify / EmitCreateException, which
         // re-use the pre-allocated TypeBuilder + MethodBuilders.
         DefineRuntimeClassPhase1(moduleBuilder, runtime);
+        if (functionPolicy.RejectReflectiveCallableFallback && runtime.NativeCallables is null)
+            throw new InvalidOperationException("Native reflective-call refusal requires the actual native callable capability.");
+        var reflectiveCallRejection = functionPolicy.RejectReflectiveCallableFallback
+            ? runtime.RuntimeClass.Type.DefineMethod("RejectReflectiveCallableFallback", MethodAttributes.Assembly | MethodAttributes.Static,
+                _types.Object, Type.EmptyTypes) : null;
+        if (_emitNativeCallables)
+            runtime.ReflectedMethods.DeclareNativeProxyRejection(runtime.RuntimeClass.Type, runtime.RuntimeClass.Type.DefineMethod(
+                "RejectNativeProxy", MethodAttributes.Assembly | MethodAttributes.Static, _types.Object, Type.EmptyTypes));
 
         // Guest throws use a dedicated exception carrying the original value.
         // Define it immediately after the phase-1 runtime signatures because its
@@ -235,8 +340,11 @@ public partial class RuntimeEmitter
                 runtime.FunctionAttributes,
                 runtime.GlobalObject.SingletonField,
                 runtime.Sentinels.UndefinedInstance,
-                runtime.Sentinels.UndefinedType
-            )
+                runtime.Sentinels.UndefinedType,
+                new TSFunctionCoercionInputs(runtime.StringCoercion.ToJsString,
+                    runtime.NumericCoercion.ToNumber, runtime.ArrayOperations.Materialize,
+                    runtime.ReceiverGuard.RequireObjectCoercibleThis), runtime.NativeCallables
+            ) { Policy = functionPolicy }
         );
         runtime.FunctionValues.CompleteEmission();
         runtime.FunctionConstruction.CompleteEmission();
@@ -277,6 +385,11 @@ public partial class RuntimeEmitter
         // Emit $Error class hierarchy for standalone error support
         // NOTE: Must stay in sync with SharpTS.Runtime.Types.SharpTSError and subclasses
         EmitTSErrorClasses(moduleBuilder, runtime.Errors);
+        if (reflectiveCallRejection is not null)
+            GuestErrorEmitter.ThrowError(reflectiveCallRejection.GetILGenerator(), runtime.Errors.CreateException,
+                runtime.Errors.TypeErrorConstructor, NativeReflectiveCallableMessage);
+        if (runtime.ReflectedMethods.NativeProxyRejection is { } nativeProxyRejection)
+            EmitNativeProxyRejection(nativeProxyRejection, runtime.Errors);
 
         // Emit $DataCloneError exception type — thrown by StructuredCloneCore (#1255).
         // Unconditional: StructuredCloneCore itself is always emitted (EmitWorkerHelpers
@@ -304,10 +417,11 @@ public partial class RuntimeEmitter
         // $Array: array length truncation must remove indexed descriptors as
         // well as dense/sparse storage. The descriptor store itself depends
         // only on helper types emitted above.
-        EmitPropertyDescriptorTypes(moduleBuilder, runtime.DescriptorStorage,
+        var guestOwnProperties = EmitPropertyDescriptorTypes(moduleBuilder, runtime.DescriptorStorage,
             new DescriptorKeyInputs(runtime.FunctionValues.Type, runtime.FunctionValues.GetMethodInfo,
-                runtime.FunctionValues.PropertyIdentityField),
-            runtime.Sentinels.UndefinedType);
+                runtime.FunctionValues.PropertyIdentityField, runtime.ObjectKeys.ForgetConstructorKey),
+            runtime.Sentinels.UndefinedType, _emitNativeOwnProperties ? runtime.Symbols.Type : null);
+        if (guestOwnProperties != null) runtime.BeginGuestOwnPropertiesEmission(guestOwnProperties);
 
         // Emit $Array class for standalone array support
         // NOTE: Must stay in sync with SharpTS.Runtime.Types.SharpTSArray
@@ -316,9 +430,12 @@ public partial class RuntimeEmitter
         // Emit $IHasFields interface for unified property access
         // Must come before $Object which implements it
         EmitHasFieldsInterface(moduleBuilder, runtime.ObjectFields);
+        if (features.UsesUserClasses)
+            EmitSourceDataDefinitionContract(moduleBuilder, runtime.ObjectFields);
+        sourceOwners?.DeclareContract(runtime.ObjectFields.Interface);
         runtime.ObjectFields.CompleteEmission();
         EmitCompactObjectRecordInterface(moduleBuilder, runtime.Records);
-        DefineClassDefinitionTypes(moduleBuilder, runtime.ClassDefinitions);
+        DefineClassDefinitionTypes(moduleBuilder, runtime.ClassDefinitions, runtime.NativeCallables);
 
         // Emit $Object class for standalone object support
         // NOTE: Must stay in sync with SharpTS.Runtime.Types.SharpTSObject
@@ -329,14 +446,14 @@ public partial class RuntimeEmitter
                     runtime.DescriptorStorage.DescriptorValue.GetGetMethod()!, runtime.FunctionValues.Type,
                     runtime.FunctionValues.InvokeWithThis, runtime.Sentinels.UndefinedInstance),
                 new ObjectInvokeInputs(runtime.FunctionValues.Type, runtime.FunctionValues.InvokeWithThis),
-                runtime.Errors.TypeErrorConstructor));
+                runtime.Errors.TypeErrorConstructor, sourceOwners, features.UsesModuleNamespaces));
 
         if (features.UsesJSON || features.UsesCompactObjectRecords)
         {
             runtime.Records.BeginScalarEmission();
             var recordContract = new RecordStorageContractInputs(
                 runtime.ObjectFields.Interface, runtime.ObjectFields.FieldsGetter,
-                runtime.ObjectFields.GetProperty, runtime.ObjectFields.SetProperty, runtime.ObjectFields.HasProperty);
+                runtime.ObjectFields.GetProperty, runtime.ObjectFields.SetProperty, runtime.ObjectFields.HasProperty, sourceOwners);
             EmitJsonScalarRecordClass(moduleBuilder, runtime.Records, recordContract, features.JsonScalarRecordShapes);
             EmitCompactObjectRecordClasses(moduleBuilder, runtime.Records, recordContract,
                 runtime.Sentinels.UndefinedInstance, features.CompactObjectRecordShapes, features.CompactObjectRecordSelfFields);
@@ -447,7 +564,7 @@ public partial class RuntimeEmitter
         // Emit $BoundTSFunction class for bound functions
         // Must come after TSFunction (uses TSFunctionType, TSFunctionInvokeWithThis)
         DefineBoundFunctionMetadata(runtime.RuntimeClass.Type, runtime.FunctionBindings);
-        EmitBoundTSFunctionClass(moduleBuilder, runtime.FunctionBindings, runtime.FunctionValues);
+        EmitBoundTSFunctionClass(moduleBuilder, runtime.FunctionBindings, runtime.FunctionValues, runtime.NativeCallables);
 
         // Emit $AsyncLocalStorage class for async context propagation
         // Must come after TSFunction (Run/Exit invoke callbacks via TSFunctionInvoke)
@@ -497,7 +614,7 @@ public partial class RuntimeEmitter
             // $BoundTypedArrayMethod Phase 1 (#940): callable wrapper for typed-array bulk methods.
             // Needs $TypedArray defined (above); must precede EmitRuntimeClass, whose invocation
             // helpers and GetTypedArrayMember reference its type/ctor/Invoke.
-            EmitBoundTypedArrayMethodTypeDefinition(moduleBuilder, runtime.TypedArrays.RequireImplementation());
+            EmitBoundTypedArrayMethodTypeDefinition(moduleBuilder, runtime.TypedArrays.RequireImplementation(), runtime.NativeCallables);
         }
 
         // Emit stream classes for standalone stream support
@@ -541,7 +658,7 @@ public partial class RuntimeEmitter
         {
             EmitTSTextEncoderClass(moduleBuilder, runtime.RequireTextEncoding(), runtime.RequireBuffer());
             EmitTSTextDecoderClass(moduleBuilder, runtime.RequireTextEncoding(), runtime.RequireBuffer(), runtime.TypedArrays);
-            EmitTSTextDecoderDecodeMethodClass(moduleBuilder, runtime.RequireTextEncoding(), runtime.RequireBuffer(), runtime.TypedArrays);
+            EmitTSTextDecoderDecodeMethodClass(moduleBuilder, runtime.RequireTextEncoding(), runtime.RequireBuffer(), runtime.TypedArrays, runtime.NativeCallables);
         }
 
         // $StringDecoder class removed — StringDecoder migrated to
@@ -568,15 +685,15 @@ public partial class RuntimeEmitter
 
         // Emit $BoundArrayMethod type and constructor (Phase 1)
         // Must come before EmitRuntimeClass so GetListProperty can use the constructor
-        EmitBoundArrayMethodTypeDefinition(moduleBuilder, runtime.ArrayOperations);
+        EmitBoundArrayMethodTypeDefinition(moduleBuilder, runtime.ArrayOperations, runtime.NativeCallables);
 
         // Emit $BoundMapMethod / $BoundSetMethod types and constructors (Phase 1)
         // Must come before EmitRuntimeClass so GetMapProperty/GetSetProperty can use them.
         // Gated alongside the rest of Map/Set emission.
         if (runtime.Map is not null)
-            EmitBoundMapMethodTypeDefinition(moduleBuilder, runtime.RequireMap());
+            EmitBoundMapMethodTypeDefinition(moduleBuilder, runtime.RequireMap(), runtime.NativeCallables);
         if (runtime.Set is not null)
-            EmitBoundSetMethodTypeDefinition(moduleBuilder, runtime.RequireSet());
+            EmitBoundSetMethodTypeDefinition(moduleBuilder, runtime.RequireSet(), runtime.NativeCallables);
 
         // Emit $BoundAnyFunction (the partial-apply wrapper for .bind on non-$TSFunction
         // callables) and the function bind/call/apply wrappers. All reference the
@@ -586,7 +703,7 @@ public partial class RuntimeEmitter
         EmitBoundAnyFunctionClass(
             moduleBuilder,
             runtime.FunctionBindings,
-            new BoundAnyFunctionClassInputs(runtime.FunctionValues, runtime.ArrayOperations, runtime.Map, runtime.Set, runtime.Invocation)
+            new BoundAnyFunctionClassInputs(runtime.FunctionValues, runtime.ArrayOperations, runtime.Map, runtime.Set, runtime.Invocation, runtime.NativeCallables, NativeProxyRejection: runtime.ReflectedMethods.NativeProxyRejection)
         );
         EmitFunctionCallWrapperClass(
             moduleBuilder,
@@ -600,7 +717,8 @@ public partial class RuntimeEmitter
                 runtime.TypedArrays,
                 runtime.TextEncoding,
                 runtime.Sentinels.UndefinedInstance,
-                runtime.Errors
+                runtime.Errors, runtime.NativeCallables,
+                NativeProxyRejection: runtime.ReflectedMethods.NativeProxyRejection
             )
         );
         EmitFunctionApplyWrapperClass(
@@ -616,7 +734,8 @@ public partial class RuntimeEmitter
                 runtime.TypedArrays,
                 runtime.TextEncoding,
                 runtime.Sentinels.UndefinedInstance,
-                runtime.Errors
+                runtime.Errors, runtime.NativeCallables,
+                NativeProxyRejection: runtime.ReflectedMethods.NativeProxyRejection
             )
         );
         EmitFunctionBindWrapperClass(
@@ -630,14 +749,15 @@ public partial class RuntimeEmitter
                 runtime.Set,
                 runtime.Sentinels.UndefinedInstance,
                 runtime.Errors,
-                runtime.FunctionPrototypes.Type
+                runtime.FunctionPrototypes.Type, runtime.NativeCallables,
+                NativeProxyRejection: runtime.ReflectedMethods.NativeProxyRejection
             )
         );
         runtime.FunctionBindings.CompleteEmission();
 
         // Emit $MethodCallable type and constructor (Phase 1)
         // Must come before EmitRuntimeClass so GetFieldsProperty can wrap GetMember results
-        EmitMethodCallableTypeDefinition(moduleBuilder, runtime.ReflectedMethods);
+        EmitMethodCallableTypeDefinition(moduleBuilder, runtime.ReflectedMethods, runtime.NativeCallables);
 
         // Emit $TemplateStringsList class for tagged template literals
         // Must come before EmitRuntimeClass so InvokeTaggedTemplate can use the constructor
@@ -722,7 +842,7 @@ public partial class RuntimeEmitter
             new ClassConstructorReturnInputs(runtime.Errors, runtime.Sentinels.UndefinedType, runtime.Symbols.Type));
 
         // Emit $Runtime class with all helper methods
-        EmitRuntimeClass(moduleBuilder, runtime, netConstruction);
+        EmitRuntimeClass(moduleBuilder, runtime, netConstruction, allowInterpreterBridge: !_emitNativeCallables, reflectiveCallRejection);
 
         // Emit $Runtime.NewOnFunction — the JS `new` protocol for runtime-valued
         // function callees. Depends on $Object, $TSFunction, $BoundTSFunction, and
@@ -742,7 +862,8 @@ public partial class RuntimeEmitter
                 runtime.ReflectedMethods,
                 runtime.Symbols.Type,
                 runtime.Sentinels.UndefinedInstance,
-                runtime.Operators.TypeOf
+                runtime.Operators.TypeOf,
+                runtime.Vm
             )
         );
 
@@ -753,6 +874,8 @@ public partial class RuntimeEmitter
             runtime.DynamicConstruction,
             new ConstructDynamicValueInputs(
                 runtime.ClassDefinitions,
+                runtime.ObjectFields.Interface,
+                runtime.ClassInitialization.SourceOwners,
                 runtime.DynamicConstruction,
                 runtime.ArrayStorage,
                 runtime.DescriptorStorage,
@@ -831,6 +954,7 @@ public partial class RuntimeEmitter
                 runtime.RequireAsyncGenerators().RequireFromSync(),
                 new AsyncFromSyncIteratorSupportInputs(
                     runtime.Generators,
+                    runtime.Errors,
                     runtime.IteratorProtocol.Done,
                     runtime.IteratorProtocol.Function,
                     runtime.IteratorRecords.NextMethod,
@@ -859,7 +983,7 @@ public partial class RuntimeEmitter
             EmitAbortControllerConstructor(runtime.RuntimeClass.Type, runtime.Abort,
                 new AbortControllerConstructorInputs(runtime.DescriptorStorage, runtime.Errors,
                     runtime.FunctionAttributes, runtime.FunctionValues,
-                    runtime.FunctionConstruction.GetOrCreate, runtime.ObjectPrototypes));
+                    runtime.FunctionConstruction.GetOrCreate, runtime.ObjectPrototypes, functionPolicy.NativeConstructedBodies));
 
         // Emit $BroadcastChannel — extends $EventEmitter, dispatches via $EventLoop,
         // and clones messages via $Runtime.StructuredClone (populated during EmitRuntimeClass
@@ -901,7 +1025,7 @@ public partial class RuntimeEmitter
         // External usage in ReflectStaticEmitter has a null-check fallback, so
         // skipping this is safe even if some path slips past the detector.
         if (runtime.Reflect.Metadata is not null)
-            EmitReflectMetadataDecoratorClass(moduleBuilder, runtime.Reflect.RequireMetadata());
+            EmitReflectMetadataDecoratorClass(moduleBuilder, runtime.Reflect.RequireMetadata(), runtime.NativeCallables);
 
         // Finalize $BoundArrayMethod with Invoke method (Phase 2)
         // Must come after EmitRuntimeClass (needs array methods defined)
@@ -921,7 +1045,7 @@ public partial class RuntimeEmitter
             EmitBoundSetMethodFinalize(runtime.RequireSet(), runtime.Sentinels.UndefinedInstance);
 
         // Finalize $MethodCallable with Invoke method (Phase 2)
-        EmitMethodCallableFinalize(runtime.ReflectedMethods);
+        EmitMethodCallableFinalize(runtime.ReflectedMethods, runtime.NativeCallables, reflectiveCallRejection);
         runtime.ReflectedMethods.CompleteEmission();
 
         NetClosureConstruction? netClosures = null;
@@ -973,6 +1097,7 @@ public partial class RuntimeEmitter
 
         runtime.GeneratorPrototypes.Type.CreateType();
         EmitRuntimeClassFinalize(runtime.RuntimeClass);     // Finalize $Runtime after all method bodies
+        ValidateVmSourceObjectTracking(runtime);
 
         if (features.UsesTls)
         {
@@ -997,9 +1122,9 @@ public partial class RuntimeEmitter
             EmitTSSignFinalize(signConstruction!, runtime);
             EmitTSVerifyFinalize(verifyConstruction!, runtime);
             EmitTSECDHFinalize(ecdhConstruction!, runtime.RequireCrypto());
-            EmitBoundECDHMethodFinalize(boundEcdhConstruction!, runtime.RequireCrypto());
+            EmitBoundECDHMethodFinalize(boundEcdhConstruction!, runtime.RequireCrypto(), runtime.NativeCallables);
             EmitTSDHFinalize(dhConstruction!, runtime);
-            EmitBoundDHMethodFinalize(boundDhConstruction!, runtime.RequireCrypto());
+            EmitBoundDHMethodFinalize(boundDhConstruction!, runtime.RequireCrypto(), runtime.NativeCallables);
         }
 
         runtime.ArrayBuffer?.CompleteEmission();
@@ -1092,6 +1217,8 @@ public partial class RuntimeEmitter
         runtime.Fetch.CompleteEmission();
         runtime.Promise?.CompleteEmission();
         runtime.BuiltInModules.CompleteEmission();
+        runtime.NativeCallables?.CompleteEmission();
+        runtime.GuestOwnProperties?.CompleteEmission();
         return runtime;
     }
 }

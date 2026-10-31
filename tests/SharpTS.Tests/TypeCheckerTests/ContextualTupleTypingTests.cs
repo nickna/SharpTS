@@ -1,4 +1,5 @@
 using SharpTS.Tests.Infrastructure;
+using SharpTS.TypeSystem;
 using SharpTS.TypeSystem.Exceptions;
 using Xunit;
 
@@ -16,10 +17,10 @@ public class ContextualTupleTypingTests
     [Fact]
     public void ArrayLiteral_AgainstTupleAnnotation_InfersTuple()
     {
-        TestHarness.RunInterpreted("""
+        new TypeChecker().Check(TestHarness.ParseOrThrow("""
             declare const ab: "a" | "b";
             const t: ["a" | "b", number] = [ab, 1];
-            """);
+            """));
     }
 
     [Fact]
@@ -34,11 +35,11 @@ public class ContextualTupleTypingTests
     [Fact]
     public void ContextPropagatesThroughTernary()
     {
-        TestHarness.RunInterpreted("""
+        new TypeChecker().Check(TestHarness.ParseOrThrow("""
             type A = ["a", number] | ["c", string];
             declare const cond: boolean;
             const a: A = cond ? ["a", 1] : ["c", ""];
-            """);
+            """));
     }
 
     [Fact]
@@ -53,12 +54,12 @@ public class ContextualTupleTypingTests
     [Fact]
     public void GH39357_DiscriminatedTupleUnion_WithOrNarrowing()
     {
-        TestHarness.RunInterpreted("""
+        new TypeChecker().Check(TestHarness.ParseOrThrow("""
             type A = ["a", number] | ["b", number] | ["c", string];
             type B = "a" | "b" | "c";
             declare const b: B;
             const a: A = b === "a" || b === "b" ? [b, 1] : ["c", ""];
-            """);
+            """));
     }
 
     [Fact]
@@ -103,11 +104,11 @@ public class ContextualTupleTypingTests
     [Fact]
     public void NonTupleContext_KeepsArrayInference()
     {
-        TestHarness.RunInterpreted("""
+        new TypeChecker().Check(TestHarness.ParseOrThrow("""
             const xs: number[] = [1, 2, 3];
             declare const cond: boolean;
             const ys: number[] = cond ? [1] : [2, 3];
-            """);
+            """));
     }
 
     [Fact]

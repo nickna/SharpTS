@@ -192,7 +192,10 @@ public partial class RuntimeEmitter
         MethodBuilder report)
     {
         // Task continuations never invoke guest code on their worker thread.
-        // They only enqueue the report action on the JS event loop.
+        // Only the actual report job owns a ref; an unsettled promise alone
+        // cannot keep the process alive.
+        il.Emit(OpCodes.Call, runtime.EventLoop.GetInstance);
+        il.Emit(OpCodes.Callvirt, runtime.EventLoop.Ref);
         il.Emit(OpCodes.Call, runtime.EventLoop.GetInstance);
         il.Emit(OpCodes.Ldarg_0);
         il.Emit(OpCodes.Ldftn, report);
@@ -274,10 +277,6 @@ public partial class RuntimeEmitter
         il.Emit(OpCodes.Ldloc, tracker);
         il.Emit(OpCodes.Callvirt, cwtAdd);
 
-        // Keep the loop alive until success/failure has been classified.
-        il.Emit(OpCodes.Call, runtime.EventLoop.GetInstance);
-        il.Emit(OpCodes.Callvirt, runtime.EventLoop.Ref);
-
         il.Emit(OpCodes.Ldloc, task);
         il.Emit(OpCodes.Callvirt,
             _types.GetProperty(_types.TaskOfObject, "IsCompleted").GetGetMethod()!);
@@ -302,6 +301,8 @@ public partial class RuntimeEmitter
         il.Emit(OpCodes.Br, ret);
 
         il.MarkLabel(schedule);
+        il.Emit(OpCodes.Call, runtime.EventLoop.GetInstance);
+        il.Emit(OpCodes.Callvirt, runtime.EventLoop.Ref);
         il.Emit(OpCodes.Call, runtime.EventLoop.GetInstance);
         il.Emit(OpCodes.Ldloc, tracker);
         il.Emit(OpCodes.Ldftn, report);

@@ -17,15 +17,10 @@ public partial class RuntimeEmitter
 
     private readonly record struct MapGroupByInputs(
         EmittedArrayStorageRuntime ArrayStorage,
-        MethodBuilder CreateException,
-        MethodBuilder GetIteratorFunction,
+        EmittedErrorRuntime Errors,
         MethodBuilder InvokeValue,
-        MethodBuilder IterateToList,
-        TypeBuilder RuntimeType,
-        FieldBuilder SymbolIterator,
-        ConstructorBuilder TSTypeErrorCtor,
         MethodBuilder TypeOf,
-        Type UndefinedType
+        CollectionConsumerInputs Iteration
     );
 
     /// <summary>
@@ -156,158 +151,70 @@ public partial class RuntimeEmitter
     /// </summary>
     private void EmitMapGroupBy(TypeBuilder typeBuilder, EmittedMapRuntime map, MapGroupByInputs inputs)
     {
-        var method = typeBuilder.DefineMethod(
-            "MapGroupBy",
-            MethodAttributes.Public | MethodAttributes.Static,
-            _types.Object,
-            [_types.Object, _types.Object]  // (iterable, callback)
-        );
+        var method = typeBuilder.DefineMethod("MapGroupBy", MethodAttributes.Public | MethodAttributes.Static,
+            _types.Object, [_types.Object, _types.Object]);
         map.GroupBy = method;
-
         var il = method.GetILGenerator();
-
-        var callbackCallable = il.DefineLabel();
+        var callable = il.DefineLabel();
         il.Emit(OpCodes.Ldarg_1);
         il.Emit(OpCodes.Call, inputs.TypeOf);
         il.Emit(OpCodes.Ldstr, "function");
-        il.Emit(OpCodes.Call, _types.GetMethod(_types.String, "op_Equality", _types.String, _types.String));
-        il.Emit(OpCodes.Brtrue, callbackCallable);
-        GuestErrorEmitter.ThrowError(il, inputs.CreateException, inputs.TSTypeErrorCtor, "Map.groupBy: callback is not callable");
-        il.MarkLabel(callbackCallable);
+        il.Emit(OpCodes.Call, _types.StringOpEquality);
+        il.Emit(OpCodes.Brtrue, callable);
+        GuestErrorEmitter.ThrowError(il, inputs.Errors.CreateException, inputs.Errors.TypeErrorConstructor,
+            "Map.groupBy: callback is not callable");
+        il.MarkLabel(callable);
 
-        // Locals
-        var mapLocal = il.DeclareLocal(_types.Object);                      // result map
-        var listLocal = il.DeclareLocal(_types.ListOfObject);               // array elements
-        var indexLocal = il.DeclareLocal(_types.Int32);                     // loop index
-        var argsLocal = il.DeclareLocal(_types.ObjectArray);                // callback args
-        var keyLocal = il.DeclareLocal(_types.Object);                      // callback result (key)
-        var existingLocal = il.DeclareLocal(_types.Object);                 // existing $Array
-
-        // Labels
-        var loopStart = il.DefineLabel();
-        var loopEnd = il.DefineLabel();
-        var hasExistingLabel = il.DefineLabel();
-        var addElementLabel = il.DefineLabel();
-
-        // map = CreateMap() — creates Dictionary<object, object?> with ReferenceEqualityComparer
+        var result = il.DeclareLocal(_types.Object);
+        var key = il.DeclareLocal(_types.Object);
+        var group = il.DeclareLocal(inputs.ArrayStorage.Type);
         il.Emit(OpCodes.Call, map.Create);
-        il.Emit(OpCodes.Stloc, mapLocal);
-
-        // GroupBy consumes the iterator protocol, not only array storage.
-        // Validate a nullish/absent @@iterator before the shared materializer's
-        // host-IEnumerable compatibility fallback can accept the value.
-        var materialize = il.DefineLabel();
-        il.Emit(OpCodes.Ldarg_0);
-        il.Emit(OpCodes.Isinst, inputs.ArrayStorage.Type);
-        il.Emit(OpCodes.Brtrue, materialize);
-        il.Emit(OpCodes.Ldarg_0);
-        il.Emit(OpCodes.Isinst, _types.ListOfObject);
-        il.Emit(OpCodes.Brtrue, materialize);
-        il.Emit(OpCodes.Ldarg_0);
-        il.Emit(OpCodes.Isinst, _types.String);
-        il.Emit(OpCodes.Brtrue, materialize);
-        var iteratorFn = il.DeclareLocal(_types.Object);
-        il.Emit(OpCodes.Ldarg_0);
-        il.Emit(OpCodes.Ldsfld, inputs.SymbolIterator);
-        il.Emit(OpCodes.Call, inputs.GetIteratorFunction);
-        il.Emit(OpCodes.Stloc, iteratorFn);
-        var invalidIterable = il.DefineLabel();
-        il.Emit(OpCodes.Ldloc, iteratorFn);
-        il.Emit(OpCodes.Brfalse, invalidIterable);
-        il.Emit(OpCodes.Ldloc, iteratorFn);
-        il.Emit(OpCodes.Isinst, inputs.UndefinedType);
-        il.Emit(OpCodes.Brfalse, materialize);
-        il.MarkLabel(invalidIterable);
-        GuestErrorEmitter.ThrowError(il, inputs.CreateException, inputs.TSTypeErrorCtor, "Map.groupBy: items is not iterable");
-        il.MarkLabel(materialize);
-        il.Emit(OpCodes.Ldarg_0);
-        il.Emit(OpCodes.Ldsfld, inputs.SymbolIterator);
-        il.Emit(OpCodes.Ldtoken, inputs.RuntimeType);
-        il.Emit(OpCodes.Call, _types.GetMethod(_types.Type, "GetTypeFromHandle")!);
-        il.Emit(OpCodes.Call, inputs.IterateToList);
-        il.Emit(OpCodes.Stloc, listLocal);
-
-        // i = 0
-        il.Emit(OpCodes.Ldc_I4_0);
-        il.Emit(OpCodes.Stloc, indexLocal);
-
-        // Loop start
-        il.MarkLabel(loopStart);
-        il.Emit(OpCodes.Ldloc, indexLocal);
-        il.Emit(OpCodes.Ldloc, listLocal);
-        il.Emit(OpCodes.Callvirt, _types.GetProperty(_types.ListOfObject, "Count").GetGetMethod()!);
-        il.Emit(OpCodes.Bge, loopEnd);
-
-        // args = new object[] { list[i], (double)i }
-        il.Emit(OpCodes.Ldc_I4_2);
-        il.Emit(OpCodes.Newarr, _types.Object);
-        il.Emit(OpCodes.Dup);
-        il.Emit(OpCodes.Ldc_I4_0);
-        il.Emit(OpCodes.Ldloc, listLocal);
-        il.Emit(OpCodes.Ldloc, indexLocal);
-        il.Emit(OpCodes.Callvirt, _types.GetProperty(_types.ListOfObject, "Item").GetGetMethod()!);
-        il.Emit(OpCodes.Stelem_Ref);
-        il.Emit(OpCodes.Dup);
-        il.Emit(OpCodes.Ldc_I4_1);
-        il.Emit(OpCodes.Ldloc, indexLocal);
-        il.Emit(OpCodes.Conv_R8);
-        il.Emit(OpCodes.Box, _types.Double);
-        il.Emit(OpCodes.Stelem_Ref);
-        il.Emit(OpCodes.Stloc, argsLocal);
-
-        // key = InvokeValue(callback, args)
-        il.Emit(OpCodes.Ldarg_1);
-        il.Emit(OpCodes.Ldloc, argsLocal);
-        il.Emit(OpCodes.Call, inputs.InvokeValue);
-        il.Emit(OpCodes.Stloc, keyLocal);
-
-        // Use MapHas(map, key) to check if key exists
-        // MapHas returns object (boxed bool) — check with unbox
-        il.Emit(OpCodes.Ldloc, mapLocal);
-        il.Emit(OpCodes.Ldloc, keyLocal);
-        il.Emit(OpCodes.Call, map.Has);
-        il.Emit(OpCodes.Brtrue, hasExistingLabel);
-
-        // Key doesn't exist: create new $Array, store in map
-        il.Emit(OpCodes.Newobj, _types.GetConstructor(_types.ListOfObject, _types.EmptyTypes));
-        il.Emit(OpCodes.Newobj, inputs.ArrayStorage.Ctor);
-        il.Emit(OpCodes.Stloc, existingLocal);
-        // MapSet(map, key, existing)
-        il.Emit(OpCodes.Ldloc, mapLocal);
-        il.Emit(OpCodes.Ldloc, keyLocal);
-        il.Emit(OpCodes.Ldloc, existingLocal);
-        il.Emit(OpCodes.Call, map.Set);
-        il.Emit(OpCodes.Pop);  // discard returned map
-        il.Emit(OpCodes.Br, addElementLabel);
-
-        // Key exists: get existing $Array
-        il.MarkLabel(hasExistingLabel);
-        il.Emit(OpCodes.Ldloc, mapLocal);
-        il.Emit(OpCodes.Ldloc, keyLocal);
-        il.Emit(OpCodes.Call, map.Get);
-        il.Emit(OpCodes.Stloc, existingLocal);
-
-        // Add current element to existing $Array
-        il.MarkLabel(addElementLabel);
-        il.Emit(OpCodes.Ldloc, existingLocal);
-        il.Emit(OpCodes.Castclass, inputs.ArrayStorage.Type);
-        il.Emit(OpCodes.Callvirt, inputs.ArrayStorage.ElementsGetter);
-        il.Emit(OpCodes.Ldloc, listLocal);
-        il.Emit(OpCodes.Ldloc, indexLocal);
-        il.Emit(OpCodes.Callvirt, _types.GetProperty(_types.ListOfObject, "Item").GetGetMethod()!);
-        il.Emit(OpCodes.Callvirt, _types.GetMethod(_types.ListOfObject, "Add", _types.Object));
-
-        // i++
-        il.Emit(OpCodes.Ldloc, indexLocal);
-        il.Emit(OpCodes.Ldc_I4_1);
-        il.Emit(OpCodes.Add);
-        il.Emit(OpCodes.Stloc, indexLocal);
-        il.Emit(OpCodes.Br, loopStart);
-
-        il.MarkLabel(loopEnd);
-
-        // return map
-        il.Emit(OpCodes.Ldloc, mapLocal);
+        il.Emit(OpCodes.Stloc, result);
+        EmitCollectionConsumerLoop(il, inputs.Iteration, () => il.Emit(OpCodes.Ldarg_0), (value, index) =>
+        {
+            il.Emit(OpCodes.Ldarg_1);
+            il.Emit(OpCodes.Ldc_I4_2);
+            il.Emit(OpCodes.Newarr, _types.Object);
+            il.Emit(OpCodes.Dup);
+            il.Emit(OpCodes.Ldc_I4_0);
+            il.Emit(OpCodes.Ldloc, value);
+            il.Emit(OpCodes.Stelem_Ref);
+            il.Emit(OpCodes.Dup);
+            il.Emit(OpCodes.Ldc_I4_1);
+            il.Emit(OpCodes.Ldloc, index);
+            il.Emit(OpCodes.Conv_R8);
+            il.Emit(OpCodes.Box, _types.Double);
+            il.Emit(OpCodes.Stelem_Ref);
+            il.Emit(OpCodes.Call, inputs.InvokeValue);
+            il.Emit(OpCodes.Stloc, key);
+            var existing = il.DefineLabel();
+            var append = il.DefineLabel();
+            il.Emit(OpCodes.Ldloc, result);
+            il.Emit(OpCodes.Ldloc, key);
+            il.Emit(OpCodes.Call, map.Has);
+            il.Emit(OpCodes.Brtrue, existing);
+            il.Emit(OpCodes.Newobj, _types.GetConstructor(_types.ListOfObject, Type.EmptyTypes));
+            il.Emit(OpCodes.Newobj, inputs.ArrayStorage.Ctor);
+            il.Emit(OpCodes.Stloc, group);
+            il.Emit(OpCodes.Ldloc, result);
+            il.Emit(OpCodes.Ldloc, key);
+            il.Emit(OpCodes.Ldloc, group);
+            il.Emit(OpCodes.Call, map.Set);
+            il.Emit(OpCodes.Pop);
+            il.Emit(OpCodes.Br, append);
+            il.MarkLabel(existing);
+            il.Emit(OpCodes.Ldloc, result);
+            il.Emit(OpCodes.Ldloc, key);
+            il.Emit(OpCodes.Call, map.Get);
+            il.Emit(OpCodes.Castclass, inputs.ArrayStorage.Type);
+            il.Emit(OpCodes.Stloc, group);
+            il.MarkLabel(append);
+            il.Emit(OpCodes.Ldloc, group);
+            il.Emit(OpCodes.Callvirt, inputs.ArrayStorage.ElementsGetter);
+            il.Emit(OpCodes.Ldloc, value);
+            il.Emit(OpCodes.Callvirt, _types.GetMethod(_types.ListOfObject, "Add", _types.Object));
+        });
+        il.Emit(OpCodes.Ldloc, result);
         il.Emit(OpCodes.Ret);
     }
 }

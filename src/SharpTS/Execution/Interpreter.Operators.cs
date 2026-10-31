@@ -31,10 +31,10 @@ public partial class Interpreter
     /// </summary>
     private async ValueTask<RuntimeValue> EvaluateCompoundAssignCore(IEvaluationContext ctx, Expr.CompoundAssign compound)
     {
-        RuntimeValue currentValue = _environment.Get(compound.Name);
+        RuntimeValue currentValue = LookupVariableRV(compound.Name, compound);
         RuntimeValue addValue = await ctx.EvaluateExprAsync(compound.Value);
         RuntimeValue newValue = ApplyCompoundOperatorRV(compound.Operator.Type, currentValue, addValue);
-        _environment.Assign(compound.Name, newValue);
+        AssignVariableValue(compound.Name, newValue);
         return newValue;
     }
 
@@ -150,13 +150,26 @@ public partial class Interpreter
             ThrowCannotReadProperty(obj, index?.ToString() ?? "");
         }
 
-        if (HasCanonicalIndexProperties(obj) || obj is BuiltInMethod or SharpTSObject or SharpTSInstance)
+        var inputView = obj as VmInputPropertyView;
+        if (inputView is { CanWrite: false })
         {
-            object key = ToPropertyKey(index);
-            RuntimeValue current = RuntimeValue.FromBoxed(GetOwnPropertyObjectValue(obj, key));
+            obj = inputView.Original;
+            inputView = null;
+        }
+        bool arrayObjectKey = HasArrayObjectKey(obj, index);
+        var globalTarget = ResolveGlobalIndexTarget(obj, index);
+        if (arrayObjectKey || inputView is not null || globalTarget is not null || HasCanonicalIndexProperties(obj) || obj is BuiltInMethod or SharpTSObject or SharpTSInstance)
+        {
+            object key = globalTarget is null ? ToPropertyKey(index) : globalTarget.Key;
+            RuntimeValue current = RuntimeValue.FromBoxed(inputView is not null
+                ? key is string name ? inputView.Read(name) : throw new InterpreterException("Compound index assignment not supported on this type.")
+                : GetOwnPropertyObjectValue(obj, key));
             RuntimeValue addValue = await ctx.EvaluateExprAsync(compound.Value);
             RuntimeValue newValue = ApplyCompoundOperatorRV(compound.Operator.Type, current, addValue);
-            SetOwnPropertyObjectValue(obj, key, newValue.ToObject(), _environment.IsStrictMode);
+            // GetValue and PutValue each convert the retained raw key. Guest
+            // coercion may select a different property after the RHS runs.
+            if (arrayObjectKey || globalTarget is not null || inputView is not null) PerformIndexSet(obj, index, newValue.ToObject());
+            else SetOwnPropertyObjectValue(obj, key, newValue.ToObject(), _environment.IsStrictMode);
             return newValue;
         }
 
@@ -235,7 +248,7 @@ public partial class Interpreter
     /// </summary>
     private async ValueTask<RuntimeValue> EvaluateLogicalAssignCore(IEvaluationContext ctx, Expr.LogicalAssign logical)
     {
-        RuntimeValue currentValue = _environment.Get(logical.Name);
+        RuntimeValue currentValue = LookupVariableRV(logical.Name, logical);
 
         switch (logical.Operator.Type)
         {
@@ -252,7 +265,7 @@ public partial class Interpreter
 
         // Short-circuit condition not met, evaluate and assign
         RuntimeValue newValue = await ctx.EvaluateExprAsync(logical.Value);
-        _environment.Assign(logical.Name, newValue);
+        AssignVariableValue(logical.Name, newValue);
         return newValue;
     }
 
@@ -323,10 +336,20 @@ public partial class Interpreter
             ThrowCannotReadProperty(obj, index?.ToString() ?? "");
         }
 
-        if (obj is ISharpTSOwnPropertyObject or BuiltInMethod)
+        var inputView = obj as VmInputPropertyView;
+        if (inputView is { CanWrite: false })
         {
-            object key = ToPropertyKey(index);
-            RuntimeValue currentRV = RuntimeValue.FromBoxed(GetOwnPropertyObjectValue(obj, key));
+            obj = inputView.Original;
+            inputView = null;
+        }
+        bool arrayObjectKey = HasArrayObjectKey(obj, index);
+        var globalTarget = ResolveGlobalIndexTarget(obj, index);
+        if (arrayObjectKey || inputView is not null || globalTarget is not null || obj is ISharpTSOwnPropertyObject or BuiltInMethod or SharpTSObjectNamespace)
+        {
+            object key = globalTarget is null ? ToPropertyKey(index) : globalTarget.Key;
+            RuntimeValue currentRV = RuntimeValue.FromBoxed(inputView is not null
+                ? key is string name ? inputView.Read(name) : throw new InterpreterException("Logical index assignment not supported on this type.")
+                : GetOwnPropertyObjectValue(obj, key));
             switch (logical.Operator.Type)
             {
                 case TokenType.AND_AND_EQUAL:
@@ -341,7 +364,8 @@ public partial class Interpreter
             }
 
             RuntimeValue newValue = await ctx.EvaluateExprAsync(logical.Value);
-            SetOwnPropertyObjectValue(obj, key, newValue.ToObject(), _environment.IsStrictMode);
+            if (arrayObjectKey || globalTarget is not null || inputView is not null) PerformIndexSet(obj, index, newValue.ToObject());
+            else SetOwnPropertyObjectValue(obj, key, newValue.ToObject(), _environment.IsStrictMode);
             return newValue;
         }
 
@@ -546,6 +570,10 @@ public partial class Interpreter
             }
         }
 
+        // CLR operators resolve first. Guest numeric operators retain the
+        // observable number-hint ToPrimitive step and its Number/BigInt kind.
+        if (op.Type is TokenType.MINUS or TokenType.TILDE)
+            rv = ToNumericRV(rv);
         switch (op.Type)
         {
             case TokenType.BANG:
@@ -556,23 +584,19 @@ public partial class Interpreter
                 // Unary `+` on BigInt throws TypeError in JS.
                 throw new InterpreterException("TypeError: Cannot convert a BigInt value to a number");
             case TokenType.PLUS:
-                return RuntimeValue.FromNumber(CoerceToNumber(rv));
+                return RuntimeValue.FromNumber(ToNumberWithPrimitive(rv.ToObject()));
             case TokenType.MINUS when rv.IsNumber:
                 return RuntimeValue.FromNumber(-rv.AsNumber());
             case TokenType.MINUS when rv.IsBigInt:
                 return RuntimeValue.FromBigInt(new SharpTSBigInt(-rv.AsBigInt().Value));
-            case TokenType.MINUS:
-                return RuntimeValue.FromNumber(-CoerceToNumber(rv));
             case TokenType.TYPEOF:
                 return RuntimeValue.FromString(rv.TypeofString());
             case TokenType.VOID:
                 return RuntimeValue.Undefined;
             case TokenType.TILDE when rv.IsNumber:
-                return RuntimeValue.FromNumber(~(int)rv.AsNumber());
+                return RuntimeValue.FromNumber(~JsToInt32(rv.AsNumber()));
             case TokenType.TILDE when rv.IsBigInt:
                 return RuntimeValue.FromBigInt(new SharpTSBigInt(~rv.AsBigInt().Value));
-            case TokenType.TILDE:
-                return RuntimeValue.FromNumber(~(int)CoerceToNumber(rv));
             default:
                 return RuntimeValue.Undefined;
         }
@@ -797,6 +821,21 @@ public partial class Interpreter
         return primitiveValue;
     }
 
+    // The VM boundary has already proved the actual object and owner. Use the
+    // real JavaScript conversion protocol rather than the compatibility fast
+    // paths used by unrelated CLR values in the general interpreter entry.
+    internal object? ToPrimitiveForVmValue(object value, string hint)
+    {
+        var preferred = hint switch
+        {
+            "default" => PrimitiveHint.Default,
+            "number" => PrimitiveHint.Number,
+            "string" => PrimitiveHint.String,
+            _ => throw new ArgumentException("Expected default, number or string conversion hint.", nameof(hint))
+        };
+        if (TryCallExoticToPrimitive(value, preferred, out var primitive)) return primitive;
+        return OrdinaryToPrimitiveObject(value, preferred);
+    }
     private object? OrdinaryToPrimitiveObject(object receiver, PrimitiveHint hint)
     {
         string first = hint == PrimitiveHint.String ? "toString" : "valueOf";
@@ -1114,6 +1153,11 @@ public partial class Interpreter
 
         return obj switch
         {
+            string text when name == "length"
+                || (PropertySemantics.TryGetArrayIndex(name, out uint index) && index < text.Length) =>
+                    strictMode
+                        ? throw StrictModeErrors.TypeError($"Cannot delete non-configurable string property '{name}'")
+                        : false,
             ISharpTSOwnPropertyObject ownPropertyObject => ownPropertyObject.OwnProperties.GetOwnPropertyDescriptor(name) is null
                 || ownPropertyObject.OwnProperties.DeletePropertyStrict(name, strictMode),
             SharpTSArray array => array.DeletePropertyStrict(name, strictMode),
@@ -1123,8 +1167,7 @@ public partial class Interpreter
                 .DeletePropertyStrict(name, strictMode),
             BoundFunction bound => bound.DeleteProperty(name, strictMode),
             SharpTSInstance tsInst => tsInst.DeleteFieldStrict(name, strictMode),
-            SharpTSPromise promise => promise.DeletePropertyStrict(name, strictMode),
-            SharpTSMath math => math.DeleteExtra(name),
+            SharpTSMath math => DeleteMathProperty(math, name, strictMode),
             SharpTSJSON json => json.DeleteExtra(name),
             SharpTSDate date => date.DeleteExtra(name),
             SharpTSRegExp regex => regex.DeleteProperty(name),
@@ -1150,7 +1193,8 @@ public partial class Interpreter
                 when name == "prototype" =>
                     DeleteNonConfigurableClassPrototype(name, strictMode),
             SharpTSBuiltInConstructor constructor =>
-                DeleteBuiltInConstructorProperty(constructor, name),
+                CompleteFunctionPropertyDeletion(
+                    DeleteBuiltInConstructorProperty(constructor, name), name, strictMode),
             IBuiltInFunctionMetadata builtInFn => builtInFn.DeleteMetadataProperty(name),
             SharpTSFunction function => function.GetOwnPropertyDescriptor(name) is null
                 || CompleteFunctionPropertyDeletion(function.DeleteProperty(name), name, strictMode),
@@ -1170,9 +1214,15 @@ public partial class Interpreter
         object? obj = (await ctx.EvaluateExprAsync(getIndex.Object)).ToObject();
         object? key = (await ctx.EvaluateExprAsync(getIndex.Index)).ToObject();
 
+        // Keep the separately tracked nullish delete boundary (#3034) ahead of
+        // key coercion. Valid receivers share one actual ToPropertyKey result.
+        if (obj is null or SharpTSUndefined)
+            return true;
+        key = ToPropertyKey(key);
+
         if (obj is ISharpTSOwnPropertyObject carrier)
         {
-            var propertyKey = ToPropertyKey(key);
+            var propertyKey = key;
             return propertyKey is SharpTSSymbol ownSymbol
                 ? !carrier.OwnProperties.HasSymbolProperty(ownSymbol)
                     || carrier.OwnProperties.DeleteBySymbolStrict(ownSymbol, strictMode)
@@ -1202,6 +1252,8 @@ public partial class Interpreter
 
     internal bool DeleteSymbolProperty(object? target, SharpTSSymbol symbol, bool strictMode)
     {
+        if (TryGetPromiseConstructorSymbolProperties(target, out var intrinsicProperties))
+            return intrinsicProperties.DeleteBySymbolStrict(symbol, strictMode);
         if (target is SharpTSProxy proxy)
         {
             bool deleted = proxy.TrapDeleteProperty(symbol, this);
@@ -1218,10 +1270,12 @@ public partial class Interpreter
         return target switch
         {
             SharpTSObject obj => obj.DeleteBySymbolStrict(symbol, strictMode),
+            SharpTSObjectNamespace objectNamespace => objectNamespace.DeleteBySymbolStrict(symbol, strictMode),
             SharpTSInstance instance => instance.DeleteBySymbolStrict(symbol, strictMode),
             SharpTSClass klass => klass.DeleteStaticSymbolProperty(symbol, strictMode),
             SharpTSClassPrototype prototype => prototype.DeleteBySymbolStrict(symbol, strictMode),
             SharpTSArray array => array.DeleteBySymbolStrict(symbol, strictMode),
+            SharpTSDate date => date.DeleteBySymbolStrict(symbol, strictMode),
             SharpTSMath math => math.DeleteBySymbolStrict(symbol, strictMode),
             ISharpTSPrimitiveConstructor constructor => constructor.DeleteBySymbolStrict(symbol, strictMode),
             SharpTSStringPrototype prototype => prototype.DeleteBySymbolStrict(symbol, strictMode),
@@ -1230,6 +1284,14 @@ public partial class Interpreter
             SharpTSFunctionPrototype prototype => prototype.DeleteBySymbolStrict(symbol, strictMode),
             _ => true
         };
+    }
+
+    private static bool DeleteMathProperty(SharpTSMath math, string name, bool strictMode)
+    {
+        bool deleted = math.DeleteExtra(name);
+        if (!deleted && strictMode)
+            throw StrictModeErrors.TypeError($"Cannot delete non-configurable property '{name}' of Math");
+        return deleted;
     }
 
     private static bool CompleteFunctionPropertyDeletion(bool deleted, string name, bool strictMode)

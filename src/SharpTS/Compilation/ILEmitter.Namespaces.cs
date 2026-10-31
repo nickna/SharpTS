@@ -126,12 +126,13 @@ public partial class ILEmitter
                     IL.Emit(OpCodes.Ldtoken, methodBuilder);
                     IL.Emit(OpCodes.Call, _ctx.Types.MethodBaseGetMethodFromHandle);
                     IL.Emit(OpCodes.Castclass, _ctx.Types.MethodInfo);
-                    IL.Emit(OpCodes.Newobj, _ctx.Runtime!.FunctionConstruction.Constructor);
+                    NativeSourceFunctionEmission.EmitConstructor(IL, _ctx.Types, _ctx.Runtime!, methodBuilder,
+                        generics: _ctx.FunctionGenericParameters);
                     IL.Emit(OpCodes.Call, _ctx.Runtime!.Namespaces.Set);
                 }
                 break;
 
-            case Stmt.Var varStmt:
+            case Stmt.Var varStmt when !varStmt.IsDeclare:
                 EmitNamespaceMemberVar(nsField, nsPath, memberName!, varStmt.Initializer, varStmt.TypeAnnotation, isExported);
                 break;
 
@@ -146,8 +147,7 @@ public partial class ILEmitter
                 {
                     IL.Emit(OpCodes.Ldsfld, nsField);
                     IL.Emit(OpCodes.Ldstr, classStmt.Name.Lexeme);
-                    IL.Emit(OpCodes.Ldtoken, classType);
-                    IL.Emit(OpCodes.Call, Types.TypeGetTypeFromHandle);
+                    EmitConstructorTypeValue(classType, NativeConstructorValueProducerKind.SourceClass);
                     IL.Emit(OpCodes.Call, _ctx.Runtime!.Namespaces.Set);
                 }
                 break;

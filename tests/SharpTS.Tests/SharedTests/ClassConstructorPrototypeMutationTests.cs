@@ -216,10 +216,6 @@ public sealed class ClassConstructorPrototypeMutationTests
         {
             yield return [row[0], row[1], row[2], ExecutionMode.Interpreted];
 
-            // #2563: the derived null-prototype Reflect.get control remains unsupported.
-            if ((string)row[0] == "derived-descendant-live-constructor-chain")
-                continue;
-
             yield return [row[0], row[1], row[2], ExecutionMode.Compiled];
         }
     }

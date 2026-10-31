@@ -9,7 +9,7 @@ namespace SharpTS.Tests.CompilerTests;
 public class EmittedObjectStorageRuntimeTests
 {
     private static PropertyInfo[] Handles => typeof(EmittedObjectStorageRuntime).GetProperties()
-        .Where(property => property.PropertyType != typeof(bool)).ToArray();
+        .Where(property => typeof(MemberInfo).IsAssignableFrom(property.PropertyType)).ToArray();
 
     public static IEnumerable<object[]> RequiredHandleNames => Handles.Select(property => new object[] { property.Name });
 
@@ -97,7 +97,9 @@ public class EmittedObjectStorageRuntimeTests
         Assert.Contains(assembly.GetType("$IHasFields"), type.GetInterfaces());
         Assert.Equal(typeof(Dictionary<string, object>), Assert.Single(Assert.Single(type.GetConstructors()).GetParameters()).ParameterType);
         var fields = type.GetFields(BindingFlags.Instance | BindingFlags.NonPublic).OrderBy(field => field.MetadataToken).ToArray();
-        Assert.Equal(new[] { "_fields", "_isFrozen", "_isSealed", "_isNonExtensible", "_getters", "_setters" }, fields.Select(field => field.Name));
+        var expectedFields = new[] { "_fields", "_isFrozen", "_isSealed", "_isNonExtensible", "_getters", "_setters" };
+        Assert.Equal(owner.ModuleNamespaces is null ? expectedFields : expectedFields.Append("_moduleNamespaceReader"), fields.Select(field => field.Name));
+        Assert.Equal(source is null, owner.ModuleNamespaces is not null);
         Assert.All(fields, field => Assert.True(field.IsPrivate));
         var tokens = new List<int>();
         foreach (var (name, result, parameters) in new (string, Type, Type[])[]
@@ -125,6 +127,17 @@ public class EmittedObjectStorageRuntimeTests
             Assert.Equal(result, method.ReturnType);
             Assert.Equal(parameters, method.GetParameters().Select(parameter => parameter.ParameterType).ToArray());
             tokens.Add(method.MetadataToken);
+        }
+        if (owner.ModuleNamespaces is { } namespaces)
+        {
+            Assert.Same(builder, namespaces.Create.DeclaringType);
+            Assert.Same(builder, namespaces.Read.DeclaringType);
+            Assert.Same(builder, namespaces.TryRead.DeclaringType);
+            Assert.Equal(typeof(Func<string, object, object>), namespaces.ReaderType);
+            Assert.Same(typeof(Func<string, object, object>), namespaces.ReaderConstructor.DeclaringType);
+            var property = typeof(EmittedObjectStorageRuntime).GetProperty(nameof(EmittedObjectStorageRuntime.ModuleNamespaces))!;
+            var error = Assert.Throws<TargetInvocationException>(() => property.SetValue(owner, namespaces));
+            Assert.IsType<InvalidOperationException>(error.InnerException);
         }
         Assert.Equal(tokens.OrderBy(token => token).ToArray(), tokens);
         Assert.True(type.GetMethod("get_Fields")!.IsVirtual);

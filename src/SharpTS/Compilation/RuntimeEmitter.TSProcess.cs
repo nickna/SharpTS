@@ -125,7 +125,7 @@ public partial class RuntimeEmitter
         TypeBuilder tb,
         EmittedRuntime runtime)
     {
-        var processInfoType = moduleBuilder.DefineType(
+        var processInfoType = EmitTypeDefinitions.DefineType(moduleBuilder,
             "$ProcessBasicInformation",
             TypeAttributes.NotPublic | TypeAttributes.Sealed |
                 TypeAttributes.SequentialLayout | TypeAttributes.BeforeFieldInit,
@@ -936,20 +936,16 @@ public partial class RuntimeEmitter
 
         // fn = new $TSFunction(null, mainImpl)
         il.Emit(OpCodes.Ldnull);
-        il.Emit(OpCodes.Ldtoken, mainImpl);
-        il.Emit(OpCodes.Call, _types.MethodBaseGetMethodFromHandle);
-        il.Emit(OpCodes.Castclass, _types.MethodInfo);
-        il.Emit(OpCodes.Newobj, runtime.FunctionConstruction.Constructor);
+        var mainParameterProducer = EmitReflectedMethodLiteralViaHandle(il, mainImpl);
+        EmitReflectedFunctionConstructor(il, runtime.FunctionConstruction.Constructor, mainParameterProducer, cached: false);
         il.Emit(OpCodes.Stloc, fnLocal);
 
         // SetProperty(fn, memberName, new $TSFunction(null, memberImpl))
         il.Emit(OpCodes.Ldloc, fnLocal);
         il.Emit(OpCodes.Ldstr, memberName);
         il.Emit(OpCodes.Ldnull);
-        il.Emit(OpCodes.Ldtoken, memberImpl);
-        il.Emit(OpCodes.Call, _types.MethodBaseGetMethodFromHandle);
-        il.Emit(OpCodes.Castclass, _types.MethodInfo);
-        il.Emit(OpCodes.Newobj, runtime.FunctionConstruction.Constructor);
+        var memberParameterProducer = EmitReflectedMethodLiteralViaHandle(il, memberImpl);
+        EmitReflectedFunctionConstructor(il, runtime.FunctionConstruction.Constructor, memberParameterProducer, cached: false);
         il.Emit(OpCodes.Call, runtime.ObjectWrite.Property);
 
         il.Emit(OpCodes.Ldloc, fnLocal);
@@ -1236,10 +1232,8 @@ public partial class RuntimeEmitter
                 il.Emit(OpCodes.Ldloc, dictLocal);
                 il.Emit(OpCodes.Ldstr, name);
                 il.Emit(OpCodes.Ldnull);
-                il.Emit(OpCodes.Ldtoken, impl);
-                il.Emit(OpCodes.Call, _types.MethodBaseGetMethodFromHandle);
-                il.Emit(OpCodes.Castclass, _types.MethodInfo);
-                il.Emit(OpCodes.Newobj, runtime.FunctionConstruction.Constructor);
+                var parameterProducer = EmitReflectedMethodLiteralViaHandle(il, impl);
+                EmitReflectedFunctionConstructor(il, runtime.FunctionConstruction.Constructor, parameterProducer, cached: false);
                 il.Emit(OpCodes.Callvirt, setItem);
             }
 
@@ -1327,7 +1321,7 @@ public partial class RuntimeEmitter
             "$Process",
             TypeAttributes.Public | TypeAttributes.Sealed | TypeAttributes.BeforeFieldInit,
             runtime.EventEmitter.Type);
-        EmitTypeDefinitions.AddInterfaceImplementation(tb, runtime.ObjectFields.Interface);
+        NativeSourceOwnerCatalog.Implement(tb, runtime.ObjectFields.Interface, runtime.ClassInitialization.SourceOwners);
 
         runtime.Process.FieldsField = tb.DefineField("_fields", _types.DictionaryStringObject, FieldAttributes.Private);
         var instanceField = tb.DefineField("_instance", tb, FieldAttributes.Private | FieldAttributes.Static);
@@ -1455,13 +1449,12 @@ public partial class RuntimeEmitter
             il.Emit(OpCodes.Callvirt, _types.GetMethodNoParams(_types.Object, "GetType"));
             il.Emit(OpCodes.Ldloc, pascalLocal);
             il.Emit(OpCodes.Ldc_I4, (int)lookupFlags);
-            il.Emit(OpCodes.Call, runtime.ReflectedMethods.FindMethod);
-            il.Emit(OpCodes.Stloc, miLocal);
+            EmitReflectedMethodQuery(il, runtime.ReflectedMethods.FindMethod, miLocal);
             il.Emit(OpCodes.Ldloc, miLocal);
             il.Emit(OpCodes.Brfalse, noMethod);
             il.Emit(OpCodes.Ldarg_0);
             il.Emit(OpCodes.Ldloc, miLocal);
-            il.Emit(OpCodes.Newobj, runtime.FunctionConstruction.Constructor);
+            EmitReflectedFunctionConstructor(il, runtime.FunctionConstruction.Constructor, _nativeUnionParameters?.ReflectionQuery(il, miLocal), cached: false);
             il.Emit(OpCodes.Ret);
             il.MarkLabel(noMethod);
 

@@ -1175,65 +1175,29 @@ public class StateMachineEmitHelpers
     /// <param name="runtimeAdd">Runtime.Add method for PLUS_EQUAL (supports string concatenation).</param>
     public void EmitCompoundOperation(TokenType opType, MethodInfo runtimeAdd)
     {
-        // Exponentiation has no IL opcode. Reuse ordered ToNumeric and the
-        // Number/BigInt power dispatch after both reference operands were read.
-        if (opType == TokenType.STAR_STAR_EQUAL)
-        {
-            _il.Emit(OpCodes.Ldc_I4, (int)TokenType.STAR_STAR);
-            EmitCallUnknown(_runtime!.Operators.NumericBinary);
-            return;
-        }
-
-        // PLUS_EQUAL uses runtime Add for string concatenation support
         if (opType == TokenType.PLUS_EQUAL)
         {
             EmitCallUnknown(runtimeAdd);
             return;
         }
-
-        // Both operands have already been evaluated and boxed. Spill them before
-        // coercion so every emitter follows the spec order: GetValue(left),
-        // GetValue(right), then ToNumeric on each operand. This also avoids using
-        // the global stack-type hint to guess the CLR shape of either operand.
-        var right = _il.DeclareLocal(_types.Object);
-        _il.Emit(OpCodes.Stloc, right);
-        var left = _il.DeclareLocal(_types.Object);
-        _il.Emit(OpCodes.Stloc, left);
-
-        var opcode = CompoundOperatorHelper.GetOpcode(opType);
-        if (opcode.HasValue)
+        TokenType operation = opType switch
         {
-            if (CompoundOperatorHelper.IsBitwise(opType))
-            {
-                _il.Emit(OpCodes.Ldloc, left);
-                _il.Emit(OpCodes.Call, _runtime!.NumericCoercion.JsToInt32);
-                _il.Emit(OpCodes.Ldloc, right);
-                _il.Emit(OpCodes.Call, _runtime.NumericCoercion.JsToInt32);
-                _il.Emit(opcode.Value);
-                if (opType == TokenType.GREATER_GREATER_GREATER_EQUAL)
-                    _il.Emit(OpCodes.Conv_U8);
-                _il.Emit(OpCodes.Conv_R8);
-                _il.Emit(OpCodes.Box, _types.Double);
-            }
-            else
-            {
-                _il.Emit(OpCodes.Ldloc, left);
-                _il.Emit(OpCodes.Call, _runtime!.NumericCoercion.ConvertToNumber);
-                _il.Emit(OpCodes.Ldloc, right);
-                _il.Emit(OpCodes.Call, _runtime.NumericCoercion.ConvertToNumber);
-                _il.Emit(opcode.Value);
-                _il.Emit(OpCodes.Box, _types.Double);
-            }
-        }
-        else
-        {
-            _il.Emit(OpCodes.Ldloc, left);
-            _il.Emit(OpCodes.Ldloc, right);
-            EmitCallUnknown(runtimeAdd);
-        }
-        SetStackUnknown();
+            TokenType.MINUS_EQUAL => TokenType.MINUS,
+            TokenType.STAR_EQUAL => TokenType.STAR,
+            TokenType.SLASH_EQUAL => TokenType.SLASH,
+            TokenType.PERCENT_EQUAL => TokenType.PERCENT,
+            TokenType.STAR_STAR_EQUAL => TokenType.STAR_STAR,
+            TokenType.AMPERSAND_EQUAL => TokenType.AMPERSAND,
+            TokenType.PIPE_EQUAL => TokenType.PIPE,
+            TokenType.CARET_EQUAL => TokenType.CARET,
+            TokenType.LESS_LESS_EQUAL => TokenType.LESS_LESS,
+            TokenType.GREATER_GREATER_EQUAL => TokenType.GREATER_GREATER,
+            TokenType.GREATER_GREATER_GREATER_EQUAL => TokenType.GREATER_GREATER_GREATER,
+            _ => throw new InvalidOperationException($"Unsupported compound operator {opType}")
+        };
+        _il.Emit(OpCodes.Ldc_I4, (int)operation);
+        EmitCallUnknown(_runtime!.Operators.NumericBinary);
     }
-
     /// <summary>
     /// Emit bitwise binary operation with int32 conversion.
     /// Stack: [left (object), right (object)] -> [result_boxed]

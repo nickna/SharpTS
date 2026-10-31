@@ -8,6 +8,15 @@ public sealed class EmittedDynamicConstructionRuntime
 {
     internal EmittedDynamicConstructionRuntime() { }
     public bool IsComplete { get; private set; }
+    internal EmittedNativeConstructorMetadataRuntime? NativeMetadata { get; private set; }
+    internal void DeclareNativeMetadata(ModuleBuilder module, EmittedNativeConstructorMetadataRuntime metadata)
+    {
+        EnsureMutable();
+        if (NativeMetadata is not null || !ReferenceEquals(metadata.Module, module))
+            throw new InvalidOperationException("Native constructor metadata must be declared once in this output.");
+        NativeMetadata = metadata;
+    }
+
     private MethodBuilder? _constructWithNewTarget;
     public MethodBuilder ConstructWithNewTarget
     {

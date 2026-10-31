@@ -375,7 +375,21 @@ public partial class DebugSymbolsTests
             """;
         CompilationArtifacts artifacts = CompileTypeScript(source, emitDebugSymbols: true);
         IReadOnlyList<HoistedStateMachineScopes> machines = ReadAndValidateHoistedScopes(artifacts);
-        Assert.Equal(4, machines.Count);
+        using var pe = new PEReader(new MemoryStream(artifacts.Assembly, writable: false));
+        MetadataReader metadata = pe.GetMetadataReader();
+        string KickoffIdentity(HoistedStateMachineScopes machine)
+        {
+            MethodDefinition kickoff = metadata.GetMethodDefinition(machine.Kickoff);
+            string owner = metadata.GetString(metadata.GetTypeDefinition(kickoff.GetDeclaringType()).Name);
+            return owner + "::" + metadata.GetString(kickoff.Name);
+        }
+        // Static methods have both a typed body and a canonical guest-receiver
+        // body. Each must retain its own kickoff, alongside all namespace bodies.
+        Assert.Equal(new[]
+        {
+            "$Program::$nsfn_N_work", "$Program::$nsfn_N_values", "$Program::$nsfn_N_stream",
+            "Service::work", "$MethodMember_Service_work::Invoke"
+        }.Order(StringComparer.Ordinal), machines.Select(KickoffIdentity).Order(StringComparer.Ordinal));
         Assert.All(machines, machine => AssertStateMachineIdentity(artifacts, machine));
         Assert.All(machines, machine => Assert.Contains(ReadHoistedFieldScopes(artifacts, machine),
             field => field.SourceName == "carried" && field.Scope.Length > 0));

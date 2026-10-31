@@ -213,6 +213,14 @@ static int RunCompileCommand(ParsedCommand.Compile compile)
                 propagateErrors: true));
         var (compileOptions, compileConfig) = resolved;
 
+        if ((compile.CompileOptions.NativeProject is not null || compile.CompileOptions.NativePublish is not null) &&
+            (compileOptions.NoEmit || compileOptions.EmitDeclarationOnly || compileOptions.ShowConfig))
+            throw new CompileException("Native output cannot be combined with effective noEmit, emitDeclarationOnly or showConfig settings after applying tsconfig.");
+
+        if (compile.CompileOptions.Signing is not null &&
+            (compileOptions.NoEmit || compileOptions.EmitDeclarationOnly || compileOptions.ShowConfig))
+            throw new CompileException("--sign requires executable output after applying tsconfig; no-output modes are incompatible.");
+
         if (compile.CompileOptions.VerifyIL &&
             !System.Runtime.CompilerServices.RuntimeFeature.IsDynamicCodeSupported)
         {
@@ -221,14 +229,22 @@ static int RunCompileCommand(ParsedCommand.Compile compile)
         }
         else
         {
+            using var nativeWorkspace = compile.CompileOptions.NativePublish is { } nativePublish
+                ? new NativePublishWorkspace(nativePublish) : null;
+            if (compile.CompileOptions.NativeProject is { } nativeProject)
+            {
+                NativeAotProjectExporter.ValidateDestination(nativeProject);
+            }
             var outputOptions = new OutputOptions(
                 compile.CompileOptions.MsBuildErrors,
-                compile.CompileOptions.QuietMode || json,
+                compile.CompileOptions.QuietMode || json || nativeWorkspace is not null,
                 compile.CompileOptions.Standalone,
-                compile.CompileOptions.EmitDebugSymbols);
+                compile.CompileOptions.EmitDebugSymbols,
+                nativeWorkspace?.ProjectOptions ?? compile.CompileOptions.NativeProject,
+                nativeWorkspace is null ? compile.CompileOptions.Signing : null);
             exitCode = CompileFile(
                 compile.InputFile,
-                compile.OutputFile,
+                nativeWorkspace?.GuestPath ?? compile.OutputFile,
                 compile.CompileOptions.PreserveConstEnums ||
                     (compileConfig?.PreserveConstEnums ?? false),
                 compile.CompileOptions.UseReferenceAssemblies,
@@ -246,7 +262,25 @@ static int RunCompileCommand(ParsedCommand.Compile compile)
                 compileOptions,
                 timings,
                 compileConfig);
+            if (exitCode == 0 && nativeWorkspace is not null)
+            {
+                using var cancellation = new CancellationTokenSource();
+                ConsoleCancelEventHandler cancel = (_, eventArgs) => { eventArgs.Cancel = true; cancellation.Cancel(); };
+                Console.CancelKeyPress += cancel;
+                try
+                {
+                    MeasurePhase(timings, "publish-native", () => NativeAotPublishDriver.PublishAsync(nativeWorkspace,
+                        Path.GetDirectoryName(Path.GetFullPath(compile.InputFile))!, Console.Out, Console.Error,
+                        compile.CompileOptions.QuietMode || json, compile.CompileOptions.Signing, cancellation.Token).GetAwaiter().GetResult());
+                }
+                finally { Console.CancelKeyPress -= cancel; }
+            }
         }
+    }
+    catch (OperationCanceledException)
+    {
+        Console.Error.WriteLine("Native publish cancelled; final output was preserved.");
+        exitCode = 130;
     }
     catch (SharpTSException ex)
     {
@@ -536,6 +570,12 @@ static void PrintResolvedConfig(GlobalOptions options, StrictnessOptions cliStri
 /// before any module loading or type checking, so every resolution seam sees the types.
 /// Reference errors are user-facing configuration problems: print and exit.
 /// </summary>
+static Type? ResolveNativeFrameworkType(string name)
+{
+    try { return TypeProvider.Runtime.Resolve(name); }
+    catch (CompileException) { return null; }
+}
+
 static ReferenceSet LoadDotNetReferences(
     string startDirectory,
     IReadOnlyList<string> cliReferences,
@@ -695,13 +735,18 @@ static int CompileFile(string inputPath, string outputPath, bool preserveConstEn
     {
         string absolutePath = Path.GetFullPath(inputPath);
 
-        // Third-party assembly references (sharpts.json + -r) load into this process
-        // before module resolution: dotnet: imports resolve at module-load time, and
-        // the returned set drives the post-Save co-location of referenced DLLs.
-        var externalRefs = MeasurePhase(timings,
+        // Native output captures a complete explicit implementation graph before
+        // module/type resolution. Its metadata scope never loads workspace code.
+        var nativeReferences = outputOptions.NativeProject is null ? null :
+            NativeManagedReferenceClosure.Capture(Path.GetDirectoryName(absolutePath) ?? ".", references,
+                outputOptions.NativeProject.AssemblyName, sdkPath);
+        using var nativeLoader = nativeReferences is { IsEmpty: false } ? nativeReferences.CreateLoader() : null;
+        using var nativeScope = nativeLoader is null ? null : DotNetTypeRegistry.UseMetadataResolver(name =>
+            nativeLoader.TryResolve(name) ?? ResolveNativeFrameworkType(name));
+        var externalRefs = nativeReferences?.References ?? MeasurePhase(timings,
             ExecutionPhaseTiming.LoadReferences,
-            () => LoadDotNetReferences(
-                Path.GetDirectoryName(absolutePath) ?? ".", references, propagateErrors: true));
+            () => LoadDotNetReferences(Path.GetDirectoryName(absolutePath) ?? ".", references, propagateErrors: true));
+        outputOptions = outputOptions with { NativeReferences = nativeReferences, NativeReferenceLoader = nativeLoader };
 
         // Load package.json if packaging is enabled
         PackageJson? packageJson = null;
@@ -762,6 +807,14 @@ static int CompileFile(string inputPath, string outputPath, bool preserveConstEn
 
         // These modes stopped before any assembly was written, so there is nothing to pack.
         if (globalOptions.NoEmit || globalOptions.EmitDeclarationOnly) return 0;
+
+        // Sign the final bundle before packaging can copy or publish it.
+        if (outputOptions.Signing is { } signing)
+        {
+            SharpTS.Cli.AuthenticodeSigner.SignAsync(outputPath, signing).GetAwaiter().GetResult();
+            if (!outputOptions.QuietMode)
+                Console.WriteLine($"Signed {outputPath}");
+        }
 
         // Package if requested
         if (packOptions.Pack)
@@ -1056,13 +1109,33 @@ static void EmitCompiledAssembly(string outputPath, bool preserveConstEnums, boo
         ILCompiler compiler = MeasurePhase(timings,
             ExecutionPhaseTiming.InitializeCompiler,
             () => new ILCompiler(assemblyName, preserveConstEnums, useReferenceAssemblies,
-                sdkPath, metadata, references, target));
+                sdkPath, metadata, outputOptions.NativeReferences is null ? references : null, target));
         compiler.SetTimingCollector(timings);
         compiler.SetDecoratorMode(decoratorMode);
         compiler.EmitDebugSymbols = outputOptions.EmitDebugSymbols;
         if (hosted) compiler.EnableHostedOutput();
+        if (outputOptions.NativeProject is not null) compiler.EnableNativeAotProjectOutput(outputOptions.NativeReferences, outputOptions.NativeReferenceLoader);
         compileBody(compiler);
         PrintCompilerWarnings(compiler);
+        if (outputOptions.NativeProject is { } nativeProject)
+        {
+            var compatibility = NativeAotCompatibilityReport.Analyze(compiler.RequiredSharpTSRuntimeRequirements,
+                compiler.RequiredSharpTSRuntimeReasons, outputOptions.NativeReferences!);
+            compatibility.ThrowIfIncompatible();
+            // Serialize and validate the actual guest dependency closure before
+            // claiming a project directory. Reuse these exact bytes for export.
+            var nativeArtifacts = compiler.SaveArtifacts("Guest.pdb");
+            NativeAotProjectExporter.Export(nativeProject, compatibility, guest =>
+            {
+                File.WriteAllBytes(guest, nativeArtifacts.Assembly);
+                if (nativeArtifacts.Pdb is not null)
+                    File.WriteAllBytes(Path.ChangeExtension(guest, ".pdb"), nativeArtifacts.Pdb);
+                if (verifyIL) VerifyCompiledAssembly(guest, sdkPath, outputOptions.NativeReferences!.ExportedReferences(nativeProject.OutputDirectory));
+            }, outputOptions.NativeReferences);
+            if (!outputOptions.QuietMode)
+                Console.WriteLine($"Exported experimental native guest project to {Path.GetFullPath(nativeProject.OutputDirectory)}");
+            return;
+        }
         ValidateCompiledRuntimeRequirements(compiler);
         compiler.Save(outputPath);
         if (hosted)
@@ -1714,8 +1787,12 @@ static void PrintHelp()
     Console.WriteLine("Compile Options:");
     Console.WriteLine("  -c, --compile <file.ts>       Compile TypeScript to .NET assembly");
     Console.WriteLine("  -o <path>                     Output file path (default: <input>.dll or .exe)");
-    Console.WriteLine("  -t, --target <type>           Output type: dll (default) or exe");
+    Console.WriteLine("  -t, --target <type>           Output type: dll (default), exe or native-aot");
     Console.WriteLine("  --bundler <mode>              Bundler selection: auto (default), sdk, or builtin");
+    Console.WriteLine("  --sign <pfx|sha1:thumbprint>   Authenticode-sign final Windows EXE output");
+    Console.WriteLine("  --sign-pass <password>        PFX password (or SHARPTS_SIGN_PASS environment variable)");
+    Console.WriteLine("  --sign-timestamp <url|none>    RFC 3161 URL (default: DigiCert); none disables timestamping");
+    Console.WriteLine("  --sign-digest <algorithm>     sha256 (default), sha384, or sha512");
     Console.WriteLine("  --gc-profile <profile>        GC policy: workstation (default), adaptive, or throughput");
     Console.WriteLine("  --preserveConstEnums          Preserve const enum declarations");
     Console.WriteLine("  --declaration                 Emit .d.ts declarations alongside the assembly");
@@ -1760,8 +1837,12 @@ static void PrintCompileUsage()
     Console.WriteLine();
     Console.WriteLine("Options:");
     Console.WriteLine("  -o <path>              Output file path (default: <input>.dll or .exe)");
-    Console.WriteLine("  -t, --target <type>    Output type: dll (default) or exe");
+    Console.WriteLine("  -t, --target <type>    Output type: dll (default), exe or native-aot");
     Console.WriteLine("  --bundler <mode>       Bundler selection: auto (default), sdk, or builtin");
+    Console.WriteLine("  --sign <pfx|sha1:hash>  Sign final Windows EXE output after bundling");
+    Console.WriteLine("  --sign-pass <value>    PFX password (or SHARPTS_SIGN_PASS)");
+    Console.WriteLine("  --sign-timestamp <url|none>  RFC 3161 timestamp; none disables timestamping");
+    Console.WriteLine("  --sign-digest <value>  sha256 (default), sha384, or sha512");
     Console.WriteLine("  --gc-profile <profile> GC policy: workstation (default), adaptive, or throughput");
     Console.WriteLine("  -r, --reference <dll>  Add assembly reference (repeatable)");
     Console.WriteLine("  --preserveConstEnums   Preserve const enum declarations");
@@ -1781,9 +1862,15 @@ static void PrintCompileUsage()
     Console.WriteLine("  --api-key <key>        NuGet API key for push");
     Console.WriteLine("  --package-id <id>      Override package ID");
     Console.WriteLine("  --version <ver>        Override package version");
+    Console.WriteLine("  --emit-native-project <dir>  Export an experimental generated-guest NativeAOT project");
+    Console.WriteLine("  --target native-aot --runtime <rid> -o <path>  Publish the generated program as a native executable");
+    Console.WriteLine("  --runtime <rid>        Explicit matching RID for native output (for example win-x64)");
 }
 
 private sealed class CompilationAbortedException : Exception;
 
-record OutputOptions(bool MsBuildErrors, bool QuietMode, bool Standalone = false, bool EmitDebugSymbols = false);
+record OutputOptions(bool MsBuildErrors, bool QuietMode, bool Standalone = false, bool EmitDebugSymbols = false,
+    NativeAotProjectOptions? NativeProject = null,
+    SharpTS.Cli.AuthenticodeSigningOptions? Signing = null,
+    NativeManagedReferenceClosure? NativeReferences = null, AssemblyReferenceLoader? NativeReferenceLoader = null);
 }

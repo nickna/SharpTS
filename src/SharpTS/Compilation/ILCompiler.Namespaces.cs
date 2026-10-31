@@ -16,7 +16,7 @@ public partial class ILCompiler
     private readonly Dictionary<string, Dictionary<string, FieldBuilder>> _namespaceVarFields = [];
     private readonly Dictionary<(string? Module, string Path), FieldBuilder> _namespaceFieldOwners = [];
 
-    private string NamespaceStorageKey(string path) => GetDefinitionContext().GetQualifiedClassName(path);
+    private string NamespaceStorageKey(string path) => GetDefinitionContext().GetRawQualifiedName(path);
 
     private Dictionary<string, FieldBuilder> NamespaceFieldsForModule(string? module)
     {
@@ -134,7 +134,7 @@ public partial class ILCompiler
 
                     // A namespace-level variable needs a static backing field so functions
                     // declared in the namespace can resolve the bare name (#567).
-                    case Stmt.Var varStmt:
+                    case Stmt.Var varStmt when !varStmt.IsDeclare:
                         DefineNamespaceVarField(path, varStmt.Name.Lexeme);
                         break;
 

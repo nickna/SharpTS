@@ -426,6 +426,13 @@ public partial class Parser
         {
             case Expr.ArrayLiteral arr: LowerArrayAssignmentTarget(arr, source, stmts, line, underDefault); break;
             case Expr.ObjectLiteral obj: LowerObjectAssignmentTarget(obj, source, stmts, line, underDefault); break;
+            case Expr.Super { Method: not null } reference:
+                // Destructuring obtains the source/default value before resolving
+                // the target reference; that evaluation can reparent the home.
+                Token superValue = GenerateTempVar(line);
+                stmts.Add(new Stmt.Var(superValue, null, source) { PreserveRawInitializerValue = true });
+                stmts.Add(new Stmt.Expression(new Expr.SetSuper(reference, new Expr.Variable(superValue))));
+                break;
             default: stmts.Add(new Stmt.Expression(MakeAssignmentExpr(target, source))); break;
         }
     }
@@ -501,6 +508,10 @@ public partial class Parser
                 break;
             case Expr.SetPrivate def:
                 LowerAssignmentTarget(new Expr.GetPrivate(def.Object, def.Name),
+                    DefaultIfUndefined(access, def.Value, stmts, line), stmts, line, underDefault);
+                break;
+            case Expr.SetSuper { Operator: null } def:
+                LowerAssignmentTarget(def.Target,
                     DefaultIfUndefined(access, def.Value, stmts, line), stmts, line, underDefault);
                 break;
             case Expr.DestructuringAssign { RawTarget: { } rawTarget, RawDefault: { } rawDefault }:

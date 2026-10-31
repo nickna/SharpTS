@@ -19,11 +19,13 @@ public class TimerHandler : ICallHandler
         var il = emitter.IL;
         var ctx = emitter.Context;
 
+        // Lexical bindings own the call before any global intrinsic fast path.
         // Skip when the variable is shadowed by any module import — built-in
         // (dispatch through the primitive emitter) or stdlib TS re-export
         // (dispatch through normal module-field resolution). Either way, the
         // global timer handler must not intercept the call.
-        if (ctx.ImportedNames?.Contains(v.Name.Lexeme) == true)
+        if (emitter.HasVariable(v.Name.Lexeme) || ctx.HasVisibleValueBinding(v.Name.Lexeme)
+            || ctx.ImportedNames?.Contains(v.Name.Lexeme) == true)
             return false;
 
         return v.Name.Lexeme switch
@@ -32,7 +34,6 @@ public class TimerHandler : ICallHandler
             "clearTimeout" => EmitClearTimer(emitter, il, ctx, call, ctx.Runtime!.Timers.ClearTimeout),
             "setInterval" => EmitTimer(emitter, il, ctx, call, ctx.Runtime!.Timers.SetInterval),
             "clearInterval" => EmitClearTimer(emitter, il, ctx, call, ctx.Runtime!.Timers.ClearInterval),
-            "queueMicrotask" => EmitQueueMicrotask(emitter, il, ctx, call),
             _ => false
         };
     }
@@ -75,11 +76,4 @@ public class TimerHandler : ICallHandler
         return true;
     }
 
-    private static bool EmitQueueMicrotask(IEmitterContext emitter, ILGenerator il, CompilationContext ctx, Expr.Call call)
-    {
-        if (call.Arguments.Count > 0) { emitter.EmitExpression(call.Arguments[0]); emitter.EmitBoxIfNeeded(call.Arguments[0]); } else { il.Emit(OpCodes.Ldnull); }
-        il.Emit(OpCodes.Call, ctx.Runtime!.Microtasks.QueueMicrotask);
-        il.Emit(OpCodes.Ldsfld, ctx.Runtime!.Sentinels.UndefinedInstance);
-        return true;
-    }
 }

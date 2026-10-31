@@ -5,6 +5,8 @@ release safety comes from artifact and registration preflight, deterministic ide
 post-publish inventory verification.
 
 Historical failures are recorded separately in [Release incident history](release-incidents.md).
+The [distribution acceptance handoff](release-acceptance.md) records current prepared artifacts,
+measured gates and remaining external inputs for the first binary/catalog release.
 
 ## Package manifest
 
@@ -18,8 +20,19 @@ When adding a package:
 1. Onboard its ID on NuGet separately from a release tag and assign it to the `nbn` package owner.
 2. Confirm the `SharpTS` Trusted Publishing policy is active; it applies to packages owned by `nbn`.
 3. Add the entry in the intended push order and run `./scripts/test-nuget-release.ps1`.
-4. Run the Publish workflow manually. Its dry run builds and packs the set and performs public-feed
-   preflight without publishing.
+4. Run the Publish workflow manually. Its dry run builds and packs the set, validates local artifact
+   IDs, versions and inventory, and runs the managed/native binary matrix without publishing.
+
+Manual dry runs do not validate NuGet package registration or publishing credentials. Their job
+summary states this boundary explicitly, so a successful binary dry run does not establish NuGet
+publication readiness. Use `./scripts/nuget-release.ps1 -Action ValidateArtifacts -Version <version>`
+for the same local artifact checks. `-Action Preflight` additionally queries public package
+registration; `-Action Publish` repeats both checks before attempting any push.
+
+Every manual dispatch uses `0.0.0-dryrun.<run-number>` and sets the stable flag to false, including
+dispatches that select an existing version tag. Real release versions, registration preflight,
+NuGet publication, GitHub Release creation and WinGet submission require a version-tag `push` event.
+Rerunning a tagged push retains that tag's version and the same publication checks.
 
 The tagged release is blocked if any manifest ID is not registered. This prevents an untested
 permission from publishing established packages before failing on a new ID.
@@ -60,7 +73,8 @@ included in tagged NuGet publication.
 
 ## Normal release
 
-The Publish workflow builds and tests artifacts before the release job. Preflight verifies that
+The Publish workflow builds and tests artifacts before the release job. Every build validates the
+package artifacts; tagged builds additionally run full registration preflight. Preflight verifies that
 every manifest-selected `.nupkg` exists, its embedded ID and version match the manifest and tag, and
 every package ID is registered. The release job pushes
 missing versions explicitly with `--skip-duplicate`, then queries NuGet up to 30 times at 20-second
@@ -102,6 +116,35 @@ on native x64 and ARM64 Windows systems.
 
 Only enable automated updates after both initial identities are visible in the public WinGet
 catalog:
+
+Prepare initial submissions from a published stable release with:
+
+```powershell
+$releaseVersion = Read-Host 'Published stable release version, without v'
+./scripts/new-winget-manifests.ps1 -Version $releaseVersion -OutputDirectory ./artifacts/winget-initial
+```
+
+The preparer uses the GitHub CLI (`gh`) to download the four exact versioned Windows ZIPs, checks their root
+`sharpts.exe`, `LICENSE`, and `README.md`, verifies each PE architecture, and computes
+SHA-256 from the downloaded bytes. It also checks the release asset digest when
+GitHub supplies one. Use `-AssetDirectory` to validate previously downloaded copies
+against the same public release metadata. Drafts, prereleases, missing assets, URL
+mismatches, and mismatched hashes are rejected before manifests are written.
+
+Both identities receive version, `en-US` locale, and ZIP/portable installer files
+using the current [1.12.0 manifest schemas](https://learn.microsoft.com/windows/package-manager/package/manifest).
+The directories follow the `winget-pkgs` layout beneath the requested output root:
+
+- `manifests/s/SharpTS/SharpTS/<version>`
+- `manifests/s/SharpTS/SharpTS/NativeAOT/<version>`
+
+Run `winget validate --manifest <directory>` for each directory, then perform the
+installation, uninstall, switching, architecture, and sandbox checks above before
+opening the two initial upstream pull requests. Regenerating identical inputs
+preserves manifest bytes; the tool refuses to overwrite local manifest edits.
+It does not install either SKU, alter PATH, or submit anything to the catalog.
+
+After the initial submissions are accepted:
 
 1. Create a protected `winget-release` environment.
 2. Create a classic GitHub PAT with only `public_repo`; fine-grained PATs are not supported by

@@ -57,6 +57,9 @@ public partial class ILEmitter
                     and not Stmt.For))
             return false;
 
+        _ctx.NativeClrAdmission?.RecordUnclassifiedSourceBoundary(call,
+            "static eval lowering is outside the captured CLR source proof");
+
         if (statements.Count == 0)
         {
             IL.Emit(OpCodes.Ldsfld, _ctx.Runtime!.Sentinels.UndefinedInstance);

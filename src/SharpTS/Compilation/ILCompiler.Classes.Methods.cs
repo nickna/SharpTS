@@ -13,6 +13,7 @@ namespace SharpTS.Compilation;
 public partial class ILCompiler
 {
     private readonly HashSet<MethodBuilder> _rawObservingPrimitiveMethodCores = [];
+    private readonly HashSet<TypeBuilder> _classMethodSignatureOwners = new(ReferenceEqualityComparer.Instance);
     /// <summary>
     /// Defines all class methods (without emitting bodies) so they're available for
     /// direct dispatch in async state machines.
@@ -88,8 +89,9 @@ public partial class ILCompiler
         if (classStmt.Methods.Any(method => !method.IsStatic && !method.IsPrivate && method.ComputedKey != null))
             registry.RegisterInstancePrototypeBarrier(typeBuilder, null);
 
-        // Skip if instance methods are already defined for this class
-        if (_classes.InstanceMethods.ContainsKey(qualifiedClassName))
+        // Static-only/accessor-only classes need the same idempotency guarantee
+        // as classes with instance methods. Revisit aliases by exact output owner.
+        if (!_classMethodSignatureOwners.Add(typeBuilder))
             return;
 
         // Pre-define constructor (if not already defined)
@@ -190,7 +192,7 @@ public partial class ILCompiler
 
             // Use typed parameters from TypeMap
             var paramTypes = ParameterTypeResolver.ResolveMethodParameters(
-                qualifiedClassName, method.Name.Lexeme, method.Parameters, _typeMapper, _typeMap);
+                qualifiedClassName, method.Name.Lexeme, method.Parameters, _typeMapper, _typeMap, isStaticMethod: method.IsStatic);
             // Set return type based on method kind
             // Must check async generator FIRST since it has both IsAsync and IsGenerator true
             var returnType = (method.IsAsync && method.IsGenerator) ? _types.IAsyncEnumerableOfObject :
@@ -221,7 +223,7 @@ public partial class ILCompiler
 
             // Use typed parameters from TypeMap
             var paramTypes = ParameterTypeResolver.ResolveMethodParameters(
-                qualifiedClassName, method.Name.Lexeme, method.Parameters, _typeMapper, _typeMap);
+                qualifiedClassName, method.Name.Lexeme, method.Parameters, _typeMapper, _typeMap, isStaticMethod: method.IsStatic);
 
             MethodAttributes methodAttrs = MethodAttributes.Public | MethodAttributes.Virtual;
             if (method.IsAbstract)
@@ -627,8 +629,8 @@ public partial class ILCompiler
         // Emit constructor
         EmitConstructor(typeBuilder, classStmt, fieldsField);
         EmitDeclaredConstructorFactory(typeBuilder, classStmt, _classes.Constructors[qualifiedClassName]);
-        if (_usesRuntimeParents && !typeBuilder.IsGenericTypeDefinition && typeBuilder.BaseType is not { Name: "$Promise" }
-            && !_classes.ErrorSubclasses.Contains(qualifiedClassName) && SupportsReceiverInitialization(classStmt))
+        if (_usesRuntimeParents && typeBuilder.BaseType is not { Name: "$Promise" }
+            && !_classes.ErrorSubclasses.Contains(qualifiedClassName) && SupportsReceiverInitialization(classStmt, allowGenericOwner: true))
             EmitReceiverInitializer(typeBuilder, classStmt);
 
         // Emit the compiler-only constructor used to create Constructor.prototype
@@ -984,7 +986,7 @@ public partial class ILCompiler
             // Param types resolve from each parameter's annotation (the type map is keyed by the @@name,
             // not the synthetic IL name) — fine: computed iterator methods are typically parameterless.
             var paramTypes = ParameterTypeResolver.ResolveMethodParameters(
-                classStmt.Name.Lexeme, uniqueName, renamed.Parameters, _typeMapper, _typeMap);
+                classStmt.Name.Lexeme, uniqueName, renamed.Parameters, _typeMapper, _typeMap, isStaticMethod: method.IsStatic);
 
             // Async generator first (it sets both flags).
             Type returnType = (method.IsAsync && method.IsGenerator) ? _types.IAsyncEnumerableOfObject :
@@ -1058,7 +1060,7 @@ public partial class ILCompiler
             // Define the method (fallback for when DefineClassMethodsOnly wasn't called)
             // Use typed parameters from TypeMap
             var paramTypes = ParameterTypeResolver.ResolveMethodParameters(
-                typeBuilder.Name, method.Name.Lexeme, method.Parameters, _typeMapper, _typeMap);
+                typeBuilder.Name, method.Name.Lexeme, method.Parameters, _typeMapper, _typeMap, isStaticMethod: method.IsStatic);
 
             MethodAttributes methodAttrs = MethodAttributes.Public | MethodAttributes.Virtual;
             if (method.IsAbstract)

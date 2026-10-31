@@ -1,5 +1,6 @@
 using SharpTS.Execution;
 using SharpTS.Runtime;
+using SharpTS.Runtime.Exceptions;
 using SharpTS.Runtime.Types;
 
 namespace SharpTS.Runtime.BuiltIns;
@@ -28,10 +29,17 @@ public static class DateBuiltIns
             .Build();
 
     // Instance method lookup for Date instances
+    private static SharpTSDate RequireDateValue(RuntimeValue receiver)
+    {
+        if (receiver.ToObject() is SharpTSDate { IsPrototype: false } date)
+            return date;
+        throw new ThrowException(new SharpTSTypeError("this is not a Date object"));
+    }
+
     private static readonly BuiltInTypeMemberLookup<SharpTSDate> _instanceLookup =
         BuiltInTypeBuilder<SharpTSDate>.ForInstanceType()
             // Getter Methods
-            .MethodV2("getTime", 0, (_, date, _) => RuntimeValue.FromNumber(date.GetTime()))
+            .MethodV2("getTime", 0, (_, date, _) => RuntimeValue.FromNumber(date.GetTime()), RequireDateValue)
             .MethodV2("getFullYear", 0, (_, date, _) => RuntimeValue.FromNumber(date.GetFullYear()))
             .MethodV2("getMonth", 0, (_, date, _) => RuntimeValue.FromNumber(date.GetMonth()))
             .MethodV2("getDate", 0, (_, date, _) => RuntimeValue.FromNumber(date.GetDate()))

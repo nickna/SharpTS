@@ -232,7 +232,7 @@ public partial class RuntimeEmitter
         var exportJwk = EmitTSKeyObjectExportJwk(
             typeBuilder, typeField, symmetricKeyField, rsaKeyField,
             ecdsaKeyField, base64UrlEncode);
-        EmitTSKeyObjectExportMethod(
+        crypto.KeyObjectExport = EmitTSKeyObjectExportMethod(
             typeBuilder, typeField, symmetricKeyField, rsaKeyField,
             ecdsaKeyField, runtime, getOption, exportJwk);
         EmitTSKeyObjectEquals(
@@ -1408,7 +1408,7 @@ public partial class RuntimeEmitter
         }
     }
 
-    private void EmitTSKeyObjectExportMethod(
+    private MethodBuilder EmitTSKeyObjectExportMethod(
         TypeBuilder typeBuilder,
         FieldBuilder typeField,
         FieldBuilder symmetricKeyField,
@@ -1601,5 +1601,6 @@ public partial class RuntimeEmitter
         il.Emit(OpCodes.Ldfld, ecdsaKeyField);
         il.Emit(OpCodes.Callvirt, typeof(ECDsa).GetMethod("ExportPkcs8PrivateKeyPem", Type.EmptyTypes)!);
         il.Emit(OpCodes.Ret);
+        return method;
     }
 }

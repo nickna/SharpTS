@@ -856,7 +856,9 @@ public partial class RuntimeEmitter
         EmitCapturedIteratorMethods(
             typeBuilder,
             runtime.IteratorRecords,
-            new CapturedIteratorInputs(runtime.Sentinels.UndefinedType, runtime.Symbols, runtime.ObjectRead, runtime.Invocation, runtime.Errors)
+            new CapturedIteratorInputs(runtime.Sentinels.UndefinedType, runtime.Symbols, runtime.ObjectRead, runtime.Invocation, runtime.Errors,
+                runtime.Operators.HasIn, runtime.FunctionConstruction, runtime.FunctionAttributes, runtime.Sentinels.UndefinedInstance,
+                runtime.Generators.Type)
         );
         runtime.IteratorRecords.CompleteEmission();
         EmitGetIteratorDone(
@@ -908,7 +910,7 @@ public partial class RuntimeEmitter
         var il = method.GetILGenerator();
         var returnMethod = il.DeclareLocal(_types.Object);
         var closeResult = il.DeclareLocal(_types.Object);
-        var lookupReturn = il.DefineLabel();
+        var lookupGuestReturn = il.DefineLabel();
         var validateResult = il.DefineLabel();
         var finishTry = il.DefineLabel();
         var done = il.DefineLabel();
@@ -918,24 +920,14 @@ public partial class RuntimeEmitter
         // IteratorClose. A small catch around the normal algorithm preserves it.
         il.BeginExceptionBlock();
 
-        // Emitted generators expose return through $IGenerator rather than an
-        // own-property dictionary. Keep that representation detail inside the
-        // shared close primitive so every iterator consumer observes the same
-        // GeneratorResumeAbrupt semantics.
+        // Generators expose mutable ordinary return properties even though
+        // their native storage also implements IEnumerator.
         il.Emit(OpCodes.Ldarg_0);
         il.Emit(OpCodes.Isinst, inputs.Generators.Type);
-        il.Emit(OpCodes.Brfalse, lookupReturn);
-        il.Emit(OpCodes.Ldarg_0);
-        il.Emit(OpCodes.Castclass, inputs.Generators.Type);
-        il.Emit(OpCodes.Ldsfld, inputs.UndefinedInstance);
-        il.Emit(OpCodes.Callvirt, inputs.Generators.Return);
-        il.Emit(OpCodes.Stloc, closeResult);
-        il.Emit(OpCodes.Br, validateResult);
+        il.Emit(OpCodes.Brtrue, lookupGuestReturn);
 
-        il.MarkLabel(lookupReturn);
         // Internal adapters and lazy helpers forward close through IDisposable.
         // Generators above retain their guest return-result validation.
-        var lookupGuestReturn = il.DefineLabel();
         il.Emit(OpCodes.Ldarg_0);
         il.Emit(OpCodes.Isinst, _types.IEnumerator);
         il.Emit(OpCodes.Brfalse, lookupGuestReturn);
@@ -1197,20 +1189,17 @@ public partial class RuntimeEmitter
         il.Emit(OpCodes.Ldarg_0);
         il.Emit(OpCodes.Brfalse, returnUndefinedLabel);
 
-        // Emitted generators are iterator objects, but their intrinsic
-        // @@iterator method lives on $IGenerator rather than in an own symbol
-        // dictionary. Return the interface MethodInfo; InvokeMethodValue binds
-        // the generator receiver and the method returns that receiver unchanged.
-        var notGeneratorIterator = il.DefineLabel();
-        il.Emit(OpCodes.Ldarg_1);
-        il.Emit(OpCodes.Ldsfld, inputs.Symbols.Iterator);
-        il.Emit(OpCodes.Bne_Un, notGeneratorIterator);
+        // A proxy's symbol Get is observable even without own symbol storage.
+        // The ordinary index path preserves its trap, receiver and revocation.
+        var proxyIterator = il.DefineLabel();
+        var ordinaryIterator = il.DefineLabel();
+        EmitProxyTypeCheck(il, () => il.Emit(OpCodes.Ldarg_0), proxyIterator, ordinaryIterator);
+        il.MarkLabel(proxyIterator);
         il.Emit(OpCodes.Ldarg_0);
-        il.Emit(OpCodes.Isinst, inputs.Generators.Type);
-        il.Emit(OpCodes.Brfalse, notGeneratorIterator);
-        EmitInstanceMethodInfoLiteral(il, inputs.Generators.Iterator, inputs.Generators.Type);
+        il.Emit(OpCodes.Ldarg_1);
+        il.Emit(OpCodes.Call, inputs.ObjectRead.Index);
         il.Emit(OpCodes.Ret);
-        il.MarkLabel(notGeneratorIterator);
+        il.MarkLabel(ordinaryIterator);
 
         // #1024: node:stream $Readable exposes [Symbol.asyncIterator] via GetAsyncIterator().
         // It carries no per-object symbol dict and isn't a user class, so hook it here:
@@ -1269,6 +1258,22 @@ public partial class RuntimeEmitter
         il.Emit(OpCodes.Ret);
 
         il.MarkLabel(tryRegistryLabel);
+        // Emitted generators are iterator objects, but their intrinsic
+        // @@iterator method lives on $IGenerator rather than in an own symbol
+        // dictionary. Return the interface MethodInfo; InvokeMethodValue binds
+        // the generator receiver and the method returns that receiver unchanged.
+        var notGeneratorIterator = il.DefineLabel();
+        il.Emit(OpCodes.Ldarg_1);
+        il.Emit(OpCodes.Ldsfld, inputs.Symbols.Iterator);
+        il.Emit(OpCodes.Bne_Un, notGeneratorIterator);
+        il.Emit(OpCodes.Ldarg_0);
+        il.Emit(OpCodes.Isinst, inputs.Generators.Type);
+        il.Emit(OpCodes.Brfalse, notGeneratorIterator);
+        EmitInstanceMethodInfoLiteral(il, inputs.Generators.Iterator, inputs.Generators.Type);
+        il.Emit(OpCodes.Ret);
+        il.MarkLabel(notGeneratorIterator);
+
+
         var ordinaryRegistry = il.DefineLabel();
         var ordinaryUserClass = il.DefineLabel();
         // Constructors use ordinary symbol lookup so inherited accessor
@@ -1849,7 +1854,14 @@ public partial class RuntimeEmitter
             var enumDoneLabel = il.DefineLabel();
             var enumLocal = il.DeclareLocal(_types.IEnumerator);
 
-            // Check if obj is IEnumerable
+            // Guest ordinary objects use a CLR dictionary for storage, but do
+            // not acquire an iterator from that carrier's IEnumerable contract.
+            // An explicit guest iterator has already been handled above.
+            il.Emit(OpCodes.Ldarg_0);
+            il.Emit(OpCodes.Isinst, _types.DictionaryStringObject);
+            il.Emit(OpCodes.Brtrue, throwLabel);
+
+            // Preserve the native enumerable interop fallback.
             il.Emit(OpCodes.Ldarg_0);
             il.Emit(OpCodes.Isinst, _types.IEnumerable);
             il.Emit(OpCodes.Brfalse, tryBufferLabel);

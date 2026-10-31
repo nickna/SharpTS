@@ -10,14 +10,49 @@ namespace SharpTS.Runtime.BuiltIns.Modules.Interpreter;
 /// Interpreter-mode implementation of the Node.js 'vm' module.
 /// Provides dynamic code compilation and execution within isolated contexts.
 /// </summary>
-public static class VmModuleInterpreter
+public static partial class VmModuleInterpreter
 {
+    private static readonly AsyncLocal<ScriptOrigin?> ActiveScriptOrigin = new();
+    internal static bool IsExecutingVmScript => ActiveScriptOrigin.Value is not null;
+
+    /// <summary>Creates a lifetime from the actual caller's queue and resource capabilities.</summary>
+    public static object CreateExecutionHost(Action<Action> queuePromiseJob, Action<Action> scheduleCallback,
+        Action<Action> queueAfterCheckpoint, Action refHandle, Action unrefHandle, Action checkCancellation)
+        => new VmExecutionHost(queuePromiseJob, scheduleCallback, queueAfterCheckpoint, refHandle, unrefHandle, checkCancellation);
+
+    /// <summary>Enters one VM call without ending its outstanding work at scope exit.</summary>
+    public static IDisposable EnterExecutionHost(object host)
+        => host is VmExecutionHost ownedHost ? ownedHost.Enter()
+            : throw new ArgumentException("Expected an owned VM execution host.", nameof(host));
+
+    /// <summary>Installs the actual caller's paired VM value transport before its first call.</summary>
+    public static void ConfigureExecutionHostValueAdapters(object host, Func<object?, object?> fromVm, Func<object?, object?> toVm)
+    {
+        if (host is not VmExecutionHost ownedHost)
+            throw new ArgumentException("Expected an owned VM execution host.", nameof(host));
+        ownedHost.ConfigureValueAdapters(fromVm, toVm);
+    }
+    /// <summary>Installs the actual caller's typed thrown-value carrier transport before execution.</summary>
+    public static void ConfigureExecutionHostThrownValueAdapter(object host, Func<Exception, bool> isThrown, Func<Exception, object?> getThrown)
+    {
+        if (host is not VmExecutionHost ownedHost)
+            throw new ArgumentException("Expected an owned VM execution host.", nameof(host));
+        ownedHost.ConfigureThrownValueAdapter(isThrown, getThrown);
+    }
+    /// <summary>Installs producer-proved native Promise callback roles before execution.</summary>
+    public static void ConfigureExecutionHostNativeCallbackRoles(object host, Func<object, int> getRole)
+    {
+        if (host is not VmExecutionHost ownedHost)
+            throw new ArgumentException("Expected an owned VM execution host.", nameof(host));
+        ownedHost.ConfigureNativeCallbackRoles(getRole);
+    }
+
     /// <summary>
     /// Gets all exported values for the vm module.
     /// </summary>
     public static Dictionary<string, object?> GetExports()
     {
-        return new Dictionary<string, object?>
+        var exports = new Dictionary<string, object?>
         {
             ["runInNewContext"] = BuiltInMethod.CreateV2("runInNewContext", 1, 3, RunInNewContext),
             ["runInThisContext"] = BuiltInMethod.CreateV2("runInThisContext", 1, 2, RunInThisContext),
@@ -31,6 +66,9 @@ public static class VmModuleInterpreter
             ["SourceTextModule"] = new VmSourceTextModuleConstructor(),
             ["SyntheticModule"] = new VmSyntheticModuleConstructor()
         };
+        foreach (var value in exports.Values)
+            if (value is ISharpTSCallable) RecordVmFacadeCallable(value, VmExecutionHost.Current);
+        return exports;
     }
 
     /// <summary>
@@ -63,7 +101,9 @@ public static class VmModuleInterpreter
         var timeout = GetTimeoutOption(options);
         var origin = ScriptOrigin.From(options);
         return RuntimeValue.FromBoxed(WithScriptOrigin(origin,
-            () => ExecuteInCurrentContext(code, interpreter, timeout, origin.Filename)));
+            () => interpreter is null
+                ? ExecuteInNewContext(code, null, timeout: timeout, filename: origin.Filename)
+                : ExecuteInCurrentContext(code, interpreter, timeout, origin.Filename)));
     }
 
     /// <summary>
@@ -142,7 +182,10 @@ public static class VmModuleInterpreter
     private static void DrainContextMicrotasks(Interp subInterpreter, VmContextOptions? options)
     {
         if (options is { DrainMicrotasks: true })
+        {
             subInterpreter.ProcessMicrotasks();
+            subInterpreter.CheckVmExecutionCancellation();
+        }
     }
 
     /// <summary>
@@ -201,10 +244,9 @@ public static class VmModuleInterpreter
         var subInterpreter = parentInterpreter != null
             ? new Interp(parentInterpreter.Out, parentInterpreter.Error)
             : new Interp();
-        var env = subInterpreter.Environment;
-
-        foreach (var (key, value) in contextProps)
-            env.Define(key, value);
+        subInterpreter.MarkVmOwnedEvaluation();
+        VmContext.ApplyPromiseIntrinsicState(contextObject, subInterpreter);
+        subInterpreter.SeedVmGlobalObjectProperties(contextProps, contextObject);
 
         // Honor the context's createContext options (codeGeneration / microtaskMode).
         var contextOptions = VmContext.GetOptions(contextObject);
@@ -220,25 +262,46 @@ public static class VmModuleInterpreter
             subInterpreter.SetVmTimeoutToken(cts.Token);
         }
 
+        VmEvaluationLease? lease = null;
+        IDisposable? executionScope = null;
+        bool succeeded = false;
+
         try
         {
+            if (contextOptions is not { DrainMicrotasks: true })
+                lease = CreateContextEvaluationLease(subInterpreter, parentInterpreter, contextObject, contextProps);
+            executionScope = lease?.Enter();
             // Resolve variables and execute
             var resolver = new VariableResolver(subInterpreter);
             resolver.Resolve(statements);
 
-            var result = subInterpreter.InterpretRepl(statements);
+            subInterpreter.PrepareVmGlobalVarBindings(statements);
+            var result = subInterpreter.InterpretScriptCompletion(statements);
 
             // Drain queued microtasks when microtaskMode:'afterEvaluate'.
             DrainContextMicrotasks(subInterpreter, contextOptions);
 
-            // Write mutations back to context object
-            VmContext.WriteBack(contextObject, contextProps, subInterpreter.Environment);
+            RecordVmBoundaryValue(result, subInterpreter);
 
+            // Write mutations back to context object
+            VmContext.WriteBack(contextObject, contextProps, subInterpreter.Environment, subInterpreter.GlobalThis);
+
+            succeeded = true;
             return result;
+        }
+        catch (Runtime.Exceptions.ThrowException failure) when (!subInterpreter.CurrentVmTimeoutToken.IsCancellationRequested)
+        {
+            RecordContextThrowValue(failure.Value, subInterpreter, parentInterpreter, contextObject, contextProps,
+                ref lease, ref executionScope);
+            throw;
         }
         finally
         {
-            subInterpreter.Dispose();
+            subInterpreter.PublishVmLexicalValues();
+            subInterpreter.SetVmTimeoutToken(default);
+            if (lease is null) subInterpreter.Dispose();
+            else lease.FinishInitialEvaluation(succeeded);
+            executionScope?.Dispose();
             cts?.Dispose();
         }
     }
@@ -253,6 +316,7 @@ public static class VmModuleInterpreter
         var resolver = new VariableResolver(interpreter);
         resolver.Resolve(statements);
 
+        var previousTimeout = interpreter.CurrentVmTimeoutToken;
         CancellationTokenSource? cts = null;
         if (timeout > 0)
         {
@@ -262,13 +326,13 @@ public static class VmModuleInterpreter
 
         try
         {
-            return interpreter.InterpretRepl(statements);
+            return interpreter.InterpretScriptCompletion(statements);
         }
         finally
         {
             if (cts != null)
             {
-                interpreter.SetVmTimeoutToken(default);
+                interpreter.SetVmTimeoutToken(previousTimeout);
                 cts.Dispose();
             }
         }
@@ -285,10 +349,9 @@ public static class VmModuleInterpreter
         var subInterpreter = parentInterpreter != null
             ? new Interp(parentInterpreter.Out, parentInterpreter.Error)
             : new Interp();
-        var env = subInterpreter.Environment;
-
-        foreach (var (key, value) in contextProps)
-            env.Define(key, value);
+        subInterpreter.MarkVmOwnedEvaluation();
+        VmContext.ApplyPromiseIntrinsicState(contextObject, subInterpreter);
+        subInterpreter.SeedVmGlobalObjectProperties(contextProps, contextObject);
 
         var contextOptions = VmContext.GetOptions(contextObject);
         ApplyContextOptions(subInterpreter, contextOptions);
@@ -302,25 +365,69 @@ public static class VmModuleInterpreter
             subInterpreter.SetVmTimeoutToken(cts.Token);
         }
 
+        VmEvaluationLease? lease = null;
+        IDisposable? executionScope = null;
+        bool succeeded = false;
+
         try
         {
+            if (contextOptions is not { DrainMicrotasks: true })
+                lease = CreateContextEvaluationLease(subInterpreter, parentInterpreter, contextObject, contextProps);
+            executionScope = lease?.Enter();
             var resolver = new VariableResolver(subInterpreter);
             resolver.Resolve(statements);
 
-            var result = subInterpreter.InterpretRepl(statements);
+            subInterpreter.PrepareVmGlobalVarBindings(statements);
+            var result = subInterpreter.InterpretScriptCompletion(statements);
 
             DrainContextMicrotasks(subInterpreter, contextOptions);
 
-            VmContext.WriteBack(contextObject, contextProps, subInterpreter.Environment);
+            RecordVmBoundaryValue(result, subInterpreter);
 
+            VmContext.WriteBack(contextObject, contextProps, subInterpreter.Environment, subInterpreter.GlobalThis);
+
+            succeeded = true;
             return result;
+        }
+        catch (Runtime.Exceptions.ThrowException failure) when (!subInterpreter.CurrentVmTimeoutToken.IsCancellationRequested)
+        {
+            RecordContextThrowValue(failure.Value, subInterpreter, parentInterpreter, contextObject, contextProps,
+                ref lease, ref executionScope);
+            throw;
         }
         finally
         {
-            subInterpreter.Dispose();
+            subInterpreter.PublishVmLexicalValues();
+            subInterpreter.SetVmTimeoutToken(default);
+            if (lease is null) subInterpreter.Dispose();
+            else lease.FinishInitialEvaluation(succeeded);
+            executionScope?.Dispose();
             cts?.Dispose();
         }
     }
+
+    private static void RecordContextThrowValue(object? value, Interp evaluator, Interp? parent,
+        object? context, Dictionary<string, object?> properties,
+        ref VmEvaluationLease? lease, ref IDisposable? executionScope)
+    {
+        if (lease is null)
+        {
+            // An abrupt afterEvaluate evaluation leaves its local checkpoint
+            // pending. Retain the escaping error without running those jobs.
+            lease = CreateContextEvaluationLease(evaluator,
+                parent, context, properties);
+            executionScope = lease?.Enter();
+        }
+        lease?.MarkGuestAbrupt();
+        RecordVmBoundaryValue(value, evaluator);
+    }
+    private static VmEvaluationLease? CreateContextEvaluationLease(Interp evaluator, Interp? parent,
+        object? context, Dictionary<string, object?> properties) =>
+        VmEvaluationLease.Create(evaluator, parent, () =>
+        {
+            evaluator.PublishVmLexicalValues();
+            VmContext.WriteBack(context, properties, evaluator.Environment, evaluator.GlobalThis);
+        });
 
     /// <summary>
     /// Executes pre-parsed statements in the current interpreter's scope.
@@ -331,6 +438,7 @@ public static class VmModuleInterpreter
         var resolver = new VariableResolver(interpreter);
         resolver.Resolve(statements);
 
+        var previousTimeout = interpreter.CurrentVmTimeoutToken;
         CancellationTokenSource? cts = null;
         if (timeout > 0)
         {
@@ -340,13 +448,13 @@ public static class VmModuleInterpreter
 
         try
         {
-            return interpreter.InterpretRepl(statements);
+            return interpreter.InterpretScriptCompletion(statements);
         }
         finally
         {
             if (cts != null)
             {
-                interpreter.SetVmTimeoutToken(default);
+                interpreter.SetVmTimeoutToken(previousTimeout);
                 cts.Dispose();
             }
         }
@@ -406,6 +514,7 @@ public static class VmModuleInterpreter
             }
             if (options.TryGetValue("contextExtensions", out var ext))
             {
+                ext = UnwrapVmInputValue(ext);
                 if (ext is List<object?> extList)
                     contextExtensions = extList;
                 else if (ext is SharpTSArray extArray)
@@ -423,14 +532,16 @@ public static class VmModuleInterpreter
             trimmedCode += ";";
         var paramsStr = string.Join(", ", paramNames);
         var wrappedCode = $"function __vmfn__({paramsStr}) {{ {trimmedCode} }}";
-        var funcDeclStatements = ParseCode(wrappedCode, origin.Filename);
+        var funcDeclStatements = ParseCode(wrappedCode, origin.Filename, origin);
 
         var importModuleDynamically = GetOption(rawOptions, "importModuleDynamically");
+        var creatorHost = VmExecutionHost.Current ?? interpreter?.GetVmExecutionHost();
 
         // Return a callable that executes the function body in a fresh interpreter
         var compiledFn = BuiltInMethod.CreateV2("compiledFunction", 0, paramNames.Count,
             (interp, recv, callArgs) =>
             {
+                using var hostScope = creatorHost?.Enter();
                 var boxedCallArgs = new List<object?>(callArgs.Length);
                 for (int i = 0; i < callArgs.Length; i++)
                     boxedCallArgs.Add(callArgs[i].ToObject());
@@ -439,7 +550,8 @@ public static class VmModuleInterpreter
                     () => ExecuteCompiledFunction(funcDeclStatements, paramNames, boxedCallArgs, parsingContext, contextExtensions, interp, hook)));
             });
 
-        return RuntimeValue.FromObject(compiledFn);
+        RecordVmFacadeCallable(compiledFn, creatorHost);
+        return RuntimeValue.FromBoxed(creatorHost is null ? compiledFn : creatorHost.FromVm(compiledFn));
     }
 
     /// <summary>
@@ -458,6 +570,11 @@ public static class VmModuleInterpreter
         var subInterpreter = parentInterpreter != null
             ? new Interp(parentInterpreter.Out, parentInterpreter.Error)
             : new Interp();
+        subInterpreter.MarkVmOwnedEvaluation();
+        if (parsingContext is not null)
+            VmContext.ApplyPromiseIntrinsicState(parsingContext, subInterpreter);
+        else if (parentInterpreter is not null)
+            subInterpreter.UsePromiseIntrinsicState(parentInterpreter.PromiseRealmState);
         var env = subInterpreter.Environment;
         if (dynamicImportHook != null)
             subInterpreter.SetVmDynamicImportHook(dynamicImportHook);
@@ -467,7 +584,7 @@ public static class VmModuleInterpreter
         {
             var contextProps = VmContext.ExtractProperties(parsingContext);
             foreach (var (key, value) in contextProps)
-                env.Define(key, value);
+                env.Define(key, VmExecutionHost.Current is { } host ? host.ToVm(value) : value);
         }
 
         // Seed contextExtensions (layered, in order)
@@ -479,7 +596,7 @@ public static class VmModuleInterpreter
                 {
                     var extProps = VmContext.ExtractProperties(ext);
                     foreach (var (key, value) in extProps)
-                        env.Define(key, value);
+                        env.Define(key, VmExecutionHost.Current is { } host ? host.ToVm(value) : value);
                 }
             }
         }
@@ -491,6 +608,7 @@ public static class VmModuleInterpreter
             var placeholder = $"__vmarg{i}__";
             argPlaceholders.Add(placeholder);
             var argVal = i < callArgs.Count ? callArgs[i] : null;
+            argVal = VmExecutionHost.Current is { } host ? host.ToVm(argVal) : argVal;
             env.Define(placeholder, argVal);
         }
 
@@ -502,12 +620,26 @@ public static class VmModuleInterpreter
         var allStatements = new List<Stmt>(funcDeclStatements);
         allStatements.AddRange(callStatements);
 
-        var resolver = new VariableResolver(subInterpreter);
-        resolver.Resolve(allStatements);
-        var result = subInterpreter.InterpretRepl(allStatements);
-
-        subInterpreter.Dispose();
-        return result;
+        VmEvaluationLease? lease = null;
+        IDisposable? executionScope = null;
+        bool succeeded = false;
+        try
+        {
+            lease = VmEvaluationLease.Create(subInterpreter, parentInterpreter, static () => { });
+            executionScope = lease?.Enter();
+            var resolver = new VariableResolver(subInterpreter);
+            resolver.Resolve(allStatements);
+            var result = subInterpreter.InterpretScriptCompletion(allStatements);
+            RecordVmBoundaryValue(result, subInterpreter);
+            succeeded = true;
+            return result;
+        }
+        finally
+        {
+            if (lease is null) subInterpreter.Dispose();
+            else lease.FinishInitialEvaluation(succeeded);
+            executionScope?.Dispose();
+        }
     }
 
     /// <summary>
@@ -626,9 +758,13 @@ public static class VmModuleInterpreter
     /// </summary>
     internal static object? WithScriptOrigin(ScriptOrigin origin, Func<object?> run)
     {
+        var previousOrigin = ActiveScriptOrigin.Value;
+        ActiveScriptOrigin.Value = origin;
         try
         {
-            return run();
+            var result = run();
+            RetainVmErrorValue(result);
+            return VmExecutionHost.Current is { } host ? host.FromVm(result) : result;
         }
         catch (Runtime.Exceptions.ThrowException te) when (te.Value is SharpTSError err)
         {
@@ -638,14 +774,22 @@ public static class VmModuleInterpreter
             // .Stack (never .name/.message) and keep the same exception type/flow, so
             // interpreter and compiled callers stay in agreement.
             //
-            // LIMITATION: a user `throw` or runtime fault is stringified by the
-            // sub-interpreter's REPL boundary into a host Exception and reconstructed
-            // by the outer interpreter (interp) / $Runtime.WrapException (compiled),
-            // which mint a fresh stack — so the origin frame is not attached for those.
-            // The supplied filename DOES flow into SyntaxError messages at parse time
-            // (see ParseCode), which is the common, cross-mode-faithful case.
-            PrependOriginFrame(err, origin);
+            // Guest-created Error instances record their actual syntax origin at
+            // creation. This separate path retains the existing host timeout error.
+            if (NeedsVmErrorOrigin(err, origin)) PrependOriginFrame(err, origin);
+            te.Data["__tsValue"] = VmExecutionHost.Current is { } host ? host.FromVm(te.Value) : te.Value;
             throw;
+        }
+        catch (Runtime.Exceptions.ThrowException te)
+        {
+            // The generated managed catch boundary already consumes this payload.
+            // Keep the actual guest value rather than reconstructing from Message.
+            te.Data["__tsValue"] = VmExecutionHost.Current is { } host ? host.FromVm(te.Value) : te.Value;
+            throw;
+        }
+        finally
+        {
+            ActiveScriptOrigin.Value = previousOrigin;
         }
     }
 
@@ -675,15 +819,16 @@ public static class VmModuleInterpreter
     /// Parses a code string into statements. Throws on parse errors.
     /// Follows the REPL pattern: retries with appended ";" on parse failure.
     /// </summary>
-    internal static List<Stmt> ParseCode(string code, string? filename = null)
+    internal static List<Stmt> ParseCode(string code, string? filename = null, ScriptOrigin? origin = null)
     {
-        var result = TryParse(code);
+        origin ??= ActiveScriptOrigin.Value ?? new ScriptOrigin(filename ?? ScriptOrigin.Default.Filename, 0, 0);
+        var result = TryParse(code, origin.Value);
 
         var errors = result.Diagnostics.Where(d => d.Severity == DiagnosticSeverity.Error).ToList();
         if (errors.Count > 0)
         {
             // Retry with appended semicolon (same as REPL)
-            var retryResult = TryParse(code + ";");
+            var retryResult = TryParse(code + ";", origin.Value);
             var retryErrors = retryResult.Diagnostics.Where(d => d.Severity == DiagnosticSeverity.Error).ToList();
             if (retryErrors.Count == 0)
                 return retryResult.Statements;
@@ -696,12 +841,16 @@ public static class VmModuleInterpreter
         return result.Statements;
     }
 
-    private static ParseDiagnosticResult TryParse(string code)
+    private static ParseDiagnosticResult TryParse(string code, ScriptOrigin origin)
     {
         var lexer = new Lexer(code);
         var tokens = lexer.ScanTokens();
-        var parser = new Parser(tokens);
-        return parser.Parse();
+        var document = new SourceDocument(origin.Filename, code, isVirtual: true);
+        var parser = new Parser(tokens).WithSourceDocument(document).WithEditorSyntax();
+        var result = parser.Parse();
+        if (result.IsSuccess)
+            Interp.RecordVmErrorOrigins(result.Statements, document, origin.LineOffset, origin.ColumnOffset);
+        return result;
     }
 }
 
@@ -722,9 +871,11 @@ public sealed class VmScriptConstructor : ISharpTSCallable
         var produceCachedData = VmModuleInterpreter.GetBoolOption(options, "produceCachedData");
         var hasCachedDataInput = VmModuleInterpreter.GetOption(options, "cachedData") != null;
         var importModuleDynamically = VmModuleInterpreter.GetOption(options, "importModuleDynamically");
+        var creatorHost = VmExecutionHost.Current ?? interpreter?.GetVmExecutionHost();
+        using var creatorScope = creatorHost?.Enter();
 
         // Pre-parse the code (with semicolon retry); syntax errors carry the filename.
-        var statements = VmModuleInterpreter.ParseCode(code, origin.Filename);
+        var statements = VmModuleInterpreter.ParseCode(code, origin.Filename, origin);
 
         // Create Script as a dictionary — works in both interpreter (via SharpTSObject wrapper)
         // and compiled mode (dictionary is native object representation).
@@ -732,6 +883,7 @@ public sealed class VmScriptConstructor : ISharpTSCallable
         var runInNewCtx = BuiltInMethod.CreateV2("runInNewContext", 0, 2,
             (interp, recv, methodArgs) =>
             {
+                using var hostScope = creatorHost?.Enter();
                 var contextObject = methodArgs.Length > 0 ? methodArgs[0].ToObject() : null;
                 var timeout = VmModuleInterpreter.GetTimeoutOption(methodArgs.Length > 1 ? methodArgs[1].ToObject() : null);
                 var hook = VmModuleInterpreter.BuildDynamicImportHook(importModuleDynamically, null, interp);
@@ -742,6 +894,7 @@ public sealed class VmScriptConstructor : ISharpTSCallable
         var runInThisCtx = BuiltInMethod.CreateV2("runInThisContext", 0, 1,
             (interp, recv, methodArgs) =>
             {
+                using var hostScope = creatorHost?.Enter();
                 var timeout = VmModuleInterpreter.GetTimeoutOption(methodArgs.Length > 0 ? methodArgs[0].ToObject() : null);
                 var hook = VmModuleInterpreter.BuildDynamicImportHook(importModuleDynamically, null, interp);
                 return RuntimeValue.FromBoxed(VmModuleInterpreter.WithScriptOrigin(origin, () =>
@@ -760,6 +913,7 @@ public sealed class VmScriptConstructor : ISharpTSCallable
         var runInCtx = BuiltInMethod.CreateV2("runInContext", 1, 2,
             (interp, recv, methodArgs) =>
             {
+                using var hostScope = creatorHost?.Enter();
                 var context = methodArgs.Length > 0 ? methodArgs[0].ToObject() : null;
                 if (!VmContext.IsContext(context))
                     throw new Exception("TypeError [ERR_INVALID_ARG_TYPE]: The \"contextifiedObject\" argument must be of type vm.Context.");
@@ -799,6 +953,6 @@ public sealed class VmScriptConstructor : ISharpTSCallable
         if (hasCachedDataInput)
             script["cachedDataRejected"] = false;
 
-        return script;
+        return VmModuleInterpreter.FinishVmFacadeObject(script);
     }
 }

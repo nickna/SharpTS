@@ -116,7 +116,7 @@ public class ExternalMethodResolver(TypeMap? typeMap, TypeProvider types)
                 continue;
             var inputParameters = DotNetMethodResolver.GetInputParameters(parameters);
             bool hasParams = parameters.Length > 0 &&
-                             parameters[^1].IsDefined(typeof(ParamArrayAttribute), false);
+                             DotNetMethodResolver.IsParamArray(parameters[^1]);
 
             if (hasParams)
             {

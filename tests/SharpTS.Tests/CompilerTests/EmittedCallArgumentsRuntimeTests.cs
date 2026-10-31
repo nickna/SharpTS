@@ -115,11 +115,11 @@ public sealed class EmittedCallArgumentsRuntimeTests
     [Fact]
     public void OwnerAndHelpersUseExplicitDependencies()
     {
-        Assert.Equal(2, Properties.Length);
+        Assert.Equal(3, Properties.Length);
         Assert.NotSame(new EmittedRuntime().CallArguments, new EmittedRuntime().CallArguments);
         Assert.Null(typeof(EmittedRuntime).GetProperty("CallArguments")!.SetMethod);
         foreach (string old in new[] { "CallArgsPoolGet", "ExpandCallArgs" }) Assert.Null(typeof(EmittedRuntime).GetProperty(old));
-        foreach (string name in new[] { "EmitCallArgsPool", "EmitExpandCallArgs" })
+        foreach (string name in new[] { "EmitCallArgsPool", "EmitExpandCallArgs", "EmitArrayLikeArguments" })
         {
             var method = typeof(RuntimeEmitter).GetMethod(name, Members)!;
             Assert.DoesNotContain(method.GetParameters(), p => p.ParameterType == typeof(EmittedRuntime) || p.ParameterType == typeof(RuntimeFeatureSet));
@@ -131,7 +131,7 @@ public sealed class EmittedCallArgumentsRuntimeTests
     private static Dictionary<string, MethodBuilder> NewHandles()
     {
         var type = NewAssembly().DefineDynamicModule("main").DefineType("Handles");
-        return new[] { "PoolGet", "Expand" }.ToDictionary(n => n, n => type.DefineMethod(n, MethodAttributes.Public | MethodAttributes.Static, typeof(object), Type.EmptyTypes));
+        return Properties.ToDictionary(p => p.Name, p => type.DefineMethod(p.Name, MethodAttributes.Public | MethodAttributes.Static, typeof(object), Type.EmptyTypes));
     }
     private static void Expect<T>(Action action) where T : Exception => Assert.IsType<T>(Assert.Throws<TargetInvocationException>(action).InnerException);
     private static RuntimeFeatureSet Detect(string code) => new RuntimeFeatureDetector().Detect(new Parser(new Lexer(code).ScanTokens()).ParseOrThrow());

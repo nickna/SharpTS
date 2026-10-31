@@ -38,11 +38,11 @@ public class EmittedDescriptorStorageRuntimeTests
         var first = new EmittedRuntime().DescriptorStorage;
         Assert.NotSame(first, new EmittedRuntime().DescriptorStorage);
         Assert.False(first.IsComplete);
-        Assert.Equal(35, Handles.Length);
+        Assert.Equal(36, Handles.Length);
         Assert.Equal(3, Handles.Count(property => property.PropertyType == typeof(Type)));
         Assert.Equal(10, Handles.Count(property => property.PropertyType == typeof(PropertyInfo)));
         Assert.Single(Handles, property => property.PropertyType == typeof(ConstructorInfo));
-        Assert.Equal(21, Handles.Count(property => property.PropertyType == typeof(MethodBuilder)));
+        Assert.Equal(22, Handles.Count(property => property.PropertyType == typeof(MethodBuilder)));
         Assert.Null(typeof(EmittedRuntime).GetProperty(nameof(EmittedRuntime.DescriptorStorage))!.SetMethod);
     }
 

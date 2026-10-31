@@ -17,6 +17,32 @@ namespace SharpTS.Compilation;
 /// <seealso cref="ILEmitter"/>
 public class EmittedRuntime
 {
+    internal NativePrototypeFieldsLookup? NativePrototypeFields { get; set; }
+    internal NativeTypedArrayBufferLookup? NativeTypedArrayBuffers { get; set; }
+    internal NativeConstructorActivationLookup? NativeConstructorActivation { get; set; }
+    internal NativeReceiverInitializerLookup? NativeReceiverInitializers { get; set; }
+
+    /// <summary>Opt-in source own-property infrastructure; does not admit or reroute existing carriers.</summary>
+    public EmittedGuestOwnPropertyRuntime? GuestOwnProperties { get; private set; }
+
+    internal void BeginGuestOwnPropertiesEmission(EmittedGuestOwnPropertyRuntime declarations)
+    {
+        ArgumentNullException.ThrowIfNull(declarations);
+        if (GuestOwnProperties != null) throw new InvalidOperationException("Guest own-property emission has already started.");
+        GuestOwnProperties = declarations;
+    }
+
+    /// <summary>Opt-in direct invocation contracts for generated native guest carriers.</summary>
+    public EmittedNativeCallableRuntime? NativeCallables { get; private set; }
+
+    internal void BeginNativeCallablesEmission(EmittedNativeCallableRuntime declarations)
+    {
+        ArgumentNullException.ThrowIfNull(declarations);
+        if (NativeCallables is not null)
+            throw new InvalidOperationException("Native callable emission has already started.");
+        NativeCallables = declarations;
+    }
+
     /// <summary>Required lazy iterator adapter construction and helper declarations.</summary>
     public EmittedIteratorHelpersRuntime IteratorHelpers { get; } = new();
 

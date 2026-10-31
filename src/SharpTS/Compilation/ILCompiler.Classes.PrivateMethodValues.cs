@@ -11,7 +11,8 @@ public partial class ILCompiler
         new Token(TokenType.IDENTIFIER, _classExprs.Names.GetValueOrDefault(expression)
             ?? expression.Name?.Lexeme ?? "<anonymous>", null, 0), expression.TypeParams,
         expression.SuperclassExpr, expression.SuperclassTypeArgs, expression.Methods, expression.Fields,
-        expression.Accessors, AutoAccessors: expression.AutoAccessors, StaticInitializers: expression.StaticInitializers);
+        expression.Accessors, AutoAccessors: expression.AutoAccessors, IsAbstract: expression.IsAbstract,
+        StaticInitializers: expression.StaticInitializers);
 
     private void EmitClassExpressionPrivateMethodBodies(Expr.ClassExpr expression, TypeBuilder template)
     {
@@ -106,7 +107,7 @@ public partial class ILCompiler
                 il = initializer.GetILGenerator();
                 il.Emit(OpCodes.Newobj, constructor);
                 EmitMethodInfoLiteral(il, method, type);
-                il.Emit(OpCodes.Newobj, _runtime.FunctionConstruction.Constructor);
+                NativeSourceFunctionEmission.EmitConstructor(il, _types, _runtime, method, actualOwner: type);
                 il.Emit(OpCodes.Stsfld, cache);
                 il.Emit(OpCodes.Ret);
             }
@@ -150,7 +151,7 @@ public partial class ILCompiler
         ctx.IsStrictMode = true;
         ctx.IsInstanceMethod = !_classes.PrivateElements.Require(owner.Name).MethodValues.Values.First(value => value.Method == method).Source.IsStatic;
         ctx.IsStaticSuperContext = !ctx.IsInstanceMethod;
-        ctx.GuestThisVariableName = "__this";
+        ctx.GuestThisVariableName = CompilationContext.ThisParameterName;
         ctx.HasGuestReceiver = true;
         foreach (var parameter in owner.Source.TypeParams ?? []) ctx.GenericTypeParameters[parameter.Name.Lexeme] = _types.Object;
     }
@@ -158,7 +159,7 @@ public partial class ILCompiler
     private void EmitGuestMethodValueBody(MethodBuilder method, Stmt.Function source,
         Func<CompilationContext> createContext, string className)
     {
-        var guestThis = new Stmt.Parameter(new Token(TokenType.IDENTIFIER, "__this", null, 0), "any");
+        var guestThis = new Stmt.Parameter(new Token(TokenType.IDENTIFIER, CompilationContext.ThisParameterName, null, 0), "any");
         var lowered = source with { Parameters = [guestThis, .. source.Parameters] };
         if (_asyncMethodFunctionDCKeys.TryGetValue(source, out var asyncKey)) _asyncMethodFunctionDCKeys[lowered] = asyncKey;
         if (_generatorMethodFunctionDCKeys.TryGetValue(source, out var generatorKey)) _generatorMethodFunctionDCKeys[lowered] = generatorKey;
@@ -174,7 +175,7 @@ public partial class ILCompiler
             ctx.AsyncArrowBuilders = _async.ArrowBuilders.Count > 0 ? _async.ArrowBuilders : null;
             ctx.AsyncArrowOuterBuilders = _async.ArrowOuterBuilders;
             ctx.AsyncArrowParentBuilders = _async.ArrowParentBuilders;
-            ctx.DefineParameter("__this", 1, _types.Object);
+            ctx.DefineParameter(CompilationContext.ThisParameterName, 1, _types.Object);
             SetupSyncMethodFunctionDisplayClass(ctx, il, source);
             var parameterTypes = method.GetParameters().Skip(1).Select(parameter => parameter.ParameterType).ToArray();
             for (int i = 0; i < source.Parameters.Count; i++) ctx.DefineParameter(source.Parameters[i].Name.Lexeme, i + 2, parameterTypes[i]);

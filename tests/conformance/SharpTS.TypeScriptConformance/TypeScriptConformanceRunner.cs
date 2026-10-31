@@ -45,7 +45,9 @@ public sealed class TypeScriptConformanceRunner
     /// <summary>
     /// Runs one test and returns its classified result. Does not throw.
     /// </summary>
-    public TypeScriptConformanceResult RunOne(string testFilePath)
+    public TypeScriptConformanceResult RunOne(string testFilePath) => RunOne(testFilePath, null);
+
+    internal TypeScriptConformanceResult RunOne(string testFilePath, Action<CheckedTypeScriptProgram>? publishProgram)
     {
         // Explicit skip-by-path — escape hatch for tests that crash the runner
         // in ways the bucket model can't absorb. Checked first so we don't even
@@ -164,6 +166,7 @@ public sealed class TypeScriptConformanceRunner
             {
                 JsxOptions = ResolveJsxOptions(metadata),
                 RecoverParseErrors = true,
+                CaptureEditorSyntax = publishProgram is not null,
             };
 
             // TypeScript resolves ambient modules declared by any declaration root before
@@ -249,8 +252,11 @@ public sealed class TypeScriptConformanceRunner
                 RespectLoadedLibraries = true,
                 MaxErrors = 1000,
             });
+            if (publishProgram is not null) checker.WithEditorMetadata();
             checker.SetDecoratorMode(decoratorMode);
-            checker.CheckModules(modules, resolver);
+            var typeMap = checker.CheckModules(modules, resolver);
+            publishProgram?.Invoke(new(metadata, virtualRoot, modules, typeMap, modules.Where(module => module.Document is not null)
+                .ToDictionary(module => module.Document!, module => checker.EditorFacts.GetSourceTypeObservations(module.Document!))));
             diagnostics = modules
                 .SelectMany(module => module.ParseDiagnostics)
                 .Concat(checker.GetDiagnostics())

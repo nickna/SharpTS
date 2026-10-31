@@ -5,6 +5,34 @@ namespace SharpTS.Compilation;
 
 public partial class RuntimeEmitter
 {
+    private void EmitArgumentsInitializer(EmittedRuntime runtime)
+    {
+        var il = runtime.Arguments.Initialize.GetILGenerator();
+        il.Emit(OpCodes.Call, runtime.ObjectPrototypes.Populate);
+        il.Emit(OpCodes.Ldarg_0);
+        il.Emit(OpCodes.Ldsfld, runtime.ObjectPrototypes.Prototype);
+        il.Emit(OpCodes.Call, runtime.DescriptorStorage.SetPrototype);
+
+        var descriptor = il.DeclareLocal(runtime.DescriptorStorage.DescriptorType);
+        il.Emit(OpCodes.Newobj, runtime.DescriptorStorage.DescriptorConstructor);
+        il.Emit(OpCodes.Stloc, descriptor);
+        il.Emit(OpCodes.Ldloc, descriptor);
+        _types.EmitLoadMethodInfo(il, runtime.ArrayOperations.Values);
+        il.Emit(OpCodes.Ldstr, "values");
+        il.Emit(OpCodes.Ldc_I4_0);
+        il.Emit(OpCodes.Call, runtime.FunctionConstruction.GetOrCreate);
+        il.Emit(OpCodes.Callvirt, runtime.DescriptorStorage.DescriptorValue.GetSetMethod()!);
+        il.Emit(OpCodes.Ldloc, descriptor);
+        il.Emit(OpCodes.Ldc_I4_0);
+        il.Emit(OpCodes.Callvirt, runtime.DescriptorStorage.DescriptorEnumerable.GetSetMethod()!);
+        il.Emit(OpCodes.Ldarg_0);
+        il.Emit(OpCodes.Call, runtime.Symbols.GetStorage);
+        il.Emit(OpCodes.Ldsfld, runtime.Symbols.Iterator);
+        il.Emit(OpCodes.Ldloc, descriptor);
+        il.Emit(OpCodes.Callvirt, _types.GetMethod(_types.DictionaryObjectObject, "set_Item"));
+        il.Emit(OpCodes.Ret);
+    }
+
     /// <summary>
     /// Defines <c>$Arguments : List&lt;object&gt;</c> — a marker subclass used to
     /// represent the JS <c>arguments</c> object in compiled mode. Inherits all

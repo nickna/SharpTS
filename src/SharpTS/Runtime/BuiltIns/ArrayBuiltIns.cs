@@ -77,7 +77,7 @@ public static class ArrayBuiltIns
     public static BuiltInMethod? GetPrototypeMethod(string name)
         => _lookup.GetMethod(name);
 
-    private static object? Flat(Interpreter _, SharpTSArray arr, List<object?> args)
+    private static object? Flat(Interpreter interp, SharpTSArray arr, List<object?> args)
     {
         // ECMA-262 23.1.3.13: skips holes.
         var depth = args.Count > 0 && args[0] is double d
@@ -86,7 +86,7 @@ public static class ArrayBuiltIns
 
         var result = new List<object?>();
         FlattenArray(arr, result, depth);
-        return new SharpTSArray(result);
+        return new SharpTSArray(result) { IntrinsicPrototype = interp.GetArrayPrototype() };
     }
 
     private static void FlattenArray(SharpTSArray source, List<object?> result, int depth)
@@ -131,7 +131,7 @@ public static class ArrayBuiltIns
                 result.Add(callResult);
             }
         }
-        return new SharpTSArray(result);
+        return new SharpTSArray(result) { IntrinsicPrototype = interp.GetArrayPrototype() };
     }
 
     private static object? ToSorted(Interpreter interp, SharpTSArray arr, List<object?> args)
@@ -159,7 +159,7 @@ public static class ArrayBuiltIns
         for (int i = 0; i < undefinedCount; i++)
             sorted.Add(SharpTSUndefined.Instance);
 
-        return new SharpTSArray(sorted);
+        return new SharpTSArray(sorted) { IntrinsicPrototype = interp.GetArrayPrototype() };
     }
 
     /// <summary>
@@ -266,7 +266,7 @@ public static class ArrayBuiltIns
 
         // If no arguments, return empty array (no elements deleted or inserted)
         if (args.Count == 0)
-            return new SharpTSArray([]);
+            return new SharpTSArray([]) { IntrinsicPrototype = interpreter.GetArrayPrototype() };
 
         // Parse start with negative handling (RelativeIndex to ActualIndex)
         int relStart = ToIntegerOrInfinityAsInt(interpreter, args[0]);
@@ -296,7 +296,7 @@ public static class ArrayBuiltIns
             arr.InsertRange(actualStart, args.Skip(2));
         }
 
-        return new SharpTSArray(deleted);
+        return new SharpTSArray(deleted) { IntrinsicPrototype = interpreter.GetArrayPrototype() };
     }
 
     #region V2 Implementations (RuntimeValue — no boxing)
@@ -490,7 +490,7 @@ public static class ArrayBuiltIns
                 System.Globalization.CultureInfo.InvariantCulture);
             result.Add(interpreter.GetPropertyValue(receiver, key));
         }
-        return new SharpTSArray(result);
+        return new SharpTSArray(result) { IntrinsicPrototype = interpreter.GetArrayPrototype() };
     }
 
     /// <summary>
@@ -558,7 +558,7 @@ public static class ArrayBuiltIns
                     else
                         result.Add(ArrayHole.Instance);
                 }
-                return new SharpTSArray(result);
+                return new SharpTSArray(result) { IntrinsicPrototype = interpreter.GetArrayPrototype() };
             }
             case "filter":
             {
@@ -569,7 +569,7 @@ public static class ArrayBuiltIns
                     if (iter.InvokeRV(interpreter, element, i).IsTruthy())
                         result.Add(element);
                 }
-                return new SharpTSArray(result);
+                return new SharpTSArray(result) { IntrinsicPrototype = interpreter.GetArrayPrototype() };
             }
             case "flatMap":
             {
@@ -583,7 +583,7 @@ public static class ArrayBuiltIns
                     else
                         result.Add(mapped);
                 }
-                return new SharpTSArray(result);
+                return new SharpTSArray(result) { IntrinsicPrototype = interpreter.GetArrayPrototype() };
             }
             case "forEach":
                 for (int i = 0; i < len; i++)
@@ -761,7 +761,7 @@ public static class ArrayBuiltIns
     private static RuntimeValue ConcatV2(
         Interpreter interpreter, SharpTSArray arr, ReadOnlySpan<RuntimeValue> args)
     {
-        var result = new SharpTSArray();
+        var result = new SharpTSArray() { IntrinsicPrototype = interpreter.GetArrayPrototype() };
         long nextIndex = 0;
         AppendConcatItem(interpreter, result, ref nextIndex, arr);
         for (int a = 0; a < args.Length; a++)
@@ -779,7 +779,7 @@ public static class ArrayBuiltIns
     internal static object ConcatArrayLike(
         Interpreter interpreter, object receiver, IReadOnlyList<object?> args)
     {
-        var result = new SharpTSArray();
+        var result = new SharpTSArray() { IntrinsicPrototype = interpreter.GetArrayPrototype() };
         long nextIndex = 0;
         AppendConcatItem(interpreter, result, ref nextIndex, receiver);
         for (int i = 0; i < args.Count; i++)
@@ -1209,7 +1209,7 @@ public static class ArrayBuiltIns
         if (count > SharpTSArray.MaxLength)
             throw new ThrowException(new SharpTSRangeError("Invalid array length."));
 
-        var result = new SharpTSArray();
+        var result = new SharpTSArray() { IntrinsicPrototype = interpreter.GetArrayPrototype() };
         result.SetLength(count);
         for (long index = 0; index < count; index++)
         {
@@ -1265,7 +1265,7 @@ public static class ArrayBuiltIns
         if (length > SharpTSArray.MaxLength)
             throw new ThrowException(new SharpTSRangeError("Invalid array length."));
 
-        var result = new SharpTSArray();
+        var result = new SharpTSArray() { IntrinsicPrototype = interpreter.GetArrayPrototype() };
         result.SetLength(length);
         for (long index = 0; index < length; index++)
         {
@@ -1309,7 +1309,7 @@ public static class ArrayBuiltIns
         if (newLength > SharpTSArray.MaxLength)
             throw new ThrowException(new SharpTSRangeError("Invalid array length."));
 
-        var result = new SharpTSArray();
+        var result = new SharpTSArray() { IntrinsicPrototype = interpreter.GetArrayPrototype() };
         result.SetLength(newLength);
         long destination = 0;
         for (long source = 0; source < actualStart; source++, destination++)
@@ -1373,7 +1373,7 @@ public static class ArrayBuiltIns
         if (actualDeleteCount > SharpTSArray.MaxLength)
             throw new ThrowException(new SharpTSRangeError("Invalid array length."));
 
-        var deleted = new SharpTSArray();
+        var deleted = new SharpTSArray() { IntrinsicPrototype = interpreter.GetArrayPrototype() };
         deleted.SetLength(actualDeleteCount);
         for (long index = 0; index < actualDeleteCount; index++)
         {
@@ -1539,7 +1539,7 @@ public static class ArrayBuiltIns
         var result = new List<object?>(len);
         for (int i = 0; i < len; i++)
             result.Add(i == actualIndex ? args[1].ToObject() : arr[i]);
-        return RuntimeValue.FromObject(new SharpTSArray(result));
+        return RuntimeValue.FromObject(new SharpTSArray(result) { IntrinsicPrototype = interpreter.GetArrayPrototype() });
     }
 
     private static RuntimeValue AtV2(Interpreter interpreter, SharpTSArray arr, ReadOnlySpan<RuntimeValue> args)
@@ -1586,7 +1586,7 @@ public static class ArrayBuiltIns
             else
                 result.Add(ArrayHole.Instance);  // preserve hole
         }
-        return RuntimeValue.FromObject(new SharpTSArray(result));
+        return RuntimeValue.FromObject(new SharpTSArray(result) { IntrinsicPrototype = interp.GetArrayPrototype() });
     }
 
     private static RuntimeValue FilterV2(Interpreter interp, SharpTSArray arr, ReadOnlySpan<RuntimeValue> args)
@@ -1601,7 +1601,7 @@ public static class ArrayBuiltIns
             if (iter.InvokeRV(interp, element, i).IsTruthy())
                 result.Add(element);
         }
-        return RuntimeValue.FromObject(new SharpTSArray(result));
+        return RuntimeValue.FromObject(new SharpTSArray(result) { IntrinsicPrototype = interp.GetArrayPrototype() });
     }
 
     private static RuntimeValue ForEachV2(Interpreter interp, SharpTSArray arr, ReadOnlySpan<RuntimeValue> args)
@@ -1895,7 +1895,7 @@ public static class ArrayBuiltIns
             object? value = arr is SharpTSArguments
                 ? interpreter.GetPropertyValue(arr, i.ToString(System.Globalization.CultureInfo.InvariantCulture))
                 : arr[i];
-            yield return new SharpTSArray([(double)i, value]);
+            yield return new SharpTSArray([(double)i, value]) { IntrinsicPrototype = interpreter.GetArrayPrototype() };
         }
     }
 

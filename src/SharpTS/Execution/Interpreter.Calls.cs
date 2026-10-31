@@ -200,6 +200,7 @@ public partial class Interpreter
     /// <returns>A ValueTask containing the return value of the called function.</returns>
     private async ValueTask<object?> EvaluateCallCore(IEvaluationContext ctx, Expr.Call call)
     {
+        using var errorOrigin = EnterVmErrorOrigin(call);
         // Handle console.* methods
         if (call.Callee is Expr.Variable v && v.Name.Lexeme.StartsWith(BuiltInNames.ConsolePrefix, StringComparison.Ordinal))
         {
@@ -342,6 +343,15 @@ public partial class Interpreter
         {
             switch (expr)
             {
+                case Expr.NonNullAssertion assertion:
+                    expr = assertion.Expression;
+                    continue;
+                case Expr.TypeAssertion assertion:
+                    expr = assertion.Expression;
+                    continue;
+                case Expr.Satisfies satisfies:
+                    expr = satisfies.Expression;
+                    continue;
                 case Expr.Get g:
                     if (g.Optional) return true;
                     expr = g.Object;
@@ -457,6 +467,7 @@ public partial class Interpreter
     /// <seealso href="https://www.typescriptlang.org/docs/handbook/2/functions.html">TypeScript Functions</seealso>
     private RuntimeValue EvaluateCall(Expr.Call call)
     {
+        using var errorOrigin = EnterVmErrorOrigin(call);
         // Handle console.* methods
         if (call.Callee is Expr.Variable v && v.Name.Lexeme.StartsWith(BuiltInNames.ConsolePrefix, StringComparison.Ordinal))
         {
@@ -1507,7 +1518,7 @@ public partial class Interpreter
                 elements.Add(value);
             }
         }
-        return new SharpTSArray(elements);
+        return new SharpTSArray(elements) { IntrinsicPrototype = GetArrayPrototype() };
     }
 
     /// <summary>

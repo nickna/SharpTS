@@ -168,7 +168,7 @@ public partial class RuntimeEmitter
         il.Emit(OpCodes.Brfalse, tryEnumerable);
         il.Emit(OpCodes.Ldloc, source);
         il.Emit(OpCodes.Stloc, iterator);
-        il.Emit(OpCodes.Br, loop);
+        il.Emit(OpCodes.Br, prepareIterator);
         il.MarkLabel(tryEnumerable);
         il.Emit(OpCodes.Ldloc, source);
         il.Emit(OpCodes.Isinst, _types.IEnumerable);
@@ -187,22 +187,10 @@ public partial class RuntimeEmitter
                 inputs.Errors.TypeErrorConstructor, "Value is not iterable");
 
         il.MarkLabel(prepareIterator);
-        // Keep generated generators on their guest next protocol. Internal
-        // array/collection adapters expose only IEnumerator and need native steps.
-        var captureGuestNext = il.DefineLabel();
-        il.Emit(OpCodes.Ldloc, iterator);
-        il.Emit(OpCodes.Isinst, _types.IEnumerator);
-        il.Emit(OpCodes.Brfalse, captureGuestNext);
-        // A real guest next method, when present, is captured before native fallback.
-        il.Emit(OpCodes.Ldloc, iterator);
-        il.Emit(OpCodes.Ldstr, "next");
-        il.Emit(OpCodes.Call, inputs.ObjectRead.Property);
-        il.Emit(OpCodes.Stloc, next);
-        il.Emit(OpCodes.Ldloc, next);
-        il.Emit(OpCodes.Isinst, inputs.UndefinedType);
-        il.Emit(OpCodes.Brtrue, nativeIterator);
-        il.Emit(OpCodes.Br, loop);
-        il.MarkLabel(captureGuestNext);
+        // The captured-next helper distinguishes a native adapter with no
+        // guest slot from an explicit undefined/getterless replacement.
+        il.Emit(OpCodes.Ldnull);
+        il.Emit(OpCodes.Stloc, enumerator);
         il.Emit(OpCodes.Ldloc, iterator);
         il.Emit(OpCodes.Call, inputs.Records.NextMethod);
         il.Emit(OpCodes.Stloc, next);

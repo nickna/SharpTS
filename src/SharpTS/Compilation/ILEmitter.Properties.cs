@@ -969,7 +969,7 @@ public partial class ILEmitter
             IL.Emit(OpCodes.Stloc, gtResultTemp);
             IL.Emit(OpCodes.Ldstr, s.Name.Lexeme);
             IL.Emit(OpCodes.Ldloc, gtResultTemp);
-            IL.Emit(OpCodes.Call, _ctx.Runtime!.GlobalObject.SetProperty);
+            EmitGlobalPropertyStore();
             IL.Emit(OpCodes.Ldloc, gtResultTemp); // expression result
             SetStackUnknown();
             return;
@@ -1846,9 +1846,10 @@ public partial class ILEmitter
             var valueTemp = IL.DeclareLocal(_ctx.Types.Object);
             IL.Emit(OpCodes.Stloc, valueTemp);
             IL.Emit(OpCodes.Ldloc, indexTemp);
+            IL.Emit(OpCodes.Call, _ctx.Runtime!.Reflect.ToPropertyKey);
             IL.Emit(OpCodes.Callvirt, _ctx.Types.GetMethod(_ctx.Types.Object, "ToString")!);
             IL.Emit(OpCodes.Ldloc, valueTemp);
-            IL.Emit(OpCodes.Call, _ctx.Runtime!.GlobalObject.SetProperty);
+            EmitGlobalPropertyStore();
             IL.Emit(OpCodes.Ldloc, valueTemp); // expression result
             SetStackUnknown();
             return;
@@ -2505,6 +2506,9 @@ public partial class ILEmitter
         var getterBuilder = _ctx.ResolveInstanceGetter(className, pascalPropertyName);
         if (getterBuilder == null)
             return false;
+        if (_ctx.Classes.TryGetValue(className, out var nativeOwnReadOwner)
+            && _ctx.ClassRegistry?.NativeOwnProperties?.ContainsOwner(nativeOwnReadOwner) == true)
+            return false;
 
         if (_ctx.ClassRegistry!.TryGetPrimitiveGuestField(className, propertyName, out var guestField))
         {
@@ -2536,7 +2540,8 @@ public partial class ILEmitter
                 classType, getterBuilder, _ctx.EmittingTypeBuilder, out var castType, out var getterTarget))
             return false;
 
-        if (HasNominalClassCarrier(receiver))
+        bool mayObservePrototype = _ctx.RuntimeFeatures?.UsesClassPrototypeMutation != false;
+        if (!mayObservePrototype && HasNominalClassCarrier(receiver))
         {
             EmitExpression(receiver);
             EnsureBoxed();
@@ -2557,9 +2562,19 @@ public partial class ILEmitter
         var completed = IL.DefineLabel();
         var getterReturnType = getterBuilder.ReturnType;
         var result = IL.DeclareLocal(_ctx.Types.Object);
+        var guestProperty = IL.DefineLabel();
+        if (mayObservePrototype)
+        {
+            // A class prototype shares its CLR instance carrier, but its public
+            // properties belong to guest storage rather than instance fields.
+            IL.Emit(OpCodes.Ldloc, savedReceiver);
+            IL.Emit(OpCodes.Call, _ctx.Runtime!.ClassPrototypes.IsPrototype);
+            IL.Emit(OpCodes.Brtrue, guestProperty);
+        }
         IL.Emit(OpCodes.Ldloc, savedReceiver);
         IL.Emit(OpCodes.Isinst, castType);
         IL.Emit(OpCodes.Brtrue, nominal);
+        IL.MarkLabel(guestProperty);
         EmitThrowIfReceiverUndefined(savedReceiver, propertyName);
         IL.Emit(OpCodes.Ldloc, savedReceiver);
         IL.Emit(OpCodes.Ldstr, propertyName);
@@ -2629,6 +2644,9 @@ public partial class ILEmitter
         // Look up the setter in the class hierarchy
         var setterBuilder = _ctx.ResolveInstanceSetter(className, pascalPropertyName);
         if (setterBuilder == null)
+            return false;
+        if (_ctx.Classes.TryGetValue(className, out var nativeOwnWriteOwner)
+            && _ctx.ClassRegistry?.NativeOwnProperties?.ContainsOwner(nativeOwnWriteOwner) == true)
             return false;
 
         if (_ctx.ClassRegistry!.TryGetPrimitiveGuestField(className, propertyName, out var guestField))
@@ -2702,8 +2720,9 @@ public partial class ILEmitter
 
         // Get the actual parameter type of the setter method
         // Field properties have typed setters, but explicit accessors take object
-        var setterParams = setterBuilder.GetParameters();
-        var setterParamType = setterParams.Length > 0 ? setterParams[0].ParameterType : _ctx.Types.Object;
+        var setterParams = setterTarget.GetParameters();
+        var setterParamType = setterParams.Length > 0
+            ? EmitterTypeHelpers.ResolveMethodParameterType(setterTarget, 0) : _ctx.Types.Object;
 
         // Emit: ((ClassName)receiver).set_PropertyName(value), while retaining the value as the
         // assignment expression result. Primitive field values stay in typed locals across the

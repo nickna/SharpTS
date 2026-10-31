@@ -23,6 +23,9 @@ public class DateStaticHandler : ICallHandler
 
         var il = emitter.IL;
         var ctx = emitter.Context;
+        if (emitter.HasVariable("Date") || ctx.HasVisibleValueBinding("Date") ||
+            ctx.RuntimeFeatures?.UsesDateConstructorMutation != false)
+            return false;
 
         switch (dateGet.Name.Lexeme)
         {

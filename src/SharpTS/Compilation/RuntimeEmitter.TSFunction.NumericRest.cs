@@ -7,7 +7,7 @@ public partial class RuntimeEmitter
 {
     private void EmitNumericRest4Attribute(ModuleBuilder moduleBuilder, EmittedFunctionAttributesRuntime attributes)
     {
-        var type = moduleBuilder.DefineType("$NumericRest4",
+        var type = EmitTypeDefinitions.DefineType(moduleBuilder, "$NumericRest4",
             TypeAttributes.Public | TypeAttributes.Sealed | TypeAttributes.BeforeFieldInit, typeof(Attribute));
         var name = type.DefineField("Entry", _types.String, FieldAttributes.Public | FieldAttributes.InitOnly);
         var ctor = type.DefineConstructor(MethodAttributes.Public, CallingConventions.Standard, [_types.String]);
@@ -27,9 +27,24 @@ public partial class RuntimeEmitter
 
     // Both callable constructors bind the capability to their actual MethodInfo.
     // Ordinary wrappers keep a null field and allocate no delegate or attribute.
-    private void EmitComputeNumericRest4(ILGenerator il, FieldBuilder entry, EmittedFunctionAttributesRuntime attributes)
+    private void EmitComputeNumericRest4(ILGenerator il, FieldBuilder entry, EmittedFunctionAttributesRuntime attributes,
+        MethodInfo? nativeBinder)
     {
         var done = il.DefineLabel();
+        if (nativeBinder is not null)
+        {
+            if (!nativeBinder.IsStatic || nativeBinder.IsGenericMethod || nativeBinder.ReturnType != entry.FieldType ||
+                !nativeBinder.GetParameters().Select(parameter => parameter.ParameterType).SequenceEqual([_types.MethodInfo]))
+                throw new InvalidOperationException("Native numeric-rest binding requires an exact static MethodInfo-to-delegate helper.");
+            il.Emit(OpCodes.Ldarg_1); // Captured/instance target: never eligible.
+            il.Emit(OpCodes.Brtrue, done);
+            il.Emit(OpCodes.Ldarg_0);
+            il.Emit(OpCodes.Ldarg_2);
+            il.Emit(OpCodes.Call, nativeBinder);
+            il.Emit(OpCodes.Stfld, entry);
+            il.MarkLabel(done);
+            return;
+        }
         var name = il.DeclareLocal(_types.String);
         var companion = il.DeclareLocal(_types.MethodInfo);
         il.Emit(OpCodes.Ldarg_1); // Captured/instance target: never eligible.

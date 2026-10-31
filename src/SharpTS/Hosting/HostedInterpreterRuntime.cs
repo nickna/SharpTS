@@ -410,8 +410,7 @@ public sealed class HostedInterpreterRuntime : ISharpTSHostedRuntime
 
         if (_interpreterConfigured && reason != SharpTSHostedShutdownReason.ProcessExit)
         {
-            _interpreter.EmitHostedBeforeExit(exitCode);
-            _interpreter.ProcessMicrotasks();
+            _interpreter.RunHostedBeforeExitCheckpoint(exitCode);
         }
 
         if (_interpreterConfigured)

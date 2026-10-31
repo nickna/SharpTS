@@ -40,7 +40,9 @@ internal sealed class AsyncArrowStorageAccess
 
     public static AsyncArrowStorageAccess CapturedField(
         AsyncArrowStateMachineBuilder builder, string name, FieldInfo field)
-        => new(null, field, OuterReceiverPath(builder, builder.TransitiveCaptures.Contains(name)));
+        => new(null, field, OuterReceiverPath(builder,
+            field.DeclaringType == builder.GrandparentStateMachineType
+            || (field.DeclaringType != builder.OuterStateMachineType && builder.TransitiveCaptures.Contains(name))));
 
     public static AsyncArrowStorageAccess OuterDisplayClassField(
         AsyncArrowStateMachineBuilder builder, FieldInfo displayClassField, FieldInfo field)
