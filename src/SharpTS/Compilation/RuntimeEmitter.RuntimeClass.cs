@@ -727,6 +727,13 @@ public partial class RuntimeEmitter
         if (promiseSpeciesInitializer is not null)
             cctorIL.Emit(OpCodes.Call, promiseSpeciesInitializer);
 
+        MethodBuilder? globalTimerInitializer = null;
+        if (_features.UsesTimerFunctionValues)
+        {
+            globalTimerInitializer = typeBuilder.DefineMethod("_InitializeGlobalTimers",
+                MethodAttributes.Private | MethodAttributes.Static, _types.Void, Type.EmptyTypes);
+            cctorIL.Emit(OpCodes.Call, globalTimerInitializer);
+        }
         cctorIL.Emit(OpCodes.Ret);
 
         // Emit all methods - these are now in partial class files
@@ -3439,6 +3446,8 @@ public partial class RuntimeEmitter
             EmitTimerPromisesMethods(typeBuilder, runtime);
         // Timer module wrappers for namespace imports (import * as timers from 'timers')
         EmitTimerModuleWrappers(typeBuilder, runtime);
+        if (globalTimerInitializer is not null)
+            EmitGlobalTimerFunctionValues(globalTimerInitializer, runtime);
         // Timer promises module wrappers for named/namespace imports (import { setTimeout } from 'timers/promises')
         if (_features.UsesPromise)
             EmitTimerPromisesModuleWrappers(typeBuilder, runtime);

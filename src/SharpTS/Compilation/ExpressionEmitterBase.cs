@@ -2348,6 +2348,8 @@ public abstract partial class ExpressionEmitterBase : IEmitterContext
         // including state-machine bodies; direct static eval keeps its own lowering.
         if (TryEmitIndirectEvalValue(name)) return true;
 
+        if (TryEmitGlobalTimerFunctionValue(name)) return true;
+
         if (name == "parseInt")
         {
             EmitGlobalParseIntRead(IL, Ctx);
@@ -2368,6 +2370,15 @@ public abstract partial class ExpressionEmitterBase : IEmitterContext
         return false;
     }
 
+    protected bool TryEmitGlobalTimerFunctionValue(string name)
+    {
+        if (name is not ("setTimeout" or "clearTimeout" or "setInterval" or "clearInterval"
+            or "setImmediate" or "clearImmediate") || Ctx.HasVisibleValueBinding(name)) return false;
+        IL.Emit(OpCodes.Ldstr, name);
+        IL.Emit(OpCodes.Call, Ctx.Runtime!.GlobalObject.GetBinding);
+        SetStackUnknown();
+        return true;
+    }
     // A global identifier read must distinguish a missing binding from a present
     // property whose value is undefined. Qualified property reads remain unchecked.
     internal static void EmitGlobalParseIntRead(
@@ -2986,6 +2997,7 @@ public abstract partial class ExpressionEmitterBase : IEmitterContext
             or "parseFloat" or "parseInt" or "isNaN" or "isFinite"
             or "encodeURIComponent" or "decodeURIComponent"
             or "setTimeout" or "clearTimeout" or "setInterval" or "clearInterval"
+            or "setImmediate" or "clearImmediate"
             or "queueMicrotask" or "structuredClone") return true;
         if (Ctx.TopLevelStaticVars?.ContainsKey(name) == true) return true;
         if (Ctx.Classes.ContainsKey(Ctx.ResolveClassName(name))) return true;

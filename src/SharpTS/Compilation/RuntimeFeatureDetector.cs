@@ -126,6 +126,7 @@ public sealed partial class RuntimeFeatureDetector
             UsesClassPrototypeMutation = false,
             UsesDatePrototypeMutation = false,
             UsesDateConstructorMutation = false,
+            UsesTimerFunctionValues = false,
             UsesPromisePrototypeMutation = false,
             UsesArrayPrototypeMutation = false,
             UsesArrayReceiverScopes = false,
@@ -362,6 +363,14 @@ public sealed partial class RuntimeFeatureDetector
     {
         switch (name)
         {
+            case "setTimeout":
+            case "clearTimeout":
+            case "setInterval":
+            case "clearInterval":
+            case "setImmediate":
+            case "clearImmediate":
+                _set.UsesTimerFunctionValues = true;
+                break;
             // A value-form reference can alias the integrity mutators
             // (`const O = Object; O.freeze(value)`). Conservatively disable
             // the direct class-setter shortcut for any opaque Object access
@@ -373,6 +382,7 @@ public sealed partial class RuntimeFeatureDetector
                 _set.UsesObjectIntegrityMutation = true;
                 if (name is "eval" or "Function")
                 {
+                    _set.UsesTimerFunctionValues = true;
                     // Callable discovery can parse indirect/grouped literal
                     // eval after this walk. Retain receiver scopes for opaque
                     // source as well as the direct eval AST visited below.
@@ -602,6 +612,7 @@ public sealed partial class RuntimeFeatureDetector
             // valve; the fine-grained ones still get set by their own triggers.
             case "globalThis":
             case "global":
+                _set.UsesTimerFunctionValues = true;
                 _set.UsesDateConstructorMutation = true;
                 _set.UsesObjectDefinitionRuntime = true;
                 _set.UsesArrayReceiverScopes = true;

@@ -173,6 +173,8 @@ public sealed class RuntimeFeatureSet
     public bool UsesDatePrototypeMutation { get; set; } = true;
     // Static Date calls require live lookup after constructor mutation or escape.
     public bool UsesDateConstructorMutation { get; set; } = true;
+    // Reachability only: global timer values use actual emitted module wrappers.
+    public bool UsesTimerFunctionValues { get; set; } = true;
     // Promise method/constructor/species mutation makes direct then lowering
     // observable through ordinary property lookup. Such programs must retain
     // value dispatch for then/catch/finally calls.
