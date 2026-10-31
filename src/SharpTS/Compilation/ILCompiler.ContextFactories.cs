@@ -320,6 +320,7 @@ public partial class ILCompiler
             AsyncArrowParentBuilders = _async.ArrowParentBuilders,
             // Inherit module support from parent context
             CurrentModulePath = parentCtx.CurrentModulePath,
+            CurrentNamespacePath = parentCtx.CurrentNamespacePath,
             ModuleNames = parentCtx.ModuleNames,
             ClassToModule = parentCtx.ClassToModule,
             FunctionToModule = parentCtx.FunctionToModule,

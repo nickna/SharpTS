@@ -1292,6 +1292,8 @@ public partial class ILCompiler
 
         // Create a new context for arrow MoveNext emission
         var ctx = CreateNestedAsyncArrowContext(il, parentCtx, arrowBuilder.MoveNextMethod);
+        if (_arrowToNamespace.TryGetValue(arrow, out var arrowNamespace))
+            ctx.CurrentNamespacePath = arrowNamespace;
         ctx.CapturesConstructorThisCell = _constructorReceiverArrows.Contains(arrow);
         if (arrowBuilder.CapturedFieldMap.ContainsKey(CompilationContext.SuperOwnerCaptureName))
             ctx.ClassDefinitionVariableName = CompilationContext.SuperOwnerCaptureName;
@@ -1903,6 +1905,8 @@ public partial class ILCompiler
 
             // Create context for MoveNext emission
             var ctx = CreateModuleMemberContext(il, arrowBuilder.MoveNextMethod);
+            if (_arrowToNamespace.TryGetValue(arrow, out var arrowNamespace))
+                ctx.CurrentNamespacePath = arrowNamespace;
             ctx.AsyncArrowBuilders = _async.ArrowBuilders;
             ctx.AsyncArrowOuterBuilders = _async.ArrowOuterBuilders;
             ctx.AsyncArrowParentBuilders = _async.ArrowParentBuilders;

@@ -27,6 +27,7 @@ public partial class ILCompiler
     // body emission otherwise runs with a stale _modules.CurrentPath and
     // resolves against the wrong module's storage.
     private readonly Dictionary<Expr.ArrowFunction, string?> _arrowToModule = new(ReferenceEqualityComparer.Instance);
+    private readonly Dictionary<Expr.ArrowFunction, string?> _arrowToNamespace = new(ReferenceEqualityComparer.Instance);
     private readonly Dictionary<Expr.ArrowFunction, Expr.ArrowFunction?> _arrowParent = new(ReferenceEqualityComparer.Instance);
     // Immediately enclosing callable (Expr.ArrowFunction or Stmt.Function) of each
     // collected arrow — i.e. the body whose emission context creates the arrow's
@@ -832,6 +833,7 @@ public partial class ILCompiler
                 CollectArrowsFromExpr(da.ResultValue);
                 break;
             case Expr.ArrowFunction af:
+                _arrowToNamespace[af] = _currentNamespacePath;
                 var captures = _closures.Analyzer.GetCaptures(af);
                 if (!af.HasOwnThis && captures.Contains("this") && ClassNeedsConstructorReceiver(_currentCollectClassName)
                     && (_collectingInstanceFieldInitializer || IsConstructorThisArrowParent(_currentEnclosingCallable)))
@@ -1738,6 +1740,8 @@ public partial class ILCompiler
         arrowReturnType ??= _types.Object;
 
         var ctx = CreateModuleMemberContext(il, method);
+        if (_arrowToNamespace.TryGetValue(arrow, out var arrowNamespace))
+            ctx.CurrentNamespacePath = arrowNamespace;
         ConfigureNewTargetBody(ctx, method);
         ctx.AsyncArrowBuilders = _async.ArrowBuilders.Count > 0 ? _async.ArrowBuilders : null;
         // A function expression / arrow with its own "use strict" prologue is

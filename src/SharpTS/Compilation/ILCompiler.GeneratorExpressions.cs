@@ -201,7 +201,7 @@ public partial class ILCompiler
             foreach (var info in _closures.GeneratorExpressions.Values)
             {
                 _modules.CurrentPath = NormalizeToEmissionPath(_arrowToModule.GetValueOrDefault(info.Source));
-                _currentNamespacePath = null;
+                _currentNamespacePath = _arrowToNamespace.GetValueOrDefault(info.Source);
                 EmitIteratorExpressionStub(info);
 
                 if (info.StateMachine is GeneratorStateMachineBuilder sync)
