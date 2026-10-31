@@ -79,11 +79,10 @@ internal sealed class PrototypePropertyOverlay(
         string name, SharpTSPropertyDescriptor descriptor, Func<string, object?> getMember,
         bool configurable = true)
     {
-        if (!IsExtensible && !HasExtra(name))
+        if (!HasExtra(name) && HasOwnProperty(name))
         {
-            // Existing virtual data slots may change on a nonextensible object.
-            // Deleted or unknown names remain absent without clearing tombstones.
-            if (!HasOwnProperty(name)) return false;
+            // A virtual own data slot already exists even before its overlay is
+            // materialized. Preserve its value and omitted attributes on update.
             var current = new SharpTSPropertyDescriptor(
                 getMember(name), writable: true, enumerable: false, configurable: configurable);
             return DefineExistingBuiltInDataProperty(name, current, descriptor);
