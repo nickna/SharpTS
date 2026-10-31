@@ -1,4 +1,5 @@
 using SharpTS.Tests.Infrastructure;
+using SharpTS.TypeSystem;
 using SharpTS.TypeSystem.Exceptions;
 using Xunit;
 
@@ -42,13 +43,13 @@ public class CallbackVarianceTests
         // tsc #51620: `set(value: T)` instantiated with function types is NOT a callback
         // position — the function-ness came from the argument, not the declaration. Both
         // directions stay legal (method bivariance).
-        TestHarness.RunInterpreted("""
+        new TypeChecker().Check(TestHarness.ParseOrThrow("""
             type Bivar<T> = { set(value: T): void }
             declare let bfu: Bivar<(x: unknown) => void>;
             declare let bfs: Bivar<(x: string) => void>;
             bfu = bfs;
             bfs = bfu;
-            """);
+            """));
     }
 
     [Fact]
@@ -58,12 +59,12 @@ public class CallbackVarianceTests
         // rule. Under the harness's default (non-strict) settings function params are bivariant,
         // so both directions are legal here; the strict-mode covariance error for `sx = sy` is
         // pinned by the covariantCallbacks conformance baseline (which runs @strict).
-        TestHarness.RunInterpreted("""
+        new TypeChecker().Check(TestHarness.ParseOrThrow("""
             type SetLike<T> = { set(value: T): void, get(): T }
             declare let sx: SetLike<(x: unknown) => void>;
             declare let sy: SetLike<(x: string) => void>;
             sy = sx;
             sx = sy;
-            """);
+            """));
     }
 }
