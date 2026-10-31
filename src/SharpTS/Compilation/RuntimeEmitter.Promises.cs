@@ -252,62 +252,32 @@ public partial class RuntimeEmitter
         runtime.RequirePromise().Resolve = resolve;
         {
             var il = resolve.GetILGenerator();
-            var notTaskLabel = il.DefineLabel();
-            var wrapTaskLabel = il.DefineLabel();
+            var resolveValueLabel = il.DefineLabel();
             var taskLocal = il.DeclareLocal(taskType);
-            var tcsType = typeof(TaskCompletionSource<object?>);
-            var tcsLocal = il.DeclareLocal(tcsType);
-            var callbackLocal = il.DeclareLocal(runtime.RequirePromise().ResolveCallbackType);
 
-            // Check if value is already a Task<object?>
             il.Emit(OpCodes.Ldarg_0);
             il.Emit(OpCodes.Isinst, taskType);
             il.Emit(OpCodes.Stloc, taskLocal);
             il.Emit(OpCodes.Ldloc, taskLocal);
-            il.Emit(OpCodes.Brfalse, notTaskLabel);
+            il.Emit(OpCodes.Brfalse, resolveValueLabel);
 
-            // IsPromise(value) && value.constructor === %Promise%: preserve
-            // identity. GetProperty observes own data/accessor overrides before
-            // falling back to Promise.prototype.constructor.
+            // The same-constructor native Promise preserves identity without
+            // reading then. All other values use the original receiver's live
+            // then, including native Tasks with an explicit subclass prototype.
             il.Emit(OpCodes.Ldarg_0);
             il.Emit(OpCodes.Ldstr, "constructor");
             il.Emit(OpCodes.Call, runtime.ObjectRead.Property);
             il.Emit(OpCodes.Ldtoken, _types.TaskOfObject);
             il.Emit(OpCodes.Call, _types.GetMethod(
                 _types.Type, "GetTypeFromHandle", _types.RuntimeTypeHandle));
-            il.Emit(OpCodes.Bne_Un, wrapTaskLabel);
+            il.Emit(OpCodes.Bne_Un, resolveValueLabel);
             il.Emit(OpCodes.Ldloc, taskLocal);
             il.Emit(OpCodes.Ret);
 
-            // The constructor differs: create a distinct intrinsic promise and
-            // resolve it with the input promise. Reusing the resolving-function
-            // implementation preserves adoption, rejection, and single-settle
-            // behavior without introducing a second promise-resolution path.
-            il.MarkLabel(wrapTaskLabel);
-            il.Emit(OpCodes.Newobj, tcsType.GetConstructor(Type.EmptyTypes)!);
-            il.Emit(OpCodes.Stloc, tcsLocal);
-            il.Emit(OpCodes.Ldloc, tcsLocal);
-            il.Emit(OpCodes.Newobj, typeof(System.Runtime.CompilerServices.StrongBox<bool>)
-                .GetConstructor(Type.EmptyTypes)!);
-            il.Emit(OpCodes.Newobj, runtime.RequirePromise().ResolveCallbackCtor);
-            il.Emit(OpCodes.Stloc, callbackLocal);
-            il.Emit(OpCodes.Ldloc, callbackLocal);
-            il.Emit(OpCodes.Ldc_I4_1);
-            il.Emit(OpCodes.Newarr, _types.Object);
-            il.Emit(OpCodes.Dup);
-            il.Emit(OpCodes.Ldc_I4_0);
-            il.Emit(OpCodes.Ldloc, taskLocal);
-            il.Emit(OpCodes.Stelem_Ref);
-            il.Emit(OpCodes.Callvirt, runtime.RequirePromise().ResolveCallbackInvoke);
-            il.Emit(OpCodes.Pop);
-            il.Emit(OpCodes.Ldloc, tcsLocal);
-            il.Emit(OpCodes.Callvirt, tcsType.GetProperty("Task")!.GetGetMethod()!);
-            il.Emit(OpCodes.Ret);
-
-            // Non-native values use the Promise Resolve Functions path: read
-            // `then` synchronously and enqueue PromiseResolveThenableJob when
-            // it is callable.
-            il.MarkLabel(notTaskLabel);
+            il.MarkLabel(resolveValueLabel);
+            // ResolveValue captures then synchronously and queues invocation.
+            // The resolving callback's raw-task shortcut would discard this
+            // observable lookup after the constructor identity check failed.
             il.Emit(OpCodes.Ldarg_0);
             il.Emit(OpCodes.Call, runtime.RequirePromise().ResolveValueMethod);
             il.Emit(OpCodes.Ret);

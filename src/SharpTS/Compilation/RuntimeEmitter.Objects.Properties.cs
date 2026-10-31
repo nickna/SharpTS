@@ -3376,6 +3376,30 @@ public partial class RuntimeEmitter
             () => il.Emit(OpCodes.Ldarg_0), inputs.InvokeMethodValue, inputs.UndefinedInstance, inputs.UndefinedType);
         il.MarkLabel(noPromisePdsDescLabel);
 
+        // A native Task can carry an actual subclass/explicit prototype.
+        // Its inherited properties must precede the intrinsic Promise surface,
+        // and inherited accessors receive the original Promise as this.
+        var intrinsicPromisePrototype = il.DefineLabel();
+        var selectedPromisePrototype = il.DeclareLocal(_types.Object);
+        il.Emit(OpCodes.Ldarg_0);
+        il.Emit(OpCodes.Call, inputs.DescriptorStorage.HasPrototypeEntry);
+        il.Emit(OpCodes.Brfalse, intrinsicPromisePrototype);
+        il.Emit(OpCodes.Ldarg_0);
+        il.Emit(OpCodes.Call, inputs.ObjectPrototypes.GetPrototypeOf);
+        il.Emit(OpCodes.Stloc, selectedPromisePrototype);
+        var hasPromisePrototype = il.DefineLabel();
+        il.Emit(OpCodes.Ldloc, selectedPromisePrototype);
+        il.Emit(OpCodes.Brtrue, hasPromisePrototype);
+        il.Emit(OpCodes.Ldsfld, inputs.UndefinedInstance);
+        il.Emit(OpCodes.Ret);
+        il.MarkLabel(hasPromisePrototype);
+        il.Emit(OpCodes.Ldloc, selectedPromisePrototype);
+        il.Emit(OpCodes.Ldarg_1);
+        il.Emit(OpCodes.Ldarg_0);
+        il.Emit(OpCodes.Call, inputs.Reflect.Get);
+        il.Emit(OpCodes.Ret);
+        il.MarkLabel(intrinsicPromisePrototype);
+
         // First, extract the underlying Task if this is a $Promise object
         // Store the task in a local variable for use in creating TSFunction wrappers
         var taskLocal = il.DeclareLocal(_types.TaskOfObject);
