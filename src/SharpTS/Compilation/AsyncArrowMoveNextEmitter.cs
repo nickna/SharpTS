@@ -37,6 +37,18 @@ public partial class AsyncArrowMoveNextEmitter : AsyncFunctionMoveNextEmitter, I
     // Variable resolver for hoisted fields, locals, and captured variables
     private AsyncArrowVariableResolver? _resolver;
 
+    protected override void EmitDefaultParameterMirror(string name, LocalBuilder value)
+    {
+        if (_builder.FunctionDCField is { } holder
+            && _builder.FunctionDCFieldMap.TryGetValue(name, out var field))
+        {
+            _il.Emit(OpCodes.Ldloc, value);
+            AsyncArrowStorageAccess.OwnDisplayClassField(holder, field).EmitStore(_il);
+        }
+        else
+            base.EmitDefaultParameterMirror(name, value);
+    }
+
     #region IEmitterContext Implementation
 
     /// <summary>
@@ -197,6 +209,14 @@ public partial class AsyncArrowMoveNextEmitter : AsyncFunctionMoveNextEmitter, I
                 _il.Emit(OpCodes.Ldfld, self);
                 _il.Emit(OpCodes.Stfld, capturedSelf);
             }
+            foreach (var (name, parameter) in _builder.ParameterFields)
+                if (_builder.FunctionDCFieldMap.TryGetValue(name, out var capturedParameter))
+                {
+                    _il.Emit(OpCodes.Ldarg_0);
+                    _il.Emit(OpCodes.Ldfld, parameter);
+                    AsyncArrowStorageAccess.OwnDisplayClassField(
+                        _builder.FunctionDCField, capturedParameter).EmitStore(_il);
+                }
             _il.MarkLabel(dcAlreadySet);
         }
 

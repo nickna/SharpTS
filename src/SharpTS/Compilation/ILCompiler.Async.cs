@@ -474,8 +474,8 @@ public partial class ILCompiler
             // rather than the owner's now-stale hoisted-field copy.
             if (!loweredDeclaration
                 && (source is not Expr.ArrowFunction { IsAsync: true, IsGenerator: false } asyncOwner
-                    || !GetAsyncDeclarationLiveLocals(asyncOwner,
-                        _collectedArrows.Select(entry => entry.Arrow)).Contains(name)))
+                    || !_closures.AsyncArrowDCKeys.TryGetValue(asyncOwner, out var ownerKey)
+                    || !_closures.FunctionDisplayClassFields[ownerKey].ContainsKey(name)))
                 continue;
             if (source != null && ResolveLiveStorage(builder, source, name) is { } storage)
                 builder.CapturedLiveStorage[name] = storage;
