@@ -168,6 +168,11 @@ public partial class CompilationContext
 
         if (FunctionToModule != null && FunctionToModule.TryGetValue(simpleFunctionName, out var modulePath))
         {
+            // The simple-name map describes declarations across every module,
+            // not bindings visible in this source body. Real imports resolve
+            // through their scoped value fields before this fallback.
+            if (CurrentModulePath is not null && !IsScriptTopLevel && modulePath != CurrentModulePath)
+                return localName;
             string sanitizedModule = GetSanitizedModuleName(modulePath);
             return $"$M_{sanitizedModule}_{simpleFunctionName}";
         }

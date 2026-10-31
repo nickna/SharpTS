@@ -329,14 +329,21 @@ public class ClosureAnalyzer : AstVisitorBase
         _bodyCells.Analyze(statements, moduleOwners, _runtimeClassDeclarations);
         if (checkedTypes != null) _bodyCells.MarkUndefinedBodyVarReferences(checkedTypes);
         _checkedTypes = checkedTypes;
-        EnterScope();
-        HoistFunctionDeclarations(statements, hoistOwnedVars: true);
-        foreach (var stmt in statements)
+        if (moduleOwners is null)
         {
-            _moduleClrImports = moduleClrImports?.GetValueOrDefault(stmt);
-            Visit(stmt);
+            AnalyzeRoot(statements, moduleClrImports);
         }
-        ExitScope();
+        else
+        {
+            // External modules have distinct lexical roots. The compiler already
+            // supplies the actual source owner for each statement; script files
+            // deliberately share one owner and therefore one global root.
+            object unowned = new();
+            foreach (var root in statements.GroupBy(
+                         statement => moduleOwners.GetValueOrDefault(statement) ?? unowned,
+                         ReferenceEqualityComparer.Instance))
+                AnalyzeRoot(root.ToList(), moduleClrImports);
+        }
         _moduleClrImports = null;
         _checkedTypes = null;
 
@@ -355,6 +362,18 @@ public class ClosureAnalyzer : AstVisitorBase
         }
     }
 
+    private void AnalyzeRoot(List<Stmt> statements,
+        IReadOnlyDictionary<Stmt, IReadOnlySet<string>>? moduleClrImports)
+    {
+        EnterScope();
+        HoistFunctionDeclarations(statements, hoistOwnedVars: true);
+        foreach (var statement in statements)
+        {
+            _moduleClrImports = moduleClrImports?.GetValueOrDefault(statement);
+            Visit(statement);
+        }
+        ExitScope();
+    }
     /// <summary>
     /// Pre-declares function declaration names in the current scope so that forward
     /// references to sibling functions resolve as outer-scope references (and therefore
