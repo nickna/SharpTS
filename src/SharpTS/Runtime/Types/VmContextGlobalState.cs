@@ -37,12 +37,11 @@ internal sealed class VmContextGlobalState
 
     internal bool Set(string name, object? value)
     {
+        if (Execution.VmEvaluationLease.CurrentInterpreter is { } owner)
+            VmModuleInterpreter.RecordVmBoundaryValue(value, owner);
         var host = VmExecutionHost.Current;
         var raw = host is null ? value : host.FromVm(value);
-        bool applied = _storage is { } storage ? storage.Set(Context, name, raw) : _properties!.TrySetProperty(name, raw);
-        if (applied && Execution.VmEvaluationLease.CurrentInterpreter is { } owner)
-            VmModuleInterpreter.RecordVmBoundaryValue(value, owner);
-        return applied;
+        return _storage is { } storage ? storage.Set(Context, name, raw) : _properties!.TrySetProperty(name, raw);
     }
 
     internal bool Delete(string name) => _storage is { } storage ? storage.Delete(Context, name) : _properties!.DeleteProperty(name);
