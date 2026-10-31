@@ -37,10 +37,12 @@ public partial class RuntimeEmitter
         MethodBuilder InvokeMethodUnwrapped,
         EmittedObjectDescriptorRuntime ObjectDescriptors,
         EmittedReflectRuntime Reflect,
+        EmittedErrorRuntime Errors,
         MethodInfo? NativeProxyRejection
     );
 
-    private readonly record struct ProxyGetIndexCheckInputs(MethodBuilder InvokeMethodUnwrapped, EmittedObjectDescriptorRuntime ObjectDescriptors, MethodInfo? NativeProxyRejection);
+    private readonly record struct ProxyGetIndexCheckInputs(MethodBuilder InvokeMethodUnwrapped,
+        EmittedObjectDescriptorRuntime ObjectDescriptors, EmittedErrorRuntime Errors, MethodInfo? NativeProxyRejection);
 
     private readonly record struct ProxyDeleteCheckInputs(
         MethodBuilder GetProperty,
@@ -78,6 +80,7 @@ public partial class RuntimeEmitter
         MethodInfo InvokeMethodUnwrapped, MethodInfo? NativeProxyRejection);
 
     private const string ProxyTypeName = "SharpTS.Runtime.Types.SharpTSProxy";
+    private const string ProxyAssemblyQualifiedTypeName = "SharpTS.Runtime.Types.SharpTSProxy, SharpTS";
 
     private readonly record struct ProxyConstructionInputs(
         Type UndefinedType, Type SymbolType, FieldInfo UndefinedInstance,
@@ -171,6 +174,196 @@ public partial class RuntimeEmitter
         il.Emit(OpCodes.Call, invokeMethodUnwrapped);
     }
 
+    private LocalBuilder EmitOwnedProxyGetCheck(ILGenerator il, Action loadObj, Label legacy)
+    {
+        var coreType = il.DeclareLocal(_types.Type);
+        il.Emit(OpCodes.Ldstr, ProxyAssemblyQualifiedTypeName);
+        il.Emit(OpCodes.Call, _types.GetMethod(_types.Type, "GetType", _types.String));
+        il.Emit(OpCodes.Stloc, coreType);
+        il.Emit(OpCodes.Ldloc, coreType);
+        il.Emit(OpCodes.Brfalse, legacy);
+        // Derived and unrelated name-lookalikes retain their own legacy operation.
+        il.Emit(OpCodes.Ldloc, coreType);
+        loadObj();
+        il.Emit(OpCodes.Call, _types.GetMethod(_types.Object, "GetType"));
+        il.Emit(OpCodes.Ceq);
+        il.Emit(OpCodes.Brfalse, legacy);
+        return coreType;
+    }
+
+    private void EmitProxyGetTransport(ILGenerator il, EmittedErrorRuntime errors, LocalBuilder coreType,
+        string operationName, Type delegateType, Type[] parameters, Action loadObj, Action emitArguments)
+    {
+        var proxyResult = il.DeclareLocal(_types.Object);
+        var foreignThrow = il.DeclareLocal(_types.Exception);
+        var errorInfo = il.DeclareLocal(_types.String.MakeArrayType());
+        var translateErrorType = typeof(Func<Exception, string[]?>);
+        var translateError = il.DeclareLocal(translateErrorType);
+        // Resolve the typed error bridge before descending into the operation.
+        // Unwinding must not need reflection/native stack on an exhausted thread.
+        il.Emit(OpCodes.Ldloc, coreType);
+        il.Emit(OpCodes.Ldstr, nameof(SharpTS.Runtime.Types.SharpTSProxy.GetPropertyErrorInfo));
+        il.Emit(OpCodes.Callvirt, _types.GetMethod(_types.Type, "GetMethod", _types.String));
+        il.Emit(OpCodes.Ldtoken, translateErrorType);
+        il.Emit(OpCodes.Call, _types.TypeGetTypeFromHandle);
+        il.Emit(OpCodes.Callvirt, _types.GetMethod(_types.MethodInfo, "CreateDelegate", _types.Type));
+        il.Emit(OpCodes.Castclass, translateErrorType);
+        il.Emit(OpCodes.Stloc, translateError);
+        var proxyDone = il.DefineLabel();
+        il.BeginExceptionBlock();
+        // Bind only the fixed Core operation with its exact existing ABI.
+        // A direct delegate avoids native reflection frames during recursive GET.
+        il.Emit(OpCodes.Ldloc, coreType);
+        il.Emit(OpCodes.Ldstr, operationName);
+        il.Emit(OpCodes.Ldc_I4, parameters.Length);
+        il.Emit(OpCodes.Newarr, _types.Type);
+        for (int index = 0; index < parameters.Length; index++)
+        {
+            il.Emit(OpCodes.Dup);
+            il.Emit(OpCodes.Ldc_I4, index);
+            il.Emit(OpCodes.Ldtoken, parameters[index]);
+            il.Emit(OpCodes.Call, _types.TypeGetTypeFromHandle);
+            il.Emit(OpCodes.Stelem_Ref);
+        }
+        il.Emit(OpCodes.Callvirt, _types.GetMethod(_types.Type, "GetMethod", _types.String,
+            _types.Type.MakeArrayType()));
+        il.Emit(OpCodes.Ldtoken, delegateType);
+        il.Emit(OpCodes.Call, _types.TypeGetTypeFromHandle);
+        loadObj();
+        il.Emit(OpCodes.Callvirt, _types.GetMethod(_types.MethodInfo, "CreateDelegate", _types.Type, _types.Object));
+        il.Emit(OpCodes.Castclass, delegateType);
+        emitArguments();
+        il.Emit(OpCodes.Callvirt, _types.GetMethod(delegateType, "Invoke", parameters));
+        il.Emit(OpCodes.Stloc, proxyResult);
+        il.Emit(OpCodes.Leave, proxyDone);
+        il.BeginExceptFilterBlock();
+        il.Emit(OpCodes.Castclass, _types.Exception);
+        il.Emit(OpCodes.Stloc, foreignThrow);
+        // A filter lets foreign/already-emitted errors unwind without entering
+        // another catch/rethrow at every recursive GET frame.
+        // The bound fixed Core bridge recognizes only its actual typed errors.
+        il.Emit(OpCodes.Ldloc, translateError);
+        il.Emit(OpCodes.Ldloc, foreignThrow);
+        il.Emit(OpCodes.Callvirt, _types.GetMethod(translateErrorType, "Invoke", _types.Exception));
+        il.Emit(OpCodes.Stloc, errorInfo);
+        il.Emit(OpCodes.Ldloc, errorInfo);
+        il.Emit(OpCodes.Ldnull);
+        il.Emit(OpCodes.Cgt_Un);
+        il.BeginCatchBlock(null);
+        il.Emit(OpCodes.Pop);
+        il.Emit(OpCodes.Ldloc, errorInfo);
+        il.Emit(OpCodes.Ldc_I4_0);
+        il.Emit(OpCodes.Ldelem_Ref);
+        il.Emit(OpCodes.Ldstr, "RangeError");
+        il.Emit(OpCodes.Call, _types.StringOpEquality);
+        var typeError = il.DefineLabel();
+        var throwError = il.DefineLabel();
+        il.Emit(OpCodes.Brfalse, typeError);
+        EmitErrorMessage();
+        il.Emit(OpCodes.Newobj, errors.RangeErrorConstructor);
+        il.Emit(OpCodes.Br, throwError);
+        il.MarkLabel(typeError);
+        EmitErrorMessage();
+        il.Emit(OpCodes.Newobj, errors.TypeErrorConstructor);
+        il.MarkLabel(throwError);
+        il.Emit(OpCodes.Call, errors.CreateException);
+        il.Emit(OpCodes.Throw);
+        il.EndExceptionBlock();
+        il.MarkLabel(proxyDone);
+        il.Emit(OpCodes.Ldloc, proxyResult);
+
+        void EmitErrorMessage()
+        {
+            il.Emit(OpCodes.Ldloc, errorInfo);
+            il.Emit(OpCodes.Ldc_I4_1);
+            il.Emit(OpCodes.Ldelem_Ref);
+        }
+    }
+
+    private void EmitProxyGetCallback(ILGenerator il, MethodInfo target, Type delegateType)
+    {
+        il.Emit(OpCodes.Ldnull);
+        il.Emit(OpCodes.Ldftn, target);
+        il.Emit(OpCodes.Newobj, _types.GetConstructor(delegateType, _types.Object, _types.IntPtr)!);
+    }
+
+    private void EmitProxyNamedGetTransport(ILGenerator il, EmittedErrorRuntime errors, LocalBuilder coreType,
+        Action loadObj, Action loadKey, Action loadReceiver, MethodInfo ordinaryGet,
+        MethodInfo handlerGet, MethodInfo functionGet, MethodInfo descriptorGet)
+    {
+        var delegateType = typeof(Func<object, object,
+            Func<object, object, object, object?>, Func<object, string, object?>,
+            Func<object, string, object?>, Func<object, object, object?>, object?>);
+        Type[] parameters = [typeof(object), typeof(object),
+            typeof(Func<object, object, object, object?>), typeof(Func<object, string, object?>),
+            typeof(Func<object, string, object?>), typeof(Func<object, object, object?>)];
+        EmitProxyGetTransport(il, errors, coreType, "TrapGetCompiled", delegateType, parameters, loadObj, () =>
+        {
+            loadKey();
+            loadReceiver();
+            EmitProxyGetCallback(il, ordinaryGet, typeof(Func<object, object, object, object?>));
+            EmitProxyGetCallback(il, handlerGet, typeof(Func<object, string, object?>));
+            EmitProxyGetCallback(il, functionGet, typeof(Func<object, string, object?>));
+            EmitProxyGetCallback(il, descriptorGet, typeof(Func<object, object, object?>));
+        });
+    }
+
+    private void EmitProxyReflectGet(ILGenerator il, EmittedReflectRuntime reflect,
+        ReflectGetInputs inputs, LocalBuilder key)
+    {
+        if (inputs.NativeProxyRejection is not null)
+        {
+            il.Emit(OpCodes.Call, inputs.NativeProxyRejection);
+            il.Emit(OpCodes.Ret);
+            return;
+        }
+        if (_features.UsesProxy)
+        {
+            var legacy = il.DefineLabel();
+            var coreType = EmitOwnedProxyGetCheck(il, () => il.Emit(OpCodes.Ldarg_0), legacy);
+            EmitProxyNamedGetTransport(il, inputs.Errors, coreType, () => il.Emit(OpCodes.Ldarg_0),
+                () => il.Emit(OpCodes.Ldloc, key), () => il.Emit(OpCodes.Ldarg_2),
+                reflect.Get, inputs.GetProperty, inputs.GetFunctionMethod, inputs.ObjectGetOwnPropertyDescriptor);
+            il.Emit(OpCodes.Ret);
+            il.MarkLabel(legacy);
+        }
+        EmitProxyMethodCallUnwrapped(
+            il, inputs.InvokeMethodUnwrapped, () => il.Emit(OpCodes.Ldarg_0),
+            "TrapGetCompiled", () =>
+            {
+                il.Emit(OpCodes.Ldc_I4_6);
+                il.Emit(OpCodes.Newarr, _types.Object);
+                il.Emit(OpCodes.Dup);
+                il.Emit(OpCodes.Ldc_I4_0);
+                il.Emit(OpCodes.Ldloc, key);
+                il.Emit(OpCodes.Stelem_Ref);
+                il.Emit(OpCodes.Dup);
+                il.Emit(OpCodes.Ldc_I4_1);
+                il.Emit(OpCodes.Ldarg_2);
+                il.Emit(OpCodes.Stelem_Ref);
+                EmitDelegate(2, reflect.Get,
+                    typeof(Func<object, object, object, object?>));
+                EmitDelegate(3, inputs.GetProperty,
+                    typeof(Func<object, string, object?>));
+                EmitDelegate(4, inputs.GetFunctionMethod,
+                    typeof(Func<object, string, object?>));
+                EmitDelegate(5, inputs.ObjectGetOwnPropertyDescriptor,
+                    typeof(Func<object, object, object?>));
+
+                void EmitDelegate(int slot, MethodInfo target, Type delegateType)
+                {
+                    il.Emit(OpCodes.Dup);
+                    il.Emit(OpCodes.Ldc_I4, slot);
+                    il.Emit(OpCodes.Ldnull);
+                    il.Emit(OpCodes.Ldftn, target);
+                    il.Emit(OpCodes.Newobj, _types.GetConstructor(
+                        delegateType, _types.Object, _types.IntPtr)!);
+                    il.Emit(OpCodes.Stelem_Ref);
+                }
+            }, inputs.NativeProxyRejection);
+        il.Emit(OpCodes.Ret);
+    }
+
     /// <summary>
     /// Emits a proxy-aware property get: checks if obj is a proxy and calls TrapGet(name, null),
     /// otherwise falls through to notProxyLabel.
@@ -190,9 +383,16 @@ public partial class RuntimeEmitter
         EmitProxyTypeCheck(il, emitLoadObj, proxyLabel, notProxyLabel);
 
         il.MarkLabel(proxyLabel);
-        // Call the receiver-aware TrapGetCompiled property-key bridge via
-        // reflection. The fallback delegate returns to this emitted runtime's
-        // ordinary Get implementation when the handler has no get trap.
+        if (_features.UsesProxy && inputs.NativeProxyRejection is null)
+        {
+            var legacy = il.DefineLabel();
+            var coreType = EmitOwnedProxyGetCheck(il, emitLoadObj, legacy);
+            EmitProxyNamedGetTransport(il, inputs.Errors, coreType, emitLoadObj, emitLoadName, emitLoadObj,
+                inputs.Reflect.Get, objectRead.Property, inputs.GetFunctionMethod,
+                inputs.ObjectDescriptors.GetOwnPropertyDescriptor);
+            il.Emit(OpCodes.Ret);
+            il.MarkLabel(legacy);
+        }
         EmitProxyMethodCallUnwrapped(il, inputs.InvokeMethodUnwrapped, emitLoadObj, "TrapGetCompiled", () =>
         {
             il.Emit(OpCodes.Ldc_I4_6);
@@ -276,8 +476,26 @@ public partial class RuntimeEmitter
         EmitProxyTypeCheck(il, emitLoadObj, proxyLabel, notProxyLabel);
 
         il.MarkLabel(proxyLabel);
-        // Preserve Symbol keys for the trap and let the emitted GetIndex
-        // implementation perform ordinary target lookup when the trap is absent.
+        if (_features.UsesProxy && inputs.NativeProxyRejection is null)
+        {
+            var legacy = il.DefineLabel();
+            var coreType = EmitOwnedProxyGetCheck(il, emitLoadObj, legacy);
+            var delegateType = typeof(Func<object, Func<object, object, object?>,
+                Func<object, string, object?>, Func<object, object, object?>, object?>);
+            Type[] parameters = [typeof(object), typeof(Func<object, object, object?>),
+                typeof(Func<object, string, object?>), typeof(Func<object, object, object?>)];
+            EmitProxyGetTransport(il, inputs.Errors, coreType, "TrapGetIndexCompiled", delegateType, parameters,
+                emitLoadObj, () =>
+                {
+                    emitLoadIndex();
+                    EmitProxyGetCallback(il, objectRead.Index, typeof(Func<object, object, object?>));
+                    EmitProxyGetCallback(il, objectRead.Property, typeof(Func<object, string, object?>));
+                    EmitProxyGetCallback(il, inputs.ObjectDescriptors.GetOwnPropertyDescriptor,
+                        typeof(Func<object, object, object?>));
+                });
+            il.Emit(OpCodes.Ret);
+            il.MarkLabel(legacy);
+        }
         EmitProxyMethodCallUnwrapped(il, inputs.InvokeMethodUnwrapped, emitLoadObj, "TrapGetIndexCompiled", () =>
         {
             il.Emit(OpCodes.Ldc_I4_4);
@@ -1026,7 +1244,7 @@ public partial class RuntimeEmitter
 
         // Late-bound construction of SharpTSProxy(target, handler) — soft dependency
         // on SharpTS.dll (the Proxy feature records Deployment.Require).
-        EmitReflectionCreateInstance(il, "SharpTS.Runtime.Types.SharpTSProxy, SharpTS", 2,
+        EmitReflectionCreateInstance(il, ProxyAssemblyQualifiedTypeName, 2,
             runtimeFeature: "Proxy");
         il.Emit(OpCodes.Ret);
     }

@@ -15,6 +15,34 @@ public class SharpTSProxy : ISharpTSCallable
     private object? _handler;
     private bool _isRevoked;
 
+    // Bound recursive GET before CLR exception dispatch exhausts the native stack.
+    // Entered scopes balance through abrupt completion and share the real thread stack.
+    private const int MaximumGetDepth = 256;
+    [ThreadStatic] private static int _getDepth;
+
+    /// <summary>Typed exception transport for the standalone Proxy GET bridge.</summary>
+    public static string[]? GetPropertyErrorInfo(Exception exception)
+        => exception is ThrowException thrown ? thrown.Value switch
+        {
+            SharpTSRangeError error => ["RangeError", error.Message],
+            SharpTSTypeError error => ["TypeError", error.Message],
+            _ => null
+        } : null;
+
+    private GetScope EnterGet()
+    {
+        EnsureNotRevoked();
+        if (_getDepth >= MaximumGetDepth)
+            throw new ThrowException(new SharpTSRangeError("Maximum call stack size exceeded"));
+        _getDepth++;
+        return default;
+    }
+
+    private readonly struct GetScope : IDisposable
+    {
+        public void Dispose() => _getDepth--;
+    }
+
     private static bool IsUndefinedLike(object? value)
         => value is SharpTSUndefined
             || value?.GetType().Name == "$Undefined";
@@ -43,6 +71,12 @@ public class SharpTSProxy : ISharpTSCallable
                 "Cannot perform operation on a revoked proxy."));
     }
 
+    private static void EnsureSufficientStack()
+    {
+        if (!System.Runtime.CompilerServices.RuntimeHelpers.TryEnsureSufficientExecutionStack())
+            throw new ThrowException(new SharpTSRangeError("Maximum call stack size exceeded"));
+    }
+
     private static void ValidateObject(object? value, string argName)
     {
         if (value == null || value is SharpTSUndefined)
@@ -58,6 +92,7 @@ public class SharpTSProxy : ISharpTSCallable
     private object? GetTrapCallable(string trapName, Interpreter? interpreter)
     {
         EnsureNotRevoked();
+        EnsureSufficientStack();
 
         object? value = null;
 
@@ -109,6 +144,7 @@ public class SharpTSProxy : ISharpTSCallable
         string trapName, Func<object, string, object?> ordinaryGet)
     {
         EnsureNotRevoked();
+        EnsureSufficientStack();
         object? value = _handler is SharpTSProxy proxy
             ? proxy.TrapGetCompiled(
                 trapName, proxy,
@@ -170,6 +206,7 @@ public class SharpTSProxy : ISharpTSCallable
         Func<object, string, object?> ordinaryFunctionGet,
         Func<object, object, object?> ordinaryGetOwnPropertyDescriptor)
     {
+        using var scope = EnterGet();
         var trap = GetTrapCallableCompiled("get", ordinaryHandlerGet);
         if (trap == null)
         {
@@ -236,6 +273,7 @@ public class SharpTSProxy : ISharpTSCallable
                 ? prop
                 : prop?.ToString() ?? "";
 
+        using var scope = EnterGet();
         var trap = GetTrapCallableCompiled("get", ordinaryHandlerGet);
         if (trap == null)
         {
@@ -255,6 +293,7 @@ public class SharpTSProxy : ISharpTSCallable
     internal object? TrapGet(
         string prop, Interpreter? interp, object? receiver)
     {
+        using var scope = EnterGet();
         var trap = GetTrapCallable("get", interp);
         if (trap == null)
         {
@@ -280,6 +319,7 @@ public class SharpTSProxy : ISharpTSCallable
 
     internal object? TrapGet(SharpTSSymbol prop, Interpreter interp, object receiver)
     {
+        using var scope = EnterGet();
         var trap = GetTrapCallable("get", interp);
         if (trap == null)
             return interp.GetSymbolPropertyValue(_target, prop, receiver);

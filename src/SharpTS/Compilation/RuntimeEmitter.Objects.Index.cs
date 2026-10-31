@@ -74,6 +74,7 @@ public partial class RuntimeEmitter
         EmittedNumberRuntime Numbers,
         EmittedBigIntRuntime BigInt,
         MethodInfo ToPropertyKey,
+        EmittedErrorRuntime Errors,
         MethodInfo? NativeProxyRejection,
         EmittedGuestOwnPropertyRuntime? GuestOwnProperties = null
     );
@@ -160,7 +161,7 @@ public partial class RuntimeEmitter
         EmitProxyGetIndexCheck(
             il,
             objectRead,
-            new ProxyGetIndexCheckInputs(inputs.InvokeMethodUnwrapped, inputs.ObjectDescriptors, NativeProxyRejection: inputs.NativeProxyRejection),
+            new ProxyGetIndexCheckInputs(inputs.InvokeMethodUnwrapped, inputs.ObjectDescriptors, inputs.Errors, NativeProxyRejection: inputs.NativeProxyRejection),
             () => il.Emit(OpCodes.Ldarg_0),
             () => il.Emit(OpCodes.Ldarg_1),
             notProxyLabel

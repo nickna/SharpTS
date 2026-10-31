@@ -1625,6 +1625,7 @@ public partial class RuntimeEmitter
                 runtime.Numbers,
                 runtime.BigInt,
                 runtime.Reflect.ToPropertyKey,
+                Errors: runtime.Errors,
                 NativeProxyRejection: runtime.ReflectedMethods.NativeProxyRejection,
                 GuestOwnProperties: runtime.GuestOwnProperties
             )
@@ -2432,7 +2433,8 @@ public partial class RuntimeEmitter
                 runtime.ObjectRead.Index,
                 runtime.Symbols.IsSymbol,
                 runtime.SymbolAccessors.FindOwnMethod,
-                NativeProxyRejection: runtime.ReflectedMethods.NativeProxyRejection
+                NativeProxyRejection: runtime.ReflectedMethods.NativeProxyRejection,
+                Errors: runtime.Errors
             )
         );
         if (runtime.Reflect.Assignment is not null)

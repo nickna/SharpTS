@@ -1749,6 +1749,7 @@ public partial class RuntimeEmitter
                 inputs.InvokeMethodUnwrapped,
                 inputs.ObjectDescriptors,
                 inputs.Reflect,
+                inputs.Errors,
                 NativeProxyRejection: inputs.NativeProxyRejection
             ),
             () => il.Emit(OpCodes.Ldarg_0),

@@ -20,7 +20,7 @@ public partial class RuntimeEmitter
         MethodInfo ObjectGetOwnPropertyDescriptor, MethodInfo HasOwnPropertyHelperMethod,
         MethodInfo GetFunctionMethod, MethodInfo InvokeMethodValue, FieldInfo UndefinedInstance, Type UndefinedType,
         MethodInfo GetProperty, MethodInfo GetPrototypeOf, MethodInfo GetIndex, MethodInfo IsSymbol,
-        MethodInfo FindOwnSymbolMethod, MethodInfo? NativeProxyRejection);
+        MethodInfo FindOwnSymbolMethod, MethodInfo? NativeProxyRejection, EmittedErrorRuntime Errors);
 
     private readonly record struct ReflectToPropertyKeyInputs(Type SymbolType, FieldInfo SymbolToPrimitive,
         Type UndefinedType, MethodInfo ToJsString, MethodInfo GetProperty, MethodInfo InvokeMethodValue,
@@ -190,41 +190,7 @@ public partial class RuntimeEmitter
         EmitProxyTypeCheck(
             il, () => il.Emit(OpCodes.Ldarg_0), proxyLabel, notProxyLabel);
         il.MarkLabel(proxyLabel);
-        EmitProxyMethodCallUnwrapped(
-            il, inputs.InvokeMethodUnwrapped, () => il.Emit(OpCodes.Ldarg_0),
-            "TrapGetCompiled", () =>
-            {
-                il.Emit(OpCodes.Ldc_I4_6);
-                il.Emit(OpCodes.Newarr, _types.Object);
-                il.Emit(OpCodes.Dup);
-                il.Emit(OpCodes.Ldc_I4_0);
-                il.Emit(OpCodes.Ldloc, key);
-                il.Emit(OpCodes.Stelem_Ref);
-                il.Emit(OpCodes.Dup);
-                il.Emit(OpCodes.Ldc_I4_1);
-                il.Emit(OpCodes.Ldarg_2);
-                il.Emit(OpCodes.Stelem_Ref);
-                EmitDelegate(2, reflect.Get,
-                    typeof(Func<object, object, object, object?>));
-                EmitDelegate(3, inputs.GetProperty,
-                    typeof(Func<object, string, object?>));
-                EmitDelegate(4, inputs.GetFunctionMethod,
-                    typeof(Func<object, string, object?>));
-                EmitDelegate(5, inputs.ObjectGetOwnPropertyDescriptor,
-                    typeof(Func<object, object, object?>));
-
-                void EmitDelegate(int slot, MethodInfo target, Type delegateType)
-                {
-                    il.Emit(OpCodes.Dup);
-                    il.Emit(OpCodes.Ldc_I4, slot);
-                    il.Emit(OpCodes.Ldnull);
-                    il.Emit(OpCodes.Ldftn, target);
-                    il.Emit(OpCodes.Newobj, _types.GetConstructor(
-                        delegateType, _types.Object, _types.IntPtr)!);
-                    il.Emit(OpCodes.Stelem_Ref);
-                }
-            }, inputs.NativeProxyRejection);
-        il.Emit(OpCodes.Ret);
+        EmitProxyReflectGet(il, reflect, inputs, key);
 
         il.MarkLabel(notProxyLabel);
         var descriptorLocal = il.DeclareLocal(_types.Object);
