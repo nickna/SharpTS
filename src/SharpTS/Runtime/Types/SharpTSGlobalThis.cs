@@ -55,8 +55,8 @@ public sealed partial class SharpTSGlobalThis : ISharpTSPropertyAccessor
     {
         if (ContextDescriptor(name) is { } descriptor && (descriptor.HasGet || descriptor.HasSet))
         {
-            getter = descriptor.Get;
-            setter = descriptor.Set;
+            getter = _vmContext!.HasExternalStorage ? VmContext.ReadContextAccessor(descriptor.RawGet ?? descriptor.Get) : descriptor.Get;
+            setter = _vmContext!.HasExternalStorage ? VmContext.ReadContextAccessor(descriptor.RawSet ?? descriptor.Set) : descriptor.Set;
             return true;
         }
         getter = _properties.GetGetter(name);
@@ -113,6 +113,16 @@ public sealed partial class SharpTSGlobalThis : ISharpTSPropertyAccessor
         if (ContextDescriptor(name) is { } contextDescriptor)
         {
             if (contextDescriptor.HasValue) contextDescriptor.Value = VmContext.ReadContextValue(contextDescriptor.Value);
+            if (_vmContext!.HasExternalStorage && contextDescriptor.HasGet)
+            {
+                contextDescriptor.Get = VmContext.ReadContextAccessor(contextDescriptor.RawGet ?? contextDescriptor.Get);
+                contextDescriptor.RawGet = contextDescriptor.Get ?? (object)SharpTSUndefined.Instance;
+            }
+            if (_vmContext!.HasExternalStorage && contextDescriptor.HasSet)
+            {
+                contextDescriptor.Set = VmContext.ReadContextAccessor(contextDescriptor.RawSet ?? contextDescriptor.Set);
+                contextDescriptor.RawSet = contextDescriptor.Set ?? (object)SharpTSUndefined.Instance;
+            }
             return contextDescriptor;
         }
         if (_properties.GetOwnPropertyDescriptor(name) is { } userDescriptor)
@@ -325,7 +335,7 @@ public sealed partial class SharpTSGlobalThis : ISharpTSPropertyAccessor
         // internal indices, sandbox-only indices, internal names, sandbox-only names.
         // Each actual store already orders its own indices and creation-ordered names.
         var internalKeys = _properties.OwnVisibleStringKeys().ToArray();
-        var contextKeys = context.Properties.OwnVisibleStringKeys().ToArray();
+        var contextKeys = context.OwnNames().ToArray();
         return internalKeys.Where(IsIndex)
             .Concat(contextKeys.Where(IsIndex))
             .Concat(internalKeys.Where(name => !IsIndex(name)))
@@ -394,7 +404,7 @@ public sealed partial class SharpTSGlobalThis : ISharpTSPropertyAccessor
         get
         {
             if (_vmContext is { } context)
-                foreach (var key in context.Properties.PropertyNames)
+                foreach (var key in context.OwnNames())
                     yield return key;
             foreach (var key in _properties.PropertyNames)
                 yield return key;

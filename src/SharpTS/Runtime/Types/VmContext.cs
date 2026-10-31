@@ -54,7 +54,13 @@ public static partial class VmContext
     public static Dictionary<string, object?> ExtractProperties(object? contextObject)
     {
         var props = new Dictionary<string, object?>();
-        if (contextObject is SharpTSObject tsObj)
+        if (contextObject is not null && GetContextStorage(contextObject) is { } storage)
+        {
+            foreach (var name in storage.OwnNames(contextObject))
+                if (storage.ReadDescriptor(contextObject, name) is { HasValue: true } descriptor)
+                    props[name] = descriptor.Value;
+        }
+        else if (contextObject is SharpTSObject tsObj)
         {
             foreach (var kv in tsObj.Fields)
                 props[kv.Key] = kv.Value;
@@ -140,6 +146,12 @@ public static partial class VmContext
     public static void WriteBack(object? contextObject, Dictionary<string, object?> originalProperties,
         RuntimeEnvironment env, SharpTSGlobalThis? globalObject = null)
     {
+        if (contextObject is not null && HasExternalGlobalStorage(contextObject, globalObject))
+        {
+            foreach (var (_, value) in globalObject!.UserOwnDataProperties())
+                BuiltIns.Modules.Interpreter.VmModuleInterpreter.RecordVmPublishedValue(value);
+            return;
+        }
         var properties = new Dictionary<string, object?>();
         foreach (var name in originalProperties.Keys)
         {

@@ -6,7 +6,7 @@ namespace SharpTS.Runtime.BuiltIns.Modules.Interpreter;
 
 // A caller-owned lifetime, separate from the ambient scope used for one VM call.
 // It contains only actual caller capabilities. Context markers never store it.
-internal sealed class VmExecutionHost : IDisposable
+internal sealed partial class VmExecutionHost : IDisposable
 {
     private static AsyncLocal<VmExecutionHost?>? _ambient;
     private readonly object _gate = new();
@@ -228,6 +228,7 @@ internal sealed class VmExecutionHost : IDisposable
                 _queuePromiseJob = _scheduleCallback = _queueAfterCheckpoint = null;
                 _refHandle = _unrefHandle = _checkCancellation = null;
                 _fromVm = _toVm = null;
+                _contextStorage = null;
                 _compiledCallables.Clear();
                 _getNativeCallbackRole = null;
                 _isThrownValue = null;

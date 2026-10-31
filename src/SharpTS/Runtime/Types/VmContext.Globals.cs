@@ -26,13 +26,36 @@ public static partial class VmContext
         return owners.GetValue(host, _ => candidate);
     }
 
+    private static VmContextStorageCapabilities? GetContextStorage(object context)
+    {
+        var storage = VmExecutionHost.Current?.ContextStorage;
+        return storage?.Admits(context) == true ? storage : null;
+    }
+
+    internal static ISharpTSCallable? ReadContextAccessor(object? value)
+    {
+        var host = VmExecutionHost.Current;
+        value = host is null ? value : host.ToVm(value);
+        if (value is null or SharpTSUndefined) return null;
+        return WrapVmCompiledCallable(value) as ISharpTSCallable
+            ?? throw new InvalidOperationException("Invalid VM context storage accessor.");
+    }
+
+    internal static bool HasExternalGlobalStorage(object context, SharpTSGlobalThis? globalObject) =>
+        _contexts.TryGetValue(context, out var marker) && marker.Globals is { } globals
+        && globals.UsesExternalStorage(context) && ReferenceEquals(globals.GlobalObject, globalObject);
     internal static bool ApplyGlobalObjectState(object? context, Execution.Interpreter interpreter)
     {
-        if (context is null || !VmContextGlobalState.Supports(context)) return false;
+        if (context is null) return false;
+        var storage = GetContextStorage(context);
+        if (!VmContextGlobalState.Supports(context) && storage is null) return false;
         var marker = _contexts.GetOrCreateValue(context);
         lock (marker)
         {
-            marker.Globals ??= new VmContextGlobalState(context, interpreter.CaptureVmGlobalIntrinsics());
+            if (marker.Globals is { } existing && existing.UsesExternalStorage(context)
+                && (storage is null || !existing.MatchesStorage(storage)))
+                throw new InvalidOperationException("VM context storage belongs to another output domain.");
+            marker.Globals ??= new VmContextGlobalState(context, interpreter.CaptureVmGlobalIntrinsics(), storage);
             interpreter.UseVmGlobalObject(marker.Globals.GlobalObject);
         }
         return true;

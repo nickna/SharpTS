@@ -1,3 +1,5 @@
+using SharpTS.Runtime.BuiltIns.Modules.Interpreter;
+
 namespace SharpTS.Runtime.Types;
 
 // A context's global identity/storage is data, separate from each evaluator's
@@ -5,37 +7,57 @@ namespace SharpTS.Runtime.Types;
 internal sealed class VmContextGlobalState
 {
     internal readonly object Context;
-    internal readonly SharpTSObject Properties;
+    private readonly SharpTSObject? _properties;
+    private readonly VmContextStorageCapabilities? _storage;
     internal readonly IReadOnlyDictionary<string, object?> Intrinsics;
     internal readonly SharpTSGlobalThis GlobalObject;
 
-    internal VmContextGlobalState(object context, IReadOnlyDictionary<string, object?> intrinsics)
+    internal VmContextGlobalState(object context, IReadOnlyDictionary<string, object?> intrinsics,
+        VmContextStorageCapabilities? storage = null)
     {
         Context = context;
-        Properties = context is SharpTSObject record ? record : new SharpTSObject((Dictionary<string, object?>)context);
+        _storage = storage;
+        if (storage is null)
+            _properties = context is SharpTSObject record ? record : new SharpTSObject((Dictionary<string, object?>)context);
         Intrinsics = intrinsics;
         GlobalObject = new SharpTSGlobalThis(this);
     }
 
     internal static bool Supports(object context) => context is SharpTSObject or Dictionary<string, object?>;
+    internal bool HasExternalStorage => _storage is not null;
+    internal bool UsesExternalStorage(object context) => _storage is not null && ReferenceEquals(context, Context);
+    internal bool MatchesStorage(VmContextStorageCapabilities storage) =>
+        _storage is not null && ReferenceEquals(_storage.Domain, storage.Domain);
+    internal IEnumerable<string> OwnNames() => _storage is { } storage ? storage.OwnNames(Context) : _properties!.OwnVisibleStringKeys();
+    internal IEnumerable<string> OwnEnumerableKeys() => _storage is not null
+        ? OwnNames().Where(name => GetDescriptor(name)?.Enumerable == true) : _properties!.OwnEnumerableKeys();
 
-    internal SharpTSPropertyDescriptor? GetDescriptor(string name) => Properties.GetOwnPropertyDescriptor(name);
+    internal SharpTSPropertyDescriptor? GetDescriptor(string name) =>
+        _storage is { } storage ? storage.ReadDescriptor(Context, name) : _properties!.GetOwnPropertyDescriptor(name);
 
     internal bool Set(string name, object? value)
     {
-        var host = BuiltIns.Modules.Interpreter.VmExecutionHost.Current;
-        bool applied = Properties.TrySetProperty(name, host is null ? value : host.FromVm(value));
+        var host = VmExecutionHost.Current;
+        var raw = host is null ? value : host.FromVm(value);
+        bool applied = _storage is { } storage ? storage.Set(Context, name, raw) : _properties!.TrySetProperty(name, raw);
         if (applied && Execution.VmEvaluationLease.CurrentInterpreter is { } owner)
-            BuiltIns.Modules.Interpreter.VmModuleInterpreter.RecordVmBoundaryValue(value, owner);
+            VmModuleInterpreter.RecordVmBoundaryValue(value, owner);
         return applied;
     }
 
-    internal bool Delete(string name) => Properties.DeleteProperty(name);
+    internal bool Delete(string name) => _storage is { } storage ? storage.Delete(Context, name) : _properties!.DeleteProperty(name);
 
     internal bool Define(string name, SharpTSPropertyDescriptor descriptor)
     {
-        if (descriptor.HasValue && Execution.VmEvaluationLease.CurrentInterpreter is { } owner)
-            BuiltIns.Modules.Interpreter.VmModuleInterpreter.RecordVmBoundaryValue(descriptor.Value, owner);
-        return Properties.DefineProperty(name, descriptor);
+        if (Execution.VmEvaluationLease.CurrentInterpreter is { } owner)
+        {
+            if (descriptor.HasValue) VmModuleInterpreter.RecordVmBoundaryValue(descriptor.Value, owner);
+            if (_storage is not null)
+            {
+                if (descriptor.HasGet) VmModuleInterpreter.RecordVmBoundaryValue(descriptor.RawGet ?? descriptor.Get, owner);
+                if (descriptor.HasSet) VmModuleInterpreter.RecordVmBoundaryValue(descriptor.RawSet ?? descriptor.Set, owner);
+            }
+        }
+        return _storage is { } storage ? storage.Define(Context, name, descriptor) : _properties!.DefineProperty(name, descriptor);
     }
 }
