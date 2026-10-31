@@ -1069,17 +1069,18 @@ public partial class TypeChecker
         if (call.Callee is Expr.Variable queueMicrotaskVar && queueMicrotaskVar.Name.Lexeme == "queueMicrotask"
             && _environment.Get(queueMicrotaskVar.Name.Lexeme) is null)
         {
-            if (call.Arguments.Count != 1)
-            {
+            if (!call.Arguments.Any(argument => argument is Expr.Spread) && call.Arguments.Count != 1)
                 throw new TypeCheckException("queueMicrotask() requires exactly one argument (callback).", tsCode: "TS2554");
-            }
 
-            // Argument must be a function
-            var callbackType = CheckExpr(call.Arguments[0]);
-            if (callbackType is not TypeInfo.Function && callbackType is not TypeInfo.Any)
-            {
-                throw new TypeCheckException($"queueMicrotask() callback must be a function, got '{callbackType}'.", tsCode: "TS2345");
-            }
+            // Reuse checked argument slots so tuple spreads supply their elements.
+            // This void callback has no parameter context; retain checked callback facts.
+            var argumentTypes = call.Arguments.Select(argument => argument is Expr.Spread spread
+                ? CheckExpr(spread.Expression) : CheckExpr(argument)).ToList();
+            var callback = new TypeInfo.Function([], TypeInfo.Void.Shared);
+            var parameters = new TypeInfo.Tuple([new TypeInfo.TupleElement(callback, TupleElementKind.Required)], 1);
+            var signature = new TypeInfo.Function([parameters], TypeInfo.Void.Shared, HasRestParam: true);
+            CheckGenericTupleRestCall(call, signature, GenericTupleCallArguments(call, argumentTypes),
+                contextualizeCallbacks: false);
 
             { result = TypeInfo.Void.Shared; return true; } // queueMicrotask returns undefined
         }
