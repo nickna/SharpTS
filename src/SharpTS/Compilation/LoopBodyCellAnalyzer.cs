@@ -45,6 +45,7 @@ internal sealed class LoopBodyCellAnalyzer : AstVisitorBase
         public bool ParameterPattern { get; set; }
         public bool FormalParameter { get; set; }
         public bool ClassStaticBlockVar { get; set; }
+        public bool OrdinaryBlockDeclaration { get; set; }
     }
 
     private readonly List<Owner> _owners = [];
@@ -158,6 +159,21 @@ internal sealed class LoopBodyCellAnalyzer : AstVisitorBase
                 declarations.Add(binding.Name);
             }
         }
+        // Repeated block declarations cannot use the unique-name entry-point lift.
+        // Keep each captured binding live through its own declaration cell instead
+        // of copying its current value into every accessor/arrow display class.
+        // The existing lexical transport proof excludes unsupported callable chains.
+        foreach (var owner in _declarations.Values.GroupBy(binding => binding.Owner))
+            foreach (var module in owner.GroupBy(binding => binding.ModuleOwner ?? _singleSourceRootOwner,
+                         ReferenceEqualityComparer.Instance))
+                foreach (var names in module.GroupBy(binding => binding.Name.Lexeme, StringComparer.Ordinal))
+                {
+                    if (!names.Skip(1).Any()) continue;
+                    foreach (var binding in names)
+                        if (binding.OrdinaryBlockDeclaration && !binding.Candidate && binding.ShadowOf is null
+                            && binding.Owner.CanOwnCells && binding.Captured && binding.GeneratorEligible)
+                            _cells.Add(binding.Name);
+                }
         HashSet<Token> generatorCells = new(ReferenceEqualityComparer.Instance);
         foreach (var binding in _declarations.Values.Where(b => b.GeneratorCaptured))
         {
@@ -320,6 +336,8 @@ internal sealed class LoopBodyCellAnalyzer : AstVisitorBase
             Declare(name, direct || (relatedShadow && _owners[^1].CanOwnCells),
                 unsupportedShadows && !handlerCandidate, relatedShadow ? parent : null,
                 lexical: generatorLexicals, ordinaryHandlerCandidate: handlerCandidate || blockCandidate);
+            // For headers use their separate copy-forward policy, not block-entry cells.
+            if (ordinaryBlock && allowCandidates) _declarations[name].OrdinaryBlockDeclaration = true;
         }
         switch (statement)
         {
