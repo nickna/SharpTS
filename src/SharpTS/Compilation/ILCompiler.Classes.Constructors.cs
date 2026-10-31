@@ -407,7 +407,9 @@ public partial class ILCompiler
             // Note: Declare fields are excluded - they have no initialization
             var instanceFieldsWithInit = classStmt.Fields.Where(f =>
                 !f.IsStatic && !f.IsDeclare &&
-                (f.IsPrivate || f.Initializer != null || f.ComputedKey != null || f.TypeAnnotation == null)).ToList();
+                (f.IsPrivate || f.Initializer != null || f.ComputedKey != null || f.TypeAnnotation == null
+                    || GetClassRegistry().TryGetOwnGuestDataField(typeBuilder, f.Name.Lexeme, out var slot)
+                        && ReferenceEquals(slot.Source, f) && slot.BackingField == null)).ToList();
             var instanceAutoAccessors = classStmt.AutoAccessors?.Where(accessor => !accessor.IsStatic) ?? [];
             var elements = instanceFieldsWithInit.Cast<Stmt>().Concat(instanceAutoAccessors)
                 .OrderBy(element => element is Stmt.Field field ? field.Name.SourceOrderOffset : ((Stmt.AutoAccessor)element).Name.SourceOrderOffset).ToList();
