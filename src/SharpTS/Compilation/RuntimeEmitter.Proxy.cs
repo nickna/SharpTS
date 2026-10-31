@@ -196,7 +196,7 @@ public partial class RuntimeEmitter
     {
         var proxyResult = il.DeclareLocal(_types.Object);
         var foreignThrow = il.DeclareLocal(_types.Exception);
-        var errorInfo = il.DeclareLocal(_types.String.MakeArrayType());
+        var errorInfo = il.DeclareLocal(typeof(string[]));
         var translateErrorType = typeof(Func<Exception, string[]?>);
         var translateError = il.DeclareLocal(translateErrorType);
         // Resolve the typed error bridge before descending into the operation.
@@ -226,7 +226,7 @@ public partial class RuntimeEmitter
             il.Emit(OpCodes.Stelem_Ref);
         }
         il.Emit(OpCodes.Callvirt, _types.GetMethod(_types.Type, "GetMethod", _types.String,
-            _types.Type.MakeArrayType()));
+            typeof(Type[])));
         il.Emit(OpCodes.Ldtoken, delegateType);
         il.Emit(OpCodes.Call, _types.TypeGetTypeFromHandle);
         loadObj();
