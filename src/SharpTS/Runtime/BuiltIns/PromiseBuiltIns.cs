@@ -1659,8 +1659,7 @@ public static class PromiseBuiltIns
     }
 
     /// <summary>
-    /// Unwraps a result that might be a Promise.
-    /// If the result is a Promise, awaits it and flattens.
+    /// Resolves a reaction handler's result through Promise Resolve Functions.
     /// </summary>
     /// <remarks>
     /// Resolution follows live then properties. Observing the resulting settled
@@ -1671,7 +1670,9 @@ public static class PromiseBuiltIns
     {
         if (RuntimeValue.FromBoxed(result).IsObject)
         {
-            return await TaskFromResolvedValue(interpreter, result);
+            var completion = new TaskCompletionSource<object?>();
+            ResolveThenableIntoCapability(interpreter, completion, result);
+            return await completion.Task;
         }
         return result;
     }
