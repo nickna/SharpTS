@@ -180,6 +180,7 @@ public class EmitterSyncTests
             "EmitForOf",            // Hoisted enumerator for yield across loop boundaries
             "EmitForIn",            // #547: hoisted key-list/index for yield across for-in iterations
             "EmitYield",            // Core: yield value + suspend
+            "EmitPropertyWriteOperation", // #3244: protect the resumed store tail without enclosing yield labels in CLR EH
             // #1105: EmitSuper/EmitDynamicImport are NO LONGER overridden — the old overrides
             // pushed `null`, silently miscompiling `super.x`/`import()` in a generator body. The
             // base implementations (hoisted-this + GetSuperMethod / module registry) work here.

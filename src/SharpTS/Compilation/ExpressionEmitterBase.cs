@@ -736,6 +736,12 @@ public abstract partial class ExpressionEmitterBase : IEmitterContext
     }
 
     /// <summary>
+    /// Emits a completed property write with an empty evaluation stack at entry and exit.
+    /// Generator suspension can leave this step outside the surrounding synchronous try segment.
+    /// </summary>
+    protected virtual void EmitPropertyWriteOperation(Action emit) => emit();
+
+    /// <summary>
     /// Emits an index set expression (obj[index] = value). Default saves value to local (SetIndex is void),
     /// emits obj + index, calls SetIndex, then pushes value back as expression result.
     /// ILEmitter overrides with IndexTarget dispatch.
@@ -749,11 +755,14 @@ public abstract partial class ExpressionEmitterBase : IEmitterContext
             // suspension. Property-key coercion stays after RHS evaluation.
             var indexTemp = SpillBoxed(si.Index);
             var valueTemp = SpillBoxed(si.Value);
-            IL.Emit(OpCodes.Ldloc, indexTemp);
-            IL.Emit(OpCodes.Call, Ctx.Runtime!.Reflect.ToPropertyKey);
-            IL.Emit(OpCodes.Callvirt, Types.GetMethodNoParams(Types.Object, "ToString"));
-            IL.Emit(OpCodes.Ldloc, valueTemp);
-            IL.Emit(OpCodes.Call, Ctx.Runtime!.GlobalObject.SetProperty);
+            EmitPropertyWriteOperation(() =>
+            {
+                IL.Emit(OpCodes.Ldloc, indexTemp);
+                IL.Emit(OpCodes.Call, Ctx.Runtime!.Reflect.ToPropertyKey);
+                IL.Emit(OpCodes.Callvirt, Types.GetMethodNoParams(Types.Object, "ToString"));
+                IL.Emit(OpCodes.Ldloc, valueTemp);
+                IL.Emit(OpCodes.Call, Ctx.Runtime!.GlobalObject.SetProperty);
+            });
             IL.Emit(OpCodes.Ldloc, valueTemp);
             SetStackUnknown();
             return;
@@ -768,13 +777,16 @@ public abstract partial class ExpressionEmitterBase : IEmitterContext
         // RequireObjectCoercible (PutValue): a null/undefined base throws a guest
         // TypeError ("Cannot set properties of undefined|null (setting '<key>')")
         // instead of silently no-op'ing (#733). Null-placeholder globals are exempt.
-        if (!IsNullPlaceholderGlobal(si.Object))
-            EmitThrowIfUndefinedIndexReceiver(objLocal, idxLocal, isWrite: true);
+        EmitPropertyWriteOperation(() =>
+        {
+            if (!IsNullPlaceholderGlobal(si.Object))
+                EmitThrowIfUndefinedIndexReceiver(objLocal, idxLocal, isWrite: true);
 
-        IL.Emit(OpCodes.Ldloc, objLocal);
-        IL.Emit(OpCodes.Ldloc, idxLocal);
-        IL.Emit(OpCodes.Ldloc, valueLocal);
-        IL.Emit(OpCodes.Call, Ctx.Runtime!.ObjectWrite.Index);
+            IL.Emit(OpCodes.Ldloc, objLocal);
+            IL.Emit(OpCodes.Ldloc, idxLocal);
+            IL.Emit(OpCodes.Ldloc, valueLocal);
+            IL.Emit(OpCodes.Call, Ctx.Runtime!.ObjectWrite.Index);
+        });
 
         IL.Emit(OpCodes.Ldloc, valueLocal);
         SetStackUnknown();
@@ -990,9 +1002,12 @@ public abstract partial class ExpressionEmitterBase : IEmitterContext
             EnsureBoxed();
             var gtResultTemp = IL.DeclareLocal(typeof(object));
             IL.Emit(OpCodes.Stloc, gtResultTemp);
-            IL.Emit(OpCodes.Ldstr, s.Name.Lexeme);
-            IL.Emit(OpCodes.Ldloc, gtResultTemp);
-            IL.Emit(OpCodes.Call, Ctx.Runtime!.GlobalObject.SetProperty);
+            EmitPropertyWriteOperation(() =>
+            {
+                IL.Emit(OpCodes.Ldstr, s.Name.Lexeme);
+                IL.Emit(OpCodes.Ldloc, gtResultTemp);
+                IL.Emit(OpCodes.Call, Ctx.Runtime!.GlobalObject.SetProperty);
+            });
             IL.Emit(OpCodes.Ldloc, gtResultTemp);
             SetStackUnknown();
             return;
@@ -1025,13 +1040,16 @@ public abstract partial class ExpressionEmitterBase : IEmitterContext
         // RequireObjectCoercible (PutValue): a null/undefined base throws a guest
         // TypeError ("Cannot set properties of undefined|null (setting 'X')") (#733).
         // Null-placeholder globals (e.g. `process`) are exempt.
-        if (!IsNullPlaceholderGlobal(s.Object))
-            EmitThrowIfReceiverUndefined(objLocal, s.Name.Lexeme, isWrite: true);
+        EmitPropertyWriteOperation(() =>
+        {
+            if (!IsNullPlaceholderGlobal(s.Object))
+                EmitThrowIfReceiverUndefined(objLocal, s.Name.Lexeme, isWrite: true);
 
-        IL.Emit(OpCodes.Ldloc, objLocal);
-        IL.Emit(OpCodes.Ldstr, s.Name.Lexeme);
-        IL.Emit(OpCodes.Ldloc, valueLocal);
-        IL.Emit(OpCodes.Call, Ctx.Runtime!.ObjectWrite.Property);
+            IL.Emit(OpCodes.Ldloc, objLocal);
+            IL.Emit(OpCodes.Ldstr, s.Name.Lexeme);
+            IL.Emit(OpCodes.Ldloc, valueLocal);
+            IL.Emit(OpCodes.Call, Ctx.Runtime!.ObjectWrite.Property);
+        });
         IL.Emit(OpCodes.Ldloc, valueLocal);
         SetStackUnknown();
     }
