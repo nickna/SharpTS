@@ -84,7 +84,6 @@ public static partial class VmModuleInterpreter
         {
             var result = operation();
             RecordVmBoundaryValue(result, receipt.Owner);
-            if (IsCoreGuestObject(result)) RecordVmValue(result!, receipt.Owner);
             return VmExecutionHost.Current is { } host ? host.FromVm(result) : result;
         }
         catch (Exceptions.ThrowException exception)
