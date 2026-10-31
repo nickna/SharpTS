@@ -425,6 +425,7 @@ public partial class Interpreter
 
     internal object? LocalizeBuiltInValue(object? value)
         => value is BuiltInMethod { IsConstant: false, IsRealmOwned: false } method
+            && !Runtime.BuiltIns.Modules.Interpreter.VmModuleInterpreter.IsVmInputValue(method)
             ? (method.HasRealmOwnedReceiver ? _ownerBuiltInMethods : _realmBuiltInMethods)
                 .GetValue(method, static template => template.CloneForRealm())
             : value;

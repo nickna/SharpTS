@@ -21,6 +21,11 @@ public static partial class VmModuleInterpreter
     internal static void RecordVmBoundaryValue(object? value, Execution.Interpreter owner)
     {
         if (value is CompiledCallableAdapter) return;
+        if (value is not null && IsUnownedVmInput(value))
+        {
+            if (value is SharpTSPromise inputPromise) RecordVmPromise(inputPromise, null);
+            return;
+        }
         RecordVmErrorValue(value, owner);
         RetainVmErrorValue(value);
         if (value is SharpTSPromise promise) RecordVmPromise(promise, owner);

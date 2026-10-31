@@ -83,6 +83,8 @@ public static class VmContext
         }
         // Wrap any compiled callables (e.g. $TSFunction) so the sub-interpreter can call them
         WrapCompiledCallables(props);
+        foreach (var value in props.Values)
+            BuiltIns.Modules.Interpreter.VmModuleInterpreter.RecordVmInputValue(value);
 
         return props;
     }
