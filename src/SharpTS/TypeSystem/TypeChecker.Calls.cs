@@ -997,7 +997,7 @@ public partial class TypeChecker
         // (which return a proper Function with a concrete signature — generic
         // function-call validation handles them, so this block is skipped).
         if (call.Callee is Expr.Variable setTimeoutVar && setTimeoutVar.Name.Lexeme == "setTimeout"
-            && _environment.Get(setTimeoutVar.Name.Lexeme) is null or TypeInfo.Any)
+            && _environment.Get(setTimeoutVar.Name.Lexeme) is null)
         {
             if (call.Arguments.Count < 1)
                 throw new TypeCheckException("setTimeout() requires at least one argument (callback).", tsCode: "TS2554");
@@ -1018,11 +1018,11 @@ public partial class TypeChecker
         }
 
         if (call.Callee is Expr.Variable clearTimeoutVar && clearTimeoutVar.Name.Lexeme == "clearTimeout"
-            && _environment.Get(clearTimeoutVar.Name.Lexeme) is null or TypeInfo.Any)
+            && _environment.Get(clearTimeoutVar.Name.Lexeme) is null)
             { result = CheckClearTimerCall(call, "clearTimeout"); return true; }
 
         if (call.Callee is Expr.Variable setIntervalVar && setIntervalVar.Name.Lexeme == "setInterval"
-            && _environment.Get(setIntervalVar.Name.Lexeme) is null or TypeInfo.Any)
+            && _environment.Get(setIntervalVar.Name.Lexeme) is null)
         {
             if (call.Arguments.Count < 1)
                 throw new TypeCheckException("setInterval() requires at least one argument (callback).", tsCode: "TS2554");
@@ -1043,11 +1043,12 @@ public partial class TypeChecker
         }
 
         if (call.Callee is Expr.Variable clearIntervalVar && clearIntervalVar.Name.Lexeme == "clearInterval"
-            && _environment.Get(clearIntervalVar.Name.Lexeme) is null or TypeInfo.Any)
+            && _environment.Get(clearIntervalVar.Name.Lexeme) is null)
             { result = CheckClearTimerCall(call, "clearInterval"); return true; }
 
         // Handle queueMicrotask(callback)
-        if (call.Callee is Expr.Variable queueMicrotaskVar && queueMicrotaskVar.Name.Lexeme == "queueMicrotask")
+        if (call.Callee is Expr.Variable queueMicrotaskVar && queueMicrotaskVar.Name.Lexeme == "queueMicrotask"
+            && _environment.Get(queueMicrotaskVar.Name.Lexeme) is null)
         {
             if (call.Arguments.Count != 1)
             {
