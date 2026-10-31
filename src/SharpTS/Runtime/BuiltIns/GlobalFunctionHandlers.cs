@@ -48,6 +48,8 @@ internal static class GlobalFunctionHandlers
         registry.RegisterV2(BuiltInNames.ClearTimeout, HandleClearTimeout);
         registry.RegisterV2(BuiltInNames.SetInterval, HandleSetInterval);
         registry.RegisterV2(BuiltInNames.ClearInterval, HandleClearInterval);
+        registry.RegisterV2(BuiltInNames.SetImmediate, HandleSetImmediate);
+        registry.RegisterV2(BuiltInNames.ClearImmediate, HandleClearImmediate);
 
         // Microtask function
         registry.RegisterV2(BuiltInNames.QueueMicrotask, HandleQueueMicrotask);
@@ -384,6 +386,39 @@ internal static class GlobalFunctionHandlers
             handle = (await evaluateArg(arguments[0])).ToObject();
         }
         TimerBuiltIns.ClearInterval(handle);
+        return RuntimeValue.Undefined;
+    }
+
+    private static async ValueTask<RuntimeValue> HandleSetImmediate(
+        Func<Expr, ValueTask<RuntimeValue>> evaluateArg,
+        IReadOnlyList<Expr> arguments,
+        Interpreter interpreter)
+    {
+        object? callbackValue = null;
+        List<object?> callbackArgs = [];
+        for (int i = 0; i < arguments.Count; i++)
+        {
+            object? value = (await evaluateArg(arguments[i])).ToObject();
+            if (i == 0) callbackValue = value;
+            else callbackArgs.Add(value);
+        }
+        if (callbackValue is not ISharpTSCallable callback)
+            throw new ThrowException(new SharpTSTypeError("setImmediate() callback must be a function."));
+        return RuntimeValue.FromBoxed(TimerBuiltIns.SetTimeout(interpreter, callback, 0, callbackArgs));
+    }
+
+    private static async ValueTask<RuntimeValue> HandleClearImmediate(
+        Func<Expr, ValueTask<RuntimeValue>> evaluateArg,
+        IReadOnlyList<Expr> arguments,
+        Interpreter interpreter)
+    {
+        object? handle = null;
+        for (int i = 0; i < arguments.Count; i++)
+        {
+            object? value = (await evaluateArg(arguments[i])).ToObject();
+            if (i == 0) handle = value;
+        }
+        TimerBuiltIns.ClearTimeout(handle);
         return RuntimeValue.Undefined;
     }
 

@@ -2523,6 +2523,7 @@ public partial class TypeChecker
         if (name.Lexeme == "setInterval") return TypeInfo.Any.Shared; // setInterval() global function
         if (name.Lexeme == "clearTimeout") return TypeInfo.Any.Shared; // clearTimeout() global function
         if (name.Lexeme == "clearInterval") return TypeInfo.Any.Shared; // clearInterval() global function
+        if (name.Lexeme is "setImmediate" or "clearImmediate") return TypeInfo.Any.Shared;
         if (name.Lexeme == "queueMicrotask") return TypeInfo.Any.Shared; // queueMicrotask() global function
         if (name.Lexeme == "encodeURIComponent") return TypeInfo.Any.Shared; // URI encoding global
         if (name.Lexeme == "decodeURIComponent") return TypeInfo.Any.Shared; // URI decoding global

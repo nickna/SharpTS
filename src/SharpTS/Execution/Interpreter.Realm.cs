@@ -147,6 +147,7 @@ public partial class Interpreter
             BuiltInNames.EncodeURIComponent, BuiltInNames.DecodeURIComponent,
             BuiltInNames.SetTimeout, BuiltInNames.ClearTimeout,
             BuiltInNames.SetInterval, BuiltInNames.ClearInterval,
+            BuiltInNames.SetImmediate, BuiltInNames.ClearImmediate,
             BuiltInNames.QueueMicrotask,
         ];
         foreach (var name in globalFunctionNames)
@@ -751,8 +752,11 @@ public partial class Interpreter
     // `global` alias resolve here (see LookupVariableRV), and sloppy-mode `this`
     // binds to it.
     private Runtime.Types.SharpTSGlobalThis? _globalThis;
-    internal Runtime.Types.SharpTSGlobalThis GlobalThis => _globalThis ??=
-        new Runtime.Types.SharpTSGlobalThis(name =>
+    internal Runtime.Types.SharpTSGlobalThis GlobalThis => _globalThis ??= CreateRealmGlobalThis();
+
+    private SharpTSGlobalThis CreateRealmGlobalThis()
+    {
+        var globalThis = new SharpTSGlobalThis(name =>
             TryGetRealmIntrinsic(name, out var intrinsic)
                 ? intrinsic
                 : _globalConstants.TryGetValue(name, out var global)
@@ -761,6 +765,26 @@ public partial class Interpreter
                         or BuiltInNames.Undefined or BuiltInNames.NaN or BuiltInNames.Infinity)
                         ? global
                         : null);
+        // Node timer globals are enumerable, mutable own data slots. Use the
+        // same actual function values as bare-name lookup, so descriptors,
+        // replacement and deletion share the global object's storage.
+        foreach (string name in new[]
+        {
+            BuiltInNames.SetTimeout, BuiltInNames.ClearTimeout,
+            BuiltInNames.SetInterval, BuiltInNames.ClearInterval,
+            BuiltInNames.SetImmediate, BuiltInNames.ClearImmediate,
+        })
+        {
+            globalThis.DefineProperty(name, new SharpTSPropertyDescriptor
+            {
+                Value = _globalConstants[name], HasValue = true,
+                Writable = true, HasWritable = true,
+                Enumerable = true, HasEnumerable = true,
+                Configurable = true, HasConfigurable = true,
+            });
+        }
+        return globalThis;
+    }
 
     /// <summary>
     /// Resolves <c>String</c>/<c>Number</c>/<c>Boolean</c><c>.prototype</c> to

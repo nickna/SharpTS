@@ -1046,6 +1046,25 @@ public partial class TypeChecker
             && _environment.Get(clearIntervalVar.Name.Lexeme) is null)
             { result = CheckClearTimerCall(call, "clearInterval"); return true; }
 
+        if (call.Callee is Expr.Variable setImmediateVar && setImmediateVar.Name.Lexeme == "setImmediate"
+            && _environment.Get(setImmediateVar.Name.Lexeme) is null)
+        {
+            if (call.Arguments.Count < 1)
+                throw new TypeCheckException("setImmediate() requires at least one argument (callback).", tsCode: "TS2554");
+            var callbackType = CheckExpr(call.Arguments[0]);
+            if (callbackType is not TypeInfo.Function && callbackType is not TypeInfo.Any)
+                throw new TypeCheckException($"setImmediate() callback must be a function, got '{callbackType}'.", tsCode: "TS2345");
+            for (int i = 1; i < call.Arguments.Count; i++) CheckExpr(call.Arguments[i]);
+            result = TypeInfo.Timeout.Shared;
+            return true;
+        }
+        if (call.Callee is Expr.Variable clearImmediateVar && clearImmediateVar.Name.Lexeme == "clearImmediate"
+            && _environment.Get(clearImmediateVar.Name.Lexeme) is null)
+        {
+            result = CheckClearTimerCall(call, "clearImmediate");
+            return true;
+        }
+
         // Handle queueMicrotask(callback)
         if (call.Callee is Expr.Variable queueMicrotaskVar && queueMicrotaskVar.Name.Lexeme == "queueMicrotask"
             && _environment.Get(queueMicrotaskVar.Name.Lexeme) is null)
