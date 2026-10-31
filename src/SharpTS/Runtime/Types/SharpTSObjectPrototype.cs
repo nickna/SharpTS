@@ -61,6 +61,33 @@ public sealed class SharpTSObjectPrototype : ISharpTSMutableBuiltIn
     public IEnumerable<string> OwnEnumerableKeys() => _overlay.OwnEnumerableKeys();
     public IEnumerable<string> OwnStringKeys() => _overlay.OwnVisibleStringKeys();
 
+    internal void FreezeOwnProperties()
+    {
+        MaterializeOwnVirtualPropertiesForIntegrity();
+        _overlay.Freeze();
+    }
+
+    internal void SealOwnProperties()
+    {
+        MaterializeOwnVirtualPropertiesForIntegrity();
+        _overlay.Seal();
+    }
+
+    internal void PreventExtensionsOwnProperties()
+    {
+        MaterializeOwnVirtualPropertiesForIntegrity();
+        _overlay.PreventExtensions();
+    }
+
+    private void MaterializeOwnVirtualPropertiesForIntegrity()
+    {
+        // Only live virtual data slots need storage. Existing descriptors retain
+        // their attributes and accessors; enumerating them never invokes getters.
+        foreach (var name in OwnStringKeys().Where(name => _overlay.GetOwnPropertyDescriptor(name) is null).ToArray())
+            if (GetMember(name) is ISharpTSCallable member)
+                _overlay.DefineProperty(name, SharpTSPropertyDescriptor.ForMethod(member));
+    }
+
     public object? GetMember(string name)
     {
         if (_overlay.TryGetOverride(name, out var value)) return value;

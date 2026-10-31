@@ -633,6 +633,10 @@ public static partial class ObjectBuiltIns
                 functionPrototype.FreezeOwnProperties();
                 PropertyDescriptorStore.Freeze(functionPrototype);
                 return RuntimeValue.FromObject(functionPrototype);
+            case SharpTSObjectPrototype objectPrototype:
+                objectPrototype.FreezeOwnProperties();
+                PropertyDescriptorStore.Freeze(objectPrototype);
+                return RuntimeValue.FromObject(objectPrototype);
             case SharpTSObject obj:
                 obj.Freeze();
                 return RuntimeValue.FromObject(obj);
@@ -706,6 +710,10 @@ public static partial class ObjectBuiltIns
                 functionPrototype.SealOwnProperties();
                 PropertyDescriptorStore.Seal(functionPrototype);
                 return RuntimeValue.FromObject(functionPrototype);
+            case SharpTSObjectPrototype objectPrototype:
+                objectPrototype.SealOwnProperties();
+                PropertyDescriptorStore.Seal(objectPrototype);
+                return RuntimeValue.FromObject(objectPrototype);
             case SharpTSObject obj:
                 obj.Seal();
                 return RuntimeValue.FromObject(obj);
@@ -2314,6 +2322,9 @@ public static partial class ObjectBuiltIns
             case SharpTSFunctionPrototype functionPrototype:
                 functionPrototype.PreventExtensionsOwnProperties();
                 return functionPrototype;
+            case SharpTSObjectPrototype objectPrototype:
+                objectPrototype.PreventExtensionsOwnProperties();
+                return objectPrototype;
             case ISharpTSCallable callable:
                 PropertyDescriptorStore.PreventExtensions(callable);
                 return callable;
@@ -2368,6 +2379,10 @@ public static partial class ObjectBuiltIns
             case SharpTSFunctionPrototype functionPrototype:
                 functionPrototype.PreventExtensionsOwnProperties();
                 PropertyDescriptorStore.PreventExtensions(functionPrototype);
+                return true;
+            case SharpTSObjectPrototype objectPrototype:
+                objectPrototype.PreventExtensionsOwnProperties();
+                PropertyDescriptorStore.PreventExtensions(objectPrototype);
                 return true;
             case ISharpTSCallable callable:
                 PropertyDescriptorStore.PreventExtensions(callable);
