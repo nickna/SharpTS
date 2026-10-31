@@ -1426,28 +1426,13 @@ public partial class RuntimeEmitter
 
             il.MarkLabel(resolveObjectValueLabel);
 
-            // Promise Resolve Functions adopt promises and thenables instead of
-            // fulfilling with their host Task representation as a plain value.
-            // Native promises/tasks retain their backing task. For every other
-            // value use PromiseResolveValue: it performs the observable `then`
-            // Get inside its own try/catch and turns an abrupt getter into a
-            // rejected task. Calling CoerceAwaitableToTask directly here let the
-            // getter escape from resolve(), so resolve(poisonedThen) returned by
-            // throwing and the executor catch observed the wrong completion.
-            var resolveOrdinaryValueLabel = il.DefineLabel();
-            var haveAdoptedTaskLabel = il.DefineLabel();
-            il.Emit(OpCodes.Ldloc, valueLocal);
-            il.Emit(OpCodes.Isinst, _types.TaskOfObject);
-            il.Emit(OpCodes.Brfalse, resolveOrdinaryValueLabel);
-            il.Emit(OpCodes.Ldloc, valueLocal);
-            il.Emit(OpCodes.Call, runtime.RequirePromise().CoerceAwaitableToTaskMethod);
-            il.Emit(OpCodes.Br, haveAdoptedTaskLabel);
-            il.MarkLabel(resolveOrdinaryValueLabel);
+            // Resolving functions observe the original object's live then,
+            // including native Tasks. Keep the actual public root so recursive
+            // adoption still rejects self-resolution before any observable Get.
             il.Emit(OpCodes.Ldloc, valueLocal);
             il.Emit(OpCodes.Ldarg_0);
             il.Emit(OpCodes.Ldfld, rootField);
             il.Emit(OpCodes.Call, runtime.RequirePromise().ResolveValueWithRootMethod);
-            il.MarkLabel(haveAdoptedTaskLabel);
             il.Emit(OpCodes.Stloc, adoptedTaskLocal);
             // Resolving a promise with itself rejects with TypeError rather than
             // installing a continuation cycle that can never settle.
