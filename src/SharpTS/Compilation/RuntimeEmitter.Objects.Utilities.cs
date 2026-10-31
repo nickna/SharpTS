@@ -653,25 +653,55 @@ public partial class RuntimeEmitter
         il.Emit(OpCodes.Call, inputs.Symbols.IsSymbol);
         il.Emit(OpCodes.Brfalse, stringKeyLabel);
 
-        // Symbol path: build $CompiledPropertyDescriptor and store in symbol-dict.
+        // A second accessor definition for the same literal key preserves the
+        // other accessor half. A previous data property starts a fresh pair.
         il.MarkLabel(symKeyLabel);
+        var symbolStorage = il.DeclareLocal(_types.DictionaryObjectObject);
+        var previous = il.DeclareLocal(_types.Object);
         var descLocal = il.DeclareLocal(inputs.DescriptorStorage.DescriptorType);
-        il.Emit(OpCodes.Newobj, inputs.DescriptorStorage.DescriptorConstructor);
-        il.Emit(OpCodes.Stloc, descLocal);
-        // desc.Getter = arg2
-        il.Emit(OpCodes.Ldloc, descLocal);
-        il.Emit(OpCodes.Ldarg_2);
-        il.Emit(OpCodes.Callvirt, inputs.DescriptorStorage.DescriptorGetter.GetSetMethod()!);
-        // desc.Setter = arg3
-        il.Emit(OpCodes.Ldloc, descLocal);
-        il.Emit(OpCodes.Ldarg_3);
-        il.Emit(OpCodes.Callvirt, inputs.DescriptorStorage.DescriptorSetter.GetSetMethod()!);
-        // GetSymbolDict(obj)[key] = desc
         il.Emit(OpCodes.Ldarg_0);
         il.Emit(OpCodes.Call, inputs.Symbols.GetStorage);
+        il.Emit(OpCodes.Stloc, symbolStorage);
+        il.Emit(OpCodes.Ldloc, symbolStorage);
+        il.Emit(OpCodes.Ldarg_1);
+        il.Emit(OpCodes.Ldloca, previous);
+        il.Emit(OpCodes.Callvirt, _types.GetMethod(
+            _types.DictionaryObjectObject, "TryGetValue"));
+        il.Emit(OpCodes.Pop);
+        il.Emit(OpCodes.Ldloc, previous);
+        il.Emit(OpCodes.Isinst, inputs.DescriptorStorage.DescriptorType);
+        il.Emit(OpCodes.Stloc, descLocal);
+        var createPair = il.DefineLabel();
+        var havePair = il.DefineLabel();
+        il.Emit(OpCodes.Ldloc, descLocal);
+        il.Emit(OpCodes.Brfalse, createPair);
+        il.Emit(OpCodes.Ldloc, descLocal);
+        il.Emit(OpCodes.Callvirt, inputs.DescriptorStorage.DescriptorGetter.GetGetMethod()!);
+        il.Emit(OpCodes.Brtrue, havePair);
+        il.Emit(OpCodes.Ldloc, descLocal);
+        il.Emit(OpCodes.Callvirt, inputs.DescriptorStorage.DescriptorSetter.GetGetMethod()!);
+        il.Emit(OpCodes.Brtrue, havePair);
+        il.MarkLabel(createPair);
+        il.Emit(OpCodes.Newobj, inputs.DescriptorStorage.DescriptorConstructor);
+        il.Emit(OpCodes.Stloc, descLocal);
+        il.MarkLabel(havePair);
+        void EmitAccessorHalf(int argument, PropertyInfo property)
+        {
+            var omitted = il.DefineLabel();
+            il.Emit(OpCodes.Ldarg_S, (byte)argument);
+            il.Emit(OpCodes.Brfalse, omitted);
+            il.Emit(OpCodes.Ldloc, descLocal);
+            il.Emit(OpCodes.Ldarg_S, (byte)argument);
+            il.Emit(OpCodes.Callvirt, property.GetSetMethod()!);
+            il.MarkLabel(omitted);
+        }
+        EmitAccessorHalf(2, inputs.DescriptorStorage.DescriptorGetter);
+        EmitAccessorHalf(3, inputs.DescriptorStorage.DescriptorSetter);
+        il.Emit(OpCodes.Ldloc, symbolStorage);
         il.Emit(OpCodes.Ldarg_1);
         il.Emit(OpCodes.Ldloc, descLocal);
-        il.Emit(OpCodes.Callvirt, _types.GetMethod(_types.DictionaryObjectObject, "set_Item", _types.Object, _types.Object));
+        il.Emit(OpCodes.Callvirt, _types.GetMethod(
+            _types.DictionaryObjectObject, "set_Item", _types.Object, _types.Object));
         il.Emit(OpCodes.Br, endLabel);
 
         // String path: stringify key, route to $Object.DefineGetter/DefineSetter.
