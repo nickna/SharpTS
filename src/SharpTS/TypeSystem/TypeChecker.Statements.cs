@@ -2213,7 +2213,10 @@ public partial class TypeChecker
 
             // Validate that the type is object-like (can have Symbol.dispose method)
             // Primitive types cannot have dispose methods
-            if (resourceType is TypeInfo.Primitive prim && !IsNullablePrimitive(prim))
+            if ((IsPrimitiveType(resourceType) &&
+                 resourceType is not TypeInfo.Primitive { Type: TokenType.NULL or TokenType.UNDEFINED }) ||
+                (IsPrimitiveType(initType) &&
+                 initType is not TypeInfo.Primitive { Type: TokenType.NULL or TokenType.UNDEFINED }))
             {
                 throw new TypeCheckException(
                     $"Type '{resourceType}' cannot be used with 'using' - it cannot have a disposal method.",
@@ -2228,14 +2231,6 @@ public partial class TypeChecker
                 MarkDefinitelyAssigned(binding.Name);
             }
         }
-    }
-
-    /// <summary>
-    /// Checks if a primitive type is nullable (null or undefined).
-    /// </summary>
-    private static bool IsNullablePrimitive(TypeInfo.Primitive prim)
-    {
-        return prim.Type == TokenType.NULL || prim.Type == TokenType.UNDEFINED;
     }
 
     /// <summary>
