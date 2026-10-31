@@ -13918,7 +13918,7 @@ public partial class StandaloneDllTests
             console.log(typeof vm.constants === 'object');
             console.log(vm.constants.USE_MAIN_CONTEXT_DEFAULT_LOADER === vm.constants.USE_MAIN_CONTEXT_DEFAULT_LOADER);
             """,
-            "3\ntrue false\n42\ncurrent-context-error\ntrue\ntrue\n", "main.ts", false
+            "3\ntrue false\n42\n42\ntrue\ntrue\n", "main.ts", false
         },
         new object[]
         {
