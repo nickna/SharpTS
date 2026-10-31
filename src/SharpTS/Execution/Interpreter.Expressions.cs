@@ -660,12 +660,12 @@ public partial class Interpreter
     /// <returns>A ValueTask containing the evaluated object.</returns>
     private async ValueTask<object?> EvaluateObjectCore(IEvaluationContext ctx, Expr.ObjectLiteral obj)
     {
+        if (obj.Properties.Any(property => property.Kind is Expr.ObjectPropertyKind.Getter or Expr.ObjectPropertyKind.Setter))
+            return await EvaluateAccessorLiteralCore(ctx, obj);
         Dictionary<string, object?> stringFields = [];
         object? literalPrototype = null;
         bool hasLiteralPrototype = false;
         Dictionary<SharpTSSymbol, object?>? symbolFields = null;
-        List<(object key, ISharpTSCallable getter)>? getters = null;
-        List<(object key, ISharpTSCallable setter)>? setters = null;
 
         foreach (var prop in obj.Properties)
         {
@@ -682,20 +682,6 @@ public partial class Interpreter
                     literalPrototype = prototype.ToObject();
                     hasLiteralPrototype = true;
                 }
-            }
-            else if (prop.Kind == Expr.ObjectPropertyKind.Getter)
-            {
-                object name = await GetPropertyKeyNameCore(ctx, prop.Key!);
-                var getter = CreateAccessorFunction(prop.Value);
-                getters ??= [];
-                getters.Add((name, getter));
-            }
-            else if (prop.Kind == Expr.ObjectPropertyKind.Setter)
-            {
-                object name = await GetPropertyKeyNameCore(ctx, prop.Key!);
-                var setter = CreateSetterFunction(prop.Value, prop.SetterParam!);
-                setters ??= [];
-                setters.Add((name, setter));
             }
             else if (prop.Key is Expr.ComputedKey computed)
             {
@@ -723,34 +709,6 @@ public partial class Interpreter
             result.IsNullPrototype = literalPrototype is null;
         }
 
-        // Apply getters and setters
-        if (getters != null)
-        {
-            foreach (var (name, getter) in getters)
-            {
-                if (name is SharpTSSymbol symbol)
-                {
-                    result.TryGetSymbolAccessor(symbol, out _, out var setter);
-                    result.DefineSymbolAccessor(symbol, getter, setter);
-                }
-                else
-                    result.DefineGetter((string)name, getter);
-            }
-        }
-        if (setters != null)
-        {
-            foreach (var (name, setter) in setters)
-            {
-                if (name is SharpTSSymbol symbol)
-                {
-                    result.TryGetSymbolAccessor(symbol, out var getter, out _);
-                    result.DefineSymbolAccessor(symbol, getter, setter);
-                }
-                else
-                    result.DefineSetter((string)name, setter);
-            }
-        }
-
         return result;
     }
 
@@ -766,12 +724,12 @@ public partial class Interpreter
     /// <seealso href="https://www.typescriptlang.org/docs/handbook/2/objects.html">TypeScript Object Types</seealso>
     private RuntimeValue EvaluateObject(Expr.ObjectLiteral obj)
     {
+        if (obj.Properties.Any(property => property.Kind is Expr.ObjectPropertyKind.Getter or Expr.ObjectPropertyKind.Setter))
+            return RuntimeValue.FromBoxed(EvaluateAccessorLiteralCore(_syncContext, obj).GetAwaiter().GetResult());
         Dictionary<string, object?> stringFields = [];
         object? literalPrototype = null;
         bool hasLiteralPrototype = false;
         Dictionary<SharpTSSymbol, object?>? symbolFields = null;
-        List<(object key, ISharpTSCallable getter)>? getters = null;
-        List<(object key, ISharpTSCallable setter)>? setters = null;
 
         foreach (var prop in obj.Properties)
         {
@@ -788,20 +746,6 @@ public partial class Interpreter
                     literalPrototype = prototype.ToObject();
                     hasLiteralPrototype = true;
                 }
-            }
-            else if (prop.Kind == Expr.ObjectPropertyKind.Getter)
-            {
-                object name = GetPropertyKeyName(prop.Key!);
-                var getter = CreateAccessorFunction(prop.Value);
-                getters ??= [];
-                getters.Add((name, getter));
-            }
-            else if (prop.Kind == Expr.ObjectPropertyKind.Setter)
-            {
-                object name = GetPropertyKeyName(prop.Key!);
-                var setter = CreateSetterFunction(prop.Value, prop.SetterParam!);
-                setters ??= [];
-                setters.Add((name, setter));
             }
             else if (prop.Key is Expr.ComputedKey computed)
             {
@@ -827,34 +771,6 @@ public partial class Interpreter
             // without looking up the public accessor or traversing the prototype.
             result.Prototype = literalPrototype;
             result.IsNullPrototype = literalPrototype is null;
-        }
-
-        // Apply getters and setters
-        if (getters != null)
-        {
-            foreach (var (name, getter) in getters)
-            {
-                if (name is SharpTSSymbol symbol)
-                {
-                    result.TryGetSymbolAccessor(symbol, out _, out var setter);
-                    result.DefineSymbolAccessor(symbol, getter, setter);
-                }
-                else
-                    result.DefineGetter((string)name, getter);
-            }
-        }
-        if (setters != null)
-        {
-            foreach (var (name, setter) in setters)
-            {
-                if (name is SharpTSSymbol symbol)
-                {
-                    result.TryGetSymbolAccessor(symbol, out var getter, out _);
-                    result.DefineSymbolAccessor(symbol, getter, setter);
-                }
-                else
-                    result.DefineSetter((string)name, setter);
-            }
         }
 
         return RuntimeValue.FromObject(result);

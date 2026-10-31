@@ -10,6 +10,18 @@ internal static class LiteralPropertyEmitter
     internal static void Emit(TypeProvider types, ILGenerator il,
         EmittedDescriptorStorageRuntime storage, MethodInfo defineProperty,
         Action loadTarget, Action loadKey, Action loadValue)
+        => EmitDefinition(types, il, storage, defineProperty,
+            loadTarget, loadKey, loadValue, "value", writable: true);
+
+    internal static void EmitAccessor(TypeProvider types, ILGenerator il,
+        EmittedDescriptorStorageRuntime storage, MethodInfo defineProperty,
+        Action loadTarget, Action loadKey, Action loadValue, bool getter)
+        => EmitDefinition(types, il, storage, defineProperty,
+            loadTarget, loadKey, loadValue, getter ? "get" : "set", writable: false);
+
+    private static void EmitDefinition(TypeProvider types, ILGenerator il,
+        EmittedDescriptorStorageRuntime storage, MethodInfo defineProperty,
+        Action loadTarget, Action loadKey, Action loadValue, string member, bool writable)
     {
         var descriptor = il.DeclareLocal(types.DictionaryStringObject);
         il.Emit(OpCodes.Newobj, types.DictionaryStringObjectCtor);
@@ -18,11 +30,12 @@ internal static class LiteralPropertyEmitter
         il.Emit(OpCodes.Ldnull);
         il.Emit(OpCodes.Call, storage.SetPrototype);
         il.Emit(OpCodes.Ldloc, descriptor);
-        il.Emit(OpCodes.Ldstr, "value");
+        il.Emit(OpCodes.Ldstr, member);
         loadValue();
         il.Emit(OpCodes.Callvirt, types.DictionaryStringObjectSetItem);
         foreach (var attribute in new[] { "writable", "enumerable", "configurable" })
         {
+            if (attribute == "writable" && !writable) continue;
             il.Emit(OpCodes.Ldloc, descriptor);
             il.Emit(OpCodes.Ldstr, attribute);
             il.Emit(OpCodes.Ldc_I4_1);

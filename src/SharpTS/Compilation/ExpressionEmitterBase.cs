@@ -1731,16 +1731,12 @@ public abstract partial class ExpressionEmitterBase : IEmitterContext
                 var value = SpillBoxed(property.Value);
                 if (property.Kind is Expr.ObjectPropertyKind.Getter or Expr.ObjectPropertyKind.Setter)
                 {
-                    EmitPropertyWriteOperation(() =>
-                    {
-                        IL.Emit(OpCodes.Ldloc, target);
-                        IL.Emit(OpCodes.Ldloc, key);
-                        if (property.Kind == Expr.ObjectPropertyKind.Getter) IL.Emit(OpCodes.Ldloc, value);
-                        else IL.Emit(OpCodes.Ldnull);
-                        if (property.Kind == Expr.ObjectPropertyKind.Setter) IL.Emit(OpCodes.Ldloc, value);
-                        else IL.Emit(OpCodes.Ldnull);
-                        IL.Emit(OpCodes.Call, Ctx.Runtime.ObjectConstruction.DefineSymbolAccessor);
-                    });
+                    EmitPropertyWriteOperation(() => LiteralPropertyEmitter.EmitAccessor(
+                        Types, IL, Ctx.Runtime!.DescriptorStorage, Ctx.Runtime.ObjectDescriptors.DefineProperty,
+                        () => IL.Emit(OpCodes.Ldloc, target),
+                        () => IL.Emit(OpCodes.Ldloc, key),
+                        () => IL.Emit(OpCodes.Ldloc, value),
+                        property.Kind == Expr.ObjectPropertyKind.Getter));
                 }
                 else
                     EmitLiteralDataDefinition(target, key, value);
