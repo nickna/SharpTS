@@ -22,7 +22,7 @@ public class EmittedVmRuntimeTests
         ["QueueAfterCheckpoint"] = "QueueVmAfterCheckpoint", ["EnterExecutionScope"] = "EnterVmExecutionScope",
         ["ConvertException"] = "ConvertVmException", ["IsRelatedValue"] = "IsRelatedVmValue",
         ["IsMappedValue"] = "IsMappedVmValue", ["ReadMappedProperty"] = "ReadMappedVmProperty",
-        ["MappedPrototype"] = "GetMappedVmPrototype", ["ToStringValue"] = "CoerceVmValueToString"
+        ["MappedPrototype"] = "GetMappedVmPrototype", ["RecordSourceObject"] = "RecordVmSourceObject", ["ToStringValue"] = "CoerceVmValueToString"
     };
     private static PropertyInfo Declaration(string name) => Declarations.Single(property => property.Name == name);
 
@@ -139,8 +139,8 @@ public class EmittedVmRuntimeTests
         {
             var vm = runtime.RequireVm();
             AssertFrozen(vm);
-            Assert.Equal(26, Handles.Count());
-            Assert.Equal(27, Declarations.Count());
+            Assert.Equal(27, Handles.Count());
+            Assert.Equal(28, Declarations.Count());
             Assert.True(runtime.RequirePromise().IsComplete);
             foreach (var (export, handle) in RegisteredExports)
                 Assert.Same(typeof(EmittedVmRuntime).GetProperty(handle)!.GetValue(vm), runtime.BuiltInModules.GetOptional("vm", export));
@@ -199,6 +199,29 @@ public class EmittedVmRuntimeTests
         AssertFrozen(second);
     }
 
+    [Fact]
+    public void ContextStorageRejectsUnrecordedDictionariesAndForeignLookalikes()
+    {
+        var runtime = EmitRuntime("import * as vm from 'node:vm';", false);
+        using var bytes = Save(runtime);
+        using (var verifier = new ILVerifier(extraProbeDirectories: [AppContext.BaseDirectory]))
+            Assert.Empty(verifier.Verify(bytes));
+        var assembly = Assembly.Load(bytes.ToArray());
+        var owner = assembly.GetType(runtime.RuntimeClass.Type.FullName!)!;
+        var admits = owner.GetMethod("_VmAdmitsContextStorage", BindingFlags.NonPublic | BindingFlags.Static)!;
+        var dictionary = new Dictionary<string, object?> { ["value"] = 7d };
+        Assert.False((bool)admits.Invoke(null, [dictionary])!);
+        Assert.False((bool)admits.Invoke(null, [new object()])!);
+        Assert.False((bool)admits.Invoke(null, [null])!);
+        var ownType = assembly.GetType(runtime.ObjectStorage.Type.FullName!)!;
+        var fakeAssembly = AssemblyBuilder.DefineDynamicAssembly(new AssemblyName("foreign_vm_context"), AssemblyBuilderAccess.Run);
+        var fake = fakeAssembly.DefineDynamicModule("main").DefineType(ownType.FullName!, TypeAttributes.Public);
+        fake.DefineDefaultConstructor(MethodAttributes.Public);
+        Assert.False((bool)admits.Invoke(null, [Activator.CreateInstance(fake.CreateType()!)])!);
+        var actualOwner = Activator.CreateInstance(ownType, [dictionary]);
+        Assert.True((bool)admits.Invoke(null, [actualOwner])!);
+    }
+
     private static void DeclareBridgeStubs(TypeBuilder type, EmittedVmRuntime vm)
     {
         // Only export declaration/registration is under test here. Reserve the
@@ -223,7 +246,7 @@ public class EmittedVmRuntimeTests
             };
             var method = type.DefineMethod(BridgeMethods[name], MethodAttributes.Public | MethodAttributes.Static, result, parameters);
             var body = method.GetILGenerator();
-            if (name is "NormalizeValue" or "RestoreValue" or "ConvertException") body.Emit(OpCodes.Ldarg_0);
+            if (name is "NormalizeValue" or "RestoreValue" or "ConvertException" or "RecordSourceObject") body.Emit(OpCodes.Ldarg_0);
             else if (result == typeof(bool)) body.Emit(OpCodes.Ldc_I4_0);
             else if (result != typeof(void)) body.Emit(OpCodes.Ldnull);
             body.Emit(OpCodes.Ret);

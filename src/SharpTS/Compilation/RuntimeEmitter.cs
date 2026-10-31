@@ -1095,6 +1095,7 @@ public partial class RuntimeEmitter
 
         runtime.GeneratorPrototypes.Type.CreateType();
         EmitRuntimeClassFinalize(runtime.RuntimeClass);     // Finalize $Runtime after all method bodies
+        ValidateVmSourceObjectTracking(runtime);
 
         if (features.UsesTls)
         {

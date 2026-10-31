@@ -191,6 +191,13 @@ public sealed class EmittedVmRuntime
         set => Set(ref _toStringValue, value);
     }
 
+    private MethodBuilder? _recordSourceObject;
+    internal MethodBuilder RecordSourceObject
+    {
+        get => Require(_recordSourceObject);
+        set => Set(ref _recordSourceObject, value);
+    }
+
     private FieldBuilder? _afterCheckpointQueue;
     internal FieldBuilder AfterCheckpointQueue
     {
@@ -217,6 +224,7 @@ public sealed class EmittedVmRuntime
     {
         EnsureMutable();
         _ = ToStringValue;
+        _ = RecordSourceObject;
         _ = RunInNewContext;
         _ = RunInThisContext;
         _ = RunInContext;

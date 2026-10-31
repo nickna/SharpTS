@@ -1586,6 +1586,20 @@ public abstract partial class ExpressionEmitterBase : IEmitterContext
         SetStackUnknown();
     }
 
+    // This call follows an actual fresh source literal allocation, never a
+    // declaration, input conversion, or arbitrary CLR object observation.
+    protected void RecordVmSourceObjectLiteral()
+    {
+        if (Ctx.Runtime?.Vm is { } vm)
+        {
+            // Preserve the constructor result's exact verifier type beneath
+            // the receipt operation's object ABI.
+            IL.Emit(OpCodes.Dup);
+            IL.Emit(OpCodes.Call, vm.RecordSourceObject);
+            IL.Emit(OpCodes.Pop);
+        }
+    }
+
     /// <summary>
     /// Emits an object literal with support for spreads, computed keys, and accessors.
     /// ILEmitter overrides with stack-type-tracked implementation.
@@ -1657,6 +1671,7 @@ public abstract partial class ExpressionEmitterBase : IEmitterContext
 
             IL.Emit(OpCodes.Call, Ctx.Runtime!.ObjectConstruction.Create);
         }
+        RecordVmSourceObjectLiteral();
         SetStackUnknown();
     }
 

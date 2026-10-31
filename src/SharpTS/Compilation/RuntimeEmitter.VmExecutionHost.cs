@@ -14,6 +14,7 @@ public partial class RuntimeEmitter
         var inputProperties = EmitVmInputProperties(owner, runtime);
         var inputTag = EmitVmInputTag(owner, runtime, inputProperties.Admits);
         var inputWrite = EmitVmInputWrite(owner, runtime, inputProperties.Admits);
+        var contextStorage = EmitVmContextStorageCallbacks(owner, runtime);
         var module = (ModuleBuilder)owner.Module;
         var callbacks = EmitTypeDefinitions.DefineType(module, "$VmHostCallbacks",
             TypeAttributes.Public | TypeAttributes.Sealed | TypeAttributes.BeforeFieldInit, _types.Object);
@@ -189,6 +190,7 @@ public partial class RuntimeEmitter
         EmitVmInputPropertyConfiguration(il, runtime, inputProperties, created);
         EmitVmInputTagConfiguration(il, created, inputTag);
         EmitVmInputWriteConfiguration(il, created, inputWrite);
+        EmitVmContextStorageConfiguration(il, runtime, contextStorage, created);
         il.Emit(OpCodes.Ldloc, created);
         il.Emit(OpCodes.Stsfld, hostField);
         il.MarkLabel(ready);

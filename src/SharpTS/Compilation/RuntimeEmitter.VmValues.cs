@@ -9,6 +9,8 @@ public partial class RuntimeEmitter
     {
         vm.ToStringValue = owner.DefineMethod("CoerceVmValueToString", MethodAttributes.Assembly | MethodAttributes.Static,
             _types.Object, [_types.Object]);
+        vm.RecordSourceObject = owner.DefineMethod("RecordVmSourceObject", MethodAttributes.Assembly | MethodAttributes.Static,
+            _types.Object, [_types.Object]);
         vm.AfterCheckpointQueue = owner.DefineField("_vmAfterCheckpoint",
             _types.MakeGenericType(_types.QueueOpen, typeof(Action)), FieldAttributes.Private | FieldAttributes.Static);
         vm.EnterExecutionScope = owner.DefineMethod("EnterVmExecutionScope", MethodAttributes.Assembly | MethodAttributes.Static,

@@ -218,12 +218,14 @@ public partial class ILEmitter
         {
             if (TryEmitJsonScalarRecordLiteral(o))
             {
+                RecordVmSourceObjectLiteral();
                 SetStackUnknown();
                 return;
             }
 
             if (TryEmitCompactObjectRecordLiteral(o))
             {
+                RecordVmSourceObjectLiteral();
                 SetStackUnknown();
                 return;
             }
@@ -337,6 +339,7 @@ public partial class ILEmitter
         // expression left behind — e.g. `const x = 0; const y = {};` used to
         // emit `Box Double` on the fresh Dictionary pointer, producing a
         // double whose bits were the reinterpreted heap address.
+        RecordVmSourceObjectLiteral();
         SetStackUnknown();
     }
 
