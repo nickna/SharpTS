@@ -82,8 +82,16 @@ jobs:
       # calls and npm tests run a real `npm install`; both can false-red on runner
       # network hiccups — which here would block a tagged release after build but
       # before pack/push. The standalone job covers the complementary class.
-      - name: Test
-        run: dotnet test --no-build --configuration Release --verbosity normal --filter "Category!=LiveNetwork&Category!=LoadSensitive&Category!=npm&FullyQualifiedName!~SharpTS.Tests.CompilerTests.StandaloneDllTests." --blame-hang-timeout 120s --blame-hang-dump-type mini
+      - name: Test core
+        run: dotnet test tests/SharpTS.Tests/SharpTS.Tests.csproj --no-build --configuration Release --verbosity normal --filter "Category!=LiveNetwork&Category!=LoadSensitive&Category!=npm&FullyQualifiedName!~SharpTS.Tests.CompilerTests.StandaloneDllTests." --blame-hang-timeout 120s --blame-hang-dump-type mini
+        timeout-minutes: 30
+
+      # Run the other solution test project after core, as CI does. SharpPaint's
+      # owned workflow deadline is 180s, so a 120s VSTest inactivity watchdog
+      # would kill its host before the helper can time out and clean up.
+      - name: Test GUI conformance
+        run: dotnet test tests/gui-conformance/SharpTS.Gui.Conformance.Tests/SharpTS.Gui.Conformance.Tests.csproj --no-build --configuration Release --verbosity normal --filter "Category!=LiveNetwork&Category!=LoadSensitive&Category!=npm&FullyQualifiedName!~SharpTS.Tests.CompilerTests.StandaloneDllTests."
+        timeout-minutes: 10
 
       - name: Test NuGet release helper
         shell: pwsh

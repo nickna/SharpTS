@@ -285,6 +285,43 @@ $verifyNuGetJob = Get-PublishJob 'verify-nuget'
 $releaseJob = Get-PublishJob 'release'
 $publishBuildJob = Get-PublishJob 'build'
 $publishStandaloneJob = Get-PublishJob 'standalone'
+$releaseTestArguments = '--no-build --configuration Release --verbosity normal --filter "' + $coreFilter + '"'
+$releaseCoreStep = [regex]::Match($publishBuildJob, '(?ms)^      - name: Test core\r?\n.*?(?=^      - |\z)').Value
+$releaseGuiStep = [regex]::Match($publishBuildJob, '(?ms)^      - name: Test GUI conformance\r?\n.*?(?=^      - |\z)').Value
+foreach ($test in @(
+    @{ Step = $releaseCoreStep; Project = 'tests/SharpTS.Tests/SharpTS.Tests.csproj'; Arguments = $releaseTestArguments + ' --blame-hang-timeout 120s --blame-hang-dump-type mini'; Minutes = 30 },
+    @{ Step = $releaseGuiStep; Project = 'tests/gui-conformance/SharpTS.Gui.Conformance.Tests/SharpTS.Gui.Conformance.Tests.csproj'; Arguments = $releaseTestArguments; Minutes = 10 }
+)) {
+    $command = '        run: dotnet test ' + $test.Project + ' ' + $test.Arguments
+    if ($test.Step -notmatch ('(?m)^' + [regex]::Escape($command) + '\r?$') -or
+        $test.Step -notmatch ('(?m)^        timeout-minutes: ' + $test.Minutes + '\r?$') -or
+        $test.Step -match '(?m)^        if:') {
+        $errors.Add("Publish must run the complete bounded '$($test.Project)' cohort with its unchanged filter and watchdog policy.")
+    }
+}
+if ($publishBuildJob.IndexOf('name: Test core', [StringComparison]::Ordinal) -ge
+    $publishBuildJob.IndexOf('name: Test GUI conformance', [StringComparison]::Ordinal)) {
+    $errors.Add('Publish must finish core validation before starting GUI conformance.')
+}
+# Discover the solution's actual test projects so splitting the invocations
+# cannot silently drop an existing or newly added solution test cohort.
+$solution = Get-Content -LiteralPath (Join-Path $repositoryRoot 'SharpTS.sln') -Raw
+$solutionTestProjects = @(
+    foreach ($project in [regex]::Matches($solution, '(?m)^Project\([^\r\n]+ = "[^"]+", "(?<path>[^"]+\.csproj)"')) {
+        $projectPath = $project.Groups['path'].Value.Replace('\', '/')
+        [xml]$projectXml = Get-Content -LiteralPath (Join-Path $repositoryRoot $projectPath) -Raw
+        if ($projectXml.SelectNodes("//*[local-name()='IsTestProject' and translate(normalize-space(.), 'TRUE', 'true')='true']").Count -gt 0 -or
+            $projectXml.SelectNodes("//*[local-name()='PackageReference' and @Include='Microsoft.NET.Test.Sdk']").Count -gt 0) {
+            $projectPath
+        }
+    }
+)
+$releaseTestProjects = @([regex]::Matches($publishBuildJob, '(?m)^        run: dotnet test (?<path>\S+\.csproj) ').ForEach({ $_.Groups['path'].Value }))
+if ($releaseTestProjects.Count -ne $solutionTestProjects.Count -or
+    @(Compare-Object ($solutionTestProjects | Sort-Object) ($releaseTestProjects | Sort-Object)).Count -gt 0 -or
+    [regex]::Matches($publishBuildJob, '(?m)^        run: dotnet test ').Count -ne $releaseTestProjects.Count) {
+    $errors.Add('Publish must explicitly run every solution test project exactly once, without an implicit overlapping solution invocation.')
+}
 if (-not $publishBuildJob.Contains($coreFilter, [StringComparison]::Ordinal) -or
     -not $standaloneScript.Contains('$baseFilter = ''' + $standaloneFilter + '''', [StringComparison]::Ordinal)) {
     $errors.Add('Publish core and standalone discovery must retain the complete complementary CI partitions.')
