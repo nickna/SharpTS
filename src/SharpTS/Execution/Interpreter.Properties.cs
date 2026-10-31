@@ -913,6 +913,12 @@ public partial class Interpreter
                 continue;
             }
 
+            if (current is SharpTSPromise { HasExplicitPrototype: true } promise)
+            {
+                current = promise.ExplicitPrototype;
+                continue;
+            }
+
             if (current is SharpTSDate date)
             {
                 if (TryReadDescriptor(date.GetOwnPropertyDescriptor(symbol), receiver, out var value))
@@ -2916,7 +2922,7 @@ public partial class Interpreter
             return value;
         }
 
-        if (obj is ISharpTSOwnPropertyObject)
+        if (obj is ISharpTSOwnPropertyObject or SharpTSPromise { HasExplicitPrototype: true })
         {
             SetOwnPropertyObjectValue(obj, set.Name.Lexeme, value, strictMode);
             return value;

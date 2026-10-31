@@ -25,6 +25,15 @@ public class SharpTSPromise : ITypeCategorized
 
     internal SharpTSBuiltInConstructor? IntrinsicConstructor { get; init; }
 
+    internal bool HasExplicitPrototype { get; private set; }
+    internal object? ExplicitPrototype { get; private set; }
+
+    internal void SetExplicitPrototype(object? prototype)
+    {
+        ExplicitPrototype = prototype;
+        HasExplicitPrototype = true;
+    }
+
     /// <summary>
     /// Suppresses SharpTS's legacy implicit wait for a promise-valued top-level
     /// expression. ECMAScript never performs that wait; this flag is needed for

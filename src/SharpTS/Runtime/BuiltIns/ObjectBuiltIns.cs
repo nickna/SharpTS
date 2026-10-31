@@ -2482,6 +2482,7 @@ public static partial class ObjectBuiltIns
         SharpTSArraySubclassInstance sub => sub.Klass.Prototype,
         SharpTSArguments => interp?.GetObjectPrototype(),
         SharpTSArray array => array.IntrinsicPrototype ?? interp?.GetArrayPrototype(),
+        SharpTSPromise { HasExplicitPrototype: true } promise => promise.ExplicitPrototype,
         SharpTSPromiseSubclassInstance promiseSub => promiseSub.Klass.Prototype,
         SharpTSPromise promise => promise.IntrinsicConstructor?.PromiseRealm?.Prototype
             ?? interp?.GetPromisePrototype(),
@@ -2628,6 +2629,13 @@ public static partial class ObjectBuiltIns
                 obj.IsNullPrototype = proto is null;
                 return true;
 
+            case SharpTSPromise promise:
+                if (ReferenceEquals(PrototypeOf(interpreter, promise), proto)) return true;
+                if (!PropertyDescriptorStore.IsExtensible(promise)) return false;
+                if (WouldCreatePrototypeCycle(interpreter, promise, proto)) return false;
+                promise.SetExplicitPrototype(proto);
+                return true;
+
             case SharpTSInstance instance:
                 if (ReferenceEquals(PrototypeOf(interpreter, instance), proto)) return true;
                 if (!instance.IsExtensible || WouldCreatePrototypeCycle(interpreter, instance, proto)) return false;
@@ -2699,7 +2707,7 @@ public static partial class ObjectBuiltIns
             // this preflight rather than having their traps invoked here.
             candidate = candidate switch
             {
-                SharpTSObject or SharpTSArray or SharpTSClassPrototype or SharpTSInstance or SharpTSArrayGlobal or SharpTSClass
+                SharpTSObject or SharpTSArray or SharpTSClassPrototype or SharpTSInstance or SharpTSArrayGlobal or SharpTSClass or SharpTSPromise
                     or SharpTSFunctionPrototype
                     or Dictionary<string, object?>
                     => PrototypeOf(interpreter, candidate),

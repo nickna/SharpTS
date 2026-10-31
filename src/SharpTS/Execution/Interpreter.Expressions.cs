@@ -1295,7 +1295,7 @@ public partial class Interpreter
             }
         }
 
-        if (obj is ISharpTSOwnPropertyObject or SharpTSObjectNamespace)
+        if (obj is ISharpTSOwnPropertyObject or SharpTSObjectNamespace or SharpTSPromise { HasExplicitPrototype: true })
         {
             object key = ToPropertyKey(index);
             return RuntimeValue.FromBoxed(key is SharpTSSymbol symbol
@@ -1711,7 +1711,7 @@ public partial class Interpreter
             return RuntimeValue.FromBoxed(value);
         }
 
-        if (obj is ISharpTSOwnPropertyObject)
+        if (obj is ISharpTSOwnPropertyObject or SharpTSPromise { HasExplicitPrototype: true })
         {
             SetOwnPropertyObjectValue(obj, ToPropertyKey(index), value, strictMode);
             return RuntimeValue.FromBoxed(value);
