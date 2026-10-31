@@ -35,6 +35,13 @@ public class RuntimeEnvironment : ScopeChain<RuntimeValue, RuntimeEnvironment>
     // Invocation and ordinary block environments start unmarked.
     internal RuntimeEnvironment? VarDeclarationTarget { get; set; }
 
+    private SharpTSGlobalThis? _vmGlobalObject;
+    internal SharpTSGlobalThis? VmGlobalObject
+    {
+        get => _vmGlobalObject ?? Enclosing?.VmGlobalObject;
+        set => _vmGlobalObject = value;
+    }
+
     // Ordinary invocations and class initializers explicitly own a null slot;
     // true arrows and blocks inherit their lexical constructor invocation.
     internal ClassConstructionFrame? ConstructionFrame

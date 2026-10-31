@@ -1290,6 +1290,23 @@ public partial class Interpreter : IDisposable
             return rv;
         }
 
+        if (_environment.VmGlobalObject is { } vmGlobal)
+        {
+            if (name.Lexeme is "globalThis" or "global")
+                return RuntimeValue.FromBoxed(vmGlobal);
+            if (vmGlobal.HasProperty(name.Lexeme))
+                return RuntimeValue.FromBoxed(GetPropertyValue(vmGlobal, name.Lexeme));
+            if (vmGlobal.IsDeletedProperty(name.Lexeme))
+            {
+                if (allowUnresolvable) return RuntimeValue.Undefined;
+                throw new InterpreterException($"ReferenceError: Undefined variable '{name.Lexeme}'.");
+            }
+            // Preserve virtual globals exposed by this existing facade even
+            // when its older presence inventory omits their physical slot.
+            if (vmGlobal.GetProperty(name.Lexeme) is not SharpTSUndefined and var intrinsic)
+                return RuntimeValue.FromBoxed(intrinsic);
+        }
+
         // Per-realm globalThis and its Node `global` alias: each realm has its
         // own global object so guest `globalThis.x = …` stays realm-local. A user
         // `let globalThis`/`let global` already won via the environment check above.
@@ -1297,9 +1314,6 @@ public partial class Interpreter : IDisposable
         {
             return RuntimeValue.FromBoxed(GlobalThis);
         }
-
-        if (_vmOwnedEvaluation && GlobalThis.HasUserProperty(name.Lexeme))
-            return RuntimeValue.FromBoxed(GetPropertyValue(GlobalThis, name.Lexeme));
 
         // Mutable global bindings live on the global object. Lexical bindings
         // above this lookup and immutable constants retain their existing paths.
@@ -1349,8 +1363,9 @@ public partial class Interpreter : IDisposable
 
     private void AssignVariableValue(Token name, RuntimeValue value)
     {
-        if (!_environment.IsDefined(name.Lexeme) && (IsMutableGlobalObjectBinding(name.Lexeme)
-                || (_vmOwnedEvaluation && GlobalThis.HasUserProperty(name.Lexeme))))
+        if (!_environment.IsDefined(name.Lexeme) && _environment.VmGlobalObject is { } vmGlobal)
+            WriteGlobalObjectVariable(vmGlobal, name.Lexeme, value, _environment.IsStrictMode);
+        else if (!_environment.IsDefined(name.Lexeme) && IsMutableGlobalObjectBinding(name.Lexeme))
             WriteClassicGlobalVariable(name.Lexeme, value, _environment.IsStrictMode);
         else
             _environment.Assign(name, value);
@@ -2383,13 +2398,16 @@ public partial class Interpreter : IDisposable
     }
 
     private void WriteClassicGlobalVariable(string name, RuntimeValue value, bool strictMode)
+        => WriteGlobalObjectVariable(GlobalThis, name, value, strictMode);
+
+    private void WriteGlobalObjectVariable(SharpTSGlobalThis target, string name, RuntimeValue value, bool strictMode)
     {
-        if (strictMode && !GlobalThis.HasProperty(name))
+        if (strictMode && !target.HasProperty(name))
             throw new InterpreterException($"ReferenceError: Undefined variable '{name}'.");
         object? boxed = value.ToObject();
-        if (!TryAssignThroughDescriptor(GlobalThis.GetOwnPropertyDescriptor(name),
-                GlobalThis, name, boxed, strictMode))
-            GlobalThis.SetProperty(name, boxed);
+        if (!TryAssignThroughDescriptor(target.GetOwnPropertyDescriptor(name),
+                target, name, boxed, strictMode))
+            target.SetProperty(name, boxed);
     }
 
     /// <summary>
