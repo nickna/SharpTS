@@ -31,6 +31,8 @@ public sealed class VmInputPropertyViewTests
         return name switch { "value" or "0" => input.Value, "self" => input, "method" => input.Method, _ => SharpTSUndefined.Instance };
     }
     private static int Role(object target) => ((Input)target).Role;
+    private static bool Write(object target, string name, object? value) => true;
+    private static bool OtherWrite(object target, string name, object? value) => false;
     private static object? OtherRead(object target, string name) => null;
     private static VmExecutionHost Host() => (VmExecutionHost)VmModuleInterpreter.CreateExecutionHost(_ => { }, _ => { }, _ => { }, () => { }, () => { }, () => { });
     private static void Configure(VmExecutionHost host) => VmModuleInterpreter.ConfigureExecutionHostInputPropertyAccess(host, typeof(Input), Admits, Read, Role);
@@ -157,6 +159,25 @@ public sealed class VmInputPropertyViewTests
         GC.KeepAlive(result.View);
     }
 
+    [Fact]
+    public void OptionalWriterConfigurationIsImmutableAndPrecedesAnyAdmission()
+    {
+        using var host = Host();
+        Assert.Throws<InvalidOperationException>(() => VmModuleInterpreter.ConfigureExecutionHostInputPropertyWrites(host, Write));
+        Configure(host);
+        var input = new Input();
+        Assert.Throws<ArgumentException>(() => VmModuleInterpreter.ConfigureExecutionHostInputPropertyWrites(host, (_, _, _) => input.Throw));
+        VmModuleInterpreter.ConfigureExecutionHostInputPropertyWrites(host, Write);
+        Assert.Throws<InvalidOperationException>(() => VmModuleInterpreter.ConfigureExecutionHostInputPropertyWrites(host, Write));
+        host.ToVm(input);
+        using var other = Host(); Configure(other);
+        VmModuleInterpreter.ConfigureExecutionHostInputPropertyWrites(other, OtherWrite);
+        Assert.Throws<InvalidOperationException>(() => other.ToVm(input));
+        using var admitted = Host(); Configure(admitted); admitted.ToVm(new Input());
+        Assert.Throws<InvalidOperationException>(() => VmModuleInterpreter.ConfigureExecutionHostInputPropertyWrites(admitted, Write));
+        using var started = Host(); Configure(started); using (started.Enter()) { }
+        Assert.Throws<InvalidOperationException>(() => VmModuleInterpreter.ConfigureExecutionHostInputPropertyWrites(started, Write));
+    }
     [Theory]
     [InlineData(0, 0)]
     [InlineData(1, 1)]
