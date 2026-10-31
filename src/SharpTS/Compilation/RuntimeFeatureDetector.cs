@@ -129,6 +129,7 @@ public sealed partial class RuntimeFeatureDetector
             UsesTimerFunctionValues = false,
             UsesPromisePrototypeMutation = false,
             UsesArrayPrototypeMutation = false,
+            UsesArrayMethodValues = false,
             UsesArrayReceiverScopes = false,
             UsesNumberPrototypeMutation = false,
             UsesStringPrototypeMutation = false,
@@ -383,6 +384,7 @@ public sealed partial class RuntimeFeatureDetector
                 if (name is "eval" or "Function")
                 {
                     _set.UsesTimerFunctionValues = true;
+                    _set.UsesArrayMethodValues = true;
                     // Callable discovery can parse indirect/grouped literal
                     // eval after this walk. Retain receiver scopes for opaque
                     // source as well as the direct eval AST visited below.
@@ -699,6 +701,7 @@ public sealed partial class RuntimeFeatureDetector
                 _set.UsesCjsRequire = true;
                 break;
             case Stmt.Export exp:
+                _set.UsesArrayMethodValues = true;
                 // Hosted consumers may inspect callback/search function values
                 // on exported arrays even when this producer never names them.
                 _set.UsesArrayReceiverScopes = true;
@@ -929,6 +932,12 @@ public sealed partial class RuntimeFeatureDetector
         or "toSorted" or "toReversed" or "with" or "at" or "toSpliced"
         or "indexOf" or "lastIndexOf";
 
+    private static bool IsArrayMethodValueName(string name) =>
+        UsesArrayReceiverScope(name) || IsArrayMutatorName(name)
+        || name is "join" or "pop" or "slice" or "splice" or "concat" or "reverse"
+            or "fill" or "copyWithin" or "entries" or "keys" or "values"
+            or "toString" or "toLocaleString";
+
     private void VisitExpr(Expr? expr)
     {
         if (expr is null) return;
@@ -946,6 +955,7 @@ public sealed partial class RuntimeFeatureDetector
                 break;
 
             case Expr.This:
+                _set.UsesArrayMethodValues = true;
                 _set.UsesObjectDefinitionRuntime = true;
                 // Script `this` can expose the global Array constructor to a
                 // host or callback without an explicit prototype member read.
@@ -967,6 +977,8 @@ public sealed partial class RuntimeFeatureDetector
                     or "defineProperty" or "defineProperties" or "create"
                     or "__defineGetter__" or "__defineSetter__")
                     _set.UsesObjectDefinitionRuntime = true;
+                if (IsArrayMethodValueName(g.Name.Lexeme))
+                    _set.UsesArrayMethodValues = true;
                 if (UsesArrayReceiverScope(g.Name.Lexeme))
                     _set.UsesArrayReceiverScopes = true;
                 if (IsOpaqueEvaluator(g.Object, g.Name.Lexeme))
@@ -1146,6 +1158,10 @@ public sealed partial class RuntimeFeatureDetector
                 _set.UsesObjectDefinitionRuntime = true;
                 if (gi.Index is Expr.Literal { Value: "prototype" or "__proto__" or "setPrototypeOf" })
                     _set.UsesClassPrototypeMutation = true;
+                if (gi.Index is Expr.Literal { Value: string arrayMember }
+                        ? IsArrayMethodValueName(arrayMember)
+                        : gi.Index is not Expr.Literal)
+                    _set.UsesArrayMethodValues = true;
                 if (gi.Index is Expr.Literal { Value: string scopedArrayMember }
                         ? UsesArrayReceiverScope(scopedArrayMember)
                         : gi.Index is not Expr.Literal)

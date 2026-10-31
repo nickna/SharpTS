@@ -402,6 +402,7 @@ public partial class RuntimeEmitter
         bool ArrayPrototypeMutation,
         EmittedDescriptorStorageRuntime DescriptorStorage,
         bool DynamicPropertyDescriptors,
+        bool ExposeArrayMethodValues,
         MethodBuilder InvokeMethodValue,
         EmittedObjectPrototypeRuntime ObjectPrototypes,
         EmittedTemplateRuntime Templates,
@@ -1381,10 +1382,11 @@ public partial class RuntimeEmitter
 
         // When source code can replace array methods or install descriptors,
         // resolve the live own/prototype slot below. The compact bound-method
-        // shortcut is valid only while those shapes are proven immutable.
+        // shortcut also cannot represent a method value with a later receiver.
         foreach (var methodName in methodNames.Where(_ =>
                      !inputs.ArrayPrototypeMutation
-                     && !inputs.DynamicPropertyDescriptors))
+                     && !inputs.DynamicPropertyDescriptors
+                     && !inputs.ExposeArrayMethodValues))
         {
             var skipLabel = il.DefineLabel();
             il.Emit(OpCodes.Ldarg_1);
