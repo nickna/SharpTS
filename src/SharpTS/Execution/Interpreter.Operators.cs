@@ -201,6 +201,28 @@ public partial class Interpreter
             return newValue;
         }
 
+        if (obj is SharpTSTypedArray keyedTypedArray && RuntimeValue.FromBoxed(index).IsObject)
+        {
+            int readIndex = ResolveTypedArrayCompoundIndex(keyedTypedArray, ToPropertyKey(index));
+            RuntimeValue current = readIndex >= 0
+                ? RuntimeValue.FromBoxed(keyedTypedArray[readIndex]) : RuntimeValue.Undefined;
+            RuntimeValue addValue = await ctx.EvaluateExprAsync(compound.Value);
+            RuntimeValue newValue = ApplyCompoundOperatorRV(compound.Operator.Type, current, addValue);
+            object writeKey = ToPropertyKey(index);
+            // Integer-indexed writes convert the value even when the numeric
+            // index is invalid. Keep the expression result before narrowing.
+            object? stored = newValue.ToObject();
+            if (keyedTypedArray is SharpTSBigInt64Array or SharpTSBigUint64Array)
+            {
+                stored = ToPrimitive(stored, PrimitiveHint.Number);
+                _ = SharpTSTypedArray.ToBigInt64Bits(stored);
+            }
+            else stored = ToNumberWithPrimitive(stored);
+            int writeIndex = ResolveTypedArrayCompoundIndex(keyedTypedArray, writeKey);
+            if (writeIndex >= 0) keyedTypedArray[writeIndex] = stored;
+            return newValue;
+        }
+
         // Typed-array element compound assignment (e.g. `a[i] += 1` on an Int32Array). Read the
         // element (a boxed double, or BigInteger for BigInt arrays), apply the op, narrow back via
         // the typed-array setter. The compiled side has a dedicated unboxed fast path; this keeps the
@@ -227,6 +249,18 @@ public partial class Interpreter
         }
 
         throw new InterpreterException("Compound index assignment not supported on this type.");
+    }
+
+    private int ResolveTypedArrayCompoundIndex(SharpTSTypedArray target, object key)
+    {
+        if (key is not string name)
+            throw new InterpreterException("Compound index assignment not supported on this type.");
+        if (name == "-0") return -1;
+        double numeric = ToNumber(name);
+        if (Stringify(numeric) != name)
+            throw new InterpreterException("Compound index assignment not supported on this type.");
+        return double.IsFinite(numeric) && numeric >= 0 && numeric < target.Length && Math.Truncate(numeric) == numeric
+            ? (int)numeric : -1;
     }
 
     /// <summary>
