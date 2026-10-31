@@ -122,6 +122,14 @@ public static partial class ObjectBuiltIns
                         includeValues ? interpreter.GetPropertyValue(prototype, key) : null);
                 }
                 yield break;
+            case SharpTSGlobalThis globalObject:
+                foreach (var key in globalObject.OwnStringKeys().ToList())
+                {
+                    if (globalObject.GetOwnPropertyDescriptor(key)?.Enumerable != true) continue;
+                    yield return new(key,
+                        includeValues ? interpreter.GetPropertyValue(globalObject, key) : null);
+                }
+                yield break;
             case SharpTSObject obj:
                 // EnumerableOwnProperties snapshots [[OwnPropertyKeys]] before
                 // reading values. A getter may add or delete siblings without

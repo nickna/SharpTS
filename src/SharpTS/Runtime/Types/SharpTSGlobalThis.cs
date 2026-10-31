@@ -260,6 +260,9 @@ public sealed class SharpTSGlobalThis : ISharpTSPropertyAccessor
     internal IEnumerable<string> OwnEnumerableKeys()
         => _properties.OwnEnumerableKeys();
 
+    internal IEnumerable<string> OwnStringKeys()
+        => _properties.OwnVisibleStringKeys();
+
     internal IEnumerable<KeyValuePair<string, object?>> UserOwnDataProperties()
     {
         foreach (var name in _properties.PropertyNames)
