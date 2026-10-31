@@ -1236,6 +1236,12 @@ public partial class Interpreter
     [MethodImpl(MethodImplOptions.AggressiveOptimization)]
     private RuntimeValue PerformIndexGetCore(Expr objectExpr, object? obj, object? index)
     {
+        if (obj is VmInputPropertyView inputView)
+        {
+            object key = ToPropertyKey(index);
+            return RuntimeValue.FromBoxed(key is string inputKey
+                ? inputView.Read(inputKey) : GetSymbolPropertyValue(inputView, (SharpTSSymbol)key));
+        }
         // ECMA-262 §13.3.3 RequireObjectCoercible: a bracket read on a nullish base
         // throws a guest TypeError. The optional `?.[]` case is short-circuited by
         // callers (EvaluateGetIndex/EvaluateGetIndexAsync) before reaching here, so

@@ -462,6 +462,7 @@ public partial class Interpreter
     private object? GetPropertyValueFromChainCore(
         object? current, string name, object? receiver)
     {
+        if (current is VmInputPropertyView inputView) return inputView.Read(name);
         for (int depth = 0; depth < 64 && current is not (null or SharpTSUndefined); depth++)
         {
             if (current is SharpTSProxy proxy)
@@ -1283,6 +1284,7 @@ public partial class Interpreter
     [MethodImpl(MethodImplOptions.AggressiveOptimization)]
     private RuntimeValue EvaluateGetOnObjectCore(Expr.Get get, object? obj)
     {
+        if (obj is VmInputPropertyView inputView) return RuntimeValue.FromBoxed(inputView.Read(get.Name.Lexeme));
         // Handle optional chaining - return undefined if object is null or undefined
         if (get.Optional && (obj == null || obj is Runtime.Types.SharpTSUndefined))
         {
@@ -2028,6 +2030,8 @@ public partial class Interpreter
     /// </summary>
     private static object? BindMemberCallReceiver(object? callee, object? receiver)
     {
+        if (receiver is VmInputPropertyView inputView && callee is CompiledCallableAdapter inputMethod)
+            return VmInputPropertyView.BindMember(inputMethod, inputView);
         if (receiver is null) return callee;
         // Class properties expose the canonical callable. Install the resolver's
         // receiver scope only for the invocation, including borrowed methods.

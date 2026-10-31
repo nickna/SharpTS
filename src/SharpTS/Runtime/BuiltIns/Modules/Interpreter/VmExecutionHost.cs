@@ -137,11 +137,12 @@ internal sealed partial class VmExecutionHost : IDisposable
     }
     internal object? FromVm(object? value)
     {
+        if (value is Types.VmInputPropertyView view) value = view.Original;
         if (value is Types.CompiledCallableAdapter callback) value = callback.Original;
         return _fromVm is { } adapt ? adapt(value) : value;
     }
     internal object? ToVm(object? value)
-        => Types.VmContext.WrapVmCompiledCallableForHost(_toVm is { } adapt ? adapt(value) : value, this);
+        => Types.VmContext.WrapVmCompiledCallableForHost(AdaptInputPropertyValue(_toVm is { } adapt ? adapt(value) : value), this);
 
     // Called only after the existing managed-function boundary has admitted the actual value.
     // Weak keys preserve identity without rooting otherwise unreachable caller functions.
@@ -229,6 +230,7 @@ internal sealed partial class VmExecutionHost : IDisposable
                 _refHandle = _unrefHandle = _checkCancellation = null;
                 _fromVm = _toVm = null;
                 _contextStorage = null;
+                _inputPropertyAccess = null;
                 _compiledCallables.Clear();
                 _getNativeCallbackRole = null;
                 _isThrownValue = null;
