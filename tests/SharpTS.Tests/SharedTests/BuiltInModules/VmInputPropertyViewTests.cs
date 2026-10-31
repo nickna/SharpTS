@@ -19,6 +19,10 @@ public sealed class VmInputPropertyViewTests
         internal bool Throw;
         internal int Reads;
         internal int Role;
+        internal object? Tag = SharpTSUndefined.Instance;
+        internal object? TagReceiver;
+        internal int TagReads;
+        internal bool TagThrows;
         public override string ToString() => "input:" + Value;
     }
     private sealed class Carrier(object? value) : Exception { internal readonly object? Value = value; }
@@ -31,6 +35,14 @@ public sealed class VmInputPropertyViewTests
         return name switch { "value" or "0" => input.Value, "self" => input, "method" => input.Method, _ => SharpTSUndefined.Instance };
     }
     private static int Role(object target) => ((Input)target).Role;
+    private static object? Tag(object target, object? receiver)
+    {
+        var input = (Input)target;
+        input.TagReads++;
+        input.TagReceiver = receiver;
+        if (input.TagThrows) throw new Carrier(input.Tag);
+        return input.Tag;
+    }
     private static bool Write(object target, string name, object? value) => true;
     private static bool OtherWrite(object target, string name, object? value) => false;
     private static object? OtherRead(object target, string name) => null;
@@ -188,6 +200,60 @@ public sealed class VmInputPropertyViewTests
         Configure(caller.GetVmExecutionHost());
         Assert.Equal(true, Run(caller, new Input { Role = 1 }, "const marker={};const proxy=new Proxy(input,{get(target,key){if(key===Symbol.toStringTag)throw marker;return Reflect.get(target,key);}});let same=false;try{Object.prototype.toString.call(proxy)}catch(error){same=error===marker}same"));
         Assert.Equal("true|true", Run(caller, new Input { Role = 1 }, "const pair=Proxy.revocable(input,{});pair.revoke();let a=false,b=false;try{Array.isArray(pair.proxy)}catch(error){a=error instanceof TypeError}try{Object.prototype.toString.call(pair.proxy)}catch(error){b=error instanceof TypeError}[a,b].join('|')"));
+    }
+    [Theory]
+    [InlineData(1, "Custom", "[object Custom]")]
+    [InlineData(1, 7, "[object Array]")]
+    [InlineData(2, 7, "[object Error]")]
+    public void ActualTagGetterRunsOnceBeforeTheCertifiedDefault(int role, object tag, string expected)
+    {
+        using var caller = new Interpreter(new StringWriter(), new StringWriter());
+        var host = caller.GetVmExecutionHost(); Configure(host);
+        VmModuleInterpreter.ConfigureExecutionHostInputToStringTag(host, Tag);
+        var input = new Input { Role = role, Tag = tag };
+        Assert.Equal(expected, Run(caller, input, "Object.prototype.toString.call(input)"));
+        Assert.Equal(1, input.TagReads);
+        Assert.Same(input, input.TagReceiver);
+    }
+
+    [Fact]
+    public void ActualTagReceivesTheTransparentProxyAndPreservesAbruptPayload()
+    {
+        using var caller = new Interpreter(new StringWriter(), new StringWriter());
+        var host = caller.GetVmExecutionHost(); Configure(host);
+        VmModuleInterpreter.ConfigureExecutionHostInputToStringTag(host, Tag);
+        var input = new Input { Role = 1, Tag = "Custom" };
+        Assert.Equal("[object Custom]", Run(caller, input, "Object.prototype.toString.call(new Proxy(input,{}))"));
+        Assert.IsType<SharpTSProxy>(input.TagReceiver);
+        Assert.Equal(1, input.TagReads);
+    }
+
+    [Fact]
+    public void ActualTagGetterPreservesTheTypedAbruptPayload()
+    {
+        using var caller = new Interpreter(new StringWriter(), new StringWriter());
+        var host = caller.GetVmExecutionHost(); Configure(host);
+        VmModuleInterpreter.ConfigureExecutionHostInputToStringTag(host, Tag);
+        VmModuleInterpreter.ConfigureExecutionHostThrownValueAdapter(host, error => error is Carrier, error => ((Carrier)error).Value);
+        var marker = new object();
+        var input = new Input { Role = 1, Tag = marker, Value = marker, TagThrows = true };
+        Assert.Equal(true, Run(caller, input, "let same=false;try{Object.prototype.toString.call(input)}catch(error){same=error===input.value}same"));
+        Assert.Equal(1, input.TagReads);
+    }
+
+    [Fact]
+    public void TagConfigurationPreservesOtherCapabilitiesAndRejectsLateChanges()
+    {
+        using var host = Host();
+        Assert.Throws<InvalidOperationException>(() => VmModuleInterpreter.ConfigureExecutionHostInputToStringTag(host, Tag));
+        Configure(host);
+        VmModuleInterpreter.ConfigureExecutionHostInputPropertyWrites(host, Write);
+        VmModuleInterpreter.ConfigureExecutionHostInputToStringTag(host, Tag);
+        Assert.NotNull(host.InputPropertyAccess!.Write);
+        Assert.Throws<InvalidOperationException>(() => VmModuleInterpreter.ConfigureExecutionHostInputToStringTag(host, Tag));
+        host.ToVm(new Input());
+        using var other = Host(); Configure(other); other.ToVm(new Input());
+        Assert.Throws<InvalidOperationException>(() => VmModuleInterpreter.ConfigureExecutionHostInputToStringTag(other, Tag));
     }
     [Fact]
     public void OptionalWriterConfigurationIsImmutableAndPrecedesAnyAdmission()

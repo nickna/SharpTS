@@ -758,6 +758,8 @@ public partial class Interpreter
         object? current = obj;
         for (int depth = 0; depth < 64 && current is not (null or SharpTSUndefined); depth++)
         {
+            if (current is VmInputPropertyView inputView && ReferenceEquals(symbol, SharpTSSymbol.ToStringTag))
+                return inputView.ReadToStringTag(receiver);
             if (current is SharpTSProxy proxy)
                 return proxy.TrapGet(symbol, this, receiver);
             if (TryGetPromiseConstructorSymbolProperties(current, out var intrinsicProperties))

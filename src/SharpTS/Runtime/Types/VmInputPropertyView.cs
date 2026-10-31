@@ -34,13 +34,26 @@ internal sealed class VmInputPropertyView
 
     internal static ISharpTSCallable BindMember(CompiledCallableAdapter callable, VmInputPropertyView receiver) => new MemberCall(callable, receiver);
 
-    internal object? Read(string name)
+    internal object? Read(string name) => ReadWithHost(_ => _access.Read(Original, name));
+
+    internal object? ReadToStringTag(object? receiver)
+    {
+        if (_access.ReadToStringTag is not { } readTag) return SharpTSUndefined.Instance;
+        return ReadWithHost(host =>
+        {
+            if (SharpTS.Execution.VmEvaluationLease.CurrentInterpreter is { } owner)
+                VmModuleInterpreter.RecordVmBoundaryValue(receiver, owner);
+            return readTag(Original, host.FromVm(receiver));
+        });
+    }
+
+    private object? ReadWithHost(Func<VmExecutionHost, object?> operation)
     {
         var host = VmExecutionHost.Current;
         if (host?.InputPropertyAccess is not { } active || !_access.Matches(active))
             throw new InvalidOperationException("VM input property access requires its active output host.");
         object? value;
-        try { value = _access.Read(Original, name); }
+        try { value = operation(host); }
         catch (Exception exception)
         {
             if (host.TryGetThrownValue(exception, out var thrown))
