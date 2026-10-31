@@ -1793,6 +1793,10 @@ public partial class Interpreter
         if (obj is ISharpTSPropertyAccessor accessor && accessor.HasProperty(memberName))
             return RuntimeValue.FromBoxed(accessor.GetProperty(memberName));
 
+        // Resolve the view's intrinsic length before shared Array-category extras.
+        if (obj is SharpTSTypedArray typedArray && memberName == "length")
+            return RuntimeValue.FromBoxed(typedArray.GetMember(memberName));
+
         // Named properties from Object.defineProperty
         if (obj is SharpTSArray array && array.HasNamedProperty(memberName))
             return RuntimeValue.FromBoxed(
