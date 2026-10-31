@@ -35,6 +35,14 @@ public class RuntimeEnvironment : ScopeChain<RuntimeValue, RuntimeEnvironment>
     // Invocation and ordinary block environments start unmarked.
     internal RuntimeEnvironment? VarDeclarationTarget { get; set; }
 
+    // VM closures retain realm-owned intrinsic data, never their evaluating host.
+    private Execution.PromiseIntrinsicState? _vmPromiseRealm;
+    internal Execution.PromiseIntrinsicState? VmPromiseRealm
+    {
+        get => _vmPromiseRealm ?? Enclosing?.VmPromiseRealm;
+        set => _vmPromiseRealm = value;
+    }
+
     private SharpTSGlobalThis? _vmGlobalObject;
     internal SharpTSGlobalThis? VmGlobalObject
     {

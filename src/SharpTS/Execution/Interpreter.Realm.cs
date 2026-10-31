@@ -224,11 +224,13 @@ public partial class Interpreter
     internal PromiseIntrinsicState PromiseRealmState
         => _promiseIntrinsicState ??= new(GetFunctionPrototype(), GetObjectPrototype(), GetObjectNamespace());
 
-    internal SharpTSBuiltInConstructor PromiseGlobalValue => PromiseRealmState.Constructor;
+    internal SharpTSBuiltInConstructor PromiseGlobalValue =>
+        (_environment.VmPromiseRealm ?? PromiseRealmState).Constructor;
 
     internal void UsePromiseIntrinsicState(PromiseIntrinsicState state)
     {
         _promiseIntrinsicState = state;
+        if (_vmOwnedEvaluation) _environment.VmPromiseRealm = state;
         _functionPrototype = state.FunctionPrototype;
         _objectPrototype = state.ObjectPrototype;
         _objectNamespace = state.ObjectConstructor;
