@@ -8,9 +8,10 @@ public static partial class VmModuleInterpreter
 {
     private static ConditionalWeakTable<object, VmErrorReceipt>? _vmErrors;
 
-    private sealed class VmErrorReceipt(Execution.Interpreter owner)
+    private sealed class VmErrorReceipt(Execution.Interpreter owner, ScriptOrigin? origin)
     {
         internal readonly Execution.Interpreter Owner = owner;
+        internal readonly ScriptOrigin? Origin = origin;
         internal VmEvaluationLease? RetainedLease;
     }
 
@@ -18,6 +19,7 @@ public static partial class VmModuleInterpreter
     // this recorder. Brand checks are CLR identities, never guest name/shape reads.
     internal static void RecordVmErrorValue(object? value, Execution.Interpreter boundaryOwner)
     {
+        if (value is not null && IsUnownedVmInput(value)) return;
         var owner = value switch
         {
             SharpTSInstance { RuntimeClass: SharpTSErrorClass } instance => instance.OwningInterpreter,
@@ -25,8 +27,11 @@ public static partial class VmModuleInterpreter
             _ => null
         };
         if (owner is null) return;
-        LazyInitializer.EnsureInitialized(ref _vmErrors).GetValue(value!, _ => new VmErrorReceipt(owner));
+        LazyInitializer.EnsureInitialized(ref _vmErrors).GetValue(value!, _ => new VmErrorReceipt(owner, ActiveScriptOrigin.Value));
     }
+
+    private static bool NeedsVmErrorOrigin(SharpTSError value, ScriptOrigin origin) =>
+        !IsVmInputValue(value) && (_vmErrors is not { } table || !table.TryGetValue(value, out var receipt) || receipt.Origin == origin);
 
     internal static void RetainVmErrorValue(object? value)
     {

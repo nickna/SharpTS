@@ -269,8 +269,7 @@ public static partial class VmModuleInterpreter
         try
         {
             if (contextOptions is not { DrainMicrotasks: true })
-                lease = VmEvaluationLease.Create(subInterpreter, parentInterpreter,
-                    () => { subInterpreter.PublishVmLexicalValues(); VmContext.WriteBack(contextObject, contextProps, subInterpreter.Environment, subInterpreter.GlobalThis); });
+                lease = CreateContextEvaluationLease(subInterpreter, parentInterpreter, contextObject, contextProps);
             executionScope = lease?.Enter();
             // Resolve variables and execute
             var resolver = new VariableResolver(subInterpreter);
@@ -289,6 +288,12 @@ public static partial class VmModuleInterpreter
 
             succeeded = true;
             return result;
+        }
+        catch (Runtime.Exceptions.ThrowException failure) when (!subInterpreter.CurrentVmTimeoutToken.IsCancellationRequested)
+        {
+            RecordContextThrowValue(failure.Value, subInterpreter, parentInterpreter, contextObject, contextProps,
+                ref lease, ref executionScope);
+            throw;
         }
         finally
         {
@@ -367,8 +372,7 @@ public static partial class VmModuleInterpreter
         try
         {
             if (contextOptions is not { DrainMicrotasks: true })
-                lease = VmEvaluationLease.Create(subInterpreter, parentInterpreter,
-                    () => { subInterpreter.PublishVmLexicalValues(); VmContext.WriteBack(contextObject, contextProps, subInterpreter.Environment, subInterpreter.GlobalThis); });
+                lease = CreateContextEvaluationLease(subInterpreter, parentInterpreter, contextObject, contextProps);
             executionScope = lease?.Enter();
             var resolver = new VariableResolver(subInterpreter);
             resolver.Resolve(statements);
@@ -385,6 +389,12 @@ public static partial class VmModuleInterpreter
             succeeded = true;
             return result;
         }
+        catch (Runtime.Exceptions.ThrowException failure) when (!subInterpreter.CurrentVmTimeoutToken.IsCancellationRequested)
+        {
+            RecordContextThrowValue(failure.Value, subInterpreter, parentInterpreter, contextObject, contextProps,
+                ref lease, ref executionScope);
+            throw;
+        }
         finally
         {
             subInterpreter.PublishVmLexicalValues();
@@ -395,6 +405,29 @@ public static partial class VmModuleInterpreter
             cts?.Dispose();
         }
     }
+
+    private static void RecordContextThrowValue(object? value, Interp evaluator, Interp? parent,
+        object? context, Dictionary<string, object?> properties,
+        ref VmEvaluationLease? lease, ref IDisposable? executionScope)
+    {
+        if (lease is null)
+        {
+            // An abrupt afterEvaluate evaluation leaves its local checkpoint
+            // pending. Retain the escaping error without running those jobs.
+            lease = CreateContextEvaluationLease(evaluator,
+                parent, context, properties);
+            executionScope = lease?.Enter();
+        }
+        lease?.MarkGuestAbrupt();
+        RecordVmBoundaryValue(value, evaluator);
+    }
+    private static VmEvaluationLease? CreateContextEvaluationLease(Interp evaluator, Interp? parent,
+        object? context, Dictionary<string, object?> properties) =>
+        VmEvaluationLease.Create(evaluator, parent, () =>
+        {
+            evaluator.PublishVmLexicalValues();
+            VmContext.WriteBack(context, properties, evaluator.Environment, evaluator.GlobalThis);
+        });
 
     /// <summary>
     /// Executes pre-parsed statements in the current interpreter's scope.
@@ -742,7 +775,7 @@ public static partial class VmModuleInterpreter
             //
             // Guest-created Error instances record their actual syntax origin at
             // creation. This separate path retains the existing host timeout error.
-            PrependOriginFrame(err, origin);
+            if (NeedsVmErrorOrigin(err, origin)) PrependOriginFrame(err, origin);
             te.Data["__tsValue"] = VmExecutionHost.Current is { } host ? host.FromVm(te.Value) : te.Value;
             throw;
         }
