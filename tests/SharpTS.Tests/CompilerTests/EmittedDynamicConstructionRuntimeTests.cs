@@ -160,7 +160,8 @@ public sealed class EmittedDynamicConstructionRuntimeTests
                 ("ReflectedMethods", typeof(EmittedReflectedMethodRuntime)),
                 ("SymbolType", typeof(Type)),
                 ("TypeOf", typeof(MethodInfo)),
-                ("UndefinedInstance", typeof(FieldInfo))
+                ("UndefinedInstance", typeof(FieldInfo)),
+                ("Vm", typeof(EmittedVmRuntime))
             ],
             ["EmitConstructDynamicValue"] =
             [
