@@ -57,6 +57,27 @@ public partial class RuntimeEmitter
 
         var arrDescLocal = il.DeclareLocal(runtime.DescriptorStorage.DescriptorType);
 
+        // The prototype is an array whose length is writable, non-enumerable
+        // and non-configurable. Keep its descriptor beside the fast dictionary
+        // value so partial definitions and integrity operations retain those flags.
+        il.Emit(OpCodes.Newobj, runtime.DescriptorStorage.DescriptorConstructor);
+        il.Emit(OpCodes.Stloc, arrDescLocal);
+        il.Emit(OpCodes.Ldloc, arrDescLocal);
+        il.Emit(OpCodes.Ldc_R8, 0.0);
+        il.Emit(OpCodes.Box, _types.Double);
+        il.Emit(OpCodes.Callvirt, runtime.DescriptorStorage.DescriptorValue.GetSetMethod()!);
+        il.Emit(OpCodes.Ldloc, arrDescLocal);
+        il.Emit(OpCodes.Ldc_I4_0);
+        il.Emit(OpCodes.Callvirt, runtime.DescriptorStorage.DescriptorEnumerable.GetSetMethod()!);
+        il.Emit(OpCodes.Ldloc, arrDescLocal);
+        il.Emit(OpCodes.Ldc_I4_0);
+        il.Emit(OpCodes.Callvirt, runtime.DescriptorStorage.DescriptorConfigurable.GetSetMethod()!);
+        il.Emit(OpCodes.Ldsfld, runtime.ArrayOperations.PrototypeField);
+        il.Emit(OpCodes.Ldstr, "length");
+        il.Emit(OpCodes.Ldloc, arrDescLocal);
+        il.Emit(OpCodes.Call, runtime.DescriptorStorage.DefineProperty);
+        il.Emit(OpCodes.Pop);
+
         // ECMA-262 23.1.3 Array.prototype.constructor === Array. Compiled
         // bare `Array` resolves to typeof(IList<object>) (per
         // GlobalThisStaticEmitter). Mirror it here so

@@ -129,6 +129,8 @@ public sealed class SharpTSArrayPrototype : ISharpTSMutableBuiltIn, ISharpTSSymb
     public SharpTSArrayPrototype()
     {
         _overlay = new(IsBuiltIn);
+        _overlay.DefineProperty("length", new SharpTSPropertyDescriptor(
+            0d, writable: true, enumerable: false, configurable: false));
     }
 
     public bool HasExtra(string name) => _overlay.HasExtra(name);
