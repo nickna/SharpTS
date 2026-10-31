@@ -159,6 +159,7 @@ public partial class Interpreter
         bool arrayObjectKey = HasArrayObjectKey(obj, index);
         var globalTarget = ResolveGlobalIndexTarget(obj, index);
         if (arrayObjectKey || inputView is not null || globalTarget is not null || HasCanonicalIndexProperties(obj)
+            || (index is string && UsesPrimitivePrototypePropertyReads(obj))
             || UsesNonextensibleBuiltInPrototypeStringIndex(obj, index)
             || obj is BuiltInMethod or SharpTSObject or SharpTSInstance)
         {
@@ -382,6 +383,7 @@ public partial class Interpreter
         bool arrayObjectKey = HasArrayObjectKey(obj, index);
         var globalTarget = ResolveGlobalIndexTarget(obj, index);
         if (arrayObjectKey || inputView is not null || globalTarget is not null
+            || (index is string && UsesPrimitivePrototypePropertyReads(obj))
             || UsesNonextensibleBuiltInPrototypeStringIndex(obj, index)
             || obj is ISharpTSOwnPropertyObject or BuiltInMethod or SharpTSObjectNamespace or SharpTSObjectPrototype)
         {
