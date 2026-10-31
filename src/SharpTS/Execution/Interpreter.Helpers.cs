@@ -30,6 +30,9 @@ public partial class Interpreter
             case SharpTSObjectNamespace objectNamespace:
                 value = GetPropertyValue(objectNamespace, name.Lexeme);
                 return true;
+            case SharpTSObjectPrototype objectPrototype:
+                value = GetPropertyValue(objectPrototype, name.Lexeme);
+                return true;
             case SharpTSProxy proxy:
                 value = proxy.TrapGet(name.Lexeme, this);
                 return true;
@@ -74,6 +77,9 @@ public partial class Interpreter
                 return true;
             case SharpTSObjectNamespace objectNamespace:
                 value = RuntimeValue.FromBoxed(GetPropertyValue(objectNamespace, name.Lexeme));
+                return true;
+            case SharpTSObjectPrototype objectPrototype:
+                value = RuntimeValue.FromBoxed(GetPropertyValue(objectPrototype, name.Lexeme));
                 return true;
             case SharpTSProxy proxy:
                 value = proxy.TrapGetRV(name.Lexeme, this);
@@ -181,7 +187,7 @@ public partial class Interpreter
             value = GetPropertyValue(global.Target, global.Key);
             return true;
         }
-        if (HasCanonicalIndexProperties(obj))
+        if (obj is SharpTSObjectPrototype || HasCanonicalIndexProperties(obj))
         {
             value = GetOwnPropertyObjectValue(obj!, ToPropertyKey(index));
             return true;

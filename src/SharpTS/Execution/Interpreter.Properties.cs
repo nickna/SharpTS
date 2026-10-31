@@ -969,6 +969,8 @@ public partial class Interpreter
                 current = GetFunctionPrototype();
                 continue;
             }
+            if (current is SharpTSObjectPrototype)
+                return SharpTSUndefined.Instance;
             if (current is ISharpTSMutableBuiltIn)
                 return PerformIndexGet(null!, current, symbol).ToObject();
             return SharpTSUndefined.Instance;
@@ -1382,6 +1384,9 @@ public partial class Interpreter
             }
             return RuntimeValue.FromBoxed(GetPropertyValue(objectNamespace, get.Name.Lexeme));
         }
+
+        if (obj is SharpTSObjectPrototype)
+            return RuntimeValue.FromBoxed(GetPropertyValue(obj, get.Name.Lexeme));
 
         if (obj is ISharpTSPrimitiveConstructor primitiveConstructor)
             return RuntimeValue.FromBoxed(GetPropertyValue(primitiveConstructor, get.Name.Lexeme));
@@ -2525,7 +2530,7 @@ public partial class Interpreter
     /// </summary>
     private object? EvaluateGetOnFallback(object? obj, string memberName)
     {
-        if (obj is SharpTSObjectNamespace)
+        if (obj is SharpTSObjectNamespace or SharpTSObjectPrototype)
             return GetPropertyValue(obj, memberName);
         if (obj is ArrayBufferConstructorImpl)
             return GetPropertyValue(obj, memberName);
