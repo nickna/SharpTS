@@ -2892,6 +2892,36 @@ public partial class RuntimeEmitter
     /// Emits SetPropertyStrict(object obj, string name, object value, bool strictMode) -> void
     /// In strict mode, throws TypeError for modifications to frozen objects or new properties on sealed objects.
     /// </summary>
+    private void EmitDictionaryInheritedSetGuard(
+        ILGenerator il, SetPropertyStrictInputs inputs, Label silentReturn)
+    {
+        // An own property masks the prototype. Otherwise resolve the nearest
+        // inherited descriptor before testing whether a new own slot is allowed;
+        // even a non-extensible receiver can invoke an inherited setter.
+        var ownPolicy = il.DefineLabel();
+        var reject = il.DefineLabel();
+        il.Emit(OpCodes.Ldarg_0);
+        il.Emit(OpCodes.Castclass, _types.DictionaryStringObject);
+        il.Emit(OpCodes.Ldarg_1);
+        il.Emit(OpCodes.Callvirt, _types.GetMethod(_types.DictionaryStringObject, "ContainsKey", _types.String));
+        il.Emit(OpCodes.Brtrue, ownPolicy);
+        il.Emit(OpCodes.Ldarg_0);
+        il.Emit(OpCodes.Ldarg_1);
+        il.Emit(OpCodes.Call, inputs.DescriptorStorage.GetPropertyDescriptor);
+        il.Emit(OpCodes.Brtrue, ownPolicy);
+        EmitConstructorPrototypeSetGuard(il, inputs, () =>
+        {
+            il.Emit(OpCodes.Ldarg_0);
+            il.Emit(OpCodes.Call, inputs.ObjectPrototypes.GetPrototypeOf);
+        }, ownPolicy, reject);
+        il.MarkLabel(reject);
+        il.Emit(OpCodes.Ldarg_3);
+        il.Emit(OpCodes.Brfalse, silentReturn);
+        EmitThrowTypeErrorWithName(il, inputs.Errors,
+            "Cannot assign to read only property '", "' of object");
+        il.MarkLabel(ownPolicy);
+    }
+
     private void EmitSetPropertyStrict(
         TypeBuilder typeBuilder,
         EmittedObjectWriteRuntime objectWrite,
@@ -3409,6 +3439,9 @@ public partial class RuntimeEmitter
         il.Emit(OpCodes.Ret);
 
         il.MarkLabel(dictLabel);
+        if (NeedsObjectDefinitionBodies || _features.UsesPropertyWrites
+            || _features.UsesArrayMethodValues || _features.UsesClassPrototypeMutation)
+            EmitDictionaryInheritedSetGuard(il, inputs, nullLabel);
         // For dictionaries, check frozen/sealed tables
         var frozenCheckLabel = il.DefineLabel();
         var sealedCheckLabel = il.DefineLabel();

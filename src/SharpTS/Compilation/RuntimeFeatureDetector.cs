@@ -99,6 +99,7 @@ public sealed partial class RuntimeFeatureDetector
             UsesPromise = false,
             UsesUserClasses = false,
             UsesObjectDefinitionRuntime = false,
+            UsesPropertyWrites = false,
             UsesDate = false,
             UsesRegExp = false,
             UsesBuffer = false,
@@ -947,6 +948,10 @@ public sealed partial class RuntimeFeatureDetector
     private void VisitExpr(Expr? expr)
     {
         if (expr is null) return;
+        if (expr is Expr.Set or Expr.SetIndex or Expr.CompoundSet or Expr.CompoundSetIndex
+            or Expr.LogicalSet or Expr.LogicalSetIndex or Expr.PrefixIncrement or Expr.PostfixIncrement
+            or Expr.SetSuper or Expr.SetPrivate or Expr.CompoundSetPrivate or Expr.LogicalSetPrivate)
+            _set.UsesPropertyWrites = true;
         if (_typeMap?.Get(expr) is TypeInfo.Promise)
             _set.UsesPromise = true;
         switch (expr)

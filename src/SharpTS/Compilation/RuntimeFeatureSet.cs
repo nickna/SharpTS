@@ -131,6 +131,9 @@ public sealed class RuntimeFeatureSet
     // Emission-only reachability of the public Object descriptor-definition helpers.
     // Keep separate from mutation guards, which control semantic optimizations.
     public bool UsesObjectDefinitionRuntime { get; set; } = true;
+    // Emission-only reachability of ordinary property assignment, including
+    // opaque keys. This does not prove anything about a receiver or descriptor.
+    public bool UsesPropertyWrites { get; set; } = true;
     public bool UsesDate { get; set; } = true;              // new Date(), Date.now(), Date.X
     public bool UsesRegExp { get; set; } = true;            // /pattern/ or new RegExp()
     public bool UsesBuffer { get; set; } = true;            // Buffer.from(), new Buffer() — also implied by crypto/fs/zlib/http/fetch/dgram
