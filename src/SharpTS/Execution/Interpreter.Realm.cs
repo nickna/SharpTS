@@ -46,7 +46,7 @@ public partial class Interpreter
     /// The names of every global constant and built-in singleton, for REPL autocomplete.
     /// </summary>
     internal static IEnumerable<string> GlobalNames
-        => _globalConstants.Keys.Concat(BuiltInNames.ErrorTypeNames);
+        => _globalConstants.Keys.Concat([BuiltInNames.Console]).Concat(BuiltInNames.ErrorTypeNames);
 
     // The process-wide RegExp constructor singleton (a SharpTSBuiltInConstructor),
     // resolved once from the static globals table. ECMA-262 §22.2.6.1 requires
@@ -546,6 +546,11 @@ public partial class Interpreter
             value = GetJSON();
             return true;
         }
+        if (name == BuiltInNames.Console)
+        {
+            value = GetConsoleNamespace();
+            return true;
+        }
         if (name == BuiltInNames.String)
         {
             value = GetStringNamespace();
@@ -593,7 +598,7 @@ public partial class Interpreter
     /// method identity holds (<c>Math.max === Math.max</c>).
     /// </summary>
     internal static bool IsRealmIntrinsicName(string name)
-        => name is "Object" or "Math" or "JSON" or "String" or "Number" or "Boolean" or "Array" or "ArrayBuffer" or "RegExp" or "Promise"
+        => name is BuiltInNames.Console or "Object" or "Math" or "JSON" or "String" or "Number" or "Boolean" or "Array" or "ArrayBuffer" or "RegExp" or "Promise"
             || BuiltInNames.IsErrorTypeName(name);
 
     // Per-realm String/Number/Boolean.prototype. Each is an extensible ECMA-262
@@ -615,6 +620,13 @@ public partial class Interpreter
     private Runtime.Types.SharpTSObjectPrototype? _objectPrototype;
     private Runtime.Types.SharpTSDate? _datePrototype;
     private Runtime.Types.SharpTSObjectNamespace? _objectNamespace;
+    private Runtime.Types.SharpTSObject? _consoleNamespace;
+
+    // This actual console value contains only the existing static method objects.
+    // Persistent VM realm data therefore keeps no evaluator or writer delegate.
+    internal Runtime.Types.SharpTSObject GetConsoleNamespace() => _consoleNamespace ??= new(
+        ConsoleBuiltIns.MemberNames.ToDictionary(static name => name,
+            static name => ConsoleBuiltIns.GetMember(name), StringComparer.Ordinal));
     // The String/Number/Boolean constructor objects. Ordinary and extensible per ECMA-262,
     // so they carry a guest-writable expando bag and — like Math/JSON/Object — are held
     // per-Interpreter: `Number.foo = 1` in one program must not be visible to the next one
