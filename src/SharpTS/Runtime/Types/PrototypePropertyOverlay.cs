@@ -66,9 +66,12 @@ internal sealed class PrototypePropertyOverlay(
 
     public bool DefineProperty(string name, SharpTSPropertyDescriptor descriptor)
     {
-        _deletedBuiltIns.Remove(name);
         bool defined = _extras.DefineProperty(name, descriptor);
-        if (defined) TrackOwnStringKey(name);
+        if (defined)
+        {
+            _deletedBuiltIns.Remove(name);
+            TrackOwnStringKey(name);
+        }
         return defined;
     }
 
