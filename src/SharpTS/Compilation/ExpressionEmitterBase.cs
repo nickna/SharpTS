@@ -1643,7 +1643,23 @@ public abstract partial class ExpressionEmitterBase : IEmitterContext
             {
                 var key = SpillObjectLiteralKey(property.Key!);
                 var value = SpillBoxed(property.Value);
-                EmitLiteralDataDefinition(target, key, value);
+                if (Ctx.RuntimeFeatures?.UsesObjectDefinitionRuntime == false)
+                {
+                    // This actual fresh dictionary has only ordinary data slots.
+                    // Direct insertion creates an own property without consulting
+                    // inherited setters or an omitted descriptor-definition body.
+                    EmitPropertyWriteOperation(() =>
+                    {
+                        IL.Emit(OpCodes.Ldloc, target);
+                        IL.Emit(OpCodes.Castclass, Types.DictionaryStringObject);
+                        IL.Emit(OpCodes.Ldloc, key);
+                        IL.Emit(OpCodes.Castclass, Types.String);
+                        IL.Emit(OpCodes.Ldloc, value);
+                        IL.Emit(OpCodes.Callvirt, Types.DictionaryStringObjectSetItem);
+                    });
+                }
+                else
+                    EmitLiteralDataDefinition(target, key, value);
             }
         }
         IL.Emit(OpCodes.Ldloc, target);
