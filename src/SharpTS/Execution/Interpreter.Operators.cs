@@ -819,6 +819,21 @@ public partial class Interpreter
         return primitiveValue;
     }
 
+    // The VM boundary has already proved the actual object and owner. Use the
+    // real JavaScript conversion protocol rather than the compatibility fast
+    // paths used by unrelated CLR values in the general interpreter entry.
+    internal object? ToPrimitiveForVmValue(object value, string hint)
+    {
+        var preferred = hint switch
+        {
+            "default" => PrimitiveHint.Default,
+            "number" => PrimitiveHint.Number,
+            "string" => PrimitiveHint.String,
+            _ => throw new ArgumentException("Expected default, number or string conversion hint.", nameof(hint))
+        };
+        if (TryCallExoticToPrimitive(value, preferred, out var primitive)) return primitive;
+        return OrdinaryToPrimitiveObject(value, preferred);
+    }
     private object? OrdinaryToPrimitiveObject(object receiver, PrimitiveHint hint)
     {
         string first = hint == PrimitiveHint.String ? "toString" : "valueOf";

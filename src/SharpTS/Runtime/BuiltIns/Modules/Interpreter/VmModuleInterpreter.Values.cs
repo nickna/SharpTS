@@ -78,21 +78,24 @@ public static partial class VmModuleInterpreter
         && (IsVmValue(value) || IsVmFacadeCallable(value));
 
     private static object? RunVmValueOperation(VmValueReceipt receipt, Func<object?> operation, bool adaptResult = true)
+        => RunVmValueOperation(receipt.Owner, receipt.Lease, operation, adaptResult);
+
+    private static object? RunVmValueOperation(Execution.Interpreter owner, VmEvaluationLease? lease, Func<object?> operation, bool adaptResult)
     {
-        using var scope = receipt.Lease?.Enter();
+        using var scope = lease?.Enter();
         try
         {
             var result = operation();
-            RecordVmBoundaryValue(result, receipt.Owner);
+            RecordVmBoundaryValue(result, owner);
             return adaptResult && VmExecutionHost.Current is { } host ? host.FromVm(result) : result;
         }
         catch (Exceptions.ThrowException exception)
         {
-            RecordVmBoundaryValue(exception.Value, receipt.Owner);
+            RecordVmBoundaryValue(exception.Value, owner);
             exception.Data["__tsValue"] = VmExecutionHost.Current is { } host ? host.FromVm(exception.Value) : exception.Value;
             throw;
         }
-        finally { receipt.Lease?.Publish(); }
+        finally { lease?.Publish(); }
     }
 
     /// <summary>Reads the real recorded owner's descriptor surface without a CLR shape fallback.</summary>
