@@ -16,6 +16,10 @@ public sealed class HoistedBlockFunctionBindingTests
         yield return ["outer-closure-keeps-owner", "const run=async()=>{const n=100,outer=()=>n;{function f(){return n}const n=3;await Promise.resolve(0);console.log(outer(),f(),n)}console.log(n)};run();", "100 3 3\n100\n"];
         yield return ["var-same-binding-control", "const run=async(n:number)=>{{function f(){return n}var n=3;await Promise.resolve(0);console.log(f(),n)}console.log(n)};run(100);", "3 3\n3\n"];
         yield return ["switch-existing-predeclare-control", "const run=async()=>{const n=100;switch(1){case 1:function f(){return n}const n=3;await Promise.resolve(0);console.log(f(),n);break}console.log(n)};run();", "3 3\n100\n"];
+        yield return ["using-forward-shadow", "/// <reference lib=\"esnext.disposable\" />\nconst run=async()=>{const n=100;{function f(){return n}using n=null;await Promise.resolve(0);console.log(f()===null,n===null)}console.log(n)};run();", "true true\n100\n"];
+        yield return ["try-forward-shadow", "const run=async()=>{const n=100;try{function f(){return n}const n=3;await Promise.resolve(0);console.log(f(),n)}finally{}console.log(n)};run();", "3 3\n100\n"];
+        yield return ["catch-forward-shadow", "const run=async()=>{const n=100;try{throw 0}catch(e){function f(){return n}const n=3;await Promise.resolve(0);console.log(f(),n)}console.log(n)};run();", "3 3\n100\n"];
+        yield return ["finally-forward-shadow", "const run=async()=>{const n=100;try{}finally{function f(){return n}const n=3;await Promise.resolve(0);console.log(f(),n)}console.log(n)};run();", "3 3\n100\n"];
     }
 
     public static IEnumerable<object[]> Modes() => Cases().SelectMany(row =>

@@ -397,6 +397,18 @@ internal sealed class GeneratorBlockScopeRenamer : AstVisitorBase
             foreach (var child in sequence.Statements) PredeclareBlockBinding(child);
             return;
         }
+        if (declaration is Stmt.Using usingDeclaration)
+        {
+            foreach (var binding in usingDeclaration.Bindings)
+            {
+                if (binding.Name is null) continue;
+                if (_arrowDepth > 0)
+                    CurrentScope.TryAdd(binding.Name.Lexeme, binding.Name.Lexeme);
+                else
+                    DeclareBlockScoped(binding, binding.Name.Lexeme);
+            }
+            return;
+        }
         string? name = declaration switch
         {
             Stmt.Var { IsVar: false } variable => variable.Name.Lexeme,
@@ -518,6 +530,7 @@ internal sealed class GeneratorBlockScopeRenamer : AstVisitorBase
     protected override void VisitTryCatch(Stmt.TryCatch stmt)
     {
         PushScope();
+        foreach (var declaration in stmt.TryBlock) PredeclareBlockBinding(declaration);
         foreach (var s in stmt.TryBlock) Visit(s);
         PopScope();
 
@@ -531,6 +544,7 @@ internal sealed class GeneratorBlockScopeRenamer : AstVisitorBase
                 else
                     CurrentScope[stmt.CatchParam.Lexeme] = stmt.CatchParam.Lexeme;
             }
+            foreach (var declaration in stmt.CatchBlock) PredeclareBlockBinding(declaration);
             foreach (var s in stmt.CatchBlock) Visit(s);
             PopScope();
         }
@@ -538,6 +552,7 @@ internal sealed class GeneratorBlockScopeRenamer : AstVisitorBase
         if (stmt.FinallyBlock != null)
         {
             PushScope();
+            foreach (var declaration in stmt.FinallyBlock) PredeclareBlockBinding(declaration);
             foreach (var s in stmt.FinallyBlock) Visit(s);
             PopScope();
         }
