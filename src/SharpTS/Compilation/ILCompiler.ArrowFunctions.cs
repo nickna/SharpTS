@@ -1415,6 +1415,17 @@ public partial class ILCompiler
                     && !_closures.Analyzer.TryGetLoopBodyCellCapture(closure, name, out _))
                     result.Add(name);
         }
+        // An ordinary descendant can require this environment even when its
+        // immediate parent only creates that descendant and reads no binding.
+        foreach (var (function, captures, _) in _collectedInnerFunctions)
+        {
+            if (function.IsAsync || function.IsGenerator) continue;
+            foreach (var name in captures)
+                if (owned.Contains(name)
+                    && ReferenceEquals(_closures.Analyzer.GetCaptureSource(function, name), owner)
+                    && !_closures.Analyzer.TryGetLoopBodyCellCapture(function, name, out _))
+                    result.Add(name);
+        }
         result.ExceptWith(_closures.Analyzer.GetPerIterationLoopBindings(owner));
         result.ExceptWith(_closures.Analyzer.GetCellOnlyCapturedLocalNames(owner));
         return result;
