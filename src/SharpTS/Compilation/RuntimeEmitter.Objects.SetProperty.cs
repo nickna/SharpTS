@@ -8,6 +8,12 @@ namespace SharpTS.Compilation;
 // Split out of RuntimeEmitter.Objects.Properties.cs (#1141): the property/index assignment emitters (sloppy + strict).
 public partial class RuntimeEmitter
 {
+    // Keep descriptor-aware write bodies for every source or helper escape;
+    // a plain program that cannot reach writes needs none of these branches.
+    private bool NeedsObjectDescriptorWrites => NeedsObjectDefinitionBodies || _features.UsesPropertyWrites
+        || _features.UsesArrayMethodValues || _features.UsesClassPrototypeMutation
+        || _features.UsesArrayPrototypeMutation;
+
     private void EmitNamespaceSetBranch(ILGenerator il, EmittedNamespaceRuntime namespaces)
     {
         var notNamespace = il.DefineLabel();
@@ -2929,6 +2935,9 @@ public partial class RuntimeEmitter
     )
     {
         var method = (MethodBuilder)objectWrite.PropertyStrict;
+        // Descriptor-aware writes are unreachable only when source writes and
+        // every descriptor/prototype/helper escape have all been excluded.
+        var emitDescriptorWrites = NeedsObjectDescriptorWrites;
 
         var il = method.GetILGenerator();
         var nullLabel = il.DefineLabel();
@@ -3413,18 +3422,21 @@ public partial class RuntimeEmitter
         EmitThrowTypeErrorWithName(il, inputs.Errors, "Cannot assign to read only property '", "' of object");
         il.MarkLabel(sharpWritableLabel);
 
-        // The carrier writes its raw dictionary; keep an existing writable
-        // own data descriptor current for descriptor-aware reads as well.
-        var sharpDescriptorLocal = il.DeclareLocal(inputs.DescriptorStorage.DescriptorType);
-        il.Emit(OpCodes.Ldarg_0);
-        il.Emit(OpCodes.Ldarg_1);
-        il.Emit(OpCodes.Call, inputs.DescriptorStorage.GetPropertyDescriptor);
-        il.Emit(OpCodes.Stloc, sharpDescriptorLocal);
-        il.Emit(OpCodes.Ldloc, sharpDescriptorLocal);
-        il.Emit(OpCodes.Brfalse, sharpDelegateToObjectLabel);
-        il.Emit(OpCodes.Ldloc, sharpDescriptorLocal);
-        il.Emit(OpCodes.Ldarg_2);
-        il.Emit(OpCodes.Callvirt, inputs.DescriptorStorage.DescriptorValue.GetSetMethod()!);
+        if (emitDescriptorWrites)
+        {
+            // Keep existing writable own descriptors current when the carrier
+            // writes its raw dictionary; setter/refusal paths remain above.
+            var sharpDescriptorLocal = il.DeclareLocal(inputs.DescriptorStorage.DescriptorType);
+            il.Emit(OpCodes.Ldarg_0);
+            il.Emit(OpCodes.Ldarg_1);
+            il.Emit(OpCodes.Call, inputs.DescriptorStorage.GetPropertyDescriptor);
+            il.Emit(OpCodes.Stloc, sharpDescriptorLocal);
+            il.Emit(OpCodes.Ldloc, sharpDescriptorLocal);
+            il.Emit(OpCodes.Brfalse, sharpDelegateToObjectLabel);
+            il.Emit(OpCodes.Ldloc, sharpDescriptorLocal);
+            il.Emit(OpCodes.Ldarg_2);
+            il.Emit(OpCodes.Callvirt, inputs.DescriptorStorage.DescriptorValue.GetSetMethod()!);
+        }
 
         il.MarkLabel(sharpDelegateToObjectLabel);
         il.Emit(OpCodes.Ldarg_0);
@@ -3439,8 +3451,7 @@ public partial class RuntimeEmitter
         il.Emit(OpCodes.Ret);
 
         il.MarkLabel(dictLabel);
-        if (NeedsObjectDefinitionBodies || _features.UsesPropertyWrites
-            || _features.UsesArrayMethodValues || _features.UsesClassPrototypeMutation)
+        if (emitDescriptorWrites)
             EmitDictionaryInheritedSetGuard(il, inputs, nullLabel);
         // For dictionaries, check frozen/sealed tables
         var frozenCheckLabel = il.DefineLabel();
