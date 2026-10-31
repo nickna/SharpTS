@@ -3382,6 +3382,20 @@ public partial class RuntimeEmitter
         il.Emit(OpCodes.Brfalse, nullLabel);
         EmitThrowTypeErrorWithName(il, inputs.Errors, "Cannot assign to read only property '", "' of object");
         il.MarkLabel(sharpWritableLabel);
+
+        // The carrier writes its raw dictionary; keep an existing writable
+        // own data descriptor current for descriptor-aware reads as well.
+        var sharpDescriptorLocal = il.DeclareLocal(inputs.DescriptorStorage.DescriptorType);
+        il.Emit(OpCodes.Ldarg_0);
+        il.Emit(OpCodes.Ldarg_1);
+        il.Emit(OpCodes.Call, inputs.DescriptorStorage.GetPropertyDescriptor);
+        il.Emit(OpCodes.Stloc, sharpDescriptorLocal);
+        il.Emit(OpCodes.Ldloc, sharpDescriptorLocal);
+        il.Emit(OpCodes.Brfalse, sharpDelegateToObjectLabel);
+        il.Emit(OpCodes.Ldloc, sharpDescriptorLocal);
+        il.Emit(OpCodes.Ldarg_2);
+        il.Emit(OpCodes.Callvirt, inputs.DescriptorStorage.DescriptorValue.GetSetMethod()!);
+
         il.MarkLabel(sharpDelegateToObjectLabel);
         il.Emit(OpCodes.Ldarg_0);
         il.Emit(OpCodes.Castclass, inputs.ObjectStorage.Type);
