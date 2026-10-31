@@ -268,7 +268,8 @@ public partial class ILEmitter
         }
         else
         {
-            // Complex case: has spreads or computed keys, use Dictionary<string, object?> and SetIndex.
+            // Keep promoted source storage, but complete every copied/explicit
+            // data property through the same own-definition path.
             // A record's merged field count is only a bounded capacity hint, never a proof
             // of runtime keys: optional/deleted fields and structurally wider values still
             // go through the full copy operation. Cap the hint to avoid large speculative
@@ -286,10 +287,9 @@ public partial class ILEmitter
                 IL.Emit(OpCodes.Newobj, _ctx.Types.GetConstructor(_ctx.Types.DictionaryStringObject));
             }
 
+            var target = _helpers.SpillStoreObject();
             foreach (var prop in o.Properties)
             {
-                IL.Emit(OpCodes.Dup);
-
                 if (prop.IsSpread)
                 {
                     if (prop.Value is Expr.Variable variable &&
@@ -300,42 +300,35 @@ public partial class ILEmitter
                         foreach (var field in source.Shape.Fields)
                         {
                             var builder = source.Shape.FieldBuilders[field.Name];
-                            IL.Emit(OpCodes.Dup);
                             IL.Emit(OpCodes.Ldstr, field.Name);
+                            var key = _helpers.SpillStoreObject();
                             IL.Emit(OpCodes.Ldloca, source.Local);
                             IL.Emit(OpCodes.Ldfld, builder);
                             if (builder.FieldType.IsValueType)
                                 IL.Emit(OpCodes.Box, builder.FieldType);
-                            IL.Emit(OpCodes.Callvirt, _ctx.Types.GetMethod(
-                                _ctx.Types.DictionaryStringObject, "set_Item", _ctx.Types.String, _ctx.Types.Object));
+                            var value = _helpers.SpillStoreObject();
+                            EmitLiteralDataDefinition(target, key, value);
                         }
-                        IL.Emit(OpCodes.Pop); // consume the duplicate target, like MergeIntoObject
                         continue;
                     }
                     // Spread: merge the object into target
-                    EmitExpression(prop.Value);
-                    EmitBoxIfNeeded(prop.Value);
-                    IL.Emit(OpCodes.Call, _ctx.Runtime!.ObjectConstruction.MergeIntoDictionary);
-                }
-                else if (prop.Key is Expr.ComputedKey ck)
-                {
-                    // Computed key: evaluate key expression and use SetIndex
-                    EmitExpression(ck.Expression);
-                    EmitBoxIfNeeded(ck.Expression);
-                    EmitExpression(prop.Value);
-                    EmitBoxIfNeeded(prop.Value);
-                    IL.Emit(OpCodes.Call, _ctx.Runtime!.ObjectWrite.Index);
+                    var spread = SpillBoxed(prop.Value);
+                    EmitPropertyWriteOperation(() =>
+                    {
+                        IL.Emit(OpCodes.Ldloc, target);
+                        IL.Emit(OpCodes.Castclass, _ctx.Types.DictionaryStringObject);
+                        IL.Emit(OpCodes.Ldloc, spread);
+                        IL.Emit(OpCodes.Call, _ctx.Runtime!.ObjectConstruction.MergeIntoDictionary);
+                    });
                 }
                 else
                 {
-                    // Static key: set directly
-                    EmitStaticPropertyKey(prop.Key!);
-                    EmitExpression(prop.Value);
-                    EmitBoxIfNeeded(prop.Value);
-                    IL.Emit(OpCodes.Callvirt, _ctx.Types.GetMethod(_ctx.Types.DictionaryStringObject, "set_Item", _ctx.Types.String, _ctx.Types.Object));
+                    var key = SpillObjectLiteralKey(prop.Key!);
+                    var value = SpillBoxed(prop.Value);
+                    EmitLiteralDataDefinition(target, key, value);
                 }
             }
-
+            IL.Emit(OpCodes.Ldloc, target);
             // Result is already Dictionary<string, object?>, no CreateObject needed
         }
         // The stack now holds a Dictionary reference (or $Object wrapper).
