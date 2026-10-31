@@ -2224,6 +2224,8 @@ public partial class TypeChecker
             if (binding.Name != null)
             {
                 DeclareValue(binding.Name, resourceType);
+                ReachLexicalValueFlow(Bindings.GetSymbol(binding.Name)!);
+                MarkDefinitelyAssigned(binding.Name);
             }
         }
     }
