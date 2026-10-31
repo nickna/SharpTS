@@ -430,6 +430,8 @@ public partial class RuntimeEmitter
         // Emit $IHasFields interface for unified property access
         // Must come before $Object which implements it
         EmitHasFieldsInterface(moduleBuilder, runtime.ObjectFields);
+        if (features.UsesUserClasses)
+            EmitSourceDataDefinitionContract(moduleBuilder, runtime.ObjectFields);
         sourceOwners?.DeclareContract(runtime.ObjectFields.Interface);
         runtime.ObjectFields.CompleteEmission();
         EmitCompactObjectRecordInterface(moduleBuilder, runtime.Records);

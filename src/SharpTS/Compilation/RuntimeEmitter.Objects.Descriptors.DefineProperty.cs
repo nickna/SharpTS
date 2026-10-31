@@ -80,7 +80,8 @@ public partial class RuntimeEmitter
         EmittedNumericCoercionRuntime NumericCoercion,
         EmittedObjectStorageRuntime ObjectStorage,
         EmittedRecordStorageRuntime Records,
-        FieldInfo UndefinedInstance
+        FieldInfo UndefinedInstance,
+        EmittedSourceDataDefinitionRuntime? SourceDataDefinition
     );
 
     private readonly record struct DefinePropertyArrayLengthStorageInputs(
@@ -1058,6 +1059,50 @@ public partial class RuntimeEmitter
             wasGenericLocal,
             endLabel
         );
+
+        if (inputs.SourceDataDefinition is { } source)
+        {
+            var notSource = il.DefineLabel();
+            il.Emit(OpCodes.Ldarg_0);
+            il.Emit(OpCodes.Isinst, source.Contract);
+            il.Emit(OpCodes.Brfalse, notSource);
+            // GetType is sealed; verify the actual output module before dispatch.
+            il.Emit(OpCodes.Ldarg_0);
+            il.Emit(OpCodes.Callvirt, _types.GetMethodNoParams(_types.Object, "GetType"));
+            var getModule = _types.GetProperty(_types.Type, "Module").GetGetMethod()!;
+            il.Emit(OpCodes.Callvirt, getModule);
+            il.Emit(OpCodes.Ldtoken, source.Contract);
+            il.Emit(OpCodes.Call, _types.TypeGetTypeFromHandle);
+            il.Emit(OpCodes.Callvirt, getModule);
+            il.Emit(OpCodes.Ceq);
+            il.Emit(OpCodes.Brfalse, notSource);
+            // An attribute-only update preserves the existing data slot. Do not
+            // materialize a prototype method into its dynamic dictionary and
+            // change the property's creation order. New data and accessor-to-data
+            // definitions still install their default undefined value below.
+            var writeSourceValue = il.DefineLabel();
+            il.Emit(OpCodes.Ldloc, dictLocal);
+            il.Emit(OpCodes.Ldstr, "value");
+            il.Emit(OpCodes.Ldloca, explicitValuePresenceLocal);
+            il.Emit(OpCodes.Callvirt, dictTryGetValue);
+            il.Emit(OpCodes.Brtrue, writeSourceValue);
+            il.Emit(OpCodes.Ldloc, existingDescLocal);
+            il.Emit(OpCodes.Brfalse, writeSourceValue);
+            il.Emit(OpCodes.Ldloc, existingDescLocal);
+            il.Emit(OpCodes.Callvirt, inputs.DescriptorStorage.DescriptorGetter.GetGetMethod()!);
+            il.Emit(OpCodes.Brtrue, writeSourceValue);
+            il.Emit(OpCodes.Ldloc, existingDescLocal);
+            il.Emit(OpCodes.Callvirt, inputs.DescriptorStorage.DescriptorSetter.GetGetMethod()!);
+            il.Emit(OpCodes.Brfalse, endLabel);
+            il.MarkLabel(writeSourceValue);
+            il.Emit(OpCodes.Ldarg_0);
+            il.Emit(OpCodes.Castclass, source.Contract);
+            il.Emit(OpCodes.Ldloc, propNameLocal);
+            il.Emit(OpCodes.Ldloc, valueToWriteLocal);
+            il.Emit(OpCodes.Callvirt, source.DefineValue);
+            il.Emit(OpCodes.Br, endLabel);
+            il.MarkLabel(notSource);
+        }
 
         EmitDefinePropertyObjectStorage(
             il,

@@ -2119,7 +2119,8 @@ public partial class RuntimeEmitter
                 new FunctionOwnPrototypeInputs(runtime.FunctionValues, runtime.FunctionAttributes, runtime.GeneratorPrototypes.Kind),
                 NativeProxyRejection: runtime.ReflectedMethods.NativeProxyRejection,
                 GuestOwnProperties: runtime.GuestOwnProperties,
-                SourceOwners: runtime.ClassInitialization.SourceOwners
+                SourceOwners: runtime.ClassInitialization.SourceOwners,
+                SourceDataDefinition: runtime.ObjectFields.SourceDataDefinition
             )
         );
         // MergeIntoObject implements CopyDataProperties through GetKeys and

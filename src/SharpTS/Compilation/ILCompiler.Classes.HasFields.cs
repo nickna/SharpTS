@@ -82,6 +82,7 @@ public partial class ILCompiler
             ensureFields, fieldsGetter, getPropertyMethod, setPropertyMethod,
             hasPropertyMethod, fieldsField));
         EmitGuestDataFieldBodies(typeBuilder, fieldsField, ensureFields);
+        EmitSourceDataDefinition(typeBuilder, ensureFields);
     }
 
     private void EmitEnsureFieldsBody(MethodBuilder method, FieldInfo fieldsField)

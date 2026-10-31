@@ -70,7 +70,8 @@ public partial class RuntimeEmitter
         FunctionOwnPrototypeInputs OwnPrototype,
         MethodInfo? NativeProxyRejection,
         EmittedGuestOwnPropertyRuntime? GuestOwnProperties = null,
-        NativeSourceOwnerCatalog? SourceOwners = null
+        NativeSourceOwnerCatalog? SourceOwners = null,
+        EmittedSourceDataDefinitionRuntime? SourceDataDefinition = null
     );
 
     private readonly record struct DefinePropertyArrayLengthCoercionInputs(
@@ -818,7 +819,8 @@ public partial class RuntimeEmitter
                 inputs.NumericCoercion,
                 inputs.ObjectStorage,
                 inputs.Records,
-                inputs.UndefinedInstance
+                inputs.UndefinedInstance,
+                inputs.SourceDataDefinition
             ),
             propNameLocal,
             dictLocal,
