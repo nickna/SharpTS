@@ -756,17 +756,16 @@ public partial class Interpreter
     private Runtime.Types.SharpTSGlobalThis? _globalThis;
     internal Runtime.Types.SharpTSGlobalThis GlobalThis => _globalThis ??= CreateRealmGlobalThis();
 
+    private object? ResolveGlobalObjectIntrinsic(string name) =>
+        TryGetRealmIntrinsic(name, out var intrinsic) ? intrinsic
+            : _globalConstants.TryGetValue(name, out var global)
+                && (global is SharpTSBuiltInConstructor or IBuiltInTypeConstructor || name is
+                    BuiltInNames.ParseInt or BuiltInNames.ParseFloat or BuiltInNames.Eval or BuiltInNames.IsNaN
+                    or BuiltInNames.Undefined or BuiltInNames.NaN or BuiltInNames.Infinity) ? global : null;
+
     private SharpTSGlobalThis CreateRealmGlobalThis()
     {
-        var globalThis = new SharpTSGlobalThis(name =>
-            TryGetRealmIntrinsic(name, out var intrinsic)
-                ? intrinsic
-                : _globalConstants.TryGetValue(name, out var global)
-                    && (global is SharpTSBuiltInConstructor or IBuiltInTypeConstructor || name is
-                        BuiltInNames.ParseInt or BuiltInNames.ParseFloat or BuiltInNames.Eval or BuiltInNames.IsNaN
-                        or BuiltInNames.Undefined or BuiltInNames.NaN or BuiltInNames.Infinity)
-                        ? global
-                        : null);
+        var globalThis = new SharpTSGlobalThis(ResolveGlobalObjectIntrinsic);
         // Node timer globals are enumerable, mutable own data slots. Use the
         // same actual function values as bare-name lookup, so descriptors,
         // replacement and deletion share the global object's storage.

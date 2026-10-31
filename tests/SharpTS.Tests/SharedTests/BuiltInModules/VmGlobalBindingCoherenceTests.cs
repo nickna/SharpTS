@@ -10,6 +10,7 @@ public sealed class VmGlobalBindingCoherenceTests
         yield return ["virtual-standard-globals", "import * as vm from 'node:vm';console.log(vm.runInNewContext('typeof Function'),vm.runInNewContext('typeof Map'),vm.runInNewContext('undefined===undefined'));", "function function true\n"];
         yield return ["escaped-context-read", "import * as vm from 'node:vm';const ctx:any={value:7};const f:any=vm.runInNewContext('()=>value',ctx);console.log(f());", "7\n"];
         yield return ["escaped-global-alias", "import * as vm from 'node:vm';const ctx:any={value:7};const f:any=vm.runInNewContext('()=>globalThis.value',ctx);console.log(f());", "7\n"];
+        yield return ["escaped-later-property", "import * as vm from 'node:vm';const ctx:any=vm.createContext({});const f:any=vm.runInContext('()=>value',ctx);vm.runInContext('globalThis.value=7',ctx);console.log(f());", "7\n"];
         yield return ["lexical-tdz", "import * as vm from 'node:vm';try{vm.runInNewContext('value;let value=9',{value:1});}catch(e){console.log((e as Error).name);}", "ReferenceError\n"];
         yield return ["new-property", "import * as vm from 'node:vm';const ctx:any={};console.log(vm.runInNewContext('globalThis.value=7;typeof value;',ctx),ctx.value);", "number 7\n"];
         yield return ["seeded-alias", "import * as vm from 'node:vm';const ctx:any={value:1};console.log(vm.runInNewContext('globalThis.value=7;value;',ctx),ctx.value);", "7 7\n"];

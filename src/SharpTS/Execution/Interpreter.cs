@@ -2376,7 +2376,7 @@ public partial class Interpreter : IDisposable
             object? initialValue = _environment.IsDefinedLocally(name) && !_environment.HasObjectBinding(name)
                 ? _environment.GetAt(0, name).ToObject()
                 : SharpTSUndefined.Instance;
-            if (!GlobalThis.DefineProperty(name, new SharpTSPropertyDescriptor(
+            if (!GlobalThis.DefineGlobalVariable(name, new SharpTSPropertyDescriptor(
                     initialValue, writable: true, enumerable: true, configurable: false)
                     { HasValue = true }))
                 throw new InterpreterException($"TypeError: Cannot declare global variable '{name}'.");

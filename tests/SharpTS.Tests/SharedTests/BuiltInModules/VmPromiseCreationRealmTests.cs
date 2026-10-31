@@ -7,6 +7,7 @@ public sealed class VmPromiseCreationRealmTests
 {
     public static IEnumerable<object[]> Cases()
     {
+        yield return ["async-arrow", "import * as vm from 'node:vm';async function main(){const ctx:any=vm.createContext({});const C:any=vm.runInContext('Promise',ctx);const f:any=vm.runInContext('async()=>{await 0;return Promise}',ctx);const outer:any=Promise;console.log(await f()===C,Promise===outer);}main();", "true true\n"];
         yield return ["parenthesized-async-arrow", "import * as vm from 'node:vm';async function main(){const ctx:any=vm.createContext({});const C:any=vm.runInContext('Promise',ctx);const f:any=vm.runInContext('(async()=>{await 0;return Promise})',ctx);const outer:any=Promise;console.log(await f()===C,Promise===outer);}main();", "true true\n"];
         yield return ["original", "import * as vm from \"node:vm\";const ctx:any=vm.createContext({});const p:any=vm.runInContext(\"class P extends Promise{static get [Symbol.species](){return Promise;}};globalThis.P=P;new P(()=>{})\",ctx);const C:any=vm.runInContext(\"Promise\",ctx);const P:any=vm.runInContext(\"P\",ctx);const child:any=p.then((value:any)=>value);console.log(p.constructor===P,child.constructor===C,child.constructor!==P);", "true true true\n"];
         yield return ["inherited-species", "import * as vm from 'node:vm';const ctx:any=vm.createContext({});const p:any=vm.runInContext('class P extends Promise{};globalThis.P=P;new P(()=>{})',ctx);const P:any=vm.runInContext('P',ctx);console.log(p.then(()=>1).constructor===P);", "true\n"];

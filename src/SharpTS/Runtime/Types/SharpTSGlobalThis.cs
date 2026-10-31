@@ -11,7 +11,7 @@ namespace SharpTS.Runtime.Types;
 /// It contains references to all built-in globals (Math, console, JSON, etc.) and provides
 /// self-reference (globalThis.globalThis === globalThis).
 /// </remarks>
-public sealed class SharpTSGlobalThis : ISharpTSPropertyAccessor
+public sealed partial class SharpTSGlobalThis : ISharpTSPropertyAccessor
 {
     /// <summary>
     /// Process-wide template instance, retained as a fallback (and the
@@ -46,13 +46,19 @@ public sealed class SharpTSGlobalThis : ISharpTSPropertyAccessor
     /// built-in globals.
     /// </summary>
     public bool HasUserProperty(string name)
-        => _properties.HasProperty(name) || _properties.HasSetter(name);
+        => ContextDescriptor(name) is not null || _properties.HasProperty(name) || _properties.HasSetter(name);
 
     internal bool IsDeletedProperty(string name) => _deletedProperties.Contains(name);
 
     internal bool TryGetUserAccessor(
         string name, out ISharpTSCallable? getter, out ISharpTSCallable? setter)
     {
+        if (ContextDescriptor(name) is { } descriptor && (descriptor.HasGet || descriptor.HasSet))
+        {
+            getter = descriptor.Get;
+            setter = descriptor.Set;
+            return true;
+        }
         getter = _properties.GetGetter(name);
         setter = _properties.GetSetter(name);
         return getter is not null || setter is not null;
@@ -65,7 +71,7 @@ public sealed class SharpTSGlobalThis : ISharpTSPropertyAccessor
         // merge as ordinary objects. Preserve omitted attributes explicitly here;
         // global declarations can pre-populate the backing slot before a later
         // Object.defineProperties attribute-only update reaches this facade.
-        if (_properties.GetOwnPropertyDescriptor(name) is { } current)
+        if ((ContextDescriptor(name) ?? _properties.GetOwnPropertyDescriptor(name)) is { } current)
         {
             if (!descriptor.HasWritable && !current.HasGet && !current.HasSet)
             {
@@ -83,13 +89,19 @@ public sealed class SharpTSGlobalThis : ISharpTSPropertyAccessor
                 descriptor.HasConfigurable = true;
             }
         }
-        bool applied = _properties.DefineProperty(name, descriptor);
+        bool applied = _vmContext is { } context
+            ? context.Define(name, descriptor) : _properties.DefineProperty(name, descriptor);
         if (applied) _vmWrittenProperties?.Add(name);
         return applied;
     }
 
     internal SharpTSPropertyDescriptor? GetOwnPropertyDescriptor(string name)
     {
+        if (ContextDescriptor(name) is { } contextDescriptor)
+        {
+            if (contextDescriptor.HasValue) contextDescriptor.Value = VmContext.ReadContextValue(contextDescriptor.Value);
+            return contextDescriptor;
+        }
         if (_properties.GetOwnPropertyDescriptor(name) is { } userDescriptor)
             return userDescriptor;
         if (!HasProperty(name)) return null;
@@ -135,6 +147,9 @@ public sealed class SharpTSGlobalThis : ISharpTSPropertyAccessor
     /// </returns>
     public object? GetProperty(string name)
     {
+        if (ContextDescriptor(name) is { } contextDescriptor)
+            return contextDescriptor.HasValue ? VmContext.ReadContextValue(contextDescriptor.Value) : SharpTSUndefined.Instance;
+
         // Check user-assigned properties first
         if (_properties.Fields.TryGetValue(name, out var value))
         {
@@ -151,7 +166,7 @@ public sealed class SharpTSGlobalThis : ISharpTSPropertyAccessor
 
         // An Interpreter-backed global object resolves mutable intrinsics from
         // its owning realm so bare `Error` and `globalThis.Error` share identity.
-        if (_realmIntrinsicResolver?.Invoke(name) is { } realmIntrinsic)
+        if (ResolveIntrinsic(name) is { } realmIntrinsic)
         {
             return realmIntrinsic;
         }
@@ -243,14 +258,21 @@ public sealed class SharpTSGlobalThis : ISharpTSPropertyAccessor
     public void SetProperty(string name, object? value)
     {
         _deletedProperties.Remove(name);
-        _properties.SetProperty(name, value);
+        if (_vmContext is { } context)
+        {
+            context.Set(name, value);
+            if (_vmDeclaredVariables?.Contains(name) == true || context.GetDescriptor(name) is null)
+                _properties.SetProperty(name, value);
+        }
+        else _properties.SetProperty(name, value);
         _vmWrittenProperties?.Add(name);
     }
 
     internal bool DeleteProperty(string name)
     {
-        if (HasUserProperty(name) && !_properties.DeleteProperty(name))
+        if (_properties.HasProperty(name) && !_properties.DeleteProperty(name))
             return false;
+        if (_vmContext is { } context && !context.Delete(name)) return false;
         _deletedProperties.Add(name);
         return true;
     }
@@ -259,7 +281,9 @@ public sealed class SharpTSGlobalThis : ISharpTSPropertyAccessor
         _vmWrittenProperties is null ? [] : _deletedProperties;
 
     internal IEnumerable<string> OwnEnumerableKeys()
-        => _properties.OwnEnumerableKeys();
+        => _vmContext is { } context
+            ? context.Properties.OwnEnumerableKeys().Concat(_properties.OwnEnumerableKeys()).Distinct(StringComparer.Ordinal)
+            : _properties.OwnEnumerableKeys();
 
     internal IEnumerable<string> OwnStringKeys()
         => _properties.OwnVisibleStringKeys();
@@ -287,7 +311,7 @@ public sealed class SharpTSGlobalThis : ISharpTSPropertyAccessor
         if (_deletedProperties.Contains(name)) return false;
         if (name == "globalThis") return true;
 
-        if (_realmIntrinsicResolver?.Invoke(name) is not null) return true;
+        if (ResolveIntrinsic(name) is not null) return true;
 
         // Check if it's a built-in singleton
         var singleton = BuiltInRegistry.Instance.GetSingleton(name);
@@ -310,6 +334,9 @@ public sealed class SharpTSGlobalThis : ISharpTSPropertyAccessor
     {
         get
         {
+            if (_vmContext is { } context)
+                foreach (var key in context.Properties.PropertyNames)
+                    yield return key;
             foreach (var key in _properties.PropertyNames)
                 yield return key;
             // Also include well-known globals

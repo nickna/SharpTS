@@ -2337,7 +2337,9 @@ public partial class Interpreter
         {
             if (descriptor.Set is not null)
             {
-                FunctionBuiltIns.CallWithThis(this, descriptor.Set, receiver, [value]);
+                var actualReceiver = receiver is SharpTSGlobalThis global
+                    ? global.AccessorReceiver : receiver;
+                FunctionBuiltIns.CallWithThis(this, descriptor.Set, actualReceiver, [value]);
             }
             else if (strictMode)
             {
@@ -2708,12 +2710,13 @@ public partial class Interpreter
         {
             return globalGetter is null
                 ? SharpTSUndefined.Instance
-                : BindAccessorToObject(globalGetter, globalObject).CallBoxed(this, []);
+                : BindAccessorToObject(globalGetter, globalObject.AccessorReceiver).CallBoxed(this, []);
         }
         if (obj is SharpTSGlobalThis gtAccessor
             && !gtAccessor.HasUserProperty(memberName)
             && !gtAccessor.IsDeletedProperty(memberName)
-            && TryGetRealmIntrinsic(memberName, out var gtIntrinsic))
+            && (gtAccessor.TryGetContextIntrinsic(memberName, out var gtIntrinsic)
+                || TryGetRealmIntrinsic(memberName, out gtIntrinsic)))
         {
             return gtIntrinsic;
         }
@@ -3478,7 +3481,7 @@ public partial class Interpreter
             if (globalThis.TryGetUserAccessor(memberName, out _, out var setter))
             {
                 if (setter != null)
-                    BindAccessorToObject(setter, globalThis).CallBoxed(this, [value]);
+                    BindAccessorToObject(setter, globalThis.AccessorReceiver).CallBoxed(this, [value]);
                 return value;
             }
             globalThis.SetProperty(memberName, value);

@@ -9,7 +9,7 @@ namespace SharpTS.Runtime.Types;
 /// Tracks which objects have been "contextified" via vm.createContext().
 /// Uses a ConditionalWeakTable so objects can be garbage collected normally.
 /// </summary>
-public static class VmContext
+public static partial class VmContext
 {
     private static readonly ConditionalWeakTable<object, VmContextMarker> _contexts = new();
 
@@ -210,6 +210,7 @@ public static class VmContext
     {
         public VmContextOptions? Options { get; set; }
         internal PromiseIntrinsicState? PromiseRealm { get; set; }
+        internal VmContextGlobalState? Globals { get; set; }
     }
 }
 

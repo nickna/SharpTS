@@ -4,9 +4,41 @@ namespace SharpTS.Execution;
 
 public partial class Interpreter
 {
-    internal void SeedVmGlobalObjectProperties(Dictionary<string, object?> properties)
+    internal IReadOnlyDictionary<string, object?> CaptureVmGlobalIntrinsics()
     {
+        var values = new Dictionary<string, object?>(StringComparer.Ordinal);
+        foreach (var name in GlobalNames.Distinct(StringComparer.Ordinal))
+            if (ResolveGlobalObjectIntrinsic(name) is { } value)
+            {
+                // These actual namespace producers otherwise keep a bound
+                // evaluator method as a lazy prototype factory. A persistent
+                // context retains the already-created prototype data instead.
+                switch (value)
+                {
+                    case Runtime.Types.SharpTSStringNamespace text:
+                        text.RealmPrototypeFactory = ConstantVmPrototype(GetStringPrototype());
+                        break;
+                    case Runtime.Types.SharpTSNumberNamespace number:
+                        number.RealmPrototypeFactory = ConstantVmPrototype(GetNumberPrototype());
+                        break;
+                    case Runtime.Types.SharpTSBooleanNamespace boolean:
+                        boolean.RealmPrototypeFactory = ConstantVmPrototype(GetBooleanPrototype());
+                        break;
+                }
+                values[name] = value;
+            }
+        return values;
+    }
+
+    private static Func<T> ConstantVmPrototype<T>(T prototype) => () => prototype;
+
+    internal void UseVmGlobalObject(Runtime.Types.SharpTSGlobalThis globalObject) => _globalThis = globalObject;
+
+    internal void SeedVmGlobalObjectProperties(Dictionary<string, object?> properties, object? context = null)
+    {
+        bool shared = Runtime.Types.VmContext.ApplyGlobalObjectState(context, this);
         _environment.VmGlobalObject = GlobalThis;
+        if (shared) return;
         foreach (var (name, value) in properties)
             GlobalThis.SetProperty(name,
                 Runtime.BuiltIns.Modules.Interpreter.VmExecutionHost.Current is { } host ? host.ToVm(value) : value);
