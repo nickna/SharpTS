@@ -1906,6 +1906,7 @@ public static partial class ObjectBuiltIns
             SharpTSObjectNamespace objectNamespace => objectNamespace.OwnStringKeys().Cast<object?>().ToList(),
             SharpTSArrayGlobal arrayGlobal => arrayGlobal.OwnStringKeys().Cast<object?>().ToList(),
             SharpTSObject obj => GetOwnPropertyNamesFromObject(obj),
+            SharpTSGlobalThis globalObject => globalObject.OwnStringKeys().Cast<object?>().ToList(),
             ISharpTSPrimitiveConstructor primitiveConstructor => primitiveConstructor.OwnStringKeys().Cast<object?>().ToList(),
             SharpTSFunctionPrototype functionPrototype => functionPrototype.OwnStringKeys().Cast<object?>().ToList(),
             SharpTSClassPrototype prototype => prototype.OwnStringKeys().Cast<object?>().ToList(),
