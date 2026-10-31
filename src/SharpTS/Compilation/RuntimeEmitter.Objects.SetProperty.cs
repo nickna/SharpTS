@@ -117,7 +117,8 @@ public partial class RuntimeEmitter
         TypeBuilder TSFunctionType,
         Type UndefinedType,
         MethodInfo? NativeProxyRejection,
-        NativeSourceOwnerCatalog? SourceOwners = null
+        NativeSourceOwnerCatalog? SourceOwners = null,
+        EmittedPromiseRuntime? Promise = null
     );
 
     private readonly record struct SetIndexStrictInputs(
@@ -2381,6 +2382,41 @@ public partial class RuntimeEmitter
                 inputs.ObjectDescriptors, inputs.ObjectRead, inputs.InvokeMethodUnwrapped, inputs.InvokeMethodValue,
                 inputs.Errors, inputs.UndefinedType, inputs.ObjectPrototypes, true, NativeProxyRejection: inputs.NativeProxyRejection), emitPrototype, create, reject);
 
+    private void EmitPromisePrototypeSetStrict(ILGenerator il, SetPropertyStrictInputs inputs)
+    {
+        if (inputs.Promise is null) return;
+        var promise = il.DefineLabel();
+        var proceed = il.DefineLabel();
+        var reject = il.DefineLabel();
+        il.Emit(OpCodes.Ldarg_0);
+        il.Emit(OpCodes.Isinst, _types.TaskOfObject);
+        il.Emit(OpCodes.Brtrue, promise);
+        il.Emit(OpCodes.Ldarg_0);
+        il.Emit(OpCodes.Isinst, inputs.Promise.Type);
+        il.Emit(OpCodes.Brfalse, proceed);
+        il.MarkLabel(promise);
+        // Existing own descriptors retain the dedicated storage/refusal path.
+        il.Emit(OpCodes.Ldarg_0);
+        il.Emit(OpCodes.Ldarg_1);
+        il.Emit(OpCodes.Call, inputs.ObjectDescriptors.GetOwnPropertyDescriptor);
+        il.Emit(OpCodes.Isinst, inputs.UndefinedType);
+        il.Emit(OpCodes.Brfalse, proceed);
+        EmitConstructorPrototypeSetGuard(il, inputs, () =>
+        {
+            il.Emit(OpCodes.Ldarg_0);
+            il.Emit(OpCodes.Call, inputs.ObjectPrototypes.GetPrototypeOf);
+        }, proceed, reject);
+        il.MarkLabel(reject);
+        il.Emit(OpCodes.Ldarg_3);
+        var silent = il.DefineLabel();
+        il.Emit(OpCodes.Brfalse, silent);
+        EmitThrowTypeErrorWithName(il, inputs.Errors,
+            "Cannot assign to read only property '", "' of object");
+        il.MarkLabel(silent);
+        il.Emit(OpCodes.Ret);
+        il.MarkLabel(proceed);
+    }
+
     private void EmitSloppyClassInstanceSetGuard(ILGenerator il, SetPropertyInputs inputs)
     {
         var proceed = il.DefineLabel();
@@ -2914,6 +2950,7 @@ public partial class RuntimeEmitter
         // in PDS. Strict writes must consult that same guest descriptor.
         EmitNativeMetadataSetStrict(il, inputs);
         EmitIteratorObjectSetStrict(il, inputs);
+        EmitPromisePrototypeSetStrict(il, inputs);
         var notConstructorPrototype = il.DefineLabel();
         il.Emit(OpCodes.Ldarg_0);
         il.Emit(OpCodes.Isinst, _types.Type);

@@ -1490,7 +1490,8 @@ public partial class RuntimeEmitter
                 runtime.FunctionValues.Type,
                 runtime.Sentinels.UndefinedType,
                 NativeProxyRejection: runtime.ReflectedMethods.NativeProxyRejection,
-                SourceOwners: runtime.ClassInitialization.SourceOwners
+                SourceOwners: runtime.ClassInitialization.SourceOwners,
+                Promise: runtime.Promise
             )
         );
         EmitDeleteProperty(
