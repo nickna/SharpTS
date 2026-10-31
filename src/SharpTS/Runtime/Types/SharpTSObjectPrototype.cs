@@ -316,6 +316,10 @@ public sealed class SharpTSObjectUnboundMethod : ISharpTSCallable, IBuiltInFunct
         if (target is bool) return "[object Boolean]";
         if (target is SharpTSBigInt or System.Numerics.BigInteger) return "[object Object]";
         if (target is SharpTSArguments) return "[object Arguments]";
+        if (target is VmInputPropertyView { NativeRole: 1 }
+            || target is SharpTSProxy inputProxy && inputProxy.HasVmInputArrayTarget())
+            return "[object Array]";
+        if (target is VmInputPropertyView { NativeRole: 2 }) return "[object Error]";
         if (target is SharpTSArray) return "[object Array]";
         if (target is SharpTSDate) return "[object Date]";
         if (target is SharpTSRegExp) return "[object RegExp]";

@@ -15,9 +15,10 @@ public static class ArrayStaticBuiltIns
                 object? candidate = args[0].ToObject();
                 bool isArray = candidate switch
                 {
-                    SharpTSProxy proxy => proxy.HasArrayTarget(),
+                    SharpTSProxy proxy => proxy.HasArrayTarget() || proxy.HasVmInputArrayTarget(),
                     SharpTSArray and not SharpTSArguments => true,
                     SharpTSArrayPrototype => true,
+                    VmInputPropertyView { NativeRole: 1 } => true,
                     _ => false,
                 };
                 return RuntimeValue.FromBoolean(isArray);

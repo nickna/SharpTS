@@ -318,6 +318,12 @@ public class SharpTSProxy : ISharpTSCallable
     /// Implements the proxy branch of ECMA-262 IsArray. Revoked proxies throw;
     /// otherwise classification recursively follows the final proxy target.
     /// </summary>
+    internal bool HasVmInputArrayTarget()
+    {
+        EnsureNotRevoked();
+        return _target is VmInputPropertyView { NativeRole: 1 }
+            || _target is SharpTSProxy proxy && proxy.HasVmInputArrayTarget();
+    }
     public bool HasArrayTarget()
     {
         EnsureNotRevoked();

@@ -159,6 +159,36 @@ public sealed class VmInputPropertyViewTests
         GC.KeepAlive(result.View);
     }
 
+    [Theory]
+    [InlineData(1, "object|false|false|true|input:7|[object Array]")]
+    [InlineData(2, "object|false|false|false|input:7|[object Error]")]
+    [InlineData(0, "object|false|false|false|input:7|[object Object]")]
+    public void BrandConsumersUseOnlyTheRecordedRoleAndPreserveOtherCoercions(int role, string expected)
+    {
+        using var caller = new Interpreter(new StringWriter(), new StringWriter());
+        Configure(caller.GetVmExecutionHost());
+        Assert.Equal(expected, Run(caller, new Input { Role = role }, "[typeof input,input instanceof Error,input instanceof TypeError,Array.isArray(input),String(input),Object.prototype.toString.call(input)].join('|')"));
+    }
+
+    [Theory]
+    [InlineData("'Custom'", "true|[object Custom]|tag")]
+    [InlineData("7", "true|[object Array]|tag")]
+    public void ProxyTagLookupStillPrecedesTheProvedArrayDefault(string tag, string expected)
+    {
+        using var caller = new Interpreter(new StringWriter(), new StringWriter());
+        Configure(caller.GetVmExecutionHost());
+        var code = "const log=[];const proxy=new Proxy(input,{get(target,key){if(key===Symbol.toStringTag){log.push('tag');return " + tag + ";}return Reflect.get(target,key);}});[Array.isArray(proxy),Object.prototype.toString.call(proxy),log.join(',')].join('|')";
+        Assert.Equal(expected, Run(caller, new Input { Role = 1 }, code));
+    }
+
+    [Fact]
+    public void AbruptTagsAndRevokedProxiesKeepExistingErrors()
+    {
+        using var caller = new Interpreter(new StringWriter(), new StringWriter());
+        Configure(caller.GetVmExecutionHost());
+        Assert.Equal(true, Run(caller, new Input { Role = 1 }, "const marker={};const proxy=new Proxy(input,{get(target,key){if(key===Symbol.toStringTag)throw marker;return Reflect.get(target,key);}});let same=false;try{Object.prototype.toString.call(proxy)}catch(error){same=error===marker}same"));
+        Assert.Equal("true|true", Run(caller, new Input { Role = 1 }, "const pair=Proxy.revocable(input,{});pair.revoke();let a=false,b=false;try{Array.isArray(pair.proxy)}catch(error){a=error instanceof TypeError}try{Object.prototype.toString.call(pair.proxy)}catch(error){b=error instanceof TypeError}[a,b].join('|')"));
+    }
     [Fact]
     public void OptionalWriterConfigurationIsImmutableAndPrecedesAnyAdmission()
     {
