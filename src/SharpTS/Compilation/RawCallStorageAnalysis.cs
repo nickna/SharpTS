@@ -135,6 +135,8 @@ internal sealed partial class RawCallStorageAnalysis
             changed |= MarkRawFlow(flow.Target, flow.Declaration,
                 passesRawValue(flow.Value, Evidence.Any), passesRawValue(flow.Value, Evidence.Call),
                 passesRawValue(flow.Value, Evidence.Numeric));
+        // Flow facts from this epoch can invalidate a formerly numeric argument.
+        changed |= SeedDynamicNumericArguments();
         return PropagateArguments(passesRawValue) | changed;
     }
 
