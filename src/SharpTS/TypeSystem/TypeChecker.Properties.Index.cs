@@ -65,7 +65,7 @@ public partial class TypeChecker
         if (getIndex.Object is Expr.Super { Method: null } super)
             return CheckComputedSuperIndex(super, getIndex.Index);
 
-        TypeInfo objType = CheckExpr(getIndex.Object);
+        TypeInfo objType = WidenFreshArrayReceiver(getIndex.Object, CheckExpr(getIndex.Object));
         TypeInfo indexType = CheckExpr(getIndex.Index);
         if (_fieldGetterScope is not null)
         {
