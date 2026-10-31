@@ -47,7 +47,7 @@ internal sealed partial class ForwardedReturnValueAnalyzer(TypeMap map, RuntimeF
             analysis._visiting.Clear(); analysis._nativeVisiting.Clear();
             int expressions = analysis._rawExpressions.Count;
             changed = storage?.Propagate(analysis.PassesRawCall) == true;
-            if (storage?.HasMutableDateStaticProducer == true)
+            if (storage?.HasMutableDateStaticProducer == true || storage?.HasErasedGenericFieldProducer == true)
                 foreach (var call in storage.Calls)
                     foreach (var expression in storage.EquivalentExpressions(call))
                         _ = analysis.PassesRawCall(expression, RawCallStorageAnalysis.Evidence.Numeric);
@@ -117,8 +117,12 @@ internal sealed partial class ForwardedReturnValueAnalyzer(TypeMap map, RuntimeF
             Expr.ArrayLiteral array => array.Elements.Any(value => PassesRawCall(value is Expr.Spread spread ? spread.Expression : value, evidence)),
             Expr.ObjectLiteral literal => literal.Properties.Any(property => PassesRawCall(property.Value, evidence)),
             Expr.New creation => creation.Arguments.Any(argument => PassesRawCall(argument, evidence)),
-            Expr.Get member => PassesRawCall(member.Object, evidence),
-            Expr.GetIndex member => PassesRawCall(member.Object, evidence),
+            Expr.Get member => (evidence != RawCallStorageAnalysis.Evidence.Call
+                    && PrimitiveFieldValueAnalysis.IsErasedGenericField(member, map))
+                | PassesRawCall(member.Object, evidence),
+            Expr.GetIndex member => (evidence != RawCallStorageAnalysis.Evidence.Call
+                    && PrimitiveFieldValueAnalysis.IsErasedGenericField(member, map))
+                | PassesRawCall(member.Object, evidence),
             Expr.Spread spread => PassesRawCall(spread.Expression, evidence),
             // Other operators perform their own conversions; their operands are not returned.
             _ => false

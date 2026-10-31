@@ -17,6 +17,7 @@ internal sealed partial class RawCallStorageAnalysis
     private readonly List<Slot> _slots = [];
     private readonly List<Flow> _flows = [];
     private readonly List<Expr.Call> _dateStaticCalls = [];
+    private readonly List<Expr> _erasedGenericFieldReads = [];
     private readonly HashSet<BindingSymbol> _rawBindings = new(ReferenceEqualityComparer.Instance);
     private readonly HashSet<BindingSymbol> _rawCallBindings = new(ReferenceEqualityComparer.Instance);
     private readonly HashSet<object> _rawSlots = new(ReferenceEqualityComparer.Instance);
@@ -32,6 +33,7 @@ internal sealed partial class RawCallStorageAnalysis
     internal HashSet<Expr> Returns { get; } = new(ReferenceEqualityComparer.Instance);
     internal HashSet<Expr.Call> Calls { get; } = new(ReferenceEqualityComparer.Instance);
     internal bool HasMutableDateStaticProducer { get; private set; }
+    internal bool HasErasedGenericFieldProducer => _erasedGenericFieldReads.Count != 0;
     internal HashSet<Stmt.Function> Functions { get; } = new(ReferenceEqualityComparer.Instance);
 
     private RawCallStorageAnalysis(IEnumerable<Stmt> statements, TypeMap map,
@@ -71,6 +73,15 @@ internal sealed partial class RawCallStorageAnalysis
             HasMutableDateStaticProducer = true;
             foreach (var call in _dateStaticCalls)
                 foreach (var expression in EquivalentExpressions(call))
+                    _map.MarkRawNumericResult(expression);
+        }
+        // Source generic fields use object storage even when an instantiated
+        // annotation says number. The fact is a representation veto only.
+        if (HasErasedGenericFieldProducer)
+        {
+            _hasNumericProducer = true;
+            foreach (var read in _erasedGenericFieldReads)
+                foreach (var expression in EquivalentExpressions(read))
                     _map.MarkRawNumericResult(expression);
         }
         ForwardedReturnValueAnalyzer.Analyze(rewritten, _map, features, modules: null, this);
@@ -245,6 +256,18 @@ internal sealed partial class RawCallStorageAnalysis
         protected RawCallStorageAnalysis Analysis { get; } = analysis;
         private readonly HashSet<object> _seen = new(ReferenceEqualityComparer.Instance);
         private bool _emittedSourceBody = true;
+        protected override void VisitGet(Expr.Get expression)
+        {
+            if (collect && _emittedSourceBody && PrimitiveFieldValueAnalysis.IsErasedGenericField(expression, Analysis._map))
+                Analysis._erasedGenericFieldReads.Add(expression);
+            base.VisitGet(expression);
+        }
+        protected override void VisitGetIndex(Expr.GetIndex expression)
+        {
+            if (collect && _emittedSourceBody && PrimitiveFieldValueAnalysis.IsErasedGenericField(expression, Analysis._map))
+                Analysis._erasedGenericFieldReads.Add(expression);
+            base.VisitGetIndex(expression);
+        }
         protected override void VisitCall(Expr.Call call)
         {
             if (collect && _emittedSourceBody) Analysis.Calls.Add(call);

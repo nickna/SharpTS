@@ -94,8 +94,10 @@ internal sealed partial class RawCallStorageAnalysis
                 {
                     Expr.Variable variable => IsRawBinding(variable.Name, Evidence.Any)
                         || _map.IsAssertedAssignmentStorage(variable.Name),
-                    Expr.Get member => PrimitiveFieldValueAnalysis.IsPrimitiveField(member, _map),
-                    Expr.GetIndex { Object: Expr.Variable array } => IsRawBinding(array.Name, Evidence.Numeric),
+                    Expr.Get member => PrimitiveFieldValueAnalysis.IsPrimitiveField(member, _map)
+                        || PrimitiveFieldValueAnalysis.IsErasedGenericField(member, _map),
+                    Expr.GetIndex member => PrimitiveFieldValueAnalysis.IsErasedGenericField(member, _map)
+                        || member.Object is Expr.Variable array && IsRawBinding(array.Name, Evidence.Numeric),
                     _ => false
                 })
                 foreach (var expression in EquivalentExpressions(result))
