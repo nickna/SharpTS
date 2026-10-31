@@ -1036,8 +1036,8 @@ public partial class Interpreter
     }
 
     private IndexTarget.GlobalThis? ResolveGlobalIndexTarget(object? obj, object? index)
-        => obj is SharpTSGlobalThis global && index is string or double
-            ? new IndexTarget.GlobalThis(global, ToPropertyKeyString(index)) : null;
+        => obj is SharpTSGlobalThis global && ToPropertyKey(index) is string key
+            ? new IndexTarget.GlobalThis(global, key) : null;
 
     private void SetGlobalIndexValue(IndexTarget.GlobalThis target, object? value, bool strictMode)
     {
@@ -1054,6 +1054,10 @@ public partial class Interpreter
     [MethodImpl(MethodImplOptions.AggressiveOptimization)]
     private IndexTarget ResolveIndexTarget(object? obj, object? index)
     {
+        if (obj is SharpTSGlobalThis)
+            return ResolveGlobalIndexTarget(obj, index) is { } global
+                ? global : new IndexTarget.Unsupported(obj, index);
+
         if (obj is SharpTSArray array)
         {
             if (index is SharpTSSymbol symbol)
@@ -1083,8 +1087,6 @@ public partial class Interpreter
         // the Unsupported bucket).
         (SharpTSObject sharpObj, _) => new IndexTarget.ObjectString(sharpObj, ToPropertyKeyString(index)),
         (SharpTSInstance instance, _) => new IndexTarget.InstanceString(instance, ToPropertyKeyString(index)),
-        (SharpTSGlobalThis globalThis, string globalKey) => new IndexTarget.GlobalThis(globalThis, globalKey),
-        (SharpTSGlobalThis globalThis, double) => new IndexTarget.GlobalThis(globalThis, ToPropertyKeyString(index)),
         (SharpTSClassPrototype prototype, SharpTSSymbol symbol) => new IndexTarget.ClassPrototypeSymbol(prototype, symbol),
         (ISharpTSMutableBuiltIn builtInPrototype, _) =>
             new IndexTarget.BuiltInPrototypeString(

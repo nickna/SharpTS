@@ -157,7 +157,9 @@ public partial class Interpreter
             RuntimeValue current = RuntimeValue.FromBoxed(GetOwnPropertyObjectValue(obj, key));
             RuntimeValue addValue = await ctx.EvaluateExprAsync(compound.Value);
             RuntimeValue newValue = ApplyCompoundOperatorRV(compound.Operator.Type, current, addValue);
-            if (globalTarget is not null) SetGlobalIndexValue(globalTarget, newValue.ToObject(), _environment.IsStrictMode);
+            // GetValue and PutValue each convert the retained raw key. Guest
+            // coercion may select a different property after the RHS runs.
+            if (globalTarget is not null) PerformIndexSet(obj, index, newValue.ToObject());
             else SetOwnPropertyObjectValue(obj, key, newValue.ToObject(), _environment.IsStrictMode);
             return newValue;
         }
@@ -344,7 +346,7 @@ public partial class Interpreter
             }
 
             RuntimeValue newValue = await ctx.EvaluateExprAsync(logical.Value);
-            if (globalTarget is not null) SetGlobalIndexValue(globalTarget, newValue.ToObject(), _environment.IsStrictMode);
+            if (globalTarget is not null) PerformIndexSet(obj, index, newValue.ToObject());
             else SetOwnPropertyObjectValue(obj, key, newValue.ToObject(), _environment.IsStrictMode);
             return newValue;
         }
