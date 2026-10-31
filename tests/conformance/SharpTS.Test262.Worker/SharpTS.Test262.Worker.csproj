@@ -33,6 +33,7 @@
     <Compile Include="..\SharpTS.Test262\Test262Outcome.cs" />
     <Compile Include="..\SharpTS.Test262\Test262Paths.cs" />
     <Compile Include="..\SharpTS.Test262\Test262Config.cs" />
+    <Compile Include="..\SharpTS.Test262\Test262TraceWriter.cs" />
   </ItemGroup>
 
   <ItemGroup>
