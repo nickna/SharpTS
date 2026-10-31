@@ -77,14 +77,14 @@ public static partial class VmModuleInterpreter
     public static bool IsVmCallableValue(object? value) => IsCoreCallable(value)
         && (IsVmValue(value) || IsVmFacadeCallable(value));
 
-    private static object? RunVmValueOperation(VmValueReceipt receipt, Func<object?> operation)
+    private static object? RunVmValueOperation(VmValueReceipt receipt, Func<object?> operation, bool adaptResult = true)
     {
         using var scope = receipt.Lease?.Enter();
         try
         {
             var result = operation();
             RecordVmBoundaryValue(result, receipt.Owner);
-            return VmExecutionHost.Current is { } host ? host.FromVm(result) : result;
+            return adaptResult && VmExecutionHost.Current is { } host ? host.FromVm(result) : result;
         }
         catch (Exceptions.ThrowException exception)
         {
@@ -129,8 +129,8 @@ public static partial class VmModuleInterpreter
     /// <summary>Checks the actual recorded value's constructor eligibility without invoking it.</summary>
     public static bool IsVmConstructorValue(object value)
     {
-        _ = GetVmValueReceipt(value);
-        return !ReflectBuiltIns.IsNotConstructor(value);
+        var receipt = GetVmValueReceipt(value);
+        return (bool)RunVmValueOperation(receipt, () => !ReflectBuiltIns.IsNotConstructor(value), adaptResult: false)!;
     }
     /// <summary>Constructs only a value produced by a recorded VM operation, preserving explicit newTarget.</summary>
     public static object? ConstructVmCallable(object constructor, object?[] arguments, object? newTarget)

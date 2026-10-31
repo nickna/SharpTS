@@ -113,6 +113,29 @@ public sealed class VmConstructValueTests
         Assert.Throws<ArgumentException>(() => VmModuleInterpreter.IsVmConstructorValue(new object()));
     }
     [Fact]
+    public void ConstructorPredicateAbruptValueUsesItsActualOwnerAndBoundary()
+    {
+        using var caller = new Interpreter(new StringWriter(), new StringWriter());
+        var host = caller.GetVmExecutionHost();
+        var marker = new object();
+        VmModuleInterpreter.ConfigureExecutionHostValueAdapters(host, value => value is SharpTSTypeError ? marker : value, value => value);
+        var proxy = VmModuleInterpreter.ExecuteInNewContext("(()=>{const pair=Proxy.revocable(function(){},{});pair.revoke();return pair.proxy;})()", null, caller)!;
+        var failure = Assert.Throws<ThrowException>(() => VmModuleInterpreter.IsVmConstructorValue(proxy));
+        Assert.True(VmModuleInterpreter.IsVmErrorValue(failure.Value));
+        Assert.Same(marker, failure.Data["__tsValue"]);
+    }
+
+    [Fact]
+    public void ConstructorMetadataDoesNotPassThroughValueConversion()
+    {
+        using var caller = new Interpreter(new StringWriter(), new StringWriter());
+        VmModuleInterpreter.ConfigureExecutionHostValueAdapters(caller.GetVmExecutionHost(), value => value is bool ? "not metadata" : value, value => value);
+        var constructor = VmModuleInterpreter.ExecuteInNewContext("(class Box{})", null, caller)!;
+        var arrow = VmModuleInterpreter.ExecuteInNewContext("(()=>7)", null, caller)!;
+        Assert.True(VmModuleInterpreter.IsVmConstructorValue(constructor));
+        Assert.False(VmModuleInterpreter.IsVmConstructorValue(arrow));
+    }
+    [Fact]
     public void DisposedOwnerRejectsFurtherConstruction()
     {
         var caller = new Interpreter(new StringWriter(), new StringWriter());
