@@ -175,6 +175,9 @@ public static partial class VmModuleInterpreter
     /// <summary>Restores only the actual emitted callback carried by the typed VM adapter.</summary>
     public static object? UnwrapVmCallback(object? value) => value is CompiledCallableAdapter callback ? callback.Original : value;
 
+    /// <summary>Restores only an exact data view created by the configured actual input boundary.</summary>
+    public static object? UnwrapVmInputValue(object? value)
+        => value is VmInputPropertyView input ? input.Original : value;
     /// <summary>Recognizes actual Core Promises recorded at a VM transport edge.</summary>
     public static bool IsVmPromiseValue(object? value) => value is SharpTSPromise promise
         && _vmPromises?.TryGetValue(promise, out _) == true;

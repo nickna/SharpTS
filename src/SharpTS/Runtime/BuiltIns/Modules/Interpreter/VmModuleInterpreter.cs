@@ -514,6 +514,7 @@ public static partial class VmModuleInterpreter
             }
             if (options.TryGetValue("contextExtensions", out var ext))
             {
+                ext = UnwrapVmInputValue(ext);
                 if (ext is List<object?> extList)
                     contextExtensions = extList;
                 else if (ext is SharpTSArray extArray)
