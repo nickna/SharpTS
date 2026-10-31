@@ -135,12 +135,6 @@ public sealed class SharpTSGlobalThis : ISharpTSPropertyAccessor
     /// </returns>
     public object? GetProperty(string name)
     {
-        // Self-reference: globalThis.globalThis === globalThis
-        if (name == "globalThis")
-        {
-            return this;
-        }
-
         // Check user-assigned properties first
         if (_properties.Fields.TryGetValue(name, out var value))
         {
@@ -150,6 +144,10 @@ public sealed class SharpTSGlobalThis : ISharpTSPropertyAccessor
             return SharpTSUndefined.Instance;
         if (_deletedProperties.Contains(name))
             return SharpTSUndefined.Instance;
+
+        // The default self property is mutable and configurable. An actual
+        // own override or deletion above takes precedence over this value.
+        if (name == "globalThis") return this;
 
         // An Interpreter-backed global object resolves mutable intrinsics from
         // its owning realm so bare `Error` and `globalThis.Error` share identity.
@@ -285,9 +283,9 @@ public sealed class SharpTSGlobalThis : ISharpTSPropertyAccessor
     /// <returns>True if the property exists (either user-assigned or built-in).</returns>
     public bool HasProperty(string name)
     {
-        if (name == "globalThis") return true;
         if (HasUserProperty(name)) return true;
         if (_deletedProperties.Contains(name)) return false;
+        if (name == "globalThis") return true;
 
         if (_realmIntrinsicResolver?.Invoke(name) is not null) return true;
 

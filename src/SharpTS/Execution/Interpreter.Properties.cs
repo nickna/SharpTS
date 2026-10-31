@@ -382,10 +382,15 @@ public partial class Interpreter
             && !_environment.IsDefined(reference.Name.Lexeme);
 
     private bool CanUseGlobalThisRegistryNamespace(Expr.Variable reference, string name)
-        => IsRegistryOnlyNamespace(name)
-            && !_locals.ContainsKey(reference)
-            && !_environment.IsDefined(reference.Name.Lexeme)
-            && !GlobalThis.HasUserProperty(name);
+    {
+        if (!IsRegistryOnlyNamespace(name) || _locals.ContainsKey(reference)
+            || _environment.IsDefined(reference.Name.Lexeme)) return false;
+        var globalObject = _environment.VmGlobalObject ?? GlobalThis;
+        return !globalObject.HasUserProperty(reference.Name.Lexeme)
+            && !globalObject.IsDeletedProperty(reference.Name.Lexeme)
+            && !globalObject.HasUserProperty(name)
+            && !globalObject.IsDeletedProperty(name);
+    }
 
     /// <summary>
     /// ECMA-262 §7.3.3 Get(O, P) abstract operation. Reads a string-named

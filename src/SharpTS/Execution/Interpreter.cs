@@ -1292,8 +1292,6 @@ public partial class Interpreter : IDisposable
 
         if (_environment.VmGlobalObject is { } vmGlobal)
         {
-            if (name.Lexeme is "globalThis" or "global")
-                return RuntimeValue.FromBoxed(vmGlobal);
             if (vmGlobal.HasProperty(name.Lexeme))
                 return RuntimeValue.FromBoxed(GetPropertyValue(vmGlobal, name.Lexeme));
             if (vmGlobal.IsDeletedProperty(name.Lexeme))
@@ -1312,7 +1310,15 @@ public partial class Interpreter : IDisposable
         // `let globalThis`/`let global` already won via the environment check above.
         if (name.Lexeme == "globalThis" || name.Lexeme == "global")
         {
-            return RuntimeValue.FromBoxed(GlobalThis);
+            var globalObject = _environment.VmGlobalObject ?? GlobalThis;
+            if (globalObject.HasUserProperty(name.Lexeme))
+                return RuntimeValue.FromBoxed(GetPropertyValue(globalObject, name.Lexeme));
+            if (globalObject.IsDeletedProperty(name.Lexeme))
+            {
+                if (allowUnresolvable) return RuntimeValue.Undefined;
+                throw new InterpreterException($"ReferenceError: Undefined variable '{name.Lexeme}'.");
+            }
+            return RuntimeValue.FromBoxed(globalObject);
         }
 
         // Mutable global bindings live on the global object. Lexical bindings
