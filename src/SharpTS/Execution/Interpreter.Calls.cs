@@ -1518,7 +1518,7 @@ public partial class Interpreter
                 elements.Add(value);
             }
         }
-        return new SharpTSArray(elements);
+        return new SharpTSArray(elements) { IntrinsicPrototype = GetArrayPrototype() };
     }
 
     /// <summary>

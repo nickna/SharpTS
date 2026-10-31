@@ -1790,15 +1790,10 @@ public partial class Interpreter
             return GetArrayIndexValue(arrIdx, idx);
         }
 
-        if (obj is SharpTSArray arrayWithPrototype
-            && arrayWithPrototype.HasExplicitPrototype)
-        {
-            object? inherited = GetPropertyValueFromChain(
-                arrayWithPrototype.ExplicitPrototype, memberName, obj);
-            return RuntimeValue.FromBoxed(
-                TryBindReceiverForMethodAccess(inherited, obj) ?? inherited);
-        }
+        if (obj is SharpTSArray)
+            return RuntimeValue.FromBoxed(GetPropertyValue(obj, memberName));
 
+        // Other Array-category carriers retain their dedicated built-in dispatch.
         if (GetArrayPrototype().GetExtraGetter(memberName) is { } prototypeGetter)
             return BindAccessorToObject(prototypeGetter, obj).CallV2(
                 this, ReadOnlySpan<RuntimeValue>.Empty);

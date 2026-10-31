@@ -101,21 +101,21 @@ public static class ArrayStaticBuiltIns
                             enumerator.Dispose();
                         }
                     }
-                    return RuntimeValue.FromObject(new SharpTSArray(result));
+                    return RuntimeValue.FromObject(new SharpTSArray(result) { IntrinsicPrototype = interpreter.GetArrayPrototype() });
                 }
 
                 var elements = isIterable
                     ? iterableElements!.ToList()
                     : interpreter.ReadArrayLikeElements(iterable);
-                return RuntimeValue.FromObject(new SharpTSArray(elements));
+                return RuntimeValue.FromObject(new SharpTSArray(elements) { IntrinsicPrototype = interpreter.GetArrayPrototype() });
             })
-            .MethodV2("of", 0, int.MaxValue, static (_, _, args) =>
+            .MethodV2("of", 0, int.MaxValue, static (interpreter, _, args) =>
             {
                 // Array.of() creates an array from all arguments
                 var items = new List<object?>(args.Length);
                 foreach (var arg in args)
                     items.Add(arg.ToObject());
-                return RuntimeValue.FromObject(new SharpTSArray(items));
+                return RuntimeValue.FromObject(new SharpTSArray(items) { IntrinsicPrototype = interpreter.GetArrayPrototype() });
             })
             .Build();
 

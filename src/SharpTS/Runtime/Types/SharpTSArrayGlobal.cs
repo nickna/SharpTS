@@ -86,11 +86,11 @@ public sealed class SharpTSArrayGlobal : ISharpTSCallable, ISharpTSMutableBuiltI
             // new Array(N) gives an array of length N with N holes — not N
             // explicit undefined values. Use SetLength so large N is sparse
             // storage, not an eager allocation (see SharpTSArray #73 Stage B).
-            var arr = new SharpTSArray();
+            var arr = new SharpTSArray { IntrinsicPrototype = RealmPrototype ?? interpreter?.GetArrayPrototype() };
             arr.SetLength(len);
             return arr;
         }
-        return new SharpTSArray(new List<object?>(arguments));
+        return new SharpTSArray(new List<object?>(arguments)) { IntrinsicPrototype = RealmPrototype ?? interpreter?.GetArrayPrototype() };
     }
 
     public object? GetMember(string name)

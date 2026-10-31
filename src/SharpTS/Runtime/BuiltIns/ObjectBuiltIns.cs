@@ -2481,7 +2481,7 @@ public static partial class ObjectBuiltIns
         SharpTSArray { HasExplicitPrototype: true } array => array.ExplicitPrototype,
         SharpTSArraySubclassInstance sub => sub.Klass.Prototype,
         SharpTSArguments => interp?.GetObjectPrototype(),
-        SharpTSArray => interp?.GetArrayPrototype(),
+        SharpTSArray array => array.IntrinsicPrototype ?? interp?.GetArrayPrototype(),
         SharpTSPromiseSubclassInstance promiseSub => promiseSub.Klass.Prototype,
         SharpTSPromise promise => promise.IntrinsicConstructor?.PromiseRealm?.Prototype
             ?? interp?.GetPromisePrototype(),
