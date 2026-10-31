@@ -7,6 +7,9 @@ using SharpTS.Hosting;
 using SharpTS.Modules;
 using SharpTS.Parsing;
 using SharpTS.References;
+using SharpTS.Runtime;
+using SharpTS.Runtime.BuiltIns;
+using SharpTS.Runtime.Types;
 using SharpTS.TypeSystem;
 using Xunit;
 
@@ -1095,6 +1098,76 @@ public sealed class HostedInterpreterRuntimeTests
         Assert.Equal(SharpTSHostedRuntimeState.Stopped, runtime.State);
         Assert.Equal([2, 1], cleanup);
         Assert.Equal(["beforeExit", "beforeExit-microtask", "exit"], Lines(output));
+    }
+
+    [Fact]
+    public void GracefulShutdown_DrainsNestedPromiseAndMicrotaskJobsBeforeExit()
+    {
+        const string source = """
+            process.on('beforeExit', () => {
+                console.log('beforeExit');
+                queueMicrotask(() => {
+                    console.log('microtask');
+                    queueMicrotask(() => console.log('nested'));
+                });
+                Promise.resolve().then(() => console.log('promise'));
+            });
+            process.on('exit', () => {
+                console.log('exit');
+                process.removeAllListeners('beforeExit');
+                process.removeAllListeners('exit');
+            });
+            export {};
+            """;
+        var dispatcher = new DeterministicHostDispatcher();
+        using var output = new StringWriter();
+        var errors = new RecordingErrorSink();
+        using var runtime = CreateRuntime(source, dispatcher, new RecordingLifetime(), errors, output);
+        RunInitialization(runtime, dispatcher);
+
+        Task shutdown = runtime.ShutdownAsync();
+        dispatcher.RunUntil(() => shutdown.IsCompleted);
+        shutdown.GetAwaiter().GetResult();
+
+        Assert.Equal(["beforeExit", "microtask", "promise", "nested", "exit"], Lines(output));
+        Assert.Empty(errors.Errors);
+    }
+
+    [Fact]
+    public void GracefulShutdown_CheckpointAcceptsOwnerJobsAndRejectsExternalWork()
+    {
+        var dispatcher = new DeterministicHostDispatcher();
+        using var output = new StringWriter();
+        var errors = new RecordingErrorSink();
+        using var runtime = CreateRuntime("console.log('ready');export {};", dispatcher, new RecordingLifetime(), errors, output);
+        RunInitialization(runtime, dispatcher);
+        Assert.Equal("ready\n", output.ToString().Replace("\r\n", "\n"));
+        var calls = new List<string>();
+        SharpTSProcess.Instance.AddListenerDirect("beforeExit", BuiltInMethod.CreateV2("beforeExit", 0, 1,
+            (interpreter, _, _) =>
+            {
+                calls.Add("beforeExit");
+                Assert.True(Task.Run(() =>
+                    interpreter.EnqueuePromiseJob(() => calls.Add("foreign-job"))).Wait(TimeSpan.FromSeconds(5)));
+                runtime.Notify(() => calls.Add("notification"));
+                runtime.EnqueueMicrotask(() => calls.Add("host-microtask"));
+                interpreter.EnqueueCallback(() => calls.Add("macrotask"));
+                interpreter.EnqueuePromiseJob(() =>
+                {
+                    calls.Add("owner-job");
+                    interpreter.EnqueueAfterPromiseCheckpoint(() => calls.Add("after-checkpoint"));
+                });
+                return RuntimeValue.Undefined;
+            }), once: true);
+        SharpTSProcess.Instance.AddListenerDirect("exit", BuiltInMethod.CreateV2("exit", 0, 1,
+            (_, _, _) => { calls.Add("exit"); return RuntimeValue.Undefined; }), once: true);
+
+        Task shutdown = runtime.ShutdownAsync();
+        dispatcher.RunUntil(() => shutdown.IsCompleted);
+        shutdown.GetAwaiter().GetResult();
+
+        Assert.Empty(errors.Errors);
+        Assert.Equal(["beforeExit", "owner-job", "after-checkpoint", "exit"], calls);
     }
 
     [Fact]

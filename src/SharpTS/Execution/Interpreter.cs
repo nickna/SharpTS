@@ -548,7 +548,7 @@ public partial class Interpreter : IDisposable
         if (_vmEvaluation is { } evaluation) { evaluation.Queue(callback, afterCheckpoint: true); return; }
         lock (_microtaskQueueLock)
         {
-            if (_isDisposed || (_hostedWorkAvailable != null && !_hostedAcceptingWork)) return;
+            if (_isDisposed || !AcceptsHostedMicrotasks) return;
             _afterPromiseCheckpointQueue.Enqueue(callback);
             Volatile.Write(ref _hasMicrotasks, 1);
         }
@@ -562,7 +562,7 @@ public partial class Interpreter : IDisposable
         if (_vmEvaluation is { } evaluation) { evaluation.Queue(continuation); return; }
         lock (_microtaskQueueLock)
         {
-            if (_isDisposed || (_hostedWorkAvailable != null && !_hostedAcceptingWork)) return;
+            if (_isDisposed || !AcceptsHostedMicrotasks) return;
             _microtaskQueue.Enqueue(continuation);
             Volatile.Write(ref _hasMicrotasks, 1);
         }

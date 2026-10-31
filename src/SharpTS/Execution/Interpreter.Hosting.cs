@@ -16,10 +16,15 @@ public partial class Interpreter
 {
     private int? _hostedOwnerThreadId;
     private volatile bool _hostedAcceptingWork;
+    private int _hostedShutdownCheckpointDepth;
     private Action? _hostedWorkAvailable;
     private Action? _hostedTimerChanged;
     private Action<Exception>? _hostedUnhandledError;
     private Action<int>? _hostedProcessExit;
+
+    private bool AcceptsHostedMicrotasks => _hostedWorkAvailable is null || _hostedAcceptingWork
+        || (_hostedShutdownCheckpointDepth > 0
+            && _hostedOwnerThreadId == System.Environment.CurrentManagedThreadId);
     private RuntimeEnvironment? _hostedScriptEnvironment;
     private int _hostedExitCode;
     private readonly HashSet<string> _hostedPreparedModules =
@@ -587,11 +592,22 @@ public partial class Interpreter
         }
     }
 
-    internal void EmitHostedBeforeExit(int exitCode)
+    internal void RunHostedBeforeExitCheckpoint(int exitCode)
     {
         AssertHostedOwnerThread();
-        if (!_exitEventEmitted)
-            SharpTSProcess.Instance.EmitWith(this, "beforeExit", (double)exitCode);
+        // Shutdown still rejects external notifications and new macrotasks.
+        // Its own lifecycle listener and jobs may finish this owner checkpoint.
+        _hostedShutdownCheckpointDepth++;
+        try
+        {
+            if (!_exitEventEmitted)
+                SharpTSProcess.Instance.EmitWith(this, "beforeExit", (double)exitCode);
+            ProcessMicrotasks();
+        }
+        finally
+        {
+            _hostedShutdownCheckpointDepth--;
+        }
     }
 
     internal void EmitHostedExit(int exitCode)
