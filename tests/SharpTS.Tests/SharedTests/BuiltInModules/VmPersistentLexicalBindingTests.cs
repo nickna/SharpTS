@@ -14,6 +14,9 @@ public sealed class VmPersistentLexicalBindingTests
     {
         yield return ["const-read-second-run", "import * as vm from 'node:vm';const ctx:any=vm.createContext({});vm.runInContext('const value=7;',ctx);console.log(vm.runInContext('value;',ctx));", "7\n"];
         yield return ["let-mutation-third-run", "import * as vm from 'node:vm';const ctx:any=vm.createContext({});vm.runInContext('let value=7;',ctx);vm.runInContext('value++;',ctx);console.log(vm.runInContext('value;',ctx),Object.prototype.hasOwnProperty.call(ctx,'value'));", "8 false\n"];
+        yield return ["completed-vm-definition-releases-var-restriction", "import * as vm from 'node:vm';const c:any=vm.createContext({});vm.runInContext('var value=1;Object.defineProperty(globalThis,\"value\",{value:9})',c);vm.runInContext('let value=2',c);console.log(vm.runInContext('value',c));", "2\n"];
+        yield return ["outside-definition-retains-var-restriction", "import * as vm from 'node:vm';const c:any=vm.createContext({});vm.runInContext('var value=1',c);Object.defineProperty(c,'value',{value:9,configurable:true});try{vm.runInContext('let value=2',c)}catch(e){console.log((e as Error).name)}console.log(vm.runInContext('value',c));", "SyntaxError\n9\n"];
+        yield return ["completed-vm-definition-releases-function-restriction", "import * as vm from 'node:vm';const c:any=vm.createContext({});vm.runInContext('function value(){};Object.defineProperty(globalThis,\"value\",{value:9})',c);vm.runInContext('let value=2',c);console.log(vm.runInContext('value',c));", "2\n"];
         yield return ["source-binding-and-generated-spill", "import * as vm from 'node:vm';const c:any=vm.createContext({});vm.runInContext('let _dest0=7',c);vm.runInContext('const [value]=[9]',c);console.log(vm.runInContext('_dest0+value',c));", "16\n"];
         yield return ["same-run-source-binding-and-spill", "import * as vm from 'node:vm';const c:any=vm.createContext({});vm.runInContext('let _dest0=7;const [value]=[9]',c);console.log(vm.runInContext('_dest0+value',c));", "16\n"];
         yield return ["destructuring-source-bindings-only", "import * as vm from 'node:vm';const c:any=vm.createContext({});vm.runInContext('const [first]=[7]',c);vm.runInContext('const [second]=[9]',c);console.log(vm.runInContext('first+second',c));try{vm.runInContext('first=1',c)}catch(e){console.log((e as Error).name)}", "16\nTypeError\n"];
@@ -34,6 +37,7 @@ public sealed class VmPersistentLexicalBindingTests
         yield return ["parsed-script-entry", "import * as vm from 'node:vm';const c:any=vm.createContext({});new vm.Script('let value=7').runInContext(c);console.log(new vm.Script('++value').runInContext(c),new vm.Script('value').runInContext(c));", "8 8\n"];
         yield return ["preflight-does-not-reserve-partial-list", "import * as vm from 'node:vm';const c:any=vm.createContext({});vm.runInContext('let prior=7',c);try{vm.runInContext('let fresh=1;let prior=2',c)}catch(e){console.log((e as Error).name)}vm.runInContext('let fresh=9',c);console.log(vm.runInContext('fresh',c));", "SyntaxError\n9\n"];
         yield return ["restricted-intrinsic", "import * as vm from 'node:vm';const c:any=vm.createContext({undefined:7});try{vm.runInContext('let undefined=9',c)}catch(e){console.log((e as Error).name)}", "SyntaxError\n"];
+
 
 
     }
