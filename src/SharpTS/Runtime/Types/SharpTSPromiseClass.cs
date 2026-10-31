@@ -172,30 +172,10 @@ public class SharpTSPromiseClass : SharpTSClass
                 settled = true;
             }
 
-            // Handle promise flattening - if value is a Promise, adopt its settled
-            // state. Routed through the event loop (not the thread pool) so the loop
-            // can't exit before the adoption settles — see Interpreter.AdoptInnerPromise
-            // (fixes the resolve-with-thenable Pass/Fail flake under load).
-            if (value is SharpTSPromise innerPromise)
-            {
-                if (ReferenceEquals(innerPromise.Task, tcs.Task))
-                {
-                    tcs.TrySetException(new SharpTSPromiseRejectedException(
-                        new SharpTSTypeError("A promise cannot resolve to itself")));
-                }
-                else
-                {
-                    interpreter.AdoptInnerPromise(innerPromise.Task, tcs);
-                }
-            }
-            else if (RuntimeValue.FromBoxed(value).IsObject)
-            {
-                PromiseBuiltIns.ResolveThenableIntoCapability(interpreter, tcs, value);
-            }
-            else
-            {
-                tcs.TrySetResult(value);
-            }
+            // Resolving functions observe the original object's live then,
+            // including native Promises. The shared algorithm handles primitive
+            // values, self-resolution, abrupt getters and queued adoption.
+            PromiseBuiltIns.ResolveThenableIntoCapability(interpreter, tcs, value);
         });
 
         var rejectCallback = new PromiseRejectCallback(reason =>

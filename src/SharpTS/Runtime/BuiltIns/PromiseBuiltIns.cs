@@ -1663,8 +1663,8 @@ public static class PromiseBuiltIns
     /// If the result is a Promise, awaits it and flattens.
     /// </summary>
     /// <remarks>
-    /// GetValueAsync() already contains a while-loop to flatten arbitrarily nested
-    /// Promises, so we only need a single check here.
+    /// Resolution follows live then properties. Observing the resulting settled
+    /// task does not recursively resolve its final fulfillment value again.
     /// </remarks>
     private static async Task<object?> UnwrapResult(
         object? result, Interpreter interpreter)
