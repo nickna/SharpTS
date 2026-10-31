@@ -179,8 +179,9 @@ public partial class Parser
             Advance(); // consume TYPE
             return TypeAliasDeclaration();
         }
-        if (Match(TokenType.ASYNC))
+        if (Check(TokenType.ASYNC) && PeekNext().Type == TokenType.FUNCTION && Peek().Line == PeekNext().Line)
         {
+            Advance();
             Consume(TokenType.FUNCTION, "Expect 'function' after 'async'.");
             // Check for async generator: async function* name() {}
             bool isGenerator = Match(TokenType.STAR);

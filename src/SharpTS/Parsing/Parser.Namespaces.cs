@@ -183,8 +183,9 @@ public partial class Parser
         {
             return WrapIfExported(EnumDeclaration(isConst: false), isExported);
         }
-        if (Match(TokenType.ASYNC))
+        if (Check(TokenType.ASYNC) && PeekNext().Type == TokenType.FUNCTION && Peek().Line == PeekNext().Line)
         {
+            Advance();
             Consume(TokenType.FUNCTION, "Expect 'function' after 'async'.");
             bool isGenerator = Match(TokenType.STAR);
             return WrapIfExported(

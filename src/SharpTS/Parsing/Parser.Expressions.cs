@@ -1276,9 +1276,10 @@ public partial class Parser
         // `async` is also a valid plain identifier (e.g. a destructured binding named `async`,
         // `if (async)`) when it isn't immediately followed by one of the tokens above — only
         // commit to the async-function forms when one of those follows.
-        if (Check(TokenType.ASYNC) &&
+        if (Check(TokenType.ASYNC) && Peek().Line == PeekNext().Line &&
             (PeekNext().Type == TokenType.FUNCTION || PeekNext().Type == TokenType.LESS || PeekNext().Type == TokenType.LEFT_PAREN))
         {
+            var asyncCursor = SaveCursor();
             Advance(); // consume 'async'
 
             // `async function ...` is an async function expression — defer to the shared
@@ -1295,10 +1296,15 @@ public partial class Parser
                 if (genericArrow != null) return genericArrow;
             }
 
-            Consume(TokenType.LEFT_PAREN, "Expect '(' after 'async' in async arrow function.");
-            Expr? arrowFunc = TryParseArrowFunction(isAsync: true);
-            if (arrowFunc != null) return arrowFunc;
-            throw new Exception("Parse Error: Expected arrow function after 'async ('.");
+            if (Match(TokenType.LEFT_PAREN))
+            {
+                Expr? arrowFunc = TryParseArrowFunction(isAsync: true);
+                if (arrowFunc != null) return arrowFunc;
+            }
+            // Without an arrow this is the contextual identifier `async`,
+            // possibly followed by an ordinary call or type argument list.
+            RestoreCursor(asyncCursor);
+            return new Expr.Variable(Advance());
         }
         if (Check(TokenType.ASYNC))
         {
@@ -1315,7 +1321,7 @@ public partial class Parser
             // otherwise the outer speculation can consume `async` as a
             // would-be parameter and leave the nested parameter list to the
             // grouping parser.
-            if (Check(TokenType.ASYNC) && PeekNext().Type == TokenType.LEFT_PAREN)
+            if (Check(TokenType.ASYNC) && PeekNext().Type == TokenType.LEFT_PAREN && Peek().Line == PeekNext().Line)
             {
                 int asyncStart = _current;
                 Advance();
@@ -1646,6 +1652,13 @@ public partial class Parser
                 RestoreCursor(savedCursor);
                 return null;
             }
+        }
+
+        // Async arrow headers cannot cross a line terminator before =>.
+        if (isAsync && Previous().Line != Peek().Line)
+        {
+            RestoreCursor(savedCursor);
+            return null;
         }
 
         // Must see '=>' for it to be an arrow function
