@@ -15,6 +15,7 @@ public static partial class VmContext
         VmModuleInterpreter.RecordVmInputValue(value);
         var host = VmExecutionHost.Current;
         value = host is null ? value : host.ToVm(value);
+        VmModuleInterpreter.RecordVmInputValue(value);
         if (value is null or string or bool or double or SharpTSUndefined or SharpTSBigInt or SharpTSSymbol)
             return value;
         if (WrapCompiledCallable(value) is not CompiledCallableAdapter candidate) return value;
