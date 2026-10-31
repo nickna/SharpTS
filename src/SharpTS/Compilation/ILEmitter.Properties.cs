@@ -1846,6 +1846,7 @@ public partial class ILEmitter
             var valueTemp = IL.DeclareLocal(_ctx.Types.Object);
             IL.Emit(OpCodes.Stloc, valueTemp);
             IL.Emit(OpCodes.Ldloc, indexTemp);
+            IL.Emit(OpCodes.Call, _ctx.Runtime!.Reflect.ToPropertyKey);
             IL.Emit(OpCodes.Callvirt, _ctx.Types.GetMethod(_ctx.Types.Object, "ToString")!);
             IL.Emit(OpCodes.Ldloc, valueTemp);
             IL.Emit(OpCodes.Call, _ctx.Runtime!.GlobalObject.SetProperty);

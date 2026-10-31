@@ -750,6 +750,7 @@ public abstract partial class ExpressionEmitterBase : IEmitterContext
             var indexTemp = SpillBoxed(si.Index);
             var valueTemp = SpillBoxed(si.Value);
             IL.Emit(OpCodes.Ldloc, indexTemp);
+            IL.Emit(OpCodes.Call, Ctx.Runtime!.Reflect.ToPropertyKey);
             IL.Emit(OpCodes.Callvirt, Types.GetMethodNoParams(Types.Object, "ToString"));
             IL.Emit(OpCodes.Ldloc, valueTemp);
             IL.Emit(OpCodes.Call, Ctx.Runtime!.GlobalObject.SetProperty);
