@@ -171,6 +171,11 @@ public partial class Interpreter
             value = inputView.Read(name);
             return true;
         }
+        if (HasArrayObjectKey(obj, index))
+        {
+            value = GetOwnPropertyObjectValue(obj!, ToPropertyKey(index));
+            return true;
+        }
         if (ResolveGlobalIndexTarget(obj, index) is { } global)
         {
             value = GetPropertyValue(global.Target, global.Key);
@@ -211,6 +216,11 @@ public partial class Interpreter
             PerformIndexSet(inputView, index, value);
             return true;
         }
+        if (HasArrayObjectKey(obj, index))
+        {
+            PerformIndexSet(obj, index, value);
+            return true;
+        }
         if (ResolveGlobalIndexTarget(obj, index) is { } global)
         {
             SetGlobalIndexValue(global, value, _environment.IsStrictMode);
@@ -233,6 +243,9 @@ public partial class Interpreter
         }
         return false;
     }
+
+    private static bool HasArrayObjectKey(object? target, object? key)
+        => target is SharpTSArray && RuntimeValue.FromBoxed(key).IsObject;
 
     private bool HasCanonicalIndexProperties(object? target)
         => target is ISharpTSOwnPropertyObject or SharpTSObject or SharpTSObjectNamespace

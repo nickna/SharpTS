@@ -156,8 +156,9 @@ public partial class Interpreter
             obj = inputView.Original;
             inputView = null;
         }
+        bool arrayObjectKey = HasArrayObjectKey(obj, index);
         var globalTarget = ResolveGlobalIndexTarget(obj, index);
-        if (inputView is not null || globalTarget is not null || HasCanonicalIndexProperties(obj) || obj is BuiltInMethod or SharpTSObject or SharpTSInstance)
+        if (arrayObjectKey || inputView is not null || globalTarget is not null || HasCanonicalIndexProperties(obj) || obj is BuiltInMethod or SharpTSObject or SharpTSInstance)
         {
             object key = globalTarget is null ? ToPropertyKey(index) : globalTarget.Key;
             RuntimeValue current = RuntimeValue.FromBoxed(inputView is not null
@@ -167,7 +168,7 @@ public partial class Interpreter
             RuntimeValue newValue = ApplyCompoundOperatorRV(compound.Operator.Type, current, addValue);
             // GetValue and PutValue each convert the retained raw key. Guest
             // coercion may select a different property after the RHS runs.
-            if (globalTarget is not null || inputView is not null) PerformIndexSet(obj, index, newValue.ToObject());
+            if (arrayObjectKey || globalTarget is not null || inputView is not null) PerformIndexSet(obj, index, newValue.ToObject());
             else SetOwnPropertyObjectValue(obj, key, newValue.ToObject(), _environment.IsStrictMode);
             return newValue;
         }
@@ -341,8 +342,9 @@ public partial class Interpreter
             obj = inputView.Original;
             inputView = null;
         }
+        bool arrayObjectKey = HasArrayObjectKey(obj, index);
         var globalTarget = ResolveGlobalIndexTarget(obj, index);
-        if (inputView is not null || globalTarget is not null || obj is ISharpTSOwnPropertyObject or BuiltInMethod or SharpTSObjectNamespace)
+        if (arrayObjectKey || inputView is not null || globalTarget is not null || obj is ISharpTSOwnPropertyObject or BuiltInMethod or SharpTSObjectNamespace)
         {
             object key = globalTarget is null ? ToPropertyKey(index) : globalTarget.Key;
             RuntimeValue currentRV = RuntimeValue.FromBoxed(inputView is not null
@@ -362,7 +364,7 @@ public partial class Interpreter
             }
 
             RuntimeValue newValue = await ctx.EvaluateExprAsync(logical.Value);
-            if (globalTarget is not null || inputView is not null) PerformIndexSet(obj, index, newValue.ToObject());
+            if (arrayObjectKey || globalTarget is not null || inputView is not null) PerformIndexSet(obj, index, newValue.ToObject());
             else SetOwnPropertyObjectValue(obj, key, newValue.ToObject(), _environment.IsStrictMode);
             return newValue;
         }

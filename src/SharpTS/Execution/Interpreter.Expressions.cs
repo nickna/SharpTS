@@ -1267,6 +1267,8 @@ public partial class Interpreter
             ThrowCannotReadProperty(obj, key);
         }
 
+        if (HasArrayObjectKey(obj, index))
+            index = ToPropertyKey(index);
         // Proxy: intercept index access via get trap
         if (obj is SharpTSProxy proxy)
         {
@@ -1685,6 +1687,8 @@ public partial class Interpreter
             ThrowCannotSetProperty(obj, index?.ToString() ?? "");
         }
 
+        if (HasArrayObjectKey(obj, index))
+            index = ToPropertyKey(index);
         // Namespace assignment uses the same guest key conversion as ordinary
         // objects, after the already-evaluated RHS and before string dispatch.
         if (obj is SharpTSObjectNamespace)
