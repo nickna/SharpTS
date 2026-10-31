@@ -1618,6 +1618,38 @@ public sealed class HostedInterpreterRuntimeTests
                 diagnostic.Severity == DiagnosticSeverity.Error);
     }
 
+    [Fact]
+    public void CompiledVmLifetimeEndsWithTheActualHostedCaller()
+    {
+        SharpTSProgram program = CreateProgram("""
+            import * as vm from 'node:vm';
+            const value:any=vm.runInNewContext('new Promise(()=>{})');
+            console.log(typeof value.then);
+            export {};
+            """);
+        var compiler = new ILCompiler($"hosted_vm_owner_{Guid.NewGuid():N}");
+        compiler.EnableHostedOutput();
+        compiler.CompileModules(program.RuntimeModules.ToList(), program.Resolver, program.TypeMap);
+        var assembly = System.Reflection.Assembly.Load(compiler.SaveToBytes());
+        var dispatcher = new DeterministicHostDispatcher();
+        using var output = Infrastructure.AsyncLocalConsoleRedirector.Capture();
+        using ISharpTSHostedRuntime runtime = SharpTSHostedAssembly.CreateRuntime(
+            assembly, dispatcher, new RecordingLifetime(), new RecordingErrorSink());
+        Task initialization = runtime.InitializeAsync();
+        dispatcher.RunUntil(() => initialization.IsCompleted);
+        initialization.GetAwaiter().GetResult();
+        Assert.Contains("function", output.GetOutput());
+        var hostField = assembly.GetType("$Runtime")!.GetField("_vmExecutionHost",
+            System.Reflection.BindingFlags.NonPublic | System.Reflection.BindingFlags.Static)!;
+        object host = Assert.IsAssignableFrom<IDisposable>(hostField.GetValue(null));
+        using (Runtime.BuiltIns.Modules.Interpreter.VmModuleInterpreter.EnterExecutionHost(host)) { }
+        Task shutdown = runtime.ShutdownAsync();
+        dispatcher.RunUntil(() => shutdown.IsCompleted);
+        shutdown.GetAwaiter().GetResult();
+        Assert.Null(hostField.GetValue(null));
+        Assert.Throws<ObjectDisposedException>(() =>
+            Runtime.BuiltIns.Modules.Interpreter.VmModuleInterpreter.EnterExecutionHost(host));
+    }
     private static HostedInterpreterRuntime CreateRunningRuntime(DeterministicHostDispatcher dispatcher)
     {
         var runtime = CreateRuntime(

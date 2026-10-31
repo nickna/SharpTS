@@ -80,6 +80,9 @@ public partial class RuntimeEmitter
             _types.Void,
             [typeof(Action)]);
 
+        if (runtime.Vm is not null)
+            DefineVmValueBridge(typeBuilder, runtime.RequireVm());
+
         // Reserve GetProperty(object, string) → object — generic property
         // reader used by $RegExp's Symbol.* protocol slow path to read
         // `exec`/`flags`/`lastIndex` etc. via the spec-aligned chain.

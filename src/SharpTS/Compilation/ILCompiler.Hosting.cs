@@ -94,6 +94,8 @@ public partial class ILCompiler
             baseType,
             hookIl =>
             {
+                if (_runtime.Vm is not null)
+                    hookIl.Emit(OpCodes.Call, _runtime.RequireVm().DisposeExecutionHost);
                 hookIl.Emit(OpCodes.Call, _runtime.Timers.CancelAllTimers);
                 if (_runtime.ChildProcess is not null)
                     hookIl.Emit(OpCodes.Call, _runtime.RequireChildProcess().TerminateOwned);

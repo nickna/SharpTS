@@ -860,7 +860,8 @@ public partial class RuntimeEmitter
                 runtime.ReflectedMethods,
                 runtime.Symbols.Type,
                 runtime.Sentinels.UndefinedInstance,
-                runtime.Operators.TypeOf
+                runtime.Operators.TypeOf,
+                runtime.Vm
             )
         );
 

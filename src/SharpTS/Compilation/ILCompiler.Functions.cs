@@ -1336,6 +1336,8 @@ public partial class ILCompiler
 
     private void EmitTerminateOwnedChildProcesses(ILGenerator il)
     {
+        if (_runtime.Vm is not null)
+            il.Emit(OpCodes.Call, _runtime.RequireVm().DisposeExecutionHost);
         if (_runtime.ChildProcess is not null)
             il.Emit(OpCodes.Call, _runtime.RequireChildProcess().TerminateOwned);
     }

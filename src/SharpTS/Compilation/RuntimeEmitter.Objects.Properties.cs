@@ -361,7 +361,8 @@ public partial class RuntimeEmitter
         EmittedWeakSetRuntime? WeakSet,
         bool UserClasses,
         MethodInfo? NativeProxyRejection,
-        NativeSourceOwnerCatalog? SourceOwners = null
+        NativeSourceOwnerCatalog? SourceOwners = null,
+        EmittedVmRuntime? Vm = null
     );
 
     private readonly record struct GetFieldsPropertyInputs(
@@ -392,7 +393,8 @@ public partial class RuntimeEmitter
         MethodBuilder ToPascalCase,
         FieldInfo UndefinedInstance,
         Type UndefinedType,
-        MethodInfo? NativePropertyGetter = null
+        MethodInfo? NativePropertyGetter = null,
+        EmittedVmRuntime? Vm = null
     );
 
     private readonly record struct GetListPropertyInputs(
@@ -642,6 +644,29 @@ public partial class RuntimeEmitter
         il.Emit(OpCodes.Ldarg_0);
         il.Emit(OpCodes.Brfalse, nullLabel);
 
+        // Only actual VM-created Core Errors enter this bridge; arbitrary CLR
+        // objects retain the existing property path.
+        if (inputs.Vm is not null)
+        {
+            var ordinary = il.DefineLabel();
+            il.Emit(OpCodes.Ldarg_0);
+            il.Emit(OpCodes.Call, inputs.Vm.IsErrorValue);
+            il.Emit(OpCodes.Brfalse, ordinary);
+            il.Emit(OpCodes.Ldarg_0);
+            il.Emit(OpCodes.Ldarg_1);
+            il.Emit(OpCodes.Call, inputs.Vm.ReadErrorProperty);
+            il.Emit(OpCodes.Ret);
+            il.MarkLabel(ordinary);
+            var unrelated = il.DefineLabel();
+            il.Emit(OpCodes.Ldarg_0);
+            il.Emit(OpCodes.Call, inputs.Vm.IsRelatedValue);
+            il.Emit(OpCodes.Brfalse, unrelated);
+            il.Emit(OpCodes.Ldarg_0);
+            il.Emit(OpCodes.Ldarg_1);
+            il.Emit(OpCodes.Call, inputs.Vm.ReadMappedProperty);
+            il.Emit(OpCodes.Ret);
+            il.MarkLabel(unrelated);
+        }
         // ECMA-262: `error.constructor` should return the constructor that built it.
         // For $Error subclasses (and $Error itself), return the instance's runtime
         // type as a System.Type. Compiled-mode `TypeError` resolves to the same
@@ -1679,6 +1704,29 @@ public partial class RuntimeEmitter
         il.Emit(OpCodes.Ret);
         il.MarkLabel(notGlobalThisLabel);
 
+        if (inputs.Vm is not null)
+        {
+            var ordinaryVmValue = il.DefineLabel();
+            il.Emit(OpCodes.Ldarg_0);
+            il.Emit(OpCodes.Call, inputs.Vm.IsMappedValue);
+            il.Emit(OpCodes.Brfalse, ordinaryVmValue);
+            var descriptor = il.DeclareLocal(inputs.DescriptorStorage.DescriptorType);
+            var noOwn = il.DefineLabel();
+            il.Emit(OpCodes.Ldarg_0);
+            il.Emit(OpCodes.Ldarg_1);
+            il.Emit(OpCodes.Call, inputs.DescriptorStorage.GetPropertyDescriptor);
+            il.Emit(OpCodes.Stloc, descriptor);
+            il.Emit(OpCodes.Ldloc, descriptor);
+            il.Emit(OpCodes.Brfalse, noOwn);
+            EmitDescriptorReadAndReturn(il, inputs.DescriptorStorage, descriptor,
+                () => il.Emit(OpCodes.Ldarg_0), inputs.InvokeMethodValue, inputs.UndefinedInstance, inputs.UndefinedType);
+            il.MarkLabel(noOwn);
+            il.Emit(OpCodes.Ldarg_0);
+            il.Emit(OpCodes.Ldarg_1);
+            il.Emit(OpCodes.Call, inputs.Vm.ReadMappedProperty);
+            il.Emit(OpCodes.Ret);
+            il.MarkLabel(ordinaryVmValue);
+        }
         var notDefinitionValue = il.DefineLabel();
         il.Emit(OpCodes.Ldarg_0);
         il.Emit(OpCodes.Isinst, inputs.ClassDefinitions.Type);

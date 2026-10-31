@@ -13973,7 +13973,7 @@ public partial class StandaloneDllTests
             console.log(typeof vm, typeof vm.runInNewContext, typeof vm.Script, typeof vm.constants);
             try {console.log(vm.runInNewContext('4+5'));} catch(e) {console.log('cjs-call-error');}
             """,
-            "object object object object\ncjs-call-error\n", "main.cjs", false
+            "object object function object\ncjs-call-error\n", "main.cjs", false
         },
         new object[]
         {

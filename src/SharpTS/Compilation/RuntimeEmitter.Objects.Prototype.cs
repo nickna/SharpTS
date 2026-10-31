@@ -59,7 +59,8 @@ public partial class RuntimeEmitter
         TypeBuilder TSFunctionType,
         Type UndefinedType,
         MethodInfo? NativeProxyRejection,
-        EmittedGuestOwnPropertyRuntime? GuestOwnProperties = null
+        EmittedGuestOwnPropertyRuntime? GuestOwnProperties = null,
+        EmittedVmRuntime? Vm = null
     );
 
     private readonly record struct ObjectSetPrototypeOfInputs(
@@ -693,8 +694,24 @@ public partial class RuntimeEmitter
         il.Emit(OpCodes.Call, inputs.DescriptorStorage.GetPrototype);
         il.Emit(OpCodes.Ret);
 
-        // Also check local _prototypeStore table for backward compatibility
         il.MarkLabel(checkLocalTableLabel);
+        if (inputs.Vm is not null)
+        {
+            var ordinaryVmPrototype = il.DefineLabel();
+            il.Emit(OpCodes.Ldarg_0);
+            il.Emit(OpCodes.Call, inputs.Vm.IsMappedValue);
+            var recordedVmPrototype = il.DefineLabel();
+            il.Emit(OpCodes.Brtrue, recordedVmPrototype);
+            il.Emit(OpCodes.Ldarg_0);
+            il.Emit(OpCodes.Call, inputs.Vm.IsRelatedValue);
+            il.Emit(OpCodes.Brfalse, ordinaryVmPrototype);
+            il.MarkLabel(recordedVmPrototype);
+            il.Emit(OpCodes.Ldarg_0);
+            il.Emit(OpCodes.Call, inputs.Vm.MappedPrototype);
+            il.Emit(OpCodes.Ret);
+            il.MarkLabel(ordinaryVmPrototype);
+        }
+        // Also check local _prototypeStore table for backward compatibility
         var notAssociatedInstance = il.DefineLabel();
         il.Emit(OpCodes.Ldarg_0);
         il.Emit(OpCodes.Isinst, inputs.ClassDefinitions.InstanceInterface);

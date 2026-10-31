@@ -17,7 +17,8 @@ public partial class RuntimeEmitter
         EmittedReflectedMethodRuntime ReflectedMethods,
         Type SymbolType,
         FieldInfo UndefinedInstance,
-        MethodInfo TypeOf
+        MethodInfo TypeOf,
+        EmittedVmRuntime? Vm = null
     );
 
     /// <summary>
@@ -71,6 +72,29 @@ public partial class RuntimeEmitter
             inputs.FunctionBindings.BoundTargetField, inputs.FunctionBindings.BoundArgumentsField);
         EmitBoundConstruction(il, dynamicConstruction.ConstructWithNewTarget, inputs.FunctionBindings.AnyType,
             inputs.FunctionBindings.AnyTargetField, inputs.FunctionBindings.AnyArgumentsField);
+
+        if (inputs.Vm is { } vm)
+        {
+            var ordinaryConstruction = il.DefineLabel();
+            il.Emit(OpCodes.Ldarg_0);
+            il.Emit(OpCodes.Call, vm.IsMappedValue);
+            il.Emit(OpCodes.Brfalse, ordinaryConstruction);
+            var constructorValue = il.DefineLabel();
+            il.Emit(OpCodes.Ldarg_0);
+            il.Emit(OpCodes.Call, inputs.FunctionIntrospection.IsConstructor);
+            il.Emit(OpCodes.Brtrue, constructorValue);
+            GuestErrorEmitter.ThrowError(il, inputs.Errors.CreateException, inputs.Errors.TypeErrorConstructor, "not a constructor");
+            il.MarkLabel(constructorValue);
+            // Only our inverse wrapper map selects this explicit construction
+            // edge. The recorded Core owner validates constructor/newTarget;
+            // ordinary calls continue through InvokeVmCallable.
+            EmitVmBoundaryBody(il, vm, () => EmitVmCoreInvoke(il, "ConstructVmCallable",
+                body => { body.Emit(OpCodes.Ldarg_0); body.Emit(OpCodes.Call, vm.RestoreValue); },
+                body => body.Emit(OpCodes.Ldarg_1),
+                body => { body.Emit(OpCodes.Ldarg_2); body.Emit(OpCodes.Call, vm.RestoreValue); }),
+                enterScope: false);
+            il.MarkLabel(ordinaryConstruction);
+        }
 
         // Proxy [[Construct]] exists only when the target is a constructor,
         // including when a handler supplies its own construct trap.

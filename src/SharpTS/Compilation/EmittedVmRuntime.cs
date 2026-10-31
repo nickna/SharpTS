@@ -94,6 +94,102 @@ public sealed class EmittedVmRuntime
         internal set => Set(ref _newSyntheticModule, value);
     }
 
+    private MethodBuilder? _normalizeValue;
+    public MethodBuilder NormalizeValue
+    {
+        get => Require(_normalizeValue);
+        internal set => Set(ref _normalizeValue, value);
+    }
+
+    private MethodBuilder? _restoreValue;
+    public MethodBuilder RestoreValue
+    {
+        get => Require(_restoreValue);
+        internal set => Set(ref _restoreValue, value);
+    }
+
+    private MethodBuilder? _isErrorValue;
+    public MethodBuilder IsErrorValue
+    {
+        get => Require(_isErrorValue);
+        internal set => Set(ref _isErrorValue, value);
+    }
+
+    private MethodBuilder? _readErrorProperty;
+    public MethodBuilder ReadErrorProperty
+    {
+        get => Require(_readErrorProperty);
+        internal set => Set(ref _readErrorProperty, value);
+    }
+
+    private MethodBuilder? _getExecutionHost;
+    public MethodBuilder GetExecutionHost
+    {
+        get => Require(_getExecutionHost);
+        internal set => Set(ref _getExecutionHost, value);
+    }
+
+    private MethodBuilder? _disposeExecutionHost;
+    public MethodBuilder DisposeExecutionHost
+    {
+        get => Require(_disposeExecutionHost);
+        internal set => Set(ref _disposeExecutionHost, value);
+    }
+
+    private MethodBuilder? _queueAfterCheckpoint;
+    public MethodBuilder QueueAfterCheckpoint
+    {
+        get => Require(_queueAfterCheckpoint);
+        internal set => Set(ref _queueAfterCheckpoint, value);
+    }
+
+    private MethodBuilder? _enterExecutionScope;
+    internal MethodBuilder EnterExecutionScope
+    {
+        get => Require(_enterExecutionScope);
+        set => Set(ref _enterExecutionScope, value);
+    }
+
+    private MethodBuilder? _convertException;
+    internal MethodBuilder ConvertException
+    {
+        get => Require(_convertException);
+        set => Set(ref _convertException, value);
+    }
+
+    private MethodBuilder? _isRelatedValue;
+    internal MethodBuilder IsRelatedValue
+    {
+        get => Require(_isRelatedValue);
+        set => Set(ref _isRelatedValue, value);
+    }
+    private MethodBuilder? _isMappedValue;
+    internal MethodBuilder IsMappedValue
+    {
+        get => Require(_isMappedValue);
+        set => Set(ref _isMappedValue, value);
+    }
+
+    private MethodBuilder? _readMappedProperty;
+    internal MethodBuilder ReadMappedProperty
+    {
+        get => Require(_readMappedProperty);
+        set => Set(ref _readMappedProperty, value);
+    }
+
+    private MethodBuilder? _mappedPrototype;
+    internal MethodBuilder MappedPrototype
+    {
+        get => Require(_mappedPrototype);
+        set => Set(ref _mappedPrototype, value);
+    }
+
+    private FieldBuilder? _afterCheckpointQueue;
+    internal FieldBuilder AfterCheckpointQueue
+    {
+        get => Require(_afterCheckpointQueue);
+        set => Set(ref _afterCheckpointQueue, value);
+    }
     private static T Require<T>(T? handle, [CallerMemberName] string name = "") where T : class =>
         handle ?? throw new InvalidOperationException($"VM metadata '{name}' has not been declared.");
 
@@ -125,6 +221,20 @@ public sealed class EmittedVmRuntime
         _ = MeasureMemory;
         _ = NewSourceTextModule;
         _ = NewSyntheticModule;
+        _ = NormalizeValue;
+        _ = RestoreValue;
+        _ = IsErrorValue;
+        _ = ReadErrorProperty;
+        _ = GetExecutionHost;
+        _ = DisposeExecutionHost;
+        _ = QueueAfterCheckpoint;
+        _ = AfterCheckpointQueue;
+        _ = EnterExecutionScope;
+        _ = ConvertException;
+        _ = IsMappedValue;
+        _ = IsRelatedValue;
+        _ = ReadMappedProperty;
+        _ = MappedPrototype;
         IsComplete = true;
     }
 }

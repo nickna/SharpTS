@@ -342,6 +342,14 @@ stdio isolation, deployment requirements, and remaining transfer/shared-memory g
 `compileFunction`, `measureMemory`, `Script`, `SourceTextModule`, `SyntheticModule`, and maintained
 constants. Contexts are language environments, not security sandboxes.
 
+Compiled VM calls use the managed SharpTS runtime. Returned Promises and callables preserve their
+VM identity, constructor/prototype ownership and callback receivers through the typed value bridge.
+Undefined and thrown values keep their original values across that boundary. An unresolved Promise
+alone does not keep the caller's event loop alive; actual scheduled work owns its lifetime.
+The [experimental native guest profile](native-guest-projects.md#first-profile-and-diagnostics)
+refuses VM-dependent programs with `SHARPTS401`. Publishing the compiler itself as NativeAOT is a
+separate capability from publishing a VM-dependent guest.
+
 ## url
 
 `url` exports WHATWG `URL` and `URLSearchParams` plus `fileURLToPath`, `pathToFileURL`, `format`,

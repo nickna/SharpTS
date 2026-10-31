@@ -828,7 +828,9 @@ public partial class RuntimeEmitter
             microtasks,
             microtaskQueueField,
             microtaskDrainScheduledField,
-            queueType);
+            queueType, runtime.Vm);
+        if (runtime.Vm is not null)
+            EmitVmAfterCheckpointQueue(runtimeType, runtime.RequireVm(), microtasks, queueType);
         EmitHasMicrotasksMethod(runtimeType, microtasks, microtaskQueueField, queueType);
     }
 
@@ -870,7 +872,7 @@ public partial class RuntimeEmitter
         EmittedMicrotaskRuntime microtasks,
         FieldBuilder microtaskQueueField,
         FieldBuilder microtaskDrainScheduledField,
-        Type queueType)
+        Type queueType, EmittedVmRuntime? vm)
     {
         var method = microtasks.ProcessMicrotasks;
 
@@ -916,6 +918,8 @@ public partial class RuntimeEmitter
         il.Emit(OpCodes.Br, loopStartLabel);
 
         il.MarkLabel(doneLabel);
+        if (vm is not null)
+            EmitVmAfterCheckpointBatch(il, vm, queueType, loopStartLabel);
         il.Emit(OpCodes.Ldc_I4_0);
         il.Emit(OpCodes.Stsfld, microtaskDrainScheduledField);
         il.Emit(OpCodes.Ret);

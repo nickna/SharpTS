@@ -1150,7 +1150,8 @@ public partial class RuntimeEmitter
                 runtime.ReflectedMethods.ToPascalCase,
                 runtime.Sentinels.UndefinedInstance,
                 runtime.Sentinels.UndefinedType,
-                runtime.ReflectedMethods.NativePropertyGetter
+                runtime.ReflectedMethods.NativePropertyGetter,
+                runtime.Vm
             )
         );
         EmitGetListProperty(
@@ -1231,7 +1232,8 @@ public partial class RuntimeEmitter
                 runtime.FunctionAttributes,
                 runtime.Sentinels.UndefinedType,
                 runtime.ReflectedMethods.InvokeUnwrapped,
-                NativeProxyRejection: runtime.ReflectedMethods.NativeProxyRejection
+                NativeProxyRejection: runtime.ReflectedMethods.NativeProxyRejection,
+                Vm: runtime.Vm
             )
         );
         runtime.FunctionIntrospection.CompleteEmission();
@@ -1365,7 +1367,8 @@ public partial class RuntimeEmitter
                 runtime.WeakSet,
                 _features.UsesUserClasses,
                 NativeProxyRejection: runtime.ReflectedMethods.NativeProxyRejection,
-                SourceOwners: runtime.ClassInitialization.SourceOwners
+                SourceOwners: runtime.ClassInitialization.SourceOwners,
+                Vm: runtime.Vm
             )
         );
         EmitClassDefinitionBodies(runtime);
@@ -2334,7 +2337,8 @@ public partial class RuntimeEmitter
                 runtime.FunctionValues.Type,
                 runtime.Sentinels.UndefinedType,
                 NativeProxyRejection: runtime.ReflectedMethods.NativeProxyRejection,
-                GuestOwnProperties: runtime.GuestOwnProperties
+                GuestOwnProperties: runtime.GuestOwnProperties,
+                Vm: runtime.Vm
             ),
             prototypeStoreField
         );
@@ -3495,7 +3499,7 @@ public partial class RuntimeEmitter
             runtime.Deployment.Require("vm module");
             // Keep the shared module index at the orchestration boundary. Helpers register
             // each declaration before emitting its body, preserving forward lookup timing.
-            EmitVmMethods(typeBuilder, runtime.RequireVm(), runtime.RequirePromise(),
+            EmitVmMethods(typeBuilder, runtime,
                 (name, method) => runtime.BuiltInModules.Register("vm", name, method));
         }
 

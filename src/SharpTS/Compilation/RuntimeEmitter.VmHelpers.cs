@@ -10,7 +10,16 @@ public partial class RuntimeEmitter
     /// The vm module inherently requires the interpreter at runtime since it compiles
     /// and executes arbitrary strings of code.
     /// </summary>
-    private void EmitVmMethods(TypeBuilder typeBuilder, EmittedVmRuntime vm, EmittedPromiseRuntime promise, Action<string, MethodBuilder> registerModuleMethod)
+    private void EmitVmMethods(TypeBuilder typeBuilder, EmittedRuntime runtime, Action<string, MethodBuilder> registerModuleMethod)
+    {
+        var vm = runtime.RequireVm();
+        var promise = runtime.RequirePromise();
+        EmitVmValueBridge(typeBuilder, runtime);
+        EmitVmExportMethods(typeBuilder, vm, promise, registerModuleMethod);
+    }
+
+    private void EmitVmExportMethods(TypeBuilder typeBuilder, EmittedVmRuntime vm,
+        EmittedPromiseRuntime promise, Action<string, MethodBuilder> registerModuleMethod)
     {
         EmitVmRunInNewContext(typeBuilder, vm, registerModuleMethod);
         EmitVmRunInThisContext(typeBuilder, vm, registerModuleMethod);
@@ -86,7 +95,7 @@ public partial class RuntimeEmitter
         registerModuleMethod("runInContext", method);
 
         var il = method.GetILGenerator();
-        EmitVmReflectionCall(il, "runInContext", 3);
+        EmitVmReflectionCall(il, vm, "runInContext", 3);
     }
 
     /// <summary>
@@ -103,7 +112,7 @@ public partial class RuntimeEmitter
         vm.GetConstants = method;
 
         var il = method.GetILGenerator();
-        EmitVmGetExportValue(il, "constants");
+        EmitVmGetExportValue(il, vm, "constants");
     }
 
     /// <summary>
@@ -121,7 +130,7 @@ public partial class RuntimeEmitter
         registerModuleMethod("runInNewContext", method);
 
         var il = method.GetILGenerator();
-        EmitVmReflectionCall(il, "runInNewContext", 3);
+        EmitVmReflectionCall(il, vm, "runInNewContext", 3);
     }
 
     /// <summary>
@@ -139,7 +148,7 @@ public partial class RuntimeEmitter
         registerModuleMethod("runInThisContext", method);
 
         var il = method.GetILGenerator();
-        EmitVmReflectionCall(il, "runInThisContext", 2);
+        EmitVmReflectionCall(il, vm, "runInThisContext", 2);
     }
 
     /// <summary>
@@ -157,7 +166,7 @@ public partial class RuntimeEmitter
         registerModuleMethod("createContext", method);
 
         var il = method.GetILGenerator();
-        EmitVmReflectionCall(il, "createContext", 2);
+        EmitVmReflectionCall(il, vm, "createContext", 2);
     }
 
     /// <summary>
@@ -175,7 +184,7 @@ public partial class RuntimeEmitter
         registerModuleMethod("isContext", method);
 
         var il = method.GetILGenerator();
-        EmitVmReflectionCall(il, "isContext", 1);
+        EmitVmReflectionCall(il, vm, "isContext", 1);
     }
 
     /// <summary>
@@ -194,7 +203,7 @@ public partial class RuntimeEmitter
         registerModuleMethod("compileFunction", method);
 
         var il = method.GetILGenerator();
-        EmitVmReflectionCall(il, "compileFunction", 3);
+        EmitVmReflectionCall(il, vm, "compileFunction", 3);
     }
 
     /// <summary>
@@ -212,7 +221,7 @@ public partial class RuntimeEmitter
         registerModuleMethod("Script", method);
 
         var il = method.GetILGenerator();
-        EmitVmGetExportValue(il, "Script");
+        EmitVmGetExportValue(il, vm, "Script");
     }
 
     /// <summary>
@@ -220,7 +229,12 @@ public partial class RuntimeEmitter
     /// exported value — a dict, constructor, or other object — not the result of a Call).
     /// Returns null when SharpTS isn't present at runtime (standalone graceful degradation).
     /// </summary>
-    private void EmitVmGetExportValue(ILGenerator il, string exportName)
+    private void EmitVmGetExportValue(ILGenerator il, EmittedVmRuntime vm, string exportName)
+    {
+        EmitVmBoundaryBody(il, vm, () => EmitVmExportInvocation(il, exportName));
+    }
+
+    private void EmitVmExportInvocation(ILGenerator il, string exportName)
     {
         // Type moduleType = Type.GetType("SharpTS.Runtime.BuiltIns.Modules.Interpreter.VmModuleInterpreter, SharpTS");
         il.Emit(OpCodes.Ldstr, "SharpTS.Runtime.BuiltIns.Modules.Interpreter.VmModuleInterpreter, SharpTS");
@@ -261,7 +275,7 @@ public partial class RuntimeEmitter
         il.Emit(OpCodes.Ldstr, exportName);
         il.Emit(OpCodes.Stelem_Ref);
         il.Emit(OpCodes.Callvirt, _types.GetMethod(_types.PropertyInfo, "GetValue", _types.Object, _types.ObjectArray));
-        il.Emit(OpCodes.Ret);
+
     }
 
     /// <summary>
@@ -277,7 +291,7 @@ public partial class RuntimeEmitter
             [_types.Object, _types.Object]);
         vm.NewScript = method;
 
-        EmitVmConstructorCall(method.GetILGenerator(), "Script", 2);
+        EmitVmConstructorCall(method.GetILGenerator(), vm, "Script", 2);
     }
 
     /// <summary>
@@ -293,7 +307,7 @@ public partial class RuntimeEmitter
             [_types.Object, _types.Object]);
         vm.NewSourceTextModule = method;
 
-        EmitVmConstructorCall(method.GetILGenerator(), "SourceTextModule", 2);
+        EmitVmConstructorCall(method.GetILGenerator(), vm, "SourceTextModule", 2);
     }
 
     /// <summary>
@@ -309,7 +323,7 @@ public partial class RuntimeEmitter
             [_types.Object, _types.Object, _types.Object]);
         vm.NewSyntheticModule = method;
 
-        EmitVmConstructorCall(method.GetILGenerator(), "SyntheticModule", 3);
+        EmitVmConstructorCall(method.GetILGenerator(), vm, "SyntheticModule", 3);
     }
 
     /// <summary>
@@ -318,7 +332,12 @@ public partial class RuntimeEmitter
     /// The N constructor arguments are taken from ldarg 0..N-1. Returns null (graceful
     /// degradation) when SharpTS isn't present at runtime.
     /// </summary>
-    private void EmitVmConstructorCall(ILGenerator il, string exportName, int argCount)
+    private void EmitVmConstructorCall(ILGenerator il, EmittedVmRuntime vm, string exportName, int argCount)
+    {
+        EmitVmBoundaryBody(il, vm, () => EmitVmConstructorInvocation(il, exportName, argCount));
+    }
+
+    private void EmitVmConstructorInvocation(ILGenerator il, string exportName, int argCount)
     {
         // Type moduleType = Type.GetType("...VmModuleInterpreter, SharpTS");
         il.Emit(OpCodes.Ldstr, "SharpTS.Runtime.BuiltIns.Modules.Interpreter.VmModuleInterpreter, SharpTS");
@@ -388,7 +407,7 @@ public partial class RuntimeEmitter
         il.Emit(OpCodes.Ldloc, argsLocal);
         il.Emit(OpCodes.Stelem_Ref);
         il.Emit(OpCodes.Callvirt, _types.GetMethod(_types.MethodInfo, "Invoke", _types.Object, _types.ObjectArray));
-        il.Emit(OpCodes.Ret);
+
     }
 
     /// <summary>
@@ -408,7 +427,12 @@ public partial class RuntimeEmitter
     /// Emits IL that calls VmModuleInterpreter.GetExports()[methodName] via reflection.
     /// Same pattern as EmitChildProcessReflectionCall.
     /// </summary>
-    private void EmitVmReflectionCall(ILGenerator il, string methodName, int argCount)
+    private void EmitVmReflectionCall(ILGenerator il, EmittedVmRuntime vm, string methodName, int argCount)
+    {
+        EmitVmBoundaryBody(il, vm, () => EmitVmReflectionInvocation(il, methodName, argCount));
+    }
+
+    private void EmitVmReflectionInvocation(ILGenerator il, string methodName, int argCount)
     {
         // Type moduleType = Type.GetType("SharpTS.Runtime.BuiltIns.Modules.Interpreter.VmModuleInterpreter, SharpTS");
         il.Emit(OpCodes.Ldstr, "SharpTS.Runtime.BuiltIns.Modules.Interpreter.VmModuleInterpreter, SharpTS");
@@ -480,6 +504,6 @@ public partial class RuntimeEmitter
         il.Emit(OpCodes.Ldloc, argsLocal);
         il.Emit(OpCodes.Stelem_Ref);
         il.Emit(OpCodes.Callvirt, _types.GetMethod(_types.MethodInfo, "Invoke", _types.Object, _types.ObjectArray));
-        il.Emit(OpCodes.Ret);
+
     }
 }

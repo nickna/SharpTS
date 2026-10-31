@@ -12,7 +12,8 @@ public partial class RuntimeEmitter
         EmittedFunctionAttributesRuntime FunctionAttributes,
         Type UndefinedType,
         MethodBuilder InvokeMethodUnwrapped,
-        MethodInfo? NativeProxyRejection
+        MethodInfo? NativeProxyRejection,
+        EmittedVmRuntime? Vm = null
     );
 
     private readonly record struct ReflectGetInputs(MethodInfo InvokeMethodUnwrapped,
@@ -1253,6 +1254,36 @@ public partial class RuntimeEmitter
         il.Emit(OpCodes.Ldc_I4_0);
         il.Emit(OpCodes.Ret);
         il.MarkLabel(notUndefinedLabel);
+
+        if (inputs.Vm is { } vm)
+        {
+            var ordinaryValue = il.DefineLabel();
+            var eligibilityReady = il.DefineLabel();
+            var eligible = il.DeclareLocal(_types.Boolean);
+            il.Emit(OpCodes.Ldarg_0);
+            il.Emit(OpCodes.Call, vm.IsMappedValue);
+            il.Emit(OpCodes.Brfalse, ordinaryValue);
+            // This output's inverse wrapper map is the only route to Core
+            // constructor metadata. Reflect still owns its caller-realm
+            // precondition error before any executor/constructor runs.
+            il.BeginExceptionBlock();
+            EmitVmCoreInvoke(il, "IsVmConstructorValue", body =>
+            {
+                body.Emit(OpCodes.Ldarg_0);
+                body.Emit(OpCodes.Call, vm.RestoreValue);
+            });
+            il.Emit(OpCodes.Unbox_Any, _types.Boolean);
+            il.Emit(OpCodes.Stloc, eligible);
+            il.Emit(OpCodes.Leave, eligibilityReady);
+            il.BeginCatchBlock(_types.Exception);
+            il.Emit(OpCodes.Call, vm.ConvertException);
+            il.Emit(OpCodes.Throw);
+            il.EndExceptionBlock();
+            il.MarkLabel(eligibilityReady);
+            il.Emit(OpCodes.Ldloc, eligible);
+            il.Emit(OpCodes.Ret);
+            il.MarkLabel(ordinaryValue);
+        }
 
         // A Proxy has [[Construct]] exactly when its (possibly nested) target
         // does. Revocation is observable and must throw here.
