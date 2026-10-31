@@ -31,22 +31,30 @@ public class PrototypeOverlayCharacterizationTests
     }
 
     [Fact]
-    public void ArrayLength_RemainsAVirtualBuiltInWithAnIndependentOverlay()
+    public void ArrayLength_RetainsIntrinsicDescriptorWithAnIndependentOverlay()
     {
         var prototype = new SharpTSArrayPrototype();
         Assert.True(prototype.HasOwnProperty("length"));
         Assert.Equal(0d, prototype.GetMember("length"));
-        Assert.Null(prototype.GetOwnPropertyDescriptor("length"));
+        // #3337: length owns its intrinsic flags before any mutation.
+        var initial = prototype.GetOwnPropertyDescriptor("length")!;
+        Assert.True(initial.Writable);
+        Assert.False(initial.Enumerable);
+        Assert.False(initial.Configurable);
         prototype.SetExtra("7", 42d);
         Assert.Equal(0d, prototype.GetMember("length"));
         Assert.True(prototype.HasIndexedExtra(8));
         Assert.False(prototype.HasIndexedExtra(7));
-        Assert.True(prototype.DeleteProperty("length"));
-        Assert.False(prototype.HasOwnProperty("length"));
-        Assert.Null(prototype.GetMember("length"));
+        Assert.False(prototype.DeleteProperty("length"));
+        Assert.True(prototype.HasOwnProperty("length"));
+        Assert.Equal(0d, prototype.GetMember("length"));
         prototype.SetExtra("length", 3d);
         Assert.Equal(3d, prototype.GetMember("length"));
-        Assert.True(prototype.GetOwnPropertyDescriptor("length")!.Enumerable);
+        var updated = prototype.GetOwnPropertyDescriptor("length")!;
+        Assert.Equal(3d, updated.Value);
+        Assert.True(updated.Writable);
+        Assert.False(updated.Enumerable);
+        Assert.False(updated.Configurable);
     }
 
     [Fact]
