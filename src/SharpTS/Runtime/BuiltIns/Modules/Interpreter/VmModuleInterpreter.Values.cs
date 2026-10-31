@@ -29,7 +29,7 @@ public static partial class VmModuleInterpreter
         RecordVmErrorValue(value, owner);
         RetainVmErrorValue(value);
         if (value is SharpTSPromise promise) RecordVmPromise(promise, owner);
-        if (value is SharpTSPromise || IsCoreCallable(value)) RecordVmValue(value!, owner);
+        if (IsCoreGuestObject(value) || IsCoreCallable(value)) RecordVmValue(value!, owner);
     }
 
     internal static void RecordVmPublishedValue(object? value)
