@@ -1,4 +1,5 @@
 using System.Runtime.CompilerServices;
+using SharpTS.Compilation;
 using SharpTS.Parsing;
 using SharpTS.Runtime;
 using SharpTS.Runtime.BuiltIns;
@@ -2490,6 +2491,11 @@ public partial class Interpreter
             target.SetPropertyStrict(name, value, strictMode);
     }
 
+    private static bool UsesNonextensibleBuiltInPrototypeWrite(object? target)
+        => target is (SharpTSStringPrototype or SharpTSNumberPrototype
+            or SharpTSBooleanPrototype or SharpTSArrayPrototype)
+            && !PropertyDescriptorStore.IsExtensible(target);
+
     private void SetOwnPropertyObjectValue(object target, object key, object? value, bool strictMode)
     {
         if (!SharpTSProxy.OrdinarySet(this, target, key, value, target) && strictMode)
@@ -3075,6 +3081,11 @@ public partial class Interpreter
         if (obj is SharpTSClassPrototype classPrototype)
         {
             SetClassPrototypeProperty(classPrototype, set.Name.Lexeme, value, strictMode);
+            return value;
+        }
+        if (UsesNonextensibleBuiltInPrototypeWrite(obj))
+        {
+            SetOwnPropertyObjectValue(obj!, set.Name.Lexeme, value, strictMode);
             return value;
         }
         if (obj is ISharpTSMutableBuiltIn builtInProto)

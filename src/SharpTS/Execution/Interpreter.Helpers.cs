@@ -21,9 +21,9 @@ public partial class Interpreter
     /// <returns><c>true</c> if the property was found; otherwise <c>false</c>.</returns>
     private bool TryGetProperty(object? obj, Token name, out object? value)
     {
-        if (UsesPrimitivePrototypePropertyReads(obj))
+        if (UsesPrimitivePrototypePropertyReads(obj) || UsesNonextensibleBuiltInPrototypeWrite(obj))
         {
-            value = GetPropertyValue(obj, name.Lexeme);
+            value = GetPropertyValue(obj!, name.Lexeme);
             return true;
         }
         switch (obj)
@@ -74,9 +74,9 @@ public partial class Interpreter
     /// </summary>
     private bool TryGetPropertyRV(object? obj, Token name, out RuntimeValue value)
     {
-        if (UsesPrimitivePrototypePropertyReads(obj))
+        if (UsesPrimitivePrototypePropertyReads(obj) || UsesNonextensibleBuiltInPrototypeWrite(obj))
         {
-            value = RuntimeValue.FromBoxed(GetPropertyValue(obj, name.Lexeme));
+            value = RuntimeValue.FromBoxed(GetPropertyValue(obj!, name.Lexeme));
             return true;
         }
         switch (obj)
@@ -129,6 +129,11 @@ public partial class Interpreter
     /// <returns><c>true</c> if the property was set; otherwise <c>false</c>.</returns>
     private bool TrySetProperty(object? obj, Token name, object? value)
     {
+        if (UsesNonextensibleBuiltInPrototypeWrite(obj))
+        {
+            SetOwnPropertyObjectValue(obj!, name.Lexeme, value, _environment.IsStrictMode);
+            return true;
+        }
         switch (obj)
         {
             case VmInputPropertyView inputView:
@@ -200,7 +205,8 @@ public partial class Interpreter
             value = GetPropertyValue(global.Target, global.Key);
             return true;
         }
-        if (HasCanonicalIndexProperties(obj) || UsesPrimitivePrototypePropertyReads(obj))
+        if (HasCanonicalIndexProperties(obj) || UsesPrimitivePrototypePropertyReads(obj)
+            || UsesNonextensibleBuiltInPrototypeStringIndex(obj, index))
         {
             value = GetOwnPropertyObjectValue(obj!, ToPropertyKey(index));
             return true;
@@ -245,7 +251,7 @@ public partial class Interpreter
             SetGlobalIndexValue(global, value, _environment.IsStrictMode);
             return true;
         }
-        if (HasCanonicalIndexProperties(obj))
+        if (HasCanonicalIndexProperties(obj) || UsesNonextensibleBuiltInPrototypeStringIndex(obj, index))
         {
             SetOwnPropertyObjectValue(obj!, ToPropertyKey(index), value, _environment.IsStrictMode);
             return true;
@@ -268,6 +274,9 @@ public partial class Interpreter
 
     private static bool UsesPrimitivePrototypePropertyReads(object? target)
         => target is SharpTSStringPrototype or SharpTSNumberPrototype or SharpTSBooleanPrototype;
+
+    private static bool UsesNonextensibleBuiltInPrototypeStringIndex(object? target, object? key)
+        => key is string && UsesNonextensibleBuiltInPrototypeWrite(target);
 
     private bool HasCanonicalIndexProperties(object? target)
         => target is ISharpTSOwnPropertyObject or SharpTSObject or SharpTSObjectNamespace or SharpTSObjectPrototype

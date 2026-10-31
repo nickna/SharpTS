@@ -158,7 +158,9 @@ public partial class Interpreter
         }
         bool arrayObjectKey = HasArrayObjectKey(obj, index);
         var globalTarget = ResolveGlobalIndexTarget(obj, index);
-        if (arrayObjectKey || inputView is not null || globalTarget is not null || HasCanonicalIndexProperties(obj) || obj is BuiltInMethod or SharpTSObject or SharpTSInstance)
+        if (arrayObjectKey || inputView is not null || globalTarget is not null || HasCanonicalIndexProperties(obj)
+            || UsesNonextensibleBuiltInPrototypeStringIndex(obj, index)
+            || obj is BuiltInMethod or SharpTSObject or SharpTSInstance)
         {
             object key = globalTarget is null ? ToPropertyKey(index) : globalTarget.Key;
             RuntimeValue current = RuntimeValue.FromBoxed(inputView is not null
@@ -380,6 +382,7 @@ public partial class Interpreter
         bool arrayObjectKey = HasArrayObjectKey(obj, index);
         var globalTarget = ResolveGlobalIndexTarget(obj, index);
         if (arrayObjectKey || inputView is not null || globalTarget is not null
+            || UsesNonextensibleBuiltInPrototypeStringIndex(obj, index)
             || obj is ISharpTSOwnPropertyObject or BuiltInMethod or SharpTSObjectNamespace or SharpTSObjectPrototype)
         {
             object key = globalTarget is null ? ToPropertyKey(index) : globalTarget.Key;

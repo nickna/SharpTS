@@ -1820,6 +1820,12 @@ public partial class Interpreter
             return RuntimeValue.FromBoxed(value);
         }
 
+        if (index is not SharpTSSymbol && UsesNonextensibleBuiltInPrototypeWrite(obj))
+        {
+            SetOwnPropertyObjectValue(obj!, PropertyKeyConverter.ToPropertyKeyString(index), value, strictMode);
+            return RuntimeValue.FromBoxed(value);
+        }
+
         // Number/Boolean/String.prototype are mutable ordinary objects — allow
         // bracket assignment (`Number.prototype[0] = 1`, `Number.prototype.length = 1`).
         if (obj is SharpTSNumberPrototype numProto)
@@ -2132,7 +2138,9 @@ public partial class Interpreter
                 break;
 
             case IndexTarget.BuiltInPrototypeString t:
-                if (t.Target is SharpTSClassPrototype classPrototype)
+                if (UsesNonextensibleBuiltInPrototypeWrite(t.Target))
+                    SetOwnPropertyObjectValue(t.Target, t.Key, value, strictMode);
+                else if (t.Target is SharpTSClassPrototype classPrototype)
                     SetClassPrototypeProperty(classPrototype, t.Key, value, strictMode);
                 else if (t.Target is not ISharpTSPrimitiveConstructor indexedConstructor
                     || !TryAssignThroughDescriptor(indexedConstructor.GetOwnPropertyDescriptor(t.Key),
