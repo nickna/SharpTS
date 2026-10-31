@@ -15,6 +15,25 @@ public sealed class EmittedObjectOperationsRuntimeTests
     public static IEnumerable<object[]> Declarations => OwnerTypes.SelectMany(type => Handles(type).Select(p => new object[] { type, p.Name }));
 
     [Theory]
+    [InlineData("1n;")]
+    [InlineData("import 'vm';")]
+    [InlineData("import 'sharpts:execution';")]
+    [InlineData("Object.defineProperty({}, 'slot', {value: 1});")]
+    public void SameValueAcceptsBigIntsFromSelectedValueBoundaries(string source)
+    {
+        var statements = new Parser(new Lexer(source).ScanTokens()).ParseOrThrow();
+        var features = new RuntimeFeatureDetector().Detect(statements);
+        var builder = NewAssembly();
+        new RuntimeEmitter(TypeProvider.Runtime).EmitAll(builder.DefineDynamicModule("main"), features);
+        var loaded = SaveVerifyLoad(builder);
+        var sameValue = loaded.GetType("$Runtime")!.GetMethod("ObjectIs")!;
+        Assert.Equal(true, sameValue.Invoke(null,
+            [new System.Numerics.BigInteger(31), new System.Numerics.BigInteger(31)]));
+        Assert.Equal(false, sameValue.Invoke(null,
+            [new System.Numerics.BigInteger(31), 31d]));
+    }
+
+    [Theory]
     [MemberData(nameof(Declarations))]
     public void MissingDeclarationIsRepairableAndCompletionFreezesMetadata(Type type, string missing)
     {

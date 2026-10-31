@@ -212,6 +212,24 @@ public partial class RuntimeEmitter
 
         // Reference equality for objects
         il.MarkLabel(referenceEqualLabel);
+        if (_features.UsesBigInt || _features.UsesObjectDefinitionRuntime
+            || _features.UsesVm || _features.UsesSourceExecution)
+        {
+            var notBigInt = il.DefineLabel();
+            il.Emit(OpCodes.Ldarg_0);
+            il.Emit(OpCodes.Isinst, _types.BigInteger);
+            il.Emit(OpCodes.Brfalse, notBigInt);
+            il.Emit(OpCodes.Ldarg_1);
+            il.Emit(OpCodes.Isinst, _types.BigInteger);
+            il.Emit(OpCodes.Brfalse, returnFalseLabel);
+            il.Emit(OpCodes.Ldarg_0);
+            il.Emit(OpCodes.Unbox_Any, _types.BigInteger);
+            il.Emit(OpCodes.Ldarg_1);
+            il.Emit(OpCodes.Unbox_Any, _types.BigInteger);
+            il.Emit(OpCodes.Call, _types.GetMethod(_types.BigInteger, "op_Equality", _types.BigInteger, _types.BigInteger));
+            il.Emit(OpCodes.Br, endLabel);
+            il.MarkLabel(notBigInt);
+        }
         il.Emit(OpCodes.Ldarg_0);
         il.Emit(OpCodes.Ldarg_1);
         il.Emit(OpCodes.Ceq);

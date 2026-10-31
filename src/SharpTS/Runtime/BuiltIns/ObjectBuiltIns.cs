@@ -390,7 +390,10 @@ public static partial class ObjectBuiltIns
         if (value1.Kind == ValueKind.String && value2.Kind == ValueKind.String)
             return RuntimeValue.FromBoolean(value1.AsString() == value2.AsString());
 
-        // Fall back to boxed comparison for objects, bigints, symbols
+        if (value1.Kind == ValueKind.BigInt && value2.Kind == ValueKind.BigInt)
+            return RuntimeValue.FromBoolean(value1.AsBigInt().Value == value2.AsBigInt().Value);
+
+        // Fall back to boxed comparison for objects and symbols.
         var obj1 = value1.ToObject();
         var obj2 = value2.ToObject();
 
