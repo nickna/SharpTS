@@ -16,7 +16,7 @@ This project is **not** included in `SharpTS.sln` and won't be picked up by solu
 dotnet test tests/conformance/SharpTS.Test262/SharpTS.Test262.csproj
 ```
 
-The default subset (config/subset.json) keeps a runtime budget of a few minutes. The wide-sweep config (config/wide-sweep.json) exercises a much larger slice and writes gitignored path-level snapshots plus a differential markdown report — useful for periodic deep checks.
+The default subset (config/subset.json) bounds the selected paths; running both modes can take tens of minutes. The wide-sweep config (config/wide-sweep.json) exercises a much larger slice and writes gitignored path-level snapshots plus a differential markdown report — useful for periodic deep checks.
 
 ## Updating the baselines
 
@@ -47,6 +47,25 @@ rates, the interpreted-to-compiled transition histogram, Track A interpreter
 deficits, Track B compiler deficits, other divergent outcomes, and paths found
 in only one baseline. It also warns when the baseline headers pin different
 Test262 corpus revisions.
+
+### Verified paired snapshot
+
+At SharpTS `7b10d3be9` and Test262
+`d5e73fc8d2c663554fb72e2380a8c2bc1a318a33`, two complete paired runs generated
+byte-identical baselines in both modes. Each mode selects 11,384 paths, with
+879 skips and 10,505 executed results:
+
+| Mode | Pass | Other executed results |
+|---|---:|---:|
+| Interpreted | 9,949 | 556 |
+| Compiled | 9,921 | 584 |
+
+The committed-subset interpreter deficit (interpreted non-pass, compiled Pass)
+is zero. The reverse compiler deficit is 28 and remains visible in the generated
+differential report. Two interpreted and fourteen compiled prior-pass losses
+reproduce with the preserved main compiler; the baseline update records that
+existing drift. No introduced prior-pass regression was identified by that audit.
+The corpus, skip policy and result vocabulary are unchanged.
 
 ## Bucket model
 

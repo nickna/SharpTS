@@ -41,9 +41,62 @@ public partial class RuntimeEmitter
 
     private readonly record struct GetOwnDescriptorProxyReceiverInputs(ProxyDescriptorCallInputs ProxyDescriptor, FieldInfo UndefinedInstance);
 
+    private void EmitGetOwnDescriptorPrimitiveStringIndex(ILGenerator il,
+        LocalBuilder propertyName, LocalBuilder result, Label end)
+    {
+        var next = il.DefineLabel();
+        var text = il.DeclareLocal(_types.String);
+        var index = il.DeclareLocal(_types.Int32);
+        il.Emit(OpCodes.Ldarg_0);
+        il.Emit(OpCodes.Isinst, _types.String);
+        il.Emit(OpCodes.Stloc, text);
+        il.Emit(OpCodes.Ldloc, text);
+        il.Emit(OpCodes.Brfalse, next);
+        il.Emit(OpCodes.Ldloc, propertyName);
+        il.Emit(OpCodes.Ldloca, index);
+        il.Emit(OpCodes.Call, _types.GetMethod(_types.Int32, "TryParse", _types.String, _types.Int32.MakeByRefType()));
+        il.Emit(OpCodes.Brfalse, next);
+        il.Emit(OpCodes.Ldloc, index);
+        il.Emit(OpCodes.Ldc_I4_0);
+        il.Emit(OpCodes.Blt, next);
+        il.Emit(OpCodes.Ldloc, index);
+        il.Emit(OpCodes.Ldloc, text);
+        il.Emit(OpCodes.Callvirt, _types.GetProperty(_types.String, "Length").GetGetMethod()!);
+        il.Emit(OpCodes.Bge, next);
+        // Parsing alone accepts named properties such as "01", "+1" and "-0".
+        // A string's virtual indices require the canonical decimal spelling.
+        il.Emit(OpCodes.Ldloca, index);
+        il.Emit(OpCodes.Call, _types.GetProperty(typeof(System.Globalization.CultureInfo), "InvariantCulture").GetGetMethod()!);
+        il.Emit(OpCodes.Call, _types.GetMethod(_types.Int32, "ToString", typeof(IFormatProvider)));
+        il.Emit(OpCodes.Ldloc, propertyName);
+        il.Emit(OpCodes.Call, _types.StringOpEquality);
+        il.Emit(OpCodes.Brfalse, next);
+        il.Emit(OpCodes.Newobj, _types.DictionaryStringObjectCtor);
+        il.Emit(OpCodes.Stloc, result);
+        il.Emit(OpCodes.Ldloc, result);
+        il.Emit(OpCodes.Ldstr, "value");
+        il.Emit(OpCodes.Ldloc, text);
+        il.Emit(OpCodes.Ldloc, index);
+        il.Emit(OpCodes.Ldc_I4_1);
+        il.Emit(OpCodes.Callvirt, _types.GetMethod(_types.String, "Substring", _types.Int32, _types.Int32));
+        il.Emit(OpCodes.Callvirt, _types.GetMethod(_types.DictionaryStringObject, "set_Item"));
+        foreach (string flag in new[] { "writable", "enumerable", "configurable" })
+        {
+            il.Emit(OpCodes.Ldloc, result);
+            il.Emit(OpCodes.Ldstr, flag);
+            il.Emit(flag == "enumerable" ? OpCodes.Ldc_I4_1 : OpCodes.Ldc_I4_0);
+            il.Emit(OpCodes.Box, _types.Boolean);
+            il.Emit(OpCodes.Callvirt, _types.GetMethod(_types.DictionaryStringObject, "set_Item"));
+        }
+        il.Emit(OpCodes.Ldloc, result);
+        il.Emit(OpCodes.Br, end);
+        il.MarkLabel(next);
+    }
+
     private readonly record struct GetOwnDescriptorGlobalReceiverInputs(
         EmittedDescriptorStorageRuntime DescriptorStorage,
         MethodBuilder GlobalThisGetProperty,
+        MethodBuilder GlobalThisIntrinsicDescriptorKind,
         FieldBuilder GlobalThisSingletonField,
         EmittedObjectStateRuntime ObjectState
     );
@@ -84,7 +137,8 @@ public partial class RuntimeEmitter
         MethodBuilder TSFunctionGetOrCreate,
         TypeBuilder TSFunctionType,
         FieldInfo UndefinedInstance,
-        Type UndefinedType
+        Type UndefinedType,
+        NativeSourceOwnerCatalog? SourceOwners = null
     );
 
     private readonly record struct GetOwnDescriptorRegExpConstructorInputs(EmittedRegExpRuntime RegExps, MethodBuilder TSFunctionGetOrCreate);
@@ -113,7 +167,8 @@ public partial class RuntimeEmitter
         EmittedDescriptorStorageRuntime DescriptorStorage,
         MethodBuilder GetProperty,
         Type IHasFieldsInterface,
-        MethodBuilder ObjectHasOwn
+        MethodBuilder ObjectHasOwn,
+        NativeSourceOwnerCatalog? SourceOwners = null
     );
 
     private readonly record struct GetOwnDescriptorConstructorFallbackInputs(
@@ -137,7 +192,8 @@ public partial class RuntimeEmitter
     private readonly record struct GetOwnDescriptorFieldsReceiverInputs(
         EmittedDescriptorStorageRuntime DescriptorStorage,
         MethodInfo IHasFieldsFieldsGetter,
-        Type IHasFieldsInterface
+        Type IHasFieldsInterface,
+        EmittedModuleNamespaceRuntime? ModuleNamespaces = null
     );
 
     // Emits a data result using explicit scratch/exit ownership. emitValue leaves one value;
@@ -160,7 +216,7 @@ public partial class RuntimeEmitter
         il.Emit(OpCodes.Br, endLabel);
     }
 
-    // Proxy dispatch precedes symbol/string coercion. Returns from the emitted method on a match;
+    // Proxy dispatch receives the normalized key before ordinary symbol/string lookup. Returns on a match;
     // otherwise falls through empty. Owns its normalization locals and labels.
     private void EmitGetOwnDescriptorProxyReceiver(ILGenerator il, GetOwnDescriptorProxyReceiverInputs inputs)
     {
@@ -249,33 +305,13 @@ public partial class RuntimeEmitter
         var writableGlobalLabel = il.DefineLabel();
         var constantGlobalLabel = il.DefineLabel();
 
-        void EmitGlobalDescriptorCheck(string name, Label matchedLabel)
-        {
-            il.Emit(OpCodes.Ldloc, propNameLocal);
-            il.Emit(OpCodes.Ldstr, name);
-            il.Emit(OpCodes.Call, _types.GetMethod(
-                _types.String, "op_Equality", _types.String, _types.String));
-            il.Emit(OpCodes.Brtrue, matchedLabel);
-        }
-        EmitGlobalDescriptorCheck("parseInt", writableGlobalLabel);
-        EmitGlobalDescriptorCheck("parseFloat", writableGlobalLabel);
-        EmitGlobalDescriptorCheck("isNaN", writableGlobalLabel);
-        EmitGlobalDescriptorCheck("isFinite", writableGlobalLabel);
-        EmitGlobalDescriptorCheck("eval", writableGlobalLabel);
-        EmitGlobalDescriptorCheck("NaN", constantGlobalLabel);
-        EmitGlobalDescriptorCheck("Infinity", constantGlobalLabel);
-        EmitGlobalDescriptorCheck("undefined", constantGlobalLabel);
-        EmitGlobalDescriptorCheck("globalThis", writableGlobalLabel);
-        foreach (var globalName in new[]
-        {
-            "Array", "Date", "RegExp", "Map", "Set", "WeakMap", "WeakSet",
-            "Promise", "Function", "Object", "Number", "String", "Boolean",
-            "Symbol", "Error", "TypeError", "RangeError", "ReferenceError",
-            "SyntaxError", "URIError", "EvalError", "AggregateError", "Math", "JSON"
-        })
-        {
-            EmitGlobalDescriptorCheck(globalName, writableGlobalLabel);
-        }
+        il.Emit(OpCodes.Ldloc, propNameLocal);
+        il.Emit(OpCodes.Call, inputs.GlobalThisIntrinsicDescriptorKind);
+        il.Emit(OpCodes.Dup);
+        il.Emit(OpCodes.Ldc_I4_2);
+        il.Emit(OpCodes.Beq, writableGlobalLabel);
+        il.Emit(OpCodes.Ldc_I4_1);
+        il.Emit(OpCodes.Beq, constantGlobalLabel);
         il.Emit(OpCodes.Br, returnNullLabel);
 
         void EmitGlobalValue()
@@ -285,6 +321,7 @@ public partial class RuntimeEmitter
         }
 
         il.MarkLabel(writableGlobalLabel);
+        il.Emit(OpCodes.Pop);
         EmitBuiltinDataDescriptor(il, resultDictLocal, endLabel,
             EmitGlobalValue, writable: true, configurable: true);
         il.MarkLabel(constantGlobalLabel);
@@ -553,6 +590,12 @@ public partial class RuntimeEmitter
         il.Emit(OpCodes.Ldarg_0);
         il.Emit(OpCodes.Isinst, _types.Type);
         il.Emit(OpCodes.Brfalse, notTypeForDescLabel);
+        // Explicit PDS definitions were checked by the caller. A tombstone
+        // suppresses every remaining synthesized native static descriptor.
+        il.Emit(OpCodes.Ldarg_0);
+        il.Emit(OpCodes.Ldloc, propNameLocal);
+        il.Emit(OpCodes.Call, inputs.ObjectState.IsBuiltinDeleted);
+        il.Emit(OpCodes.Brtrue, returnNullLabel);
         EmitGetOwnDescriptorConstructorMetadata(il, inputs.GetProperty, inputs.ObjectState.IsBuiltinDeleted,
             propNameLocal, resultDictLocal, returnNullLabel, endLabel);
 
@@ -616,7 +659,8 @@ public partial class RuntimeEmitter
                     inputs.DescriptorStorage,
                     inputs.GetProperty,
                     inputs.IHasFieldsInterface,
-                    inputs.ObjectHasOwn
+                    inputs.ObjectHasOwn,
+                inputs.SourceOwners
                 ),
                 propNameLocal,
                 resultDictLocal,
@@ -751,10 +795,10 @@ public partial class RuntimeEmitter
             il.Emit(OpCodes.Brfalse, notRegExpEscapeDescriptor);
             EmitBuiltinDataDescriptor(il, resultDictLocal, endLabel, () =>
             {
-                _types.EmitLoadMethodInfo(il, inputs.RegExps.RequireImplementation().StaticEscape);
+                var parameterProducer1 = EmitReflectedMethodLiteral(il, inputs.RegExps.RequireImplementation().StaticEscape);
                 il.Emit(OpCodes.Ldstr, "escape");
                 il.Emit(OpCodes.Ldc_I4_1);
-                il.Emit(OpCodes.Call, inputs.TSFunctionGetOrCreate);
+                EmitReflectedFunctionFactory(il, inputs.TSFunctionGetOrCreate, parameterProducer1);
             }, writable: true, configurable: true);
             il.MarkLabel(notRegExpEscapeDescriptor);
         }
@@ -805,10 +849,10 @@ public partial class RuntimeEmitter
             il.Emit(OpCodes.Stloc, resultDictLocal);
             il.Emit(OpCodes.Ldloc, resultDictLocal);
             il.Emit(OpCodes.Ldstr, "value");
-            _types.EmitLoadMethodInfo(il, targetMethod);
+            var parameterProducer2 = EmitReflectedMethodLiteral(il, targetMethod);
             il.Emit(OpCodes.Ldstr, n);
             il.Emit(OpCodes.Ldc_I4, specLength);
-            il.Emit(OpCodes.Call, inputs.TSFunctionGetOrCreate);
+            EmitReflectedFunctionFactory(il, inputs.TSFunctionGetOrCreate, parameterProducer2);
             il.Emit(OpCodes.Callvirt, _types.GetMethod(_types.DictionaryStringObject, "set_Item"));
             EmitDescriptorBoolField(il, resultDictLocal, "writable", true);
             EmitDescriptorBoolField(il, resultDictLocal, "enumerable", false);
@@ -913,10 +957,10 @@ public partial class RuntimeEmitter
                 il.Emit(OpCodes.Brfalse, next);
                 EmitBuiltinDataDescriptor(il, resultDictLocal, endLabel, () =>
                 {
-                    _types.EmitLoadMethodInfo(il, target);
+                    var parameterProducer3 = EmitReflectedMethodLiteral(il, target);
                     il.Emit(OpCodes.Ldstr, name);
                     il.Emit(OpCodes.Ldc_I4, length);
-                    il.Emit(OpCodes.Call, inputs.TSFunctionGetOrCreate);
+                    EmitReflectedFunctionFactory(il, inputs.TSFunctionGetOrCreate, parameterProducer3);
                 }, writable: true, configurable: true);
                 il.MarkLabel(next);
             }
@@ -956,7 +1000,7 @@ public partial class RuntimeEmitter
             il.Emit(OpCodes.Stloc, resultDictLocal);
             il.Emit(OpCodes.Ldloc, resultDictLocal);
             il.Emit(OpCodes.Ldstr, "value");
-            if (n == "isArray")
+            if (n is "isArray" or "from" or "of")
             {
                 // Resolve through the existing static-member cache, just as
                 // direct, computed and aliased Array.isArray reads do.
@@ -1021,10 +1065,10 @@ public partial class RuntimeEmitter
             {
                 // Emit TSFunction.GetOrCreate(methodInfo, name, length) so the
                 // descriptor's .value === Number.X (same cached wrapper).
-                _types.EmitLoadMethodInfo(il, methodTarget);
+                var parameterProducer4 = EmitReflectedMethodLiteral(il, methodTarget);
                 il.Emit(OpCodes.Ldstr, n);
                 il.Emit(OpCodes.Ldc_I4, methodArity);
-                il.Emit(OpCodes.Call, inputs.TSFunctionGetOrCreate);
+                EmitReflectedFunctionFactory(il, inputs.TSFunctionGetOrCreate, parameterProducer4);
             }
             else
             {
@@ -1090,11 +1134,11 @@ public partial class RuntimeEmitter
         il.Emit(OpCodes.Ldloc, propNameLocal);
         il.Emit(OpCodes.Call, inputs.ObjectHasOwn);
         il.Emit(OpCodes.Brfalse, returnNullLabel);
-        var fieldOwner = EmitStaticMemberLookupOwner(il, owner, inputs.IHasFieldsInterface);
+        var fieldOwner = EmitStaticMemberLookupOwner(il, owner, inputs.IHasFieldsInterface, inputs.SourceOwners);
         il.Emit(OpCodes.Ldloc, fieldOwner);
         il.Emit(OpCodes.Ldloc, propNameLocal);
         il.Emit(OpCodes.Ldc_I4, (int)(BindingFlags.Public | BindingFlags.Static | BindingFlags.DeclaredOnly));
-        il.Emit(OpCodes.Callvirt, _types.GetMethod(_types.Type, "GetField", _types.String, typeof(BindingFlags)));
+        EmitStaticFieldLookup(il);
         il.Emit(OpCodes.Brfalse, unhandled);
 
         il.Emit(OpCodes.Newobj, _types.DictionaryStringObjectCtor);
@@ -1721,7 +1765,8 @@ public partial class RuntimeEmitter
         // Set value
         il.Emit(OpCodes.Ldloc, resultDictLocal);
         il.Emit(OpCodes.Ldstr, "value");
-        il.Emit(OpCodes.Ldloc, valueLocal);
+        EmitModuleNamespaceDataRead(il, inputs.ModuleNamespaces, valueLocal,
+            () => il.Emit(OpCodes.Ldarg_0), () => il.Emit(OpCodes.Ldloc, propNameLocal));
         il.Emit(OpCodes.Callvirt, _types.GetMethod(_types.DictionaryStringObject, "set_Item"));
 
         // writable = !frozen.

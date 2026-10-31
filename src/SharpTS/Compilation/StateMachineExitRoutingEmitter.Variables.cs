@@ -60,11 +60,28 @@ public abstract partial class StateMachineExitRoutingEmitter
         if (!parameters.Any(p => p.DefaultValue != null) && initializers is null)
             return;
 
+        foreach (var parameter in parameters)
+            if (Ctx.ClosureAnalyzer?.IsLoopBodyCellDeclaration(parameter.Name) == true)
+                EnterLexicalCellBinding(parameter, parameter.Name, []);
+        foreach (var initializer in initializers?.Values.AsEnumerable() ?? [])
+            EnterLoopBodyCellScope(initializer.Statements, []);
+
         for (int i = 0; i < parameters.Count; i++)
         {
             var param = parameters[i];
             if (param.DefaultValue != null)
                 EmitDefault(param, ParameterTdzNames(i));
+
+            if (Ctx.ClosureAnalyzer?.IsLoopBodyCellDeclaration(param.Name) == true)
+            {
+                var source = GetHoistedVariableField(param.Name.Lexeme)
+                    ?? throw new InvalidOperationException("Captured parameter has no initialized state-machine source.");
+                IL.Emit(OpCodes.Ldarg_0);
+                IL.Emit(OpCodes.Ldfld, source);
+                if (source.FieldType.IsValueType) IL.Emit(OpCodes.Box, source.FieldType);
+                if (!TryInitializeLexicalCell(param.Name))
+                    throw new InvalidOperationException("Captured parameter has no owned state-machine cell.");
+            }
 
             if (initializers is null || !initializers.TryGetValue(param.Name.Lexeme, out var initializer))
                 continue;

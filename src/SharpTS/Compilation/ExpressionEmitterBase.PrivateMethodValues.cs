@@ -59,14 +59,9 @@ public abstract partial class ExpressionEmitterBase
 
     protected bool TryEmitGuestStaticPrivateField(Expr receiverExpression, Token token, Expr? assignedValue = null)
     {
-        // Dynamic reads must evaluate and brand the receiver before loading the lexical field.
-        bool dynamicRead = Ctx.TypeMap?.Get(receiverExpression) is SharpTS.TypeSystem.TypeInfo.Any;
-        // An arrow's CLR Invoke can be an instance method while this retains its lexical static home.
-        bool lexicalStaticRead = receiverExpression is Expr.This && Ctx.IsStaticSuperContext;
-        bool newlyAdmittedStaticRead = lexicalStaticRead && Ctx.GuestThisVariableName == null
-            && assignedValue == null && !dynamicRead;
-        if ((Ctx.GuestThisVariableName == null && assignedValue == null && !dynamicRead && !lexicalStaticRead)
-            || Ctx.CurrentClassName is not { } current) return false;
+        // Checked constructor receivers still require the runtime brand and
+        // field-installation checks, including during static initialization.
+        if (Ctx.CurrentClassName is not { } current) return false;
         string name = token.Lexeme.TrimStart('#');
         string owner = Ctx.ResolvePrivateFieldOwner(current, name);
         var declaration = Ctx.ClassRegistry?.GetPrivateElements(owner);
@@ -76,10 +71,8 @@ public abstract partial class ExpressionEmitterBase
         EmitOrdinaryStaticPrivateBrandCheck(owner, receiver, name);
         if (!Ctx.ClassRegistry!.TryGetCallableStaticPrivateField(owner, name, out var field))
             throw new InvalidOperationException("Static private field has no callable owner.");
-        if (value != null || dynamicRead || newlyAdmittedStaticRead)
         {
             // A successful receiver brand check does not install a later field.
-            // Dynamic and newly admitted static-this reads must reject uninitialized fields.
             var presence = field!.DeclaringType!.IsConstructedGenericType
                 ? EmitterTypeHelpers.ResolveField(field.DeclaringType, declaration.StaticPresence!)
                 : declaration.StaticPresence!;

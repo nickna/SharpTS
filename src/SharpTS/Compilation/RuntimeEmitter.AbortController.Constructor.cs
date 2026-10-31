@@ -11,7 +11,8 @@ public partial class RuntimeEmitter
         EmittedFunctionAttributesRuntime FunctionAttributes,
         EmittedFunctionValueRuntime FunctionValues,
         MethodBuilder GetOrCreateFunction,
-        EmittedObjectPrototypeRuntime ObjectPrototypes);
+        EmittedObjectPrototypeRuntime ObjectPrototypes,
+        NativeConstructedBodyLookup? ConstructedBodies);
 
     private void EmitAbortControllerConstructor(TypeBuilder runtimeType,
         EmittedAbortRuntime abort, AbortControllerConstructorInputs inputs)
@@ -44,6 +45,7 @@ public partial class RuntimeEmitter
         il.Emit(OpCodes.Call, inputs.DescriptorStorage.SetPrototype);
         il.Emit(OpCodes.Ldloc, controller);
         il.Emit(OpCodes.Ret);
+        inputs.ConstructedBodies?.RecordIntrinsicPair(entry, construct);
         carrier.CreateType();
 
         il = abort.GetControllerConstructor.GetILGenerator();

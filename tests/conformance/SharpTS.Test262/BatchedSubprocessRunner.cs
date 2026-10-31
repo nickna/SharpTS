@@ -1,5 +1,6 @@
 using System.Collections.Concurrent;
 using System.Diagnostics;
+using System.Text;
 
 namespace SharpTS.Test262;
 
@@ -38,6 +39,40 @@ namespace SharpTS.Test262;
 /// </remarks>
 public sealed class BatchedSubprocessRunner
 {
+    internal sealed record WorkerStderrSnapshot(long TotalCharacters, string First, string Last, string? ReadError)
+    {
+        public bool Truncated => TotalCharacters > First.Length + Last.Length;
+    }
+
+    // Keep draining after the retention limit: stopping the read would block a
+    // noisy worker on its redirected pipe and falsely trigger the idle watchdog.
+    internal static async Task<WorkerStderrSnapshot> CaptureWorkerStandardErrorAsync(TextReader reader)
+    {
+        const int limit = 16384;
+        var first = new StringBuilder(limit);
+        var last = new StringBuilder(limit);
+        var buffer = new char[4096];
+        long total = 0;
+        string? error = null;
+        try
+        {
+            int count;
+            while ((count = await reader.ReadAsync(buffer.AsMemory()).ConfigureAwait(false)) != 0)
+            {
+                total += count;
+                int prefixCount = Math.Min(limit - first.Length, count);
+                first.Append(buffer, 0, prefixCount);
+                last.Append(buffer, prefixCount, count - prefixCount);
+                if (last.Length > limit) last.Remove(0, last.Length - limit);
+            }
+        }
+        catch (Exception exception)
+        {
+            error = $"{exception.GetType().Name}: {exception.Message}";
+        }
+        return new WorkerStderrSnapshot(total, first.ToString(), last.ToString(), error);
+    }
+
     internal sealed class WorkerCrashRetryPolicy
     {
         private readonly ConcurrentDictionary<string, byte> _retried =
@@ -311,6 +346,8 @@ public sealed class BatchedSubprocessRunner
         private Task? _writerTask;
         private Task? _readerTask;
         private Task? _watchdogTask;
+        private Task<WorkerStderrSnapshot>? _stderrTask;
+        private int _exitTraced;
         private readonly CancellationTokenSource _shutdownCts = new();
         private bool _killedByWatchdog;
 
@@ -363,6 +400,7 @@ public sealed class BatchedSubprocessRunner
 
         public void Start()
         {
+            _stderrTask = CaptureWorkerStandardErrorAsync(_proc.StandardError);
             _writerTask = Task.Run(WriteLoop);
             _readerTask = Task.Run(ReadLoop);
             _watchdogTask = Task.Run(WatchdogLoop);
@@ -374,7 +412,48 @@ public sealed class BatchedSubprocessRunner
             try { _readerTask?.Wait(); } catch { }
             _shutdownCts.Cancel();
             try { _watchdogTask?.Wait(TimeSpan.FromSeconds(2)); } catch { }
-            try { _proc.WaitForExit(2000); } catch { }
+            try
+            {
+                if (_proc.WaitForExit(2000))
+                {
+                    WaitForStandardError();
+                    TraceWorkerExit();
+                }
+            }
+            catch (Exception exception) { _trace.Log("WAIT-EXIT error: {0}", exception.Message); }
+        }
+
+        private void WaitForStandardError()
+        {
+            try { _stderrTask?.Wait(TimeSpan.FromSeconds(2)); } catch { }
+        }
+
+        private void TraceWorkerExit()
+        {
+            if (Interlocked.Exchange(ref _exitTraced, 1) != 0) return;
+            string exitCode;
+            try
+            {
+                exitCode = _proc.HasExited
+                    ? _proc.ExitCode.ToString(System.Globalization.CultureInfo.InvariantCulture)
+                    : "still-running";
+            }
+            catch (Exception exception) { exitCode = $"unavailable:{exception.GetType().Name}"; }
+            bool drained = _stderrTask?.IsCompletedSuccessfully == true;
+            _trace.Log("EXIT PID={0} exitCode={1} doneSeen={2} watchdog={3} stderrDrainComplete={4}",
+                _proc.Id, exitCode, _doneSeen, _killedByWatchdog, drained);
+            if (drained)
+            {
+                var stderr = _stderrTask!.Result;
+                _trace.Log("STDERR totalChars={0} retainedChars={1} truncated={2} readError={3}\n[first]\n{4}\n[last]\n{5}\n[/stderr]",
+                    stderr.TotalCharacters, stderr.First.Length + stderr.Last.Length,
+                    stderr.Truncated, stderr.ReadError ?? "none", stderr.First, stderr.Last);
+            }
+            else
+            {
+                _trace.Log("STDERR capture state={0} error={1}", _stderrTask?.Status.ToString() ?? "not-started",
+                    _stderrTask?.Exception?.GetBaseException().Message ?? "none");
+            }
         }
 
         public void Dispose()
@@ -389,6 +468,9 @@ public sealed class BatchedSubprocessRunner
                 }
             }
             catch { }
+            try { _proc.WaitForExit(2000); } catch { }
+            WaitForStandardError();
+            TraceWorkerExit();
             _proc.Dispose();
             _shutdownCts.Dispose();
             _trace.Close();

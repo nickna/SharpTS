@@ -562,6 +562,13 @@ public sealed class EmittedCryptoRuntime
     }
 
     // KeyObject support
+    private MethodBuilder? _keyObjectExport;
+    public MethodBuilder KeyObjectExport
+    {
+        get => Require(_keyObjectExport);
+        internal set => SetHandle(ref _keyObjectExport, value);
+    }
+
     private MethodBuilder? _createSecretKey;
     public MethodBuilder CreateSecretKey
     {
@@ -881,6 +888,7 @@ public sealed class EmittedCryptoRuntime
         _ = KeyObjectCtorAsym;
         _ = KeyObjectCtorRsa;
         _ = KeyObjectCtorEc;
+        _ = KeyObjectExport;
         _ = KeyObjectToPublicKey;
         _ = KeyObjectImportJwk;
         _ = KeyObjectImportDer;

@@ -57,17 +57,21 @@ public partial class ILCompiler
 
         var checkedClass = _typeMap.GetClassType(classStmt);
         if (_currentNamespacePath is not null)
-            qualifiedClassName = ctx.GetQualifiedClassName(
+            qualifiedClassName = ctx.GetRawQualifiedName(
                 $"$nsclass_{_currentNamespacePath.Replace('.', '_')}_{checkedClass?.Core.DeclarationId}_{classStmt.Name.Lexeme}");
-        _classes.DeclarationNames[classStmt] = qualifiedClassName;
-        _classes.DeclarationNamespaces[classStmt] = _currentNamespacePath;
-        _classes.ScopedNames[(_modules.CurrentPath, _currentNamespacePath, classStmt.Name.Lexeme)] = qualifiedClassName;
-        if (checkedClass is not null)
+        void RecordClassIdentity()
         {
-            _classes.CheckedDeclarationNames[checkedClass.Core.DeclarationId] = qualifiedClassName;
-            _typeMapper.RegisterCheckedClassName(checkedClass.Core.DeclarationId, qualifiedClassName);
-            _typeMap.SetClassType(qualifiedClassName, checkedClass);
+            _classes.DeclarationNames[classStmt] = qualifiedClassName;
+            _classes.DeclarationNamespaces[classStmt] = _currentNamespacePath;
+            _classes.ScopedNames[(_modules.CurrentPath, _currentNamespacePath, classStmt.Name.Lexeme)] = qualifiedClassName;
+            if (checkedClass is not null)
+            {
+                _classes.CheckedDeclarationNames[checkedClass.Core.DeclarationId] = qualifiedClassName;
+                _typeMapper.RegisterCheckedClassName(checkedClass.Core.DeclarationId, qualifiedClassName);
+                _typeMap.SetClassType(qualifiedClassName, checkedClass);
+            }
         }
+        RecordClassIdentity();
 
         // Track simple name -> module mapping for later lookups
         if (_modules.CurrentPath != null && _currentNamespacePath is null && !_classes.BlockScopedNames.ContainsKey(classStmt))
@@ -109,8 +113,15 @@ public partial class ILCompiler
 
         // Ambient declarations describe types but have no runtime class or emitted bodies.
         // Decorated external mappings above still participate in type resolution.
-        if (classStmt.IsDeclare)
+        if (!EmitsSourceClassBody(classStmt))
             return;
+
+        if (_nativeSourceTypeNames is not null)
+        {
+            qualifiedClassName = _nativeSourceTypeNames.Declare(classStmt, qualifiedClassName,
+                !_classes.BlockScopedNames.ContainsKey(classStmt) && _currentNamespacePath is null);
+            RecordClassIdentity();
+        }
 
         // Plain methods need the same shared function environment as free functions when a nested
         // closure captures a method-local binding.
@@ -143,7 +154,7 @@ public partial class ILCompiler
 
         // Create TypeBuilder initially without parent - we'll set it after defining generic params
         // This is necessary because the base type may reference our generic params (e.g., class Foo<T> extends Box<T>)
-        var typeBuilder = _moduleBuilder.DefineType(
+        var typeBuilder = EmitTypeDefinitions.DefineType(_moduleBuilder,
             qualifiedClassName,
             typeAttrs
         );
@@ -286,9 +297,19 @@ public partial class ILCompiler
         // Implement $IHasFields interface for unified property access
         // All classes implement this interface (including derived classes)
         // Each class emits its own GetProperty/SetProperty methods that access its _fields
-        EmitTypeDefinitions.AddInterfaceImplementation(typeBuilder, _runtime.ObjectFields.Interface);
+        NativeSourceOwnerCatalog.Implement(typeBuilder, _runtime.ObjectFields.Interface, _runtime.ClassInitialization.SourceOwners);
 
         string className = qualifiedClassName;
+        if (_runtime.GuestOwnProperties != null && classStmt.SuperclassExpr == null && !classStmt.IsAbstract
+            && !_repeatingClassDeclarations.Contains(classStmt) && !_runtimeClassDeclarations.ContainsKey(classStmt)
+            && !(classStmt.AutoAccessors?.Any(accessor => !accessor.IsStatic) ?? false)
+            && !classStmt.Fields.Any(field => !field.IsStatic && !field.IsPrivate && field.ComputedKey != null)
+            && !classStmt.Fields.Where(field => !field.IsStatic && !field.IsPrivate && !field.IsDeclare)
+                .GroupBy(field => NamingConventions.ToPascalCase(field.Name.Lexeme), StringComparer.Ordinal)
+                .Any(group => group.Skip(1).Any())
+            && !classStmt.Methods.Any(method => method.Name.Lexeme == "constructor"
+                && method.Parameters.Any(parameter => parameter.IsParameterProperty)))
+            _nativeOwnSourceDeclarations.Add(typeBuilder, classStmt);
 
         // Initialize property tracking dictionaries for this class
         _typedInterop.PropertyBackingFields[className] = [];
@@ -430,6 +451,8 @@ public partial class ILCompiler
         // Define $IHasFields interface method stubs
         // Bodies are emitted later in EmitHasFieldsInterfaceMethodBodies after method definitions are available
         DefineHasFieldsInterfaceMethods(typeBuilder, className, fieldsField);
+        if (_nativeOwnSourceDeclarations.ContainsKey(typeBuilder))
+            DefineNativeOwnPropertyAdapter(typeBuilder, className);
 
         // ES2022 Private Class Elements: Define storage for private fields and methods
         DefinePrivateClassElements(typeBuilder, className, classStmt, classGenericParams);
@@ -565,7 +588,10 @@ public partial class ILCompiler
             privateStaticMethods.Add(methodName, methodBuilder);
         }
 
-        var instanceBridge = typeBuilder.IsGenericTypeDefinition && privateStorage is not null
+        // Expression templates use their actual per-evaluation ClassDefinition
+        // private table. A canonical declared-class bridge would both address
+        // the wrong owner inventory and share brands across evaluations.
+        var instanceBridge = expression is null && typeBuilder.IsGenericTypeDefinition && privateStorage is not null
             ? DefinePrivateInstanceBridge(typeBuilder, privateStorage, privateMethods) : null;
         _classes.PrivateElements.Declare(className, typeBuilder, privateStorage,
             privateFieldNames, privateStaticFields, privateMethods, privateStaticMethods, instanceBridge);
@@ -625,6 +651,9 @@ public partial class ILCompiler
     /// Extracts the .NET type name from a @DotNetType decorator if present.
     /// Returns null if the decorator is not present.
     /// </summary>
+    internal static bool EmitsSourceClassBody(Stmt.Class classStmt) =>
+        !classStmt.IsDeclare && GetDotNetTypeMapping(classStmt) is null;
+
     private static string? GetDotNetTypeMapping(Stmt.Class classStmt)
     {
         if (classStmt.Decorators == null) return null;

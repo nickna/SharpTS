@@ -276,6 +276,7 @@ public partial class TypeChecker
     // execution-oriented built-in fallbacks used by standalone checking.
     private bool _hasDefaultLibraries;
     private BindingSymbol? _defaultLibraryArrayBinding;
+    private TypeInfo.Interface? _defaultLibraryObjectType;
     private readonly Dictionary<string, BindingSymbol> _defaultLibraryErrorBindings = new(StringComparer.Ordinal);
     private bool _hasEs2023IntlLibrary;
     private readonly HashSet<string> _globalObjectLexicalNames = new(StringComparer.Ordinal);
@@ -973,6 +974,7 @@ public partial class TypeChecker
     private bool _applySourceDiagnosticPolicy;
     private bool _checkJsDiagnostics;
     private TypeScriptPragmas _standalonePragmas = TypeScriptPragmas.Empty;
+    private readonly Dictionary<ParsedModule, HashSet<int>> _matchedModuleExpectErrors = new(ReferenceEqualityComparer.Instance);
 
     // Execution pipelines still need the checked graph for inference and emission. Only diagnostic
     // publication follows checkJs/pragmas; direct checker consumers keep their existing contract.
@@ -1202,20 +1204,21 @@ public partial class TypeChecker
         int requiredParams = 0;
         bool seenDefault = false;
 
-        // A default value may reference any PRECEDING parameter (`(x: T, y: U = x)`), so defaults
-        // are checked in a scope where the earlier parameters are progressively defined. Each
-        // parameter is defined AFTER its own default is checked, so self-reference still resolves
-        // to an outer binding or errors. A preceding bare-optional parameter is visible here with
-        // its WIDENED (possibly-undefined) type, matching what the function body itself would see.
+        // All parameter bindings exist while defaults run. Deferred closures may read a
+        // later binding, but immediate reads still observe its initialization boundary.
         var paramScope = new TypeEnvironment(_environment);
         if (editorOwner is not null)
             RegisterEditorParameterScope(editorOwner, paramScope);
+        var annotations = parameters.Select(param => ResolveAnnotation(param.Type, param.TypeAnnotationNode, param)).ToList();
+        var defaultBindings = new ParameterDefaultBindings(this, editorOwner, parameters,
+            annotations.Select(type => type ?? TypeInfo.Any.Shared).ToList(), paramScope, validateDefaults);
         using var bindingScope = new ParameterBindingCheckScope(this, editorOwner, validateDefaults,
             deferClassContextDefaults);
 
-        foreach (var param in parameters)
+        for (int parameterIndex = 0; parameterIndex < parameters.Count; parameterIndex++)
         {
-            TypeInfo? resolvedParameter = ResolveAnnotation(param.Type, param.TypeAnnotationNode, param);
+            var param = parameters[parameterIndex];
+            TypeInfo? resolvedParameter = annotations[parameterIndex];
             if (resolvedParameter is null && param.DestructuredProperties is { Count: > 0 } properties)
             {
                 var fields = new Dictionary<string, TypeInfo>(StringComparer.Ordinal);
@@ -1258,6 +1261,7 @@ public partial class TypeChecker
             {
                 DeclareParameterValue(paramScope, param, paramType);
                 bindingScope.Initialize(param, paramScope, paramType);
+                defaultBindings.Initialize(param, parameterIndex);
                 continue;
             }
 
@@ -1273,6 +1277,7 @@ public partial class TypeChecker
                     {
                         defaultType = CheckDeferredClassDefault(param.DefaultValue, ParameterDefaultTupleContext(paramType));
                     }
+                    defaultBindings.Check(param.DefaultValue, parameterIndex);
                     if (!IsCompatible(paramType, defaultType))
                     {
                         throw new TypeMismatchException($"Default value type is not assignable to parameter type in {contextName}",
@@ -1301,6 +1306,7 @@ public partial class TypeChecker
                 param,
                 visibleType);
             bindingScope.Initialize(param, paramScope, visibleType);
+            defaultBindings.Initialize(param, parameterIndex);
         }
 
         bool hasRest = parameters.Any(p => p.IsRest);
@@ -1406,6 +1412,7 @@ public partial class TypeChecker
     /// </summary>
     public TypeMap Check(List<Stmt> statements, SourceDocument? sourceDocument)
     {
+        _defaultLibraryObjectType = null;
         IndexNewTargetContexts(statements);
         _globalDeclarationEnvironment = _environment;
         Bindings.Clear();
@@ -1632,6 +1639,20 @@ public partial class TypeChecker
         SourceLocation? location = diagnostic.Location is { } explicitLocation
             ? explicitLocation with { FilePath = explicitLocation.FilePath ?? _filePath }
             : _currentStatementLine is { } line ? new SourceLocation(_filePath, line) : null;
+        if (_applySourceDiagnosticPolicy && _currentModule is { } module &&
+            diagnostic.Severity == DiagnosticSeverity.Error && location is { Line: > 0 } &&
+            location.FilePath == module.Path)
+        {
+            int directiveLine = location.Line - 1;
+            if (module.Pragmas.IgnoreLines.Contains(directiveLine)) return;
+            if (module.Pragmas.ExpectErrorLines.Contains(directiveLine))
+            {
+                if (!_matchedModuleExpectErrors.TryGetValue(module, out var matched))
+                    _matchedModuleExpectErrors[module] = matched = [];
+                matched.Add(directiveLine);
+                return;
+            }
+        }
         _diagnostics.Add(diagnostic with
         {
             Location = location,
@@ -1811,6 +1832,7 @@ public partial class TypeChecker
     public TypeMap CheckModules(List<ParsedModule> modules, ModuleResolver resolver)
     {
         _diagnostics.Clear();
+        _matchedModuleExpectErrors.Clear();
         IndexNewTargetContexts(modules.SelectMany(module => module.Statements));
         Bindings.Clear();
         _typeMap.ClearDeclaredValueTypes();
@@ -1840,6 +1862,7 @@ public partial class TypeChecker
         _moduleResolver = resolver;
         _hasDefaultLibraries = modules.Any(module => module.IsDefaultLibrary);
         _defaultLibraryArrayBinding = null;
+        _defaultLibraryObjectType = null;
         _defaultLibraryErrorBindings.Clear();
         _hasEs2023IntlLibrary = modules.Any(module =>
             module.IsDefaultLibrary &&
@@ -1848,23 +1871,7 @@ public partial class TypeChecker
         _globalObjectVarNames.Clear();
         _globalObjectMembers = null;
         foreach (ParsedModule script in modules.Where(module => !module.IsDefaultLibrary && module.IsScript))
-        {
-            foreach (Stmt statement in script.Statements)
-            {
-                switch (statement)
-                {
-                    case Stmt.Var { IsVar: false } lexical:
-                        _globalObjectLexicalNames.Add(lexical.Name.Lexeme);
-                        break;
-                    case Stmt.Var { IsVar: true } variable:
-                        _globalObjectVarNames.Add(variable.Name.Lexeme);
-                        break;
-                    case Stmt.Const constant:
-                        _globalObjectLexicalNames.Add(constant.Name.Lexeme);
-                        break;
-                }
-            }
-        }
+            CollectGlobalObjectDeclarationNames(script.Statements);
 
         // Base declared-type frame for the whole run, mirroring Check()/CheckWithRecovery (#743) —
         // shared by all script files, which share global scope. With no frame on the stack,
@@ -1932,6 +1939,7 @@ public partial class TypeChecker
             foreach (var module in modules.Where(module => module.IsDefaultLibrary))
                 PrepareModule(module);
             _defaultLibraryArrayBinding = scriptEnv.GetValueBinding("Array");
+            _defaultLibraryObjectType = scriptEnv.GetTypeBinding("Object") as TypeInfo.Interface;
             _defaultLibraryPromiseBinding = scriptEnv.GetValueBinding("Promise");
             CaptureDefaultLibraryErrorBindings(scriptEnv);
             foreach (var module in modules.Where(module => !module.IsDefaultLibrary && module.IsScript))
@@ -2183,6 +2191,18 @@ public partial class TypeChecker
             ReportRootDeclarationImplicitAnyDiagnostics(module.Statements);
         }
 
+        if (_applySourceDiagnosticPolicy)
+        {
+            foreach (var module in modules.Where(module => !module.IsDefaultLibrary && !module.IsDeclarationFile &&
+                TypeCheckPolicy.ShouldTypeCheck(module.Path, module.Pragmas, _checkJsDiagnostics)))
+            {
+                _matchedModuleExpectErrors.TryGetValue(module, out var matched);
+                foreach (int line in module.Pragmas.ExpectErrorLines.Order())
+                    if (matched?.Contains(line) != true)
+                        _diagnostics.Add(new Diagnostic(DiagnosticSeverity.Error, DiagnosticCode.TypeError,
+                            "Unused '@ts-expect-error' directive.", new SourceLocation(module.Path, line, 1), TsCode: "TS2578"));
+            }
+        }
         _currentModule = null;
         _filePath = null;
         _currentStatementLine = null;
@@ -2228,6 +2248,28 @@ public partial class TypeChecker
         }
     }
 
+    private void CollectGlobalObjectDeclarationNames(IEnumerable<Stmt> statements)
+    {
+        foreach (Stmt statement in statements)
+        {
+            switch (statement)
+            {
+                case Stmt.Sequence sequence:
+                    CollectGlobalObjectDeclarationNames(sequence.Statements);
+                    break;
+                case Stmt.Var variable when variable.IsVar || variable.IsAmbientVar:
+                    _globalObjectVarNames.Add(variable.Name.Lexeme);
+                    break;
+                case Stmt.Var lexical:
+                    _globalObjectLexicalNames.Add(lexical.Name.Lexeme);
+                    break;
+                case Stmt.Const constant:
+                    _globalObjectLexicalNames.Add(constant.Name.Lexeme);
+                    break;
+            }
+        }
+    }
+
     private TypeInfo.Interface GetGlobalThisType() => new(
         "typeof globalThis",
         (_globalObjectMembers ?? new Dictionary<string, TypeInfo>
@@ -2235,7 +2277,14 @@ public partial class TypeChecker
             ["globalThis"] = TypeInfo.Any.Shared,
         }).ToFrozenDictionary(StringComparer.Ordinal),
         FrozenSet<string>.Empty,
-        ReadonlyMembers: new[] { "globalThis" }.ToFrozenSet(StringComparer.Ordinal));
+        ReadonlyMembers: new[] { "globalThis" }.ToFrozenSet(StringComparer.Ordinal)) { IsGlobalThisObject = true };
+
+    private bool TryGetGlobalThisMember(string name, [System.Diagnostics.CodeAnalysis.NotNullWhen(true)] out TypeInfo? member)
+    {
+        var global = GetGlobalThisType();
+        if (name == "globalThis") { member = global; return true; }
+        return global.Members.TryGetValue(name, out member);
+    }
 
     private void ReportUnusedImports(ParsedModule module)
     {
@@ -2604,19 +2653,22 @@ public partial class TypeChecker
                 }
                 else if (export.Declaration != null)
                 {
-                    string name = GetDeclarationName(export.Declaration);
-                    var type = GetDeclaredType(export.Declaration);
-                    // Function/namespace declaration merging carries the namespace as the type
-                    // facet and the function through its value binding. Retain the namespace so
-                    // factory-local qualified types such as `predom.JSX.Element` survive import.
-                    if (!module.ExportedTypes.TryGetValue(name, out TypeInfo? prior) ||
-                        prior is not TypeInfo.Namespace || type is TypeInfo.Namespace)
-                        module.ExportedTypes[name] = type;
-                    RecordExportedDeclarationBindings(
-                        module,
-                        export.Declaration,
-                        exportedName: name,
-                        isDefault: false);
+                    foreach (var declaration in ExportDeclarationSequence.Declarations(export.Declaration))
+                    {
+                        string name = GetDeclarationName(declaration);
+                        var type = GetDeclaredType(declaration);
+                        // Function/namespace declaration merging carries the namespace as the type
+                        // facet and the function through its value binding. Retain the namespace so
+                        // factory-local qualified types such as `predom.JSX.Element` survive import.
+                        if (!module.ExportedTypes.TryGetValue(name, out TypeInfo? prior) ||
+                            prior is not TypeInfo.Namespace || type is TypeInfo.Namespace)
+                            module.ExportedTypes[name] = type;
+                        RecordExportedDeclarationBindings(
+                            module,
+                            declaration,
+                            exportedName: name,
+                            isDefault: false);
+                    }
                 }
                 else if (export.NamedExports != null && export.FromModulePath == null)
                 {
@@ -2715,28 +2767,34 @@ public partial class TypeChecker
                             {
                                 string exportedName = spec.ExportedName?.Lexeme ?? spec.LocalName.Lexeme;
                                 bool isTypeOnly = export.IsTypeOnly || spec.IsTypeOnly;
-                                if (sourceModule.ExportedTypes.TryGetValue(spec.LocalName.Lexeme, out var type))
+                                string importedName = spec.LocalName.Lexeme;
+                                var type = importedName == "default"
+                                    ? sourceModule.DefaultExportType
+                                    : sourceModule.ExportedTypes.GetValueOrDefault(importedName);
+                                if (type is null && sourceModule.IsCommonJs)
+                                    type = TypeInfo.Any.Shared;
+                                if (type is not null)
                                 {
-                                    module.ExportedTypes[exportedName] = type;
-                                }
-                                else if (sourceModule.IsCommonJs)
-                                {
-                                    module.ExportedTypes[exportedName] = TypeInfo.Any.Shared;
+                                    if (exportedName == "default") module.DefaultExportType = type;
+                                    else module.ExportedTypes[exportedName] = type;
                                 }
 
-                                if (!isTypeOnly &&
-                                    sourceModule.ExportedValueBindings.TryGetValue(
-                                        spec.LocalName.Lexeme,
-                                        out var valueBinding))
+                                var valueBinding = importedName == "default"
+                                    ? sourceModule.DefaultValueBinding
+                                    : sourceModule.ExportedValueBindings.GetValueOrDefault(importedName);
+                                if (!isTypeOnly && valueBinding is not null)
                                 {
-                                    module.ExportedValueBindings[exportedName] = valueBinding;
+                                    if (exportedName == "default") module.DefaultValueBinding = valueBinding;
+                                    else module.ExportedValueBindings[exportedName] = valueBinding;
                                     BindExportSpecifier(spec, valueBinding);
                                 }
-                                if (sourceModule.ExportedTypeBindings.TryGetValue(
-                                        spec.LocalName.Lexeme,
-                                        out var typeBinding))
+                                var typeBinding = importedName == "default"
+                                    ? sourceModule.DefaultTypeBinding
+                                    : sourceModule.ExportedTypeBindings.GetValueOrDefault(importedName);
+                                if (typeBinding is not null)
                                 {
-                                    module.ExportedTypeBindings[exportedName] = typeBinding;
+                                    if (exportedName == "default") module.DefaultTypeBinding = typeBinding;
+                                    else module.ExportedTypeBindings[exportedName] = typeBinding;
                                     BindExportSpecifier(spec, typeBinding);
                                 }
                             }
@@ -3102,11 +3160,13 @@ public partial class TypeChecker
                                     isValue: !isTypeOnly);
 
                             Token localToken = spec.LocalName ?? spec.Imported;
-                            if (!isTypeOnly &&
-                                importedModule.ExportedValueBindings.TryGetValue(
-                                    importedName,
-                                    out var valueBinding))
+                            if (!isTypeOnly)
                             {
+                                // Native/embedded modules can supply a checked export
+                                // without source declaration provenance. The local import
+                                // still needs a lexical value identity, distinct from a
+                                // same-named parameter or block binding.
+                                importedModule.ExportedValueBindings.TryGetValue(importedName, out var valueBinding);
                                 BindImportedDeclaration(
                                     env,
                                     localToken,

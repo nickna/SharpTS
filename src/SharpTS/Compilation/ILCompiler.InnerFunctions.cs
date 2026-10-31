@@ -15,10 +15,10 @@ public partial class ILCompiler
     // Inner function tracking (keyed by Stmt.Function reference identity)
     private readonly List<(Stmt.Function Func, HashSet<string> Captures, string EnclosingFunctionName)> _collectedInnerFunctions = [];
     private readonly Dictionary<Stmt.Function, MethodBuilder> _innerFunctionMethods = new(ReferenceEqualityComparer.Instance);
+    private readonly Dictionary<Stmt.Function, string> _innerFunctionModulePaths = new(ReferenceEqualityComparer.Instance);
     private readonly Dictionary<Stmt.Function, TypeBuilder> _innerFunctionDisplayClasses = new(ReferenceEqualityComparer.Instance);
     private readonly Dictionary<Stmt.Function, Dictionary<string, FieldBuilder>> _innerFunctionDCFields = new(ReferenceEqualityComparer.Instance);
     private readonly Dictionary<Stmt.Function, ConstructorBuilder> _innerFunctionDCCtors = new(ReferenceEqualityComparer.Instance);
-    private readonly HashSet<Stmt.Function> _strictInnerFunctions = new(ReferenceEqualityComparer.Instance);
     private readonly Dictionary<Stmt.Function, string> _innerFunctionEnclosingClassNames = new(ReferenceEqualityComparer.Instance);
     private readonly Dictionary<Stmt.Function, FieldBuilder> _innerFunctionEntryPointDCFields = new(ReferenceEqualityComparer.Instance);
     private readonly Dictionary<Stmt.Function, FieldBuilder> _innerFunctionFunctionDCFields = new(ReferenceEqualityComparer.Instance);
@@ -73,11 +73,8 @@ public partial class ILCompiler
     /// </summary>
     private void CollectInnerFunction(Stmt.Function funcStmt)
     {
-        // All code in a class body is strict, including ordinary functions nested
-        // inside methods. Record that lexical fact while the class collection cursor
-        // is available; body emission happens later, after the cursor is gone.
-        if (_currentCollectStrict || _currentCollectClassName != null)
-            _strictInnerFunctions.Add(funcStmt);
+        if (_modules.CurrentPath is { } path && _modules.Types.ContainsKey(path))
+            _innerFunctionModulePaths[funcStmt] = path;
         if (_currentCollectClassName != null)
             _innerFunctionEnclosingClassNames[funcStmt] = _currentCollectClassName;
 
@@ -85,6 +82,7 @@ public partial class ILCompiler
         // Remove self-reference: the function's own name is not a true capture.
         // Self-calls are handled via InnerFunctionMethodsByName direct dispatch.
         captures.Remove(funcStmt.Name.Lexeme);
+        RemoveLiveModuleCaptures(funcStmt, captures, _modules.CurrentPath);
         // Private names on evaluated classes belong to that evaluation, rather
         // than the emitted template. Carry its definition through ordinary
         // functions too, including frames that only create a nested closure.
@@ -551,7 +549,8 @@ public partial class ILCompiler
         {
             string enclosingFuncName = ResolveInnerFunctionEnclosingFunctionName(
                 func, captures, collectedEnclosingFuncName);
-            if (_functionDefinitionModule.TryGetValue(enclosingFuncName, out var fnModule))
+            if (_innerFunctionModulePaths.TryGetValue(func, out var fnModule) ||
+                _functionDefinitionModule.TryGetValue(enclosingFuncName, out fnModule))
             {
                 _modules.CurrentPath = NormalizeToEmissionPath(fnModule);
             }
@@ -579,9 +578,7 @@ public partial class ILCompiler
                 }
             }
             ConfigureNewTargetBody(ctx, (MethodBuilder)method);
-            ctx.IsStrictMode = _strictInnerFunctions.Contains(func)
-                || _isStrictMode
-                || BodyDeclaresUseStrict(func.Body);
+            ctx.IsStrictMode = IsStrictFunction(func);
             ApplyCapturedTopLevelVariableAccess(ctx);
             ctx.ArrowEntryPointDCFields = _closures.ArrowEntryPointDCFields.Count > 0 ? _closures.ArrowEntryPointDCFields : null;
             ctx.ArrowFunctionDCFields = _closures.ArrowFunctionDCFields.Count > 0 ? _closures.ArrowFunctionDCFields : null;
@@ -1123,7 +1120,8 @@ public partial class ILCompiler
             il.Emit(OpCodes.Ldtoken, displayClass);
             il.Emit(OpCodes.Call, _types.MethodBaseGetMethodFromHandleWithType);
             il.Emit(OpCodes.Castclass, _types.MethodInfo);
-            il.Emit(OpCodes.Newobj, _runtime.FunctionConstruction.Constructor);
+            NativeSourceFunctionEmission.EmitConstructor(il, _types, _runtime, method,
+                actualOwner: displayClass, generics: _functions.GenericParameters);
         }
         else
         {
@@ -1132,7 +1130,8 @@ public partial class ILCompiler
             il.Emit(OpCodes.Ldtoken, method);
             il.Emit(OpCodes.Call, _types.MethodBaseGetMethodFromHandle);
             il.Emit(OpCodes.Castclass, _types.MethodInfo);
-            il.Emit(OpCodes.Newobj, _runtime.FunctionConstruction.Constructor);
+            NativeSourceFunctionEmission.EmitConstructor(il, _types, _runtime, method,
+                generics: _functions.GenericParameters);
         }
 
         // Store TSFunction in the appropriate location
@@ -1292,7 +1291,7 @@ public partial class ILCompiler
                     {
                         if (!ctx.LexicalCaptureWriteBacks.TryGetValue(capturedVar, out var writeBacks))
                             ctx.LexicalCaptureWriteBacks[capturedVar] = writeBacks = [];
-                        writeBacks.Add((dcTemp, field));
+                        writeBacks.Add((existingLocal, dcTemp, field));
                     }
                 }
                 else

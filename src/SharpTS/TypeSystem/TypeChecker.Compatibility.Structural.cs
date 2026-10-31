@@ -213,6 +213,18 @@ public partial class TypeChecker
             return null;
         }
 
+        if (type is TypeInfo.InstantiatedGeneric { GenericDefinition: TypeInfo.GenericClass })
+        {
+            if (name == "prototype") return TypeInfo.Any.Shared;
+            TryGetOrdinaryConstructorHierarchy(type, out var levels);
+            var members = OrdinaryConstructorMembers(levels, isStatic: true);
+            if (members.TryGetValue(name, out var member))
+                return member.Access == AccessModifier.Public ? member.Type : null;
+            if (name is "call" or "apply" or "bind" or "length" or "name")
+                return BuiltInTypes.GetFunctionMemberType(name, type);
+            return ResolveObjectPrototypeMember(name);
+        }
+
         // Handle String type - has length property and string methods
         if (type is TypeInfo.String or TypeInfo.StringLiteral)
         {

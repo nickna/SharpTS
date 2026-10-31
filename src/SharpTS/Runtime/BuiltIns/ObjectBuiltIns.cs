@@ -21,7 +21,7 @@ public static partial class ObjectBuiltIns
             .MethodV2("seal", 1, SealV2)
             .MethodV2("isFrozen", 1, IsFrozenV2)
             .MethodV2("isSealed", 1, IsSealedV2)
-            .MethodV2("defineProperty", 3, DefinePropertyV2)
+            .MethodV2("defineProperty", 0, int.MaxValue, specLength: 3, DefinePropertyV2)
             .MethodV2("getOwnPropertyDescriptor", 0, 2, specLength: 2, GetOwnPropertyDescriptorV2)
             .MethodV2("getOwnPropertyNames", 1, GetOwnPropertyNamesV2)
             .MethodV2("create", 1, 2, 2, CreateV2)
@@ -107,6 +107,13 @@ public static partial class ObjectBuiltIns
                         includeValues ? interpreter.GetPropertyValue(carrier, key) : null);
                 }
                 yield break;
+            case SharpTSObjectNamespace objectNamespace:
+                foreach (var key in objectNamespace.OwnStringKeys().ToList())
+                {
+                    if (OwnPropertyDescriptorOf(interpreter, objectNamespace, key)?.Enumerable != true) continue;
+                    yield return new(key, includeValues ? interpreter.GetPropertyValue(objectNamespace, key) : null);
+                }
+                yield break;
             case SharpTSClassPrototype prototype:
                 foreach (var key in prototype.OwnStringKeys().ToList())
                 {
@@ -115,13 +122,24 @@ public static partial class ObjectBuiltIns
                         includeValues ? interpreter.GetPropertyValue(prototype, key) : null);
                 }
                 yield break;
+            case SharpTSGlobalThis globalObject:
+                foreach (var key in globalObject.OwnStringKeys().ToList())
+                {
+                    if (globalObject.GetOwnPropertyDescriptor(key)?.Enumerable != true) continue;
+                    yield return new(key,
+                        includeValues ? interpreter.GetPropertyValue(globalObject, key) : null);
+                }
+                yield break;
             case SharpTSObject obj:
                 // EnumerableOwnProperties snapshots [[OwnPropertyKeys]] before
                 // reading values. A getter may add or delete siblings without
                 // changing the key list being traversed by entries()/values().
-                foreach (var k in obj.OwnEnumerableKeys().ToList())
+                foreach (var k in obj.OwnVisibleStringKeys().ToList())
+                {
+                    if (obj.GetOwnPropertyDescriptor(k)?.Enumerable != true) continue;
                     yield return new(k,
                         includeValues ? interpreter.GetProperty(obj, k) : null);
+                }
                 yield break;
             case SharpTSArray arr:
                 foreach (var key in arr.OwnEnumerableKeys())
@@ -229,6 +247,10 @@ public static partial class ObjectBuiltIns
                     yield return new(key, includeValues ? interpreter.GetPropertyValue(klass, key) : null);
                 }
                 yield break;
+            case SharpTSBuiltInConstructor constructor:
+                foreach (var key in interpreter.GetBuiltInConstructorEnumerableKeys(constructor))
+                    yield return new(key, includeValues ? interpreter.GetPropertyValue(constructor, key) : null);
+                yield break;
             case ISharpTSCallable:
                 yield break;
             default:
@@ -267,7 +289,7 @@ public static partial class ObjectBuiltIns
                 "Object.fromEntries requires an iterable argument"));
 
         var elements = interpreter.GetIterableElements(args[0]);
-        Dictionary<string, object?> result = [];
+        var result = new SharpTSObject([]);
 
         var iterator = elements.GetEnumerator();
         bool preserveThrow = false;
@@ -294,7 +316,9 @@ public static partial class ObjectBuiltIns
                     key = interpreter.GetPropertyValue(element, "0");
                     value = interpreter.GetPropertyValue(element, "1");
                 }
-                result[key?.ToString() ?? ""] = value;
+                var propertyKey = interpreter.ToPropertyKey(key);
+                if (propertyKey is SharpTSSymbol symbol) result.SetBySymbol(symbol, value);
+                else result.SetProperty((string)propertyKey, value);
             }
         }
         catch
@@ -310,7 +334,7 @@ public static partial class ObjectBuiltIns
                 // IteratorClose cannot replace the entry-processing throw.
             }
         }
-        return new SharpTSObject(result);
+        return result;
     }
 
     private static RuntimeValue HasOwnV2(
@@ -366,7 +390,10 @@ public static partial class ObjectBuiltIns
         if (value1.Kind == ValueKind.String && value2.Kind == ValueKind.String)
             return RuntimeValue.FromBoolean(value1.AsString() == value2.AsString());
 
-        // Fall back to boxed comparison for objects, bigints, symbols
+        if (value1.Kind == ValueKind.BigInt && value2.Kind == ValueKind.BigInt)
+            return RuntimeValue.FromBoolean(value1.AsBigInt().Value == value2.AsBigInt().Value);
+
+        // Fall back to boxed comparison for objects and symbols.
         var obj1 = value1.ToObject();
         var obj2 = value2.ToObject();
 
@@ -418,6 +445,16 @@ public static partial class ObjectBuiltIns
                             proxySource.TrapGet(name, interpreter));
                     }
                 }
+                continue;
+            }
+
+            if (args[i] is SharpTSObjectNamespace namespaceSource)
+            {
+                foreach (var entry in EnumerateObjectNamespaceOwnEnumerable(interpreter, namespaceSource))
+                    if (entry.Key is SharpTSSymbol symbol)
+                        SetAssignedSymbol(interpreter, target, symbol, entry.Value);
+                    else
+                        SetAssignedProperty(interpreter, target, (string)entry.Key, entry.Value);
                 continue;
             }
 
@@ -528,6 +565,7 @@ public static partial class ObjectBuiltIns
     {
         switch (target)
         {
+            case SharpTSObjectNamespace:
             case ISharpTSOwnPropertyObject:
                 if (!SharpTSProxy.OrdinarySet(interpreter, target, symbol, value, target))
                     throw new ThrowException(new SharpTSTypeError($"Cannot assign to symbol property '{symbol}'"));
@@ -563,6 +601,11 @@ public static partial class ObjectBuiltIns
     private static RuntimeValue FreezeV2(Interpreter interpreter, RuntimeValue receiver, ReadOnlySpan<RuntimeValue> args)
     {
         var arg = args[0].ToObject();
+        if (interpreter.TryGetPromiseConstructorSymbolProperties(arg, out var intrinsicProperties))
+        {
+            interpreter.SetPromiseConstructorStringIntegrity(arg, freeze: true);
+            intrinsicProperties.Freeze();
+        }
         switch (arg)
         {
             case ISharpTSOwnPropertyObject carrier:
@@ -631,6 +674,11 @@ public static partial class ObjectBuiltIns
     private static RuntimeValue SealV2(Interpreter interpreter, RuntimeValue receiver, ReadOnlySpan<RuntimeValue> args)
     {
         var arg = args[0].ToObject();
+        if (interpreter.TryGetPromiseConstructorSymbolProperties(arg, out var intrinsicProperties))
+        {
+            interpreter.SetPromiseConstructorStringIntegrity(arg, freeze: false);
+            intrinsicProperties.Seal();
+        }
         switch (arg)
         {
             case ISharpTSOwnPropertyObject carrier:
@@ -699,6 +747,8 @@ public static partial class ObjectBuiltIns
     private static RuntimeValue IsFrozenV2(Interpreter interpreter, RuntimeValue receiver, ReadOnlySpan<RuntimeValue> args)
     {
         var arg = args[0].ToObject();
+        if (interpreter.TryGetPromiseConstructorSymbolProperties(arg, out var intrinsicProperties))
+            return RuntimeValue.FromBoolean(intrinsicProperties.IsFrozen);
         return RuntimeValue.FromBoolean(arg switch
         {
             ISharpTSOwnPropertyObject carrier => carrier.OwnProperties.IsFrozen,
@@ -718,6 +768,8 @@ public static partial class ObjectBuiltIns
     private static RuntimeValue IsSealedV2(Interpreter interpreter, RuntimeValue receiver, ReadOnlySpan<RuntimeValue> args)
     {
         var arg = args[0].ToObject();
+        if (interpreter.TryGetPromiseConstructorSymbolProperties(arg, out var intrinsicProperties))
+            return RuntimeValue.FromBoolean(intrinsicProperties.IsSealed);
         return RuntimeValue.FromBoolean(arg switch
         {
             ISharpTSOwnPropertyObject carrier => carrier.OwnProperties.IsSealed,
@@ -784,6 +836,12 @@ public static partial class ObjectBuiltIns
         // this path against RegExp.prototype[Symbol.split].
         if (args[1] is SharpTSSymbol symKey)
         {
+            if (interpreter.TryGetPromiseConstructorSymbolProperties(target, out var intrinsicProperties))
+            {
+                if (!intrinsicProperties.DefineProperty(symKey, descriptor))
+                    throw new ThrowException(new SharpTSTypeError("Cannot redefine symbol property"));
+                return target;
+            }
             bool descriptorHasValue = descriptor.HasValue;
             bool isAccessor = descriptor.Get != null || descriptor.Set != null;
             switch (target)
@@ -799,12 +857,20 @@ public static partial class ObjectBuiltIns
                             "Cannot redefine symbol property"));
                     }
                     return target;
+                case SharpTSObjectNamespace objectNamespace:
+                    if (!objectNamespace.DefineProperty(symKey, descriptor))
+                        throw new ThrowException(new SharpTSTypeError("Cannot redefine symbol property"));
+                    return target;
                 case SharpTSArray symArray:
                     if (!symArray.DefineProperty(symKey, descriptor))
                     {
                         throw new ThrowException(new SharpTSTypeError(
                             "Cannot redefine symbol property"));
                     }
+                    return target;
+                case SharpTSDate symDate:
+                    if (!symDate.DefineProperty(symKey, descriptor))
+                        throw new ThrowException(new SharpTSTypeError("Cannot redefine symbol property"));
                     return target;
                 case SharpTSMath symMath:
                     if (!symMath.DefineProperty(symKey, descriptor))
@@ -951,6 +1017,10 @@ public static partial class ObjectBuiltIns
             case SharpTSClass klass:
                 success = klass.DefineStaticProperty(propertyKey, descriptor);
                 break;
+            case SharpTSBuiltInConstructor constructor when Interpreter.GetPromiseConstructorState(constructor) is not null:
+                if (!interpreter.DefineBuiltInConstructorProperty(constructor, propertyKey, descriptor))
+                    throw new ThrowException(new SharpTSTypeError($"Cannot redefine property '{propertyKey}'"));
+                return target;
             case SharpTSBuiltInConstructor constructor:
                 success = interpreter.DefineBuiltInConstructorProperty(
                     constructor, propertyKey, descriptor);
@@ -1015,9 +1085,9 @@ public static partial class ObjectBuiltIns
     internal static SharpTSPropertyDescriptor ToPropertyDescriptor(
         Interpreter interpreter, object descriptorObject)
     {
-        var descriptor = SharpTSPropertyDescriptor.FromAnyObject(descriptorObject);
-        ApplyBooleanAttributes(descriptor, descriptorObject, interpreter);
-        ApplyValueAndAccessors(descriptor, descriptorObject, interpreter);
+        var descriptor = new SharpTSPropertyDescriptor();
+        ApplyEnumerableAndConfigurable(descriptor, descriptorObject, interpreter);
+        ApplyDataAndAccessorFields(descriptor, descriptorObject, interpreter);
         ValidatePropertyDescriptor(descriptor);
         return descriptor;
     }
@@ -1025,6 +1095,18 @@ public static partial class ObjectBuiltIns
     internal static bool DefinePropertyOnProxyTarget(
         Interpreter interpreter, object target, object propertyKey, object descriptor)
     {
+        // OrdinarySet consumes a boolean refusal. The public Object entry point
+        // below translates the same refusal into TypeError for its own callers.
+        if (target is SharpTSObjectNamespace objectNamespace)
+        {
+            if (propertyKey is string name)
+                return objectNamespace.DefineProperty(name, ToPropertyDescriptor(interpreter, descriptor));
+            if (propertyKey is SharpTSSymbol namespaceSymbol)
+                return objectNamespace.DefineProperty(namespaceSymbol, ToPropertyDescriptor(interpreter, descriptor));
+        }
+        if (target is SharpTSBuiltInConstructor constructor && propertyKey is string promiseName
+            && Interpreter.GetPromiseConstructorState(constructor) is not null)
+            return interpreter.DefineBuiltInConstructorProperty(constructor, promiseName, ToPropertyDescriptor(interpreter, descriptor));
         if (target is ISharpTSOwnPropertyObject carrier)
         {
             var key = interpreter.ToPropertyKey(propertyKey);
@@ -1042,27 +1124,24 @@ public static partial class ObjectBuiltIns
     /// </summary>
     private static object? GetOwnPropertyDescriptor(Interpreter interpreter, List<object?> args)
     {
-        var target = args[0];
+        var target = args.Count > 0 ? args[0] : SharpTSUndefined.Instance;
 
         if (target is null or SharpTSUndefined)
             throw new ThrowException(new SharpTSTypeError(
                 "Object.getOwnPropertyDescriptor called on null or undefined"));
 
+        var keyArg = interpreter.ToPropertyKey(args.Count > 1 ? args[1] : SharpTSUndefined.Instance);
         if (target is ISharpTSOwnPropertyObject carrier)
         {
-            var key = interpreter.ToPropertyKey(args.Count > 1 ? args[1] : SharpTSUndefined.Instance);
-            var ownDescriptor = key is SharpTSSymbol symbol
+            var ownDescriptor = keyArg is SharpTSSymbol symbol
                 ? carrier.OwnProperties.GetOwnPropertyDescriptor(symbol)
-                : carrier.OwnProperties.GetOwnPropertyDescriptor((string)key);
+                : carrier.OwnProperties.GetOwnPropertyDescriptor((string)keyArg);
             return ownDescriptor?.ToObject() ?? (object)SharpTSUndefined.Instance;
         }
 
         // Symbol-keyed lookup goes through the symbol-dict path; the spec keeps
         // symbols distinct from string keys, and SharpTSObject/Instance store
         // them in a separate map.
-        object? keyArg = args.Count > 1
-            ? args[1]
-            : SharpTSUndefined.Instance;
         if (keyArg is SharpTSSymbol symKey)
         {
             if (target is SharpTSProxy symbolProxy)
@@ -1070,8 +1149,7 @@ public static partial class ObjectBuiltIns
             return GetOwnPropertyDescriptorBySymbol(target, symKey, interpreter);
         }
 
-        // ECMA-262 §7.1.19: ToPropertyKey on the name argument.
-        var propertyKey = interpreter.ToPropertyKeyString(keyArg);
+        var propertyKey = (string)keyArg;
 
         if (target is SharpTSProxy proxy)
         {
@@ -1104,6 +1182,12 @@ public static partial class ObjectBuiltIns
     {
         return target switch
         {
+            string text when propertyKey == "length" =>
+                DataDescriptor((double)text.Length, writable: false, enumerable: false, configurable: false),
+            string text when PropertySemantics.TryGetArrayIndex(propertyKey, out var stringIndex)
+                && stringIndex < text.Length =>
+                DataDescriptor(text[(int)stringIndex].ToString(), writable: false, enumerable: true, configurable: false),
+            string => null,
             ISharpTSOwnPropertyObject carrier => carrier.OwnProperties.GetOwnPropertyDescriptor(propertyKey),
             ISharpTSFunctionObject function => FunctionObjectProperties.GetProperties(function, interpreter).GetOwnPropertyDescriptor(propertyKey),
             SharpTSObject obj => obj.GetOwnPropertyDescriptor(propertyKey),
@@ -1115,7 +1199,6 @@ public static partial class ObjectBuiltIns
                 => arrayGlobal.GetOwnPropertyDescriptor(propertyKey)
                     ?? GetBuiltInOwnPropertyDescriptor(interpreter, target, propertyKey),
             SharpTSInstance inst => inst.GetOwnPropertyDescriptor(propertyKey),
-            SharpTSPromise promise => promise.GetOwnPropertyDescriptor(propertyKey),
             SharpTSArray arr => arr.GetOwnPropertyDescriptor(propertyKey),
             SharpTSArrayPrototype arrayPrototype when !arrayPrototype.HasOwnProperty(propertyKey) => null,
             SharpTSArrayPrototype arrayPrototype => arrayPrototype.GetOwnPropertyDescriptor(propertyKey)
@@ -1155,9 +1238,15 @@ public static partial class ObjectBuiltIns
                 ?? GetBuiltInOwnPropertyDescriptor(interpreter, target, propertyKey),
             SharpTSError error => error.GetOwnPropertyDescriptor(propertyKey)
                 ?? GetBuiltInOwnPropertyDescriptor(interpreter, target, propertyKey),
-            SharpTSGlobalThis globalThis => globalThis.GetOwnPropertyDescriptor(propertyKey)
-                ?? GetBuiltInOwnPropertyDescriptor(interpreter, target, propertyKey),
+            SharpTSGlobalThis globalThis => globalThis.IsDeletedProperty(propertyKey) ? null
+                : globalThis.GetOwnPropertyDescriptor(propertyKey)
+                    ?? GetBuiltInOwnPropertyDescriptor(interpreter, target, propertyKey),
             SharpTSClass klass => klass.GetOwnStaticPropertyDescriptor(propertyKey),
+            SharpTSFunctionGlobal when propertyKey == "prototype" => DataDescriptor(
+                interpreter.GetFunctionPrototype(),
+                writable: false,
+                enumerable: false,
+                configurable: false),
             SharpTSBuiltInConstructor { Name: BuiltInNames.RegExp }
                 when propertyKey == "prototype" => DataDescriptor(
                     interpreter.GetRegExpPrototype(),
@@ -1165,6 +1254,9 @@ public static partial class ObjectBuiltIns
                     enumerable: false,
                     configurable: false),
             SharpTSBuiltInConstructor constructor when propertyKey == "name"
+                || propertyKey == "length"
+                    && (interpreter.HasBuiltInConstructorInitialInventory(constructor)
+                        || interpreter.GetBuiltInConstructorOverlayDescriptor(constructor, propertyKey) is not null)
                 => interpreter.GetBuiltInConstructorOverlayDescriptor(constructor, propertyKey),
             SharpTSSymbol => null,
             Dictionary<string, object?> dict => GetDictionaryPropertyDescriptor(dict, propertyKey),
@@ -1232,7 +1324,18 @@ public static partial class ObjectBuiltIns
         // __proto__ can't spin here.
         for (int i = 0; i < 64 && current is not null and not SharpTSUndefined; i++)
         {
-            var descriptor = OwnPropertyDescriptorOf(interpreter, current, propertyKey);
+            SharpTSPropertyDescriptor? descriptor;
+            if (current is SharpTSProxy proxy)
+            {
+                var result = proxy.TrapGetOwnPropertyDescriptor(propertyKey, interpreter);
+                descriptor = result is null or SharpTSUndefined
+                    ? null
+                    : SharpTSPropertyDescriptor.FromAnyObject(result);
+            }
+            else
+            {
+                descriptor = OwnPropertyDescriptorOf(interpreter, current, propertyKey);
+            }
             if (descriptor != null)
             {
                 var accessor = isGetter ? descriptor.Get : descriptor.Set;
@@ -1260,6 +1363,27 @@ public static partial class ObjectBuiltIns
 
     internal static List<object> GetClassPrototypeOwnKeys(SharpTSClassPrototype prototype)
         => prototype.OwnStringKeys().Cast<object>().Concat(prototype.GetSymbolPropertyNames()).ToList();
+
+    internal static IEnumerable<KeyValuePair<object, object?>> EnumerateObjectNamespaceOwnEnumerable(
+        Interpreter interpreter, SharpTSObjectNamespace source, IReadOnlySet<object>? excluded = null)
+    {
+        // One complete key snapshot precedes getter calls. Native string members
+        // retain their virtual descriptors; only Symbols use the namespace bag.
+        foreach (var key in source.OwnPropertyKeys().ToList())
+        {
+            if (excluded?.Contains(key) == true) continue;
+            var descriptor = key is SharpTSSymbol symbolKey
+                ? source.GetOwnPropertyDescriptor(symbolKey)
+                : OwnPropertyDescriptorOf(interpreter, source, (string)key);
+            if (descriptor?.Enumerable != true) continue;
+            yield return new(key, key is SharpTSSymbol symbol
+                ? interpreter.GetSymbolPropertyValue(source, symbol)
+                : interpreter.GetPropertyValue(source, (string)key));
+        }
+    }
+
+    internal static List<object> GetClassConstructorOwnKeys(SharpTSClass klass)
+        => klass.OwnStaticStringKeys().Cast<object>().Concat(klass.OwnStaticSymbolKeys()).ToList();
 
     internal static SharpTSPropertyDescriptor? GetClassPrototypeOwnDescriptor(
         SharpTSClassPrototype prototype, object key)
@@ -1301,8 +1425,7 @@ public static partial class ObjectBuiltIns
             if (!date.IsPrototype || date.IsBuiltInDeleted(propertyKey))
                 return null;
             var dateMember = DateBuiltIns.GetMember(date, propertyKey);
-            if (dateMember is null && propertyKey == "constructor")
-                dateMember = interpreter.GetProperty(date, propertyKey);
+
             return dateMember is null
                 ? null
                 : DataDescriptor(
@@ -1381,13 +1504,7 @@ public static partial class ObjectBuiltIns
     private static SharpTSPropertyDescriptor GetCallableMetaDescriptor(ISharpTSCallable callable, string propertyKey)
     {
         var value = FunctionBuiltIns.GetMember(callable, propertyKey);
-        return new SharpTSPropertyDescriptor
-        {
-            Value = value,
-            Writable = false,
-            Enumerable = false,
-            Configurable = true,
-        };
+        return DataDescriptor(value, writable: false, enumerable: false, configurable: true);
     }
 
     /// <summary>
@@ -1397,11 +1514,17 @@ public static partial class ObjectBuiltIns
     /// </summary>
     private static object? GetOwnPropertyDescriptorBySymbol(object target, SharpTSSymbol key, Interpreter? interpreter = null)
     {
+        if (interpreter != null
+            && interpreter.TryGetPromiseConstructorSymbolProperties(target, out var intrinsicProperties))
+            return (object?)intrinsicProperties.GetOwnPropertyDescriptor(key)?.ToObject()
+                ?? SharpTSUndefined.Instance;
         if (FunctionObjectProperties.TryGetStorage(target, interpreter, out var properties))
             return properties.GetOwnPropertyDescriptor(key) is { } ownDescriptor
                 ? ownDescriptor.ToObject() : SharpTSUndefined.Instance;
         switch (target)
         {
+            case SharpTSObjectNamespace objectNamespace when objectNamespace.GetOwnPropertyDescriptor(key) is { } descriptor:
+                return descriptor.ToObject();
             case ISharpTSOwnPropertyObject carrier when carrier.OwnProperties.GetOwnPropertyDescriptor(key) is { } descriptor:
                 return descriptor.ToObject();
             case SharpTSClass klass when klass.GetOwnStaticSymbolPropertyDescriptor(key) is { } descriptor:
@@ -1415,6 +1538,8 @@ public static partial class ObjectBuiltIns
             case SharpTSInstance inst when inst.GetOwnPropertyDescriptor(key) is { } descriptor:
                 return descriptor.ToObject();
             case SharpTSArray array when array.GetOwnPropertyDescriptor(key) is { } descriptor:
+                return descriptor.ToObject();
+            case SharpTSDate date when date.GetOwnPropertyDescriptor(key) is { } descriptor:
                 return descriptor.ToObject();
             case SharpTSMath math when math.GetOwnPropertyDescriptor(key) is { } descriptor:
                 return descriptor.ToObject();
@@ -1501,6 +1626,39 @@ public static partial class ObjectBuiltIns
             or SharpTSBigInt or SharpTSSymbol
             || props is string { Length: 0 })
         {
+            return target;
+        }
+
+        if (props is SharpTSProxy proxySource)
+        {
+            var keys = proxySource.TrapOwnPropertyKeys(interpreter).ToList();
+            List<KeyValuePair<object, object?>> proxyEntries = [];
+            foreach (var key in keys)
+            {
+                if (key is null) continue;
+                var descriptor = key is SharpTSSymbol symbol
+                    ? proxySource.TrapGetOwnPropertyDescriptor(symbol, interpreter)
+                    : proxySource.TrapGetOwnPropertyDescriptor((string)key, interpreter);
+                if (descriptor is null or SharpTSUndefined
+                    || !SharpTSPropertyDescriptor.FromAnyObject(descriptor).Enumerable)
+                    continue;
+                var value = key is SharpTSSymbol symbolKey
+                    ? interpreter.GetSymbolPropertyValue(proxySource, symbolKey)
+                    : proxySource.TrapGet((string)key, interpreter);
+                proxyEntries.Add(new(key, ConvertDefinePropertiesDescriptor(interpreter, value)));
+            }
+            foreach (var entry in proxyEntries)
+                DefineProperty(interpreter, [target, entry.Key, entry.Value]);
+            return target;
+        }
+
+        if (props is SharpTSObjectNamespace namespaceSource)
+        {
+            var namespaceEntries = EnumerateObjectNamespaceOwnEnumerable(interpreter, namespaceSource)
+                .Select(entry => new KeyValuePair<object, object?>(entry.Key,
+                    ConvertDefinePropertiesDescriptor(interpreter, entry.Value))).ToList();
+            foreach (var entry in namespaceEntries)
+                DefineProperty(interpreter, [target, entry.Key, entry.Value]);
             return target;
         }
 
@@ -1675,8 +1833,10 @@ public static partial class ObjectBuiltIns
         {
             ISharpTSOwnPropertyObject carrier => carrier.OwnProperties.OwnVisibleStringKeys().Cast<object?>()
                 .Concat(carrier.OwnProperties.GetSymbolPropertyNames().Cast<object?>()).ToList(),
+            SharpTSObjectNamespace objectNamespace => objectNamespace.OwnPropertyKeys().Cast<object?>().ToList(),
             SharpTSObject obj => GetAllOwnPropertyNames(obj).Cast<object?>()
                 .Concat(obj.GetSymbolPropertyNames().Cast<object?>()).ToList(),
+            SharpTSArrayGlobal arrayGlobal => arrayGlobal.OwnStringKeys().Cast<object?>().ToList(),
             ISharpTSPrimitiveConstructor primitiveConstructor => primitiveConstructor.OwnStringKeys().Cast<object?>()
                 .Concat(primitiveConstructor.GetSymbolPropertyNames().Cast<object?>()).ToList(),
             SharpTSFunctionPrototype functionPrototype => ((SharpTSArray)GetOwnPropertyNames(interpreter, [target])!)
@@ -1689,6 +1849,8 @@ public static partial class ObjectBuiltIns
             SharpTSArray arr => GetOwnPropertyNamesFromArray(arr),
             SharpTSMath math => math.OwnStringKeys().Cast<object?>()
                 .Concat(math.GetSymbolPropertyNames().Cast<object?>()).ToList(),
+            SharpTSDate date => date.OwnStringKeys().Cast<object?>()
+                .Concat(date.GetSymbolPropertyNames().Cast<object?>()).ToList(),
             SharpTSJSON json => json.OwnStringKeys().Cast<object?>()
                 .Concat(json.GetSymbolPropertyNames().Cast<object?>()).ToList(),
             SharpTSRegExp regex => regex.OwnStringKeys().Cast<object?>().ToList(),
@@ -1696,6 +1858,9 @@ public static partial class ObjectBuiltIns
             Dictionary<string, object?> dict => dict.Keys.Cast<object?>().ToList(),
             _ => []
         };
+
+        if (interpreter.TryGetPromiseConstructorSymbolProperties(target, out var intrinsicProperties))
+            keys.AddRange(intrinsicProperties.GetSymbolPropertyNames());
 
         var result = new SharpTSObject([]);
 
@@ -1731,15 +1896,20 @@ public static partial class ObjectBuiltIns
             throw new ThrowException(new SharpTSTypeError(
                 "Object.getOwnPropertyNames called on null or undefined"));
 
+        if (target is SharpTSBuiltInConstructor constructor
+            && interpreter.TryGetBuiltInConstructorOwnStringKeys(constructor, out var constructorNames))
+            return new SharpTSArray(constructorNames.Cast<object?>().ToList());
+
         List<object?> names = FunctionObjectProperties.TryGetStorage(target, interpreter, out var properties)
             ? properties.OwnVisibleStringKeys().Cast<object?>().ToList()
             : target switch
         {
             ISharpTSOwnPropertyObject carrier => carrier.OwnProperties.OwnVisibleStringKeys().Cast<object?>().ToList(),
-            SharpTSObjectNamespace objectNamespace =>
-                new[] { "length", "name", "prototype" }.Concat(StaticMemberNames)
-                    .Where(objectNamespace.HasOwnProperty).Cast<object?>().ToList(),
+            SharpTSObjectNamespace objectNamespace => objectNamespace.OwnStringKeys().Cast<object?>().ToList(),
+            SharpTSObjectPrototype objectPrototype => objectPrototype.OwnStringKeys().Cast<object?>().ToList(),
+            SharpTSArrayGlobal arrayGlobal => arrayGlobal.OwnStringKeys().Cast<object?>().ToList(),
             SharpTSObject obj => GetOwnPropertyNamesFromObject(obj),
+            SharpTSGlobalThis globalObject => globalObject.OwnStringKeys().Cast<object?>().ToList(),
             ISharpTSPrimitiveConstructor primitiveConstructor => primitiveConstructor.OwnStringKeys().Cast<object?>().ToList(),
             SharpTSFunctionPrototype functionPrototype => functionPrototype.OwnStringKeys().Cast<object?>().ToList(),
             SharpTSClassPrototype prototype => prototype.OwnStringKeys().Cast<object?>().ToList(),
@@ -1800,6 +1970,35 @@ public static partial class ObjectBuiltIns
     internal static SharpTSObject ObjectRest(
         Interpreter interpreter, object? source, IEnumerable<object?> excludeKeys)
     {
+        if (source is SharpTSObjectNamespace objectNamespace)
+        {
+            var excludedNamespaceKeys = excludeKeys.Select(interpreter.ToPropertyKey).ToHashSet();
+            var namespaceRest = new SharpTSObject([]);
+            foreach (var entry in EnumerateObjectNamespaceOwnEnumerable(interpreter, objectNamespace, excludedNamespaceKeys))
+                if (entry.Key is SharpTSSymbol symbol)
+                    namespaceRest.SetBySymbol(symbol, entry.Value);
+                else
+                    namespaceRest.SetProperty((string)entry.Key, entry.Value);
+            return namespaceRest;
+        }
+        if (source is SharpTSClass klass)
+        {
+            var excludedClassKeys = excludeKeys.Select(interpreter.ToPropertyKey).ToHashSet();
+            var classRest = new SharpTSObject([]);
+            foreach (var key in GetClassConstructorOwnKeys(klass))
+            {
+                if (excludedClassKeys.Contains(key)) continue;
+                var descriptor = key is SharpTSSymbol symbolKey
+                    ? klass.GetOwnStaticSymbolPropertyDescriptor(symbolKey)
+                    : klass.GetOwnStaticPropertyDescriptor((string)key);
+                if (descriptor?.Enumerable != true) continue;
+                if (key is SharpTSSymbol symbol)
+                    classRest.SetBySymbol(symbol, interpreter.GetSymbolPropertyValue(klass, symbol));
+                else
+                    classRest.SetProperty((string)key, interpreter.GetPropertyValue(klass, (string)key));
+            }
+            return classRest;
+        }
         if (source is SharpTSClassPrototype prototype)
         {
             var excludedPrototypeKeys = excludeKeys.Select(interpreter.ToPropertyKey).ToHashSet();
@@ -1894,11 +2093,8 @@ public static partial class ObjectBuiltIns
         // OrdinaryObjectCreate creates a FRESH object whose [[Prototype]] is
         // O — it does NOT copy O's own properties. Inherited properties are
         // reached via prototype-chain walk at property-access time.
-        // SharpTSObject.GetProperty/HasProperty map the virtual `__proto__`
-        // slot to the Prototype property so Interpreter.Properties.cs's
-        // chain walker (which queries `__proto__`) reaches the prototype
-        // without needing a real _fields entry that would leak via
-        // Object.keys.
+        // The internal Prototype slot is independent of any own __proto__
+        // data property; the inherited accessor reads that slot.
         var result = new SharpTSObject([]);
         result.Prototype = proto;
         // Object.create(null) → a null-prototype object that inherits nothing
@@ -1922,22 +2118,12 @@ public static partial class ObjectBuiltIns
     }
 
     /// <summary>
-    /// ECMA-262 §6.2.5.5 ToPropertyDescriptor boolean-attribute coercion done
-    /// with interpreter access: each of writable/enumerable/configurable, when
-    /// resolvable via <c>Get</c> (own or inherited, data or accessor), is
-    /// ToBoolean-coerced. A non-undefined result means the attribute is present
-    /// (for these three, "absent" and "present-but-undefined" both yield the
-    /// false default, so this matches spec). Overrides the own-only <c>is bool</c>
-    /// values from <see cref="SharpTSPropertyDescriptor.FromAnyObject"/>.
+    /// Reads enumerable/configurable first, using HasProperty/Get and ToBoolean
+    /// for each present field. Presence is recorded independently of its value.
     /// </summary>
-    private static void ApplyBooleanAttributes(SharpTSPropertyDescriptor descriptor, object? descObj, Interpreter interpreter)
+    private static void ApplyEnumerableAndConfigurable(SharpTSPropertyDescriptor descriptor, object? descObj, Interpreter interpreter)
     {
         if (descObj is null) return;
-        if (interpreter.TryGetDescriptorField(descObj, "writable", out var w))
-        {
-            descriptor.HasWritable = true;
-            descriptor.Writable = Compilation.RuntimeTypes.IsTruthy(w);
-        }
         if (interpreter.TryGetDescriptorField(descObj, "enumerable", out var e))
         {
             descriptor.HasEnumerable = true;
@@ -1951,16 +2137,13 @@ public static partial class ObjectBuiltIns
     }
 
     /// <summary>
-    /// ECMA-262 §6.2.5.5 ToPropertyDescriptor reads <c>value</c>/<c>get</c>/<c>set</c>
-    /// with HasProperty/Get semantics — walking the descriptor object's prototype
-    /// chain and honoring accessors. <see cref="SharpTSPropertyDescriptor.FromAnyObject"/>
-    /// only sees own fields, so re-derive these prototype-aware with interpreter access
-    /// and record presence on the descriptor (#801). An inherited setter-only
+    /// Reads value/writable/get/set next, in that order, using HasProperty/Get
+    /// and immediate accessor-callability validation. An inherited setter-only
     /// <c>value</c> counts as a data descriptor whose value reads <c>undefined</c>,
     /// which <see cref="Interpreter.HasProperty"/> detects even though Get yields
     /// undefined for it.
     /// </summary>
-    private static void ApplyValueAndAccessors(SharpTSPropertyDescriptor descriptor, object? descObj, Interpreter interpreter)
+    private static void ApplyDataAndAccessorFields(SharpTSPropertyDescriptor descriptor, object? descObj, Interpreter interpreter)
     {
         if (descObj is null) return;
         // TryGetDescriptorField applies Get semantics with correct presence AND
@@ -1970,6 +2153,11 @@ public static partial class ObjectBuiltIns
         {
             descriptor.Value = v;
             descriptor.HasValue = true;
+        }
+        if (interpreter.TryGetDescriptorField(descObj, "writable", out var w))
+        {
+            descriptor.HasWritable = true;
+            descriptor.Writable = Compilation.RuntimeTypes.IsTruthy(w);
         }
         if (interpreter.TryGetDescriptorField(descObj, "get", out var g))
         {
@@ -2030,7 +2218,7 @@ public static partial class ObjectBuiltIns
     /// ECMA-262 §10.1.6.3 ValidateAndApplyPropertyDescriptor: when redefining an
     /// EXISTING own property, attributes the descriptor omits are preserved from
     /// the current property rather than reset to false (<see cref="SharpTSPropertyDescriptor"/>
-    /// defaults absent booleans to false, and <see cref="ApplyBooleanAttributes"/> only
+    /// defaults absent booleans to false, and <see cref="ApplyEnumerableAndConfigurable"/> and <see cref="ApplyDataAndAccessorFields"/> only
     /// sets the ones actually present). Without this,
     /// <c>Object.defineProperty(o, "a", { writable:false })</c> on an enumerable data
     /// property <c>a</c> wrongly clears its enumerable flag, dropping it from
@@ -2070,6 +2258,8 @@ public static partial class ObjectBuiltIns
     /// </summary>
     private static object? PreventExtensions(Interpreter interpreter, List<object?> args)
     {
+        if (interpreter.TryGetPromiseConstructorSymbolProperties(args[0], out var intrinsicProperties))
+            intrinsicProperties.PreventExtensions();
         if (args[0] is SharpTSProxy proxy)
         {
             if (!proxy.TrapPreventExtensions(interpreter))
@@ -2133,6 +2323,8 @@ public static partial class ObjectBuiltIns
 
     internal static bool PreventExtensionsTarget(Interpreter interpreter, object target)
     {
+        if (interpreter.TryGetPromiseConstructorSymbolProperties(target, out var intrinsicProperties))
+            intrinsicProperties.PreventExtensions();
         switch (target)
         {
             case ISharpTSOwnPropertyObject carrier:
@@ -2189,6 +2381,8 @@ public static partial class ObjectBuiltIns
     /// </summary>
     private static object? IsExtensibleMethod(Interpreter interpreter, List<object?> args)
     {
+        if (interpreter.TryGetPromiseConstructorSymbolProperties(args[0], out var intrinsicProperties))
+            return intrinsicProperties.IsExtensible;
         return args[0] switch
         {
             ISharpTSOwnPropertyObject carrier => carrier.OwnProperties.IsExtensible,
@@ -2219,17 +2413,22 @@ public static partial class ObjectBuiltIns
             throw new ThrowException(new SharpTSTypeError(
                 "Object.getOwnPropertySymbols called on null or undefined"));
 
+        if (interpreter.TryGetPromiseConstructorSymbolProperties(args[0], out var intrinsicProperties))
+            return new SharpTSArray(intrinsicProperties.GetSymbolPropertyNames().Cast<object?>().ToList());
+
         List<object?> symbols = FunctionObjectProperties.TryGetStorage(args[0], interpreter, out var properties)
             ? properties.GetSymbolPropertyNames().Cast<object?>().ToList()
             : args[0] switch
         {
             ISharpTSOwnPropertyObject carrier => carrier.OwnProperties.GetSymbolPropertyNames().Cast<object?>().ToList(),
+            SharpTSObjectNamespace objectNamespace => objectNamespace.GetSymbolPropertyNames().Cast<object?>().ToList(),
             SharpTSObject obj => obj.GetSymbolPropertyNames().Select(s => (object?)s).ToList(),
             ISharpTSPrimitiveConstructor primitiveConstructor => primitiveConstructor.GetSymbolPropertyNames().Cast<object?>().ToList(),
             SharpTSProxy proxy => proxy.TrapOwnPropertyKeys(interpreter)
                 .OfType<SharpTSSymbol>().Cast<object?>().ToList(),
             SharpTSInstance inst => inst.GetSymbolPropertyNames().Select(s => (object?)s).ToList(),
             SharpTSArray array => array.GetSymbolPropertyNames().Select(s => (object?)s).ToList(),
+            SharpTSDate date => date.GetSymbolPropertyNames().Cast<object?>().ToList(),
             SharpTSMath math => math.GetSymbolPropertyNames().Select(s => (object?)s).ToList(),
             SharpTSStringPrototype stringPrototype
                 => stringPrototype.GetSymbolPropertyNames().Select(s => (object?)s).ToList(),
@@ -2282,9 +2481,11 @@ public static partial class ObjectBuiltIns
         SharpTSArray { HasExplicitPrototype: true } array => array.ExplicitPrototype,
         SharpTSArraySubclassInstance sub => sub.Klass.Prototype,
         SharpTSArguments => interp?.GetObjectPrototype(),
-        SharpTSArray => interp?.GetArrayPrototype(),
+        SharpTSArray array => array.IntrinsicPrototype ?? interp?.GetArrayPrototype(),
+        SharpTSPromise { HasExplicitPrototype: true } promise => promise.ExplicitPrototype,
         SharpTSPromiseSubclassInstance promiseSub => promiseSub.Klass.Prototype,
-        SharpTSPromise => interp?.GetPromisePrototype(),
+        SharpTSPromise promise => promise.IntrinsicConstructor?.PromiseRealm?.Prototype
+            ?? interp?.GetPromisePrototype(),
         // ECMA-262 §22.2.6: a RegExp instance's [[Prototype]] is the
         // per-realm RegExp.prototype object, so `Object.getPrototypeOf(/x/)
         // === RegExp.prototype` (the from-regexp-like tests assert this).
@@ -2304,14 +2505,19 @@ public static partial class ObjectBuiltIns
         // initially inherits Object.prototype, but has an ordinary mutable link.
         SharpTSFunctionPrototype { HasExplicitPrototype: true } functionPrototype
             => functionPrototype.ExplicitPrototype,
-        SharpTSFunctionPrototype => interp?.GetObjectPrototype(),
+        SharpTSFunctionPrototype functionPrototype => functionPrototype.RealmObjectPrototype ?? interp?.GetObjectPrototype(),
         SharpTSArrayPrototype => interp?.GetObjectPrototype(),
-        SharpTSPromisePrototype => interp?.GetObjectPrototype(),
+        SharpTSPromisePrototype promisePrototype
+            => (promisePrototype.RealmConstructor as SharpTSBuiltInConstructor)?.PromiseRealm?.ObjectPrototype
+                ?? interp?.GetObjectPrototype(),
         SharpTSStringPrototype => interp?.GetObjectPrototype(),
         SharpTSClassPrototype { HasExplicitPrototype: true } classPrototype
             => classPrototype.ExplicitPrototype,
         SharpTSClassPrototype classPrototype when ReferenceEquals(classPrototype.Class.Superclass, SharpTSArrayClass.ArrayBase)
             => interp?.GetArrayPrototype(),
+        SharpTSClassPrototype classPrototype when ReferenceEquals(classPrototype.Class.Superclass, SharpTSPromiseClass.PromiseBase)
+            => (classPrototype.Class as SharpTSPromiseClass)?.IntrinsicParentConstructor?.PromiseRealm?.Prototype
+                ?? interp?.GetPromisePrototype(),
         SharpTSClassPrototype classPrototype
             => (object?)classPrototype.Class.Superclass?.Prototype ?? interp?.GetObjectPrototype(),
         // The Number prototype object is ordinary and inherits from this realm's
@@ -2350,12 +2556,18 @@ public static partial class ObjectBuiltIns
         SharpTSClass { HasExplicitPrototype: true } klass => klass.ExplicitPrototype,
         SharpTSClass klass when ReferenceEquals(klass.Superclass, SharpTSArrayClass.ArrayBase)
             => interp?.GetArrayGlobal(),
+        SharpTSClass klass when ReferenceEquals(klass.Superclass, SharpTSPromiseClass.PromiseBase)
+            => (klass as SharpTSPromiseClass)?.IntrinsicParentConstructor ?? interp?.PromiseGlobalValue,
         SharpTSClass klass => (object?)klass.Superclass ?? interp?.GetFunctionPrototype(),
         SharpTSArrayGlobal { HasExplicitPrototype: true } arrayGlobal => arrayGlobal.ExplicitPrototype,
+        SharpTSBuiltInConstructor constructor when Interpreter.GetPromiseConstructorState(constructor) is { } promiseRealm
+            => promiseRealm.FunctionPrototype,
         ISharpTSCallable function when FunctionObjectProperties.TryGetExplicitPrototype(function, interp, out var prototype)
             => prototype,
         ISharpTSGeneratorFunctionValue generator when interp is not null
             => generator.FunctionProperties.GetFunctionPrototype(interp),
+        BuiltInAsyncMethod { DefaultPromiseConstructor.PromiseRealm: { } promiseRealm }
+            => promiseRealm.FunctionPrototype,
         ISharpTSCallable => interp?.GetFunctionPrototype(),
         _ => null
     };
@@ -2384,6 +2596,18 @@ public static partial class ObjectBuiltIns
             throw new ThrowException(new SharpTSTypeError(
                 "Cannot set prototype of a non-extensible object"));
         return target;
+    }
+
+    internal static object? SetLegacyPrototype(Interpreter interpreter, object? target, List<object?> args)
+    {
+        if (target is null or SharpTSUndefined)
+            throw new ThrowException(new SharpTSTypeError("Cannot set prototype of null or undefined"));
+        var prototype = args.Count > 0 ? args[0] : SharpTSUndefined.Instance;
+        if (!IsPrototypeValue(prototype) || !IsPrototypeValue(target))
+            return SharpTSUndefined.Instance;
+        if (!SetPrototypeOfTarget(interpreter, target, prototype))
+            throw new ThrowException(new SharpTSTypeError("Cannot set object prototype"));
+        return SharpTSUndefined.Instance;
     }
 
     internal static bool SetPrototypeOfTarget(
@@ -2417,8 +2641,18 @@ public static partial class ObjectBuiltIns
                 obj.IsNullPrototype = proto is null;
                 return true;
 
+            case SharpTSPromise promise:
+                if (ReferenceEquals(PrototypeOf(interpreter, promise), proto)) return true;
+                if (!promise.IsExtensible) return false;
+                if (WouldCreatePrototypeCycle(interpreter, promise, proto)) return false;
+                promise.SetExplicitPrototype(proto);
+                return true;
+
             case SharpTSInstance instance:
-                return ReferenceEquals(PrototypeOf(interpreter, instance), proto);
+                if (ReferenceEquals(PrototypeOf(interpreter, instance), proto)) return true;
+                if (!instance.IsExtensible || WouldCreatePrototypeCycle(interpreter, instance, proto)) return false;
+                instance.SetExplicitPrototype(proto);
+                return true;
 
             case SharpTSClassPrototype classPrototype:
                 if (ReferenceEquals(PrototypeOf(interpreter, classPrototype), proto)) return true;
@@ -2485,7 +2719,7 @@ public static partial class ObjectBuiltIns
             // this preflight rather than having their traps invoked here.
             candidate = candidate switch
             {
-                SharpTSObject or SharpTSArray or SharpTSClassPrototype or SharpTSInstance or SharpTSArrayGlobal or SharpTSClass
+                SharpTSObject or SharpTSArray or SharpTSClassPrototype or SharpTSInstance or SharpTSArrayGlobal or SharpTSClass or SharpTSPromise
                     or SharpTSFunctionPrototype
                     or Dictionary<string, object?>
                     => PrototypeOf(interpreter, candidate),
@@ -2565,7 +2799,17 @@ public static partial class ObjectBuiltIns
         => RuntimeValue.FromBoxed(Assign(interp, CallableInterop.ToBoxedList(args)));
 
     private static RuntimeValue DefinePropertyV2(Interpreter interp, RuntimeValue recv, ReadOnlySpan<RuntimeValue> args)
-        => RuntimeValue.FromBoxed(DefineProperty(interp, CallableInterop.ToBoxedList(args)));
+    {
+        var target = args.Length > 0 ? args[0] : RuntimeValue.Undefined;
+        if (!target.IsObject)
+            throw new ThrowException(new SharpTSTypeError(
+                "Object.defineProperty called on non-object"));
+
+        var key = interp.ToPropertyKey(args.Length > 1
+            ? args[1].ToObject() : SharpTSUndefined.Instance);
+        var descriptor = args.Length > 2 ? args[2].ToObject() : SharpTSUndefined.Instance;
+        return RuntimeValue.FromBoxed(DefineProperty(interp, [target.ToObject(), key, descriptor]));
+    }
 
     private static RuntimeValue GetOwnPropertyDescriptorV2(Interpreter interp, RuntimeValue recv, ReadOnlySpan<RuntimeValue> args)
         => RuntimeValue.FromBoxed(GetOwnPropertyDescriptor(interp, CallableInterop.ToBoxedList(args)));
@@ -2594,6 +2838,8 @@ public static partial class ObjectBuiltIns
     private static RuntimeValue IsExtensibleMethodV2(Interpreter interp, RuntimeValue recv, ReadOnlySpan<RuntimeValue> args)
     {
         var arg = args[0].ToObject();
+        if (interp.TryGetPromiseConstructorSymbolProperties(arg, out var intrinsicProperties))
+            return RuntimeValue.FromBoolean(intrinsicProperties.IsExtensible);
         if (arg is ISharpTSOwnPropertyObject carrier)
             return RuntimeValue.FromBoolean(carrier.OwnProperties.IsExtensible);
         if (FunctionObjectProperties.TryGetStorage(arg, interp, out var properties))

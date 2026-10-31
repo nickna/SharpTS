@@ -23,6 +23,7 @@ internal sealed class LexicalBindingNameCollector : AstVisitorBase
 
     protected override void VisitVar(Stmt.Var stmt)
     {
+        if (stmt.IsDeclare) return;
         if (!stmt.IsVar)
             _names.Add(stmt.Name.Lexeme);
         base.VisitVar(stmt);

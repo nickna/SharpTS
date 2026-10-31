@@ -13,25 +13,40 @@ internal static class PrimitiveFieldValueAnalysis
         return IsPrimitiveField(instance.ResolvedClassType, get.Name.Lexeme);
     }
 
-    private static bool IsPrimitiveField(TypeInfo? owner, string name)
+    internal static bool IsErasedGenericField(Expr.Get get, TypeMap? map) =>
+        map?.Get(get.Object) is TypeInfo.Instance instance &&
+        MatchesField(instance.ResolvedClassType, get.Name.Lexeme,
+            static type => type is TypeInfo.TypeParameter or TypeInfo.InferredTypeParameter, sourceOnly: true);
+
+    internal static bool IsErasedGenericField(Expr.GetIndex get, TypeMap? map) =>
+        get.Index is Expr.Literal { Value: string name } &&
+        map?.Get(get.Object) is TypeInfo.Instance instance &&
+        MatchesField(instance.ResolvedClassType, name,
+            static type => type is TypeInfo.TypeParameter or TypeInfo.InferredTypeParameter, sourceOnly: true);
+
+    private static bool IsPrimitiveField(TypeInfo? owner, string name) =>
+        MatchesField(owner, name, IsPrimitive, sourceOnly: false);
+
+    private static bool MatchesField(TypeInfo? owner, string name, Func<TypeInfo, bool> matches, bool sourceOnly)
     {
         while (owner is not null)
         {
             if (owner is TypeInfo.MutableClass mutable)
             {
+                if (sourceOnly && mutable.IsDotNetMapped) return false;
                 if (mutable.Getters.ContainsKey(name) || mutable.Setters.ContainsKey(name))
                     return false;
                 if (mutable.FieldTypes.TryGetValue(name, out var field))
-                    return IsPrimitive(field);
+                    return matches(field);
                 owner = mutable.Superclass;
                 continue;
             }
             var core = ClassInfoAccessor.Get(owner, c => c.Core, c => c.Core);
-            if (core is null) return false;
+            if (core is null || sourceOnly && core.IsDotNetMapped) return false;
             if (core.Getters.ContainsKey(name) || core.Setters.ContainsKey(name))
                 return false;
             if (core.FieldTypes.TryGetValue(name, out var type))
-                return IsPrimitive(type);
+                return matches(type);
             owner = core.Superclass;
         }
         return false;
@@ -96,7 +111,8 @@ internal static class PrimitiveFieldValueAnalysis
 
     internal static bool ReturnsRawField(Expr? expression, TypeMap? map) => expression switch
     {
-        Expr.Get get => IsPrimitiveField(get, map),
+        Expr.Get get => IsPrimitiveField(get, map) || IsErasedGenericField(get, map),
+        Expr.GetIndex get => IsErasedGenericField(get, map),
         Expr.Grouping group => ReturnsRawField(group.Expression, map),
         Expr.TypeAssertion assertion => ReturnsRawField(assertion.Expression, map),
         Expr.NonNullAssertion assertion => ReturnsRawField(assertion.Expression, map),

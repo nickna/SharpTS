@@ -36,7 +36,7 @@ public class CliDeclarationEmitTests
         Assert.False(File.Exists(dir.GetPath("library.dll")));
         string declaration = File.ReadAllText(dir.GetPath("types/library.d.ts"));
         Assert.Contains("export interface Box<T>", declaration);
-        Assert.Contains("map<U>(arg0: (arg0: T) => U): Box<U>;", declaration);
+        Assert.Contains("map<U>(fn: (value: T) => U): Box<U>;", declaration);
         Assert.Contains("export declare class Service", declaration);
         Assert.Contains("public run(value: string): number;", declaration);
         Assert.Contains("private secret: number;", declaration);

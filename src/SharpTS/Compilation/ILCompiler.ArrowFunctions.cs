@@ -18,6 +18,7 @@ public partial class ILCompiler
     private readonly Dictionary<string, List<Expr.Call>> _staticIndirectEvalCallsByAlias =
         new(StringComparer.Ordinal);
     private readonly HashSet<Expr.ArrowFunction> _strictArrows = new(ReferenceEqualityComparer.Instance);
+    private readonly HashSet<Stmt.Function> _strictFunctions = new(ReferenceEqualityComparer.Instance);
     private readonly HashSet<Expr.ArrowFunction> _arrowsInAnonymousEmptyDerivedClass = new(ReferenceEqualityComparer.Instance);
     private readonly HashSet<Expr.ArrowFunction> _arrowsInStaticClassContext = new(ReferenceEqualityComparer.Instance);
     // Maps each collected arrow to the module path that owns it (null = script/single-file
@@ -26,6 +27,7 @@ public partial class ILCompiler
     // body emission otherwise runs with a stale _modules.CurrentPath and
     // resolves against the wrong module's storage.
     private readonly Dictionary<Expr.ArrowFunction, string?> _arrowToModule = new(ReferenceEqualityComparer.Instance);
+    private readonly Dictionary<Expr.ArrowFunction, string?> _arrowToNamespace = new(ReferenceEqualityComparer.Instance);
     private readonly Dictionary<Expr.ArrowFunction, Expr.ArrowFunction?> _arrowParent = new(ReferenceEqualityComparer.Instance);
     // Immediately enclosing callable (Expr.ArrowFunction or Stmt.Function) of each
     // collected arrow — i.e. the body whose emission context creates the arrow's
@@ -241,6 +243,12 @@ public partial class ILCompiler
             if (_arrowsInStaticClassContext.Contains(arrow) && captures.Contains("this")
                 && (returnType is TypeBuilder || returnType.IsConstructedGenericType))
                 returnType = _types.Object;
+            // Captured object storage can receive a checker-accepted `any`
+            // write after this function was created. Preserve the actual value
+            // unless whole-program analysis proves its numeric representation.
+            if ((returnType == _types.Double || returnType == _types.Boolean)
+                && OriginalModuleCaptures(arrow, captures).Any(name => _typeMap?.IsStableNumericCaptureField(arrow, name) != true))
+                returnType = _types.Object;
             if (arrow.IsGenerator)
                 returnType = arrow.IsAsync ? _types.IAsyncEnumerableOfObject : _types.IEnumerableOfObject;
             _closures.ArrowReturnTypes[arrow] = returnType;
@@ -435,6 +443,7 @@ public partial class ILCompiler
                         ? _types.Double
                         : _types.Object;
                     var field = displayClass.DefineField(capturedVar, captureType, FieldAttributes.Public);
+                    if (capturedVar == "this") _nativeReceiverBinding?.Register(field);
                     fieldMap[capturedVar] = field;
                 }
                 _closures.DisplayClassFields[arrow] = fieldMap;
@@ -571,6 +580,10 @@ public partial class ILCompiler
                 // Skip overload signatures (no body)
                 if (f.Body != null)
                 {
+                    // Preserve lexical strictness before module emission folds
+                    // script owners into the shared global-storage bucket.
+                    if (_currentCollectStrict || _currentCollectClassName != null)
+                        _strictFunctions.Add(f);
                     // Sync arrows are emitted before the guest method adapter. Its
                     // async body shares these arrows, so mark their lexical receiver
                     // now rather than compiling this.property as a nominal CLR cast.
@@ -820,6 +833,7 @@ public partial class ILCompiler
                 CollectArrowsFromExpr(da.ResultValue);
                 break;
             case Expr.ArrowFunction af:
+                _arrowToNamespace[af] = _currentNamespacePath;
                 var captures = _closures.Analyzer.GetCaptures(af);
                 if (!af.HasOwnThis && captures.Contains("this") && ClassNeedsConstructorReceiver(_currentCollectClassName)
                     && (_collectingInstanceFieldInitializer || IsConstructorThisArrowParent(_currentEnclosingCallable)))
@@ -837,6 +851,10 @@ public partial class ILCompiler
                     && ((_currentCollectStaticClassContext && captures.Contains("this"))
                         || ArrowUsesClassDefinition(af)))
                     captures.Add(CompilationContext.SuperOwnerCaptureName);
+                // Async builders also consume the analyzer's synthetic owner
+                // captures. Only the module storage rewrite needs a private copy.
+                captures = new HashSet<string>(captures);
+                RemoveLiveModuleCaptures(af, captures, _modules.CurrentPath);
                 _collectedArrows.Add((af, captures));
                 if (_currentCollectClassName != null || _currentCollectStrict)
                     _strictArrows.Add(af);
@@ -1427,7 +1445,7 @@ public partial class ILCompiler
         // in a generated namespace so their CLR short name remains the source name.
         string identity = $"$ClassExpr_{++_classExprs.Counter}";
         string className = classExpr.Name is { } name ? $"{identity}.{name.Lexeme}" : identity;
-        _classExprs.Names[classExpr] = className;
+        _classExprs.Names[classExpr] = _nativeSourceTypeNames?.DeclareExpression(classExpr, className) ?? className;
         _classExprs.ToDefine.Add(classExpr);
     }
 
@@ -1709,6 +1727,9 @@ public partial class ILCompiler
     private static bool BodyDeclaresUseStrict(List<Stmt>? body)
         => Parsing.DirectivePrologue.HasUseStrict(body);
 
+    private bool IsStrictFunction(Stmt.Function function)
+        => _strictFunctions.Contains(function) || _isStrictMode || BodyDeclaresUseStrict(function.Body);
+
     private void EmitArrowBody(Expr.ArrowFunction arrow, MethodBuilder method, TypeBuilder? displayClass)
     {
         method = NewTargetBody(method);
@@ -1719,6 +1740,8 @@ public partial class ILCompiler
         arrowReturnType ??= _types.Object;
 
         var ctx = CreateModuleMemberContext(il, method);
+        if (_arrowToNamespace.TryGetValue(arrow, out var arrowNamespace))
+            ctx.CurrentNamespacePath = arrowNamespace;
         ConfigureNewTargetBody(ctx, method);
         ctx.AsyncArrowBuilders = _async.ArrowBuilders.Count > 0 ? _async.ArrowBuilders : null;
         // A function expression / arrow with its own "use strict" prologue is
@@ -1888,7 +1911,7 @@ public partial class ILCompiler
             if (arrow.HasOwnThis)
             {
                 // __this is at index 1, actual parameters start at index 2
-                ctx.DefineParameter("__this", 1);
+                ctx.DefineParameter(CompilationContext.ThisParameterName, 1);
                 for (int i = 0; i < arrow.Parameters.Count; i++)
                 {
                     Type? paramType = arrowParamTypes != null && i < arrowParamTypes.Length ? arrowParamTypes[i] : null;
@@ -1913,7 +1936,7 @@ public partial class ILCompiler
             if (arrow.HasOwnThis)
             {
                 // __this is at index 0, actual parameters start at index 1
-                ctx.DefineParameter("__this", 0);
+                ctx.DefineParameter(CompilationContext.ThisParameterName, 0);
                 for (int i = 0; i < arrow.Parameters.Count; i++)
                 {
                     Type? paramType = arrowParamTypes != null && i < arrowParamTypes.Length ? arrowParamTypes[i] : null;

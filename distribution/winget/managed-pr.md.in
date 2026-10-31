@@ -1,0 +1,26 @@
+<!-- Draft only: fill every marker with the selected stable release and actual acceptance evidence before submission. -->
+New package: SharpTS.SharpTS version @VERSION@
+
+Add the SharpTS managed distribution as a ZIP/portable package for Windows x64 and ARM64.
+Each archive has the root-level `sharpts.exe`, `LICENSE` and `README.md`. The portable command
+is `sharpts`; the package declares no .NET installation dependency.
+
+This is the full-feature self-contained managed CLI. The CLI itself needs no separate .NET installation; executing its emitted managed DLLs needs a compatible .NET host.
+
+Release: https://github.com/nickna/SharpTS/releases/tag/v@VERSION@
+
+- x64: https://github.com/nickna/SharpTS/releases/download/v@VERSION@/sharpts-@VERSION@-win-x64.zip
+- ARM64: https://github.com/nickna/SharpTS/releases/download/v@VERSION@/sharpts-@VERSION@-win-arm64.zip
+
+The manifest generator computed SHA-256 values from the actual public archives and checked their
+layout, architecture and available GitHub asset digests. Both SharpTS SKUs share the command name;
+the documented switching procedure uninstalls the current identity first.
+
+Actual validation evidence: @VALIDATION_EVIDENCE_URL@
+
+That evidence must cover schema validation, native x64/ARM64 installer selection, local installation,
+version and interpreter/compiler smokes, command discovery from a fresh terminal, uninstall cleanup,
+both switching directions and the upstream sandbox test. Do not submit this draft with missing
+results or placeholders. Apply the current upstream PR checklist and complete its CLA requirements.
+
+Upstream tracking: https://github.com/nickna/SharpTS/issues/1356

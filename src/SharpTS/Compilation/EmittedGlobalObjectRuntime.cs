@@ -34,11 +34,26 @@ public sealed class EmittedGlobalObjectRuntime
         internal set => SetDeclaration(ref _getBinding, value);
     }
 
+    private MethodBuilder? _intrinsicDescriptorKind;
+    /// <summary>Classifies existing synthesized JS global descriptors without reading their values.</summary>
+    public MethodBuilder IntrinsicDescriptorKind
+    {
+        get => Require(_intrinsicDescriptorKind);
+        internal set => SetDeclaration(ref _intrinsicDescriptorKind, value);
+    }
+
     private MethodBuilder? _setProperty;
     public MethodBuilder SetProperty
     {
         get => Require(_setProperty);
         internal set => SetDeclaration(ref _setProperty, value);
+    }
+
+    private MethodBuilder? _setPropertyStrict;
+    public MethodBuilder SetPropertyStrict
+    {
+        get => Require(_setPropertyStrict);
+        internal set => SetDeclaration(ref _setPropertyStrict, value);
     }
 
     private FieldBuilder? _properties;
@@ -102,6 +117,8 @@ public sealed class EmittedGlobalObjectRuntime
         _ = GetProperty;
         _ = GetBinding;
         _ = SetProperty;
+        _ = SetPropertyStrict;
+        _ = IntrinsicDescriptorKind;
         _ = Properties;
         IsDeclared = true;
     }

@@ -32,7 +32,8 @@ public partial class RuntimeEmitter
         ConstructorBuilder TSTypeErrorCtor,
         MethodBuilder TypeOf,
         FieldInfo UndefinedInstance,
-        Type UndefinedType
+        Type UndefinedType,
+        MethodInfo? NativeProxyRejection
     );
 
     private readonly record struct ConvertListToHashSetInputs(
@@ -65,7 +66,8 @@ public partial class RuntimeEmitter
         TypeBuilder TSSymbolType,
         ConstructorBuilder TSTypeErrorCtor,
         MethodBuilder TypeOf,
-        Type UndefinedType
+        Type UndefinedType,
+        MethodInfo? NativeProxyRejection
     );
 
     private readonly record struct StringifyArrayFullInputs(
@@ -149,7 +151,8 @@ public partial class RuntimeEmitter
                 inputs.TSSymbolType,
                 inputs.TSTypeErrorCtor,
                 inputs.TypeOf,
-                inputs.UndefinedType
+                inputs.UndefinedType,
+                NativeProxyRejection: inputs.NativeProxyRejection
             )
         );
 
@@ -674,7 +677,7 @@ public partial class RuntimeEmitter
             il,
             valueLocal,
             notProxyLabelFull,
-            new ProxyMaterializeForJsonInputs(inputs.InvokeMethodUnwrapped)
+            new ProxyMaterializeForJsonInputs(inputs.InvokeMethodUnwrapped, NativeProxyRejection: inputs.NativeProxyRejection)
         );
         il.Emit(OpCodes.Ldc_I4_0);
         il.Emit(OpCodes.Stloc, allowPooledDictionaryKeysLocal);
@@ -798,52 +801,12 @@ public partial class RuntimeEmitter
             allowPooledDictionaryKeysLocal
         );
 
-        // Class instance
+        // Snapshot names from the actual holder and defer each Get until its
+        // PropertyList/key-snapshot turn, preserving replacer receiver identity.
         il.MarkLabel(classInstanceLabel);
-        var classFieldsLocal = il.DeclareLocal(_types.DictionaryStringObject);
-        var classHolderLocal = il.DeclareLocal(_types.Object);
-        var noClassFieldsLabel = il.DefineLabel();
-        // Use TSObjectMergeEnumerable to include accessor (getter) properties
-        // alongside data props per ECMA-262 25.5.2.4 EnumerableOwnPropertyNames.
-        // For non-$Object IHasFields receivers, this falls back to the same
-        // Fields getter that the original code used.
-        // Preserve the original object identity for replacer `this`.  The
-        // enumerable snapshot below is only a serialization view; exposing it
-        // as the holder breaks SameValue checks for compact-record sources.
-        il.Emit(OpCodes.Ldloc, valueLocal);
-        il.Emit(OpCodes.Stloc, classHolderLocal);
-        il.Emit(OpCodes.Ldloc, valueLocal);
-        il.Emit(OpCodes.Call, inputs.TSObjectMergeEnumerable);
-        il.Emit(OpCodes.Stloc, classFieldsLocal);
-        il.Emit(OpCodes.Ldloc, classFieldsLocal);
-        il.Emit(OpCodes.Brfalse, noClassFieldsLabel);
-        il.Emit(OpCodes.Ldloc, classFieldsLocal);
-        il.Emit(OpCodes.Stloc, valueLocal);
-        EmitStringifyObjectFull(
-            il,
-            method,
-            valueLocal,
-            json,
-            new StringifyObjectFullInputs(
-                inputs.BoundTSFunctionInvokeWithThis,
-                inputs.BoundTSFunctionType,
-                inputs.DescriptorStorage,
-                inputs.GetKeys,
-                inputs.GetProperty,
-                inputs.InvokeMethodValue,
-                inputs.InvokeValue,
-                inputs.TSFunctionInvokeWithThis,
-                inputs.TSFunctionType,
-                inputs.TSSymbolType,
-                inputs.TypeOf,
-                inputs.UndefinedType
-            ),
-            null,
-            classHolderLocal
-        );
-        il.MarkLabel(noClassFieldsLabel);
-        il.Emit(OpCodes.Ldstr, "{}");
-        il.Emit(OpCodes.Ret);
+        il.Emit(OpCodes.Ldc_I4_0);
+        il.Emit(OpCodes.Stloc, allowPooledDictionaryKeysLocal);
+        il.Emit(OpCodes.Br, dictLabel);
 
         return method;
     }
@@ -1296,8 +1259,7 @@ public partial class RuntimeEmitter
         MethodBuilder stringifyMethod,
         LocalBuilder valueLocal,
         EmittedJsonImplementation json, StringifyObjectFullInputs inputs,
-        LocalBuilder? allowPooledDictionaryKeysLocal,
-        LocalBuilder? replacerHolderLocal = null)
+        LocalBuilder? allowPooledDictionaryKeysLocal)
     {
         var sbLocal = il.DeclareLocal(_types.StringBuilder);
         var dictLocal = il.DeclareLocal(_types.DictionaryStringObject);
@@ -1317,7 +1279,7 @@ public partial class RuntimeEmitter
         var indentDoneLabel = il.DefineLabel();
 
         il.Emit(OpCodes.Ldloc, valueLocal);
-        il.Emit(OpCodes.Castclass, _types.DictionaryStringObject);
+        il.Emit(OpCodes.Isinst, _types.DictionaryStringObject);
         il.Emit(OpCodes.Stloc, dictLocal);
 
         // A replacer PropertyList supplies the iteration order and needs no own
@@ -1414,9 +1376,7 @@ public partial class RuntimeEmitter
         il.Emit(OpCodes.Add);
         il.Emit(OpCodes.Stloc, iLocalObj);
         // Get(holder, key); absent keys become undefined and are omitted below.
-        il.Emit(OpCodes.Ldloc, dictLocal);
-        il.Emit(OpCodes.Ldloc, keyLocal);
-        il.Emit(OpCodes.Call, json.GetDictionaryProperty!);
+        EmitJsonObjectPropertyRead(il, dictLocal, valueLocal, keyLocal, json, inputs.GetProperty);
         il.Emit(OpCodes.Stloc, valLocal);
         il.Emit(OpCodes.Br, iterDoneLabel);
 
@@ -1448,9 +1408,7 @@ public partial class RuntimeEmitter
         il.Emit(OpCodes.Brtrue, iterDoneLabel);
 
         il.MarkLabel(generalSourceRead);
-        il.Emit(OpCodes.Ldloc, dictLocal);
-        il.Emit(OpCodes.Ldloc, keyLocal);
-        il.Emit(OpCodes.Call, json.GetDictionaryProperty!);
+        EmitJsonObjectPropertyRead(il, dictLocal, valueLocal, keyLocal, json, inputs.GetProperty);
         il.Emit(OpCodes.Stloc, valLocal);
 
         il.MarkLabel(iterDoneLabel);
@@ -1473,7 +1431,7 @@ public partial class RuntimeEmitter
             il,
             valLocal,
             keyLocal,
-            replacerHolderLocal ?? dictLocal,
+            valueLocal,
             new CallReplacerWithKeyInputs(
                 inputs.BoundTSFunctionInvokeWithThis,
                 inputs.BoundTSFunctionType,

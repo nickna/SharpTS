@@ -109,6 +109,9 @@ public class Token(TokenType type, string lexeme, object? literal, int line, int
     /// <summary>Parse origin for comparing offsets when no source document is available.</summary>
     internal object? SourceIdentity { get; init; }
 
+    /// <summary>Parser-owned destructuring spill, never a declared public export.</summary>
+    internal bool IsGeneratedTemporary { get; init; }
+
     /// <summary>
     /// Exclusive character offset where this token ends, or -1 when <see cref="Start"/> is unset.
     /// </summary>

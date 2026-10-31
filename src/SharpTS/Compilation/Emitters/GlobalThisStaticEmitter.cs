@@ -117,7 +117,7 @@ public sealed class GlobalThisStaticEmitter : IStaticTypeEmitterStrategy
         if (TryEmitBuiltInClassType(il, ctx, propertyName))
             return true;
 
-        if (propertyName is "Math" or "Reflect")
+        if (propertyName is "Math" or "Reflect" or "ArrayBuffer")
         {
             il.Emit(OpCodes.Ldstr, propertyName);
             il.Emit(OpCodes.Call, ctx.Runtime!.GlobalObject.GetProperty);
@@ -220,8 +220,8 @@ public sealed class GlobalThisStaticEmitter : IStaticTypeEmitterStrategy
             _ => null
         };
         if (t == null) return false;
-        il.Emit(OpCodes.Ldtoken, t);
-        il.Emit(OpCodes.Call, ctx.Types.GetMethod(ctx.Types.Type, "GetTypeFromHandle", ctx.Types.RuntimeTypeHandle));
+        NativeConstructorActivationLookup.EmitValue(ctx.Runtime?.NativeConstructorActivation, ctx.Types, il, t,
+            NativeConstructorValueProducerKind.GlobalConstructorProperty, ctx.CurrentMethod, ctx.CurrentClassBuilder);
         return true;
     }
 }

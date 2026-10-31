@@ -1114,7 +1114,10 @@ public sealed class FsModuleEmitter : IBuiltInModuleEmitter
         // FsWatch(string path, object optionsOrCallback, object callback)
         // Arg 0: path (string — don't box)
         if (arguments.Count > 0)
+        {
             emitter.EmitExpression(arguments[0]);
+            emitter.EmitConversionForParameter(arguments[0], ctx.Types.String);
+        }
         else
             il.Emit(OpCodes.Ldnull);
 
@@ -1141,7 +1144,10 @@ public sealed class FsModuleEmitter : IBuiltInModuleEmitter
 
         // FsWatchFile(string path, object options, object callback)
         if (arguments.Count > 0)
+        {
             emitter.EmitExpression(arguments[0]);
+            emitter.EmitConversionForParameter(arguments[0], ctx.Types.String);
+        }
         else
             il.Emit(OpCodes.Ldnull);
 
@@ -1167,7 +1173,10 @@ public sealed class FsModuleEmitter : IBuiltInModuleEmitter
 
         // FsUnwatchFile(string path)
         if (arguments.Count > 0)
+        {
             emitter.EmitExpression(arguments[0]);
+            emitter.EmitConversionForParameter(arguments[0], ctx.Types.String);
+        }
         else
             il.Emit(OpCodes.Ldnull);
 

@@ -18,10 +18,14 @@ public partial class RuntimeEmitter
         // Use the same declaration cache as ordinary property lookup, so the
         // dictionary entry and descriptor share the function's identity and
         // the JavaScript name/length supplied by this prototype slot.
+        int parameterOffset = il.ILOffset;
         il.Emit(OpCodes.Ldarg_2);
         il.Emit(OpCodes.Ldarg_1);
         il.Emit(OpCodes.Ldarg_3);
-        il.Emit(OpCodes.Call, runtime.FunctionConstruction.GetOrCreate);
+        int factoryOffset = il.ILOffset;
+        if (_nativeUnionParameters is { } conversion && conversion.MatchesOriginalFactory(runtime.FunctionConstruction.GetOrCreate))
+            factoryOffset = conversion.EmitArrayInstallerFactory(il, method, parameterOffset);
+        else il.Emit(OpCodes.Call, runtime.FunctionConstruction.GetOrCreate);
         il.Emit(OpCodes.Stloc, wrapper);
         il.Emit(OpCodes.Ldarg_0);
         il.Emit(OpCodes.Ldarg_1);
@@ -44,6 +48,7 @@ public partial class RuntimeEmitter
         il.Emit(OpCodes.Call, runtime.DescriptorStorage.DefineProperty);
         il.Emit(OpCodes.Pop);
         il.Emit(OpCodes.Ret);
+        _nativeUnionParameters?.RecordArrayInstaller(method, il, parameterOffset, factoryOffset);
         return method;
     }
 }

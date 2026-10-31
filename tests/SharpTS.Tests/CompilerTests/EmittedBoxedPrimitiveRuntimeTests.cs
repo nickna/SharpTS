@@ -161,7 +161,7 @@ public class EmittedBoxedPrimitiveRuntimeTests
         var boxed = new EmittedBoxedPrimitiveRuntime();
         InvokeEmitter("DeclareUnwrapIfBoxed", emitter, helper, boxed);
         var peers = CreateInputs("UnwrapPrimitiveInputs",
-            runtime.ObjectStorage.Type, runtime.Symbols.ToPrimitive, runtime.ObjectRead.Index, runtime.Sentinels.UndefinedType,
+            runtime.ObjectStorage.Type, runtime.ObjectFields.Interface, runtime.Symbols.ToPrimitive, runtime.ObjectRead.Index, runtime.Sentinels.UndefinedType,
             runtime.Operators.TypeOf, runtime.Invocation.Method, runtime.ObjectStorage.GetProperty,
             runtime.ObjectOwnProperties.HasOwnProperty, runtime.ObjectRead.Property, runtime.Errors.CreateException, runtime.Errors.TypeErrorConstructor);
         var dateInputs = includeDate ? CreateInputs("BoxedDateInputs", runtime.Dates.RequireImplementation().Type, runtime.Dates.RequireImplementation().ToStringMethod) : null;

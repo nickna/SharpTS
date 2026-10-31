@@ -1,3 +1,5 @@
+using SharpTS.Parsing;
+
 namespace SharpTS.TypeSystem;
 
 /// <summary>
@@ -114,6 +116,41 @@ public partial class TypeChecker
     private bool ClassMatchesConstructorSignatures(TypeInfo.Class cls, List<TypeInfo.ConstructorSignature> constructorSignatures)
     {
         return constructorSignatures.Any(sig => ClassMatchesConstructorSignature(cls, sig));
+    }
+
+    private bool SpecializedClassMatchesConstructorSignatures(TypeInfo.InstantiatedGeneric specialized,
+        List<TypeInfo.ConstructorSignature> targets)
+    {
+        if (!TryGetPublicSpecializedConstructors(specialized, out var sources)) return false;
+        var result = new TypeInfo.Instance(specialized);
+        return targets.All(target => sources.Any(source => SignatureRelatedTo(
+            source with { Func = source.Func with { ReturnType = result } }, NormalizeConstructorSignature(target))));
+    }
+
+    private bool TryGetPublicSpecializedConstructors(TypeInfo.InstantiatedGeneric specialized,
+        out List<NormalizedSignature> sources)
+    {
+        sources = [];
+        if (specialized.GenericDefinition is not TypeInfo.GenericClass { IsAbstract: false }) return false;
+        bool complete = TryGetOrdinaryConstructorHierarchy(specialized, out var levels);
+        if (!complete && !levels.Any(level => level.Core.Methods.ContainsKey("constructor"))) return false;
+        var constructors = OrdinaryConstructSignatures(levels);
+        sources = constructors.Signatures;
+        return constructors.Access == AccessModifier.Public;
+    }
+
+    private bool SpecializedConstructorResultMismatch(TypeInfo target, TypeInfo.InstantiatedGeneric source)
+    {
+        if (GetConstructorSignatures(target) is not { Count: 1 } targets || targets[0].IsGeneric
+            || !TryGetPublicSpecializedConstructors(source, out var sources) || sources.Count != 1)
+            return false;
+        // Separate parameter compatibility from the result diagnostic without
+        // changing the actual checked construct signature or its return type.
+        var targetSignature = NormalizeConstructorSignature(targets[0]);
+        var parameters = sources[0] with { Func = sources[0].Func with { ReturnType = TypeInfo.Any.Shared } };
+        var targetParameters = targetSignature with { Func = targetSignature.Func with { ReturnType = TypeInfo.Any.Shared } };
+        return SignatureRelatedTo(parameters, targetParameters)
+            && !IsCompatible(targets[0].ReturnType, new TypeInfo.Instance(source));
     }
 
     /// <summary>

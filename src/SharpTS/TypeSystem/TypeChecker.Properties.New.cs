@@ -107,6 +107,10 @@ public partial class TypeChecker
 
     private TypeInfo CheckNewCore(Expr.New newExpr)
     {
+        // Compatibility constructor fast paths may not call CheckExpr on a
+        // bare callee. Still retain its existing lexical identity so imported
+        // native constructors remain distinct from same-named local values.
+        if (newExpr.Callee is Expr.Variable variable) BindValueUse(variable.Name);
         // Built-in types only apply when callee is a simple identifier
         bool isSimpleName = IsSimpleIdentifier(newExpr.Callee);
         string? simpleClassName = GetSimpleClassName(newExpr.Callee);
@@ -373,7 +377,11 @@ public partial class TypeChecker
         }
 
         // Handle new EventEmitter() constructor
-        if (isSimpleName && simpleClassName == "EventEmitter")
+        if (isSimpleName && simpleClassName == "EventEmitter" &&
+            (_environment.Get(simpleClassName) is null ||
+             _environment.GetValueBinding(simpleClassName)?.Declarations.Any(declaration =>
+                 declaration.Name.Lexeme == "EventEmitter" &&
+                 Modules.Stdlib.Providers.EmbeddedStdlibProvider.TryExtractSpecifier(declaration.Document.Path) == "events") == true))
         {
             // Node's EventEmitter accepts an optional options object
             // ({ captureRejections?: boolean }). Reject anything beyond that.
@@ -440,9 +448,11 @@ public partial class TypeChecker
                     tsCode: "TS2583");
             }
 
-            // With lib declarations loaded, use their construct signature and
-            // returned interface so target/lib-specific members stay exact.
-            if (_hasDefaultLibraries && _environment.Get(simpleClassName!) is not null)
+            // A selected value binding can be a local class, parameter or import
+            // even in compatibility mode. Its own construct signature also keeps
+            // loaded library members exact when this is the global constructor.
+            if (_environment.GetValueBinding(simpleClassName!) is not null ||
+                (_hasDefaultLibraries && _environment.Get(simpleClassName!) is not null))
                 goto CheckDeclaredConstructor;
 
             if (newExpr.Arguments.Count != 1)
@@ -738,6 +748,10 @@ public partial class TypeChecker
         {
             return CheckInterfaceConstructorCall(itf, newExpr.TypeArgs, newExpr.Arguments, qualifiedName, newExpr.TypeArgNodes);
         }
+        if (calleeType is TypeInfo.Record record && record.IsConstructable)
+        {
+            return CheckInterfaceConstructorCall(record, newExpr.TypeArgs, newExpr.Arguments, qualifiedName, newExpr.TypeArgNodes);
+        }
         if (calleeType is TypeInfo.GenericInterface gi && gi.IsConstructable)
         {
             return CheckGenericInterfaceConstructorCall(gi, newExpr.TypeArgs, newExpr.Arguments, qualifiedName, newExpr.TypeArgNodes);
@@ -764,7 +778,7 @@ public partial class TypeChecker
             if (newExpr.TypeArgs == null || newExpr.TypeArgs.Count == 0)
             {
                 // Try to infer type arguments from constructor parameters
-                List<TypeInfo> argTypes = newExpr.Arguments.Select(CheckExpr).ToList();
+                List<TypeInfo> argTypes = CheckConstructorInferenceArguments(newExpr.Arguments);
                 var inferredArgs = InferConstructorTypeArguments(genericClass, argTypes);
 
                 if (inferredArgs == null)
@@ -778,26 +792,15 @@ public partial class TypeChecker
             {
                 typeArgs = newExpr.TypeArgs.Select((_, i) => ResolveTypeArg(newExpr.TypeArgs, newExpr.TypeArgNodes, i)).ToList();
             }
-            var instantiated = InstantiateGenericClass(genericClass, typeArgs);
-            RecordEditorConstructedType(instantiated);
+            return CheckInstantiatedClassConstruction(
+                (TypeInfo.InstantiatedGeneric)InstantiateGenericClass(genericClass, typeArgs), newExpr, qualifiedName);
+        }
 
-            // Build substitution map for constructor parameter types
-            var subs = GenericClassSubs(genericClass,
-                ((TypeInfo.InstantiatedGeneric)instantiated).TypeArguments);
-
-            // Check constructor with substituted parameter types (walk inheritance chain). When the
-            // constructor is inherited from a generic-class instantiation, compose the substitutions.
-            if (TryGetDefaultLibraryPromiseConstructor(genericClass, subs, out var promiseConstructor))
-            {
-                ValidateConstructorCall(promiseConstructor, newExpr, qualifiedName, contextualArguments: true);
-            }
-            else
-            {
-                var (ctorTypeInfo, constructorSubs) = FindInheritedConstructor(genericClass, subs);
-                ValidateConstructorCall(ctorTypeInfo, newExpr, qualifiedName, constructorSubs);
-            }
-
-            return new TypeInfo.Instance(instantiated);
+        if (type is TypeInfo.InstantiatedGeneric { GenericDefinition: TypeInfo.GenericClass } specializedClass)
+        {
+            if (newExpr.TypeArgs is { Count: > 0 })
+                throw new TypeCheckException($"Expected 0 type arguments, but got {newExpr.TypeArgs.Count}.", tsCode: "TS2558");
+            return CheckInstantiatedClassConstruction(specializedClass, newExpr, qualifiedName);
         }
 
         if (type is TypeInfo.Class classType)
@@ -828,6 +831,24 @@ public partial class TypeChecker
         return TypeInfo.Any.Shared;
     }
 
+    private TypeInfo CheckInstantiatedClassConstruction(TypeInfo.InstantiatedGeneric instantiated,
+        Expr.New newExpr, string qualifiedName)
+    {
+        var genericClass = (TypeInfo.GenericClass)instantiated.GenericDefinition;
+        if (genericClass.IsAbstract)
+            throw new TypeCheckException($"Cannot create an instance of abstract class '{qualifiedName}'.", tsCode: "TS2511");
+        RecordEditorConstructedType(instantiated);
+        var substitutions = GenericClassSubs(genericClass, instantiated.TypeArguments);
+        if (TryGetDefaultLibraryPromiseConstructor(genericClass, substitutions, out var promiseConstructor))
+            ValidateConstructorCall(promiseConstructor, newExpr, qualifiedName, contextualArguments: true);
+        else
+        {
+            var (constructor, constructorSubstitutions) = FindInheritedConstructor(genericClass, substitutions);
+            ValidateConstructorCall(constructor, newExpr, qualifiedName, constructorSubstitutions);
+        }
+        return new TypeInfo.Instance(instantiated);
+    }
+
     /// <summary>
     /// Validates a constructor call (overloaded or simple) against the provided arguments.
     /// Applies optional generic substitutions to parameter types when provided.
@@ -839,6 +860,12 @@ public partial class TypeChecker
         Dictionary<string, TypeInfo>? subs = null,
         bool contextualArguments = false)
     {
+        if (newExpr.Arguments.Any(argument => argument is Expr.Spread) &&
+            ctorTypeInfo is null or TypeInfo.Function or TypeInfo.OverloadedFunction)
+        {
+            ValidateSpreadConstructorCall(ctorTypeInfo, newExpr, qualifiedName, subs);
+            return;
+        }
         if (ctorTypeInfo == null)
         {
             if (newExpr.Arguments.Count > 0)
@@ -1192,21 +1219,22 @@ public partial class TypeChecker
     /// Returns the type produced by calling the constructor.
     /// </summary>
     private TypeInfo CheckInterfaceConstructorCall(
-        TypeInfo.Interface itf,
+        TypeInfo type,
         List<string>? typeArgs,
         List<Expr> arguments,
         string qualifiedName,
         List<TypeNode?>? typeArgNodes = null)
     {
-        if (itf.ConstructorSignatures == null || itf.ConstructorSignatures.Count == 0)
+        var signatures = GetConstructorSignatures(type);
+        if (signatures == null || signatures.Count == 0)
         {
             throw new TypeCheckException($" Interface '{qualifiedName}' is not constructable.", tsCode: "TS2351");
         }
 
-        List<TypeInfo> argTypes = arguments.Select(CheckExpr).ToList();
+        List<TypeInfo> argTypes = CheckConstructorInferenceArguments(arguments);
 
         // Try each constructor signature
-        foreach (var ctorSig in itf.ConstructorSignatures)
+        foreach (var ctorSig in signatures)
         {
             if (ctorSig.IsGeneric)
             {
@@ -1221,7 +1249,7 @@ public partial class TypeChecker
                 if (TryMatchConstructorArgs(argTypes, ctorSig.ParamTypes, ctorSig.MinArity, ctorSig.HasRestParam))
                 {
                     // Validate each argument
-                    for (int i = 0; i < arguments.Count && i < ctorSig.ParamTypes.Count; i++)
+                    for (int i = 0; i < argTypes.Count && i < ctorSig.ParamTypes.Count; i++)
                     {
                         if (!IsCompatible(ctorSig.ParamTypes[i], argTypes[i]))
                         {
@@ -1266,13 +1294,13 @@ public partial class TypeChecker
             }
 
             // Substitute in constructor signatures and check
-            List<TypeInfo> argTypes = arguments.Select(CheckExpr).ToList();
+            List<TypeInfo> argTypes = CheckConstructorInferenceArguments(arguments);
             foreach (var ctorSig in gi.ConstructorSignatures)
             {
                 var substitutedParamTypes = ctorSig.ParamTypes.Select(p => Substitute(p, subs)).ToList();
                 if (TryMatchConstructorArgs(argTypes, substitutedParamTypes, ctorSig.MinArity, ctorSig.HasRestParam))
                 {
-                    for (int i = 0; i < arguments.Count && i < substitutedParamTypes.Count; i++)
+                    for (int i = 0; i < argTypes.Count && i < substitutedParamTypes.Count; i++)
                     {
                         if (!IsCompatible(substitutedParamTypes[i], argTypes[i]))
                             goto NextSignature;

@@ -179,8 +179,9 @@ public partial class Parser
             Advance(); // consume TYPE
             return TypeAliasDeclaration();
         }
-        if (Match(TokenType.ASYNC))
+        if (Check(TokenType.ASYNC) && PeekNext().Type == TokenType.FUNCTION && Peek().Line == PeekNext().Line)
         {
+            Advance();
             Consume(TokenType.FUNCTION, "Expect 'function' after 'async'.");
             // Check for async generator: async function* name() {}
             bool isGenerator = Match(TokenType.STAR);
@@ -1218,9 +1219,9 @@ public partial class Parser
         if (isConst)
         {
             // For ambient const, we use Var with no initializer (special case)
-            return new Stmt.Var(name, typeAnnotation, null, IsVar: isVar, TypeAnnotationNode: typeAnnotationNode, IsDeclare: true);
+            return new Stmt.Var(name, typeAnnotation, null, IsVar: isVar, TypeAnnotationNode: typeAnnotationNode, IsDeclare: true) { IsAmbientVar = isVarKeyword };
         }
-        return new Stmt.Var(name, typeAnnotation, null, IsVar: isVar, TypeAnnotationNode: typeAnnotationNode, IsDeclare: true);
+        return new Stmt.Var(name, typeAnnotation, null, IsVar: isVar, TypeAnnotationNode: typeAnnotationNode, IsDeclare: true) { IsAmbientVar = isVarKeyword };
     }
 
     /// <summary>

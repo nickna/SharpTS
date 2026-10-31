@@ -10,6 +10,20 @@ public partial class AsyncArrowMoveNextEmitter
     // The rename-then-delegate operator overrides that consume this live on StateMachineExitRoutingEmitter.
     protected override IReadOnlyDictionary<object, string> BlockScopeRenames => _analysis.BlockScopeRenames ?? NoRenames;
 
+    protected override string GetForLoopCellStorageName(Stmt.For loop, string name)
+    {
+        // Cell analysis retains source names; the async local analysis may give a
+        // loop binding separate storage from an expression's private self name.
+        string? Find(Stmt? initializer) => initializer switch
+        {
+            Stmt.Var v when v.Name.Lexeme == name => BlockScopeRenames.GetValueOrDefault(v, name),
+            Stmt.Const c when c.Name.Lexeme == name => BlockScopeRenames.GetValueOrDefault(c, name),
+            Stmt.Sequence sequence => sequence.Statements.Select(Find).FirstOrDefault(value => value != null),
+            _ => null
+        };
+        return Find(loop.Initializer) ?? name;
+    }
+
     protected override void EmitVariable(Expr.Variable v)
     {
         var checkedReference = v;

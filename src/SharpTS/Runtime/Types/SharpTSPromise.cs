@@ -9,19 +9,27 @@ namespace SharpTS.Runtime.Types;
 /// </summary>
 /// <remarks>
 /// Wraps a .NET Task&lt;object?&gt; to provide Promise semantics in the interpreter.
-/// Supports automatic Promise flattening - Promise&lt;Promise&lt;T&gt;&gt; becomes Promise&lt;T&gt;.
-///
-/// IMPORTANT: Callers should NOT double-wrap Promises. If you're creating a Promise
-/// from a value that might already be a Promise, use SharpTSPromise.Resolve() which
-/// handles flattening. Direct constructor calls with Task&lt;SharpTSPromise&gt; will
-/// trigger a debug assertion.
+/// Resolving functions assimilate values through their live then property before
+/// settling the backing task. A settled result can itself be a Promise object
+/// when that object's then property is noncallable.
 /// </remarks>
-public class SharpTSPromise : ITypeCategorized
+public class SharpTSPromise : ITypeCategorized, ISharpTSOwnPropertyObject
 {
     /// <inheritdoc />
     public TypeCategory RuntimeCategory => TypeCategory.Promise;
 
     private readonly Task<object?> _task;
+
+    internal SharpTSBuiltInConstructor? IntrinsicConstructor { get; init; }
+
+    internal bool HasExplicitPrototype { get; private set; }
+    internal object? ExplicitPrototype { get; private set; }
+
+    internal void SetExplicitPrototype(object? prototype)
+    {
+        ExplicitPrototype = prototype;
+        HasExplicitPrototype = true;
+    }
 
     /// <summary>
     /// Suppresses SharpTS's legacy implicit wait for a promise-valued top-level
@@ -37,7 +45,7 @@ public class SharpTSPromise : ITypeCategorized
     // until user code adds one — a poisoned `constructor` getter
     // (Object.defineProperty(p, "constructor", { get() { throw … } }), test262
     // then/ctor-poisoned, #350) is the motivating case. The descriptor store is
-    // lazily allocated so plain promises stay allocation-free.
+    // lazily allocated so ordinary Promise member reads need no own storage.
     private SharpTSObject? _ownProperties;
 
     private SharpTSObject OwnProperties
@@ -60,6 +68,11 @@ public class SharpTSPromise : ITypeCategorized
             return properties;
         }
     }
+
+    SharpTSObject ISharpTSOwnPropertyObject.OwnProperties => OwnProperties;
+
+    internal bool IsExtensible => PropertyDescriptorStore.IsExtensible(this)
+        && (_ownProperties?.IsExtensible ?? true);
 
     internal bool DefineProperty(string name, SharpTSPropertyDescriptor descriptor)
         => OwnProperties.DefineProperty(name, descriptor);
@@ -129,23 +142,11 @@ public class SharpTSPromise : ITypeCategorized
     /// <summary>
     /// Creates a Promise wrapping an existing Task.
     /// </summary>
-    /// <remarks>
-    /// The task's result should NOT be a SharpTSPromise - this would create
-    /// double-wrapping which causes infinite loops in async iterators.
-    /// Use SharpTSPromise.Resolve() for values that might already be Promises.
-    /// </remarks>
     public SharpTSPromise(Task<object?> task)
     {
         _task = task ?? throw new ArgumentNullException(nameof(task));
+        Execution.VmEvaluationLease.ObservePromise(task);
 
-        // Debug assertion to catch double-wrapping bugs early.
-        // If this fires, the caller is wrapping a Promise in another Promise,
-        // which will cause infinite loops when awaited (the inner Promise
-        // is returned instead of the actual value).
-        Debug.Assert(
-            !task.IsCompletedSuccessfully || task.Result is not SharpTSPromise,
-            "Double-wrapped Promise detected! The task's result is already a SharpTSPromise. " +
-            "Use SharpTSPromise.Resolve() instead of the constructor to handle Promise flattening.");
     }
 
     /// <summary>
@@ -177,21 +178,10 @@ public class SharpTSPromise : ITypeCategorized
     public Task<object?> Task => _task;
 
     /// <summary>
-    /// Gets the resolved value, flattening any nested Promises.
-    /// Used by the await expression to unwrap Promise chains.
+    /// Gets the settled fulfillment value. Resolution has already performed
+    /// thenable assimilation; observing it must not resolve that value again.
     /// </summary>
-    public async Task<object?> GetValueAsync()
-    {
-        object? result = await _task;
-
-        // Flatten nested Promises
-        while (result is SharpTSPromise inner)
-        {
-            result = await inner._task;
-        }
-
-        return result;
-    }
+    public Task<object?> GetValueAsync() => _task;
 
     /// <summary>
     /// Unwraps a value if it's a Promise, otherwise returns it unchanged.

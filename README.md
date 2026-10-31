@@ -59,6 +59,21 @@ Allocation-heavy services can opt into adaptive server GC with
 `--gc-profile adaptive`; workstation GC remains the conservative default. See the
 [GC profile decision](benchmarks/gc-profiles/decision.md) for measured tradeoffs.
 
+Windows executable output can opt into Authenticode signing after bundling:
+
+```powershell
+# Supply the PFX password through SHARPTS_SIGN_PASS or CI secret settings.
+sharpts --compile hello.ts -t exe --sign code-signing.pfx
+signtool verify /pa /v hello.exe
+```
+
+For an offline file-only development test, create a one-day certificate with
+OpenSSL, then use `sharpts --compile hello.ts -t exe --sign test.pfx --sign-timestamp none`.
+The [signing and antivirus guide](docs/antivirus-false-positives.md) includes the
+complete self-signed example, timestamp and digest options, platform requirements,
+and verification commands. Signing failures return a nonzero exit code and
+preserve the original executable.
+
 ## Major feature areas
 
 - TypeScript syntax, type checking, modules, projects, declarations, JSX/TSX, async functions,

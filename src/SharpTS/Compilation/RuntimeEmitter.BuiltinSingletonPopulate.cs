@@ -8,7 +8,7 @@ public partial class RuntimeEmitter
 {
     // Immutable inputs shared by singleton installation; no peer metadata is retained by Math.
     private readonly record struct BuiltinSingletonInputs(
-        Type DescriptorType, PrototypeDescriptorInputs Descriptors, MethodInfo WritableSetter,
+        Type DescriptorType, PrototypeDescriptorInputs Descriptors, MethodInfo WritableSetter, MethodInfo ConfigurableSetter,
         MethodInfo FunctionGetOrCreate, MethodInfo GetSymbolDict, FieldInfo ToStringTag);
 
     private static BuiltinSingletonInputs GetBuiltinSingletonInputs(EmittedRuntime runtime) => new(
@@ -16,7 +16,8 @@ public partial class RuntimeEmitter
         new PrototypeDescriptorInputs(runtime.DescriptorStorage.DescriptorConstructor,
             runtime.DescriptorStorage.DescriptorValue.GetSetMethod()!, runtime.DescriptorStorage.DescriptorEnumerable.GetSetMethod()!,
             runtime.DescriptorStorage.DefineProperty),
-        runtime.DescriptorStorage.DescriptorWritable.GetSetMethod()!, runtime.FunctionConstruction.GetOrCreate,
+        runtime.DescriptorStorage.DescriptorWritable.GetSetMethod()!, runtime.DescriptorStorage.DescriptorConfigurable.GetSetMethod()!,
+        runtime.FunctionConstruction.GetOrCreate,
         runtime.Symbols.GetStorage, runtime.Symbols.ToStringTag);
 
     // Math.* / JSON.* are normally intercepted at compile time by the dedicated
@@ -57,29 +58,68 @@ public partial class RuntimeEmitter
             Type.EmptyTypes);
     }
 
-    private void EmitMathSingletonPopulate(EmittedMathRuntime math, BuiltinSingletonInputs inputs) =>
+    private void EmitMathSingletonPopulate(EmittedMathRuntime math, BuiltinSingletonInputs inputs, MethodBuilder installDataProperty) =>
         EmitBuiltinSingletonPopulate(
             math.SingletonPopulateMethod,
             math.SingletonField,
             inputs,
+            installDataProperty,
             MathStaticEmitter.EnumerateValueFormMethods(math),
-            "Math");
+            "Math", MathStaticEmitter.EnumerateConstantValues());
 
-    private void EmitJsonSingletonPopulate(EmittedJsonRuntime json, BuiltinSingletonInputs inputs) =>
+    private void EmitJsonSingletonPopulate(EmittedJsonRuntime json, BuiltinSingletonInputs inputs, MethodBuilder installDataProperty) =>
         EmitBuiltinSingletonPopulate(
             json.SingletonPopulateMethod,
             json.SingletonField,
             inputs,
+            installDataProperty,
             JSONStaticEmitter.EnumerateValueFormMethods(json.Implementation),
             "JSON");
 
-    private void EmitReflectSingletonPopulate(EmittedReflectNamespace reflectNamespace, BuiltinSingletonInputs inputs) =>
+    private void EmitReflectSingletonPopulate(EmittedReflectNamespace reflectNamespace, BuiltinSingletonInputs inputs, MethodBuilder installDataProperty) =>
         EmitBuiltinSingletonPopulate(
             reflectNamespace.SingletonPopulateMethod,
             reflectNamespace.SingletonField,
             inputs,
+            installDataProperty,
             ReflectStaticEmitter.EnumerateValueFormMethods(reflectNamespace),
             "Reflect");
+
+    // Keep the descriptor installation body once in the generated image. Each
+    // namespace still supplies its actual dictionary, key, and cached value.
+    private MethodBuilder EmitBuiltinSingletonDataPropertyInstaller(TypeBuilder typeBuilder, BuiltinSingletonInputs inputs)
+    {
+        var method = typeBuilder.DefineMethod("InstallBuiltinSingletonDataProperty",
+            MethodAttributes.Private | MethodAttributes.Static, _types.Void,
+            [_types.DictionaryStringObject, _types.String, _types.Object, _types.Boolean]);
+        var il = method.GetILGenerator();
+        il.Emit(OpCodes.Ldarg_0);
+        il.Emit(OpCodes.Ldarg_1);
+        il.Emit(OpCodes.Ldarg_2);
+        il.Emit(OpCodes.Callvirt, _types.GetMethod(_types.DictionaryStringObject, "set_Item", _types.String, _types.Object));
+        var descriptor = il.DeclareLocal(inputs.DescriptorType);
+        il.Emit(OpCodes.Newobj, inputs.Descriptors.Ctor);
+        il.Emit(OpCodes.Stloc, descriptor);
+        il.Emit(OpCodes.Ldloc, descriptor);
+        il.Emit(OpCodes.Ldarg_2);
+        il.Emit(OpCodes.Callvirt, inputs.Descriptors.ValueSetter);
+        il.Emit(OpCodes.Ldloc, descriptor);
+        il.Emit(OpCodes.Ldc_I4_0);
+        il.Emit(OpCodes.Callvirt, inputs.Descriptors.EnumerableSetter);
+        foreach (var setter in new[] { inputs.WritableSetter, inputs.ConfigurableSetter })
+        {
+            il.Emit(OpCodes.Ldloc, descriptor);
+            il.Emit(OpCodes.Ldarg_3);
+            il.Emit(OpCodes.Callvirt, setter);
+        }
+        il.Emit(OpCodes.Ldarg_0);
+        il.Emit(OpCodes.Ldarg_1);
+        il.Emit(OpCodes.Ldloc, descriptor);
+        il.Emit(OpCodes.Call, inputs.Descriptors.DefineProperty);
+        il.Emit(OpCodes.Pop);
+        il.Emit(OpCodes.Ret);
+        return method;
+    }
 
     /// <summary>
     /// Fills a built-in singleton dictionary with identity-cached $TSFunction
@@ -93,16 +133,28 @@ public partial class RuntimeEmitter
         MethodBuilder method,
         FieldBuilder singletonField,
         BuiltinSingletonInputs inputs,
+        MethodBuilder installDataProperty,
         IEnumerable<(string Name, MethodInfo? Backing, int Length)> methods,
-        string toStringTag)
+        string toStringTag,
+        IEnumerable<(string Name, double Value)>? constants = null)
     {
         var il = method.GetILGenerator();
-        var setItem = _types.GetMethod(_types.DictionaryStringObject, "set_Item",
-            _types.String, _types.Object);
-
         EmitPrototypePopulateGuard(il, singletonField);
 
         var descLocal = il.DeclareLocal(inputs.DescriptorType);
+
+        if (constants is not null)
+        {
+            foreach (var (name, value) in constants)
+            {
+                il.Emit(OpCodes.Ldsfld, singletonField);
+                il.Emit(OpCodes.Ldstr, name);
+                il.Emit(OpCodes.Ldc_R8, value);
+                il.Emit(OpCodes.Box, _types.Double);
+                il.Emit(OpCodes.Ldc_I4_0);
+                il.Emit(OpCodes.Call, installDataProperty);
+            }
+        }
 
         var fnLocal = il.DeclareLocal(_types.Object);
         foreach (var (jsName, backing, jsLength) in methods)
@@ -111,19 +163,18 @@ public partial class RuntimeEmitter
             // $TSFunction.GetOrCreate(MethodInfo, name, length) — cached identity
             // so `m.max === Math.max` (same instance the value-form static
             // emitter hands out).
-            _types.EmitLoadMethodInfo(il, backing);
+            var parameterProducer = EmitReflectedMethodLiteral(il, backing);
             il.Emit(OpCodes.Ldstr, jsName);
             il.Emit(OpCodes.Ldc_I4, jsLength);
-            il.Emit(OpCodes.Call, inputs.FunctionGetOrCreate);
+            EmitReflectedFunctionFactory(il, inputs.FunctionGetOrCreate, parameterProducer);
             il.Emit(OpCodes.Stloc, fnLocal);
             // Fast-path dict store (covers `m.max`) + non-enumerable descriptor
             // (so `Object.keys(Math)` / for-in don't surface the methods).
             il.Emit(OpCodes.Ldsfld, singletonField);
             il.Emit(OpCodes.Ldstr, jsName);
             il.Emit(OpCodes.Ldloc, fnLocal);
-            il.Emit(OpCodes.Callvirt, setItem);
-            EmitInstallNonEnumerableDescriptor(il, inputs.Descriptors, singletonField, descLocal, jsName,
-                () => il.Emit(OpCodes.Ldloc, fnLocal));
+            il.Emit(OpCodes.Ldc_I4_1);
+            il.Emit(OpCodes.Call, installDataProperty);
         }
 
         // Install the intrinsic @@toStringTag as a real symbol-keyed data

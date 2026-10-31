@@ -54,8 +54,7 @@ public partial class RuntimeEmitter
         // and InstanceOf semantics).
         EmitInstallConstructorDescriptor(il, peers.Descriptors, numbers.PrototypeField, numDescLocal, setItem, () =>
         {
-            il.Emit(OpCodes.Ldtoken, _types.Double);
-            il.Emit(OpCodes.Call, _types.GetMethod(_types.Type, "GetTypeFromHandle", _types.RuntimeTypeHandle));
+            EmitRuntimeConstructorValue(il, _types.Double);
         });
 
         // Wire with explicit JS-spec name + length per ECMA-262. Number's

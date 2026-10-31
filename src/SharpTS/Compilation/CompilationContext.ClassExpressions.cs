@@ -28,10 +28,15 @@ public partial class CompilationContext
     public Dictionary<Expr.ClassExpr, Dictionary<string, MethodBuilder>>? ClassExprSetters { get; set; }
     public Dictionary<Expr.ClassExpr, ConstructorBuilder>? ClassExprConstructors { get; set; }
     public ClassGenericParameterRegistry? ClassGenericParameters { get; set; }
+    internal NativeClassInitializationEmission? NativeClassInitialization { get; set; }
+    internal NativeClrAdmission? NativeClrAdmission { get; init; }
+    internal NativeClosedSourceFamilies? NativeClosedFamilies { get; init; }
     public Dictionary<Expr.ClassExpr, string?>? ClassExprSuperclass { get; set; }
     public Dictionary<Expr.ClassExpr, Dictionary<string, int>>? ClassExprCaptureSlots { get; set; }
     internal const string PrivateOwnerCaptureName = "'privateOwner";
     internal const string SuperOwnerCaptureName = "'superOwner";
+    // This key cannot collide with a source identifier such as `__this`.
+    internal const string ThisParameterName = "'this";
     internal IReadOnlyDictionary<Expr.ClassExpr, string>? ClassExprEnclosingClasses { get; set; }
 
     // Current class expression being compiled
@@ -44,6 +49,7 @@ public partial class CompilationContext
     internal bool HasGuestReceiver { get; set; }
     internal bool CapturesClassConstructorReturn { get; set; }
     internal bool IsDerivedClassConstructor { get; set; }
+    internal LocalBuilder? ConstructorSuperBound { get; set; }
     internal LocalBuilder? ClassConstructorReceiver { get; set; }
     internal LocalBuilder? ClassConstructorReturnValue { get; set; }
     internal LocalBuilder? ClassConstructorThisCell { get; set; }

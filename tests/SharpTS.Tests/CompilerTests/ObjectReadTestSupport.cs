@@ -47,6 +47,8 @@ internal static class ObjectReadTestSupport
             if (parameter.Name == "MethodCallableCtor") return runtime.ReflectedMethods.CallableConstructor;
             if (parameter.Name == "ReflectedMethodCacheField") return runtime.ReflectedMethods.Cache;
             if (parameter.Name == "ToPascalCase") return runtime.ReflectedMethods.ToPascalCase;
+            if (parameter.Name == "NativeProxyRejection") return runtime.ReflectedMethods.NativeProxyRejection;
+            if (parameter.Name == "SourceOwners") return runtime.ClassInitialization.SourceOwners;
             return parameter.Name switch
             {
                 "TSFunctionCtor" => runtime.FunctionConstruction.Constructor,
@@ -66,12 +68,15 @@ internal static class ObjectReadTestSupport
                 "FunctionPrototypeField" => runtime.FunctionPrototypes.Prototype,
                 "FunctionPrototypePopulateMethod" => runtime.FunctionPrototypes.Populate,
                 "GetFunctionMethod" => runtime.FunctionIntrospection.GetProperty,
+                "ToPropertyKey" => runtime.Reflect.ToPropertyKey,
+                "UserClasses" => false,
                 "InvokeMethodUnwrapped" => runtime.ReflectedMethods.InvokeUnwrapped,
                 "SafeGetMethod" => runtime.ReflectedMethods.FindMethod,
                 "InvokeValue" => runtime.Invocation.Value,
                 "InvokeMethodValue" => runtime.Invocation.Method,
                 "InvokeMethodValue0" => runtime.Invocation.Method0,
                 "IHasFieldsInterface" => runtime.ObjectFields.Interface,
+                "GuestClassFactoryAttribute" => runtime.DynamicConstruction.FactoryAttributeType,
                 "IHasFieldsGetProperty" => runtime.ObjectFields.GetProperty,
                 "IHasFieldsHasProperty" => runtime.ObjectFields.HasProperty,
                 "UndefinedType" => runtime.Sentinels.UndefinedType,

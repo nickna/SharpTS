@@ -37,6 +37,7 @@ public class BuiltInAsyncMethod : ISharpTSCallable, ISharpTSAsyncCallable, IBuil
     private readonly BuiltInFunctionMetadata _metadata;
     private int _specLength = -1;
     private object? _receiver;
+    internal SharpTSBuiltInConstructor? DefaultPromiseConstructor { get; set; }
 
     // Cache for bound methods - uses weak references to avoid memory leaks
     private ConditionalWeakTable<object, BuiltInAsyncMethod>? _boundMethodCache;
@@ -143,13 +144,15 @@ public class BuiltInAsyncMethod : ISharpTSCallable, ISharpTSAsyncCallable, IBuil
         // Null receivers don't need caching
         if (receiver == null)
         {
-            return new BuiltInAsyncMethod(_name, _minArity, _maxArity, _implementation, _promiseFactory, _refsEventLoopWhileInFlight, _speciesResolver, null, _metadata, _specLength);
+            return new BuiltInAsyncMethod(_name, _minArity, _maxArity, _implementation, _promiseFactory, _refsEventLoopWhileInFlight, _speciesResolver, null, _metadata, _specLength)
+            { DefaultPromiseConstructor = DefaultPromiseConstructor };
         }
 
         // Value types can't be cached efficiently
         if (receiver.GetType().IsValueType)
         {
-            return new BuiltInAsyncMethod(_name, _minArity, _maxArity, _implementation, _promiseFactory, _refsEventLoopWhileInFlight, _speciesResolver, receiver, _metadata, _specLength);
+            return new BuiltInAsyncMethod(_name, _minArity, _maxArity, _implementation, _promiseFactory, _refsEventLoopWhileInFlight, _speciesResolver, receiver, _metadata, _specLength)
+            { DefaultPromiseConstructor = DefaultPromiseConstructor };
         }
 
         // Initialize cache lazily
@@ -162,7 +165,8 @@ public class BuiltInAsyncMethod : ISharpTSCallable, ISharpTSAsyncCallable, IBuil
         }
 
         // Create new bound method and cache it
-        var bound = new BuiltInAsyncMethod(_name, _minArity, _maxArity, _implementation, _promiseFactory, _refsEventLoopWhileInFlight, _speciesResolver, receiver, _metadata, _specLength);
+        var bound = new BuiltInAsyncMethod(_name, _minArity, _maxArity, _implementation, _promiseFactory, _refsEventLoopWhileInFlight, _speciesResolver, receiver, _metadata, _specLength)
+            { DefaultPromiseConstructor = DefaultPromiseConstructor };
         _boundMethodCache.AddOrUpdate(receiver, bound);
         return bound;
     }
@@ -217,11 +221,12 @@ public class BuiltInAsyncMethod : ISharpTSCallable, ISharpTSAsyncCallable, IBuil
         return result;
     }
 
-    private static object? WrapResult(
+    private object? WrapResult(
         Interpreter interpreter,
         Func<Interpreter, Task<object?>, object?>? factory,
         Task<object?> task)
-        => factory != null ? factory(interpreter, task) : new SharpTSPromise(task);
+        => factory != null ? factory(interpreter, task)
+            : new SharpTSPromise(task) { IntrinsicConstructor = DefaultPromiseConstructor ?? interpreter.PromiseGlobalValue };
 
     /// <summary>
     /// Async call - awaits the implementation directly.

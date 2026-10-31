@@ -27,7 +27,7 @@ internal static class DotNetGenericMethodInference
         MethodInfo method,
         IReadOnlyList<Type?> argumentTypes,
         IReadOnlyList<Type>? explicitTypeArguments = null,
-        Type? expectedReturnType = null)
+        Type? expectedReturnType = null, Func<Type, Type>? coreAtom = null)
     {
         if (!method.IsGenericMethodDefinition)
         {
@@ -54,7 +54,7 @@ internal static class DotNetGenericMethodInference
 
         var parameters = DotNetMethodResolver.GetInputParameters(method.GetParameters());
         bool hasParams = parameters.Length > 0 &&
-                         parameters[^1].IsDefined(typeof(ParamArrayAttribute), false);
+                         DotNetMethodResolver.IsParamArray(parameters[^1]);
         int fixedCount = hasParams ? parameters.Length - 1 : parameters.Length;
         if ((!hasParams && argumentTypes.Count > parameters.Length) ||
             (hasParams && argumentTypes.Count < fixedCount))
@@ -67,7 +67,7 @@ internal static class DotNetGenericMethodInference
             Type? actual = argumentTypes[i];
             if (actual == null)
                 continue;
-            if (!TryUnify(DotNetMethodResolver.GetInputType(parameters[i]), actual, inferred))
+            if (!TryUnify(DotNetMethodResolver.GetInputType(parameters[i]), actual, inferred, coreAtom))
                 return null;
         }
 
@@ -77,13 +77,13 @@ internal static class DotNetGenericMethodInference
             for (int i = fixedCount; i < argumentTypes.Count; i++)
             {
                 Type? actual = argumentTypes[i];
-                if (actual != null && !TryUnify(elementType, actual, inferred))
+                if (actual != null && !TryUnify(elementType, actual, inferred, coreAtom))
                     return null;
             }
         }
 
         if (expectedReturnType != null &&
-            !TryUnify(method.ReturnType, expectedReturnType, inferred))
+            !TryUnify(method.ReturnType, expectedReturnType, inferred, coreAtom))
         {
             return null;
         }
@@ -103,7 +103,7 @@ internal static class DotNetGenericMethodInference
         }
     }
 
-    private static bool TryUnify(Type pattern, Type actual, Dictionary<Type, Type> inferred)
+    private static bool TryUnify(Type pattern, Type actual, Dictionary<Type, Type> inferred, Func<Type, Type>? coreAtom)
     {
         if (pattern.IsByRef)
             pattern = pattern.GetElementType()!;
@@ -125,11 +125,11 @@ internal static class DotNetGenericMethodInference
         if (pattern.IsArray)
         {
             return actual.IsArray &&
-                   TryUnify(pattern.GetElementType()!, actual.GetElementType()!, inferred);
+                   TryUnify(pattern.GetElementType()!, actual.GetElementType()!, inferred, coreAtom);
         }
 
-        if (typeof(Delegate).IsAssignableFrom(pattern) &&
-            typeof(Delegate).IsAssignableFrom(actual) &&
+        if (IsDelegate(pattern, coreAtom) &&
+            IsDelegate(actual, coreAtom) &&
             ManagedDotNetInterop.GetMethod(pattern, "Invoke") is { } patternInvoke &&
             ManagedDotNetInterop.GetMethod(actual, "Invoke") is { } actualInvoke)
         {
@@ -142,11 +142,11 @@ internal static class DotNetGenericMethodInference
                 if (!TryUnify(
                         patternParameters[i].ParameterType,
                         actualParameters[i].ParameterType,
-                        inferred))
+                        inferred, coreAtom))
                     return false;
             }
             return TryUnify(
-                patternInvoke.ReturnType, actualInvoke.ReturnType, inferred);
+                patternInvoke.ReturnType, actualInvoke.ReturnType, inferred, coreAtom);
         }
 
         if (pattern.IsGenericType)
@@ -160,13 +160,21 @@ internal static class DotNetGenericMethodInference
             var actualArguments = matchingActual.GetGenericArguments();
             for (int i = 0; i < patternArguments.Length; i++)
             {
-                if (!TryUnify(patternArguments[i], actualArguments[i], inferred))
+                if (!TryUnify(patternArguments[i], actualArguments[i], inferred, coreAtom))
                     return false;
             }
             return true;
         }
 
-        return pattern.IsAssignableFrom(actual) || NumericTypesAreBridgeCompatible(pattern, actual);
+        return pattern.IsAssignableFrom(actual) || NumericTypesAreBridgeCompatible(coreAtom?.Invoke(pattern) ?? pattern, coreAtom?.Invoke(actual) ?? actual);
+    }
+
+    private static bool IsDelegate(Type type, Func<Type, Type>? coreAtom)
+    {
+        if (coreAtom is null) return typeof(Delegate).IsAssignableFrom(type);
+        for (Type? current = type; current is not null; current = current.BaseType)
+            if (coreAtom(current) == typeof(Delegate)) return true;
+        return false;
     }
 
     private static Type? FindConstructedType(Type actual, Type genericDefinition)

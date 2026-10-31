@@ -8,6 +8,18 @@ public sealed class EmittedObjectFieldRuntime
 {
     internal EmittedObjectFieldRuntime() { }
     public bool IsComplete { get; private set; }
+    internal EmittedSourceDataDefinitionRuntime? SourceDataDefinition { get; private set; }
+
+    internal void DeclareSourceDataDefinition(Type contract, MethodInfo defineValue)
+    {
+        EnsureMutable();
+        if (SourceDataDefinition is not null || !contract.IsInterface
+            || !ReferenceEquals(contract.Module, Interface.Module)
+            || !ReferenceEquals(defineValue.DeclaringType, contract)
+            || defineValue.IsStatic || !defineValue.IsAbstract)
+            throw new InvalidOperationException("Invalid source data definition contract.");
+        SourceDataDefinition = new(contract, defineValue);
+    }
 
     private Type? _interface;
     public Type Interface

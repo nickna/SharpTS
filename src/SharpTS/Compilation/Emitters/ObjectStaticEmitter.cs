@@ -17,6 +17,54 @@ public sealed class ObjectStaticEmitter : IStaticTypeEmitterStrategy
         var ctx = emitter.Context;
         var il = ctx.IL;
 
+        if (methodName == "getOwnPropertyDescriptor")
+        {
+            if (arguments.Any(argument => argument is Expr.Spread))
+            {
+                emitter.EmitArgsArrayWithSpread(arguments);
+                var values = il.DeclareLocal(ctx.Types.ObjectArray);
+                il.Emit(OpCodes.Stloc, values);
+                void EmitArgument(int index)
+                {
+                    var present = il.DefineLabel();
+                    var done = il.DefineLabel();
+                    il.Emit(OpCodes.Ldloc, values);
+                    il.Emit(OpCodes.Ldlen);
+                    il.Emit(OpCodes.Conv_I4);
+                    il.Emit(OpCodes.Ldc_I4, index);
+                    il.Emit(OpCodes.Bgt, present);
+                    il.Emit(OpCodes.Ldsfld, ctx.Runtime!.Sentinels.UndefinedInstance);
+                    il.Emit(OpCodes.Br, done);
+                    il.MarkLabel(present);
+                    il.Emit(OpCodes.Ldloc, values);
+                    il.Emit(OpCodes.Ldc_I4, index);
+                    il.Emit(OpCodes.Ldelem_Ref);
+                    il.MarkLabel(done);
+                }
+                EmitArgument(0);
+                EmitArgument(1);
+                il.Emit(OpCodes.Call, ctx.Runtime!.ObjectDescriptors.GetOwnPropertyDescriptorValueForm);
+                return true;
+            }
+            // Finish argument expressions before ToObject, preserving their
+            // values across an await in a later argument. The public entry
+            // rejects nullish targets before converting the property key.
+            var target = arguments.Count > 0 ? emitter.SpillBoxedArg(arguments[0]) : null;
+            var key = arguments.Count > 1 ? emitter.SpillBoxedArg(arguments[1]) : null;
+            for (int index = 2; index < arguments.Count; index++)
+            {
+                emitter.EmitExpression(arguments[index]);
+                emitter.EmitBoxIfNeeded(arguments[index]);
+                il.Emit(OpCodes.Pop);
+            }
+            if (target is not null) il.Emit(OpCodes.Ldloc, target);
+            else il.Emit(OpCodes.Ldsfld, ctx.Runtime!.Sentinels.UndefinedInstance);
+            if (key is not null) il.Emit(OpCodes.Ldloc, key);
+            else il.Emit(OpCodes.Ldsfld, ctx.Runtime!.Sentinels.UndefinedInstance);
+            il.Emit(OpCodes.Call, ctx.Runtime!.ObjectDescriptors.GetOwnPropertyDescriptorValueForm);
+            return true;
+        }
+
         // Closed non-escaping record (#1506): Object.keys(o) needs a fresh mutable result, but it
         // does not need to box/materialize o or enter GetKeys' descriptor/reflection dispatch. Shape
         // field order is the proven enumerable string-key order for this restricted record domain.
@@ -164,24 +212,6 @@ public sealed class ObjectStaticEmitter : IStaticTypeEmitterStrategy
                 }
                 il.Emit(OpCodes.Call, ctx.Runtime!.ObjectDescriptors.DefineProperty);
                 return true;
-            case "getOwnPropertyDescriptor":
-                // Object.getOwnPropertyDescriptor(obj, prop) - gets a property descriptor.
-                // ECMA-262 §20.1.2.6 step 1: Let obj be ? ToObject(O). ToObject
-                // throws TypeError on null/undefined.
-                EmitToObjectGuard(il, ctx.Runtime!, "Object.getOwnPropertyDescriptor");
-                // First argument (obj) is already on the stack
-                // Emit second argument (property name)
-                if (arguments.Count > 1)
-                {
-                    emitter.EmitExpression(arguments[1]);
-                    emitter.EmitBoxIfNeeded(arguments[1]);
-                }
-                else
-                {
-                    il.Emit(OpCodes.Ldnull);
-                }
-                il.Emit(OpCodes.Call, ctx.Runtime!.ObjectDescriptors.GetOwnPropertyDescriptor);
-                return true;
             case "getOwnPropertyNames":
                 // Object.getOwnPropertyNames(obj) - gets all own property names
                 il.Emit(OpCodes.Call, ctx.Runtime!.ObjectKeys.Names);
@@ -304,24 +334,4 @@ public sealed class ObjectStaticEmitter : IStaticTypeEmitterStrategy
     public bool HasStaticProperty(string memberName) => memberName is
         "prototype" or "length" or "name";
 
-    /// <summary>
-    /// Emits a TypeError throw if the value on top of stack is null or $Undefined.Instance.
-    /// Mirrors ECMA-262 ToObject step 1. Stack is preserved (value remains on top).
-    /// </summary>
-    private static void EmitToObjectGuard(ILGenerator il, EmittedRuntime runtime, string callName)
-    {
-        var throwLabel = il.DefineLabel();
-        var okLabel = il.DefineLabel();
-        il.Emit(OpCodes.Dup);
-        il.Emit(OpCodes.Brfalse, throwLabel);
-        il.Emit(OpCodes.Dup);
-        il.Emit(OpCodes.Isinst, runtime.Sentinels.UndefinedType);
-        il.Emit(OpCodes.Brtrue, throwLabel);
-        il.Emit(OpCodes.Br, okLabel);
-        il.MarkLabel(throwLabel);
-        il.Emit(OpCodes.Pop);
-        il.Emit(OpCodes.Ldstr, callName + " called on null or undefined");
-        GuestErrorEmitter.ThrowErrorFromStack(il, runtime, runtime.Errors.TypeErrorConstructor);
-        il.MarkLabel(okLabel);
-    }
 }

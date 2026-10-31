@@ -670,7 +670,7 @@ public partial class RuntimeEmitter
         // return new $RegExp(pattern, flags)
         il.Emit(OpCodes.Ldarg_0);
         il.Emit(OpCodes.Ldarg_1);
-        il.Emit(OpCodes.Newobj, regExp.PatternFlagsConstructor);
+        NativePrototypeFieldsLookup.EmitCarrierCreate(_nativePrototypeFields, il, regExp.PatternFlagsConstructor);
         il.Emit(OpCodes.Ret);
     }
 
@@ -1194,7 +1194,7 @@ public partial class RuntimeEmitter
         var createdArgsLocal = il.DeclareLocal(_types.ObjectArray);
         il.Emit(OpCodes.Ldarg_1);
         il.Emit(OpCodes.Call, regExp.CoerceArgument);
-        il.Emit(OpCodes.Newobj, regExp.PatternConstructor);
+        NativePrototypeFieldsLookup.EmitCarrierCreate(_nativePrototypeFields, il, regExp.PatternConstructor);
         il.Emit(OpCodes.Stloc, createdMatcherLocal);
         il.Emit(OpCodes.Ldloc, createdMatcherLocal);
         il.Emit(OpCodes.Ldsfld, inputs.Symbols.Match);
@@ -1538,7 +1538,7 @@ public partial class RuntimeEmitter
         il.MarkLabel(sourceReadyLabel);
         il.Emit(OpCodes.Ldloc, sourceLocal);
         il.Emit(OpCodes.Ldstr, "g");
-        il.Emit(OpCodes.Newobj, regExp.PatternFlagsConstructor);
+        NativePrototypeFieldsLookup.EmitCarrierCreate(_nativePrototypeFields, il, regExp.PatternFlagsConstructor);
         il.Emit(OpCodes.Stloc, regexpLocal);
         il.Emit(OpCodes.Ldloc, regexpLocal);
         il.Emit(OpCodes.Ldfld, regExp.RegexField);

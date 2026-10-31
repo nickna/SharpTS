@@ -121,6 +121,7 @@ public partial class RuntimeEmitter
         il.Emit(OpCodes.Ldnull);
         il.Emit(OpCodes.Ret);
 
+        runtime.NativeCallables?.Register(typeBuilder, invoke);
         typeBuilder.CreateType();
     }
 
@@ -261,6 +262,7 @@ public partial class RuntimeEmitter
         il.Emit(OpCodes.Ldnull);
         il.Emit(OpCodes.Ret);
 
+        runtime.NativeCallables?.Register(typeBuilder, invoke);
         typeBuilder.CreateType();
     }
 }

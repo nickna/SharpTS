@@ -29,7 +29,10 @@ public partial class RuntimeEmitter
         ProxyOwnKeysCallInputs ProxyOwnKeys,
         EmittedSymbolRuntime Symbols,
         TypeBuilder TSFunctionType,
-        Type UndefinedType
+        Type UndefinedType,
+        FunctionOwnPrototypeInputs OwnPrototype,
+        MethodInfo IsBuiltinDeleted,
+        EmittedGuestOwnPropertyRuntime? GuestOwnProperties = null
     );
 
     private readonly record struct GetOwnPropertyNamesInputs(
@@ -47,7 +50,11 @@ public partial class RuntimeEmitter
         ProxyOwnKeysCallInputs ProxyOwnKeys,
         EmittedRegExpRuntime RegExps,
         EmittedSymbolRuntime Symbols,
-        Type UndefinedType
+        Type UndefinedType,
+        FunctionOwnPrototypeInputs OwnPrototype,
+        MethodInfo IsBuiltinDeleted,
+        EmittedGuestOwnPropertyRuntime? GuestOwnProperties = null,
+        Type? DateConstructor = null
     );
 
     /// <summary>
@@ -317,6 +324,7 @@ public partial class RuntimeEmitter
         var il = method.GetILGenerator();
         // number[] unboxing: materialize a numeric-mode $Array before enumerating it as an object.
         EmitDeoptArgIfNumericArrayStorage(il, inputs.ArrayStorage, 0);
+        EmitGuestOwnKeyQuery(il, inputs.GuestOwnProperties, inputs.DescriptorStorage.DescriptorEnumerable.GetGetMethod()!);
         var dictType = _types.DictionaryStringObject;
         var listType = _types.ListOfObject;
 
@@ -625,6 +633,10 @@ public partial class RuntimeEmitter
             var desc = il.DeclareLocal(inputs.DescriptorStorage.DescriptorType);
             il.Emit(OpCodes.Ldarg_0);
             il.Emit(OpCodes.Ldstr, name);
+            il.Emit(OpCodes.Call, inputs.IsBuiltinDeleted);
+            il.Emit(OpCodes.Brtrue, skip);
+            il.Emit(OpCodes.Ldarg_0);
+            il.Emit(OpCodes.Ldstr, name);
             il.Emit(OpCodes.Call, inputs.DescriptorStorage.GetPropertyDescriptor);
             il.Emit(OpCodes.Stloc, desc);
             il.Emit(OpCodes.Ldloc, desc);
@@ -639,7 +651,10 @@ public partial class RuntimeEmitter
         }
         EmitEnumerableFunctionIntrinsic("length");
         EmitEnumerableFunctionIntrinsic("name");
+        var noIntrinsicFunctionPrototype = il.DefineLabel();
+        EmitFunctionOwnPrototypeGuard(il, () => il.Emit(OpCodes.Ldarg_0), inputs.OwnPrototype, noIntrinsicFunctionPrototype);
         EmitEnumerableFunctionIntrinsic("prototype");
+        il.MarkLabel(noIntrinsicFunctionPrototype);
 
         il.Emit(OpCodes.Ldarg_0);
         il.Emit(OpCodes.Ldnull);
@@ -751,6 +766,16 @@ public partial class RuntimeEmitter
         il.Emit(OpCodes.Callvirt, inputs.DescriptorStorage.DescriptorEnumerable.GetGetMethod()!);
         il.Emit(OpCodes.Brfalse, skipKeyLabel);
         il.MarkLabel(fieldsAddKeyLabel);
+        // Namespace [[GetOwnProperty]] observes the value even for Object.keys.
+        // Own-name/Reflect.ownKeys enumeration remains on its separate key-only path.
+        if (inputs.ObjectStorage.ModuleNamespaces is { } namespaces)
+        {
+            il.Emit(OpCodes.Ldarg_0);
+            il.Emit(OpCodes.Ldloc, keyLocal);
+            il.Emit(OpCodes.Ldnull);
+            il.Emit(OpCodes.Call, namespaces.Read);
+            il.Emit(OpCodes.Pop);
+        }
 
         il.Emit(OpCodes.Ldloc, resultLocal);
         il.Emit(OpCodes.Ldloc, keyLocal);
@@ -1075,6 +1100,7 @@ public partial class RuntimeEmitter
         objectKeys.Names = method;
 
         var il = method.GetILGenerator();
+        EmitGuestOwnKeyQuery(il, inputs.GuestOwnProperties);
 
         var dictLabel = il.DefineLabel();
         var listLabel = il.DefineLabel();
@@ -1084,6 +1110,7 @@ public partial class RuntimeEmitter
         // Local for result list
         var namesLocal = il.DeclareLocal(_types.ListOfObject);
         var iLocal = il.DeclareLocal(_types.Int32);
+        var appendStoredNames = il.DefineLabel();
 
         // ECMA-262 §20.1.2.10 step 1: Let O be ? ToObject(obj). ToObject throws
         // TypeError for null/undefined. Tests 15.2.3.4-1-{1,2,3} verify each.
@@ -1332,6 +1359,42 @@ public partial class RuntimeEmitter
             il.MarkLabel(absent);
         }
 
+        void AddInitialOwnName(string name)
+        {
+            // A recreated intrinsic is appended through its descriptor-store
+            // creation position rather than its deleted original slot.
+            var recreated = il.DefineLabel();
+            il.Emit(OpCodes.Ldarg_0);
+            il.Emit(OpCodes.Ldstr, name);
+            il.Emit(OpCodes.Call, inputs.IsBuiltinDeleted);
+            il.Emit(OpCodes.Brtrue, recreated);
+            AddOwnName(name);
+            il.MarkLabel(recreated);
+        }
+
+        // Intrinsic slots are created with the function, before user expandos.
+        // Attribute changes preserve that position; deletion and recreation do not.
+        var notFunctionForNames = il.DefineLabel();
+        il.Emit(OpCodes.Ldarg_0);
+        il.Emit(OpCodes.Isinst, inputs.OwnPrototype.FunctionValues.Type);
+        il.Emit(OpCodes.Brfalse, notFunctionForNames);
+        foreach (var name in new[] { "length", "name" })
+        {
+            var recreated = il.DefineLabel();
+            il.Emit(OpCodes.Ldarg_0);
+            il.Emit(OpCodes.Ldstr, name);
+            il.Emit(OpCodes.Call, inputs.IsBuiltinDeleted);
+            il.Emit(OpCodes.Brtrue, recreated);
+            AddOwnName(name);
+            il.MarkLabel(recreated);
+        }
+        var noIntrinsicPrototype = il.DefineLabel();
+        EmitFunctionOwnPrototypeGuard(il, () => il.Emit(OpCodes.Ldarg_0), inputs.OwnPrototype, noIntrinsicPrototype);
+        AddOwnName("prototype");
+        il.MarkLabel(noIntrinsicPrototype);
+        il.Emit(OpCodes.Br, appendStoredNames);
+        il.MarkLabel(notFunctionForNames);
+
         // Anonymous host delegates back Proxy revocation functions.  They are
         // ECMAScript built-ins whose own keys are created in this order.
         var notAnonymousDelegateForNamesLabel = il.DefineLabel();
@@ -1402,8 +1465,7 @@ public partial class RuntimeEmitter
         AddOwnName("seal");
         AddOwnName("setPrototypeOf");
         AddOwnName("values");
-        il.Emit(OpCodes.Ldloc, namesLocal);
-        il.Emit(OpCodes.Ret);
+        il.Emit(OpCodes.Br, appendStoredNames);
         il.MarkLabel(notObjectTypeLabel);
 
         // IList<object> Type → JS Array constructor own static names.
@@ -1419,8 +1481,7 @@ public partial class RuntimeEmitter
         AddOwnName("fromAsync");
         AddOwnName("isArray");
         AddOwnName("of");
-        il.Emit(OpCodes.Ldloc, namesLocal);
-        il.Emit(OpCodes.Ret);
+        il.Emit(OpCodes.Br, appendStoredNames);
         il.MarkLabel(notArrayTypeForNamesLabel);
 
         // System.Double Type → JS Number constructor own static names.
@@ -1446,9 +1507,37 @@ public partial class RuntimeEmitter
         AddOwnName("isSafeInteger");
         AddOwnName("parseFloat");
         AddOwnName("parseInt");
-        il.Emit(OpCodes.Ldloc, namesLocal);
-        il.Emit(OpCodes.Ret);
+        il.Emit(OpCodes.Br, appendStoredNames);
         il.MarkLabel(notNumberTypeForNamesLabel);
+
+        if (inputs.DateConstructor is { } dateConstructor)
+        {
+            var notDateConstructor = il.DefineLabel();
+            il.Emit(OpCodes.Ldarg_0);
+            il.Emit(OpCodes.Ldtoken, dateConstructor);
+            il.Emit(OpCodes.Call, _types.TypeGetTypeFromHandle);
+            il.Emit(OpCodes.Bne_Un, notDateConstructor);
+            foreach (var name in new[] { "length", "name", "prototype", "now", "parse", "UTC" })
+                AddInitialOwnName(name);
+            il.Emit(OpCodes.Br, appendStoredNames);
+            il.MarkLabel(notDateConstructor);
+        }
+
+        if (inputs.Promise is not null)
+        {
+            // This is the same canonical constructor value used by Promise
+            // reads, own descriptors and deletion; no CLR method inventory.
+            var notPromiseConstructor = il.DefineLabel();
+            il.Emit(OpCodes.Ldarg_0);
+            il.Emit(OpCodes.Ldtoken, _types.TaskOfObject);
+            il.Emit(OpCodes.Call, _types.TypeGetTypeFromHandle);
+            il.Emit(OpCodes.Bne_Un, notPromiseConstructor);
+            foreach (var name in new[] { "length", "name", "prototype", "all", "allSettled", "any", "race",
+                         "resolve", "reject", "withResolvers", "allKeyed", "allSettledKeyed" })
+                AddInitialOwnName(name);
+            il.Emit(OpCodes.Br, appendStoredNames);
+            il.MarkLabel(notPromiseConstructor);
+        }
 
         // RegExp instances are created with an own non-enumerable lastIndex
         // property before any user expando. Keep that intrinsic at the front
@@ -1586,6 +1675,7 @@ public partial class RuntimeEmitter
         // earlier. Receiver is arg0; pass the fieldsDict as the "already in"
         // set when present (null when not $IHasFields, so PDS-only props
         // surface).
+        il.MarkLabel(appendStoredNames);
         var objPdsExtraNamesLocal = il.DeclareLocal(_types.ListOfObject);
         il.Emit(OpCodes.Ldarg_0);
         il.Emit(OpCodes.Ldloc, fieldsDictLocal);
@@ -1779,7 +1869,8 @@ public partial class RuntimeEmitter
     /// Phase 1: Define $BoundArrayMethod type, fields, and constructor.
     /// Must be called before EmitRuntimeClass so GetListProperty can use the constructor.
     /// </summary>
-    internal void EmitBoundArrayMethodTypeDefinition(ModuleBuilder moduleBuilder, EmittedArrayOperationsRuntime arrays)
+    internal void EmitBoundArrayMethodTypeDefinition(ModuleBuilder moduleBuilder, EmittedArrayOperationsRuntime arrays,
+        EmittedNativeCallableRuntime? nativeCallables = null)
     {
         // Define class: public sealed class $BoundArrayMethod
         var typeBuilder = EmitTypeDefinitions.DefineType(moduleBuilder,
@@ -1827,6 +1918,7 @@ public partial class RuntimeEmitter
             [_types.ObjectArray]
         );
         arrays.BoundMethodInvoke = invokeBuilder;
+        nativeCallables?.Register(typeBuilder, invokeBuilder);
     }
 
     /// <summary>

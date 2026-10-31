@@ -1305,7 +1305,7 @@ public partial class RuntimeEmitter
         fetch.BeginClientEmission();
         var client = fetch.RequireClient();
 
-        client.DisplayClass = moduleBuilder.DefineType(
+        client.DisplayClass = EmitTypeDefinitions.DefineType(moduleBuilder,
             "$FetchDisplayClass",
             TypeAttributes.Public | TypeAttributes.Sealed | TypeAttributes.BeforeFieldInit);
 

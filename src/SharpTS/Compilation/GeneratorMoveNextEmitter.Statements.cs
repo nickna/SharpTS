@@ -113,80 +113,11 @@ public partial class GeneratorMoveNextEmitter
         var endLabel = _il.DefineLabel();
         var continueLabel = _il.DefineLabel();
 
-        // Get compile-time type info for the iterable expression
-        TypeInfo? iterableType = _ctx!.TypeMap?.Get(f.Iterable);
-
         // Emit iterable and get enumerator
         EmitExpression(f.Iterable);
         EnsureBoxed();
 
-        // Handle Map/Set specially - convert to List before iteration
-        // This matches the behavior in ILEmitter.Statements.cs EmitForOf
-        if (iterableType is TypeInfo.Map)
-        {
-            // Map iteration yields [key, value] entries (compile-time known)
-            _il.Emit(OpCodes.Call, _ctx.Runtime!.RequireMap().Entries);
-        }
-        else if (iterableType is TypeInfo.Set)
-        {
-            // Set iteration yields values (compile-time known)
-            _il.Emit(OpCodes.Call, _ctx.Runtime!.RequireSet().Values);
-        }
-        else
-        {
-            // Fallback: runtime type checking for Map/Set when compile-time
-            // type isn't available. Each arm gates on whether the corresponding
-            // $Runtime helper was emitted (null MethodBuilder ⇒ feature off).
-            var hasMapEntries = _ctx.Runtime?.Map is not null;
-            var hasSetValues = _ctx.Runtime?.Set is not null;
-            var iterableLocal = _il.DeclareLocal(_types.Object);
-            _il.Emit(OpCodes.Stloc, iterableLocal);
-
-            if (hasMapEntries || hasSetValues)
-            {
-                var afterMapSetLabel = _il.DefineLabel();
-                var checkSetLabel = _il.DefineLabel();
-                var dictionaryType = typeof(Dictionary<object, object?>);
-                var hashSetType = typeof(HashSet<object>);
-
-                if (hasMapEntries)
-                {
-                    // Check if iterable is Dictionary<object, object?> (Map)
-                    _il.Emit(OpCodes.Ldloc, iterableLocal);
-                    _il.Emit(OpCodes.Isinst, dictionaryType);
-                    _il.Emit(OpCodes.Brfalse, checkSetLabel);
-
-                    // It's a Map - call MapEntries to get List<object?>
-                    _il.Emit(OpCodes.Ldloc, iterableLocal);
-                    _il.Emit(OpCodes.Call, _ctx.Runtime!.RequireMap().Entries);
-                    _il.Emit(OpCodes.Stloc, iterableLocal);
-                    _il.Emit(OpCodes.Br, afterMapSetLabel);
-                }
-
-                if (hasSetValues)
-                {
-                    _il.MarkLabel(checkSetLabel);
-                    _il.Emit(OpCodes.Ldloc, iterableLocal);
-                    _il.Emit(OpCodes.Isinst, hashSetType);
-                    _il.Emit(OpCodes.Brfalse, afterMapSetLabel);
-
-                    // It's a Set - call SetValues to get List<object?>
-                    _il.Emit(OpCodes.Ldloc, iterableLocal);
-                    _il.Emit(OpCodes.Call, _ctx.Runtime!.RequireSet().Values);
-                    _il.Emit(OpCodes.Stloc, iterableLocal);
-                }
-                else
-                {
-                    // Map-only: still need checkSetLabel as the Map arm's Brfalse target.
-                    _il.MarkLabel(checkSetLabel);
-                }
-
-                _il.MarkLabel(afterMapSetLabel);
-            }
-            _il.Emit(OpCodes.Ldloc, iterableLocal);
-        }
-
-        // Acquire the guest iterator from the (possibly converted) iterable once.
+        // Acquire the selected guest iterator from the original iterable once.
         EmitSynchronousForOfEnumeratorFromStack();
 
         // Store enumerator to hoisted field (need temp local for the stack swap)
@@ -196,35 +127,80 @@ public partial class GeneratorMoveNextEmitter
         _il.Emit(OpCodes.Ldloc, tempLocal);
         _il.Emit(OpCodes.Stfld, enumeratorField);
 
-        EnterLoop(endLabel, continueLabel);
-
-        // Declare loop variable (may be hoisted or local)
-        var loopVarLocal = DeclareLoopVariable(GetBindingStorageName(f, f.Variable.Lexeme));
-
-        _il.MarkLabel(startLabel);
-
-        // Check MoveNext - load enumerator from hoisted field
-        _il.Emit(OpCodes.Ldarg_0);  // this
-        _il.Emit(OpCodes.Ldfld, enumeratorField);
-        _il.Emit(OpCodes.Callvirt, _types.GetMethodNoParams(_types.IEnumerator, "MoveNext"));
-        _il.Emit(OpCodes.Brfalse, endLabel);
-
-        // Set loop variable from Current
-        EmitStoreLoopVariable(loopVarLocal, GetBindingStorageName(f, f.Variable.Lexeme), () =>
+        var closePending = _builder.StateMachineType.DefineField(
+            enumeratorField.Name + "_closePending", _types.Boolean, System.Reflection.FieldAttributes.Private);
+        void SetClosePending(bool pending)
         {
-            _il.Emit(OpCodes.Ldarg_0);  // this
+            _il.Emit(OpCodes.Ldarg_0);
+            _il.Emit(pending ? OpCodes.Ldc_I4_1 : OpCodes.Ldc_I4_0);
+            _il.Emit(OpCodes.Stfld, closePending);
+        }
+        SetClosePending(false);
+
+        // This synthetic finally shares the suspension-aware exit routing used
+        // by source try/finally. Its scope encloses the loop, so local continue
+        // stays inside it while return and outer labeled exits cross cleanup.
+        var body = f.Body is Stmt.Block block ? block.Statements : [f.Body];
+        var cleanup = new Stmt.TryCatch(body, null, null, []);
+        EmitTryCatchWithYields(cleanup, cleanup, (caught, exceptionPresent, afterTry) =>
+        {
+            EnterLoop(endLabel, continueLabel);
+            var loopVarLocal = DeclareLoopVariable(GetBindingStorageName(f, f.Variable.Lexeme));
+            var moved = _il.DeclareLocal(_types.Boolean);
+            var value = _il.DeclareLocal(_types.Object);
+            _il.MarkLabel(startLabel);
+            EmitCancellationCheck();
+            SetClosePending(false);
+
+            // Failures of next/done/value do not close an iterator. Capture them
+            // before marking a successfully produced value as close-pending.
+            EmitSyncSegmentInTry(() =>
+            {
+                _il.Emit(OpCodes.Ldarg_0);
+                _il.Emit(OpCodes.Ldfld, enumeratorField);
+                _il.Emit(OpCodes.Callvirt, _types.GetMethodNoParams(_types.IEnumerator, "MoveNext"));
+                _il.Emit(OpCodes.Stloc, moved);
+                var noValue = _il.DefineLabel();
+                _il.Emit(OpCodes.Ldloc, moved);
+                _il.Emit(OpCodes.Brfalse, noValue);
+                _il.Emit(OpCodes.Ldarg_0);
+                _il.Emit(OpCodes.Ldfld, enumeratorField);
+                _il.Emit(OpCodes.Callvirt, _types.GetPropertyGetter(_types.IEnumerator, "Current"));
+                _il.Emit(OpCodes.Stloc, value);
+                _il.MarkLabel(noValue);
+            }, caught, exceptionPresent);
+            _il.Emit(OpCodes.Ldloc, exceptionPresent);
+            _il.Emit(OpCodes.Brtrue, afterTry);
+            _il.Emit(OpCodes.Ldloc, moved);
+            _il.Emit(OpCodes.Brfalse, endLabel);
+            SetClosePending(true);
+            EmitStoreLoopVariable(loopVarLocal, GetBindingStorageName(f, f.Variable.Lexeme),
+                () => _il.Emit(OpCodes.Ldloc, value));
+            EmitScopedTryBodyWithYields(body, caught, exceptionPresent, afterTry);
+            _il.Emit(OpCodes.Ldloc, exceptionPresent);
+            _il.Emit(OpCodes.Brtrue, afterTry);
+            _il.MarkLabel(continueLabel);
+            _il.Emit(OpCodes.Br, startLabel);
+            _il.MarkLabel(endLabel);
+            ExitLoop();
+        }, exceptionPresent =>
+        {
+            var complete = _il.DefineLabel();
+            _il.Emit(OpCodes.Ldarg_0);
+            _il.Emit(OpCodes.Ldfld, closePending);
+            _il.Emit(OpCodes.Brfalse, complete);
+            SetClosePending(false);
+            _il.Emit(OpCodes.Ldarg_0);
             _il.Emit(OpCodes.Ldfld, enumeratorField);
-            _il.Emit(OpCodes.Callvirt, _types.GetPropertyGetter(_types.IEnumerator, "Current"));
+            _il.Emit(OpCodes.Ldloc, exceptionPresent);
+            _il.Emit(OpCodes.Ldarg_0);
+            _il.Emit(OpCodes.Ldfld, GetPendingExitField());
+            _il.Emit(OpCodes.Ldc_I4, ExitCodeThrow);
+            _il.Emit(OpCodes.Ceq);
+            _il.Emit(OpCodes.Or);
+            _il.Emit(OpCodes.Call, _ctx!.Runtime!.IteratorProtocol.Close);
+            _il.MarkLabel(complete);
         });
-
-        // Emit body
-        EmitStatement(f.Body);
-
-        _il.MarkLabel(continueLabel);
-        _il.Emit(OpCodes.Br, startLabel);
-
-        _il.MarkLabel(endLabel);
-        ExitLoop();
     }
 
     #endregion
@@ -264,7 +240,7 @@ public partial class GeneratorMoveNextEmitter
         _il.Emit(OpCodes.Ldloc, sourceTemp);
         _il.Emit(OpCodes.Stfld, sourceField);
         _il.Emit(OpCodes.Ldloc, sourceTemp);
-        _il.Emit(OpCodes.Call, _ctx!.Runtime!.ObjectKeys.Keys);
+        _il.Emit(OpCodes.Call, _ctx!.Runtime!.ObjectKeys.ForIn);
         var keysTemp = _il.DeclareLocal(_types.ListOfObject);
         _il.Emit(OpCodes.Stloc, keysTemp);
         _il.Emit(OpCodes.Ldarg_0);

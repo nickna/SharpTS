@@ -7,7 +7,7 @@ public partial class RuntimeEmitter
 {
     private void EmitCanonicalStaticStorageAttribute(ModuleBuilder module, EmittedClassInitializationRuntime initialization)
     {
-        var type = module.DefineType("$CanonicalStaticStorage",
+        var type = EmitTypeDefinitions.DefineType(module, "$CanonicalStaticStorage",
             TypeAttributes.Public | TypeAttributes.Sealed | TypeAttributes.BeforeFieldInit, typeof(Attribute));
         var constructor = type.DefineConstructor(MethodAttributes.Public, CallingConventions.Standard, Type.EmptyTypes);
         var il = constructor.GetILGenerator();
@@ -41,15 +41,19 @@ public partial class RuntimeEmitter
             var constructorOwner = il.DeclareLocal(_types.Type);
             il.Emit(OpCodes.Ldarg_0);
             il.Emit(OpCodes.Stloc, constructorOwner);
-            var initializedOwner = EmitStaticMemberLookupOwner(il, constructorOwner, userClassInterface);
+            var initializedOwner = EmitStaticMemberLookupOwner(il, constructorOwner, userClassInterface, initialization.SourceOwners);
             il.Emit(OpCodes.Ldloc, initializedOwner);
             il.Emit(OpCodes.Starg_S, (byte)0);
 
             il.BeginExceptionBlock();
             il.Emit(OpCodes.Ldarg_0);
-            il.Emit(OpCodes.Callvirt,
-                typeof(Type).GetProperty(nameof(Type.TypeHandle))!.GetGetMethod()!);
-            il.Emit(OpCodes.Call, _types.RuntimeHelpersRunClassConstructor);
+            if (initialization.NativeInitializer is not null) il.Emit(OpCodes.Call, initialization.NativeInitializer);
+            else
+            {
+                il.Emit(OpCodes.Callvirt,
+                    typeof(Type).GetProperty(nameof(Type.TypeHandle))!.GetGetMethod()!);
+                il.Emit(OpCodes.Call, _types.RuntimeHelpersRunClassConstructor);
+            }
             il.Emit(OpCodes.Leave, returnLabel);
 
             il.BeginCatchBlock(typeof(TypeInitializationException));

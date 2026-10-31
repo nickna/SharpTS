@@ -80,6 +80,10 @@ public partial class ILCompiler
             // Compilation-wide services
             Runtime = _runtime,
             ProgramType = _programType,
+            NativeClassInitialization = GetNativeClassInitialization(),
+            NativeClrAdmission = _nativeClrAdmission,
+            NativeSourceTypeNames = _nativeSourceTypeNames,
+            NativeClosedFamilies = _nativeClosedFamilies,
             GetStaticReceiverCall = GetOrCreateStaticReceiverCall,
             RuntimeFeatures = _features,
             LexicalTdzNames = _lexicalBindingNames,
@@ -93,6 +97,8 @@ public partial class ILCompiler
             BuiltInModuleEmitterRegistry = _builtInModuleEmitterRegistry,
             BuiltInModuleNamespaces = _builtInModuleNamespaces,
             BuiltInModuleMethodBindings = GetCurrentBuiltInMethodBindings(),
+            NativeModuleConstructorBindings = _nativeModuleConstructorBindings,
+            NativeModuleNamespaceBindings = _nativeModuleNamespaceBindings,
             ImportedNames = _importedNames,
             TopLevelNumericConstantValues = _topLevelNumericConstantValues,
             ClassExprBuilders = _classExprs.Builders,
@@ -193,7 +199,7 @@ public partial class ILCompiler
             ctx.CurrentClassBuilder = _classExprs.Builders[owner.Expression];
             ctx.ClassDefinitionOwnerField = owner.Definition;
             ctx.IsStaticSuperContext = owner.IsStatic;
-            ctx.GuestThisVariableName = "__this";
+            ctx.GuestThisVariableName = CompilationContext.ThisParameterName;
             foreach (var parameter in owner.Expression.TypeParams ?? [])
                 ctx.GenericTypeParameters[parameter.Name.Lexeme] = _types.Object;
         }
@@ -300,6 +306,10 @@ public partial class ILCompiler
             FunctionLengths = parentCtx.FunctionLengths,
             FunctionNames = parentCtx.FunctionNames,
             FunctionGenericParameters = parentCtx.FunctionGenericParameters,
+            NativeClassInitialization = parentCtx.NativeClassInitialization,
+            NativeClrAdmission = parentCtx.NativeClrAdmission,
+            NativeSourceTypeNames = parentCtx.NativeSourceTypeNames,
+            NativeClosedFamilies = parentCtx.NativeClosedFamilies,
             TypeMap = parentCtx.TypeMap,
             CheckedClassNames = parentCtx.CheckedClassNames,
             ScopedClassNames = parentCtx.ScopedClassNames,
@@ -310,6 +320,7 @@ public partial class ILCompiler
             AsyncArrowParentBuilders = _async.ArrowParentBuilders,
             // Inherit module support from parent context
             CurrentModulePath = parentCtx.CurrentModulePath,
+            CurrentNamespacePath = parentCtx.CurrentNamespacePath,
             ModuleNames = parentCtx.ModuleNames,
             ClassToModule = parentCtx.ClassToModule,
             FunctionToModule = parentCtx.FunctionToModule,
@@ -394,6 +405,7 @@ public partial class ILCompiler
     /// <summary>Applies the compilation's definition→module maps.</summary>
     private void ApplyModuleMaps(CompilationContext ctx)
     {
+        ctx.ModuleNamespaceMethods = _moduleGetNamespaceMethods;
         ctx.ClassToModule = _modules.ClassToModule;
         ctx.FunctionToModule = _modules.FunctionToModule;
         ctx.EnumToModule = _modules.EnumToModule;
@@ -425,6 +437,7 @@ public partial class ILCompiler
     {
         ctx.ModuleResolver = _modules.Resolver;
         ctx.ModuleExportFields = _modules.ExportFields;
+        ctx.ModuleNamespaceMethods = _moduleGetNamespaceMethods;
         ctx.ModuleInitMethods = _modules.InitMethods;
         ctx.ModuleImportFields = _modules.ImportFields;
         ctx.ModuleTypes = _modules.Types;

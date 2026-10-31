@@ -11,7 +11,7 @@ namespace SharpTS.Runtime.Types;
 /// It contains references to all built-in globals (Math, console, JSON, etc.) and provides
 /// self-reference (globalThis.globalThis === globalThis).
 /// </remarks>
-public sealed class SharpTSGlobalThis : ISharpTSPropertyAccessor
+public sealed partial class SharpTSGlobalThis : ISharpTSPropertyAccessor
 {
     /// <summary>
     /// Process-wide template instance, retained as a fallback (and the
@@ -28,6 +28,7 @@ public sealed class SharpTSGlobalThis : ISharpTSPropertyAccessor
     /// </summary>
     private readonly SharpTSObject _properties = new([]);
     private readonly HashSet<string> _deletedProperties = new(StringComparer.Ordinal);
+    private HashSet<string>? _vmWrittenProperties;
     private readonly Func<string, object?>? _realmIntrinsicResolver;
 
     // internal (not private) so each Interpreter can construct its own realm
@@ -45,13 +46,19 @@ public sealed class SharpTSGlobalThis : ISharpTSPropertyAccessor
     /// built-in globals.
     /// </summary>
     public bool HasUserProperty(string name)
-        => _properties.HasProperty(name) || _properties.HasSetter(name);
+        => ContextDescriptor(name) is not null || _properties.HasProperty(name) || _properties.HasSetter(name);
 
     internal bool IsDeletedProperty(string name) => _deletedProperties.Contains(name);
 
     internal bool TryGetUserAccessor(
         string name, out ISharpTSCallable? getter, out ISharpTSCallable? setter)
     {
+        if (ContextDescriptor(name) is { } descriptor && (descriptor.HasGet || descriptor.HasSet))
+        {
+            getter = _vmContext!.HasExternalStorage ? VmContext.ReadContextAccessor(descriptor.RawGet ?? descriptor.Get) : descriptor.Get;
+            setter = _vmContext!.HasExternalStorage ? VmContext.ReadContextAccessor(descriptor.RawSet ?? descriptor.Set) : descriptor.Set;
+            return true;
+        }
         getter = _properties.GetGetter(name);
         setter = _properties.GetSetter(name);
         return getter is not null || setter is not null;
@@ -64,7 +71,7 @@ public sealed class SharpTSGlobalThis : ISharpTSPropertyAccessor
         // merge as ordinary objects. Preserve omitted attributes explicitly here;
         // global declarations can pre-populate the backing slot before a later
         // Object.defineProperties attribute-only update reaches this facade.
-        if (_properties.GetOwnPropertyDescriptor(name) is { } current)
+        if ((ContextDescriptor(name) ?? _properties.GetOwnPropertyDescriptor(name)) is { } current)
         {
             if (!descriptor.HasWritable && !current.HasGet && !current.HasSet)
             {
@@ -82,11 +89,42 @@ public sealed class SharpTSGlobalThis : ISharpTSPropertyAccessor
                 descriptor.HasConfigurable = true;
             }
         }
-        return _properties.DefineProperty(name, descriptor);
+        bool applied;
+        if (_vmContext is { } context)
+        {
+            bool contextApplied = context.Define(name, descriptor);
+            if (contextApplied)
+            {
+                _properties.MirrorCompletedPropertyDefinition(name, context.GetDescriptor(name)!);
+                applied = true;
+            }
+            else applied = context.GetDescriptor(name) is null && _properties.DefineProperty(name, descriptor);
+        }
+        else applied = _properties.DefineProperty(name, descriptor);
+        if (applied)
+        {
+            _vmWrittenProperties?.Add(name);
+        }
+        return applied;
     }
 
     internal SharpTSPropertyDescriptor? GetOwnPropertyDescriptor(string name)
     {
+        if (ContextDescriptor(name) is { } contextDescriptor)
+        {
+            if (contextDescriptor.HasValue) contextDescriptor.Value = VmContext.ReadContextValue(contextDescriptor.Value);
+            if (_vmContext!.HasExternalStorage && contextDescriptor.HasGet)
+            {
+                contextDescriptor.Get = VmContext.ReadContextAccessor(contextDescriptor.RawGet ?? contextDescriptor.Get);
+                contextDescriptor.RawGet = contextDescriptor.Get ?? (object)SharpTSUndefined.Instance;
+            }
+            if (_vmContext!.HasExternalStorage && contextDescriptor.HasSet)
+            {
+                contextDescriptor.Set = VmContext.ReadContextAccessor(contextDescriptor.RawSet ?? contextDescriptor.Set);
+                contextDescriptor.RawSet = contextDescriptor.Set ?? (object)SharpTSUndefined.Instance;
+            }
+            return contextDescriptor;
+        }
         if (_properties.GetOwnPropertyDescriptor(name) is { } userDescriptor)
             return userDescriptor;
         if (!HasProperty(name)) return null;
@@ -132,11 +170,8 @@ public sealed class SharpTSGlobalThis : ISharpTSPropertyAccessor
     /// </returns>
     public object? GetProperty(string name)
     {
-        // Self-reference: globalThis.globalThis === globalThis
-        if (name == "globalThis")
-        {
-            return this;
-        }
+        if (ContextDescriptor(name) is { } contextDescriptor)
+            return contextDescriptor.HasValue ? VmContext.ReadContextValue(contextDescriptor.Value) : SharpTSUndefined.Instance;
 
         // Check user-assigned properties first
         if (_properties.Fields.TryGetValue(name, out var value))
@@ -148,9 +183,13 @@ public sealed class SharpTSGlobalThis : ISharpTSPropertyAccessor
         if (_deletedProperties.Contains(name))
             return SharpTSUndefined.Instance;
 
+        // The default self property is mutable and configurable. An actual
+        // own override or deletion above takes precedence over this value.
+        if (name == "globalThis") return this;
+
         // An Interpreter-backed global object resolves mutable intrinsics from
         // its owning realm so bare `Error` and `globalThis.Error` share identity.
-        if (_realmIntrinsicResolver?.Invoke(name) is { } realmIntrinsic)
+        if (ResolveIntrinsic(name) is { } realmIntrinsic)
         {
             return realmIntrinsic;
         }
@@ -241,20 +280,88 @@ public sealed class SharpTSGlobalThis : ISharpTSPropertyAccessor
     /// <param name="value">The value to set.</param>
     public void SetProperty(string name, object? value)
     {
-        _deletedProperties.Remove(name);
-        _properties.SetProperty(name, value);
+        if (_vmContext is { } context)
+        {
+            if (RejectsVmInternalDataWrite(name)) return;
+            bool applied = context.Set(name, value);
+            if (applied && !_properties.HasProperty(name))
+            {
+                var descriptor = context.GetDescriptor(name)!;
+                descriptor.Value = value;
+                descriptor.HasValue = true;
+                applied = _properties.DefineProperty(name, descriptor);
+            }
+            else if (applied || context.GetDescriptor(name) is null)
+                applied = _properties.TrySetProperty(name, value);
+            if (!applied) return;
+        }
+        else
+        {
+            _deletedProperties.Remove(name);
+            _properties.SetProperty(name, value);
+        }
+        if (_vmContext is not null) _deletedProperties.Remove(name);
+        _vmWrittenProperties?.Add(name);
     }
 
     internal bool DeleteProperty(string name)
     {
-        if (HasUserProperty(name) && !_properties.DeleteProperty(name))
+        if (_vmContext is { } context)
+        {
+            if (!context.Delete(name)) return false;
+        }
+        if (_properties.HasProperty(name) && !_properties.DeleteProperty(name))
             return false;
         _deletedProperties.Add(name);
         return true;
     }
 
+    internal IEnumerable<string> VmDeletedProperties =>
+        _vmWrittenProperties is null ? []
+            : _vmContext is not null
+                ? _deletedProperties.Where(name => ContextDescriptor(name) is null)
+                : _deletedProperties;
+
     internal IEnumerable<string> OwnEnumerableKeys()
-        => _properties.OwnEnumerableKeys();
+        => _vmContext is not null
+            ? OwnStringKeys().Where(name => GetOwnPropertyDescriptor(name) is { Enumerable: true })
+            : _properties.OwnEnumerableKeys();
+
+    internal IEnumerable<string> OwnStringKeys()
+    {
+        if (_vmContext is not { } context) return _properties.OwnVisibleStringKeys();
+
+        // A contextified global preserves the two stores' ordering separately:
+        // internal indices, sandbox-only indices, internal names, sandbox-only names.
+        // Each actual store already orders its own indices and creation-ordered names.
+        var internalKeys = _properties.OwnVisibleStringKeys().ToArray();
+        var contextKeys = context.OwnNames().ToArray();
+        return internalKeys.Where(IsIndex)
+            .Concat(contextKeys.Where(IsIndex))
+            .Concat(internalKeys.Where(name => !IsIndex(name)))
+            .Concat(contextKeys.Where(name => !IsIndex(name)))
+            .Distinct(StringComparer.Ordinal);
+
+        static bool IsIndex(string name) => PropertySemantics.TryGetArrayIndex(name, out _);
+    }
+
+    internal IEnumerable<KeyValuePair<string, object?>> UserOwnDataProperties()
+    {
+        foreach (var name in _properties.PropertyNames)
+            if (_vmWrittenProperties is null || _vmWrittenProperties.Contains(name))
+            {
+                if (ContextDescriptor(name) is { } live)
+                {
+                    if (live.HasValue) yield return new(name, VmContext.ReadContextValue(live.Value));
+                }
+                else if (_properties.GetOwnPropertyDescriptor(name) is { HasValue: true } descriptor)
+                    yield return new(name, descriptor.Value);
+            }
+    }
+
+    // Uninitialized var bindings exist inside the VM global, but Node does
+    // not publish them onto the context object until a write actually occurs.
+    internal void BeginVmWriteTracking() => _vmWrittenProperties = new(StringComparer.Ordinal);
 
     /// <summary>
     /// Checks if a property exists on globalThis.
@@ -263,11 +370,17 @@ public sealed class SharpTSGlobalThis : ISharpTSPropertyAccessor
     /// <returns>True if the property exists (either user-assigned or built-in).</returns>
     public bool HasProperty(string name)
     {
-        if (name == "globalThis") return true;
-        if (HasUserProperty(name)) return true;
-        if (_deletedProperties.Contains(name)) return false;
+        if (ContextDescriptor(name) is not null) return true;
+        return HasInternalProperty(name);
+    }
 
-        if (_realmIntrinsicResolver?.Invoke(name) is not null) return true;
+    private bool HasInternalProperty(string name)
+    {
+        if (_properties.HasProperty(name) || _properties.HasSetter(name)) return true;
+        if (_deletedProperties.Contains(name)) return false;
+        if (name == "globalThis") return true;
+
+        if (ResolveIntrinsic(name) is not null) return true;
 
         // Check if it's a built-in singleton
         var singleton = BuiltInRegistry.Instance.GetSingleton(name);
@@ -290,6 +403,9 @@ public sealed class SharpTSGlobalThis : ISharpTSPropertyAccessor
     {
         get
         {
+            if (_vmContext is { } context)
+                foreach (var key in context.OwnNames())
+                    yield return key;
             foreach (var key in _properties.PropertyNames)
                 yield return key;
             // Also include well-known globals

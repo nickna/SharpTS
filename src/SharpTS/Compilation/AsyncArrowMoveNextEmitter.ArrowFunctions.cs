@@ -63,12 +63,11 @@ public partial class AsyncArrowMoveNextEmitter
         // Follow-up to #838: if this sync arrow routes a captured write through THIS async arrow's own
         // function DC, share the reference: dc.$functionDC = this.<>__functionDC. The arrow body then
         // reads/writes that local through $functionDC (verifiable) instead of a by-value snapshot.
-        if (_ctx.ArrowFunctionDCFields?.TryGetValue(af, out var functionDCField) == true &&
-            _builder.FunctionDCField != null)
+        if (_ctx.ArrowFunctionDCFields?.TryGetValue(af, out var functionDCField) == true)
         {
             _il.Emit(OpCodes.Dup);
-            _il.Emit(OpCodes.Ldarg_0);
-            _il.Emit(OpCodes.Ldfld, _builder.FunctionDCField);
+            StandaloneAsyncCaptureEmitter.EmitOwnerReference(_il, _ctx,
+                functionDCField.FieldType, functionDCField.Name, _builder);
             _il.Emit(OpCodes.Stfld, functionDCField);
         }
 
@@ -85,6 +84,7 @@ public partial class AsyncArrowMoveNextEmitter
         // Populate captured fields from async arrow state machine context
         foreach (var (capturedVar, field) in fieldMap)
         {
+            var captureSource = PivotCaptureSource(_analysis.BlockScopeCaptureRenames, af, capturedVar);
             _il.Emit(OpCodes.Dup); // Keep display class instance on stack
 
             // Per-iteration cell capture (#650): snapshot the StrongBox REFERENCE, not its
@@ -93,11 +93,11 @@ public partial class AsyncArrowMoveNextEmitter
             else if (capturedVar == CompilationContext.NewTargetCaptureName) EmitNewTargetValue();
             else if (capturedVar == CompilationContext.SuperOwnerCaptureName && TryEmitOwnedClassDefinition()) { }
             else if (LexicalEnvironmentCellAccess.TryEmitCaptureReference(_il, _ctx, af, capturedVar)) { }
-            else if (_ctx.CellBindingLocals.TryGetValue(capturedVar, out var cellLocal))
+            else if (_ctx.CellBindingLocals.TryGetValue(captureSource, out var cellLocal))
                 _il.Emit(OpCodes.Ldloc, cellLocal);
             else
                 // #767: pivot a captured nested-block shadow to its renamed storage (identity otherwise).
-                LoadVariableForCapture(PivotCaptureSource(_analysis.BlockScopeCaptureRenames, af, capturedVar));
+                LoadVariableForCapture(captureSource);
 
             _il.Emit(OpCodes.Stfld, field);
         }

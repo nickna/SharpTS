@@ -180,12 +180,15 @@ public sealed class EmittedObjectPrototypeRuntimeTests
     {
         var ctor = Assert.Single(type.GetConstructors());
         return ctor.Invoke(ctor.GetParameters().Select(p => overrides.TryGetValue(p.Name!, out var value) ? value
+            : p.Name == "NativeProxyRejection" ? runtime.ReflectedMethods.NativeProxyRejection
             : p.Name is "NativeObjectTypes" or "NativeFunctionTypes" ? Array.Empty<Type>()
             : p.Name == "GetProperty" ? runtime.ObjectRead.Property
             : p.Name == "FunctionGetMethodInfo" ? runtime.FunctionValues.GetMethodInfo
             : p.Name == "FunctionPrototypeType" ? runtime.FunctionPrototypes.Type
             : p.Name == "GeneratorKind" ? runtime.GeneratorPrototypes.Kind
             : p.Name == "GeneratorFunctionPrototype" ? runtime.GeneratorPrototypes.FunctionPrototype
+            : p.Name == "NativeArrayType" ? runtime.ArrayStorage.Type
+            : p.Name == "NativePromiseType" ? runtime.Promise?.Type
             : (p.Name switch { "TSFunctionGetOrCreate" => runtime.FunctionConstruction.GetOrCreate, _ => (p.Name switch { "ArgumentsType" => runtime.Arguments.Type, "BoundAnyFunctionType" => runtime.FunctionBindings.AnyType, "BoundTSFunctionType" => runtime.FunctionBindings.BoundType, "FunctionApplyWrapperType" => runtime.FunctionBindings.ApplyType, "FunctionBindWrapperType" => runtime.FunctionBindings.BindType, "FunctionCallWrapperType" => runtime.FunctionBindings.CallType, "TSFunctionType" => runtime.FunctionValues.Type, _ => (p.Name switch { "FunctionPrototypeField" => runtime.FunctionPrototypes.Prototype, "FunctionPrototypePopulateMethod" => runtime.FunctionPrototypes.Populate, _ => (p.Name switch { "InvokeMethodUnwrapped" => runtime.ReflectedMethods.InvokeUnwrapped, _ => (p.Name switch { "InvokeValue" => runtime.Invocation.Value, "InvokeMethodValue" => runtime.Invocation.Method, "InvokeMethodValue0" => runtime.Invocation.Method0, _ => (p.Name! switch { "IHasFieldsInterface" => runtime.ObjectFields.Interface, "UndefinedType" => runtime.Sentinels.UndefinedType, "UndefinedInstance" => runtime.Sentinels.UndefinedInstance, _ => typeof(EmittedRuntime).GetProperty(p.Name!)!.GetValue(runtime) }) }) }) }) }) })).ToArray());
     }
     private static void Fill(object owner, string? missing = null)

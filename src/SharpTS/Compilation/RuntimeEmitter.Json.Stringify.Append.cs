@@ -28,14 +28,16 @@ public partial class RuntimeEmitter
         TypeBuilder TSSymbolType,
         ConstructorBuilder TSTypeErrorCtor,
         MethodBuilder TypeOf,
-        Type UndefinedType
+        Type UndefinedType,
+        MethodInfo? NativeProxyRejection
     );
 
     private readonly record struct AppendJsonArrayInputs(EmittedArrayStorageRuntime ArrayStorage);
 
     private readonly record struct AppendJsonObjectInputs(
         EmittedDescriptorStorageRuntime DescriptorStorage,
-        MethodBuilder GetKeys
+        MethodBuilder GetKeys,
+        MethodBuilder GetProperty
     );
 
 
@@ -271,7 +273,7 @@ public partial class RuntimeEmitter
             il,
             valueLocal,
             notProxy,
-            new ProxyMaterializeForJsonInputs(inputs.InvokeMethodUnwrapped)
+            new ProxyMaterializeForJsonInputs(inputs.InvokeMethodUnwrapped, NativeProxyRejection: inputs.NativeProxyRejection)
         );
         il.Emit(OpCodes.Ldc_I4_0);
         il.Emit(OpCodes.Stloc, allowPooledKeysLocal);
@@ -369,18 +371,10 @@ public partial class RuntimeEmitter
             valueLocal,
             allowPooledKeysLocal,
             json,
-            new AppendJsonObjectInputs(inputs.DescriptorStorage, inputs.GetKeys)
+            new AppendJsonObjectInputs(inputs.DescriptorStorage, inputs.GetKeys, inputs.GetProperty)
         );
 
         il.MarkLabel(classLabel);
-        var fieldsLocal = il.DeclareLocal(_types.DictionaryStringObject);
-        il.Emit(OpCodes.Ldloc, valueLocal);
-        il.Emit(OpCodes.Call, inputs.TSObjectMergeEnumerable);
-        il.Emit(OpCodes.Stloc, fieldsLocal);
-        il.Emit(OpCodes.Ldloc, fieldsLocal);
-        il.Emit(OpCodes.Brfalse, regexpLabel);
-        il.Emit(OpCodes.Ldloc, fieldsLocal);
-        il.Emit(OpCodes.Stloc, valueLocal);
         il.Emit(OpCodes.Ldc_I4_0);
         il.Emit(OpCodes.Stloc, allowPooledKeysLocal);
         il.Emit(OpCodes.Br, objectLabel);
@@ -523,7 +517,7 @@ public partial class RuntimeEmitter
         var snapshotReady = il.DefineLabel();
 
         il.Emit(OpCodes.Ldloc, valueLocal);
-        il.Emit(OpCodes.Castclass, _types.DictionaryStringObject);
+        il.Emit(OpCodes.Isinst, _types.DictionaryStringObject);
         il.Emit(OpCodes.Stloc, dictLocal);
         il.Emit(OpCodes.Ldloc, allowPooledKeysLocal);
         il.Emit(OpCodes.Brfalse, fallbackSnapshot);
@@ -589,9 +583,7 @@ public partial class RuntimeEmitter
             [_types.String, _types.Object.MakeByRefType()])!);
         il.Emit(OpCodes.Brtrue, valueReady);
         il.MarkLabel(generalRead);
-        il.Emit(OpCodes.Ldloc, dictLocal);
-        il.Emit(OpCodes.Ldloc, keyLocal);
-        il.Emit(OpCodes.Call, json.GetDictionaryProperty!);
+        EmitJsonObjectPropertyRead(il, dictLocal, valueLocal, keyLocal, json, inputs.GetProperty);
         il.Emit(OpCodes.Stloc, dictValueLocal);
         il.MarkLabel(valueReady);
 

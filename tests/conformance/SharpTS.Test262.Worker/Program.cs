@@ -97,7 +97,7 @@ StreamWriter? trace = null;
 }
 void TraceLog(string format, params object[] args)
 {
-    trace?.WriteLine($"{DateTime.UtcNow:HH:mm:ss.fff} {string.Format(format, args)}");
+    Test262TraceWriter.WriteLine(trace, format, args);
 }
 TraceLog("startup pid={0} mode={1} timeout={2}s", Environment.ProcessId, mode, timeoutSeconds);
 

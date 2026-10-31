@@ -201,7 +201,7 @@ public partial class ILCompiler
             foreach (var info in _closures.GeneratorExpressions.Values)
             {
                 _modules.CurrentPath = NormalizeToEmissionPath(_arrowToModule.GetValueOrDefault(info.Source));
-                _currentNamespacePath = null;
+                _currentNamespacePath = _arrowToNamespace.GetValueOrDefault(info.Source);
                 EmitIteratorExpressionStub(info);
 
                 if (info.StateMachine is GeneratorStateMachineBuilder sync)
@@ -232,6 +232,7 @@ public partial class ILCompiler
     private CompilationContext CreateGeneratorExpressionBodyContext(GeneratorExpressionCompilation info, MethodBuilder method)
     {
         var context = CreateModuleMemberContext(method.GetILGenerator(), method);
+        ApplyIteratorParameterCaptureCells(context, (IIteratorStateMachineBuilder)info.StateMachine);
         context.CurrentGeneratorExpression = info;
         context.IsStrictMode = _strictArrows.Contains(info.Source) || _isStrictMode
             || BodyDeclaresUseStrict(info.Source.BlockBody);

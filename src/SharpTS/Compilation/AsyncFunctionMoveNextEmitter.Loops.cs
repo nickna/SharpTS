@@ -42,7 +42,7 @@ public abstract partial class AsyncFunctionMoveNextEmitter
         IL.Emit(OpCodes.Stfld, receiverField);
         IL.Emit(OpCodes.Ldarg_0);
         IL.Emit(OpCodes.Ldloc, receiver);
-        IL.Emit(OpCodes.Call, Ctx.Runtime!.ObjectKeys.Keys);
+        IL.Emit(OpCodes.Call, Ctx.Runtime!.ObjectKeys.ForIn);
         IL.Emit(OpCodes.Stfld, keysField);
         IL.Emit(OpCodes.Ldarg_0);
         IL.Emit(OpCodes.Ldc_I4_0);

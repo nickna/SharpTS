@@ -6,12 +6,16 @@ namespace SharpTS.Compilation;
 
 public partial class RuntimeEmitter
 {
-    private readonly record struct PrepareApplyArgumentsInputs(
+    private readonly record struct ArrayLikeArgumentsInputs(
         MethodInfo TypeOf,
         MethodInfo GetProperty,
         MethodInfo GetIndex,
         MethodInfo ToNumber,
-        Type UndefinedType,
+        MethodInfo CreateException,
+        ConstructorInfo TypeErrorConstructor);
+
+    private readonly record struct CallableValidationInputs(
+        MethodInfo TypeOf,
         Type ReflectedCallableType,
         Type? BoundTypedArrayMethodType,
         Type? TextDecodeMethodType,
@@ -19,6 +23,9 @@ public partial class RuntimeEmitter
         Type? StreamWriteCallbackType,
         MethodInfo CreateException,
         ConstructorInfo TypeErrorConstructor);
+
+    private readonly record struct PrepareApplyArgumentsInputs(
+        CallableValidationInputs Callable, Type UndefinedType, MethodInfo FromArrayLike);
 
     private void DefinePrepareApplyArguments(
         TypeBuilder typeBuilder, EmittedFunctionPrototypeRuntime functionPrototypes)
@@ -32,18 +39,32 @@ public partial class RuntimeEmitter
         EmittedFunctionPrototypeRuntime functionPrototypes, PrepareApplyArgumentsInputs inputs)
     {
         var il = functionPrototypes.PrepareApplyArguments.GetILGenerator();
-        var callable = il.DefineLabel();
         var empty = il.DefineLabel();
-        var objectList = il.DefineLabel();
-        var boundedLength = il.DefineLabel();
-        var haveLength = il.DefineLabel();
-        var loop = il.DefineLabel();
-        var done = il.DefineLabel();
-        var listKind = il.DeclareLocal(_types.String);
-        var numericLength = il.DeclareLocal(_types.Double);
-        var length = il.DeclareLocal(_types.Int64);
-        var index = il.DeclareLocal(_types.Int64);
-        var values = il.DeclareLocal(_types.ListOfObject);
+
+        EmitRequireCallable(il, inputs.Callable, () => il.Emit(OpCodes.Ldarg_0),
+            "Function.prototype.apply called on a non-callable value");
+
+        // Function.prototype.apply permits nullish lists; Reflect does not.
+        il.Emit(OpCodes.Ldarg_1);
+        il.Emit(OpCodes.Brfalse, empty);
+        il.Emit(OpCodes.Ldarg_1);
+        il.Emit(OpCodes.Isinst, inputs.UndefinedType);
+        il.Emit(OpCodes.Brtrue, empty);
+        il.Emit(OpCodes.Ldarg_1);
+        il.Emit(OpCodes.Call, inputs.FromArrayLike);
+        il.Emit(OpCodes.Ret);
+
+        il.MarkLabel(empty);
+        il.Emit(OpCodes.Ldc_I4_0);
+        il.Emit(OpCodes.Newarr, _types.Object);
+        il.Emit(OpCodes.Ret);
+        functionPrototypes.MarkPrepareApplyArgumentsBodyEmitted();
+    }
+
+    private void EmitRequireCallable(ILGenerator il, CallableValidationInputs inputs,
+        Action loadTarget, string message)
+    {
+        var callable = il.DefineLabel();
         var stringEquals = _types.GetMethod(_types.String, "op_Equality", _types.String, _types.String);
 
         // IsCallable must precede every observable read from the argument list.
@@ -56,27 +77,41 @@ public partial class RuntimeEmitter
                      inputs.TransformDoneCallbackType, inputs.StreamWriteCallbackType })
         {
             if (callableType is null) continue;
-            il.Emit(OpCodes.Ldarg_0);
+            loadTarget();
             il.Emit(OpCodes.Isinst, callableType);
             il.Emit(OpCodes.Brtrue, callable);
         }
-        il.Emit(OpCodes.Ldarg_0);
+        loadTarget();
         il.Emit(OpCodes.Call, inputs.TypeOf);
         il.Emit(OpCodes.Ldstr, "function");
         il.Emit(OpCodes.Call, stringEquals);
         il.Emit(OpCodes.Brtrue, callable);
         GuestErrorEmitter.ThrowError(il, inputs.CreateException, inputs.TypeErrorConstructor,
-            "Function.prototype.apply called on a non-callable value");
+            message);
         il.MarkLabel(callable);
+    }
 
-        il.Emit(OpCodes.Ldarg_1);
-        il.Emit(OpCodes.Brfalse, empty);
-        il.Emit(OpCodes.Ldarg_1);
-        il.Emit(OpCodes.Isinst, inputs.UndefinedType);
-        il.Emit(OpCodes.Brtrue, empty);
+    private void EmitArrayLikeArguments(EmittedCallArgumentsRuntime arguments, ArrayLikeArgumentsInputs inputs)
+    {
+        var il = arguments.FromArrayLike.GetILGenerator();
+        var empty = il.DefineLabel();
+        var objectList = il.DefineLabel();
+        var invalidList = il.DefineLabel();
+        var boundedLength = il.DefineLabel();
+        var haveLength = il.DefineLabel();
+        var loop = il.DefineLabel();
+        var done = il.DefineLabel();
+        var listKind = il.DeclareLocal(_types.String);
+        var numericLength = il.DeclareLocal(_types.Double);
+        var length = il.DeclareLocal(_types.Int64);
+        var index = il.DeclareLocal(_types.Int64);
+        var values = il.DeclareLocal(_types.ListOfObject);
+        var stringEquals = _types.GetMethod(_types.String, "op_Equality", _types.String, _types.String);
 
         // CreateListFromArrayLike requires an object; primitive strings do not qualify.
-        il.Emit(OpCodes.Ldarg_1);
+        il.Emit(OpCodes.Ldarg_0);
+        il.Emit(OpCodes.Brfalse, invalidList);
+        il.Emit(OpCodes.Ldarg_0);
         il.Emit(OpCodes.Call, inputs.TypeOf);
         il.Emit(OpCodes.Stloc, listKind);
         il.Emit(OpCodes.Ldloc, listKind);
@@ -87,13 +122,14 @@ public partial class RuntimeEmitter
         il.Emit(OpCodes.Ldstr, "function");
         il.Emit(OpCodes.Call, stringEquals);
         il.Emit(OpCodes.Brtrue, objectList);
+        il.MarkLabel(invalidList);
         GuestErrorEmitter.ThrowError(il, inputs.CreateException, inputs.TypeErrorConstructor,
-            "Function.prototype.apply requires an array-like object");
+            "Argument list must be an array-like object");
         il.MarkLabel(objectList);
 
         // Read length and coerce it exactly once. Abstract ToNumber rejects BigInt,
         // unlike the separate Number() conversion helper.
-        il.Emit(OpCodes.Ldarg_1);
+        il.Emit(OpCodes.Ldarg_0);
         il.Emit(OpCodes.Ldstr, "length");
         il.Emit(OpCodes.Call, inputs.GetProperty);
         il.Emit(OpCodes.Call, inputs.ToNumber);
@@ -126,7 +162,7 @@ public partial class RuntimeEmitter
         il.Emit(OpCodes.Ldloc, length);
         il.Emit(OpCodes.Bge, done);
         il.Emit(OpCodes.Ldloc, values);
-        il.Emit(OpCodes.Ldarg_1);
+        il.Emit(OpCodes.Ldarg_0);
         il.Emit(OpCodes.Ldloca, index);
         il.Emit(OpCodes.Call, _types.GetProperty(typeof(CultureInfo), "InvariantCulture").GetGetMethod()!);
         il.Emit(OpCodes.Call, _types.GetMethod(_types.Int64, "ToString", typeof(IFormatProvider)));
@@ -146,6 +182,5 @@ public partial class RuntimeEmitter
         il.Emit(OpCodes.Ldc_I4_0);
         il.Emit(OpCodes.Newarr, _types.Object);
         il.Emit(OpCodes.Ret);
-        functionPrototypes.MarkPrepareApplyArgumentsBodyEmitted();
     }
 }

@@ -37,5 +37,7 @@
       which is intentionally NOT linked.
     -->
     <Compile Include="..\SharpTS\Configuration\TsConfigJson.cs" Link="TsConfigJson.cs" />
+    <Compile Include="..\SharpTS\Compilation\NativeReferenceManifest.cs" Link="NativeReferenceManifest.cs" />
+    <Compile Include="..\SharpTS\Compilation\NativeReferenceFileName.cs" Link="NativeReferenceFileName.cs" />
   </ItemGroup>
 </Project>

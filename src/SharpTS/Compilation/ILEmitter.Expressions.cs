@@ -38,12 +38,14 @@ public partial class ILEmitter
         }
     }
 
-    internal void EmitConstructorParameterProperty(Stmt statement)
+    internal void EmitConstructorParameterProperty(Stmt statement, LocalBuilder? parameterLocal = null)
     {
         var value = ((Expr.Set)((Stmt.Expression)statement).Expr).Value as Expr.Variable
             ?? throw new InvalidOperationException("Expected a synthetic constructor parameter property.");
         var previous = _constructorParameterPropertyValue;
+        var previousLocal = _constructorParameterPropertyLocal;
         _constructorParameterPropertyValue = value;
+        _constructorParameterPropertyLocal = parameterLocal;
         try
         {
             EmitStatement(statement);
@@ -51,6 +53,7 @@ public partial class ILEmitter
         finally
         {
             _constructorParameterPropertyValue = previous;
+            _constructorParameterPropertyLocal = previousLocal;
         }
     }
 
@@ -62,7 +65,7 @@ public partial class ILEmitter
         // the lexical environment containing that super() call.
         if (ReferenceEquals(v, _constructorParameterPropertyValue))
         {
-            SetStackType(_resolver.TryLoadParameter(name)
+            SetStackType(_resolver.TryLoadParameter(name, _constructorParameterPropertyLocal)
                 ?? throw new InvalidOperationException("Constructor parameter property has no parameter binding."));
             return;
         }
@@ -118,9 +121,7 @@ public partial class ILEmitter
             && (name == _ctx.CurrentClassName || name == _ctx.CurrentClassShortName)
             && !HasClassDefinitionCaptureShadow(name))
         {
-            IL.Emit(OpCodes.Ldtoken, _ctx.CurrentClassBuilder);
-            IL.Emit(OpCodes.Call, _ctx.Types.GetMethod(
-                _ctx.Types.Type, "GetTypeFromHandle", _ctx.Types.RuntimeTypeHandle));
+            EmitConstructorTypeValue(_ctx.CurrentClassBuilder, NativeConstructorValueProducerKind.SourceClass);
             SetStackUnknown();
             return;
         }
@@ -203,8 +204,7 @@ public partial class ILEmitter
             // dispatches via InvokeValue's Type-callee branch. Direct
             // `Symbol.iterator` / `Symbol(...)` sites still compile through
             // SymbolStaticEmitter / BuiltInConstructorHandler first.
-            IL.Emit(OpCodes.Ldtoken, _ctx.Runtime!.Symbols.Type);
-            IL.Emit(OpCodes.Call, _ctx.Types.GetMethod(_ctx.Types.Type, "GetTypeFromHandle", _ctx.Types.RuntimeTypeHandle));
+            EmitConstructorTypeValue(_ctx.Runtime!.Symbols.Type, NativeConstructorValueProducerKind.BuiltInConstructor);
             SetStackUnknown();
             return;
         }
@@ -214,8 +214,7 @@ public partial class ILEmitter
             // BigInt is callable but not constructible. Its value-form Type
             // token gives aliases normal function identity/property lookup;
             // direct BigInt(x) calls still use BuiltInConstructorHandler.
-            IL.Emit(OpCodes.Ldtoken, _ctx.Types.BigInteger);
-            IL.Emit(OpCodes.Call, _ctx.Types.GetMethod(_ctx.Types.Type, "GetTypeFromHandle", _ctx.Types.RuntimeTypeHandle));
+            EmitConstructorTypeValue(_ctx.Types.BigInteger, NativeConstructorValueProducerKind.BuiltInConstructor);
             SetStackUnknown();
             return;
         }
@@ -250,6 +249,7 @@ public partial class ILEmitter
         // but must ALSO be addressable as values — lodash caches them: `var freeParseFloat = parseFloat`
         // then calls the alias later). Matches how `fetch` resolves the bare reference above.
         if (TryEmitIndirectEvalValue(name)) return;
+        if (TryEmitGlobalTimerFunctionValue(name)) return;
         if (name == "parseInt" && !_ctx.HasVisibleValueBinding(name))
         {
             EmitGlobalParseIntRead(IL, _ctx);
@@ -258,8 +258,7 @@ public partial class ILEmitter
         }
         if (name is "parseFloat" or "isNaN" or "isFinite"
             or "encodeURIComponent" or "decodeURIComponent"
-            or "setTimeout" or "clearTimeout" or "setInterval" or "clearInterval"
-            or "queueMicrotask" or "structuredClone")
+            or "structuredClone")
         {
             IL.Emit(OpCodes.Ldstr, name);
             IL.Emit(OpCodes.Call, _ctx.Runtime!.GlobalObject.GetProperty);
@@ -288,8 +287,7 @@ public partial class ILEmitter
         // Check if it's a class - load the Type object
         if (_ctx.Classes.TryGetValue(_ctx.ResolveClassName(_ctx.TypeMap?.Get(v), name), out var classType))
         {
-            IL.Emit(OpCodes.Ldtoken, classType);
-            IL.Emit(OpCodes.Call, _ctx.Types.GetMethod(_ctx.Types.Type, "GetTypeFromHandle", _ctx.Types.RuntimeTypeHandle));
+            EmitConstructorTypeValue(classType, NativeConstructorValueProducerKind.SourceClass);
             SetStackUnknown();
             return;
         }
@@ -333,7 +331,8 @@ public partial class ILEmitter
             int arity = _ctx.GetFunctionLength(methodBuilder);
             IL.Emit(OpCodes.Ldstr, _ctx.GetFunctionName(methodBuilder, name));
             IL.Emit(OpCodes.Ldc_I4, arity);  // function length
-            IL.Emit(OpCodes.Call, _ctx.Runtime!.FunctionConstruction.GetOrCreate);
+            NativeSourceFunctionEmission.EmitCachedFactory(IL, _ctx.Types, _ctx.Runtime!, methodBuilder,
+                generics: _ctx.FunctionGenericParameters);
             SetStackUnknown();
             return;
         }
@@ -359,7 +358,9 @@ public partial class ILEmitter
                 IL.Emit(OpCodes.Call, _ctx.Types.MethodBaseGetMethodFromHandle);
             }
             IL.Emit(OpCodes.Castclass, _ctx.Types.MethodInfo);
-            EmitNewobjUnknown(_ctx.Runtime!.FunctionConstruction.Constructor);
+            NativeSourceFunctionEmission.EmitConstructor(IL, _ctx.Types, _ctx.Runtime!, innerFuncMethod,
+                actualOwner: isCapturing ? innerDC : null, generics: _ctx.FunctionGenericParameters);
+            SetStackUnknown();
             return;
         }
 

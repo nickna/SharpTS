@@ -159,6 +159,7 @@ public partial class ILCompiler
         // Create a compilation context for the state machine
         var il = smBuilder.MoveNextAsyncMethod.GetILGenerator();
         var ctx = CreateModuleMemberContext(il, smBuilder.MoveNextAsyncMethod);
+        ApplyIteratorParameterCaptureCells(ctx, smBuilder);
         // Captured top-level variables (entry-point display class)
         ApplyCapturedTopLevelVariableAccess(ctx);
         // Per-arrow $entryPointDC field map so a capturing arrow nested in the async generator body
@@ -240,6 +241,7 @@ public partial class ILCompiler
         // Create context for MoveNextAsync emission
         var il = smBuilder.MoveNextAsyncMethod.GetILGenerator();
         var ctx = CreateModuleMemberContext(il, smBuilder.MoveNextAsyncMethod);
+        ApplyIteratorParameterCaptureCells(ctx, smBuilder);
         ctx.FieldsField = fieldsField;
         ctx.IsInstanceMethod = isInstanceMethod;
         ctx.IsStaticSuperContext = !isInstanceMethod;

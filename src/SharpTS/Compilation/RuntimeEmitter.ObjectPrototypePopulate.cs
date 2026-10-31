@@ -14,7 +14,11 @@ public partial class RuntimeEmitter
         MethodBuilder LookupSetterHelperMethod,
         MethodBuilder PropertyIsEnumerableHelperMethod,
         PrototypeDescriptorInputs PrototypeDescriptors,
-        MethodBuilder TSFunctionGetOrCreate
+        MethodBuilder TSFunctionGetOrCreate,
+        MethodInfo TypeOf,
+        EmittedErrorRuntime Errors,
+        Type UndefinedType,
+        FieldInfo UndefinedInstance
     );
 
     private void DefineObjectPrototypePopulateShell(TypeBuilder typeBuilder, EmittedObjectPrototypeRuntime objectPrototypes)
@@ -47,8 +51,7 @@ public partial class RuntimeEmitter
         var protoDescLocal = il.DeclareLocal(inputs.DescriptorStorage.DescriptorType);
         EmitInstallConstructorDescriptor(il, inputs.PrototypeDescriptors, objectPrototypes.Prototype, protoDescLocal, setItem, () =>
         {
-            il.Emit(OpCodes.Ldtoken, _types.Object);
-            il.Emit(OpCodes.Call, _types.GetMethod(_types.Type, "GetTypeFromHandle", _types.RuntimeTypeHandle));
+            EmitRuntimeConstructorValue(il, _types.Object);
         });
 
         // Wire methods backed by $Runtime helpers. Each wrapper has the
@@ -82,6 +85,8 @@ public partial class RuntimeEmitter
         Wire("__lookupSetter__", inputs.LookupSetterHelperMethod, 1);
         Wire("__defineGetter__", inputs.DefineGetterHelperMethod, 2);
         Wire("__defineSetter__", inputs.DefineSetterHelperMethod, 2);
+
+        EmitLegacyPrototypeAccessor(il, objectPrototypes, inputs, protoDescLocal);
 
         il.Emit(OpCodes.Ret);
         objectPrototypes.MarkPopulateBodyEmitted();

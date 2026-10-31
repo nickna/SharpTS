@@ -77,7 +77,7 @@ public partial class RuntimeEmitter
         // callbacks, can expose a terminate() method — PascalCase reflection
         // lookup finds "Terminate" and invokes it via $TSFunction wrapping.
         EmitReadableStreamTerminateAlias(streamBuilder, closeMethod);
-        var errorMethod = EmitReadableStreamErrorMethod(construction, runtime.RequireWebStreams(), streamBuilder);
+        var errorMethod = EmitReadableStreamErrorMethod(construction, runtime.RequireWebStreams(), streamBuilder, runtime.Errors);
         var desiredSizeMethod = EmitReadableStreamDesiredSizeProperty(construction, runtime.RequireWebStreams(), streamBuilder);
         var readMethod = EmitReadableStreamRead(construction, streamBuilder, errorMethod, runtime);
         runtime.RequireWebStreams().ReadableDrainQueuedChunks = EmitReadableStreamDrainQueuedChunks(construction, runtime.RequireWebStreams(), streamBuilder);
@@ -495,7 +495,7 @@ public partial class RuntimeEmitter
         il.Emit(OpCodes.Ret);
     }
 
-    private MethodBuilder EmitReadableStreamErrorMethod(ReadableStreamConstruction construction, EmittedWebStreamRuntime webStreams, TypeBuilder t)
+    private MethodBuilder EmitReadableStreamErrorMethod(ReadableStreamConstruction construction, EmittedWebStreamRuntime webStreams, TypeBuilder t, EmittedErrorRuntime errors)
     {
         var method = t.DefineMethod(
             "ErrorStream",
@@ -516,7 +516,7 @@ public partial class RuntimeEmitter
         il.Emit(OpCodes.Callvirt, _types.GetMethod(construction.ListOfObject, "Clear")!);
 
         // Reject any parked readers with the stored error.
-        EmitDrainPendingReadsWithError(construction, webStreams, il);
+        EmitDrainPendingReadsWithError(construction, webStreams, il, errors);
 
         il.Emit(OpCodes.Ret);
         return method;
@@ -564,9 +564,9 @@ public partial class RuntimeEmitter
     }
 
     /// <summary>
-    /// Emits: while (_pendingReads.Count &gt; 0) { _pendingReads.Dequeue().TrySetException(new Exception(_storedError?.ToString() ?? "stream errored")); }
+    /// Rejects parked reads while retaining the exact guest error value.
     /// </summary>
-    private void EmitDrainPendingReadsWithError(ReadableStreamConstruction construction, EmittedWebStreamRuntime webStreams, ILGenerator il)
+    private void EmitDrainPendingReadsWithError(ReadableStreamConstruction construction, EmittedWebStreamRuntime webStreams, ILGenerator il, EmittedErrorRuntime errors)
     {
         var loopStart = il.DefineLabel();
         var loopEnd = il.DefineLabel();
@@ -582,20 +582,9 @@ public partial class RuntimeEmitter
         il.Emit(OpCodes.Ldfld, webStreams.ReadablePendingReadsField);
         il.Emit(OpCodes.Callvirt, _types.GetMethod(construction.PendingReadsQueueType, "Dequeue")!);
 
-        // new Exception(_storedError?.ToString() ?? "stream errored")
         il.Emit(OpCodes.Ldarg_0);
         il.Emit(OpCodes.Ldfld, webStreams.ReadableStoredErrorField);
-        var notNullLabel = il.DefineLabel();
-        var msgDoneLabel = il.DefineLabel();
-        il.Emit(OpCodes.Dup);
-        il.Emit(OpCodes.Brtrue, notNullLabel);
-        il.Emit(OpCodes.Pop);
-        il.Emit(OpCodes.Ldstr, "stream errored");
-        il.Emit(OpCodes.Br, msgDoneLabel);
-        il.MarkLabel(notNullLabel);
-        il.Emit(OpCodes.Callvirt, _types.GetMethodNoParams(_types.Object, "ToString"));
-        il.MarkLabel(msgDoneLabel);
-        il.Emit(OpCodes.Newobj, _types.GetConstructor(_types.Exception, _types.String));
+        il.Emit(OpCodes.Call, errors.CreateException);
 
         il.Emit(OpCodes.Callvirt, _types.GetMethod(construction.PendingReadsTcsType, "TrySetException", [typeof(Exception)])!);
         il.Emit(OpCodes.Pop);
@@ -826,7 +815,7 @@ public partial class RuntimeEmitter
         // is observed via the closed promise. Tests for ErrorPropagatesToReader
         // catch via the read() rejection so we DO need to surface a rejected task.
         // Build: TaskCompletionSource<object>; SetException; return tcs.Task.
-        EmitErroredTaskFromStoredError(runtime.RequireWebStreams(), il);
+        EmitErroredTaskFromStoredError(runtime.RequireWebStreams(), il, runtime.Errors);
         il.Emit(OpCodes.Ret);
 
         return method;
@@ -874,33 +863,19 @@ public partial class RuntimeEmitter
         il.Emit(OpCodes.Call, EmitGenerics.MakeGenericMethod(typeof(Task).GetMethod("FromResult")!, typeof(object)));
     }
 
-    private void EmitErroredTaskFromStoredError(EmittedWebStreamRuntime webStreams, ILGenerator il)
+    private void EmitErroredTaskFromStoredError(EmittedWebStreamRuntime webStreams, ILGenerator il, EmittedErrorRuntime errors)
     {
-        // Build a Task<object> that's faulted with an Exception wrapping
-        // _storedError.ToString().
+        // Use the guest exception carrier so future reads observe the same reason.
         var tcsType = typeof(TaskCompletionSource<object>);
         var tcsLocal = il.DeclareLocal(tcsType);
 
         il.Emit(OpCodes.Newobj, tcsType.GetConstructor(Type.EmptyTypes)!);
         il.Emit(OpCodes.Stloc, tcsLocal);
 
-        // tcs.SetException(new Exception(_storedError.ToString() ?? "stream errored"))
         il.Emit(OpCodes.Ldloc, tcsLocal);
         il.Emit(OpCodes.Ldarg_0);
         il.Emit(OpCodes.Ldfld, webStreams.ReadableStoredErrorField);
-        // null check / fallback
-        var notNullLabel = il.DefineLabel();
-        var msgDoneLabel = il.DefineLabel();
-        il.Emit(OpCodes.Dup);
-        il.Emit(OpCodes.Brtrue, notNullLabel);
-        il.Emit(OpCodes.Pop);
-        il.Emit(OpCodes.Ldstr, "stream errored");
-        il.Emit(OpCodes.Br, msgDoneLabel);
-        il.MarkLabel(notNullLabel);
-        il.Emit(OpCodes.Callvirt, _types.GetMethodNoParams(_types.Object, "ToString"));
-        il.MarkLabel(msgDoneLabel);
-
-        il.Emit(OpCodes.Newobj, _types.GetConstructor(_types.Exception, _types.String));
+        il.Emit(OpCodes.Call, errors.CreateException);
         il.Emit(OpCodes.Callvirt, tcsType.GetMethod("SetException", [typeof(Exception)])!);
 
         // Return tcs.Task

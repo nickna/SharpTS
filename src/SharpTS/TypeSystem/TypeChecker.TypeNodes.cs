@@ -225,9 +225,9 @@ public partial class TypeChecker
             {
                 if (TryResolveGenericSignature(genericFn.TypeParameters, genericFn.Body) is not ({ } typeParams, { } func))
                     return null;
-                return new TypeInfo.GenericFunction(
+                return CopyEditorSignatureMetadata(func, new TypeInfo.GenericFunction(
                     typeParams, func.ParamTypes, func.ReturnType, func.RequiredParams, func.HasRestParam,
-                    func.ThisType, func.ParamNames);
+                    func.ThisType, func.ParamNames));
             }
 
             // `new <T>(…) => R` — an object type with a single GENERIC construct signature, mirroring
@@ -269,8 +269,10 @@ public partial class TypeChecker
                 if (!TryResolveParameters(fn.Parameters, out var paramTypes, out int requiredParams, out bool hasRestParam))
                     return null;
                 if (TryToTypeInfo(fn.ReturnType) is not { } returnType) return null;
-                return new TypeInfo.Function(paramTypes, returnType, requiredParams, hasRestParam, thisType,
-                    InstantiatedTypeParamPositions: MarkInstantiatedParamPositions(fn.Parameters));
+                return RegisterSpecializedOverload(new TypeInfo.Function(paramTypes, returnType, requiredParams, hasRestParam, thisType,
+                    ParamNames: fn.Parameters.Select((parameter, index) => parameter.Name ?? $"arg{index}").ToList(),
+                    InstantiatedTypeParamPositions: MarkInstantiatedParamPositions(fn.Parameters)),
+                    fn.Parameters.Select(parameter => parameter.Type));
             }
 
             // `new (…) => R` models as an object type carrying a single construct signature —

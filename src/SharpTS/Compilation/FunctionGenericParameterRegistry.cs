@@ -1,3 +1,4 @@
+using System.Reflection;
 using System.Reflection.Emit;
 
 namespace SharpTS.Compilation;
@@ -11,6 +12,7 @@ public sealed class FunctionGenericParameterRegistry
 {
     private readonly Dictionary<MethodBuilder, IReadOnlyList<GenericTypeParameterBuilder>> _parameters =
         new(ReferenceEqualityComparer.Instance);
+    private readonly Dictionary<MethodBuilder, MethodInfo> _erasedValueInvocationTargets = new(ReferenceEqualityComparer.Instance);
 
     public bool IsComplete { get; private set; }
 
@@ -29,12 +31,47 @@ public sealed class FunctionGenericParameterRegistry
             throw new InvalidOperationException("Function generic parameters are already declared.");
     }
 
+    internal void DeclareErasedValueInvocationTarget(MethodBuilder owner, Type[] canonicalArguments)
+    {
+        EnsureMutable();
+        ArgumentNullException.ThrowIfNull(canonicalArguments);
+        var parameters = Require(owner);
+        if (parameters.Count == 0 || canonicalArguments.Length != parameters.Count ||
+            canonicalArguments.Any(argument => argument is null || ContainsUnboundType(argument)) ||
+            ContainsUnboundType(owner.DeclaringType!) || ContainsUnboundType(owner.ReturnType) ||
+            owner.GetParameters().Any(parameter => ContainsUnboundType(parameter.ParameterType)))
+            throw new InvalidOperationException("Erased source invocation requires a closed owner/signature and one canonical argument per method parameter.");
+        if (!_erasedValueInvocationTargets.TryAdd(owner, EmitGenerics.MakeGenericMethod(owner, canonicalArguments.ToArray())))
+            throw new InvalidOperationException("Erased source invocation target is already declared.");
+    }
+
+    internal bool TryGetErasedValueInvocationTarget(MethodBuilder owner, out MethodInfo target) =>
+        _erasedValueInvocationTargets.TryGetValue(owner, out target!);
+
+    internal IReadOnlyDictionary<MethodBuilder, MethodInfo> RequireCompletedErasedValueInvocationTargets()
+    {
+        if (!IsComplete) throw new InvalidOperationException("Function generic parameter metadata is not complete.");
+        return new System.Collections.ObjectModel.ReadOnlyDictionary<MethodBuilder, MethodInfo>(_erasedValueInvocationTargets);
+    }
+
+    // Reflection.Emit generic parameters can report ContainsGenericParameters
+    // false before Save, so inspect the metadata shape as well as that property.
+    internal static bool ContainsUnboundType(Type type) => type.IsGenericParameter || type.IsGenericTypeDefinition ||
+        type.ContainsGenericParameters || (type.HasElementType && ContainsUnboundType(type.GetElementType()!)) ||
+        (type.IsGenericType && type.GetGenericArguments().Any(ContainsUnboundType));
+
     internal void CompleteEmission()
     {
         EnsureMutable();
         foreach (var (owner, parameters) in _parameters)
             Validate(owner, parameters);
         IsComplete = true;
+    }
+
+    internal IReadOnlyList<KeyValuePair<MethodBuilder, IReadOnlyList<GenericTypeParameterBuilder>>> RequireCompletedGenericDefinitions()
+    {
+        if (!IsComplete) throw new InvalidOperationException("Function generic parameter metadata is not complete.");
+        return _parameters.Where(pair => pair.Value.Count != 0).ToArray();
     }
 
     private static void Validate(MethodBuilder owner, IReadOnlyList<GenericTypeParameterBuilder> parameters)

@@ -94,8 +94,7 @@ public partial class RuntimeEmitter
         // bare `Function` resolves to typeof($TSFunction).
         il.Emit(OpCodes.Ldsfld, functionPrototypes.Prototype);
         il.Emit(OpCodes.Ldstr, "constructor");
-        il.Emit(OpCodes.Ldtoken, inputs.FunctionValues.Type);
-        il.Emit(OpCodes.Call, _types.GetMethod(_types.Type, "GetTypeFromHandle", _types.RuntimeTypeHandle));
+        EmitRuntimeConstructorValue(il, inputs.FunctionValues.Type);
         il.Emit(OpCodes.Callvirt, setItem);
         // "constructor" is non-enumerable per ECMA-262 §17. Installed below
         // after the method wires.
@@ -152,10 +151,10 @@ public partial class RuntimeEmitter
         });
 
         var intrinsic = il.DeclareLocal(_types.Object);
-        _types.EmitLoadMethodInfo(il, hasInstanceHelper);
+        var parameterProducer = EmitReflectedMethodLiteral(il, hasInstanceHelper);
         il.Emit(OpCodes.Ldstr, "[Symbol.hasInstance]");
         il.Emit(OpCodes.Ldc_I4_1);
-        il.Emit(OpCodes.Call, inputs.FunctionConstruction.GetOrCreate);
+        EmitReflectedFunctionFactory(il, inputs.FunctionConstruction.GetOrCreate, parameterProducer);
         il.Emit(OpCodes.Stloc, intrinsic);
         il.Emit(OpCodes.Newobj, inputs.DescriptorStorage.DescriptorConstructor);
         il.Emit(OpCodes.Stloc, fnDescLocal);
@@ -178,8 +177,7 @@ public partial class RuntimeEmitter
         // constructor: non-enumerable per ECMA-262 §17.
         EmitInstallNonEnumerableDescriptor(il, new PrototypeDescriptorInputs(inputs.DescriptorStorage.DescriptorConstructor, inputs.DescriptorStorage.DescriptorValue.GetSetMethod()!, inputs.DescriptorStorage.DescriptorEnumerable.GetSetMethod()!, inputs.DescriptorStorage.DefineProperty), functionPrototypes.Prototype, fnDescLocal, "constructor", () =>
         {
-            il.Emit(OpCodes.Ldtoken, inputs.FunctionValues.Type);
-            il.Emit(OpCodes.Call, _types.GetMethod(_types.Type, "GetTypeFromHandle", _types.RuntimeTypeHandle));
+            EmitRuntimeConstructorValue(il, inputs.FunctionValues.Type);
         });
 
         // Function.prototype's [[Prototype]] is %Object.prototype% per
@@ -506,7 +504,7 @@ public partial class RuntimeEmitter
         il.Emit(OpCodes.Castclass, inputs.FunctionValues.Type);
         il.Emit(OpCodes.Ldloc, thisArgLocal);
         il.Emit(OpCodes.Ldloc, boundArgsLocal);
-        il.Emit(OpCodes.Newobj, inputs.FunctionBindings.BoundCtor);
+        NativePrototypeFieldsLookup.EmitCarrierCreate(_nativePrototypeFields, il, inputs.FunctionBindings.BoundCtor);
         il.Emit(OpCodes.Ret);
 
         // Constructor Type values and already-bound callables need the generic
@@ -515,7 +513,7 @@ public partial class RuntimeEmitter
         il.Emit(OpCodes.Ldarg_0);
         il.Emit(OpCodes.Ldloc, thisArgLocal);
         il.Emit(OpCodes.Ldloc, boundArgsLocal);
-        il.Emit(OpCodes.Newobj, inputs.FunctionBindings.AnyCtor);
+        NativePrototypeFieldsLookup.EmitCarrierCreate(_nativePrototypeFields, il, inputs.FunctionBindings.AnyCtor);
         il.Emit(OpCodes.Ret);
 
         return method;

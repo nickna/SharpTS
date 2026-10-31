@@ -10,8 +10,21 @@ namespace SharpTS.Tests.CompilerTests;
 
 public class EmittedVmRuntimeTests
 {
-    private static IEnumerable<PropertyInfo> Handles => typeof(EmittedVmRuntime).GetProperties()
-        .Where(property => property.PropertyType == typeof(MethodBuilder));
+    private static IEnumerable<PropertyInfo> Declarations => typeof(EmittedVmRuntime)
+        .GetProperties(BindingFlags.Public | BindingFlags.NonPublic | BindingFlags.Instance)
+        .Where(property => property.PropertyType == typeof(MethodBuilder) || property.PropertyType == typeof(FieldBuilder));
+    private static IEnumerable<PropertyInfo> Handles => Declarations.Where(property => property.PropertyType == typeof(MethodBuilder));
+    private static readonly IReadOnlyDictionary<string, string> BridgeMethods = new Dictionary<string, string>
+    {
+        ["NormalizeValue"] = "NormalizeVmValue", ["RestoreValue"] = "RestoreVmValue",
+        ["IsErrorValue"] = "IsVmErrorValue", ["ReadErrorProperty"] = "ReadVmErrorProperty",
+        ["GetExecutionHost"] = "GetVmExecutionHost", ["DisposeExecutionHost"] = "DisposeVmExecutionHost",
+        ["QueueAfterCheckpoint"] = "QueueVmAfterCheckpoint", ["EnterExecutionScope"] = "EnterVmExecutionScope",
+        ["ConvertException"] = "ConvertVmException", ["IsRelatedValue"] = "IsRelatedVmValue",
+        ["IsMappedValue"] = "IsMappedVmValue", ["ReadMappedProperty"] = "ReadMappedVmProperty",
+        ["MappedPrototype"] = "GetMappedVmPrototype", ["RecordSourceObject"] = "RecordVmSourceObject", ["ToStringValue"] = "CoerceVmValueToString"
+    };
+    private static PropertyInfo Declaration(string name) => Declarations.Single(property => property.Name == name);
 
     private static readonly (string Export, string Handle)[] RegisteredExports =
     [
@@ -21,14 +34,14 @@ public class EmittedVmRuntimeTests
         ("measureMemory", "MeasureMemory"), ("Script", "GetScriptConstructor")
     ];
 
-    public static IEnumerable<object[]> HandleNames => Handles.Select(property => new object[] { property.Name });
+    public static IEnumerable<object[]> HandleNames => Declarations.Select(property => new object[] { property.Name });
 
     [Theory]
     [MemberData(nameof(HandleNames))]
     public void MissingDeclarationRejectsReadsAndCompletionThenAllowsRetry(string missingHandle)
     {
         var vm = CreateDeclarations(missingHandle);
-        var property = typeof(EmittedVmRuntime).GetProperty(missingHandle)!;
+        var property = Declaration(missingHandle);
         var error = Assert.Throws<TargetInvocationException>(() => property.GetValue(vm));
         Assert.Contains($"'{missingHandle}'", Assert.IsType<InvalidOperationException>(error.InnerException).Message);
         Assert.Contains($"'{missingHandle}'", Assert.Throws<InvalidOperationException>(vm.CompleteEmission).Message);
@@ -52,7 +65,7 @@ public class EmittedVmRuntimeTests
         Assert.Throws<InvalidOperationException>(runtime.BeginVmEmission);
         Assert.True(typeof(EmittedRuntime).GetProperty(nameof(EmittedRuntime.Vm))!.SetMethod!.IsPrivate);
         var declarations = CreateDeclarations();
-        foreach (var property in Handles) property.SetValue(vm, property.GetValue(declarations));
+        foreach (var property in Declarations) property.SetValue(vm, property.GetValue(declarations));
         vm.CompleteEmission();
         AssertFrozen(vm);
         Assert.Throws<InvalidOperationException>(runtime.BeginVmEmission);
@@ -69,6 +82,7 @@ public class EmittedVmRuntimeTests
         resolve.GetILGenerator().Emit(OpCodes.Ret);
         var promise = new EmittedPromiseRuntime { TypeResolve = resolve };
         var vm = new EmittedVmRuntime();
+        DeclareBridgeStubs(type, vm);
         var runtime = new EmittedRuntime();
         var features = new RuntimeFeatureDetector().Detect(new Parser(new Lexer("console.log(1);").ScanTokens()).ParseOrThrow());
         features.UsesVm = true;
@@ -87,7 +101,7 @@ public class EmittedVmRuntimeTests
             registrations.Add(name);
         };
         var emitter = new RuntimeEmitter(TypeProvider.Runtime);
-        typeof(RuntimeEmitter).GetMethod("EmitVmMethods", BindingFlags.NonPublic | BindingFlags.Instance)!
+        typeof(RuntimeEmitter).GetMethod("EmitVmExportMethods", BindingFlags.NonPublic | BindingFlags.Instance)!
             .Invoke(emitter, [type, vm, promise, register]);
         Assert.Equal(RegisteredExports.Select(entry => entry.Export), registrations);
         foreach (var property in Handles)
@@ -125,7 +139,8 @@ public class EmittedVmRuntimeTests
         {
             var vm = runtime.RequireVm();
             AssertFrozen(vm);
-            Assert.Equal(12, Handles.Count());
+            Assert.Equal(27, Handles.Count());
+            Assert.Equal(28, Declarations.Count());
             Assert.True(runtime.RequirePromise().IsComplete);
             foreach (var (export, handle) in RegisteredExports)
                 Assert.Same(typeof(EmittedVmRuntime).GetProperty(handle)!.GetValue(vm), runtime.BuiltInModules.GetOptional("vm", export));
@@ -141,7 +156,10 @@ public class EmittedVmRuntimeTests
         using var pe = new PEReader(bytes);
         var reader = pe.GetMetadataReader();
         var methods = reader.MethodDefinitions.Select(handle => reader.GetString(reader.GetMethodDefinition(handle).Name)).ToArray();
-        foreach (var property in Handles) Assert.Equal(enabled, methods.Contains("Vm" + property.Name));
+        foreach (var property in Handles)
+            Assert.Equal(enabled, methods.Contains(BridgeMethods.TryGetValue(property.Name, out var name) ? name : "Vm" + property.Name));
+        var fields = reader.FieldDefinitions.Select(handle => reader.GetString(reader.GetFieldDefinition(handle).Name)).ToArray();
+        Assert.Equal(enabled, fields.Contains("_vmAfterCheckpoint"));
         var references = reader.AssemblyReferences.Select(handle => reader.GetString(reader.GetAssemblyReference(handle).Name)).ToArray();
         Assert.DoesNotContain("SharpTS", references);
         Assert.Equal(hosted, references.Contains("SharpTS.Hosting.Abstractions"));
@@ -181,6 +199,63 @@ public class EmittedVmRuntimeTests
         AssertFrozen(second);
     }
 
+    [Fact]
+    public void ContextStorageRejectsUnrecordedDictionariesAndForeignLookalikes()
+    {
+        var runtime = EmitRuntime("import * as vm from 'node:vm';", false);
+        using var bytes = Save(runtime);
+        using (var verifier = new ILVerifier(extraProbeDirectories: [AppContext.BaseDirectory]))
+            Assert.Empty(verifier.Verify(bytes));
+        var assembly = Assembly.Load(bytes.ToArray());
+        var owner = assembly.GetType(runtime.RuntimeClass.Type.FullName!)!;
+        var admits = owner.GetMethod("_VmAdmitsContextStorage", BindingFlags.NonPublic | BindingFlags.Static)!;
+        var dictionary = new Dictionary<string, object?> { ["value"] = 7d };
+        Assert.False((bool)admits.Invoke(null, [dictionary])!);
+        Assert.False((bool)admits.Invoke(null, [new object()])!);
+        Assert.False((bool)admits.Invoke(null, [null])!);
+        var ownType = assembly.GetType(runtime.ObjectStorage.Type.FullName!)!;
+        var fakeAssembly = AssemblyBuilder.DefineDynamicAssembly(new AssemblyName("foreign_vm_context"), AssemblyBuilderAccess.Run);
+        var fake = fakeAssembly.DefineDynamicModule("main").DefineType(ownType.FullName!, TypeAttributes.Public);
+        fake.DefineDefaultConstructor(MethodAttributes.Public);
+        Assert.False((bool)admits.Invoke(null, [Activator.CreateInstance(fake.CreateType()!)])!);
+        var actualOwner = Activator.CreateInstance(ownType, [dictionary]);
+        Assert.True((bool)admits.Invoke(null, [actualOwner])!);
+    }
+
+    private static void DeclareBridgeStubs(TypeBuilder type, EmittedVmRuntime vm)
+    {
+        // Only export declaration/registration is under test here. Reserve the
+        // completed bridge's exact ABI so all resulting calls remain verifiable.
+        foreach (var name in BridgeMethods.Keys)
+        {
+            Type result = name switch
+            {
+                "IsErrorValue" or "IsRelatedValue" or "IsMappedValue" => typeof(bool),
+                "EnterExecutionScope" => typeof(IDisposable),
+                "ConvertException" => typeof(Exception),
+                "DisposeExecutionHost" or "QueueAfterCheckpoint" => typeof(void),
+                _ => typeof(object)
+            };
+            Type[] parameters = name switch
+            {
+                "GetExecutionHost" or "DisposeExecutionHost" or "EnterExecutionScope" => Type.EmptyTypes,
+                "ReadErrorProperty" or "ReadMappedProperty" => [typeof(object), typeof(string)],
+                "QueueAfterCheckpoint" => [typeof(Action)],
+                "ConvertException" => [typeof(Exception)],
+                _ => [typeof(object)]
+            };
+            var method = type.DefineMethod(BridgeMethods[name], MethodAttributes.Public | MethodAttributes.Static, result, parameters);
+            var body = method.GetILGenerator();
+            if (name is "NormalizeValue" or "RestoreValue" or "ConvertException" or "RecordSourceObject") body.Emit(OpCodes.Ldarg_0);
+            else if (result == typeof(bool)) body.Emit(OpCodes.Ldc_I4_0);
+            else if (result != typeof(void)) body.Emit(OpCodes.Ldnull);
+            body.Emit(OpCodes.Ret);
+            Declaration(name).SetValue(vm, method);
+        }
+        Declaration("AfterCheckpointQueue").SetValue(vm,
+            type.DefineField("_vmAfterCheckpoint", typeof(Queue<Action>), FieldAttributes.Private | FieldAttributes.Static));
+    }
+
     private static EmittedVmRuntime CreateDeclarations(string? missingHandle = null)
     {
         var vm = new EmittedVmRuntime();
@@ -188,7 +263,9 @@ public class EmittedVmRuntimeTests
         var type = assembly.DefineDynamicModule("main").DefineType("Placeholder");
         var method = type.DefineMethod("Placeholder", MethodAttributes.Public, typeof(void), Type.EmptyTypes);
         method.GetILGenerator().Emit(OpCodes.Ret);
-        foreach (var property in Handles.Where(property => property.Name != missingHandle)) property.SetValue(vm, method);
+        var field = type.DefineField("Checkpoint", typeof(Queue<Action>), FieldAttributes.Private | FieldAttributes.Static);
+        foreach (var property in Declarations.Where(property => property.Name != missingHandle))
+            property.SetValue(vm, property.PropertyType == typeof(MethodBuilder) ? (object)method : field);
         return vm;
     }
 
@@ -196,7 +273,7 @@ public class EmittedVmRuntimeTests
     {
         Assert.True(vm.IsComplete);
         Assert.Throws<InvalidOperationException>(vm.CompleteEmission);
-        foreach (var property in Handles)
+        foreach (var property in Declarations)
         {
             var value = property.GetValue(vm);
             Assert.NotNull(value);

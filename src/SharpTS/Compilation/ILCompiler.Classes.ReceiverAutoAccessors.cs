@@ -155,12 +155,17 @@ public partial class ILCompiler
         il.MarkLabel(fresh);
         il.Emit(OpCodes.Ldloc, slots); il.Emit(OpCodes.Ldstr, source.Name.Lexeme); il.Emit(OpCodes.Ldloc, value);
         il.Emit(OpCodes.Callvirt, _types.DictionaryStringObjectSetItem);
+        if (context.CurrentClassExpr != null && context.ClassDefinitionParameterIndex is { } definitionIndex)
+        {
+            il.Emit(OpCodes.Ldloc, slots); il.Emit(OpCodes.Ldstr, "'owner");
+            il.Emit(OpCodes.Ldarg, definitionIndex); il.Emit(OpCodes.Callvirt, _types.DictionaryStringObjectSetItem);
+        }
         // Preserve the existing CLR backing default when no typed initializer
         // exists. The actual-object slot still records guest undefined.
         if (source.Initializer == null) return;
         var done = il.DefineLabel();
         il.Emit(OpCodes.Ldloc, context.ClassConstructorReceiver!); il.Emit(OpCodes.Ldarg_0); il.Emit(OpCodes.Bne_Un, done);
-        var backing = _typedInterop.PropertyBackingFields[className][NamingConventions.ToPascalCase(source.Name.Lexeme)];
+        var backing = _autoAccessorBackingFields[source];
         il.Emit(OpCodes.Ldarg_0); il.Emit(OpCodes.Ldloc, value); EmitBoxedFieldConversion(il, backing.FieldType);
         il.Emit(OpCodes.Stfld, EmitterTypeHelpers.SelfFieldReference(backing));
         il.MarkLabel(done);
@@ -169,6 +174,8 @@ public partial class ILCompiler
     private void EmitReceiverAutoAccessorDescriptors(ILGenerator il, TypeBuilder owner,
         Stmt.AutoAccessor? selected = null, Type? descriptorOwner = null)
     {
+        var registrationDone = il.DefineLabel();
+        EmitCanonicalClassMemberRegistrationGuard(il, owner, descriptorOwner, registrationDone);
         foreach (var (source, metadata) in _receiverAutoAccessors.Where(entry => ReferenceEquals(entry.Value.Owner, owner)
             && (selected == null || ReferenceEquals(entry.Key, selected))))
         {
@@ -187,5 +194,6 @@ public partial class ILCompiler
             il.Emit(OpCodes.Callvirt, _runtime.DescriptorStorage.DescriptorConfigurable.GetSetMethod()!);
             il.Emit(OpCodes.Call, _runtime.DescriptorStorage.DefineProperty); il.Emit(OpCodes.Pop);
         }
+        il.MarkLabel(registrationDone);
     }
 }

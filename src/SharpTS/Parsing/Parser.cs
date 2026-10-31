@@ -119,7 +119,8 @@ public partial class Parser(List<Token> tokens, DecoratorMode decoratorMode = De
     private record ObjectPatternProperty(Token Key, DestructurePattern Value, Expr? DefaultValue, Expr? ComputedKey = null);
 
     private Token GenerateTempVar(int line) =>
-        new Token(TokenType.IDENTIFIER, $"_dest{_tempVarCounter++}", null, line);
+        new Token(TokenType.IDENTIFIER, $"_dest{_tempVarCounter++}", null, line)
+        { IsGeneratedTemporary = true };
 
     /// <summary>
     /// Parses the token stream with error recovery, collecting multiple errors.

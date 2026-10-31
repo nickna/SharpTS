@@ -25,6 +25,7 @@ namespace SharpTS.Compilation;
 public sealed partial class RuntimeFeatureDetector
 {
     private readonly RuntimeFeatureSet _set;
+    private readonly bool _nativeClassBodiesOnly;
     private readonly HashSet<string> _sourceFunctions = new(StringComparer.Ordinal);
     private readonly HashSet<string> _opaqueValueBindings = new(StringComparer.Ordinal);
     private readonly HashSet<string> _numberConstructorAliases = new(StringComparer.Ordinal)
@@ -60,9 +61,13 @@ public sealed partial class RuntimeFeatureDetector
     private readonly HashSet<(string Fingerprint, int Index)> _invalidCompactRecordSelfFields = [];
     private readonly Dictionary<string, JsonSerializationShape.Record> _canonicalCompactRecordShapes = [];
     private TypeMap? _typeMap;
+    private int _dateConstructorReceiverReads;
 
-    public RuntimeFeatureDetector()
+    public RuntimeFeatureDetector() : this(nativeClassBodiesOnly: false) { }
+
+    internal RuntimeFeatureDetector(bool nativeClassBodiesOnly)
     {
+        _nativeClassBodiesOnly = nativeClassBodiesOnly;
         // Start with everything off; the walk flips flags on as triggers are seen.
         _set = new RuntimeFeatureSet
         {
@@ -94,6 +99,7 @@ public sealed partial class RuntimeFeatureDetector
             UsesPromise = false,
             UsesUserClasses = false,
             UsesObjectDefinitionRuntime = false,
+            UsesPropertyWrites = false,
             UsesDate = false,
             UsesRegExp = false,
             UsesBuffer = false,
@@ -108,6 +114,7 @@ public sealed partial class RuntimeFeatureDetector
             UsesAbortSignalAny = false,
             UsesProxy = false,
             UsesDynamicImport = false,
+            UsesModuleNamespaces = false,
             UsesAsyncGenerator = false,
             UsesForAwaitOf = false,
             UsesWeakRef = false,
@@ -119,8 +126,12 @@ public sealed partial class RuntimeFeatureDetector
             UsesObjectIntegrityMutation = false,
             UsesClassPrototypeMutation = false,
             UsesDatePrototypeMutation = false,
+            UsesDateConstructorMutation = false,
+            UsesTimerFunctionValues = false,
+            UsesMicrotaskFunctionValues = false,
             UsesPromisePrototypeMutation = false,
             UsesArrayPrototypeMutation = false,
+            UsesArrayMethodValues = false,
             UsesArrayReceiverScopes = false,
             UsesNumberPrototypeMutation = false,
             UsesStringPrototypeMutation = false,
@@ -355,6 +366,17 @@ public sealed partial class RuntimeFeatureDetector
     {
         switch (name)
         {
+            case "queueMicrotask":
+                _set.UsesMicrotaskFunctionValues = true;
+                break;
+            case "setTimeout":
+            case "clearTimeout":
+            case "setInterval":
+            case "clearInterval":
+            case "setImmediate":
+            case "clearImmediate":
+                _set.UsesTimerFunctionValues = true;
+                break;
             // A value-form reference can alias the integrity mutators
             // (`const O = Object; O.freeze(value)`). Conservatively disable
             // the direct class-setter shortcut for any opaque Object access
@@ -366,11 +388,15 @@ public sealed partial class RuntimeFeatureDetector
                 _set.UsesObjectIntegrityMutation = true;
                 if (name is "eval" or "Function")
                 {
+                    _set.UsesTimerFunctionValues = true;
+                    _set.UsesMicrotaskFunctionValues = true;
+                    _set.UsesArrayMethodValues = true;
                     // Callable discovery can parse indirect/grouped literal
                     // eval after this walk. Retain receiver scopes for opaque
                     // source as well as the direct eval AST visited below.
                     _set.UsesArrayReceiverScopes = true;
                     _set.UsesDatePrototypeMutation = true;
+                    _set.UsesDateConstructorMutation = true;
                     _set.UsesRegExpPrototypeMutation = true;
                     _set.UsesStringPrototypeMutation = true;
                     _set.UsesMathMutation = true;
@@ -594,6 +620,9 @@ public sealed partial class RuntimeFeatureDetector
             // valve; the fine-grained ones still get set by their own triggers.
             case "globalThis":
             case "global":
+                _set.UsesTimerFunctionValues = true;
+                _set.UsesMicrotaskFunctionValues = true;
+                _set.UsesDateConstructorMutation = true;
                 _set.UsesObjectDefinitionRuntime = true;
                 _set.UsesArrayReceiverScopes = true;
                 _set.UsesObjectIntegrityMutation = true;
@@ -668,6 +697,10 @@ public sealed partial class RuntimeFeatureDetector
         switch (stmt)
         {
             case Stmt.Import imp:
+                if (!imp.IsTypeOnly && imp.NamespaceImport is not null &&
+                    Runtime.BuiltIns.Modules.BuiltInModuleRegistry.GetModuleName(imp.ModulePath) is null &&
+                    !Modules.DotNetImports.IsDotNetSpecifier(imp.ModulePath) && !Modules.DotNetExtensionImports.IsSpecifier(imp.ModulePath))
+                    _set.UsesModuleNamespaces = true;
                 HandleModulePath(imp.ModulePath);
                 break;
             case Stmt.ImportRequire req:
@@ -675,6 +708,7 @@ public sealed partial class RuntimeFeatureDetector
                 _set.UsesCjsRequire = true;
                 break;
             case Stmt.Export exp:
+                _set.UsesArrayMethodValues = true;
                 // Hosted consumers may inspect callback/search function values
                 // on exported arrays even when this producer never names them.
                 _set.UsesArrayReceiverScopes = true;
@@ -787,7 +821,13 @@ public sealed partial class RuntimeFeatureDetector
                 break;
 
             case Stmt.Class cls:
-                _set.UsesUserClasses = true;
+                // Native output need not retain source-class machinery for a
+                // declaration that the class producer never emits. This is
+                // reachability selection, not a runtime owner certificate.
+                if (!_nativeClassBodiesOnly || ILCompiler.EmitsSourceClassBody(cls))
+                    _set.UsesUserClasses = true;
+                if (cls.Methods.Any(method => !method.IsStatic && method.ComputedKey is { } key && IsSymbolIterator(key)))
+                    _set.UsesArrayPrototypeMutation = true;
                 foreach (var expression in ClassDefinitionExpressions.Enumerate(cls))
                     VisitExpr(expression);
                 foreach (var m in cls.Methods)
@@ -899,9 +939,19 @@ public sealed partial class RuntimeFeatureDetector
         or "toSorted" or "toReversed" or "with" or "at" or "toSpliced"
         or "indexOf" or "lastIndexOf";
 
+    private static bool IsArrayMethodValueName(string name) =>
+        UsesArrayReceiverScope(name) || IsArrayMutatorName(name)
+        || name is "join" or "pop" or "slice" or "splice" or "concat" or "reverse"
+            or "fill" or "copyWithin" or "entries" or "keys" or "values"
+            or "toString" or "toLocaleString";
+
     private void VisitExpr(Expr? expr)
     {
         if (expr is null) return;
+        if (expr is Expr.Set or Expr.SetIndex or Expr.CompoundSet or Expr.CompoundSetIndex
+            or Expr.LogicalSet or Expr.LogicalSetIndex or Expr.PrefixIncrement or Expr.PostfixIncrement
+            or Expr.SetSuper or Expr.SetPrivate or Expr.CompoundSetPrivate or Expr.LogicalSetPrivate)
+            _set.UsesPropertyWrites = true;
         if (_typeMap?.Get(expr) is TypeInfo.Promise)
             _set.UsesPromise = true;
         switch (expr)
@@ -910,10 +960,13 @@ public sealed partial class RuntimeFeatureDetector
                 _set.UsesNewTarget = true;
                 break;
             case Expr.Variable v:
+                if (_dateConstructorReceiverReads == 0 && IsDateConstructor(v))
+                    _set.UsesDateConstructorMutation = true;
                 HandleIdentifier(v.Name.Lexeme);
                 break;
 
             case Expr.This:
+                _set.UsesArrayMethodValues = true;
                 _set.UsesObjectDefinitionRuntime = true;
                 // Script `this` can expose the global Array constructor to a
                 // host or callback without an explicit prototype member read.
@@ -927,12 +980,16 @@ public sealed partial class RuntimeFeatureDetector
                 break;
 
             case Expr.Get g:
+                if (_dateConstructorReceiverReads == 0 && IsDateConstructorEscape(g))
+                    _set.UsesDateConstructorMutation = true;
                 // A held constructor or definition method can be reached without
                 // a literal Object reference, including through a native receiver.
                 if (g.Name.Lexeme is "Object" or "Reflect" or "constructor"
                     or "defineProperty" or "defineProperties" or "create"
                     or "__defineGetter__" or "__defineSetter__")
                     _set.UsesObjectDefinitionRuntime = true;
+                if (IsArrayMethodValueName(g.Name.Lexeme))
+                    _set.UsesArrayMethodValues = true;
                 if (UsesArrayReceiverScope(g.Name.Lexeme))
                     _set.UsesArrayReceiverScopes = true;
                 if (IsOpaqueEvaluator(g.Object, g.Name.Lexeme))
@@ -1049,7 +1106,7 @@ public sealed partial class RuntimeFeatureDetector
                         _set.UsesSet = true;
                         break;
                 }
-                VisitExpr(g.Object);
+                VisitDateConstructorReceiver(g.Object);
                 break;
 
             case Expr.SetSuper superSet:
@@ -1106,10 +1163,16 @@ public sealed partial class RuntimeFeatureDetector
                 break;
 
             case Expr.GetIndex gi:
+                if (_dateConstructorReceiverReads == 0 && IsDateConstructorEscape(gi))
+                    _set.UsesDateConstructorMutation = true;
                 // Opaque keys can select a constructor or descriptor mutator.
                 _set.UsesObjectDefinitionRuntime = true;
                 if (gi.Index is Expr.Literal { Value: "prototype" or "__proto__" or "setPrototypeOf" })
                     _set.UsesClassPrototypeMutation = true;
+                if (gi.Index is Expr.Literal { Value: string arrayMember }
+                        ? IsArrayMethodValueName(arrayMember)
+                        : gi.Index is not Expr.Literal)
+                    _set.UsesArrayMethodValues = true;
                 if (gi.Index is Expr.Literal { Value: string scopedArrayMember }
                         ? UsesArrayReceiverScope(scopedArrayMember)
                         : gi.Index is not Expr.Literal)
@@ -1147,7 +1210,7 @@ public sealed partial class RuntimeFeatureDetector
                     _set.UsesArrayPrototypeMutation = true;
                     _set.UsesClassPrototypeMutation = true;
                 }
-                VisitExpr(gi.Object);
+                VisitDateConstructorReceiver(gi.Object);
                 VisitExpr(gi.Index);
                 break;
             case Expr.SetIndex si:
@@ -1235,6 +1298,7 @@ public sealed partial class RuntimeFeatureDetector
                             or "set" or "deleteProperty" or "setPrototypeOf"
                     })
                 {
+                    _set.UsesDateConstructorMutation = true;
                     // Aliases can hide either Promise.prototype or an intrinsic
                     // promise receiver from this syntax-only pass. Retaining
                     // value dispatch is conservative and preserves observability.
@@ -1340,6 +1404,8 @@ public sealed partial class RuntimeFeatureDetector
                 break;
 
             case Expr.Assign asg:
+                if (asg.Name.Lexeme == "Date")
+                    _set.UsesDateConstructorMutation = true;
                 TrackGlobalObjectAlias(asg.Name.Lexeme, asg.Value);
                 TrackNumberAlias(asg.Name.Lexeme, asg.Value);
                 TrackStringAlias(asg.Name.Lexeme, asg.Value);
@@ -1689,11 +1755,17 @@ public sealed partial class RuntimeFeatureDetector
                 foreach (var e in al.Elements) VisitExpr(e);
                 break;
             case Expr.ObjectLiteral ol:
+                if (ol.Properties.Any(property => property.IsPrototypeSetter
+                        || property.IsSpread || property.Key is Expr.ComputedKey
+                        || property.Kind is Expr.ObjectPropertyKind.Getter or Expr.ObjectPropertyKind.Setter))
+                    _set.UsesObjectDefinitionRuntime = true;
+                if (ol.Properties.Any(property => property.IsPrototypeSetter))
+                    _set.UsesClassPrototypeMutation = true;
                 // Small plain records can use the emitted slot-backed ordinary-object
                 // carrier. This is deliberately only an emission gate; the literal
                 // emitter repeats the full key/duplicate validation before selecting it.
                 if (ol.Properties.Count is >= 1 and <= 4 && ol.Properties.All(prop =>
-                        !prop.IsSpread &&
+                        !prop.IsSpread && !prop.IsPrototypeSetter &&
                         prop.Key is not Expr.ComputedKey &&
                         prop.Kind == Expr.ObjectPropertyKind.Value))
                 {
@@ -1726,7 +1798,7 @@ public sealed partial class RuntimeFeatureDetector
                 }
                 foreach (var prop in ol.Properties)
                 {
-                    if (prop.IsSpread)
+                    if (prop.IsSpread || prop.IsPrototypeSetter)
                         MarkPotentiallyMaterialized(prop.Value);
                     if (prop.Key is Expr.ComputedKey computed)
                         VisitExpr(computed.Expression);
@@ -1777,6 +1849,7 @@ public sealed partial class RuntimeFeatureDetector
             case Expr.DynamicImport dimp:
                 _set.UsesPromise = true;
                 _set.UsesDynamicImport = true;
+                _set.UsesModuleNamespaces = true;
                 _set.PotentiallyMaterializesUnknownCompactObjectRecordShape = true;
                 VisitExpr(dimp.PathExpression);
                 if (dimp.PathExpression is Expr.Literal lit2 && lit2.Value is string p)
@@ -1790,6 +1863,8 @@ public sealed partial class RuntimeFeatureDetector
                 break;
             case Expr.ClassExpr ce:
                 _set.UsesUserClasses = true;
+                if (ce.Methods.Any(method => !method.IsStatic && method.ComputedKey is { } key && IsSymbolIterator(key)))
+                    _set.UsesArrayPrototypeMutation = true;
                 foreach (var expression in ClassDefinitionExpressions.Enumerate(ce))
                     VisitExpr(expression);
                 foreach (var m in ce.Methods)
@@ -1870,6 +1945,29 @@ public sealed partial class RuntimeFeatureDetector
                 break;
         }
     }
+
+    // Reading a constructor as a value can hide writes behind an alias or
+    // callback. A direct member receiver alone does not escape.
+    private void VisitDateConstructorReceiver(Expr receiver)
+    {
+        if (!IsDateConstructor(receiver))
+        {
+            VisitExpr(receiver);
+            return;
+        }
+        _dateConstructorReceiverReads++;
+        try { VisitExpr(receiver); }
+        finally { _dateConstructorReceiverReads--; }
+    }
+
+    private bool IsDateConstructorEscape(Expr expr) => IsDateConstructor(expr) || expr switch
+    {
+        Expr.Get { Object: var owner, Name.Lexeme: "constructor" } =>
+            IsDatePrototype(owner) || CouldTargetDateInstance(owner),
+        Expr.GetIndex { Object: var owner, Index: Expr.Literal { Value: "constructor" } } =>
+            IsDatePrototype(owner) || CouldTargetDateInstance(owner),
+        _ => false
+    };
 
     private bool IsDateConstructor(Expr expr) => expr switch
     {
@@ -1972,6 +2070,7 @@ public sealed partial class RuntimeFeatureDetector
         _set.UsesObjectIntegrityMutation = true;
         _set.UsesClassPrototypeMutation = true;
         _set.UsesDatePrototypeMutation = true;
+        _set.UsesDateConstructorMutation = true;
         _set.UsesPromisePrototypeMutation = true;
         _set.UsesArrayPrototypeMutation = true;
         _set.UsesArrayReceiverScopes = true;
@@ -1992,6 +2091,7 @@ public sealed partial class RuntimeFeatureDetector
         {
             case "Date":
                 _set.UsesDatePrototypeMutation = true;
+                _set.UsesDateConstructorMutation = true;
                 break;
             case "Promise":
                 _set.UsesPromisePrototypeMutation = true;
@@ -2518,6 +2618,8 @@ public sealed partial class RuntimeFeatureDetector
 
     private void MarkMutationTarget(Expr target)
     {
+        if (IsDateConstructor(target))
+            _set.UsesDateConstructorMutation = true;
         if (IsStringMutationTarget(target))
             _set.UsesStringPrototypeMutation = true;
         if (IsMathObject(target))

@@ -24,7 +24,8 @@ public partial class RuntimeEmitter
         EmittedSymbolRuntime Symbols,
         TypeBuilder TSFunctionType,
         Type UndefinedType,
-        FieldInfo FunctionPrototype
+        FieldInfo FunctionPrototype,
+        MethodInfo? NativeProxyRejection
     );
 
     private readonly record struct InstanceOfInputs(
@@ -67,7 +68,8 @@ public partial class RuntimeEmitter
         EmittedSymbolRuntime Symbols,
         MethodBuilder ToPascalCase,
         Type UndefinedType,
-        TypeBuilder TSFunctionType
+        TypeBuilder TSFunctionType,
+        MethodInfo? NativeProxyRejection
     );
 
     private readonly record struct AddInputs(
@@ -83,18 +85,15 @@ public partial class RuntimeEmitter
         EmittedNumericCoercionRuntime NumericCoercion,
         EmittedObjectStorageRuntime ObjectStorage,
         EmittedStringCoercionRuntime StringCoercion,
-        Type UndefinedType
+        Type UndefinedType,
+        MethodInfo? BigIntLooseEquals
     );
 
     /// <summary>
     /// ToNumeric update helper used by ++/-- on object-typed storage. BigInt
     /// remains BigInt; all other values follow ToNumber and return a Number.
     /// </summary>
-    private void EmitUpdateNumeric(
-        TypeBuilder typeBuilder,
-        EmittedOperatorRuntime operators,
-        EmittedNumericCoercionRuntime numericCoercion
-    )
+    private void DeclareUpdateNumeric(TypeBuilder typeBuilder, EmittedOperatorRuntime operators)
     {
         var method = typeBuilder.DefineMethod(
             "UpdateNumeric",
@@ -102,15 +101,23 @@ public partial class RuntimeEmitter
             _types.Object,
             [_types.Object, _types.Boolean]);
         operators.UpdateNumeric = method;
-        var il = method.GetILGenerator();
+    }
+
+    private void EmitUpdateNumeric(EmittedOperatorRuntime operators, EmittedNumericCoercionRuntime numericCoercion)
+    {
+        var il = operators.UpdateNumeric.GetILGenerator();
         var numberPath = il.DefineLabel();
         var subtractBigInt = il.DefineLabel();
         var subtractNumber = il.DefineLabel();
+        var numeric = il.DeclareLocal(_types.Object);
 
         il.Emit(OpCodes.Ldarg_0);
+        il.Emit(OpCodes.Call, numericCoercion.ToNumeric);
+        il.Emit(OpCodes.Stloc, numeric);
+        il.Emit(OpCodes.Ldloc, numeric);
         il.Emit(OpCodes.Isinst, _types.BigInteger);
         il.Emit(OpCodes.Brfalse, numberPath);
-        il.Emit(OpCodes.Ldarg_0);
+        il.Emit(OpCodes.Ldloc, numeric);
         il.Emit(OpCodes.Unbox_Any, _types.BigInteger);
         il.Emit(OpCodes.Call, _types.GetProperty(_types.BigInteger, "One")!.GetGetMethod()!);
         il.Emit(OpCodes.Ldarg_1);
@@ -126,8 +133,8 @@ public partial class RuntimeEmitter
         il.Emit(OpCodes.Ret);
 
         il.MarkLabel(numberPath);
-        il.Emit(OpCodes.Ldarg_0);
-        il.Emit(OpCodes.Call, numericCoercion.ToNumber);
+        il.Emit(OpCodes.Ldloc, numeric);
+        il.Emit(OpCodes.Unbox_Any, _types.Double);
         il.Emit(OpCodes.Ldc_R8, 1.0);
         il.Emit(OpCodes.Ldarg_1);
         il.Emit(OpCodes.Brfalse, subtractNumber);
@@ -608,7 +615,7 @@ public partial class RuntimeEmitter
         {
             il.Emit(OpCodes.Ldc_I4_0);
             il.Emit(OpCodes.Newarr, _types.Object);
-        });
+        }, inputs.NativeProxyRejection);
         il.Emit(OpCodes.Unbox_Any, _types.Boolean);
         il.Emit(OpCodes.Brtrue, functionLabel);
         il.Emit(OpCodes.Ldstr, "object");
@@ -1251,7 +1258,8 @@ public partial class RuntimeEmitter
                 inputs.InvokeMethodUnwrapped,
                 inputs.ObjectDescriptors,
                 inputs.ObjectRead,
-                inputs.ObjectState
+                inputs.ObjectState,
+                NativeProxyRejection: inputs.NativeProxyRejection
             )
         );
 
@@ -1283,9 +1291,24 @@ public partial class RuntimeEmitter
         // Ordinary-function chains use existence-only own descriptors
         // and actual prototype links, including null termination and Proxy [[Has]].
         var defaultFunctionHas = il.DefineLabel();
+        var ordinaryPrototypeHas = il.DefineLabel();
         il.Emit(OpCodes.Ldarg_1);
         il.Emit(OpCodes.Isinst, inputs.TSFunctionType);
+        il.Emit(OpCodes.Brtrue, ordinaryPrototypeHas);
+        il.Emit(OpCodes.Ldloc, rhsType);
+        il.Emit(OpCodes.Ldstr, "function");
+        il.Emit(OpCodes.Call, _types.StringOpEquality);
+        il.Emit(OpCodes.Brtrue, ordinaryPrototypeHas);
+        il.Emit(OpCodes.Ldarg_1);
+        il.Emit(OpCodes.Isinst, inputs.IHasFieldsInterface);
+        il.Emit(OpCodes.Brtrue, ordinaryPrototypeHas);
+        il.Emit(OpCodes.Ldarg_1);
+        il.Emit(OpCodes.Isinst, inputs.ArrayStorage.Type);
+        il.Emit(OpCodes.Brtrue, ordinaryPrototypeHas);
+        il.Emit(OpCodes.Ldarg_1);
+        il.Emit(OpCodes.Isinst, _types.ListOfObject);
         il.Emit(OpCodes.Brfalse, defaultFunctionHas);
+        il.MarkLabel(ordinaryPrototypeHas);
         var functionHasKey = il.DeclareLocal(_types.String);
         var functionHasPrototype = il.DeclareLocal(_types.Object);
         var functionHasDescriptor = il.DeclareLocal(_types.Object);
@@ -1306,7 +1329,7 @@ public partial class RuntimeEmitter
             () => il.Emit(OpCodes.Ldloc, functionHasKey),
             functionHasNotProxy, operators,
             new ProxyHasCheckInputs(inputs.Booleans, inputs.InvokeMethodUnwrapped,
-                inputs.ObjectDescriptors, inputs.ObjectRead, inputs.ObjectState));
+                inputs.ObjectDescriptors, inputs.ObjectRead, inputs.ObjectState, NativeProxyRejection: inputs.NativeProxyRejection));
         il.MarkLabel(functionHasNotProxy);
         il.Emit(OpCodes.Ldloc, functionHasPrototype);
         il.Emit(OpCodes.Ldloc, functionHasKey);
@@ -1405,21 +1428,33 @@ public partial class RuntimeEmitter
         il.Emit(OpCodes.Call, inputs.ToPascalCase);
         il.Emit(OpCodes.Stloc, classPascalNameLocal);
 
-        // obj.GetType().GetProperty(pascalName, Instance | Public | IgnoreCase)
-        il.Emit(OpCodes.Ldarg_1);
-        il.Emit(OpCodes.Callvirt, _types.GetMethod(_types.Object, "GetType"));
-        il.Emit(OpCodes.Ldloc, classPascalNameLocal);
-        il.Emit(OpCodes.Ldc_I4, (int)(System.Reflection.BindingFlags.Instance | System.Reflection.BindingFlags.Public | System.Reflection.BindingFlags.IgnoreCase));
-        il.Emit(OpCodes.Callvirt, _types.GetMethod(_types.Type, "GetProperty", _types.String, typeof(System.Reflection.BindingFlags)));
-        il.Emit(OpCodes.Brtrue, classTrueLabel);
+        if (_nativeHasInMemberLookup is { } nativeMembers)
+        {
+            il.Emit(OpCodes.Ldarg_1);
+            il.Emit(OpCodes.Callvirt, _types.GetMethod(_types.Object, "GetType"));
+            il.Emit(OpCodes.Ldloc, classPascalNameLocal);
+            il.Emit(OpCodes.Call, nativeMembers);
+            il.Emit(OpCodes.Brtrue, classTrueLabel);
+        }
+        else
+        {
+            // obj.GetType().GetProperty(pascalName, Instance | Public | IgnoreCase)
+            il.Emit(OpCodes.Ldarg_1);
+            il.Emit(OpCodes.Callvirt, _types.GetMethod(_types.Object, "GetType"));
+            il.Emit(OpCodes.Ldloc, classPascalNameLocal);
+            il.Emit(OpCodes.Ldc_I4, (int)(System.Reflection.BindingFlags.Instance | System.Reflection.BindingFlags.Public | System.Reflection.BindingFlags.IgnoreCase));
+            il.Emit(OpCodes.Callvirt, _types.GetMethod(_types.Type, "GetProperty", _types.String, typeof(System.Reflection.BindingFlags)));
+            il.Emit(OpCodes.Brtrue, classTrueLabel);
 
-        // obj.GetType().GetMethod(pascalName, Instance | Public | IgnoreCase)
-        il.Emit(OpCodes.Ldarg_1);
-        il.Emit(OpCodes.Callvirt, _types.GetMethod(_types.Object, "GetType"));
-        il.Emit(OpCodes.Ldloc, classPascalNameLocal);
-        il.Emit(OpCodes.Ldc_I4, (int)(System.Reflection.BindingFlags.Instance | System.Reflection.BindingFlags.Public | System.Reflection.BindingFlags.IgnoreCase));
-        il.Emit(OpCodes.Callvirt, _types.GetMethod(_types.Type, "GetMethod", _types.String, typeof(System.Reflection.BindingFlags)));
-        il.Emit(OpCodes.Brtrue, classTrueLabel);
+            // obj.GetType().GetMethod(pascalName, Instance | Public | IgnoreCase)
+            il.Emit(OpCodes.Ldarg_1);
+            il.Emit(OpCodes.Callvirt, _types.GetMethod(_types.Object, "GetType"));
+            il.Emit(OpCodes.Ldloc, classPascalNameLocal);
+            il.Emit(OpCodes.Ldc_I4, (int)(System.Reflection.BindingFlags.Instance | System.Reflection.BindingFlags.Public | System.Reflection.BindingFlags.IgnoreCase));
+            il.Emit(OpCodes.Callvirt, _types.GetMethod(_types.Type, "GetMethod", _types.String, typeof(System.Reflection.BindingFlags)));
+            il.Emit(OpCodes.Brtrue, classTrueLabel);
+
+        }
 
         il.Emit(OpCodes.Br, falseLabel);
 
@@ -1822,6 +1857,24 @@ public partial class RuntimeEmitter
         il.Emit(OpCodes.Call, inputs.BoxedPrimitives.UnwrapIfBoxed);
         il.Emit(OpCodes.Stloc, rightLocal);
         il.MarkLabel(operandsReadyLabel);
+
+        if (inputs.BigIntLooseEquals is { } bigIntEquals)
+        {
+            var compareBigInt = il.DefineLabel();
+            var noBigInt = il.DefineLabel();
+            il.Emit(OpCodes.Ldloc, leftLocal);
+            il.Emit(OpCodes.Isinst, _types.BigInteger);
+            il.Emit(OpCodes.Brtrue, compareBigInt);
+            il.Emit(OpCodes.Ldloc, rightLocal);
+            il.Emit(OpCodes.Isinst, _types.BigInteger);
+            il.Emit(OpCodes.Brfalse, noBigInt);
+            il.MarkLabel(compareBigInt);
+            il.Emit(OpCodes.Ldloc, leftLocal);
+            il.Emit(OpCodes.Ldloc, rightLocal);
+            il.Emit(OpCodes.Call, bigIntEquals);
+            il.Emit(OpCodes.Ret);
+            il.MarkLabel(noBigInt);
+        }
 
         // ECMA-262 7.2.14 IsLooselyEqual: when one side is a Dictionary/$Object
         // and the other is a String, Number, or Boolean, the spec calls

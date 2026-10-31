@@ -100,17 +100,18 @@ public sealed class EmittedGlobalObjectRuntimeTests
     [Fact]
     public void HelpersReceiveScopedInputsAndOwnerBelongsToOneCompilation()
     {
-        Assert.Equal(5, Declarations.Length);
+        Assert.Equal(new[] { "GetBinding", "GetProperty", "IntrinsicDescriptorKind", "Properties", "SetProperty", "SetPropertyStrict", "SingletonField" },
+            Declarations.Select(property => property.Name).Order(StringComparer.Ordinal));
         Assert.NotSame(new EmittedRuntime().GlobalObject, new EmittedRuntime().GlobalObject);
         Assert.Null(typeof(EmittedRuntime).GetProperty("GlobalObject")!.SetMethod);
         foreach (var old in new[] { "GlobalThisSingletonField", "GlobalThisGetProperty", "GlobalThisSetProperty", "GlobalThisProperties", "EvalIndirect" })
             Assert.Null(typeof(EmittedRuntime).GetProperty(old));
-        Assert.Equal(new[] { typeof(TypeBuilder), typeof(EmittedGlobalObjectRuntime), typeof(FieldInfo) },
+        Assert.Equal(new[] { typeof(TypeBuilder), typeof(EmittedGlobalObjectRuntime), typeof(FieldInfo), typeof(bool) },
             typeof(RuntimeEmitter).GetMethod("EmitIndirectEval", Members)!.GetParameters().Select(p => p.ParameterType));
         foreach (var name in new[] { "EmitGlobalThisGetProperty", "EmitGlobalThisSetProperty", "EmitCachedTSFunction" })
             Assert.DoesNotContain(typeof(RuntimeEmitter).GetMethod(name, Members)!.GetParameters(), p => p.ParameterType == typeof(EmittedRuntime));
         var optional = typeof(RuntimeEmitter).GetNestedType("GlobalPropertyOptionalInputs", BindingFlags.NonPublic)!;
-        Assert.Equal(new[] { "DateType", "RegExpType", "ReflectSingleton", "PopulateReflectSingleton", "BufferType", "EncoderType", "DecoderType", "GetCryptoObject", "FetchInvoke", "GetAbortControllerConstructor" },
+        Assert.Equal(new[] { "DateType", "RegExpType", "ReflectSingleton", "PopulateReflectSingleton", "BufferType", "ArrayBufferType", "EncoderType", "DecoderType", "GetCryptoObject", "FetchInvoke", "GetAbortControllerConstructor" },
             optional.GetProperties().Select(p => p.Name));
         foreach (var name in new[] { "GlobalPropertyReadInputs", "GlobalPropertyWriteInputs", "GlobalPropertyOptionalInputs" })
             Assert.DoesNotContain(typeof(RuntimeEmitter).GetNestedType(name, BindingFlags.NonPublic)!.GetProperties(),

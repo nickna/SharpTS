@@ -53,6 +53,14 @@ public partial class ILCompiler
         var canonicalConstructor = ctorBuilder;
         ctorBuilder = DefineNewTargetConstructor(canonicalConstructor);
         var il = ctorBuilder.GetILGenerator();
+        if (RequiresConstructorReturnAdapter(classStmt))
+        {
+            // Guest initialization runs in the factory's explicit-receiver method.
+            // Keep the CLR bookkeeping constructor valid on every return path.
+            EmitClassPrototypeBaseConstructorCall(il, typeBuilder);
+            il.Emit(OpCodes.Ret);
+            return;
+        }
         var ctx = CreateModuleMemberContext(il, ctorBuilder);
         if (ctorBuilder != canonicalConstructor) ctx.NewTargetParameterIndex = ctorBuilder.GetParameters().Length;
         ctx.IsStrictMode = true;
@@ -113,9 +121,7 @@ public partial class ILCompiler
                 EmitEffectiveClassElements(ctx, classStmt.Fields,
                     _typedInterop.PropertyBackingFields.GetValueOrDefault(className),
                     _typedInterop.PropertyTypes.GetValueOrDefault(className),
-                    field => il.Emit(OpCodes.Ldsfld, _classes.DeferredDefinitions.RequireFieldKey(field)));
-                foreach (var accessor in classStmt.AutoAccessors?.Where(accessor => !accessor.IsStatic) ?? [])
-                    EmitReceiverAutoAccessorInitializer(ctx, accessor, className);
+                    field => il.Emit(OpCodes.Ldsfld, _classes.DeferredDefinitions.RequireFieldKey(field)), classStmt.AutoAccessors);
                 var parameterEmitter = new ILEmitter(ctx);
                 foreach (var assignment in parameterProperties) parameterEmitter.EmitConstructorParameterProperty(assignment);
             });
@@ -125,7 +131,6 @@ public partial class ILCompiler
                 // Keep nominal fields and their typed accessors synchronized.
                 // The callback runs at the successful super expression itself.
                 EmitOrderedFieldInitializers();
-                EmitInstanceAutoAccessorInitializers();
                 var parameterEmitter = new ILEmitter(ctx);
                 foreach (var assignment in parameterProperties) parameterEmitter.EmitConstructorParameterProperty(assignment);
             });
@@ -293,7 +298,10 @@ public partial class ILCompiler
         // The base constructor owns allocation. Install newTarget's prototype
         // before either instance fields or the guest constructor body can read it.
         if (classStmt.SuperclassExpr == null)
+        {
             EmitConstructedClassPrototype(ctx);
+            EmitNativeOwnPrototypeCapture(ctx);
+        }
 
         if (constructor?.Body?.Any(ContainsSuperCall) != true)
         {
@@ -307,9 +315,6 @@ public partial class ILCompiler
             && constructor.Body.Any(ContainsSuperCall);
         bool privateInitializationEmitted = !deferPrivateInitialization;
         if (!deferPrivateInitialization && ctx.ClassConstructorThisCell == null) EmitOrderedFieldInitializers();
-        // TypeScript 4.9+: Initialize instance auto-accessor backing fields
-        if (ctx.ClassConstructorThisCell == null && !initializeNominalElementsAtSuper)
-            EmitInstanceAutoAccessorInitializers();
 
         // Emit constructor body
         if (constructor != null)
@@ -372,20 +377,6 @@ public partial class ILCompiler
 
         il.Emit(OpCodes.Ret);
 
-        void EmitInstanceAutoAccessorInitializers()
-        {
-            var instanceAutoAccessors = classStmt.AutoAccessors?.Where(a => !a.IsStatic && a.Initializer != null).ToList() ?? [];
-            if (instanceAutoAccessors.Count == 0) return;
-            ctx.FieldsField = fieldsField;
-            ctx.IsInstanceMethod = true;
-            var autoAccessorEmitter = new ILEmitter(ctx);
-            bool previous = ctx.SuppressNewTarget;
-            ctx.SuppressNewTarget = true;
-            foreach (var autoAccessor in instanceAutoAccessors)
-                EmitAutoAccessorInitializer(autoAccessorEmitter, autoAccessor, className, isStatic: false);
-            ctx.SuppressNewTarget = previous;
-        }
-
         void EmitOrderedFieldInitializers()
         {
             bool previous = ctx.SuppressNewTarget;
@@ -396,19 +387,47 @@ public partial class ILCompiler
 
         void EmitOrderedFieldInitializersCore()
         {
+            Label? nativeDone = null;
+            if (_nativeOwnAdapters.ContainsKey(typeBuilder))
+            {
+                var legacy = EmitNativeOwnReceiverGuard(il); nativeDone = il.DefineLabel();
+                ctx.FieldsField = fieldsField;
+                ctx.IsInstanceMethod = true;
+                var previousReceiver = ctx.ClassConstructorReceiver;
+                ctx.ClassConstructorReceiver = il.DeclareLocal(_types.Object);
+                il.Emit(OpCodes.Ldarg_0); il.Emit(OpCodes.Stloc, ctx.ClassConstructorReceiver);
+                EmitEffectiveClassElements(ctx, classStmt.Fields,
+                    _typedInterop.PropertyBackingFields.GetValueOrDefault(className),
+                    _typedInterop.PropertyTypes.GetValueOrDefault(className),
+                    field => il.Emit(OpCodes.Ldsfld, _classes.DeferredDefinitions.RequireFieldKey(field)));
+                ctx.ClassConstructorReceiver = previousReceiver;
+                il.Emit(OpCodes.Br, nativeDone.Value); il.MarkLabel(legacy);
+            }
+            EmitUninitializedParameterProperties(il, typeBuilder, constructor);
             // Note: Declare fields are excluded - they have no initialization
             var instanceFieldsWithInit = classStmt.Fields.Where(f =>
                 !f.IsStatic && !f.IsDeclare &&
-                (f.IsPrivate || f.Initializer != null || f.ComputedKey != null || f.TypeAnnotation == null)).ToList();
-            if (instanceFieldsWithInit.Count > 0 || _classes.PrivateElements.Require(className).Storage != null)
+                (f.IsPrivate || f.Initializer != null || f.ComputedKey != null || f.TypeAnnotation == null
+                    || GetClassRegistry().TryGetOwnGuestDataField(typeBuilder, f.Name.Lexeme, out var slot)
+                        && ReferenceEquals(slot.Source, f) && slot.BackingField == null)).ToList();
+            var instanceAutoAccessors = classStmt.AutoAccessors?.Where(accessor => !accessor.IsStatic) ?? [];
+            var elements = instanceFieldsWithInit.Cast<Stmt>().Concat(instanceAutoAccessors)
+                .OrderBy(element => element is Stmt.Field field ? field.Name.SourceOrderOffset : ((Stmt.AutoAccessor)element).Name.SourceOrderOffset).ToList();
+            if (elements.Count > 0 || _classes.PrivateElements.Require(className).Storage != null)
             {
                 ctx.FieldsField = fieldsField;
                 ctx.IsInstanceMethod = true;
                 var initEmitter = new ILEmitter(ctx);
 
                 var privateStorage = EmitPrivateFieldStorage(il, className);
-                foreach (var field in instanceFieldsWithInit)
+                foreach (var element in elements)
                 {
+                    if (element is Stmt.AutoAccessor accessor)
+                    {
+                        EmitAutoAccessorInitializer(initEmitter, accessor, className, isStatic: false);
+                        continue;
+                    }
+                    var field = (Stmt.Field)element;
                     if (field.IsPrivate)
                     {
                         EmitPrivateFieldInitializer(il, field, privateStorage!, initEmitter);
@@ -492,7 +511,7 @@ public partial class ILCompiler
                     }
                 }
             }
-
+            if (nativeDone is { } done) il.MarkLabel(done);
         }
     }
 

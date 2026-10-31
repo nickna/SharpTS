@@ -148,7 +148,7 @@ public class SharpTSTextDecoder : ISharpTSPropertyAccessor
         /// </summary>
         public object? Call(Interpreter interpreter, List<object?> arguments)
         {
-            return DecodeFromArgs(arguments.ToArray());
+            return CallWithReceiver(SharpTSUndefined.Instance, arguments);
         }
 
         /// <summary>
@@ -164,6 +164,15 @@ public class SharpTSTextDecoder : ISharpTSPropertyAccessor
             if (receiver is not SharpTSTextDecoder decoder)
                 throw new ThrowException(new SharpTSTypeError("TextDecoder.decode called on incompatible receiver"));
             return new TextDecoderDecodeMethod(decoder).DecodeFromArgs(arguments.ToArray());
+        }
+
+        internal ISharpTSCallable BindTo(object? receiver) => new ReceiverBoundDecode(this, receiver);
+
+        private sealed class ReceiverBoundDecode(TextDecoderDecodeMethod method, object? receiver) : ISharpTSCallable
+        {
+            public int Arity() => 0;
+            public object? Call(Interpreter interpreter, List<object?> arguments)
+                => method.CallWithReceiver(receiver, arguments);
         }
 
         private string DecodeFromArgs(object?[] args)

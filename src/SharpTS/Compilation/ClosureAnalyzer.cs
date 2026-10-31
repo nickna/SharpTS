@@ -33,6 +33,8 @@ public class ClosureAnalyzer : AstVisitorBase
 
     // Stack of scopes - each scope tracks variables declared at that level
     private readonly Stack<HashSet<string>> _scopeStack = new();
+    private readonly Dictionary<HashSet<string>, object?> _scopeOwners = [];
+    private readonly HashSet<HashSet<string>> _namespaceScopes = [];
 
     // Current function being analyzed (for tracking captures)
     private object? _currentFunction;
@@ -178,9 +180,6 @@ public class ClosureAnalyzer : AstVisitorBase
     {
         if (_bodyCells.CanTransportClassSelf(reference))
             return _bodyCells.TryGetClassSelfOwner(reference, out owner);
-        // Ordinary nested declarations do not yet carry an evaluated class
-        // owner. Preserve their previous capture/emission path; the raw lexical
-        // identity remains available in the independent analysis.
         owner = null!;
         return false;
     }
@@ -330,14 +329,21 @@ public class ClosureAnalyzer : AstVisitorBase
         _bodyCells.Analyze(statements, moduleOwners, _runtimeClassDeclarations);
         if (checkedTypes != null) _bodyCells.MarkUndefinedBodyVarReferences(checkedTypes);
         _checkedTypes = checkedTypes;
-        _scopeStack.Push([]);
-        HoistFunctionDeclarations(statements, hoistOwnedVars: true);
-        foreach (var stmt in statements)
+        if (moduleOwners is null)
         {
-            _moduleClrImports = moduleClrImports?.GetValueOrDefault(stmt);
-            Visit(stmt);
+            AnalyzeRoot(statements, moduleClrImports);
         }
-        _scopeStack.Pop();
+        else
+        {
+            // External modules have distinct lexical roots. The compiler already
+            // supplies the actual source owner for each statement; script files
+            // deliberately share one owner and therefore one global root.
+            object unowned = new();
+            foreach (var root in statements.GroupBy(
+                         statement => moduleOwners.GetValueOrDefault(statement) ?? unowned,
+                         ReferenceEqualityComparer.Instance))
+                AnalyzeRoot(root.ToList(), moduleClrImports);
+        }
         _moduleClrImports = null;
         _checkedTypes = null;
 
@@ -356,6 +362,18 @@ public class ClosureAnalyzer : AstVisitorBase
         }
     }
 
+    private void AnalyzeRoot(List<Stmt> statements,
+        IReadOnlyDictionary<Stmt, IReadOnlySet<string>>? moduleClrImports)
+    {
+        EnterScope();
+        HoistFunctionDeclarations(statements, hoistOwnedVars: true);
+        foreach (var statement in statements)
+        {
+            _moduleClrImports = moduleClrImports?.GetValueOrDefault(statement);
+            Visit(statement);
+        }
+        ExitScope();
+    }
     /// <summary>
     /// Pre-declares function declaration names in the current scope so that forward
     /// references to sibling functions resolve as outer-scope references (and therefore
@@ -390,7 +408,7 @@ public class ClosureAnalyzer : AstVisitorBase
             // pattern `function baseRest() { ... setToString(...) ... } ... var setToString
             // = shortOut(baseSetToString);` makes baseRest treat setToString as undeclared,
             // and the compiled inner function body emits a runtime ReferenceError fallback.
-            else if (stmt is Stmt.Var vr && vr.IsVar)
+            else if (stmt is Stmt.Var vr && vr.IsVar && !vr.IsDeclare)
                 DeclareVariable(vr.Name.Lexeme);
             // Pre-declare block-scoped let/const for the same reason (#533): an inner function
             // declared BEFORE a let/const in this scope must still capture it, because the function
@@ -398,7 +416,7 @@ public class ClosureAnalyzer : AstVisitorBase
             // block, function body, arrow body), so each binding is declared in its own scope.
             // Unlike var, no source-order initialization is implied — capture analysis only needs to
             // know which scope OWNS the name so the inner function shares the binding's slot.
-            else if (stmt is Stmt.Var lt && !lt.IsVar)
+            else if (stmt is Stmt.Var lt && !lt.IsVar && !lt.IsDeclare)
                 DeclareVariable(lt.Name.Lexeme, isPerIterationBinding: true);
             else if (stmt is Stmt.Const ct)
                 DeclareVariable(ct.Name.Lexeme, isPerIterationBinding: true);
@@ -409,8 +427,14 @@ public class ClosureAnalyzer : AstVisitorBase
 
     #region Scope management
 
-    private void EnterScope() => _scopeStack.Push([]);
-    private void ExitScope() => _scopeStack.Pop();
+    private void EnterScope()
+    {
+        HashSet<string> scope = [];
+        _scopeStack.Push(scope);
+        _scopeOwners.Add(scope, _currentFunction);
+    }
+
+    private void ExitScope() => _scopeOwners.Remove(_scopeStack.Pop());
 
     /// <param name="name">The declared identifier.</param>
     /// <param name="isPerIterationBinding">True when the declaration creates a fresh
@@ -473,6 +497,15 @@ public class ClosureAnalyzer : AstVisitorBase
         if (name is "console.log" or "console" or "undefined" or "NaN" or "Infinity" or "Symbol")
             return;
 
+        // Namespace members have namespace-owned static storage. Treating them
+        // as module captures can select an unrelated same-spelled module field.
+        foreach (var scope in _scopeStack)
+            if (scope.Contains(name))
+            {
+                if (_namespaceScopes.Contains(scope)) return;
+                break;
+            }
+
         // Check for self-reference in named function expressions
         // This needs to happen BEFORE the local variable check
         if (name == _currentFunctionName)
@@ -483,7 +516,7 @@ public class ClosureAnalyzer : AstVisitorBase
         }
 
         // Check if this is a local variable in the current function
-        if (_localVars.TryGetValue(_currentFunction, out var locals) && locals.Contains(name))
+        if (FindDefiningFunction(name) == _currentFunction)
             return;
 
         // Check if it's an outer variable - this means it's captured
@@ -508,6 +541,20 @@ public class ClosureAnalyzer : AstVisitorBase
                         if (!_captureSources.TryGetValue(expression, out var classSources))
                             _captureSources[expression] = classSources = [];
                         classSources[name] = definingFunc;
+                    }
+                    // Creating this evaluated class needs the same enclosing
+                    // binding even when only one of its initializers reads it.
+                    foreach (var frame in _functionStack)
+                    {
+                        if (ReferenceEquals(frame, definingFunc)) break;
+                        if (frame == null || !enclosingFunctions.Contains(frame)) continue;
+                        _captures[frame].Add(name);
+                        if (definingFunc != null)
+                        {
+                            if (!_captureSources.TryGetValue(frame, out var relaySources))
+                                _captureSources[frame] = relaySources = [];
+                            relaySources[name] = definingFunc;
+                        }
                     }
                 }
             if (definingFunc != null)
@@ -629,6 +676,9 @@ public class ClosureAnalyzer : AstVisitorBase
                 break; // sync arrow / function boundary — different relay mechanism applies
             if (_captures.TryGetValue(intermediateArrow, out var caps) && caps.Add(name))
                 _allCapturedVariables.Add(name);
+            if (!_captureSources.TryGetValue(intermediateArrow, out var sources))
+                _captureSources[intermediateArrow] = sources = [];
+            sources[name] = definingFunc;
         }
     }
 
@@ -721,28 +771,17 @@ public class ClosureAnalyzer : AstVisitorBase
     }
 
     /// <summary>
-    /// Finds the function that defines a given variable by checking _localVars
-    /// for functions in the stack. Returns null if the variable is top-level.
+    /// Finds the callable owning the nearest active lexical declaration.
+    /// Returns null if the variable is top-level or undeclared.
     /// Note: O(depth) where depth is nesting level, typically small (5-10).
     /// </summary>
-    /// <remarks>
-    /// <c>Stack&lt;T&gt;</c> enumerates LIFO (most-recently-pushed first), so a plain
-    /// <c>foreach</c> already visits the innermost function first — the nearest
-    /// declaring scope wins. That's what we want. The minimal reproducer that
-    /// surfaced this code path had two sibling module-level functions with the
-    /// same parameter name and inner closures capturing it; each function is
-    /// analyzed with its own fresh stack, so sibling collisions don't occur
-    /// through this path.
-    /// </remarks>
     private object? FindDefiningFunction(string name)
     {
-        foreach (var func in _functionStack)
-        {
-            if (func != null && _localVars.TryGetValue(func, out var locals) && locals.Contains(name))
-            {
-                return func;
-            }
-        }
+        // Cumulative function locals also contain declarations from exited
+        // blocks. Only an active lexical scope can own this reference.
+        foreach (var scope in _scopeStack)
+            if (scope.Contains(name))
+                return _scopeOwners[scope];
         return null;
     }
 
@@ -750,8 +789,26 @@ public class ClosureAnalyzer : AstVisitorBase
 
     #region Statement visitors
 
+    protected override void VisitNamespace(Stmt.Namespace stmt)
+    {
+        EnterScope();
+        var namespaceScope = _scopeStack.Peek();
+        _namespaceScopes.Add(namespaceScope);
+        try
+        {
+            HoistFunctionDeclarations(stmt.Members, hoistOwnedVars: true);
+            base.VisitNamespace(stmt);
+        }
+        finally
+        {
+            _namespaceScopes.Remove(namespaceScope);
+            ExitScope();
+        }
+    }
+
     protected override void VisitVar(Stmt.Var stmt)
     {
+        if (stmt.IsDeclare) return;
         DeclareVariable(stmt.Name.Lexeme, isPerIterationBinding: !stmt.IsVar);
         base.VisitVar(stmt);
     }
@@ -1187,9 +1244,9 @@ public class ClosureAnalyzer : AstVisitorBase
         foreach (var initializer in parameterInitializers?.Values.AsEnumerable() ?? [])
             foreach (var name in LexicalDeclarationBindings.Collect(initializer.Statements))
                 DeclareVariable(name.Lexeme);
+        foreach (var param in parameters) DeclareVariable(param.Name.Lexeme);
         foreach (var param in parameters)
         {
-            DeclareVariable(param.Name.Lexeme);
             if (param.DefaultValue != null)
                 Visit(param.DefaultValue);
             if (parameterInitializers?.TryGetValue(param.Name.Lexeme, out var initializer) == true)
@@ -1271,10 +1328,11 @@ public class ClosureAnalyzer : AstVisitorBase
             foreach (var name in LexicalDeclarationBindings.Collect(initializer.Statements))
                 DeclareVariable(name.Lexeme);
 
-        // Declare parameters (may shadow function name if same identifier)
+        // Every parameter binding exists while defaults run, including in
+        // deferred closures created before a later parameter initializes.
+        foreach (var param in af.Parameters) DeclareVariable(param.Name.Lexeme);
         foreach (var param in af.Parameters)
         {
-            DeclareVariable(param.Name.Lexeme);
             if (param.DefaultValue != null)
                 Visit(param.DefaultValue);
             if (parameterInitializers?.TryGetValue(param.Name.Lexeme, out var initializer) == true)

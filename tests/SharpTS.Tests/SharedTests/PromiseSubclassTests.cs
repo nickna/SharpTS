@@ -553,7 +553,7 @@ public class PromiseSubclassTests
         // symbol-expando dict.
         var source = """
             class MyP extends Promise<number> {}
-            (MyP as any)[Symbol.species] = Promise;
+            Object.defineProperty(MyP, Symbol.species, { value: Promise, configurable: true });
             async function main() {
                 const q = MyP.resolve(1).then(v => v);
                 console.log(q instanceof MyP);
@@ -575,7 +575,7 @@ public class PromiseSubclassTests
         var source = """
             class Other extends Promise<number> {}
             class MyP extends Promise<number> {}
-            (MyP as any)[Symbol.species] = Other;
+            Object.defineProperty(MyP, Symbol.species, { value: Other, configurable: true });
             async function main() {
                 const q = MyP.resolve(1).then(v => v);
                 console.log(q instanceof Other);
@@ -598,7 +598,7 @@ public class PromiseSubclassTests
         // is a plain promise, not a Sub/Base instance.
         var source = """
             class Base extends Promise<number> {}
-            (Base as any)[Symbol.species] = Promise;
+            Object.defineProperty(Base, Symbol.species, { value: Promise, configurable: true });
             class Sub extends Base {}
             async function main() {
                 const q = Sub.resolve(1).then(v => v);
@@ -624,7 +624,7 @@ public class PromiseSubclassTests
         // path uses, #351) so the expando is found in both modes (#349).
         var source = """
             class MyP<T> extends Promise<T> {}
-            (MyP as any)[Symbol.species] = Promise;
+            Object.defineProperty(MyP, Symbol.species, { value: Promise, configurable: true });
             async function main() {
                 const q = MyP.resolve(1).then(v => v);
                 console.log(q instanceof MyP);
@@ -726,7 +726,7 @@ public class PromiseSubclassTests
                 then(onF: any) { if (this.settled) onF(this.v); else this.cb = onF; }
             }
             class P extends Promise<number> {}
-            (P as any)[Symbol.species] = Thenable;
+            Object.defineProperty(P, Symbol.species, { value: Thenable, configurable: true });
             async function main() {
                 const r: any = P.resolve(5).then((x: number) => x * 2);
                 console.log(r instanceof Thenable);
@@ -820,7 +820,7 @@ public class PromiseSubclassTests
         // getter: a string is not a constructor → TypeError (#390).
         var source = """
             class MyPromise extends Promise<number> {}
-            (MyPromise as any)[Symbol.species] = "not a constructor";
+            Object.defineProperty(MyPromise, Symbol.species, { value: "not a constructor", configurable: true });
             let threw = false;
             try {
                 MyPromise.resolve(1).then(x => x);

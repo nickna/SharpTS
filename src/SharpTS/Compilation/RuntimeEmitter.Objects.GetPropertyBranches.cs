@@ -426,8 +426,7 @@ public partial class RuntimeEmitter
         il.Emit(OpCodes.Call, _types.GetMethod(_types.String, "op_Equality", _types.String, _types.String));
         var notTSArrayCtorLabel = il.DefineLabel();
         il.Emit(OpCodes.Brfalse, notTSArrayCtorLabel);
-        il.Emit(OpCodes.Ldtoken, _types.IListOfObject);
-        il.Emit(OpCodes.Call, _types.GetMethod(_types.Type, "GetTypeFromHandle", _types.RuntimeTypeHandle));
+        EmitRuntimeConstructorValue(il, _types.IListOfObject);
         il.Emit(OpCodes.Ret);
         il.MarkLabel(notTSArrayCtorLabel);
         // For other properties on $Array (method names like push/pop/sort/etc.),
@@ -551,8 +550,7 @@ public partial class RuntimeEmitter
         il.Emit(OpCodes.Call, _types.GetMethod(_types.String, "op_Equality", _types.String, _types.String));
         var notListCtorLabel = il.DefineLabel();
         il.Emit(OpCodes.Brfalse, notListCtorLabel);
-        il.Emit(OpCodes.Ldtoken, _types.IListOfObject);
-        il.Emit(OpCodes.Call, _types.GetMethod(_types.Type, "GetTypeFromHandle", _types.RuntimeTypeHandle));
+        EmitRuntimeConstructorValue(il, _types.IListOfObject);
         il.Emit(OpCodes.Ret);
         il.MarkLabel(notListCtorLabel);
         // Numeric-string index — `GetProperty(list, "0")` must return list[0] so
@@ -756,8 +754,7 @@ public partial class RuntimeEmitter
         il.Emit(OpCodes.Call, _types.GetMethod(_types.String, "op_Equality", _types.String, _types.String));
         var notStrCtorLabel = il.DefineLabel();
         il.Emit(OpCodes.Brfalse, notStrCtorLabel);
-        il.Emit(OpCodes.Ldtoken, _types.String);
-        il.Emit(OpCodes.Call, _types.GetMethod(_types.Type, "GetTypeFromHandle", _types.RuntimeTypeHandle));
+        EmitRuntimeConstructorValue(il, _types.String);
         il.Emit(OpCodes.Ret);
         il.MarkLabel(notStrCtorLabel);
 
@@ -823,8 +820,8 @@ public partial class RuntimeEmitter
             il.Emit(OpCodes.Call, _types.GetMethod(_types.String, "op_Equality", _types.String, _types.String));
             il.Emit(OpCodes.Brfalse, skip);
             il.Emit(OpCodes.Ldarg_0);
-            _types.EmitLoadMethodInfo(il, helper);
-            il.Emit(OpCodes.Newobj, inputs.TSFunctionCtor);
+            var parameterProducer1 = EmitReflectedMethodLiteral(il, helper);
+            EmitReflectedFunctionConstructor(il, inputs.TSFunctionCtor, parameterProducer1, cached: false);
             il.Emit(OpCodes.Ret);
             il.MarkLabel(skip);
         }
@@ -920,8 +917,8 @@ public partial class RuntimeEmitter
         il.Emit(OpCodes.Ldloc, tsObjectInstanceLocal);
         il.Emit(OpCodes.Ldstr, "__primitiveValue");
         il.Emit(OpCodes.Callvirt, inputs.ObjectStorage.GetProperty);
-        _types.EmitLoadMethodInfo(il, inputs.Symbols.ToStringMethod);
-        il.Emit(OpCodes.Newobj, inputs.TSFunctionCtor);
+        var parameterProducer2 = EmitReflectedMethodLiteral(il, inputs.Symbols.ToStringMethod);
+        EmitReflectedFunctionConstructor(il, inputs.TSFunctionCtor, parameterProducer2, cached: false);
         il.Emit(OpCodes.Ret);
         il.MarkLabel(notBoxedSymbolToString);
 
@@ -1089,8 +1086,7 @@ public partial class RuntimeEmitter
             // still wins.
             NameMatchBranch("constructor", () =>
             {
-                il.Emit(OpCodes.Ldtoken, inputs.RegExps.RequireImplementation().Type);
-                il.Emit(OpCodes.Call, _types.GetMethod(_types.Type, "GetTypeFromHandle", _types.RuntimeTypeHandle));
+                EmitRuntimeConstructorValue(il, inputs.RegExps.RequireImplementation().Type);
             });
             // "source" / "flags" — string fields.
             NameMatchBranch("source", () =>
@@ -1301,10 +1297,10 @@ public partial class RuntimeEmitter
             il.Emit(OpCodes.Ldarg_0);
             il.Emit(OpCodes.Call, inputs.DescriptorStorage.HasPrototypeEntry);
             il.Emit(OpCodes.Brtrue, skip);
-            _types.EmitLoadMethodInfo(il, helper);
+            var parameterProducer3 = EmitReflectedMethodLiteral(il, helper);
             il.Emit(OpCodes.Ldstr, jsName);
             il.Emit(OpCodes.Ldc_I4, jsLength);
-            il.Emit(OpCodes.Call, inputs.TSFunctionGetOrCreate);
+            EmitReflectedFunctionFactory(il, inputs.TSFunctionGetOrCreate, parameterProducer3);
             il.Emit(OpCodes.Ret);
             il.MarkLabel(skip);
         }
@@ -1403,10 +1399,10 @@ public partial class RuntimeEmitter
             il.Emit(OpCodes.Call, inputs.Abort.ControllerGetSignal);
             il.Emit(OpCodes.Ret);
             il.MarkLabel(controllerAbort);
-            _types.EmitLoadMethodInfo(il, inputs.Abort.ControllerAbort);
+            var parameterProducer4 = EmitReflectedMethodLiteral(il, inputs.Abort.ControllerAbort);
             il.Emit(OpCodes.Ldstr, "abort");
             il.Emit(OpCodes.Ldc_I4_0);
-            il.Emit(OpCodes.Call, inputs.TSFunctionGetOrCreate);
+            EmitReflectedFunctionFactory(il, inputs.TSFunctionGetOrCreate, parameterProducer4);
             il.Emit(OpCodes.Ret);
             il.MarkLabel(notControllerProperty);
         }
@@ -1436,10 +1432,10 @@ public partial class RuntimeEmitter
             void EmitSignalMethodWrapper(MethodBuilder helper, string jsName, int jsLength)
             {
                 il.Emit(OpCodes.Ldnull);
-                _types.EmitLoadMethodInfo(il, helper);
+                var parameterProducer5 = EmitReflectedMethodLiteral(il, helper);
                 il.Emit(OpCodes.Ldstr, jsName);
                 il.Emit(OpCodes.Ldc_I4, jsLength);
-                il.Emit(OpCodes.Newobj, inputs.TSFunctionCtorWithCache);
+                EmitReflectedFunctionConstructor(il, inputs.TSFunctionCtorWithCache, parameterProducer5, cached: true);
                 il.Emit(OpCodes.Ret);
             }
 
@@ -1550,8 +1546,7 @@ public partial class RuntimeEmitter
         il.Emit(OpCodes.Ldstr, "constructor");
         il.Emit(OpCodes.Call, _types.GetMethod(_types.String, "op_Equality", _types.String, _types.String));
         il.Emit(OpCodes.Brfalse, notDictCtorLabel);
-        il.Emit(OpCodes.Ldtoken, _types.Object);
-        il.Emit(OpCodes.Call, _types.GetMethod(_types.Type, "GetTypeFromHandle", _types.RuntimeTypeHandle));
+        EmitRuntimeConstructorValue(il, _types.Object);
         il.Emit(OpCodes.Ret);
         il.MarkLabel(notDictCtorLabel);
         // ECMA-262 19.1.3: every plain object inherits from Object.prototype.

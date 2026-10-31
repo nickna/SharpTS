@@ -174,8 +174,11 @@ public sealed class EmittedObjectDeletionRuntimeTests
     private static object MakeInputs(Type type, EmittedRuntime runtime, IReadOnlyDictionary<string, object?> overrides)
     {
         var constructor = Assert.Single(type.GetConstructors());
+        if (type.Name == "ProxyDeleteCheckInputs")
+            return constructor.Invoke([runtime.ObjectRead.Property, runtime.ReflectedMethods.InvokeUnwrapped,
+                runtime.ObjectDescriptors, runtime.ObjectState, runtime.ReflectedMethods.NativeProxyRejection]);
         return constructor.Invoke(constructor.GetParameters().Select(parameter => overrides.TryGetValue(parameter.Name!, out var value)
-            ? value : (parameter.Name switch { "TSFunctionType" => runtime.FunctionValues.Type, _ => (parameter.Name switch { "InvokeMethodUnwrapped" => runtime.ReflectedMethods.InvokeUnwrapped, _ => (parameter.Name switch { "InvokeValue" => runtime.Invocation.Value, "InvokeMethodValue" => runtime.Invocation.Method, "InvokeMethodValue0" => runtime.Invocation.Method0, _ => (parameter.Name! switch { "UndefinedType" => runtime.Sentinels.UndefinedType, "UndefinedInstance" => runtime.Sentinels.UndefinedInstance, _ => typeof(EmittedRuntime).GetProperty(parameter.Name!)!.GetValue(runtime) }) }) }) })).ToArray());
+            ? value : (parameter.Name switch { "ToPropertyKey" => runtime.Reflect.ToPropertyKey, "ProxyDelete" => MakeInputs(parameter.ParameterType, runtime, overrides), "TSFunctionType" => runtime.FunctionValues.Type, _ => (parameter.Name switch { "InvokeMethodUnwrapped" => runtime.ReflectedMethods.InvokeUnwrapped, _ => (parameter.Name switch { "InvokeValue" => runtime.Invocation.Value, "InvokeMethodValue" => runtime.Invocation.Method, "InvokeMethodValue0" => runtime.Invocation.Method0, _ => (parameter.Name! switch { "UndefinedType" => runtime.Sentinels.UndefinedType, "UndefinedInstance" => runtime.Sentinels.UndefinedInstance, _ => typeof(EmittedRuntime).GetProperty(parameter.Name!)!.GetValue(runtime) }) }) }) })).ToArray());
     }
     private static void Fill(object owner, string? missing = null)
     {

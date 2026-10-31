@@ -5,7 +5,7 @@ namespace SharpTS.Compilation;
 
 public partial class RuntimeEmitter
 {
-    private readonly record struct ProxyMaterializeForJsonInputs(MethodBuilder InvokeMethodUnwrapped);
+    private readonly record struct ProxyMaterializeForJsonInputs(MethodBuilder InvokeMethodUnwrapped, MethodInfo? NativeProxyRejection);
 
     private void EmitInvokeMethodUnwrapped(
         TypeBuilder typeBuilder,
@@ -119,6 +119,14 @@ public partial class RuntimeEmitter
         EmitProxyTypeCheck(il, () => il.Emit(OpCodes.Ldloc, valueLocal), proxyLabel, notProxyLabel);
 
         il.MarkLabel(proxyLabel);
+
+        if (inputs.NativeProxyRejection is { } rejection)
+        {
+            il.Emit(OpCodes.Call, rejection);
+            il.Emit(OpCodes.Pop);
+            il.Emit(OpCodes.Br, notProxyLabel);
+            return;
+        }
 
         // proxyType = Type.GetType("SharpTS.Runtime.Types.SharpTSProxy, SharpTS")
         var proxyTypeLocal = il.DeclareLocal(_types.Type);

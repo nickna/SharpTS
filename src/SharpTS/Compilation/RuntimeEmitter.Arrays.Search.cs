@@ -484,24 +484,26 @@ public partial class RuntimeEmitter
     /// <c>__this</c> slot.
     /// </summary>
     /// <remarks>
-    /// Called from <c>$TSFunction.CoercePrimitiveArgs</c> via late-bound
-    /// reflection (<c>Type.GetType("$Runtime").GetMethod("RequireObjectCoercibleThis")</c>),
-    /// because TSFunction's IL is emitted before the TSError class is built.
+    /// Called directly from <c>$TSFunction.CoercePrimitiveArgs</c> through an
+    /// early method declaration; its body follows the TSError declarations.
     /// Routing through this helper lets us throw a real <c>$TypeError</c>
     /// instance that <c>e instanceof TypeError</c> sees correctly, without
     /// each <c>String.prototype.X</c> helper repeating the null/Symbol check.
     /// </remarks>
-    private void EmitRequireObjectCoercibleThis(
-        TypeBuilder typeBuilder, EmittedReceiverGuardRuntime receiverGuard,
-        Type undefinedType, Type symbolType, MethodInfo createException, ConstructorInfo typeErrorConstructor)
+    private void DeclareRequireObjectCoercibleThis(TypeBuilder typeBuilder, EmittedReceiverGuardRuntime receiverGuard)
     {
-        var method = typeBuilder.DefineMethod(
+        receiverGuard.RequireObjectCoercibleThis = typeBuilder.DefineMethod(
             "RequireObjectCoercibleThis",
             MethodAttributes.Public | MethodAttributes.Static,
             _types.Object,
             [_types.Object]);
-        receiverGuard.RequireObjectCoercibleThis = method;
+    }
 
+    private void EmitRequireObjectCoercibleThis(
+        EmittedReceiverGuardRuntime receiverGuard,
+        Type undefinedType, Type symbolType, MethodInfo createException, ConstructorInfo typeErrorConstructor)
+    {
+        var method = receiverGuard.RequireObjectCoercibleThis;
         var il = method.GetILGenerator();
         var passThroughLabel = il.DefineLabel();
 
@@ -2483,7 +2485,8 @@ public partial class RuntimeEmitter
                 runtime.ReflectedMethods.InvokeUnwrapped,
                 runtime.ObjectDescriptors,
                 runtime.ObjectRead,
-                runtime.ObjectState
+                runtime.ObjectState,
+                NativeProxyRejection: runtime.ReflectedMethods.NativeProxyRejection
             )
         );
         il.MarkLabel(notProxyLabel);

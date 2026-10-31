@@ -59,6 +59,7 @@ internal static class ParameterBinder
         Interpreter interpreter,
         List<Stmt>? body = null)
     {
+        ReserveParameterBindings(parameters, body, environment);
         var initializers = ParameterInitializers(body);
         for (int i = 0; i < parameters.Count; i++)
         {
@@ -115,6 +116,7 @@ internal static class ParameterBinder
         Interpreter interpreter,
         List<Stmt>? body = null)
     {
+        ReserveParameterBindings(parameters, body, environment);
         var initializers = ParameterInitializers(body);
         for (int i = 0; i < parameters.Count; i++)
         {
@@ -176,6 +178,7 @@ internal static class ParameterBinder
         Interpreter interpreter,
         List<Stmt>? body = null)
     {
+        ReserveParameterBindings(parameters, body, environment);
         var initializers = ParameterInitializers(body);
         for (int i = 0; i < parameters.Count; i++)
         {
@@ -223,6 +226,18 @@ internal static class ParameterBinder
 
     internal static bool HasParameterExpressions(IEnumerable<Stmt.Parameter> parameters)
         => parameters.Any(parameter => parameter.DefaultValue is not null || parameter.HasBindingExpressions);
+
+    private static void ReserveParameterBindings(List<Stmt.Parameter> parameters, List<Stmt>? body,
+        RuntimeEnvironment environment)
+    {
+        if (!HasParameterExpressions(parameters)) return;
+        // Every formal binding owns its TDZ before any default runs. A formal named
+        // arguments also masks the invocation's already-materialized arguments object.
+        foreach (var parameter in parameters)
+            environment.ReserveLexical(parameter.Name.Lexeme, replaceExisting: true);
+        foreach (var name in GetBodyBindings(body).DestructuredNames)
+            environment.ReserveLexical(name.Lexeme, replaceExisting: true);
+    }
 
     internal static Dictionary<string, Stmt.Sequence>? ParameterInitializers(List<Stmt>? body)
         => body is null ? null : GetBodyBindings(body).Initializers;

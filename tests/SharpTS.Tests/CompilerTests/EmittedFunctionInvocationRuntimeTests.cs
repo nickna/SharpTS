@@ -46,7 +46,13 @@ public sealed class EmittedFunctionInvocationRuntimeTests
         Assert.Equal("$ArgumentsContext", field.DeclaringType!.Name);
         Assert.True(((TypeBuilder)field.DeclaringType).IsCreated());
         Assert.False(owner.IsComplete); Assert.Throws<InvalidOperationException>(owner.CompleteEmission);
-        emitter.EmitArgumentsTypeDefinition(module, owner); owner.CompleteEmission();
+        emitter.EmitArgumentsTypeDefinition(module, owner);
+        var initializers = module.DefineType("ArgumentInitialization");
+        owner.Initialize = initializers.DefineMethod("Initialize", MethodAttributes.Public | MethodAttributes.Static,
+            typeof(void), [typeof(object)]);
+        owner.Initialize.GetILGenerator().Emit(OpCodes.Ret);
+        initializers.CreateType();
+        owner.CompleteEmission();
         Assert.Same(field, owner.CurrentField); Assert.True(owner.Type.IsCreated());
         var loaded = SaveVerifyLoad(builder);
         Assert.NotNull(loaded.GetType("$ArgumentsContext")!.GetField(field.Name)!.GetCustomAttribute<ThreadStaticAttribute>());
@@ -151,7 +157,7 @@ public sealed class EmittedFunctionInvocationRuntimeTests
         captureType.CreateType();
         var bindings = new EmittedFunctionBindingRuntime
             { CaptureName = captureName, CaptureLength = captureLength, CapturePrototype = capturePrototype };
-        typeof(RuntimeEmitter).GetMethod("EmitBoundTSFunctionClass", Members)!.Invoke(new RuntimeEmitter(TypeProvider.Runtime), [module, bindings, values]);
+        typeof(RuntimeEmitter).GetMethod("EmitBoundTSFunctionClass", Members)!.Invoke(new RuntimeEmitter(TypeProvider.Runtime), [module, bindings, values, null]);
         Assert.True(bindings.BoundType.IsCreated()); Assert.NotNull(bindings.BoundInvoke); Assert.NotNull(bindings.BoundInvokeWithThis);
         Assert.False(bindings.IsComplete); Assert.Throws<InvalidOperationException>(bindings.CompleteEmission);
         Assert.Throws<InvalidOperationException>(() => bindings.AnyType); Assert.Throws<InvalidOperationException>(() => bindings.ApplyInvoke);
@@ -191,7 +197,7 @@ public sealed class EmittedFunctionInvocationRuntimeTests
         var fallback = fallbackType.DefineMethod("InvokeMethodValue", MethodAttributes.Public | MethodAttributes.Static, typeof(object), [typeof(object), typeof(object), typeof(object[])]);
         fallback.GetILGenerator().Emit(OpCodes.Ldnull); fallback.GetILGenerator().Emit(OpCodes.Ret); fallbackType.CreateType();
         var invocation = new EmittedInvocationRuntime { Method = fallback };
-        var peers = Activator.CreateInstance(inputs, Members, null, [values, arrays, maps, sets, invocation], null)!;
+        var peers = Activator.CreateInstance(inputs, Members, null, [values, arrays, maps, sets, invocation, null], null)!;
         var dispatcher = module.DefineType("Dispatch", TypeAttributes.Public);
         var targetField = dispatcher.DefineField("Target", typeof(object), FieldAttributes.Public);
         var method = dispatcher.DefineMethod("Invoke", MethodAttributes.Public, typeof(object), [typeof(object[])]);

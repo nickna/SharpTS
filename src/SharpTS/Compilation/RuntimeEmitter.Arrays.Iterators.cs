@@ -499,6 +499,10 @@ public partial class RuntimeEmitter
 
         il.MarkLabel(loopEnd);
         il.Emit(OpCodes.Ldloc, resultLocal);
+        // A VM can read the result as a guest array. Use the existing canonical
+        // fresh-result constructor rather than granting authority to BCL lists.
+        if (_features.UsesVm)
+            il.Emit(OpCodes.Newobj, runtime.ArrayStorage.Ctor);
         il.Emit(OpCodes.Ret);
     }
 
@@ -592,6 +596,10 @@ public partial class RuntimeEmitter
 
         il.MarkLabel(loopEnd);
         il.Emit(OpCodes.Ldloc, resultLocal);
+        // A VM can read the result as a guest array. Use the existing canonical
+        // fresh-result constructor rather than granting authority to BCL lists.
+        if (_features.UsesVm)
+            il.Emit(OpCodes.Newobj, runtime.ArrayStorage.Ctor);
         il.Emit(OpCodes.Ret);
     }
 
@@ -2437,7 +2445,7 @@ public partial class RuntimeEmitter
         var il = method.GetILGenerator();
         il.Emit(OpCodes.Ldarg_0);
         il.Emit(OpCodes.Ldc_I4_2);
-        il.Emit(OpCodes.Newobj, arrays.IteratorCtor);
+        NativePrototypeFieldsLookup.EmitCarrierCreate(_nativePrototypeFields, il, arrays.IteratorCtor);
         il.Emit(OpCodes.Ret);
     }
 
@@ -2457,7 +2465,7 @@ public partial class RuntimeEmitter
         var il = method.GetILGenerator();
         il.Emit(OpCodes.Ldarg_0);
         il.Emit(OpCodes.Ldc_I4_0);
-        il.Emit(OpCodes.Newobj, arrays.IteratorCtor);
+        NativePrototypeFieldsLookup.EmitCarrierCreate(_nativePrototypeFields, il, arrays.IteratorCtor);
         il.Emit(OpCodes.Ret);
     }
 
@@ -2478,7 +2486,7 @@ public partial class RuntimeEmitter
 
         il.Emit(OpCodes.Ldarg_0);
         il.Emit(OpCodes.Ldc_I4_1);
-        il.Emit(OpCodes.Newobj, arrays.IteratorCtor);
+        NativePrototypeFieldsLookup.EmitCarrierCreate(_nativePrototypeFields, il, arrays.IteratorCtor);
         il.Emit(OpCodes.Ret);
     }
 }

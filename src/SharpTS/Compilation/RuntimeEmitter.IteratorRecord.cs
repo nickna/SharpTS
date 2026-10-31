@@ -75,7 +75,12 @@ public partial class RuntimeEmitter
         EmittedSymbolRuntime Symbols,
         EmittedObjectReadRuntime ObjectRead,
         EmittedInvocationRuntime Invocation,
-        EmittedErrorRuntime Errors
+        EmittedErrorRuntime Errors,
+        MethodInfo HasIn,
+        EmittedFunctionConstructionRuntime Construction,
+        EmittedFunctionAttributesRuntime Attributes,
+        FieldInfo UndefinedInstance,
+        Type? GeneratorType
     );
 
     private void EmitCapturedIteratorMethods(TypeBuilder typeBuilder, EmittedIteratorRecordRuntime iteratorRecords, CapturedIteratorInputs inputs)
@@ -98,14 +103,43 @@ public partial class RuntimeEmitter
         il.MarkLabel(invalid);
         GuestErrorEmitter.ThrowError(il, inputs.Errors.CreateException, inputs.Errors.TypeErrorConstructor, "Iterator protocol requires an object");
 
+        var nativeNext = EmitCapturedNativeIteratorNext(typeBuilder, inputs);
         var getNext = typeBuilder.DefineMethod("GetIteratorNextMethod",
             MethodAttributes.Public | MethodAttributes.Static, _types.Object, [_types.Object]);
         iteratorRecords.NextMethod = getNext;
         il = getNext.GetILGenerator();
+        var next = il.DeclareLocal(_types.Object);
+        var useGuestNext = il.DefineLabel();
         il.Emit(OpCodes.Ldarg_0);
         il.Emit(OpCodes.Call, require);
         il.Emit(OpCodes.Ldstr, "next");
         il.Emit(OpCodes.Call, inputs.ObjectRead.Property);
+        il.Emit(OpCodes.Stloc, next);
+        il.Emit(OpCodes.Ldloc, next);
+        il.Emit(OpCodes.Isinst, inputs.UndefinedType);
+        il.Emit(OpCodes.Brfalse, useGuestNext);
+        il.Emit(OpCodes.Ldarg_0);
+        il.Emit(OpCodes.Isinst, _types.IEnumerator);
+        il.Emit(OpCodes.Brfalse, useGuestNext);
+        if (inputs.GeneratorType is { } generatorType)
+        {
+            il.Emit(OpCodes.Ldarg_0);
+            il.Emit(OpCodes.Isinst, generatorType);
+            il.Emit(OpCodes.Brtrue, useGuestNext);
+        }
+        // An explicit undefined/getterless next claims the key. Only a native
+        // adapter with no guest slot receives the captured intrinsic operation.
+        il.Emit(OpCodes.Ldstr, "next");
+        il.Emit(OpCodes.Ldarg_0);
+        il.Emit(OpCodes.Call, inputs.HasIn);
+        il.Emit(OpCodes.Brtrue, useGuestNext);
+        var parameterProducer = EmitReflectedMethodLiteral(il, nativeNext);
+        il.Emit(OpCodes.Ldstr, "next");
+        il.Emit(OpCodes.Ldc_I4_0);
+        EmitReflectedFunctionFactory(il, inputs.Construction.GetOrCreate, parameterProducer);
+        il.Emit(OpCodes.Ret);
+        il.MarkLabel(useGuestNext);
+        il.Emit(OpCodes.Ldloc, next);
         il.Emit(OpCodes.Ret);
 
         iteratorRecords.InvokeNext = EmitCall("InvokeCapturedIteratorNext", false);
@@ -137,5 +171,55 @@ public partial class RuntimeEmitter
             callIl.Emit(OpCodes.Ret);
             return method;
         }
+    }
+
+    private MethodBuilder EmitCapturedNativeIteratorNext(TypeBuilder typeBuilder, CapturedIteratorInputs inputs)
+    {
+        var method = typeBuilder.DefineMethod("CapturedNativeIteratorNext",
+            MethodAttributes.Public | MethodAttributes.Static, _types.Object, [_types.Object]);
+        method.DefineParameter(1, ParameterAttributes.None, "__this");
+        method.SetCustomAttribute(inputs.Attributes.ExpectsThisCtor, CustomAttributeEncoder.EmptyBlob);
+        method.SetCustomAttribute(inputs.Attributes.NonConstructibleCtor, CustomAttributeEncoder.EmptyBlob);
+        var il = method.GetILGenerator();
+        var iterator = il.DeclareLocal(_types.IEnumerator);
+        var done = il.DeclareLocal(_types.Boolean);
+        var result = il.DeclareLocal(_types.DictionaryStringObject);
+        var valid = il.DefineLabel();
+        il.Emit(OpCodes.Ldarg_0);
+        il.Emit(OpCodes.Isinst, _types.IEnumerator);
+        il.Emit(OpCodes.Stloc, iterator);
+        il.Emit(OpCodes.Ldloc, iterator);
+        il.Emit(OpCodes.Brtrue, valid);
+        GuestErrorEmitter.ThrowError(il, inputs.Errors.CreateException, inputs.Errors.TypeErrorConstructor,
+            "Iterator next called on incompatible receiver");
+        il.MarkLabel(valid);
+        il.Emit(OpCodes.Ldloc, iterator);
+        il.Emit(OpCodes.Callvirt, _types.GetMethodNoParams(_types.IEnumerator, "MoveNext"));
+        il.Emit(OpCodes.Ldc_I4_0);
+        il.Emit(OpCodes.Ceq);
+        il.Emit(OpCodes.Stloc, done);
+        il.Emit(OpCodes.Newobj, _types.DictionaryStringObjectCtor);
+        il.Emit(OpCodes.Stloc, result);
+        il.Emit(OpCodes.Ldloc, result);
+        il.Emit(OpCodes.Ldstr, "done");
+        il.Emit(OpCodes.Ldloc, done);
+        il.Emit(OpCodes.Box, _types.Boolean);
+        il.Emit(OpCodes.Callvirt, _types.GetMethod(_types.DictionaryStringObject, "set_Item"));
+        il.Emit(OpCodes.Ldloc, result);
+        il.Emit(OpCodes.Ldstr, "value");
+        var complete = il.DefineLabel();
+        var valueReady = il.DefineLabel();
+        il.Emit(OpCodes.Ldloc, done);
+        il.Emit(OpCodes.Brtrue, complete);
+        il.Emit(OpCodes.Ldloc, iterator);
+        il.Emit(OpCodes.Callvirt, _types.GetPropertyGetter(_types.IEnumerator, "Current"));
+        il.Emit(OpCodes.Br, valueReady);
+        il.MarkLabel(complete);
+        il.Emit(OpCodes.Ldsfld, inputs.UndefinedInstance);
+        il.MarkLabel(valueReady);
+        il.Emit(OpCodes.Callvirt, _types.GetMethod(_types.DictionaryStringObject, "set_Item"));
+        il.Emit(OpCodes.Ldloc, result);
+        il.Emit(OpCodes.Ret);
+        return method;
     }
 }

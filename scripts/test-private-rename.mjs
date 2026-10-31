@@ -234,6 +234,17 @@ for (const configuration of [
       ["private-compound-field", "class Box { /*declaration*/#old: number = 1; " +
         "run(): number { this./*compound*/#old += this./*rhs*/#old; return this./*read*/#old; } }",
         ["declaration", "compound", "rhs", "read"]],
+      ...[
+        ["postfix-increment", "this./*update*/#old++;"],
+        ["prefix-increment", "++this./*update*/#old;"],
+        ["postfix-decrement", "this./*update*/#old--;"],
+        ["prefix-decrement", "--this./*update*/#old;"],
+      ].map(([name, update]) => [
+        "private-" + name,
+        "class Box { /*declaration*/#old: number = 1; run(): number { " + update +
+          " return this./*read*/#old; } }",
+        ["declaration", "update", "read"],
+      ]),
       ...["||=", "&&=", "??="].map((operator) => [
         "private-logical-field-" + operator,
         "class Box { /*declaration*/#old: number = 1; " +
@@ -261,7 +272,7 @@ for (const configuration of [
       ["unresolved-private-occurrence", "class Box { #old: number = 1; run(loose: any): number { loose.#old; return this./*read*/#old; } }", "#old"],
       ["recovered-domain", "class Box { #old: number = 1; run(): number { return this./*read*/#old; }", "#old"],
       ["unrelated-target-document-parse-error", "class Box { #old: number = 1; run(): number { return this./*read*/#old; } } const = 1;", "#old"],
-      ["private-update-original-is-parser-rejected", "class Box { #old: number = 1; run(): number { this.#old++; return this./*read*/#old; } }", "#old"],
+      ["private-update-is-not-an-assignment-target", "class Box { #old: number = 1; run(): number { this.#old++ = 2; return this./*read*/#old; } }", "#old"],
       ["public-member-of-branded-class", "class Box { #brand: number = 1; old: number = 1; run(): number { return this./*read*/old; } }", "old"],
       ["typescript-private", "class Box { private old: number = 1; run(): number { return this./*read*/old; } }", "old"],
       ["protected-member", "class Box { protected old: number = 1; run(): number { return this./*read*/old; } }", "old"],

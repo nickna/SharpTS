@@ -36,6 +36,14 @@ public partial class ILEmitter
         if (TryEmitExternalBinaryOperator(b))
             return;
 
+        if (HasRawNumericValue(b.Left) || HasRawNumericValue(b.Right))
+        {
+            // Checked `number` does not exclude a retained BigInt. The existing
+            // boxed operator path preserves numeric-kind dispatch and errors.
+            base.EmitBinary(b);
+            return;
+        }
+
         if (TryEmitDirectInt32TypedArrayStencil(b))
             return;
 
@@ -323,7 +331,7 @@ public partial class ILEmitter
         var candidate = resolver.ResolveMethod(methods, arguments);
         var method = (System.Reflection.MethodInfo)candidate.Method;
         var byRefOutputs = EmitExternalCallArguments(arguments, method, candidate);
-        IL.Emit(OpCodes.Call, method);
+        IL.Emit(OpCodes.Call, _ctx.TypeMapper.ForEmission(method));
         EmitExternalCallResult(method, byRefOutputs);
 
         SetStackUnknown();
@@ -577,6 +585,8 @@ public partial class ILEmitter
         if (TryEmitExternalUnaryOperator(u))
             return;
 
+        if (TryEmitRawNumericUnary(u)) return;
+
         switch (u.Operator.Type)
         {
             case TokenType.MINUS:
@@ -638,7 +648,7 @@ public partial class ILEmitter
 
             case TokenType.TYPEOF:
                 // typeof never throws on undeclared variables - returns "undefined"
-                if (TryEmitGlobalParseIntTypeOf(u.Right))
+                if (TryEmitMutableGlobalFunctionTypeOf(u.Right))
                 {
                     break;
                 }
@@ -717,7 +727,7 @@ public partial class ILEmitter
         var candidate = resolver.ResolveMethod(methods, arguments);
         var method = (System.Reflection.MethodInfo)candidate.Method;
         var byRefOutputs = EmitExternalCallArguments(arguments, method, candidate);
-        IL.Emit(OpCodes.Call, method);
+        IL.Emit(OpCodes.Call, _ctx.TypeMapper.ForEmission(method));
         EmitExternalCallResult(method, byRefOutputs);
         SetStackUnknown();
         return true;
@@ -747,6 +757,11 @@ public partial class ILEmitter
         var local = _ctx.Locals.GetLocal(ca.Name.Lexeme);
         FieldBuilder? topLevelField = null;
         _ctx.TopLevelStaticVars?.TryGetValue(ca.Name.Lexeme, out topLevelField);
+        if (HasOwnedReceiverParameterCapture(ca.Name.Lexeme))
+        {
+            local = null;
+            topLevelField = null;
+        }
 
         // Special case: string concatenation with +=
         if (ca.Operator.Type == TokenType.PLUS_EQUAL && IsStringExpression(ca.Value))
@@ -906,7 +921,7 @@ public partial class ILEmitter
         var candidate = resolver.ResolveMethod(methods, arguments);
         var method = (System.Reflection.MethodInfo)candidate.Method;
         var byRefOutputs = EmitExternalCallArguments(arguments, method, candidate);
-        IL.Emit(OpCodes.Call, method);
+        IL.Emit(OpCodes.Call, _ctx.TypeMapper.ForEmission(method));
         EmitExternalCallResult(method, byRefOutputs);
 
         var result = IL.DeclareLocal(_ctx.Types.Object);
@@ -971,6 +986,11 @@ public partial class ILEmitter
         var local = _ctx.Locals.GetLocal(la.Name.Lexeme);
         FieldBuilder? topLevelField = null;
         _ctx.TopLevelStaticVars?.TryGetValue(la.Name.Lexeme, out topLevelField);
+        if (HasOwnedReceiverParameterCapture(la.Name.Lexeme))
+        {
+            local = null;
+            topLevelField = null;
+        }
 
         // Load current value
         EmitVariable(new Expr.Variable(la.Name));
@@ -1030,6 +1050,20 @@ public partial class ILEmitter
 
         builder.MarkLabel(endLabel);
         SetStackUnknown();
+    }
+
+    private bool HasOwnedReceiverParameterCapture(string name)
+    {
+        string storage = _ctx.ResolveFunctionDCFieldName(name);
+        // Receiver initializers keep argument locals while binding defaults, then
+        // seed captured parameters. Body writes must use the same field as arrows.
+        return _ctx.IsRuntimeReceiverInitializer && _ctx.UseOwnedCapturedParameterStorage &&
+            (_ctx.InitializedParameterNames?.Contains(name) == true ||
+             _ctx.PublishedCapturedParameterNames?.Contains(name) == true) &&
+            _ctx.Locals.GetNestedScopeLocal(name) is null &&
+            _ctx.FunctionDisplayClassLocal is not null &&
+            _ctx.CapturedFunctionLocals?.Contains(storage) == true &&
+            _ctx.FunctionDisplayClassFields?.ContainsKey(storage) == true;
     }
 
     protected override void EmitLogicalSet(Expr.LogicalSet ls)
@@ -2127,6 +2161,12 @@ public partial class ILEmitter
 
     protected override void EmitPrefixIncrement(Expr.PrefixIncrement pi)
     {
+        if (pi.Operand is Expr.GetPrivate privateField)
+        {
+            EmitPrivateIncrement(privateField, pi.Operator.Type, isPrefix: true);
+            return;
+        }
+
         if (TryEmitExternalIncrement(
                 pi.Operand, pi.Operator.Type, isPrefix: true))
             return;
@@ -2220,12 +2260,13 @@ public partial class ILEmitter
             if (TryResolveStaticThisField(get, out _, out var staticFieldPre))
             {
                 IL.Emit(OpCodes.Ldsfld, staticFieldPre);
-                EmitUnboxToDouble();
-                IL.Emit(OpCodes.Ldc_R8, 1.0);
-                IL.Emit(pi.Operator.Type == TokenType.PLUS_PLUS ? OpCodes.Add : OpCodes.Sub);
-                IL.Emit(OpCodes.Box, _ctx.Types.Double);
-                IL.Emit(OpCodes.Dup);
+                var rawValue = IL.DeclareLocal(_ctx.Types.Object);
+                IL.Emit(OpCodes.Stloc, rawValue);
+                EmitNumericUpdate(rawValue, pi.Operator.Type == TokenType.PLUS_PLUS,
+                    out _, out var newValue);
+                IL.Emit(OpCodes.Ldloc, newValue);
                 IL.Emit(OpCodes.Stsfld, staticFieldPre);
+                IL.Emit(OpCodes.Ldloc, newValue);
                 SetStackUnknown();
                 return;
             }
@@ -2297,39 +2338,14 @@ public partial class ILEmitter
         SetStackUnknown();
     }
 
-    private void EmitNumericUpdate(
-        LocalBuilder rawValue,
-        bool isIncrement,
-        out LocalBuilder oldNumeric,
-        out LocalBuilder newNumeric)
-    {
-        oldNumeric = IL.DeclareLocal(_ctx.Types.Object);
-        newNumeric = IL.DeclareLocal(_ctx.Types.Object);
-        var numberPath = IL.DefineLabel();
-        var numericReady = IL.DefineLabel();
-
-        IL.Emit(OpCodes.Ldloc, rawValue);
-        IL.Emit(OpCodes.Isinst, _ctx.Types.BigInteger);
-        IL.Emit(OpCodes.Brfalse, numberPath);
-        IL.Emit(OpCodes.Ldloc, rawValue);
-        IL.Emit(OpCodes.Stloc, oldNumeric);
-        IL.Emit(OpCodes.Br, numericReady);
-
-        IL.MarkLabel(numberPath);
-        IL.Emit(OpCodes.Ldloc, rawValue);
-        IL.Emit(OpCodes.Call, _ctx.Runtime!.NumericCoercion.ToNumber);
-        IL.Emit(OpCodes.Box, _ctx.Types.Double);
-        IL.Emit(OpCodes.Stloc, oldNumeric);
-
-        IL.MarkLabel(numericReady);
-        IL.Emit(OpCodes.Ldloc, oldNumeric);
-        IL.Emit(isIncrement ? OpCodes.Ldc_I4_1 : OpCodes.Ldc_I4_0);
-        IL.Emit(OpCodes.Call, _ctx.Runtime!.Operators.UpdateNumeric);
-        IL.Emit(OpCodes.Stloc, newNumeric);
-    }
-
     protected override void EmitPostfixIncrement(Expr.PostfixIncrement pi)
     {
+        if (pi.Operand is Expr.GetPrivate privateField)
+        {
+            EmitPrivateIncrement(privateField, pi.Operator.Type, isPrefix: false);
+            return;
+        }
+
         if (TryEmitExternalIncrement(
                 pi.Operand, pi.Operator.Type, isPrefix: false))
             return;
@@ -2417,20 +2433,14 @@ public partial class ILEmitter
             if (TryResolveStaticThisField(get, out _, out var staticFieldPost))
             {
                 IL.Emit(OpCodes.Ldsfld, staticFieldPost);
-                EmitUnboxToDouble();
-
-                var oldValueStatic = IL.DeclareLocal(_ctx.Types.Double);
-                IL.Emit(OpCodes.Dup);
-                IL.Emit(OpCodes.Stloc, oldValueStatic);
-
-                IL.Emit(OpCodes.Ldc_R8, 1.0);
-                IL.Emit(pi.Operator.Type == TokenType.PLUS_PLUS ? OpCodes.Add : OpCodes.Sub);
-
-                IL.Emit(OpCodes.Box, _ctx.Types.Double);
+                var rawValue = IL.DeclareLocal(_ctx.Types.Object);
+                IL.Emit(OpCodes.Stloc, rawValue);
+                EmitNumericUpdate(rawValue, pi.Operator.Type == TokenType.PLUS_PLUS,
+                    out var oldValueStatic, out var newValueStatic);
+                IL.Emit(OpCodes.Ldloc, newValueStatic);
                 IL.Emit(OpCodes.Stsfld, staticFieldPost);
 
                 IL.Emit(OpCodes.Ldloc, oldValueStatic);
-                IL.Emit(OpCodes.Box, _ctx.Types.Double);
                 SetStackUnknown();
                 return;
             }
@@ -2482,14 +2492,15 @@ public partial class ILEmitter
 
         // Preserve the original boxed value for postfix semantics, then invoke the CLR
         // op_Increment/op_Decrement once and write the returned value back to the l-value.
-        EmitExpression(operand);
+        EmitExpression(operand); RecordExternalInput(operand, method.GetParameters()[0].ParameterType);
         EnsureBoxed();
         var oldValue = IL.DeclareLocal(_ctx.Types.Object);
         IL.Emit(OpCodes.Stloc, oldValue);
 
         IL.Emit(OpCodes.Ldloc, oldValue);
         EmitExternalTypeConversion(method.GetParameters()[0].ParameterType);
-        IL.Emit(OpCodes.Call, method);
+        RecordExternalSelection(method, method.ReturnType);
+        IL.Emit(OpCodes.Call, _ctx.TypeMapper.ForEmission(method));
         BoxResultIfValueType(method.ReturnType);
         var newValue = IL.DeclareLocal(_ctx.Types.Object);
         IL.Emit(OpCodes.Stloc, newValue);
@@ -2755,10 +2766,10 @@ public partial class ILEmitter
         switch (member)
         {
             case PropertyInfo property:
-                IL.Emit(OpCodes.Callvirt, property.GetGetMethod()!);
+                IL.Emit(OpCodes.Callvirt, _ctx.TypeMapper.ForEmission(property.GetGetMethod()!));
                 break;
             case FieldInfo field:
-                IL.Emit(OpCodes.Ldfld, field);
+                IL.Emit(OpCodes.Ldfld, _ctx.TypeMapper.ForEmission(field));
                 break;
         }
         BoxResultIfValueType(valueType);
@@ -2781,10 +2792,10 @@ public partial class ILEmitter
         switch (member)
         {
             case PropertyInfo property:
-                IL.Emit(OpCodes.Callvirt, property.GetSetMethod()!);
+                IL.Emit(OpCodes.Callvirt, _ctx.TypeMapper.ForEmission(property.GetSetMethod()!));
                 break;
             case FieldInfo field:
-                IL.Emit(OpCodes.Stfld, field);
+                IL.Emit(OpCodes.Stfld, _ctx.TypeMapper.ForEmission(field));
                 break;
         }
     }
@@ -2800,7 +2811,7 @@ public partial class ILEmitter
         IL.Emit(OpCodes.Castclass, ownerType);
         IL.Emit(OpCodes.Ldloc, index);
         EmitExternalTypeConversion(getter.GetParameters()[0].ParameterType);
-        IL.Emit(OpCodes.Callvirt, getter);
+        IL.Emit(OpCodes.Callvirt, _ctx.TypeMapper.ForEmission(getter));
         BoxResultIfValueType(getter.ReturnType);
         var oldValue = IL.DeclareLocal(_ctx.Types.Object);
         IL.Emit(OpCodes.Stloc, oldValue);
@@ -2822,7 +2833,7 @@ public partial class ILEmitter
         EmitExternalTypeConversion(parameters[0].ParameterType);
         IL.Emit(OpCodes.Ldloc, value);
         EmitExternalTypeConversion(parameters[1].ParameterType);
-        IL.Emit(OpCodes.Callvirt, setter);
+        IL.Emit(OpCodes.Callvirt, _ctx.TypeMapper.ForEmission(setter));
     }
 
     private LocalBuilder EmitExternalOperatorCall(
@@ -2830,12 +2841,14 @@ public partial class ILEmitter
         Expr rightExpression,
         MethodInfo method)
     {
+        _ctx.NativeClrAdmission?.RefuseUnclassifiedInput(CurrentSourceExpression);
         var parameters = method.GetParameters();
         IL.Emit(OpCodes.Ldloc, oldValue);
         EmitExternalTypeConversion(parameters[0].ParameterType);
         EmitExpression(rightExpression);
         EmitExternalTypeConversion(parameters[1].ParameterType);
-        IL.Emit(OpCodes.Call, method);
+        RecordExternalSelection(method, method.ReturnType);
+        IL.Emit(OpCodes.Call, _ctx.TypeMapper.ForEmission(method));
         BoxResultIfValueType(method.ReturnType);
         var newValue = IL.DeclareLocal(_ctx.Types.Object);
         IL.Emit(OpCodes.Stloc, newValue);
@@ -2846,9 +2859,11 @@ public partial class ILEmitter
         LocalBuilder oldValue,
         MethodInfo method)
     {
+        _ctx.NativeClrAdmission?.RefuseUnclassifiedInput(CurrentSourceExpression);
         IL.Emit(OpCodes.Ldloc, oldValue);
         EmitExternalTypeConversion(method.GetParameters()[0].ParameterType);
-        IL.Emit(OpCodes.Call, method);
+        RecordExternalSelection(method, method.ReturnType);
+        IL.Emit(OpCodes.Call, _ctx.TypeMapper.ForEmission(method));
         BoxResultIfValueType(method.ReturnType);
         var newValue = IL.DeclareLocal(_ctx.Types.Object);
         IL.Emit(OpCodes.Stloc, newValue);
@@ -2878,27 +2893,14 @@ public partial class ILEmitter
         if (!own && !_ctx.ClassRegistry!.TryGetCallableStaticField(resolvedClassName, get.Name.Lexeme, classBuilder, out inheritedField))
             return false;
 
-        // Load current value and coerce to double (ToNumber semantics).
+        // Convert the current value while retaining the actual static storage.
         if (own)
             IL.Emit(OpCodes.Ldsfld, ownField!);
         else
             EmitStaticFieldLoadWithShadow(resolvedClassName, classBuilder, get.Name.Lexeme, inheritedField!);
-        EmitUnboxToDouble();
-
-        // Postfix returns the original value — stash it before incrementing.
-        System.Reflection.Emit.LocalBuilder? oldValue = null;
-        if (!isPrefix)
-        {
-            oldValue = IL.DeclareLocal(_ctx.Types.Double);
-            IL.Emit(OpCodes.Dup);
-            IL.Emit(OpCodes.Stloc, oldValue);
-        }
-
-        IL.Emit(OpCodes.Ldc_R8, 1.0);
-        IL.Emit(isIncrement ? OpCodes.Add : OpCodes.Sub);
-        IL.Emit(OpCodes.Box, _ctx.Types.Double);
-        var newValue = IL.DeclareLocal(_ctx.Types.Object);
-        IL.Emit(OpCodes.Stloc, newValue);
+        var rawValue = IL.DeclareLocal(_ctx.Types.Object);
+        IL.Emit(OpCodes.Stloc, rawValue);
+        EmitNumericUpdate(rawValue, isIncrement, out var oldValue, out var newValue);
 
         // Write back to the same storage the matching read consults.
         if (own)
@@ -2915,15 +2917,7 @@ public partial class ILEmitter
             EmitPropertyWrite(indexed: false);
         }
 
-        if (isPrefix)
-        {
-            IL.Emit(OpCodes.Ldloc, newValue);
-        }
-        else
-        {
-            IL.Emit(OpCodes.Ldloc, oldValue!);
-            IL.Emit(OpCodes.Box, _ctx.Types.Double);
-        }
+        IL.Emit(OpCodes.Ldloc, isPrefix ? newValue : oldValue);
         SetStackUnknown();
         return true;
     }
@@ -3590,7 +3584,7 @@ public partial class ILEmitter
         }
 
         // Call the runtime method
-        IL.Emit(OpCodes.Call, method);
+        IL.Emit(OpCodes.Call, _ctx.TypeMapper.ForEmission(method));
 
         // Handle result based on type
         switch (resultType)

@@ -24,7 +24,7 @@ namespace SharpTS.Compilation;
 public partial class RuntimeEmitter
 {
     private readonly record struct BuiltInStaticDispatchInputs(
-        MethodInfo GetOrCreate, MethodInfo IsArray, EmittedNumberRuntime Numbers,
+        MethodInfo GetOrCreate, EmittedArrayOperationsRuntime Arrays, EmittedNumberRuntime Numbers,
         MethodInfo StringFromCharCode, MethodInfo StringFromCodePoint, MethodInfo StringRaw,
         EmittedObjectKeysRuntime ObjectKeys, EmittedObjectOperationsRuntime ObjectOperations,
         EmittedObjectStateRuntime ObjectState, EmittedObjectPrototypeRuntime ObjectPrototypes,
@@ -96,17 +96,19 @@ public partial class RuntimeEmitter
 
             // Match — return TSFunctionGetOrCreate(method, name, length) so the
             // wrapper identity matches the syntactic-dispatch path.
-            _types.EmitLoadMethodInfo(il, backingMethod);
+            var parameterProducer = EmitReflectedMethodLiteral(il, backingMethod);
             il.Emit(OpCodes.Ldstr, memberName);
             il.Emit(OpCodes.Ldc_I4, specLength);
-            il.Emit(OpCodes.Call, inputs.GetOrCreate);
+            EmitReflectedFunctionFactory(il, inputs.GetOrCreate, parameterProducer);
             il.Emit(OpCodes.Ret);
 
             il.MarkLabel(skipLabel);
         }
 
         // Array.* — stored-as-value Array reference accessing static members.
-        EmitLookup(_types.IListOfObject, "isArray", inputs.IsArray, 1);
+        EmitLookup(_types.IListOfObject, "isArray", inputs.Arrays.IsArray, 1);
+        EmitLookup(_types.IListOfObject, "from", inputs.Arrays.FromAdapter, 1);
+        EmitLookup(_types.IListOfObject, "of", inputs.Arrays.Of, 0);
 
         if (inputs.ArrayBuffer is { } arrayBuffer)
             EmitLookup(arrayBuffer.Type, "isView", arrayBuffer.IsView, 1);
@@ -179,10 +181,10 @@ public partial class RuntimeEmitter
 
             // TSFunctionGetOrCreate(MethodInfo, name, length) — identity-stable
             // wrapper (same MethodInfo key → same wrapper instance).
-            _types.EmitLoadMethodInfo(il, backingMethod);
+            var parameterProducer = EmitReflectedMethodLiteral(il, backingMethod);
             il.Emit(OpCodes.Ldstr, memberName);
             il.Emit(OpCodes.Ldc_I4, specLength);
-            il.Emit(OpCodes.Call, inputs.GetOrCreate);
+            EmitReflectedFunctionFactory(il, inputs.GetOrCreate, parameterProducer);
             il.Emit(OpCodes.Ret);
 
             il.MarkLabel(skipLabel);
@@ -201,7 +203,7 @@ public partial class RuntimeEmitter
         EmitObjectMethodLookup("setPrototypeOf",          inputs.ObjectPrototypes.SetPrototypeOf, 2);
         EmitObjectMethodLookup("defineProperty",          inputs.ObjectDescriptors.DefineProperty, 3);
         EmitObjectMethodLookup("defineProperties",        inputs.ObjectDescriptors.DefineProperties, 2);
-        EmitObjectMethodLookup("getOwnPropertyDescriptor",  inputs.ObjectDescriptors.GetOwnPropertyDescriptor, 2);
+        EmitObjectMethodLookup("getOwnPropertyDescriptor",  inputs.ObjectDescriptors.GetOwnPropertyDescriptorValueForm, 2);
         EmitObjectMethodLookup("getOwnPropertyDescriptors", inputs.ObjectDescriptors.GetOwnPropertyDescriptors, 1);
         // create routes through the value-form wrapper: reflection dispatch
         // pads the missing props arg with null, which raw ObjectCreate must
@@ -246,6 +248,7 @@ public partial class RuntimeEmitter
             EmitLookup(_types.TaskOfObject, "allSettled", promise.AllSettledStatic, 1);
             EmitLookup(_types.TaskOfObject, "allSettledKeyed", promise.AllSettledKeyedStatic, 1);
             EmitLookup(_types.TaskOfObject, "any", promise.AnyStatic, 1);
+            EmitLookup(_types.TaskOfObject, "withResolvers", promise.WithResolversStatic, 0);
             // Guest classes that `extend Promise` derive from the emitted wrapper.
             EmitLookup(promise.Type, "resolve", promise.ResolveStatic, 1);
             EmitLookup(promise.Type, "reject", promise.RejectStatic, 1);
@@ -255,6 +258,7 @@ public partial class RuntimeEmitter
             EmitLookup(promise.Type, "allSettled", promise.AllSettledStatic, 1);
             EmitLookup(promise.Type, "allSettledKeyed", promise.AllSettledKeyedStatic, 1);
             EmitLookup(promise.Type, "any", promise.AnyStatic, 1);
+            EmitLookup(promise.Type, "withResolvers", promise.WithResolversStatic, 0);
         }
         EmitLookup(inputs.ErrorType, "isError", inputs.ErrorIsError, 1);
 

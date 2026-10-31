@@ -227,6 +227,12 @@ public abstract partial class ExpressionEmitterBase
     /// </summary>
     protected virtual void EmitPrefixIncrement(Expr.PrefixIncrement pi)
     {
+        if (pi.Operand is Expr.GetPrivate privateField)
+        {
+            EmitPrivateIncrement(privateField, pi.Operator.Type, isPrefix: true);
+            return;
+        }
+
         if (pi.Operand is Expr.Variable v)
         {
             string name = v.Name.Lexeme;
@@ -235,19 +241,14 @@ public abstract partial class ExpressionEmitterBase
             if (TryEmitNativeNumericLocalIncrement(v, delta, isPrefix: true))
                 return;
 
-            // Load current value, convert to double, add delta, box.
-            // ConvertToNumber implements ECMA-262 ToNumber (undefined→NaN);
-            // Convert.ToDouble throws InvalidCastException on $Undefined (#190).
             EmitVariable(v);
             EnsureBoxed();
-            IL.Emit(OpCodes.Call, Ctx.Runtime?.NumericCoercion.ConvertToNumber ?? Types.ConvertToDoubleFromObject);
-            IL.Emit(OpCodes.Ldc_R8, delta);
-            IL.Emit(OpCodes.Add);
-            IL.Emit(OpCodes.Box, typeof(double));
-
-            // Dup new value (expression result), then store
-            IL.Emit(OpCodes.Dup);
+            var rawValue = IL.DeclareLocal(Types.Object);
+            IL.Emit(OpCodes.Stloc, rawValue);
+            EmitNumericUpdate(rawValue, delta > 0, out _, out var newValue);
+            IL.Emit(OpCodes.Ldloc, newValue);
             EmitStoreVariable(name);
+            IL.Emit(OpCodes.Ldloc, newValue);
             SetStackUnknown();
             return;
         }
@@ -293,6 +294,12 @@ public abstract partial class ExpressionEmitterBase
     /// </summary>
     protected virtual void EmitPostfixIncrement(Expr.PostfixIncrement poi)
     {
+        if (poi.Operand is Expr.GetPrivate privateField)
+        {
+            EmitPrivateIncrement(privateField, poi.Operator.Type, isPrefix: false);
+            return;
+        }
+
         if (poi.Operand is Expr.Variable v)
         {
             string name = v.Name.Lexeme;
@@ -301,19 +308,14 @@ public abstract partial class ExpressionEmitterBase
             if (TryEmitNativeNumericLocalIncrement(v, delta, isPrefix: false))
                 return;
 
-            // Load current value (this is the expression result — original value)
             EmitVariable(v);
             EnsureBoxed();
-            IL.Emit(OpCodes.Dup);  // Dup original for expression result
-
-            // Convert to double, add delta, box (ToNumber semantics — see EmitPrefixIncrement)
-            IL.Emit(OpCodes.Call, Ctx.Runtime?.NumericCoercion.ConvertToNumber ?? Types.ConvertToDoubleFromObject);
-            IL.Emit(OpCodes.Ldc_R8, delta);
-            IL.Emit(OpCodes.Add);
-            IL.Emit(OpCodes.Box, typeof(double));
-
-            // Store incremented value (original remains on stack)
+            var rawValue = IL.DeclareLocal(Types.Object);
+            IL.Emit(OpCodes.Stloc, rawValue);
+            EmitNumericUpdate(rawValue, delta > 0, out var oldValue, out var newValue);
+            IL.Emit(OpCodes.Ldloc, newValue);
             EmitStoreVariable(name);
+            IL.Emit(OpCodes.Ldloc, oldValue);
             SetStackUnknown();
             return;
         }
@@ -408,10 +410,10 @@ public abstract partial class ExpressionEmitterBase
     /// a state-machine body. The receiver (and index) must already be spilled into <paramref name="objLocal"/>
     /// (and captured by <paramref name="emitKey"/>) via <see cref="SpillBoxed"/>, so any await/yield inside
     /// them has already suspended with an empty stack and is evaluated exactly once; from here the
-    /// read → ToNumber → write sequence is straight-line with no suspension point, so plain locals suffice.
+    /// read → ToNumeric → write sequence is straight-line with no suspension point, so plain locals suffice.
     /// <paramref name="emitKey"/> pushes the property name (Ldstr) or index local (Ldloc) and is invoked
     /// once for the read and once for the write. <paramref name="isPrefix"/> selects the result: prefix
-    /// returns the new value, postfix the ToNumber-coerced original (ECMA-262 §13.4).
+    /// returns the new value, postfix the ToNumeric-coerced original (ECMA-262 §13.4).
     /// </summary>
     private void EmitMemberAccessIncrement(
         bool isPrefix, TokenType op, LocalBuilder objLocal, Action emitKey,
@@ -419,11 +421,9 @@ public abstract partial class ExpressionEmitterBase
     {
         double delta = op == TokenType.PLUS_PLUS ? 1.0 : -1.0;
 
-        // Read current value and coerce to a number (undefined→NaN, never throws — #190).
         IL.Emit(OpCodes.Ldloc, objLocal);
         emitKey();
         IL.Emit(OpCodes.Call, getMethod);
-        IL.Emit(OpCodes.Call, Ctx.Runtime?.NumericCoercion.ConvertToNumber ?? Types.ConvertToDoubleFromObject);
 
         var newValue = IL.DeclareLocal(typeof(object));
         var resultValue = IL.DeclareLocal(typeof(object));
@@ -440,35 +440,32 @@ public abstract partial class ExpressionEmitterBase
     }
 
     /// <summary>
-    /// Given the current numeric value on the stack as an unboxed <c>double</c>, computes the
+    /// Given the current boxed value on the stack, applies ToNumeric and computes the
     /// incremented value and stores two boxed locals: <paramref name="newValue"/> (to write back)
     /// and <paramref name="resultValue"/> (what the expression evaluates to — the new value for
-    /// prefix, the ToNumber-coerced original for postfix). Consumes the stack value.
+    /// prefix, the ToNumeric-coerced original for postfix). Consumes the stack value.
     /// </summary>
     private void EmitIncrementComputeStoreResult(
         bool isPrefix, double delta, LocalBuilder newValue, LocalBuilder resultValue)
     {
-        if (isPrefix)
-        {
-            // Stack: [current:double] → compute new, return it.
-            IL.Emit(OpCodes.Ldc_R8, delta);
-            IL.Emit(OpCodes.Add);
-            IL.Emit(OpCodes.Box, typeof(double));
-            IL.Emit(OpCodes.Dup);
-            IL.Emit(OpCodes.Stloc, newValue);
-            IL.Emit(OpCodes.Stloc, resultValue);
-        }
-        else
-        {
-            // Stack: [current:double] → stash the coerced original as the result, then compute new.
-            IL.Emit(OpCodes.Dup);
-            IL.Emit(OpCodes.Box, typeof(double));
-            IL.Emit(OpCodes.Stloc, resultValue);
-            IL.Emit(OpCodes.Ldc_R8, delta);
-            IL.Emit(OpCodes.Add);
-            IL.Emit(OpCodes.Box, typeof(double));
-            IL.Emit(OpCodes.Stloc, newValue);
-        }
+        IL.Emit(OpCodes.Call, Ctx.Runtime!.NumericCoercion.ToNumeric);
+        IL.Emit(OpCodes.Stloc, resultValue);
+        IL.Emit(OpCodes.Ldloc, resultValue);
+        IL.Emit(delta > 0 ? OpCodes.Ldc_I4_1 : OpCodes.Ldc_I4_0);
+        IL.Emit(OpCodes.Call, Ctx.Runtime.Operators.UpdateNumeric);
+        IL.Emit(OpCodes.Stloc, newValue);
+        if (!isPrefix) return;
+        IL.Emit(OpCodes.Ldloc, newValue);
+        IL.Emit(OpCodes.Stloc, resultValue);
+    }
+
+    protected void EmitNumericUpdate(LocalBuilder rawValue, bool isIncrement,
+        out LocalBuilder oldNumeric, out LocalBuilder newNumeric)
+    {
+        oldNumeric = IL.DeclareLocal(Types.Object);
+        newNumeric = IL.DeclareLocal(Types.Object);
+        IL.Emit(OpCodes.Ldloc, rawValue);
+        EmitIncrementComputeStoreResult(false, isIncrement ? 1 : -1, newNumeric, oldNumeric);
     }
 
     /// <summary>
@@ -496,7 +493,6 @@ public abstract partial class ExpressionEmitterBase
         if (Ctx.ClassRegistry!.TryGetOwnCallableStaticField(resolvedClassName, get.Name.Lexeme, classBuilder, out var ownField))
         {
             IL.Emit(OpCodes.Ldsfld, ownField!);
-            IL.Emit(OpCodes.Call, Ctx.Runtime?.NumericCoercion.ConvertToNumber ?? Types.ConvertToDoubleFromObject);
             EmitIncrementComputeStoreResult(isPrefix, delta, newValue, resultValue);
 
             IL.Emit(OpCodes.Ldloc, newValue);
@@ -511,7 +507,6 @@ public abstract partial class ExpressionEmitterBase
         if (Ctx.ClassRegistry!.TryGetCallableStaticField(resolvedClassName, get.Name.Lexeme, classBuilder, out var inheritedField))
         {
             EmitStaticFieldLoadWithShadow(resolvedClassName, classBuilder, get.Name.Lexeme, inheritedField!);
-            IL.Emit(OpCodes.Call, Ctx.Runtime?.NumericCoercion.ConvertToNumber ?? Types.ConvertToDoubleFromObject);
             EmitIncrementComputeStoreResult(isPrefix, delta, newValue, resultValue);
 
             IL.Emit(OpCodes.Ldtoken, classBuilder);

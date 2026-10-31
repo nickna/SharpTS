@@ -10,7 +10,7 @@ namespace SharpTS.Runtime.Types;
 /// Stores time internally as UTC DateTime, converts to local time for getters/setters.
 /// Follows JavaScript Date semantics including 0-indexed months and mutable setters.
 /// </remarks>
-public class SharpTSDate : ITypeCategorized
+public class SharpTSDate : ITypeCategorized, ISharpTSSymbolPropertyBag
 {
     /// <inheritdoc />
     public TypeCategory RuntimeCategory => TypeCategory.Date;
@@ -54,6 +54,21 @@ public class SharpTSDate : ITypeCategorized
     }
     internal IEnumerable<string> OwnEnumerableKeys() => _extras.OwnEnumerableKeys();
     internal IEnumerable<string> OwnStringKeys() => _extras.OwnVisibleStringKeys();
+    internal bool DefineProperty(SharpTSSymbol symbol, SharpTSPropertyDescriptor descriptor)
+        => _extras.DefineProperty(symbol, descriptor);
+    internal SharpTSPropertyDescriptor? GetOwnPropertyDescriptor(SharpTSSymbol symbol)
+        => _extras.GetOwnPropertyDescriptor(symbol);
+    internal IEnumerable<SharpTSSymbol> GetSymbolPropertyNames() => _extras.GetSymbolPropertyNames();
+    internal bool DeleteBySymbolStrict(SharpTSSymbol symbol, bool strictMode)
+        => _extras.DeleteBySymbolStrict(symbol, strictMode);
+    bool ISharpTSSymbolPropertyBag.HasSymbolProperty(SharpTSSymbol symbol) => _extras.HasSymbolProperty(symbol);
+    object? ISharpTSSymbolPropertyBag.GetBySymbol(SharpTSSymbol symbol) => _extras.GetBySymbol(symbol);
+    bool ISharpTSSymbolPropertyBag.TryGetSymbolAccessor(
+        SharpTSSymbol symbol, out ISharpTSCallable? getter, out ISharpTSCallable? setter)
+        => _extras.TryGetSymbolAccessor(symbol, out getter, out setter);
+    void ISharpTSSymbolPropertyBag.SetBySymbolStrict(SharpTSSymbol symbol, object? value, bool strictMode)
+        => _extras.SetBySymbolStrict(symbol, value, strictMode);
+
     internal bool IsExtensible => _extras.IsExtensible;
     internal void PreventExtensions() => _extras.PreventExtensions();
     internal void FreezeOwnProperties() => _extras.Freeze();
@@ -67,7 +82,9 @@ public class SharpTSDate : ITypeCategorized
     /// </summary>
     public SharpTSDate()
     {
-        _utcDateTime = DateTime.UtcNow;
+        long ticks = DateTime.UtcNow.Ticks;
+        _utcDateTime = new DateTime(ticks / TimeSpan.TicksPerMillisecond * TimeSpan.TicksPerMillisecond,
+            DateTimeKind.Utc);
         _isInvalid = false;
     }
 
@@ -927,7 +944,7 @@ public class SharpTSDate : ITypeCategorized
     /// </summary>
     public static double Now()
     {
-        return (DateTime.UtcNow - UnixEpoch).TotalMilliseconds;
+        return Math.Floor((DateTime.UtcNow - UnixEpoch).TotalMilliseconds);
     }
 
     /// <summary>

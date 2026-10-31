@@ -30,6 +30,26 @@ public partial class TypeChecker
     private TypeInfo WithOptionalPropertyUndefined(TypeInfo type, bool optional) =>
         optional && _strictNullChecks ? CreateUnion(type, TypeInfo.Undefined.Shared) : type;
 
+    private TypeInfo? ReadArrayStringKeys(TypeInfo.Array array, TypeInfo indexType)
+    {
+        if (!TryGetStringLiteralKeys(indexType, out var keys)) return null;
+        List<TypeInfo> members = [];
+        foreach (string key in keys)
+        {
+            if (Runtime.Types.PropertySemantics.TryGetArrayIndex(key, out _))
+                members.Add(WithUncheckedUndefined(array.ElementType));
+            else
+            {
+                if (array.IsReadonly && key is "push" or "pop" or "shift" or "unshift"
+                    or "splice" or "reverse" or "sort" or "fill" or "copyWithin") return null;
+                if (GetMemberType(array, key) is not { } member) return null;
+                members.Add(member);
+            }
+        }
+        var unique = members.Distinct(TypeInfoEqualityComparer.Instance).ToList();
+        return unique.Count == 1 ? unique[0] : new TypeInfo.Union(unique);
+    }
+
     private TypeInfo CheckGetIndex(Expr.GetIndex getIndex)
     {
         // Validate the ordinary indexed read before applying a stable path refinement.
@@ -45,7 +65,7 @@ public partial class TypeChecker
         if (getIndex.Object is Expr.Super { Method: null } super)
             return CheckComputedSuperIndex(super, getIndex.Index);
 
-        TypeInfo objType = CheckExpr(getIndex.Object);
+        TypeInfo objType = WidenFreshArrayReceiver(getIndex.Object, CheckExpr(getIndex.Object));
         TypeInfo indexType = CheckExpr(getIndex.Index);
         if (_fieldGetterScope is not null)
         {
@@ -63,7 +83,7 @@ public partial class TypeChecker
             (getIndex.Object is Expr.Variable { Name.Lexeme: "globalThis" } ||
              getIndex.Object is Expr.This && _currentClass is null))
         {
-            if (GetGlobalThisType().Members.TryGetValue(directGlobalProperty, out TypeInfo? directMember))
+            if (TryGetGlobalThisMember(directGlobalProperty, out TypeInfo? directMember))
                 return directMember;
             if (_globalObjectLexicalNames.Contains(directGlobalProperty))
                 throw new TypeCheckException(
@@ -81,7 +101,7 @@ public partial class TypeChecker
         if (_hasDefaultLibraries &&
             getIndex.Index is Expr.Literal { Value: string globalProperty } &&
             ContainsGlobalThisType(objType) &&
-            !GetGlobalThisType().Members.TryGetValue(globalProperty, out TypeInfo? globalMember))
+            !TryGetGlobalThisMember(globalProperty, out TypeInfo? globalMember))
         {
             bool direct = getIndex.Object is Expr.Variable { Name.Lexeme: "globalThis" } ||
                 getIndex.Object is Expr.This && _currentClass is null;
@@ -95,7 +115,7 @@ public partial class TypeChecker
         if (_hasDefaultLibraries &&
             getIndex.Index is Expr.Literal { Value: string knownGlobalProperty } &&
             ContainsGlobalThisType(objType) &&
-            GetGlobalThisType().Members.TryGetValue(knownGlobalProperty, out TypeInfo? knownGlobalMember))
+            TryGetGlobalThisMember(knownGlobalProperty, out TypeInfo? knownGlobalMember))
             return knownGlobalMember;
 
         // An enum-typed index (`x[E.A]` — enum member accesses type as the enum) participates
@@ -309,7 +329,10 @@ public partial class TypeChecker
             if (objTp.Constraint != null)
             {
                 var constrainedResult = CheckGetIndexOnType(objTp.Constraint, indexType, getIndex);
-                if (constrainedResult != null) return constrainedResult;
+                if (constrainedResult != null)
+                    return indexType is TypeInfo.TypeParameter && IsPropertyKeyDomain(indexType)
+                        ? new TypeInfo.IndexedAccess(objTp, indexType)
+                        : constrainedResult;
             }
 
             // Check if the index type has a keyof constraint on this type parameter
@@ -336,7 +359,7 @@ public partial class TypeChecker
                 ApparentTypeOf(genericKeyForTp) is { } keyLikeApparent &&
                 IsCompatible(KeyLikeUnion, keyLikeApparent))
             {
-                return TypeInfo.Any.Shared;
+                return new TypeInfo.IndexedAccess(objTp, indexType);
             }
 
             // Unconstrained type parameter can't be indexed with arbitrary types
@@ -418,11 +441,9 @@ public partial class TypeChecker
                     key is TypeInfo.StringLiteral && IsNumericConstructorIndex(key))))
             return WithUncheckedUndefined(TypeInfo.String.Shared);
 
-        // Canonical numeric string literals address Array elements with the same read type.
         if (objType is TypeInfo.Array stringIndexedArray &&
-            TryGetStringLiteralKeys(indexType, out var arrayStringKeys) &&
-            arrayStringKeys.All(key => Runtime.Types.PropertySemantics.TryGetArrayIndex(key, out _)))
-            return WithUncheckedUndefined(stringIndexedArray.ElementType);
+            ReadArrayStringKeys(stringIndexedArray, indexType) is { } arrayStringMember)
+            return arrayStringMember;
 
         // Handle string index on objects/interfaces
         if (IsString(indexType) || indexType is TypeInfo.StringLiteral)
@@ -628,7 +649,7 @@ public partial class TypeChecker
     }
 
     private static bool ContainsGlobalThisType(TypeInfo type) =>
-        type is TypeInfo.Interface { Name: "typeof globalThis" } ||
+        type is TypeInfo.Interface { IsGlobalThisObject: true } ||
         type is TypeInfo.Intersection intersection &&
             intersection.FlattenedTypes.Any(ContainsGlobalThisType);
 
@@ -1651,11 +1672,9 @@ public partial class TypeChecker
                     key is TypeInfo.StringLiteral && IsNumericConstructorIndex(key))))
             return WithUncheckedUndefined(TypeInfo.String.Shared);
 
-        // Canonical numeric string literals address Array elements with the same read type.
         if (objType is TypeInfo.Array stringIndexedArray &&
-            TryGetStringLiteralKeys(indexType, out var arrayStringKeys) &&
-            arrayStringKeys.All(key => Runtime.Types.PropertySemantics.TryGetArrayIndex(key, out _)))
-            return WithUncheckedUndefined(stringIndexedArray.ElementType);
+            ReadArrayStringKeys(stringIndexedArray, indexType) is { } arrayStringMember)
+            return arrayStringMember;
 
         // Handle string index
         if (IsString(indexType) || indexType is TypeInfo.StringLiteral)
@@ -1777,7 +1796,6 @@ public partial class TypeChecker
 
     private TypeInfo? TryReadKnownIndexedInstanceMember(TypeInfo receiver, TypeInfo index, Expr.GetIndex syntax)
     {
-        if (receiver is not TypeInfo.Instance instance) return null;
         string? name = index switch
         {
             TypeInfo.StringLiteral text => text.Value,
@@ -1785,6 +1803,9 @@ public partial class TypeChecker
             _ => null
         };
         if (name is null) return null;
+        if (receiver is TypeInfo.Date)
+            return ResolveBuiltInMemberType(TypeCategory.Date, receiver, name);
+        if (receiver is not TypeInfo.Instance instance) return null;
         HashSet<TypeInfo> visited = new(ReferenceEqualityComparer.Instance);
         for (TypeInfo? owner = instance.ResolvedClassType; owner is not null && visited.Add(owner); owner = GetSuperclass(owner))
         {

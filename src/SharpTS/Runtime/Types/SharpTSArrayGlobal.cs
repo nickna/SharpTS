@@ -21,7 +21,7 @@ namespace SharpTS.Runtime.Types;
 public sealed class SharpTSArrayGlobal : ISharpTSCallable, ISharpTSMutableBuiltIn
 {
     public static readonly SharpTSArrayGlobal Instance = new();
-    private readonly SharpTSObject _extras = new([]);
+    private readonly SharpTSObject _extras = FunctionObjectProperties.Create("Array", 1);
     private readonly HashSet<string> _deletedBuiltIns = [];
     internal SharpTSArrayGlobal() { }
 
@@ -62,6 +62,13 @@ public sealed class SharpTSArrayGlobal : ISharpTSCallable, ISharpTSMutableBuiltI
     }
     public IEnumerable<string> OwnEnumerableKeys() => _extras.OwnEnumerableKeys();
 
+    internal IEnumerable<string> OwnStringKeys()
+        => _extras.OwnVisibleStringKeys().Where(key => PropertySemantics.TryGetArrayIndex(key, out _))
+            .Concat(new[] { "length", "name", "prototype" }.Concat(ArrayStaticBuiltIns.StaticMemberNames)
+                .Where(HasOwnProperty))
+            .Concat(_extras.OwnVisibleStringKeys().Where(key => !PropertySemantics.TryGetArrayIndex(key, out _)))
+            .Distinct();
+
     public int Arity() => 0;
 
     /// <summary>
@@ -79,11 +86,11 @@ public sealed class SharpTSArrayGlobal : ISharpTSCallable, ISharpTSMutableBuiltI
             // new Array(N) gives an array of length N with N holes — not N
             // explicit undefined values. Use SetLength so large N is sparse
             // storage, not an eager allocation (see SharpTSArray #73 Stage B).
-            var arr = new SharpTSArray();
+            var arr = new SharpTSArray { IntrinsicPrototype = RealmPrototype ?? interpreter?.GetArrayPrototype() };
             arr.SetLength(len);
             return arr;
         }
-        return new SharpTSArray(new List<object?>(arguments));
+        return new SharpTSArray(new List<object?>(arguments)) { IntrinsicPrototype = RealmPrototype ?? interpreter?.GetArrayPrototype() };
     }
 
     public object? GetMember(string name)

@@ -18,6 +18,20 @@ public sealed class EmittedObjectKeysRuntime
     }
 
     private MethodBuilder? _normalize;
+    private MethodBuilder? _forIn;
+    public MethodBuilder ForIn
+    {
+        get => Require(_forIn);
+        internal set => SetHandle(ref _forIn, value);
+    }
+
+    private MethodBuilder? _forInEnumerable;
+    public MethodBuilder ForInEnumerable
+    {
+        get => Require(_forInEnumerable);
+        internal set => SetHandle(ref _forInEnumerable, value);
+    }
+
     public MethodBuilder Normalize
     {
         get => Require(_normalize);
@@ -87,6 +101,13 @@ public sealed class EmittedObjectKeysRuntime
         internal set => SetHandle(ref _constructorKeys, value);
     }
 
+    private FieldBuilder? _constructorCreationOrder;
+    public FieldBuilder ConstructorCreationOrder { get => Require(_constructorCreationOrder); internal set => SetHandle(ref _constructorCreationOrder, value); }
+    private MethodBuilder? _recordConstructorKey;
+    public MethodBuilder RecordConstructorKey { get => Require(_recordConstructorKey); internal set => SetHandle(ref _recordConstructorKey, value); }
+    private MethodBuilder? _forgetConstructorKey;
+    public MethodBuilder ForgetConstructorKey { get => Require(_forgetConstructorKey); internal set => SetHandle(ref _forgetConstructorKey, value); }
+
     internal void MarkProxyCallbackBodiesEmitted()
     {
         EnsureMutable();
@@ -117,6 +138,8 @@ public sealed class EmittedObjectKeysRuntime
     {
         EnsureMutable();
         _ = Keys;
+        _ = ForIn;
+        _ = ForInEnumerable;
         _ = Normalize;
         _ = Names;
         _ = Ordinary;
@@ -127,6 +150,9 @@ public sealed class EmittedObjectKeysRuntime
         _ = ClassStaticPropertyName;
         _ = ClassStaticPropertyEnumerable;
         _ = ConstructorKeys;
+        _ = ConstructorCreationOrder;
+        _ = RecordConstructorKey;
+        _ = ForgetConstructorKey;
         if (!_proxyCallbackBodiesEmitted)
             throw new InvalidOperationException("Object key callback bodies have not been emitted.");
         IsComplete = true;

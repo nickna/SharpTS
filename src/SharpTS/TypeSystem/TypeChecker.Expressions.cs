@@ -115,6 +115,12 @@ public partial class TypeChecker
                 _typeMap.Set(expr, tupleType);
                 return tupleType;
             }
+            case Expr.ArrayLiteral array when ContextualArrayElement(contextualType) is { } elementContext:
+            {
+                TypeInfo result = CheckArray(array, elementContext);
+                _typeMap.Set(expr, result);
+                return result;
+            }
             // The destructuring desugarer wraps the source in `__arrayDestructure(src)` (#685). Re-thread
             // the contextual shape to the wrapped source so a mixed array literal infers as a tuple, then
             // normalize as the plain call branch does (#783).
@@ -133,6 +139,12 @@ public partial class TypeChecker
             case Expr.ArrowFunction arrow:
             {
                 TypeInfo result = CheckArrowFunction(arrow, contextualType);
+                _typeMap.Set(expr, result);
+                return result;
+            }
+            case Expr.ObjectLiteral literal:
+            {
+                TypeInfo result = CheckObject(literal, contextualType);
                 _typeMap.Set(expr, result);
                 return result;
             }
@@ -432,18 +444,29 @@ public partial class TypeChecker
                 // (#548): `function* g() { yield* [1, 2]; }` yields `number`, so it must infer
                 // Generator<number>, not Generator<void>. Collected only while that type is being inferred.
                 _inferredYieldTypes?.Add(delegatedElement);
-                return delegatedElement;
+                return valueType switch
+                {
+                    TypeInfo.Generator generator => generator.ReturnType,
+                    TypeInfo.AsyncGenerator generator => generator.ReturnType,
+                    _ => TypeInfo.Any.Shared,
+                };
             }
 
             _inferredYieldTypes?.Add(valueType);
-            return valueType;
+            return GetGeneratorNextType();
         }
 
         // Bare `yield` yields `undefined`; it contributes `undefined` to the inferred yield type (#548).
         _inferredYieldTypes?.Add(TypeInfo.Undefined.Shared);
-        // The yield EXPRESSION still evaluates to the (modeled) void type for an operand-less yield.
-        return TypeInfo.Void.Shared;
+        return GetGeneratorNextType();
     }
+
+    private TypeInfo GetGeneratorNextType() => _currentFunctionReturnType switch
+    {
+        TypeInfo.Generator generator => generator.NextType,
+        TypeInfo.AsyncGenerator generator => generator.NextType,
+        _ => TypeInfo.Any.Shared,
+    };
 
     /// <summary>
     /// Gets the element type from an iterable type (for yield* delegation).
@@ -567,13 +590,13 @@ public partial class TypeChecker
 
     private TypeInfo CheckSatisfies(Expr.Satisfies sat)
     {
-        TypeInfo inferredType = CheckExpr(sat.Expression);
         // Node-first, mirroring CheckTypeAssertion (#346): a composite constraint such as a
         // conditional with a function-type extends clause garbles in the string resolver.
         long editorVersion = BeginEditorExpressionAnnotation(sat);
         TypeInfo constraintType = (sat.ConstraintTypeNode is { } constraintNode ? TryToTypeInfo(constraintNode) : null)
             ?? ToTypeInfo(sat.ConstraintType);
         CompleteEditorExpressionAnnotation(sat, editorVersion);
+        TypeInfo inferredType = CheckExprWithContext(sat.Expression, constraintType);
 
         // Escape hatches - any/unknown constraints always pass
         if (constraintType is TypeInfo.Any or TypeInfo.Unknown)
@@ -602,13 +625,19 @@ public partial class TypeChecker
     /// </summary>
     private TypeInfo InferConstType(Expr expr, TypeInfo sourceType)
     {
-        return expr switch
+        TypeInfo result = expr switch
         {
             Expr.ArrayLiteral arr => InferConstArrayType(arr),
             Expr.ObjectLiteral obj => InferConstObjectType(obj),
             Expr.Literal lit => InferConstLiteralType(lit.Value),
             _ => sourceType // Variables and other expressions keep their inferred type
         };
+        if (expr is Expr.ObjectLiteral or Expr.ArrayLiteral)
+        {
+            _typeMap.Set(expr, result);
+            RecordEditorExpressionType(expr, result);
+        }
+        return result;
     }
 
     /// <summary>
@@ -757,28 +786,39 @@ public partial class TypeChecker
         Dictionary<string, TypeInfo> fields,
         HashSet<string>? optionalFields = null)
     {
+        void MergeField(string name, TypeInfo value, bool sourceOptional)
+        {
+            if (sourceOptional && fields.TryGetValue(name, out TypeInfo? previous))
+            {
+                // A missing right-hand property leaves the earlier value in
+                // place. Its optionality therefore cannot erase prior presence.
+                if (!_exactOptionalPropertyTypes)
+                    value = value switch
+                    {
+                        TypeInfo.Undefined => TypeInfo.Never.Shared,
+                        TypeInfo.Union values => values.FlattenedTypes
+                            .Where(part => part is not TypeInfo.Undefined)
+                            .Aggregate((TypeInfo)TypeInfo.Never.Shared, CreateUnion),
+                        _ => value,
+                    };
+                fields[name] = CreateUnion(previous, value);
+                return;
+            }
+            fields[name] = value;
+            if (sourceOptional) optionalFields?.Add(name);
+            else optionalFields?.Remove(name);
+        }
+
         switch (spreadType)
         {
             case TypeInfo.Record record:
                 foreach (var kv in record.Fields)
-                {
-                    fields[kv.Key] = kv.Value;
-                    if (record.OptionalFields?.Contains(kv.Key) == true)
-                        optionalFields?.Add(kv.Key);
-                    else
-                        optionalFields?.Remove(kv.Key);
-                }
+                    MergeField(kv.Key, kv.Value, record.OptionalFields?.Contains(kv.Key) == true);
                 return true;
 
             case TypeInfo.Interface iface:
                 foreach (var kv in iface.GetAllMembers())
-                {
-                    fields[kv.Key] = kv.Value;
-                    if (iface.GetAllOptionalMembers().Contains(kv.Key))
-                        optionalFields?.Add(kv.Key);
-                    else
-                        optionalFields?.Remove(kv.Key);
-                }
+                    MergeField(kv.Key, kv.Value, iface.GetAllOptionalMembers().Contains(kv.Key));
                 return true;
 
             case TypeInfo.InstantiatedGeneric { GenericDefinition: TypeInfo.GenericInterface } instantiated
@@ -795,15 +835,21 @@ public partial class TypeChecker
             case TypeInfo.Intersection intersection:
                 // Spread of an intersection contributes the fields of every object-like constituent.
                 // Reject only if no constituent is object-like (e.g. `string & number`).
-                bool anyObjectLike = false;
+                var intersectionParts = new List<(Dictionary<string, TypeInfo> Fields, HashSet<string> Optional)>();
                 foreach (var part in intersection.Types)
                 {
-                    if (TryMergeSpreadFields(part, fields, optionalFields))
-                    {
-                        anyObjectLike = true;
-                    }
+                    var partFields = new Dictionary<string, TypeInfo>(StringComparer.Ordinal);
+                    var partOptional = new HashSet<string>(StringComparer.Ordinal);
+                    if (TryMergeSpreadFields(part, partFields, partOptional))
+                        intersectionParts.Add((partFields, partOptional));
                 }
-                return anyObjectLike;
+                foreach (string name in intersectionParts.SelectMany(part => part.Fields.Keys).Distinct(StringComparer.Ordinal))
+                {
+                    var members = intersectionParts.Where(part => part.Fields.ContainsKey(name)).ToList();
+                    MergeField(name, SimplifyIntersection(members.Select(part => part.Fields[name]).ToList()),
+                        members.All(part => part.Optional.Contains(name)));
+                }
+                return intersectionParts.Count != 0;
 
             case TypeInfo.SpreadType spread:
                 return TryMergeSpreadFields(spread.Inner, fields, optionalFields);
@@ -833,22 +879,9 @@ public partial class TypeChecker
                         .Select(alternative => alternative.Fields[name])
                         .ToList();
                     TypeInfo valueType = CollapseOrCreateUnion(valueTypes);
-                    bool sourceOptional = alternatives.Any(alternative =>
+                    bool sourceOptional = union.FlattenedTypes.Any(part => part is TypeInfo.Null or TypeInfo.Undefined) || alternatives.Any(alternative =>
                         !alternative.Fields.ContainsKey(name) || alternative.Optional.Contains(name));
-
-                    if (sourceOptional && fields.TryGetValue(name, out TypeInfo? previous))
-                    {
-                        fields[name] = CreateUnion(previous, valueType);
-                        optionalFields?.Remove(name);
-                    }
-                    else
-                    {
-                        fields[name] = valueType;
-                        if (sourceOptional)
-                            optionalFields?.Add(name);
-                        else
-                            optionalFields?.Remove(name);
-                    }
+                    MergeField(name, valueType, sourceOptional);
                 }
                 return true;
             }
@@ -868,8 +901,10 @@ public partial class TypeChecker
         }
     }
 
-    private TypeInfo CheckObject(Expr.ObjectLiteral obj)
+    private TypeInfo CheckObject(Expr.ObjectLiteral obj, TypeInfo? contextualType = null)
     {
+        contextualType ??= _jsxAttributeContexts.GetValueOrDefault(obj);
+        contextualType = SelectObjectLiteralContext(obj, contextualType);
         Dictionary<string, TypeInfo> fields = [];
         HashSet<string> optionalFields = [];
         TypeInfo? stringIndexType = null;
@@ -964,7 +999,13 @@ public partial class TypeChecker
                         tsCode: "TS1312");
                 }
 
-                TypeInfo valueType = CheckExpr(prop.Value);
+                TypeInfo? context = ObjectMemberContext(contextualType, prop.Key);
+                if (_jsxAttributeObjects.Contains(obj) &&
+                    UnwrapTransparentForWidening(prop.Value) is not (Expr.ObjectLiteral or Expr.ArrayLiteral))
+                    context = null; // The JSX pipeline selects and contextualizes direct callbacks later.
+                TypeInfo rawValue = CheckExprWithContext(prop.Value, context);
+                TypeInfo valueType = _jsxAttributeObjects.Contains(obj)
+                    ? rawValue : WidenMutableMemberValue(prop.Value, rawValue, context);
 
                 switch (prop.Key)
                 {
@@ -1039,18 +1080,12 @@ public partial class TypeChecker
         // Pass 2: If there are accessors, build the object type and re-check accessor bodies with proper 'this'
         if (hasAccessors)
         {
-            // Widen literal types for 'this' inference (e.g., 0 -> number, "test" -> string)
-            var widenedFields = fields.ToDictionary(
-                kv => kv.Key,
-                kv => WidenLiteralType(kv.Value)
-            );
-
-            // Build the object type for 'this' inference
+            // Data members have already completed fresh/contextual inference.
             var objectType = new TypeInfo.Record(
-                widenedFields.ToFrozenDictionary(),
-                stringIndexType != null ? WidenLiteralType(stringIndexType) : null,
-                numberIndexType != null ? WidenLiteralType(numberIndexType) : null,
-                symbolIndexType != null ? WidenLiteralType(symbolIndexType) : null
+                fields.ToFrozenDictionary(),
+                stringIndexType,
+                numberIndexType,
+                symbolIndexType
             );
 
             // Set contextual 'this' type for accessor bodies
@@ -1243,7 +1278,7 @@ public partial class TypeChecker
             // A fresh object literal widens each member; a member that is itself `as const`, or a
             // spread of a non-fresh source, is preserved per-member (see WidenConstObjectLiteralFields).
             case Expr.ObjectLiteral obj when type is TypeInfo.Record rec:
-                return WidenConstObjectLiteralFields(obj, rec);
+                return rec;
 
             // A fresh array literal widens only the elements that are themselves fresh. Types
             // contributed by a variable/call/non-fresh spread are already fixed and must retain
@@ -1418,7 +1453,7 @@ public partial class TypeChecker
         return name != null;
     }
 
-    private TypeInfo CheckArray(Expr.ArrayLiteral array)
+    private TypeInfo CheckArray(Expr.ArrayLiteral array, TypeInfo? elementContext = null)
     {
         if (array.Elements.Count == 0) return new TypeInfo.Array(TypeInfo.Any.Shared); // Empty array is any[]? or generic?
 
@@ -1456,7 +1491,7 @@ public partial class TypeChecker
             }
             else
             {
-                elemType = CheckExpr(element);
+                elemType = CheckExprWithContext(element, elementContext);
             }
             elementTypes.Add(elemType);
         }
@@ -1469,7 +1504,12 @@ public partial class TypeChecker
         bool allCompatible = true;
         for (int i = 1; i < elementTypes.Count; i++)
         {
-            if (!IsCompatible(commonType, elementTypes[i]) && !IsCompatible(elementTypes[i], commonType))
+            if (IsCompatible(commonType, elementTypes[i])) continue;
+            if (IsCompatible(elementTypes[i], commonType))
+            {
+                commonType = elementTypes[i];
+            }
+            else
             {
                 allCompatible = false;
                 break;
@@ -1554,7 +1594,7 @@ public partial class TypeChecker
             }
             else
             {
-                TypeInfo elemType = CheckExpr(element);
+                TypeInfo elemType = CheckExprWithContext(element, expectedType);
                 if (!IsCompatible(expectedType, elemType))
                 {
                     throw new TypeCheckException($" Element at index {i} has type '{elemType}' but expected '{expectedType}' for variable '{varName}'.", tsCode: "TS2322");
@@ -1793,6 +1833,7 @@ public partial class TypeChecker
             // masks the private name even before initialization, including pattern bindings.
             var paramScope = new TypeEnvironment(defaultParent);
             RegisterEditorParameterScope(arrow, paramScope);
+            var defaultBindings = new ParameterDefaultBindings(this, arrow, arrow.Parameters, paramTypes, paramScope);
             var namedDefaults = arrow.Name is not null
                 ? new NamedExpressionParameterDefaults(this, arrow, paramScope, paramTypes) : null;
             using var bindingScope = new ParameterBindingCheckScope(this, arrow, validate: true);
@@ -1807,6 +1848,7 @@ public partial class TypeChecker
                 {
                     DeclareValue(paramScope, param.Name, paramType);
                     bindingScope.Initialize(param, paramScope, paramType);
+                    defaultBindings.Initialize(param, i);
                     namedDefaults?.Initialize(param, i);
                     continue;
                 }
@@ -1825,6 +1867,7 @@ public partial class TypeChecker
                             : CheckDeferredClassDefault(param.DefaultValue, defaultContext);
                     }
                     namedDefaults?.Check(param.DefaultValue, i);
+                    defaultBindings.Check(param.DefaultValue, i);
                     if (!IsCompatible(paramType, defaultType))
                     {
                         throw new TypeCheckException($" Default value type '{defaultType}' is not assignable to parameter type '{paramType}'.",
@@ -1845,6 +1888,7 @@ public partial class TypeChecker
 
                 DeclareValue(paramScope, param.Name, paramType);
                 bindingScope.Initialize(param, paramScope, paramType);
+                defaultBindings.Initialize(param, i);
                 namedDefaults?.Initialize(param, i);
             }
 
@@ -1896,7 +1940,9 @@ public partial class TypeChecker
         int previousSwitchDepth = _switchDepth;
         var previousActiveLabels = new Dictionary<string, ActiveLabel>(_activeLabels);
 
-        bool inferringArrowReturn = returnType is TypeInfo.Inferred;
+        bool inferringArrowReturn = returnType is TypeInfo.Inferred ||
+            arrow.ReturnType is null && !arrow.IsAsync && !arrow.IsGenerator &&
+            expectedFuncType?.ReturnType is TypeInfo.Void;
         _environment = arrowEnv;
         MarkEditorBodyEntered(arrow);
         if (inferringArrowReturn)
@@ -1954,7 +2000,11 @@ public partial class TypeChecker
             {
                 RecordStableCaptureParameters(arrow.Parameters, null, arrow.ExpressionBody);
                 // Expression body - infer return type if not specified
-                TypeInfo exprType = CheckExpr(arrow.ExpressionBody);
+                TypeInfo? expressionContext = arrow.ReturnType != null ? returnType :
+                    useContextualReturnType ? expectedFuncType?.ReturnType : null;
+                if (arrow.IsAsync && expressionContext is not null) expressionContext = ResolveAwaitedType(expressionContext);
+                TypeInfo exprType = UnwrapTransparentForWidening(arrow.ExpressionBody) is Expr.ObjectLiteral
+                    ? CheckExprWithContext(arrow.ExpressionBody, expressionContext) : CheckExpr(arrow.ExpressionBody);
                 if (arrow.ReturnType == null && expectedFuncType is not null && useContextualReturnType)
                 {
                     TypeInfo expectedRetType = expectedFuncType.ReturnType;
@@ -2093,6 +2143,8 @@ public partial class TypeChecker
         TypeInfo completedType = typeParams != null && typeParams.Count > 0
             ? new TypeInfo.GenericFunction(typeParams, paramTypes, returnType, requiredParams, hasRest, thisType, paramNames)
             : new TypeInfo.Function(paramTypes, returnType, requiredParams, hasRest, thisType, paramNames);
+        if (arrow.ReturnType == null && !arrow.IsGenerator)
+            completedType = WidenFreshArrowReturn(arrow, completedType, useContextualReturnType ? expectedFuncType?.ReturnType : null);
         RecordEditorExpressionType(arrow, completedType);
         if (arrow.Name is { } sourceName)
         {
@@ -2222,7 +2274,8 @@ public partial class TypeChecker
         TypeInfo valueType;
         try
         {
-            valueType = CheckExpr(assign.Value);
+            valueType = UnwrapTransparentForWidening(assign.Value) is Expr.ObjectLiteral or Expr.ArrayLiteral
+                ? CheckExprWithContext(assign.Value, declaredType) : CheckExpr(assign.Value);
         }
         catch (TypeCheckException ex) when (ex.Diagnostic.TsCode == "TS2454")
         {
@@ -2470,6 +2523,7 @@ public partial class TypeChecker
         if (name.Lexeme == "setInterval") return TypeInfo.Any.Shared; // setInterval() global function
         if (name.Lexeme == "clearTimeout") return TypeInfo.Any.Shared; // clearTimeout() global function
         if (name.Lexeme == "clearInterval") return TypeInfo.Any.Shared; // clearInterval() global function
+        if (name.Lexeme is "setImmediate" or "clearImmediate") return TypeInfo.Any.Shared;
         if (name.Lexeme == "queueMicrotask") return TypeInfo.Any.Shared; // queueMicrotask() global function
         if (name.Lexeme == "encodeURIComponent") return TypeInfo.Any.Shared; // URI encoding global
         if (name.Lexeme == "decodeURIComponent") return TypeInfo.Any.Shared; // URI decoding global

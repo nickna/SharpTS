@@ -442,17 +442,29 @@ public partial class TypeChecker
         int missingMemberCount = MissingRequiredMemberCount(target, source);
         if (missingMemberCount > 0)
             return missingMemberCount == 1 ? "TS2741" : "TS2739";
+        if (source is TypeInfo.InstantiatedGeneric { GenericDefinition: TypeInfo.GenericClass } specialized
+            && SpecializedConstructorResultMismatch(target, specialized))
+            return "TS2419";
         return "TS2322";
     }
 
     /// <summary>The number of required target members absent from an object-like source.</summary>
     private int MissingRequiredMemberCount(TypeInfo target, TypeInfo source)
     {
-        if (source is not (TypeInfo.Record or TypeInfo.Interface or TypeInfo.Class or TypeInfo.Instance))
+        if (source is not (TypeInfo.Record or TypeInfo.Interface or TypeInfo.Class or TypeInfo.Instance
+            or TypeInfo.InstantiatedGeneric { GenericDefinition: TypeInfo.GenericClass }))
             return 0;
+        HashSet<string>? hiddenStatics = null;
+        if (source is TypeInfo.InstantiatedGeneric { GenericDefinition: TypeInfo.GenericClass })
+        {
+            TryGetOrdinaryConstructorHierarchy(source, out var levels);
+            hiddenStatics = OrdinaryConstructorMembers(levels, isStatic: true)
+                .Where(member => member.Value.Access != AccessModifier.Public)
+                .Select(member => member.Key).ToHashSet(StringComparer.Ordinal);
+        }
         int count = 0;
         foreach (var name in RequiredMemberNames(target))
-            if (GetMemberType(source, name) is null)
+            if (GetMemberType(source, name) is null && hiddenStatics?.Contains(name) != true)
                 count++;
         return count;
     }

@@ -1106,7 +1106,10 @@ public partial class TypeChecker
         CheckReadonlyRecordProperty(objType, logical.Name.Lexeme, logical.Name.Line);
         EnsureWritableClassIndex(objType, new TypeInfo.StringLiteral(logical.Name.Lexeme), new Expr.Literal(logical.Name.Lexeme));
         EnsureWritableInterfaceIndex(objType, new TypeInfo.StringLiteral(logical.Name.Lexeme), new Expr.Literal(logical.Name.Lexeme));
-        CheckExpr(logical.Value);
+        TypeInfo readType = CheckGetOnType(objType, logical.Name);
+        if (ShouldCaptureEditorFacts)
+            EditorFacts.RecordMemberReadType(CurrentSourceDocument, logical, readType);
+        TypeInfo valueType = CheckExpr(logical.Value);
 
         // Invalidate any narrowings affected by this property assignment
         var basePath = ExtractNarrowingPath(logical.Object);
@@ -1116,7 +1119,32 @@ public partial class TypeChecker
             InvalidateNarrowingsFor(assignedPath);
         }
 
-        return TypeInfo.Any.Shared;
+        return LogicalPropertyAssignmentResult(readType, valueType, logical.Operator.Type);
+    }
+
+    private TypeInfo LogicalPropertyAssignmentResult(TypeInfo left, TypeInfo right, TokenType operation)
+    {
+        TypeInfo retained = operation switch
+        {
+            TokenType.OR_OR_EQUAL => NarrowLogicalTruthy(left),
+            TokenType.AND_AND_EQUAL => Falsy(left),
+            _ => ExpandNonNullable(left),
+        };
+        if (retained is TypeInfo.Never) return right;
+        if (retained is TypeInfo.Any || right is TypeInfo.Any) return TypeInfo.Any.Shared;
+        if (IsCompatible(retained, right)) return retained;
+        if (IsCompatible(right, retained)) return right;
+        return CreateUnion(retained, right);
+
+        static TypeInfo Falsy(TypeInfo type) => type switch
+        {
+            TypeInfo.Primitive { Type: TokenType.TYPE_BOOLEAN } => new TypeInfo.BooleanLiteral(false),
+            TypeInfo.BooleanLiteral { Value: true } => TypeInfo.Never.Shared,
+            TypeInfo.NumberLiteral { Value: not 0 } => TypeInfo.Never.Shared,
+            TypeInfo.StringLiteral literal when literal.Value.Length != 0 => TypeInfo.Never.Shared,
+            TypeInfo.Union union => union.FlattenedTypes.Select(Falsy).Aggregate((TypeInfo)TypeInfo.Never.Shared, CreateUnion),
+            _ => NarrowLogicalFalsy(type),
+        };
     }
 
     private TypeInfo CheckLogicalSetIndex(Expr.LogicalSetIndex logical)
@@ -1173,6 +1201,8 @@ public partial class TypeChecker
 
     private TypeInfo CheckPrefixIncrement(Expr.PrefixIncrement prefix)
     {
+        if (prefix.Operand is Expr.GetPrivate privateField)
+            return CheckPrivateIncrement(prefix, privateField, prefix.Operator);
         TypeInfo operandType = CheckExpr(prefix.Operand);
         CheckReadonlyRecordUpdate(prefix.Operand, prefix.Operator.Line);
         EnsureWritableClassIndexUpdate(prefix.Operand);
@@ -1188,6 +1218,8 @@ public partial class TypeChecker
 
     private TypeInfo CheckPostfixIncrement(Expr.PostfixIncrement postfix)
     {
+        if (postfix.Operand is Expr.GetPrivate privateField)
+            return CheckPrivateIncrement(postfix, privateField, postfix.Operator);
         TypeInfo operandType = CheckExpr(postfix.Operand);
         CheckReadonlyRecordUpdate(postfix.Operand, postfix.Operator.Line);
         EnsureWritableClassIndexUpdate(postfix.Operand);

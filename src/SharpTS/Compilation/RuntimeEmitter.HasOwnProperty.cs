@@ -25,7 +25,9 @@ public partial class RuntimeEmitter
         TypeBuilder TSFunctionType,
         EmittedFunctionBindingRuntime FunctionBindings,
         Type UndefinedType,
-        FunctionOwnPrototypeInputs OwnPrototype
+        FunctionOwnPrototypeInputs OwnPrototype,
+        GuestOwnQueryInputs? GuestOwnProperties = null,
+        MethodInfo? NativeStaticMemberPresence = null
     );
 
     private readonly record struct PropertyIsEnumerableHelperInputs(
@@ -38,7 +40,9 @@ public partial class RuntimeEmitter
         EmittedRegExpRuntime RegExps,
         EmittedSymbolRuntime Symbols,
         TypeBuilder TSFunctionType,
-        Type UndefinedType
+        Type UndefinedType,
+        GuestOwnQueryInputs? GuestOwnProperties = null,
+        NativeSourceOwnerCatalog? SourceOwners = null
     );
 
     /// <summary>
@@ -124,6 +128,7 @@ public partial class RuntimeEmitter
         il.Emit(OpCodes.Brtrue, falseLabel);
         il.Emit(OpCodes.Br, trueLabel);
         il.MarkLabel(notProxyLabel);
+        EmitGuestOwnPresenceQuery(il, inputs.GuestOwnProperties);
 
         // ECMA-262 §20.1.3.2 step 1: Let P be ? ToPropertyKey(V). For Symbol,
         // ToPropertyKey returns the symbol itself — NOT a string. Symbol keys
@@ -620,44 +625,52 @@ public partial class RuntimeEmitter
         il.Emit(OpCodes.Ldarg_0);
         il.Emit(OpCodes.Castclass, _types.Type);
         il.Emit(OpCodes.Stloc, typeLocal2);
-        // GetField
-        il.Emit(OpCodes.Ldloc, typeLocal2);
-        il.Emit(OpCodes.Ldloc, nameLocal);
-        il.Emit(OpCodes.Ldc_I4, (int)staticPub);
-        il.Emit(OpCodes.Callvirt, _types.GetMethod(_types.Type, "GetField", _types.String, typeof(System.Reflection.BindingFlags)));
-        il.Emit(OpCodes.Brtrue, trueLabel);
-        // GetProperty(name) — covers static .NET property accessors.
-        il.Emit(OpCodes.Ldloc, typeLocal2);
-        il.Emit(OpCodes.Ldloc, nameLocal);
-        il.Emit(OpCodes.Ldc_I4, (int)staticPub);
-        il.Emit(OpCodes.Callvirt, _types.GetMethod(_types.Type, "GetProperty", _types.String, typeof(System.Reflection.BindingFlags)));
-        il.Emit(OpCodes.Brtrue, trueLabel);
-        // Guest classes declare JavaScript methods as CLR statics. Native
-        // constructor tokens use their explicit JS inventory above, because
-        // BCL methods such as System.Double.Parse are not Number properties.
-        var checkStoredTypeProperties = il.DefineLabel();
-        il.Emit(OpCodes.Ldtoken, inputs.IHasFieldsInterface);
-        il.Emit(OpCodes.Call, _types.TypeGetTypeFromHandle);
-        il.Emit(OpCodes.Ldloc, typeLocal2);
-        il.Emit(OpCodes.Callvirt, _types.GetMethod(_types.Type, "IsAssignableFrom", _types.Type));
-        il.Emit(OpCodes.Brfalse, checkStoredTypeProperties);
-        // GetMember handles overloaded static methods without AmbiguousMatchException.
-        il.Emit(OpCodes.Ldloc, typeLocal2);
-        il.Emit(OpCodes.Ldloc, nameLocal);
-        il.Emit(OpCodes.Ldc_I4, (int)MemberTypes.Method);
-        il.Emit(OpCodes.Ldc_I4, (int)staticPub);
-        il.Emit(OpCodes.Callvirt, _types.GetMethod(_types.Type, "GetMember", _types.String,
-            typeof(MemberTypes), typeof(BindingFlags)));
-        il.Emit(OpCodes.Ldlen);
-        il.Emit(OpCodes.Conv_I4);
-        il.Emit(OpCodes.Brtrue, trueLabel);
-        // Computed string method names live in the shared registry under their
-        // evaluated JavaScript key, rather than their synthetic CLR name.
-        il.Emit(OpCodes.Ldarg_0);
-        il.Emit(OpCodes.Ldloc, nameLocal);
-        il.Emit(OpCodes.Call, inputs.SymbolAccessors.FindOwnMethod);
-        il.Emit(OpCodes.Brtrue, trueLabel);
-        il.MarkLabel(checkStoredTypeProperties);
+        if (inputs.NativeStaticMemberPresence is not null)
+        {
+            il.Emit(OpCodes.Ldloc, typeLocal2); il.Emit(OpCodes.Ldloc, nameLocal);
+            il.Emit(OpCodes.Call, inputs.NativeStaticMemberPresence); il.Emit(OpCodes.Brtrue, trueLabel);
+        }
+        else
+        {
+            // GetField
+            il.Emit(OpCodes.Ldloc, typeLocal2);
+            il.Emit(OpCodes.Ldloc, nameLocal);
+            il.Emit(OpCodes.Ldc_I4, (int)staticPub);
+            EmitStaticFieldLookup(il);
+            il.Emit(OpCodes.Brtrue, trueLabel);
+            // GetProperty(name) — covers static .NET property accessors.
+            il.Emit(OpCodes.Ldloc, typeLocal2);
+            il.Emit(OpCodes.Ldloc, nameLocal);
+            il.Emit(OpCodes.Ldc_I4, (int)staticPub);
+            il.Emit(OpCodes.Callvirt, _types.GetMethod(_types.Type, "GetProperty", _types.String, typeof(System.Reflection.BindingFlags)));
+            il.Emit(OpCodes.Brtrue, trueLabel);
+            // Guest classes declare JavaScript methods as CLR statics. Native
+            // constructor tokens use their explicit JS inventory above, because
+            // BCL methods such as System.Double.Parse are not Number properties.
+            var checkStoredTypeProperties = il.DefineLabel();
+            il.Emit(OpCodes.Ldtoken, inputs.IHasFieldsInterface);
+            il.Emit(OpCodes.Call, _types.TypeGetTypeFromHandle);
+            il.Emit(OpCodes.Ldloc, typeLocal2);
+            il.Emit(OpCodes.Callvirt, _types.GetMethod(_types.Type, "IsAssignableFrom", _types.Type));
+            il.Emit(OpCodes.Brfalse, checkStoredTypeProperties);
+            // GetMember handles overloaded static methods without AmbiguousMatchException.
+            il.Emit(OpCodes.Ldloc, typeLocal2);
+            il.Emit(OpCodes.Ldloc, nameLocal);
+            il.Emit(OpCodes.Ldc_I4, (int)MemberTypes.Method);
+            il.Emit(OpCodes.Ldc_I4, (int)staticPub);
+            il.Emit(OpCodes.Callvirt, _types.GetMethod(_types.Type, "GetMember", _types.String,
+                typeof(MemberTypes), typeof(BindingFlags)));
+            il.Emit(OpCodes.Ldlen);
+            il.Emit(OpCodes.Conv_I4);
+            il.Emit(OpCodes.Brtrue, trueLabel);
+            // Computed string method names live in the shared registry under their
+            // evaluated JavaScript key, rather than their synthetic CLR name.
+            il.Emit(OpCodes.Ldarg_0);
+            il.Emit(OpCodes.Ldloc, nameLocal);
+            il.Emit(OpCodes.Call, inputs.SymbolAccessors.FindOwnMethod);
+            il.Emit(OpCodes.Brtrue, trueLabel);
+            il.MarkLabel(checkStoredTypeProperties);
+        }
         il.Emit(OpCodes.Br, falseLabel);
         il.MarkLabel(notTypeLabel);
 
@@ -706,6 +719,7 @@ public partial class RuntimeEmitter
         method.DefineParameter(2, ParameterAttributes.None, "name");
 
         var il = method.GetILGenerator();
+        EmitGuestOwnPresenceQuery(il, inputs.GuestOwnProperties, inputs.DescriptorStorage.DescriptorEnumerable.GetGetMethod()!);
         var nameLocal = il.DeclareLocal(_types.String);
         var descLocal = il.DeclareLocal(inputs.DescriptorStorage.DescriptorType);
         var falseLabel = il.DefineLabel();
@@ -800,6 +814,20 @@ public partial class RuntimeEmitter
             il.MarkLabel(pieNotRegExpLastIndex);
         }
 
+        // PDS descriptor lookup. When defineProperty installed a descriptor
+        // for this name we already have the spec-correct Enumerable bit.
+        il.Emit(OpCodes.Ldarg_0);
+        il.Emit(OpCodes.Ldloc, nameLocal);
+        il.Emit(OpCodes.Call, inputs.DescriptorStorage.GetPropertyDescriptor);
+        il.Emit(OpCodes.Stloc, descLocal);
+        var noPdsLabel = il.DefineLabel();
+        il.Emit(OpCodes.Ldloc, descLocal);
+        il.Emit(OpCodes.Brfalse, noPdsLabel);
+        il.Emit(OpCodes.Ldloc, descLocal);
+        il.Emit(OpCodes.Callvirt, inputs.DescriptorStorage.DescriptorEnumerable.GetGetMethod()!);
+        il.Emit(OpCodes.Ret);
+        il.MarkLabel(noPdsLabel);
+
         // ECMA-262 §17: built-in function .name / .length are
         // { writable:false, enumerable:false, configurable:true } — return
         // false explicitly when the receiver is a $TSFunction and the name
@@ -831,20 +859,6 @@ public partial class RuntimeEmitter
         il.Emit(OpCodes.Call, _types.GetMethod(_types.String, "op_Equality", _types.String, _types.String));
         il.Emit(OpCodes.Brtrue, falseLabel);
         il.MarkLabel(notFunctionBuiltinLabel);
-
-        // PDS descriptor lookup. When defineProperty installed a descriptor
-        // for this name we already have the spec-correct Enumerable bit.
-        il.Emit(OpCodes.Ldarg_0);
-        il.Emit(OpCodes.Ldloc, nameLocal);
-        il.Emit(OpCodes.Call, inputs.DescriptorStorage.GetPropertyDescriptor);
-        il.Emit(OpCodes.Stloc, descLocal);
-        var noPdsLabel = il.DefineLabel();
-        il.Emit(OpCodes.Ldloc, descLocal);
-        il.Emit(OpCodes.Brfalse, noPdsLabel);
-        il.Emit(OpCodes.Ldloc, descLocal);
-        il.Emit(OpCodes.Callvirt, inputs.DescriptorStorage.DescriptorEnumerable.GetGetMethod()!);
-        il.Emit(OpCodes.Ret);
-        il.MarkLabel(noPdsLabel);
 
         // Array length is a synthetic, non-enumerable own property even before
         // defineProperty attaches an explicit descriptor.
@@ -878,12 +892,12 @@ public partial class RuntimeEmitter
         il.Emit(OpCodes.Ldloc, constructor);
         il.Emit(OpCodes.Callvirt, _types.GetMethod(_types.Type, "IsAssignableFrom", _types.Type));
         il.Emit(OpCodes.Brfalse, falseLabel);
-        var memberOwner = EmitStaticMemberLookupOwner(il, constructor, inputs.IHasFieldsInterface);
+        var memberOwner = EmitStaticMemberLookupOwner(il, constructor, inputs.IHasFieldsInterface, inputs.SourceOwners);
         var ownField = il.DeclareLocal(typeof(FieldInfo));
         il.Emit(OpCodes.Ldloc, memberOwner);
         il.Emit(OpCodes.Ldloc, nameLocal);
         il.Emit(OpCodes.Ldc_I4, (int)(BindingFlags.Public | BindingFlags.Static | BindingFlags.DeclaredOnly));
-        il.Emit(OpCodes.Callvirt, _types.GetMethod(_types.Type, "GetField", _types.String, typeof(BindingFlags)));
+        EmitStaticFieldLookup(il);
         il.Emit(OpCodes.Stloc, ownField);
         il.Emit(OpCodes.Ldloc, ownField);
         il.Emit(OpCodes.Brfalse, falseLabel);

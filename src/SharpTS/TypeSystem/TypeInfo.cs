@@ -177,6 +177,8 @@ public abstract record TypeInfo
         // A pure object call signature shares the function representation, but its written
         // protocol retains strict call arity even when every parameter is any.
         public CallSignature? WrittenCallSignature { get; init; }
+        // Builtin method metadata declares an arity even without a source AST signature.
+        internal bool HasExplicitArity { get; init; }
         // RequiredParams defaults to -1 meaning all params are required (for backwards compat)
         public int MinArity => RequiredParams < 0 ? ParamTypes.Count : RequiredParams;
         public override string ToString() =>
@@ -570,6 +572,8 @@ public abstract record TypeInfo
         // Class-derived interface bases retain the exact source class for write access and
         // protected receiver checks. Public mapped projections deliberately omit this origin.
         internal TypeInfo? ClassOrigin { get; init; }
+        internal bool HasFunctionTypeofFacet { get; init; }
+        internal bool IsGlobalThisObject { get; init; }
         public bool ReadonlyStringIndex { get; init; }
         public bool ReadonlySymbolIndex { get; init; }
         internal FrozenDictionary<BindingSymbol, string>? SymbolMemberNames { get; init; }
@@ -622,7 +626,9 @@ public abstract record TypeInfo
             // Return own members first
             foreach (var member in Members)
             {
-                yield return member;
+                yield return IsGlobalThisObject && member.Key == "globalThis"
+                    ? new KeyValuePair<string, TypeInfo>(member.Key, this)
+                    : member;
             }
 
             // Then inherited members (that don't shadow own members)
@@ -1306,6 +1312,7 @@ public abstract record TypeInfo
     public record Generator(TypeInfo YieldType) : TypeInfo
     {
         public TypeInfo ReturnType { get; init; } = Any.Shared;
+        public TypeInfo NextType { get; init; } = Unknown.Shared;
         public override string ToString() => ReturnType is Any
             ? $"Generator<{YieldType}>" : $"Generator<{YieldType}, {ReturnType}>";
     }
@@ -1317,6 +1324,7 @@ public abstract record TypeInfo
     public record AsyncGenerator(TypeInfo YieldType) : TypeInfo
     {
         public TypeInfo ReturnType { get; init; } = Any.Shared;
+        public TypeInfo NextType { get; init; } = Unknown.Shared;
         public override string ToString() => ReturnType is Any
             ? $"AsyncGenerator<{YieldType}>" : $"AsyncGenerator<{YieldType}, {ReturnType}>";
     }
@@ -1751,10 +1759,12 @@ public abstract record TypeInfo
     /// match, the inferred type must satisfy it or the conditional takes its false branch.</param>
     public record InferredTypeParameter(string Name, TypeInfo? Constraint = null) : TypeInfo
     {
+        internal string? IntrinsicDisplayName { get; init; }
+        internal string DisplayName => IntrinsicDisplayName ?? Name;
         // Constraint must participate in ToString: CacheKey/TypeInfoEqualityComparer compare via
         // ToString, and `infer U extends string` vs `infer U extends number` must not collide.
         public override string ToString() =>
-            Constraint is null ? $"infer {Name}" : $"infer {Name} extends {Constraint}";
+            Constraint is null ? $"infer {DisplayName}" : $"infer {DisplayName} extends {Constraint}";
     }
 
     /// <summary>

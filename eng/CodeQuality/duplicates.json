@@ -190,13 +190,5 @@
       "src/SharpTS/Runtime/Types/SharpTSBigInt.cs::SharpTSBigInt.ParseRadix(ReadOnlySpan<char> digits, int radix)"
     ],
     "Reason": "Existing BigInt construction and runtime wrapper parsing share radix accumulation; defer shared parsing extraction to a BigInt-focused change."
-  },
-  {
-    "Hash": "f754e2cdb5135ae5ac6825963a9a8942ac1d29b079eec8dbf22e029711b0e3d9",
-    "Members": [
-      "src/SharpTS/Compilation/AsyncGeneratorMoveNextEmitter.Statements.TryCatch.cs::AsyncGeneratorMoveNextEmitter.EmitSyncSegmentInTry(List<Stmt> statements, LocalBuilder caughtExceptionLocal, LocalBuilder exceptionPresentLocal)",
-      "src/SharpTS/Compilation/GeneratorMoveNextEmitter.Statements.TryCatch.cs::GeneratorMoveNextEmitter.EmitSyncSegmentInTry(List<Stmt> statements, LocalBuilder caughtExceptionLocal, LocalBuilder exceptionPresentLocal)"
-    ],
-    "Reason": "Sync and async generator emitters own separate protected-region and suspension state; retain paired exception-segment emission until a shared state contract is designed."
   }
 ]

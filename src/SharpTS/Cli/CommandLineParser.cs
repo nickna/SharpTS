@@ -143,6 +143,8 @@ public record GlobalOptions(
 /// <param name="TimingsJson">Print the compilation timing report as JSON.</param>
 /// <param name="Hosted">Emit the experimental versioned hosted runtime ABI.</param>
 /// <param name="GcProfile">Deployment-time garbage-collection profile.</param>
+/// <param name="NativeProject">Optional experimental generated-guest NativeAOT project export.</param>
+/// <param name="Signing">Opt-in Authenticode signing after successful EXE bundling.</param>
 public record CompileOptions(
     OutputTarget Target = OutputTarget.Dll,
     bool PreserveConstEnums = false,
@@ -158,10 +160,14 @@ public record CompileOptions(
     bool Timings = false,
     bool TimingsJson = false,
     bool Hosted = false,
-    GcProfile GcProfile = GcProfile.Workstation
+    GcProfile GcProfile = GcProfile.Workstation,
+    NativeAotProjectOptions? NativeProject = null,
+    AuthenticodeSigningOptions? Signing = null
 )
 {
     public IReadOnlyList<string> References { get; init; } = References ?? [];
+    /// <summary>Optional automatic native publication; the emitted guest retains DLL PE shape.</summary>
+    public NativeAotPublishOptions? NativePublish { get; init; }
 }
 
 /// <summary>
@@ -790,9 +796,17 @@ public class CommandLineParser
         bool timings = false;
         bool timingsJson = false;
         bool hosted = false;
+        string? nativeProjectDirectory = null;
+        string? nativeRuntimeIdentifier = null;
+        bool nativePublishRequested = false;
         string? sdkPath = null;
         BundlerMode bundlerMode = BundlerMode.Auto;
         GcProfile gcProfile = GcProfile.Workstation;
+        string? signCertificate = null;
+        string? signPassword = null;
+        string? signTimestamp = AuthenticodeSigningOptions.DefaultTimestampUrl;
+        string signDigest = "sha256";
+        bool signDetailsProvided = false;
 
         // Packaging options
         bool pack = false;
@@ -813,7 +827,7 @@ public class CommandLineParser
                 if (i + 1 >= args.Length)
                 {
                     return new ParsedCommand.Error(
-                        $"Error: {args[i]} requires a value (dll or exe)",
+                        $"Error: {args[i]} requires a value (dll, exe or native-aot)",
                         64,
                         ShowCompileUsage: true
                     );
@@ -822,19 +836,34 @@ public class CommandLineParser
                 if (targetArg == "dll")
                 {
                     target = OutputTarget.Dll;
+                    nativePublishRequested = false;
                 }
                 else if (targetArg == "exe")
                 {
                     target = OutputTarget.Exe;
+                    nativePublishRequested = false;
+                }
+                else if (targetArg == "native-aot")
+                {
+                    target = OutputTarget.Dll;
+                    nativePublishRequested = true;
                 }
                 else
                 {
                     return new ParsedCommand.Error(
-                        $"Error: Invalid target '{targetArg}'. Use 'dll' or 'exe'.",
+                        $"Error: Invalid target '{targetArg}'. Use 'dll', 'exe' or 'native-aot'.",
                         64,
                         ShowCompileUsage: true
                     );
                 }
+            }
+            else if (args[i] == "--emit-native-project" && i + 1 < args.Length && !args[i + 1].StartsWith('-'))
+            {
+                nativeProjectDirectory = args[++i];
+            }
+            else if (args[i] == "--runtime" && i + 1 < args.Length && !args[i + 1].StartsWith('-'))
+            {
+                nativeRuntimeIdentifier = args[++i];
             }
             else if (args[i] == "--bundler")
             {
@@ -861,6 +890,41 @@ public class CommandLineParser
                         64,
                         ShowCompileUsage: true
                     );
+                }
+            }
+            else if (args[i] is "--sign" or "--sign-pass" or "--sign-timestamp" or "--sign-digest")
+            {
+                var option = args[i];
+                if (++i >= args.Length)
+                    return new ParsedCommand.Error($"Error: {option} requires a value", 64, ShowCompileUsage: true);
+                var value = args[i];
+                switch (option)
+                {
+                    case "--sign":
+                        if (string.IsNullOrWhiteSpace(value) || value.StartsWith('-'))
+                            return new ParsedCommand.Error("Error: --sign requires a certificate file or sha1: thumbprint.", 64, ShowCompileUsage: true);
+                        signCertificate = value;
+                        break;
+                    case "--sign-pass":
+                        signPassword = value;
+                        signDetailsProvided = true;
+                        break;
+                    case "--sign-timestamp":
+                        if (value.Equals("none", StringComparison.OrdinalIgnoreCase))
+                            signTimestamp = null;
+                        else if (Uri.TryCreate(value, UriKind.Absolute, out var timestamp) && timestamp.Scheme is "http" or "https"
+                            && string.IsNullOrEmpty(timestamp.UserInfo))
+                            signTimestamp = value;
+                        else
+                            return new ParsedCommand.Error("Error: --sign-timestamp requires an HTTP(S) RFC 3161 URL or 'none'.", 64, ShowCompileUsage: true);
+                        signDetailsProvided = true;
+                        break;
+                    case "--sign-digest":
+                        signDigest = value.ToLowerInvariant();
+                        if (signDigest is not ("sha256" or "sha384" or "sha512"))
+                            return new ParsedCommand.Error("Error: --sign-digest must be sha256, sha384, or sha512.", 64, ShowCompileUsage: true);
+                        signDetailsProvided = true;
+                        break;
                 }
             }
             else if (args[i] == "--gc-profile")
@@ -955,7 +1019,8 @@ public class CommandLineParser
                 // Global flags are already stripped by ParseGlobalOptions, so anything reaching
                 // here is genuinely unrecognized by compile mode.
                 bool needsValue = args[i] is "-o" or "-t" or "--target" or "--bundler" or "--gc-profile"
-                    or "--sdk-path" or "--push" or "--api-key" or "--package-id" or "--version";
+                    or "--sdk-path" or "--push" or "--api-key" or "--package-id" or "--version"
+                    or "--emit-native-project" or "--runtime";
 
                 return new ParsedCommand.Error(
                     needsValue
@@ -965,6 +1030,15 @@ public class CommandLineParser
                     ShowCompileUsage: true);
             }
         }
+
+        if (signCertificate is null && signDetailsProvided)
+            return new ParsedCommand.Error("Error: signing options require --sign <certificate>.", 64, ShowCompileUsage: true);
+        if (signCertificate is not null && signCertificate.StartsWith("sha1:", StringComparison.OrdinalIgnoreCase) && signPassword is not null)
+            return new ParsedCommand.Error("Error: --sign-pass applies only to a .pfx/.p12 certificate file.", 64, ShowCompileUsage: true);
+        if (signCertificate is not null && (target != OutputTarget.Exe && !nativePublishRequested || globalOptions.NoEmit || globalOptions.EmitDeclarationOnly || globalOptions.ShowConfig))
+            return new ParsedCommand.Error("Error: --sign requires --target exe or Windows native-aot executable output (without --noEmit/--emitDeclarationOnly/--showConfig).", 64, ShowCompileUsage: true);
+        if (signCertificate is not null && nativePublishRequested && nativeRuntimeIdentifier?.StartsWith("win-", StringComparison.Ordinal) != true)
+            return new ParsedCommand.Error("Error: Authenticode signing requires Windows native output.", 64, ShowCompileUsage: true);
 
         if ((globalOptions.NoEmit || globalOptions.EmitDeclarationOnly) && pack)
         {
@@ -1000,8 +1074,45 @@ public class CommandLineParser
                 ShowCompileUsage: true);
         }
 
-        // Determine output file: use explicit output if provided, otherwise derive from input + target
-        string outputFile = explicitOutput ?? Path.ChangeExtension(inputFile, target == OutputTarget.Exe ? ".exe" : ".dll");
+        NativeAotProjectOptions? nativeProject = null;
+        NativeAotPublishOptions? nativePublish = null;
+        if (nativePublishRequested)
+        {
+            if (nativeRuntimeIdentifier is null || !NativeAotProjectOptions.SupportedRuntimeIdentifiers.Contains(nativeRuntimeIdentifier))
+                return new ParsedCommand.Error("Error: --target native-aot requires --runtime with a supported RID (win-x64, win-arm64, linux-x64, linux-arm64, osx-x64, osx-arm64).", 64, ShowCompileUsage: true);
+            if (nativeRuntimeIdentifier != NativeAotProjectOptions.HostRuntimeIdentifier)
+                return new ParsedCommand.Error($"Error: --target native-aot requires a matching compiler host RID ({NativeAotProjectOptions.HostRuntimeIdentifier ?? "unsupported host"}).", 64, ShowCompileUsage: true);
+            if (string.IsNullOrWhiteSpace(explicitOutput))
+                return new ParsedCommand.Error("Error: --target native-aot requires -o with the final native executable path.", 64, ShowCompileUsage: true);
+            if (nativeProjectDirectory is not null || hosted || pack || bundlerMode != BundlerMode.Auto ||
+                globalOptions.NoEmit || globalOptions.EmitDeclarationOnly || globalOptions.ShowConfig)
+                return new ParsedCommand.Error("Error: --target native-aot cannot combine with --emit-native-project, hosted, packaging, bundler or no-output modes.", 64, ShowCompileUsage: true);
+            if (gcProfile != GcProfile.Workstation)
+                return new ParsedCommand.Error("Error: --target native-aot currently supports only the workstation GC profile.", 64, ShowCompileUsage: true);
+            nativePublish = new(explicitOutput, nativeRuntimeIdentifier);
+            useReferenceAssemblies = true;
+        }
+        else if (nativeProjectDirectory is not null)
+        {
+            if (nativeRuntimeIdentifier is null || !NativeAotProjectOptions.SupportedRuntimeIdentifiers.Contains(nativeRuntimeIdentifier))
+                return new ParsedCommand.Error("Error: --emit-native-project requires --runtime with a supported RID (win-x64, win-arm64, linux-x64, linux-arm64, osx-x64, osx-arm64).", 64, ShowCompileUsage: true);
+            if (nativeRuntimeIdentifier != NativeAotProjectOptions.HostRuntimeIdentifier)
+                return new ParsedCommand.Error($"Error: --emit-native-project requires a matching compiler host RID ({NativeAotProjectOptions.HostRuntimeIdentifier ?? "unsupported host"}); export on the target OS and architecture.", 64, ShowCompileUsage: true);
+            if (target != OutputTarget.Dll || hosted || pack || explicitOutput is not null || bundlerMode != BundlerMode.Auto ||
+                globalOptions.NoEmit || globalOptions.EmitDeclarationOnly || globalOptions.ShowConfig)
+                return new ParsedCommand.Error("Error: --emit-native-project requires ordinary DLL compilation without -o, hosted, packaging, bundler, or no-output modes.", 64, ShowCompileUsage: true);
+            if (gcProfile != GcProfile.Workstation)
+                return new ParsedCommand.Error("Error: --emit-native-project currently supports only the workstation GC profile.", 64, ShowCompileUsage: true);
+            nativeProject = new(nativeProjectDirectory, nativeRuntimeIdentifier);
+            useReferenceAssemblies = true;
+        }
+        else if (nativeRuntimeIdentifier is not null)
+            return new ParsedCommand.Error("Error: --runtime is valid only with --emit-native-project or --target native-aot.", 64, ShowCompileUsage: true);
+
+        // Native projects own their guest path; ordinary output retains its existing defaults.
+        string outputFile = nativeProject is not null
+            ? Path.Combine(nativeProject.OutputDirectory, "guest", "Guest.dll")
+            : nativePublish?.OutputPath ?? explicitOutput ?? Path.ChangeExtension(inputFile, target == OutputTarget.Exe ? ".exe" : ".dll");
 
         var compileOptions = new CompileOptions(
             Target: target,
@@ -1018,8 +1129,19 @@ public class CommandLineParser
             Timings: timings,
             TimingsJson: timingsJson,
             Hosted: hosted,
-            GcProfile: gcProfile
+            GcProfile: gcProfile,
+            NativeProject: nativeProject,
+            Signing: signCertificate is null ? null : new AuthenticodeSigningOptions
+            {
+                Certificate = signCertificate,
+                Password = signPassword ?? (signCertificate.StartsWith("sha1:", StringComparison.OrdinalIgnoreCase)
+                    ? null : Environment.GetEnvironmentVariable("SHARPTS_SIGN_PASS")),
+                TimestampUrl = signTimestamp,
+                DigestAlgorithm = signDigest
+            }
         );
+
+        compileOptions = compileOptions with { NativePublish = nativePublish };
 
         var packOptions = new PackOptions(
             Pack: pack,

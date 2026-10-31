@@ -436,7 +436,7 @@ public partial class RuntimeEmitter
 
         // This closure belongs only to this emission. Its dispatch runs after a
         // Promise reaction checkpoint, including for already-settled listeners.
-        var closure = events.Type.DefineNestedType("CaptureRejection",
+        var closure = EmitTypeDefinitions.DefineNestedType(events.Type, "CaptureRejection",
             TypeAttributes.NestedPrivate | TypeAttributes.Sealed | TypeAttributes.BeforeFieldInit);
         var target = closure.DefineField("Target", events.Type, FieldAttributes.Public);
         var source = closure.DefineField("Source", _types.TaskOfObject, FieldAttributes.Public);

@@ -14,15 +14,24 @@ public partial class ILCompiler
 
     private void EmitEffectiveClassElements(CompilationContext context, IEnumerable<Stmt.Field> fields,
         IReadOnlyDictionary<string, FieldBuilder>? backingFields, IReadOnlyDictionary<string, Type>? propertyTypes,
-        Action<Stmt.Field> loadComputedKey)
+        Action<Stmt.Field> loadComputedKey, IEnumerable<Stmt.AutoAccessor>? autoAccessors = null)
     {
         var il = context.IL;
         var emitter = new ILEmitter(context);
         bool previous = context.SuppressNewTarget;
         context.SuppressNewTarget = true;
         var slots = EmitPrivateFieldStorage(il, context.CurrentClassName!, context, emitter);
-        foreach (var field in fields.Where(field => !field.IsStatic && !field.IsDeclare))
+        var elements = fields.Where(field => !field.IsStatic && !field.IsDeclare).Cast<Stmt>()
+            .Concat((autoAccessors ?? []).Where(accessor => !accessor.IsStatic))
+            .OrderBy(element => element is Stmt.Field field ? field.Name.SourceOrderOffset : ((Stmt.AutoAccessor)element).Name.SourceOrderOffset);
+        foreach (var element in elements)
         {
+            if (element is Stmt.AutoAccessor accessor)
+            {
+                EmitReceiverAutoAccessorInitializer(context, accessor, context.CurrentClassName!);
+                continue;
+            }
+            var field = (Stmt.Field)element;
             if (field.IsPrivate)
             {
                 EmitPrivateFieldInitializer(il, field, slots!, emitter);
@@ -38,23 +47,44 @@ public partial class ILCompiler
             il.Emit(OpCodes.Stloc, value);
             var done = il.DefineLabel();
             string property = NamingConventions.ToPascalCase(field.Name.Lexeme);
-            if (field.ComputedKey == null && field.Initializer != null
+            bool nativeOwn = context.CurrentClassBuilder is TypeBuilder nativeOwnOwner && _nativeOwnAdapters.ContainsKey(nativeOwnOwner);
+            if (field.ComputedKey == null && (field.Initializer != null || nativeOwn)
                 && backingFields?.TryGetValue(property, out var backing) == true)
             {
                 var external = il.DefineLabel();
                 il.Emit(OpCodes.Ldloc, context.ClassConstructorReceiver!);
                 il.Emit(OpCodes.Ldarg_0);
                 il.Emit(OpCodes.Bne_Un, external);
-                il.Emit(OpCodes.Ldarg_0);
-                il.Emit(OpCodes.Ldloc, value);
-                if (GetClassRegistry().TryGetOwnGuestDataField((TypeBuilder)backing.DeclaringType!, field.Name.Lexeme, out var guestField)
-                    && guestField.IsPrimitive)
-                    il.Emit(OpCodes.Call, EmitterTypeHelpers.SelfMethodReference(guestField.GuestSetter));
-                else
+                GetClassRegistry().TryGetOwnGuestDataField((TypeBuilder)backing.DeclaringType!, field.Name.Lexeme, out var guestField);
+                void Store(bool ownStorage)
                 {
-                    EmitBoxedFieldConversion(il, propertyTypes![property]);
-                    il.Emit(OpCodes.Stfld, backing);
+                    il.Emit(OpCodes.Ldarg_0); il.Emit(OpCodes.Ldloc, value);
+                    if (guestField != null && (guestField.IsPrimitive || ownStorage))
+                        il.Emit(OpCodes.Call, EmitterTypeHelpers.SelfMethodReference(guestField.GuestSetter));
+                    else
+                    {
+                        EmitBoxedFieldConversion(il, propertyTypes![property]);
+                        il.Emit(OpCodes.Stfld, backing);
+                    }
                 }
+                if (nativeOwn)
+                {
+                    var legacy = EmitNativeOwnReceiverGuard(il);
+                    // Complete the throwing public field definition before selecting
+                    // the exact owner-local native/raw storage for its value.
+                    il.Emit(OpCodes.Ldarg_0); il.Emit(OpCodes.Ldstr, field.Name.Lexeme);
+                    EmitOwnDataDefinition(il, value);
+                    Store(true);
+                    // This internal overlay removal does not delete the property.
+                    il.Emit(OpCodes.Ldarg_0); il.Emit(OpCodes.Ldstr, field.Name.Lexeme);
+                    il.Emit(OpCodes.Call, _runtime.DescriptorStorage.DeleteProperty); il.Emit(OpCodes.Pop);
+                    il.Emit(OpCodes.Ldarg_0); il.Emit(OpCodes.Ldstr, field.Name.Lexeme);
+                    il.Emit(OpCodes.Ldstr, NativeOwnFieldIdentity(guestField!)); il.Emit(OpCodes.Ldc_I4_1);
+                    il.Emit(OpCodes.Call, _runtime.GuestOwnProperties!.CommitDefinition);
+                    il.Emit(OpCodes.Br, done); il.MarkLabel(legacy);
+                }
+                if (field.Initializer == null) il.Emit(OpCodes.Br, external);
+                else Store(false);
                 il.Emit(OpCodes.Br, done);
                 il.MarkLabel(external);
             }

@@ -80,10 +80,9 @@ public sealed class StableRecursiveModuleFunctionTests
                 """
         };
 
-        // The imported wrapper remains the same callable in both engines, while recursion inside
-        // it observes the source module's replaced binding. Most importantly, the imported call
-        // itself never becomes a direct call to the source module's emitted method.
-        Assert.Equal("101 101\n", TestHarness.RunModules(files, "main.ts", mode));
+        // The retained original observes the replacement when it recurses.
+        // The live import calls the source module's replacement directly.
+        Assert.Equal("101 100\n", TestHarness.RunModules(files, "main.ts", mode));
     }
 
     [Theory, ModeData]

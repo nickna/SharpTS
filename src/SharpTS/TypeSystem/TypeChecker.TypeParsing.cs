@@ -138,6 +138,8 @@ public partial class TypeChecker
             {
                 if (EditorFacts.IsEnabled && _editorAliasResolutionProof?.GetValueOrDefault(aliasCacheKey) != true)
                     MarkEditorUnprovenTypeName();
+                EditorFacts.RecordResolvedAliasDefinition(aliasEntry.DefinitionNode, cached,
+                    _editorAliasResolutionProof?.GetValueOrDefault(aliasCacheKey) == true);
                 return cached;
             }
 
@@ -176,6 +178,8 @@ public partial class TypeChecker
                 _expandedTypeAliasCache[aliasCacheKey] = expanded;
                 if (EditorFacts.IsEnabled)
                     (_editorAliasResolutionProof ??= new(StringComparer.Ordinal))[aliasCacheKey] = editorProofVersion == _editorUnprovenTypeVersion;
+                EditorFacts.RecordResolvedAliasDefinition(aliasEntry.DefinitionNode, expanded,
+                    editorProofVersion == _editorUnprovenTypeVersion);
 
                 return expanded;
             }
@@ -477,7 +481,7 @@ public partial class TypeChecker
                         mergedFields.ToFrozenDictionary(),
                         optionalFields.ToFrozenSet(),
                         CallSignatures: callSignatures.Count == 0 ? null : callSignatures,
-                        ReadonlyMembers: readonlyFields.ToFrozenSet(StringComparer.Ordinal));
+                        ReadonlyMembers: readonlyFields.ToFrozenSet(StringComparer.Ordinal)) { IsGlobalThisObject = containsGlobalThis };
                 }
                 return new TypeInfo.Record(mergedFields.ToFrozenDictionary(),
                     CallSignatures: callSignatures.Count == 0 ? null : callSignatures,

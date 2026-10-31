@@ -158,6 +158,23 @@ public partial class TypeChecker
         return new TypeInfo.Instance(_currentClass);
     }
 
+    private TypeInfo WidenFreshArrayReceiver(Expr receiver, TypeInfo type)
+    {
+        if (type is not TypeInfo.Array array) return type;
+        while (receiver is Expr.Grouping grouping) receiver = grouping.Expression;
+        if (receiver is Expr.Satisfies satisfies)
+        {
+            TypeInfo context = (satisfies.ConstraintTypeNode is { } node ? TryToTypeInfo(node) : null)
+                ?? ToTypeInfo(satisfies.ConstraintType);
+            // Reuse the fixed contextual element domain, including literal unions.
+            return ContextualFreshCallArgument(satisfies.Expression, type, context,
+                isConst: false, publish: false);
+        }
+        return receiver is Expr.ArrayLiteral literal
+            ? WidenConstArrayLiteralElements(literal, array)
+            : type;
+    }
+
     private TypeInfo CheckGet(Expr.Get get)
     {
         using var memberLookup = BeginSourceMemberLookup(get, get.Name, MemberOperation.Read);
@@ -245,11 +262,17 @@ public partial class TypeChecker
 
         if (_hasDefaultLibraries &&
             get.Object is Expr.Variable { Name.Lexeme: "self" or "window" } &&
-            GetGlobalThisType().Members.TryGetValue(get.Name.Lexeme, out TypeInfo? windowGlobalMember))
+            TryGetGlobalThisMember(get.Name.Lexeme, out TypeInfo? windowGlobalMember))
             return windowGlobalMember;
 
         TypeInfo objType = RefreshCompletedInterfaceBinding(CheckExpr(get.Object));
+        objType = WidenFreshArrayReceiver(get.Object, objType);
         ExpectSourceMemberReceiver(objType);
+
+        if (objType is TypeInfo.Any && get.Name.Lexeme == "prototype"
+            && get.Object is Expr.Variable { Name.Lexeme: "Date" }
+            && _environment.Get("Date") is null)
+            return TypeInfo.Date.Shared;
 
         if (_hasDefaultLibraries &&
             get.Object is Expr.Variable { Name.Lexeme: "top" } &&
@@ -1561,7 +1584,7 @@ public partial class TypeChecker
             try
             {
                 var arguments = InferTypeArguments(genericMethod,
-                    PrepareFreshCallArgumentsForInference(genericMethod.ParamTypes, call.Arguments, argumentTypes));
+                    PrepareFreshCallArgumentsForInference(genericMethod, call.Arguments, argumentTypes));
                 methodType = InstantiateGenericFunction(genericMethod, arguments);
             }
             catch (TypeCheckException exception) when (exception.Diagnostic.TsCode == "TS2344")

@@ -55,7 +55,7 @@ public sealed class DestructuredParameterDefaultTypeCheckTests
             """, "TS2322", 2];
         yield return ["later-pattern-binding-remains-unavailable", """
             function run(first = later, [later]: number[] = [1]) {}
-            """, "TS2304", 1];
+            """, "TS2373", 1];
     }
 
     [Theory, MemberData(nameof(RejectedCases))]

@@ -40,8 +40,8 @@ public abstract partial class ExpressionEmitterBase
         if (!TryResolveExternalClassValue(reference, out var clrType))
             return false;
 
-        IL.Emit(OpCodes.Ldtoken, clrType);
-        IL.Emit(OpCodes.Call, Types.TypeGetTypeFromHandle);
+        Ctx.NativeClrAdmission?.RecordTypeValue(reference, clrType);
+        EmitConstructorTypeValue(clrType, NativeConstructorValueProducerKind.ClrConstructor);
         SetStackUnknown();
         return true;
     }

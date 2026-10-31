@@ -1752,10 +1752,11 @@ public static class FsModuleInterpreter
         ISharpTSCallable? listener = null;
 
         // Parse overloaded args: watchFile(filename, options?, listener)
-        if (args.Length == 2)
+        // Source wrappers supply an omitted third slot as undefined. Select
+        // the listener overload from the actual second value, not slot count.
+        if (args.Length > 1 && args[1].ToObject() is ISharpTSCallable cb)
         {
-            if (args[1].ToObject() is ISharpTSCallable cb)
-                listener = cb;
+            listener = cb;
         }
         else if (args.Length >= 3)
         {

@@ -51,6 +51,8 @@ public partial class ILCompiler
         }
         foreach (var member in members.OrderBy(member => member.Position))
             Register(member.Static, member.Key, member.Method, member.Getter, member.Parameters);
+        foreach (var accessor in expression.AutoAccessors ?? [])
+            EmitStaticAutoAccessorDescriptor(il, template, accessor, () => il.Emit(OpCodes.Ldarg_0));
 
         foreach (var initializer in expression.StaticInitializers ?? expression.Fields.Where(field => field.IsStatic).Cast<Stmt>().ToList())
         {
@@ -91,6 +93,17 @@ public partial class ILCompiler
             }
             else if (initializer is Stmt.StaticBlock block)
                 emitter.EmitClassExpressionStaticBlock(block);
+            else if (initializer is Stmt.AutoAccessor accessor && accessor.IsStatic)
+            {
+                il.Emit(OpCodes.Ldarg_0); il.Emit(OpCodes.Ldfld, _runtime.ClassDefinitions.PrivateMembers);
+                il.Emit(OpCodes.Ldstr, StaticAutoAccessorKey(accessor));
+                if (accessor.Initializer != null)
+                {
+                    emitter.EmitExpression(accessor.Initializer); emitter.EmitBoxIfNeeded(accessor.Initializer);
+                }
+                else il.Emit(OpCodes.Ldsfld, _runtime.Sentinels.UndefinedInstance);
+                il.Emit(OpCodes.Callvirt, _types.DictionaryStringObjectSetItem);
+            }
         }
         il.Emit(OpCodes.Ret);
 

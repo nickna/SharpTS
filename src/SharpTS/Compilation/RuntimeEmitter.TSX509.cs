@@ -75,7 +75,7 @@ public partial class RuntimeEmitter
         EmitX509InfoAccessGetter(tb);
 
         // --- methods ---
-        EmitX509Verify(tb, certField, verifyWithPem);
+        EmitX509Verify(tb, certField, verifyWithPem, runtime);
         EmitX509CheckHost(tb, runtime, dnsField, cnField, hostMatches);
         EmitX509CheckIp(tb, runtime, ipsField);
         EmitX509CheckEmail(tb, runtime, emailsField);
@@ -1365,7 +1365,7 @@ public partial class RuntimeEmitter
     // Methods
     // ------------------------------------------------------------------
 
-    private void EmitX509Verify(TypeBuilder tb, FieldBuilder certField, MethodBuilder verifyWithPem)
+    private void EmitX509Verify(TypeBuilder tb, FieldBuilder certField, MethodBuilder verifyWithPem, EmittedRuntime runtime)
     {
         var method = tb.DefineMethod("Verify",
             MethodAttributes.Public | MethodAttributes.HideBySig,
@@ -1374,10 +1374,15 @@ public partial class RuntimeEmitter
 
         // pem = (string)key.GetType().GetMethod("export").Invoke(key, new object[]{ null })
         var pemLocal = il.DeclareLocal(_types.Object);
-        il.Emit(OpCodes.Ldarg_1);
-        il.Emit(OpCodes.Callvirt, _types.GetMethodNoParams(_types.Object, "GetType"));
-        il.Emit(OpCodes.Ldstr, "export");
-        il.Emit(OpCodes.Callvirt, _types.GetMethod(typeof(Type), "GetMethod", [typeof(string)]));
+        if (_emitNativeCallables)
+            EmitNativeX509KeyExportMember(il, tb, runtime);
+        else
+        {
+            il.Emit(OpCodes.Ldarg_1);
+            il.Emit(OpCodes.Callvirt, _types.GetMethodNoParams(_types.Object, "GetType"));
+            il.Emit(OpCodes.Ldstr, "export");
+            il.Emit(OpCodes.Callvirt, _types.GetMethod(typeof(Type), "GetMethod", [typeof(string)]));
+        }
         il.Emit(OpCodes.Ldarg_1);
         il.Emit(OpCodes.Ldc_I4_1);
         il.Emit(OpCodes.Newarr, _types.Object);

@@ -43,7 +43,7 @@ public partial class ILCompiler
             typeAttrs |= TypeAttributes.Abstract;
         }
 
-        var typeBuilder = _moduleBuilder.DefineType(
+        var typeBuilder = EmitTypeDefinitions.DefineType(_moduleBuilder,
             className,
             typeAttrs
         );
@@ -180,7 +180,7 @@ public partial class ILCompiler
 
         // Implement $IHasFields interface for unified property access
         // All classes implement this interface (including derived classes)
-        EmitTypeDefinitions.AddInterfaceImplementation(typeBuilder, _runtime.ObjectFields.Interface);
+        NativeSourceOwnerCatalog.Implement(typeBuilder, _runtime.ObjectFields.Interface, _runtime.ClassInitialization.SourceOwners);
 
         // Initialize tracking dictionaries for this class expression
         _classExprs.BackingFields[classExpr] = [];
@@ -193,6 +193,13 @@ public partial class ILCompiler
         _classExprs.InstanceMethods[classExpr] = [];
         _classExprs.Getters[classExpr] = [];
         _classExprs.Setters[classExpr] = [];
+        _typedInterop.PropertyBackingFields[className] = _classExprs.BackingFields[classExpr];
+        _typedInterop.ClassProperties[className] = _classExprs.Properties[classExpr];
+        _typedInterop.PropertyTypes[className] = _classExprs.PropertyTypes[classExpr];
+        _typedInterop.DeclaredPropertyNames[className] = _classExprs.DeclaredProperties[classExpr];
+        _typedInterop.ReadonlyPropertyNames[className] = _classExprs.ReadonlyProperties[classExpr];
+        _classes.InstanceGetters[className] = _classExprs.Getters[classExpr];
+        _classes.InstanceSetters[className] = _classExprs.Setters[classExpr];
 
         // Class expressions retain direct per-instance expando storage. Unlike the narrow
         // declaration optimization, their runtime-valued identity commonly escapes.
@@ -222,6 +229,9 @@ public partial class ILCompiler
             }
             DefineClassExpressionProperty(typeBuilder, classExpr, field, classGenericParams);
         }
+
+        foreach (var accessor in classExpr.AutoAccessors ?? [])
+            DefineAutoAccessorProperty(typeBuilder, className, accessor, classGenericParams);
 
         // Define static fields (use object type for compatibility with existing emission code)
         foreach (var field in classExpr.Fields.Where(f => f.IsStatic && !f.IsPrivate))
@@ -395,9 +405,9 @@ public partial class ILCompiler
                     : superclassName == "Promise"
                         ? [typeof(object)]
                         : []);
-        // Declaration adapters keep the declaration's rest marker. Ordinary
-        // expression constructors retain their existing parameter representation.
-        if (constructor != null && _runtimeClassDeclarations.Values.Any(expression => ReferenceEquals(expression, classExpr)))
+        // Keep source rest parameters visible to both direct super calls and
+        // the flat-arguments constructor factory.
+        if (constructor != null)
             for (int index = 0; index < constructor.Parameters.Count; index++)
                 if (constructor.Parameters[index].IsRest) ctorParamTypes[index] = _types.ListOfObject;
 
@@ -580,9 +590,9 @@ public partial class ILCompiler
 
         string className = _classExprs.Names[classExpr];
         var fieldsField = _classes.InstanceFieldsField[className];
-        if (_usesRuntimeParents && !typeBuilder.IsGenericTypeDefinition && !_classes.ErrorSubclasses.Contains(className)
+        if (_usesRuntimeParents && !_classes.ErrorSubclasses.Contains(className)
             && !_classes.PromiseSubclasses.Contains(className)
-            && SupportsReceiverInitialization(ClassExpressionDeclaration(classExpr)))
+            && SupportsReceiverInitialization(ClassExpressionDeclaration(classExpr), allowGenericOwner: true))
             EmitReceiverInitializer(typeBuilder, ClassExpressionDeclaration(classExpr), classExpr);
 
         // Emit the constructor-free prototype path before the .cctor that uses it.
@@ -707,7 +717,7 @@ public partial class ILCompiler
             il.Emit(OpCodes.Newobj, _types.GetDefaultConstructor(privateStorage.FieldType));
             il.Emit(OpCodes.Stsfld, EmitterTypeHelpers.SelfFieldReference(privateStorage));
         }
-        EmitClassPrototypeRegistration(il, typeBuilder, GetClassConstructorLength(classExpr.Methods));
+        EmitClassPrototypeRegistration(il, typeBuilder, GetClassConstructorLength(classExpr.Methods), cctor);
         il.Emit(OpCodes.Ret);
         EmitClassDefinitionInitializer(classExpr, typeBuilder);
     }
@@ -724,7 +734,7 @@ public partial class ILCompiler
         var canonicalConstructor = ctorBuilder;
         ctorBuilder = NewTargetConstructor(ctorBuilder);
         var il = ctorBuilder.GetILGenerator();
-        if (HasRuntimeParent(classExpr))
+        if (HasRuntimeParent(classExpr) || RequiresConstructorReturnAdapter(ClassExpressionDeclaration(classExpr)))
         {
             // The definition factory allocates through the bookkeeping constructor
             // and uses the explicit-receiver adapter for guest initialization.
@@ -780,7 +790,7 @@ public partial class ILCompiler
                         il.Emit(OpCodes.Ldfld, _runtime.ClassDefinitions.Keys);
                         il.Emit(OpCodes.Ldc_I4, index);
                         il.Emit(OpCodes.Ldelem_Ref);
-                    });
+                    }, classExpr.AutoAccessors);
                 var parameterEmitter = new ILEmitter(ctx);
                 foreach (var assignment in parameterProperties) parameterEmitter.EmitConstructorParameterProperty(assignment);
             });
@@ -958,85 +968,25 @@ public partial class ILCompiler
 
         void EmitInstanceFieldInitializersCore()
         {
-            var privateStorage = EmitPrivateFieldStorage(il, className, ctx, emitter);
-            foreach (var field in classExpr.Fields.Where(f => !f.IsStatic && !f.IsDeclare && (f.IsPrivate || f.Initializer != null || f.ComputedKey != null)))
+            var previousReceiver = ctx.ClassConstructorReceiver;
+            if (previousReceiver == null)
             {
-                if (field.IsPrivate)
+                ctx.ClassConstructorReceiver = il.DeclareLocal(_types.Object);
+                il.Emit(OpCodes.Ldarg_0);
+                il.Emit(OpCodes.Stloc, ctx.ClassConstructorReceiver);
+            }
+            EmitEffectiveClassElements(ctx, classExpr.Fields, _classExprs.BackingFields[classExpr],
+                _classExprs.PropertyTypes[classExpr], field =>
                 {
-                    EmitPrivateFieldInitializer(il, field, privateStorage!, emitter);
-                    continue;
-                }
-                if (field.ComputedKey != null)
-                {
-                    il.Emit(OpCodes.Ldarg_0);
                     var keys = _classExprs.Factories[classExpr].Keys;
-                    int keyIndex = Enumerable.Range(0, keys.Count)
-                        .First(index => ReferenceEquals(keys[index], field.ComputedKey));
-                    il.Emit(OpCodes.Ldarg_0);
-                    il.Emit(OpCodes.Ldfld, EmitterTypeHelpers.SelfFieldReference(_classExprs.DefinitionFields[classExpr]));
+                    int index = Enumerable.Range(0, keys.Count).First(index => ReferenceEquals(keys[index], field.ComputedKey));
+                    il.Emit(OpCodes.Ldarg, ctx.ClassDefinitionParameterIndex!.Value);
                     il.Emit(OpCodes.Castclass, _runtime.ClassDefinitions.Type);
                     il.Emit(OpCodes.Ldfld, _runtime.ClassDefinitions.Keys);
-                    il.Emit(OpCodes.Ldc_I4, keyIndex);
+                    il.Emit(OpCodes.Ldc_I4, index);
                     il.Emit(OpCodes.Ldelem_Ref);
-                    if (field.Initializer != null)
-                    {
-                        emitter.EmitExpression(field.Initializer);
-                        emitter.EmitBoxIfNeeded(field.Initializer);
-                    }
-                    else
-                        il.Emit(OpCodes.Ldsfld, _runtime.Sentinels.UndefinedInstance);
-                    il.Emit(OpCodes.Call, _runtime.ObjectWrite.Index);
-                    continue;
-                }
-                if (field.Initializer == null)
-                    continue;
-                string fieldName = field.Name.Lexeme;
-                string pascalName = NamingConventions.ToPascalCase(fieldName);
-
-                if (_classExprs.BackingFields[classExpr].TryGetValue(pascalName, out var backingField))
-                {
-                    // Store in backing field
-                    il.Emit(OpCodes.Ldarg_0);
-                    emitter.EmitExpression(field.Initializer!);
-
-                    Type targetType = _classExprs.PropertyTypes[classExpr][pascalName];
-                    if (GetClassRegistry().TryGetOwnGuestDataField((TypeBuilder)backingField.DeclaringType!, fieldName, out var guestField)
-                        && guestField.IsPrimitive)
-                    {
-                        emitter.EmitBoxIfNeeded(field.Initializer!);
-                        il.Emit(OpCodes.Call, EmitterTypeHelpers.SelfMethodReference(guestField.GuestSetter));
-                    }
-                    else
-                    {
-                        EmitTypeConversion(il, emitter, field.Initializer!, targetType);
-                        il.Emit(OpCodes.Stfld, backingField);
-                    }
-                }
-                else
-                {
-                    // Fallback to _fields dictionary
-                    il.Emit(OpCodes.Ldarg_0);
-                    il.Emit(OpCodes.Call, EmitterTypeHelpers.SelfMethodReference(ensureFields));
-                    il.Emit(OpCodes.Ldstr, fieldName);
-                    emitter.EmitExpression(field.Initializer!);
-                    emitter.EmitBoxIfNeeded(field.Initializer!);
-                    il.Emit(OpCodes.Callvirt, _types.DictionaryStringObjectSetItem);
-                }
-            }
-
-            // Initialize instance declare fields (without initializers) to null in _fields dictionary
-            // TypeScript semantics: uninitialized fields return null/undefined, not CLR defaults
-            foreach (var field in classExpr.Fields.Where(f =>
-                !f.IsStatic && !f.IsPrivate && f.IsDeclare && f.Initializer == null && f.ComputedKey == null))
-            {
-                string fieldName = field.Name.Lexeme;
-                // Store null in _fields dictionary
-                il.Emit(OpCodes.Ldarg_0);
-                il.Emit(OpCodes.Call, EmitterTypeHelpers.SelfMethodReference(ensureFields));
-                il.Emit(OpCodes.Ldstr, fieldName);
-                il.Emit(OpCodes.Ldnull);
-                il.Emit(OpCodes.Callvirt, _types.DictionaryStringObjectSetItem);
-            }
+                }, classExpr.AutoAccessors);
+            ctx.ClassConstructorReceiver = previousReceiver;
         }
     }
 

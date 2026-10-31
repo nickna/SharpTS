@@ -632,8 +632,7 @@ public sealed class ArrayEmitter : ITypeEmitterStrategy
                 il.MarkLabel(fallbackLabel);
                 emitter.EmitExpression(receiver);
                 emitter.EmitBoxIfNeeded(receiver);
-                il.Emit(OpCodes.Call, ctx.Runtime!.ObjectRead.Length);
-                il.Emit(OpCodes.Conv_R8);
+                EmitFallbackLengthGet(emitter);
 
                 il.MarkLabel(endLabel);
                 emitter.SetStackType(StackType.Double);
@@ -696,12 +695,40 @@ public sealed class ArrayEmitter : ITypeEmitterStrategy
 
         il.MarkLabel(fallbackLabelNH);
         il.Emit(OpCodes.Ldloc, objLocal);
-        il.Emit(OpCodes.Call, ctx.Runtime!.ObjectRead.Length);
-        il.Emit(OpCodes.Conv_R8);
+        EmitFallbackLengthGet(emitter);
 
         il.MarkLabel(endLabelNH);
         emitter.SetStackType(StackType.Double);
         return true;
+    }
+
+    // Consumes one boxed receiver and leaves its numeric length. The canonical
+    // Array.prototype is currently a dictionary, despite its apparent array
+    // type in the default library; its actual live slot is authoritative.
+    private static void EmitFallbackLengthGet(IEmitterContext emitter)
+    {
+        var ctx = emitter.Context;
+        var il = ctx.IL;
+        var receiver = il.DeclareLocal(ctx.Types.Object);
+        var ordinary = il.DefineLabel();
+        var done = il.DefineLabel();
+        il.Emit(OpCodes.Stloc, receiver);
+        il.Emit(OpCodes.Ldloc, receiver);
+        il.Emit(OpCodes.Brfalse, ordinary);
+        il.Emit(OpCodes.Ldloc, receiver);
+        il.Emit(OpCodes.Ldsfld, ctx.Runtime!.ArrayOperations.PrototypeField);
+        il.Emit(OpCodes.Bne_Un, ordinary);
+        il.Emit(OpCodes.Ldloc, receiver);
+        il.Emit(OpCodes.Ldstr, "length");
+        il.Emit(OpCodes.Call, ctx.Runtime.ObjectRead.Property);
+        il.Emit(OpCodes.Call, ctx.Runtime.NumericCoercion.ToNumber);
+        il.Emit(OpCodes.Br, done);
+
+        il.MarkLabel(ordinary);
+        il.Emit(OpCodes.Ldloc, receiver);
+        il.Emit(OpCodes.Call, ctx.Runtime.ObjectRead.Length);
+        il.Emit(OpCodes.Conv_R8);
+        il.MarkLabel(done);
     }
 
     /// <summary>

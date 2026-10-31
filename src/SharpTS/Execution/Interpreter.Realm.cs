@@ -46,7 +46,7 @@ public partial class Interpreter
     /// The names of every global constant and built-in singleton, for REPL autocomplete.
     /// </summary>
     internal static IEnumerable<string> GlobalNames
-        => _globalConstants.Keys.Concat(BuiltInNames.ErrorTypeNames);
+        => _globalConstants.Keys.Concat([BuiltInNames.Console]).Concat(BuiltInNames.ErrorTypeNames);
 
     // The process-wide RegExp constructor singleton (a SharpTSBuiltInConstructor),
     // resolved once from the static globals table. ECMA-262 §22.2.6.1 requires
@@ -147,6 +147,7 @@ public partial class Interpreter
             BuiltInNames.EncodeURIComponent, BuiltInNames.DecodeURIComponent,
             BuiltInNames.SetTimeout, BuiltInNames.ClearTimeout,
             BuiltInNames.SetInterval, BuiltInNames.ClearInterval,
+            BuiltInNames.SetImmediate, BuiltInNames.ClearImmediate,
             BuiltInNames.QueueMicrotask,
         ];
         foreach (var name in globalFunctionNames)
@@ -157,7 +158,7 @@ public partial class Interpreter
                     {
                         BuiltInNames.ParseInt => 2,
                         BuiltInNames.ParseFloat or BuiltInNames.BigInt or BuiltInNames.Eval
-                            or BuiltInNames.EncodeURIComponent or BuiltInNames.DecodeURIComponent => 1,
+                            or BuiltInNames.EncodeURIComponent or BuiltInNames.DecodeURIComponent or BuiltInNames.QueueMicrotask => 1,
                         _ => 0
                     });
         }
@@ -215,17 +216,33 @@ public partial class Interpreter
     }
 
     /// <summary>
-    /// The value bare <c>Promise</c> resolves to — whatever the global table
-    /// actually holds (a registry singleton when one exists, otherwise
-    /// <see cref="PromiseConstructorSentinel"/>). Surfaced as
-    /// <c>promise.constructor</c> by PromiseBuiltIns.GetMember so the
-    /// ECMA-262 §27.2.5.1 identity holds:
-    /// <c>Promise.resolve(1).constructor === Promise</c> (#221).
+    /// Realm-owned Promise intrinsic data, retained across fresh evaluators of
+    /// the same VM context without retaining evaluator or scheduler lifetime.
     /// </summary>
-    internal static object PromiseGlobalValue => _globalConstants[BuiltInNames.Promise];
+    private PromiseIntrinsicState? _promiseIntrinsicState;
 
-    // Built-in constructor values are process-wide singletons, but their JS own
-    // properties are realm-local and mutable. Keep expandos here so assignments
+    internal PromiseIntrinsicState PromiseRealmState
+        => _promiseIntrinsicState ??= new(GetFunctionPrototype(), GetObjectPrototype(), GetObjectNamespace());
+
+    internal SharpTSBuiltInConstructor PromiseGlobalValue =>
+        (_environment.VmPromiseRealm ?? PromiseRealmState).Constructor;
+
+    internal void UsePromiseIntrinsicState(PromiseIntrinsicState state)
+    {
+        _promiseIntrinsicState = state;
+        if (_vmOwnedEvaluation) _environment.VmPromiseRealm = state;
+        _functionPrototype = state.FunctionPrototype;
+        _objectPrototype = state.ObjectPrototype;
+        _objectNamespace = state.ObjectConstructor;
+    }
+
+    internal static PromiseIntrinsicState? GetPromiseConstructorState(object? constructor)
+        => constructor is SharpTSBuiltInConstructor { PromiseRealm: { } realm }
+            && ReferenceEquals(constructor, realm.Constructor) ? realm : null;
+
+    // Other built-in constructor templates are process-wide singletons; their
+    // own properties remain evaluator-local. Promise selects its retained realm
+    // tables instead. Keep expandos here so assignments
     // such as `Promise.resolve = replacement` are observable without leaking to
     // another interpreter running in the same process.
     private Dictionary<SharpTSBuiltInConstructor, Dictionary<string, SharpTSPropertyDescriptor>>?
@@ -233,24 +250,45 @@ public partial class Interpreter
     private Dictionary<SharpTSBuiltInConstructor, HashSet<string>>?
         _deletedBuiltInConstructorProperties;
 
+    private Dictionary<SharpTSBuiltInConstructor, Dictionary<string, SharpTSPropertyDescriptor>>?
+        GetConstructorPropertyTable(SharpTSBuiltInConstructor constructor, bool create = false)
+        => GetPromiseConstructorState(constructor) is { } realm
+            ? realm.StringProperties : create ? (_builtInConstructorProperties ??= []) : _builtInConstructorProperties;
+
+    private Dictionary<SharpTSBuiltInConstructor, HashSet<string>>?
+        GetConstructorDeletedTable(SharpTSBuiltInConstructor constructor, bool create = false)
+        => GetPromiseConstructorState(constructor) is { } realm
+            ? realm.DeletedStringProperties : create ? (_deletedBuiltInConstructorProperties ??= []) : _deletedBuiltInConstructorProperties;
+
     private void SetBuiltInConstructorProperty(
         SharpTSBuiltInConstructor constructor,
         string name,
         object? value,
         bool strictMode = false)
     {
+        if (GetPromiseConstructorState(constructor) is not null)
+        {
+            if (!SharpTSProxy.OrdinarySet(this, constructor, name, value, constructor) && strictMode)
+                throw new Runtime.Exceptions.ThrowException(new SharpTSTypeError(
+                    $"Cannot assign to property '{name}' of Promise"));
+            return;
+        }
+        var propertiesByConstructor = GetConstructorPropertyTable(constructor);
+        var deletedByConstructor = GetConstructorDeletedTable(constructor);
         bool hadOwnProperty = HasBuiltInConstructorOwnProperty(constructor, name);
-        if (name == "name"
+        bool metadataName = name == "name"
+            || name == "length" && HasBuiltInConstructorInitialInventory(constructor);
+        if (metadataName
             && GetBuiltInConstructorOverlayDescriptor(constructor, name) is { Writable: false, HasGet: false, HasSet: false })
         {
             if (strictMode)
                 throw new Runtime.Exceptions.ThrowException(new SharpTSTypeError(
-                    "Cannot assign to read only property 'name' of function"));
+                    $"Cannot assign to read only property '{name}' of function"));
             return;
         }
-        if (name == "name" && !hadOwnProperty)
+        if (metadataName && !hadOwnProperty)
         {
-            object? prototype = GetFunctionPrototype();
+            object? prototype = GetPromiseConstructorState(constructor)?.FunctionPrototype ?? GetFunctionPrototype();
             for (int depth = 0; depth < 64 && prototype is not (null or SharpTSUndefined); depth++)
             {
                 if (ObjectBuiltIns.OwnPropertyDescriptorOf(this, prototype, name) is { } inherited)
@@ -263,32 +301,28 @@ public partial class Interpreter
                 prototype = ObjectBuiltIns.PrototypeOf(this, prototype);
             }
         }
-        if (_builtInConstructorProperties != null
-            && _builtInConstructorProperties.TryGetValue(constructor, out var existingProperties)
+        if (propertiesByConstructor != null
+            && propertiesByConstructor.TryGetValue(constructor, out var existingProperties)
             && existingProperties.TryGetValue(name, out var existing))
         {
-            if (existing.Set is { } setter)
-            {
-                FunctionBuiltIns.CallWithThis(this, setter, constructor, [value]);
-                return;
-            }
-            if (!existing.Writable)
+            if (TryAssignThroughDescriptor(existing, constructor, name, value, strictMode))
                 return;
             existing.Value = value;
             existing.HasValue = true;
             return;
         }
 
-        if (_deletedBuiltInConstructorProperties != null
-            && _deletedBuiltInConstructorProperties.TryGetValue(constructor, out var deleted))
+        if (!HasBuiltInConstructorInitialInventory(constructor)
+            && deletedByConstructor != null
+            && deletedByConstructor.TryGetValue(constructor, out var deleted))
         {
             deleted.Remove(name);
         }
-        _builtInConstructorProperties ??= [];
-        if (!_builtInConstructorProperties.TryGetValue(constructor, out var properties))
+        propertiesByConstructor ??= GetConstructorPropertyTable(constructor, create: true)!;
+        if (!propertiesByConstructor.TryGetValue(constructor, out var properties))
         {
             properties = [];
-            _builtInConstructorProperties[constructor] = properties;
+            propertiesByConstructor[constructor] = properties;
         }
         properties[name] = new SharpTSPropertyDescriptor
         {
@@ -308,24 +342,36 @@ public partial class Interpreter
         string name,
         SharpTSPropertyDescriptor descriptor)
     {
-        if (name == "name")
+        var propertiesByConstructor = GetConstructorPropertyTable(constructor);
+        var deletedByConstructor = GetConstructorDeletedTable(constructor);
+        if (GetPromiseConstructorState(constructor) is { } realm)
         {
             var storage = new SharpTSObject([]);
-            if (GetBuiltInConstructorOverlayDescriptor(constructor, name) is { } current)
+            if (ObjectBuiltIns.OwnPropertyDescriptorOf(this, constructor, name) is { } current)
+                storage.DefineProperty(name, current);
+            if (!realm.SymbolProperties.IsExtensible) storage.PreventExtensions();
+            if (!storage.DefineProperty(name, descriptor)) return false;
+            descriptor = storage.GetOwnPropertyDescriptor(name)!;
+        }
+        else
+        {
+            var storage = new SharpTSObject([]);
+            if (ObjectBuiltIns.OwnPropertyDescriptorOf(this, constructor, name) is { } current)
                 storage.DefineProperty(name, current);
             if (!storage.DefineProperty(name, descriptor)) return false;
             descriptor = storage.GetOwnPropertyDescriptor(name)!;
         }
-        if (_deletedBuiltInConstructorProperties != null
-            && _deletedBuiltInConstructorProperties.TryGetValue(constructor, out var deleted))
+        if (!HasBuiltInConstructorInitialInventory(constructor)
+            && deletedByConstructor != null
+            && deletedByConstructor.TryGetValue(constructor, out var deleted))
         {
             deleted.Remove(name);
         }
-        _builtInConstructorProperties ??= [];
-        if (!_builtInConstructorProperties.TryGetValue(constructor, out var properties))
+        propertiesByConstructor ??= GetConstructorPropertyTable(constructor, create: true)!;
+        if (!propertiesByConstructor.TryGetValue(constructor, out var properties))
         {
             properties = [];
-            _builtInConstructorProperties[constructor] = properties;
+            propertiesByConstructor[constructor] = properties;
         }
         properties[name] = descriptor;
         return true;
@@ -348,34 +394,57 @@ public partial class Interpreter
     internal SharpTSPropertyDescriptor? GetBuiltInConstructorOverlayDescriptor(
         SharpTSBuiltInConstructor constructor, string name)
     {
-        if (_builtInConstructorProperties == null
-            || !_builtInConstructorProperties.TryGetValue(constructor, out var properties)
+        var propertiesByConstructor = GetConstructorPropertyTable(constructor);
+        if (propertiesByConstructor == null
+            || !propertiesByConstructor.TryGetValue(constructor, out var properties)
             || !properties.TryGetValue(name, out var descriptor))
-            return name == "name" && !IsBuiltInConstructorPropertyDeleted(constructor, name)
-                ? new SharpTSPropertyDescriptor(constructor.Name,
-                    writable: false, enumerable: false, configurable: true)
-                : null;
+        {
+            if (IsBuiltInConstructorPropertyDeleted(constructor, name)) return null;
+            if (name == "name")
+                return new SharpTSPropertyDescriptor(constructor.Name,
+                    writable: false, enumerable: false, configurable: true);
+            if (name == "length" && GetBuiltInConstructorInitialLength(constructor) is { } length)
+                return new SharpTSPropertyDescriptor(length,
+                    writable: false, enumerable: false, configurable: true);
+            return null;
+        }
         return descriptor;
+    }
+
+    internal IEnumerable<string> GetBuiltInConstructorEnumerableKeys(SharpTSBuiltInConstructor constructor)
+    {
+        var propertiesByConstructor = GetConstructorPropertyTable(constructor);
+        if (propertiesByConstructor is null
+            || !propertiesByConstructor.TryGetValue(constructor, out var properties))
+            yield break;
+
+        foreach (var name in properties.Keys.ToList())
+            if (properties.TryGetValue(name, out var descriptor) && descriptor.Enumerable)
+                yield return name;
     }
 
     internal bool DeleteBuiltInConstructorProperty(
         SharpTSBuiltInConstructor constructor, string name)
     {
-        if (_builtInConstructorProperties != null
-            && _builtInConstructorProperties.TryGetValue(constructor, out var properties))
+        if (ObjectBuiltIns.OwnPropertyDescriptorOf(this, constructor, name) is { Configurable: false })
+            return false;
+        var propertiesByConstructor = GetConstructorPropertyTable(constructor);
+        var deletedByConstructor = GetConstructorDeletedTable(constructor);
+        if (propertiesByConstructor != null
+            && propertiesByConstructor.TryGetValue(constructor, out var properties))
         {
             if (properties.TryGetValue(name, out var descriptor)
                 && !descriptor.Configurable)
                 return false;
             properties.Remove(name);
         }
-        if (constructor.GetMember(name) is null)
+        if (constructor.GetMember(name) is null && !IsBuiltInConstructorInitialProperty(constructor, name))
             return true;
-        _deletedBuiltInConstructorProperties ??= [];
-        if (!_deletedBuiltInConstructorProperties.TryGetValue(constructor, out var deleted))
+        deletedByConstructor ??= GetConstructorDeletedTable(constructor, create: true)!;
+        if (!deletedByConstructor.TryGetValue(constructor, out var deleted))
         {
             deleted = [];
-            _deletedBuiltInConstructorProperties[constructor] = deleted;
+            deletedByConstructor[constructor] = deleted;
         }
         deleted.Add(name);
         return true;
@@ -383,8 +452,7 @@ public partial class Interpreter
 
     private bool IsBuiltInConstructorPropertyDeleted(
         SharpTSBuiltInConstructor constructor, string name)
-        => _deletedBuiltInConstructorProperties != null
-            && _deletedBuiltInConstructorProperties.TryGetValue(constructor, out var deleted)
+        => GetConstructorDeletedTable(constructor)?.TryGetValue(constructor, out var deleted) == true
             && deleted.Contains(name);
 
     // Per-realm RegExp.prototype. Held on the Interpreter (not on the
@@ -478,6 +546,11 @@ public partial class Interpreter
             value = GetJSON();
             return true;
         }
+        if (name == BuiltInNames.Console)
+        {
+            value = GetConsoleNamespace();
+            return true;
+        }
         if (name == BuiltInNames.String)
         {
             value = GetStringNamespace();
@@ -525,7 +598,7 @@ public partial class Interpreter
     /// method identity holds (<c>Math.max === Math.max</c>).
     /// </summary>
     internal static bool IsRealmIntrinsicName(string name)
-        => name is "Object" or "Math" or "JSON" or "String" or "Number" or "Boolean" or "Array" or "ArrayBuffer" or "RegExp" or "Promise"
+        => name is BuiltInNames.Console or "Object" or "Math" or "JSON" or "String" or "Number" or "Boolean" or "Array" or "ArrayBuffer" or "RegExp" or "Promise"
             || BuiltInNames.IsErrorTypeName(name);
 
     // Per-realm String/Number/Boolean.prototype. Each is an extensible ECMA-262
@@ -547,6 +620,13 @@ public partial class Interpreter
     private Runtime.Types.SharpTSObjectPrototype? _objectPrototype;
     private Runtime.Types.SharpTSDate? _datePrototype;
     private Runtime.Types.SharpTSObjectNamespace? _objectNamespace;
+    private Runtime.Types.SharpTSObject? _consoleNamespace;
+
+    // This actual console value contains only the existing static method objects.
+    // Persistent VM realm data therefore keeps no evaluator or writer delegate.
+    internal Runtime.Types.SharpTSObject GetConsoleNamespace() => _consoleNamespace ??= new(
+        ConsoleBuiltIns.MemberNames.ToDictionary(static name => name,
+            static name => ConsoleBuiltIns.GetMember(name), StringComparer.Ordinal));
     // The String/Number/Boolean constructor objects. Ordinary and extensible per ECMA-262,
     // so they carry a guest-writable expando bag and — like Math/JSON/Object — are held
     // per-Interpreter: `Number.foo = 1` in one program must not be visible to the next one
@@ -555,7 +635,6 @@ public partial class Interpreter
     private Runtime.Types.SharpTSNumberNamespace? _numberNamespace;
     private Runtime.Types.SharpTSBooleanNamespace? _booleanNamespace;
     private Runtime.Types.SharpTSArrayGlobal? _arrayGlobal;
-    private Runtime.Types.SharpTSPromisePrototype? _promisePrototype;
     private Dictionary<string, Runtime.Types.SharpTSErrorClass>? _errorClasses;
     // Each prototype is linked back to this realm's constructor object on creation, so
     // `String.prototype.constructor === String` holds — both sides resolve per-realm.
@@ -610,7 +689,16 @@ public partial class Interpreter
     internal Runtime.Types.SharpTSObjectPrototype GetObjectPrototype()
         => _objectPrototype ??= new() { RealmConstructor = GetObjectNamespace() };
     internal Runtime.Types.SharpTSDate GetDatePrototype()
-        => _datePrototype ??= new(double.NaN) { IsPrototype = true };
+    {
+        if (_datePrototype is null)
+        {
+            _datePrototype = new(double.NaN) { IsPrototype = true };
+            _datePrototype.DefineExtraProperty("constructor", new Runtime.Types.SharpTSPropertyDescriptor(
+                _globalConstants[BuiltInNames.Date],
+                writable: true, enumerable: false, configurable: true));
+        }
+        return _datePrototype;
+    }
     internal Runtime.Types.SharpTSObjectNamespace GetObjectNamespace() => _objectNamespace ??= new();
     internal Runtime.Types.SharpTSStringNamespace GetStringNamespace()
         => _stringNamespace ??= new() { RealmPrototypeFactory = GetStringPrototype };
@@ -641,7 +729,7 @@ public partial class Interpreter
         }
         return _arrayGlobal;
     }
-    internal Runtime.Types.SharpTSPromisePrototype GetPromisePrototype() => _promisePrototype ??= new();
+    internal Runtime.Types.SharpTSPromisePrototype GetPromisePrototype() => PromiseRealmState.Prototype;
 
     /// <summary>
     /// Returns this realm's Error constructor. Error constructors and their prototype
@@ -678,16 +766,39 @@ public partial class Interpreter
     // `global` alias resolve here (see LookupVariableRV), and sloppy-mode `this`
     // binds to it.
     private Runtime.Types.SharpTSGlobalThis? _globalThis;
-    internal Runtime.Types.SharpTSGlobalThis GlobalThis => _globalThis ??=
-        new Runtime.Types.SharpTSGlobalThis(name =>
-            TryGetRealmIntrinsic(name, out var intrinsic)
-                ? intrinsic
-                : _globalConstants.TryGetValue(name, out var global)
-                    && (global is SharpTSBuiltInConstructor or IBuiltInTypeConstructor || name is
-                        BuiltInNames.ParseInt or BuiltInNames.ParseFloat or BuiltInNames.Eval
-                        or BuiltInNames.Undefined or BuiltInNames.NaN or BuiltInNames.Infinity)
-                        ? global
-                        : null);
+    internal Runtime.Types.SharpTSGlobalThis GlobalThis => _globalThis ??= CreateRealmGlobalThis();
+
+    private object? ResolveGlobalObjectIntrinsic(string name) =>
+        TryGetRealmIntrinsic(name, out var intrinsic) ? intrinsic
+            : _globalConstants.TryGetValue(name, out var global)
+                && (global is SharpTSBuiltInConstructor or IBuiltInTypeConstructor || name is
+                    BuiltInNames.ParseInt or BuiltInNames.ParseFloat or BuiltInNames.Eval or BuiltInNames.IsNaN
+                    or BuiltInNames.Undefined or BuiltInNames.NaN or BuiltInNames.Infinity) ? global : null;
+
+    private SharpTSGlobalThis CreateRealmGlobalThis()
+    {
+        var globalThis = new SharpTSGlobalThis(ResolveGlobalObjectIntrinsic);
+        // Node timer globals are enumerable, mutable own data slots. Use the
+        // same actual function values as bare-name lookup, so descriptors,
+        // replacement and deletion share the global object's storage.
+        foreach (string name in new[]
+        {
+            BuiltInNames.SetTimeout, BuiltInNames.ClearTimeout,
+            BuiltInNames.SetInterval, BuiltInNames.ClearInterval,
+            BuiltInNames.SetImmediate, BuiltInNames.ClearImmediate,
+            BuiltInNames.QueueMicrotask,
+        })
+        {
+            globalThis.DefineProperty(name, new SharpTSPropertyDescriptor
+            {
+                Value = _globalConstants[name], HasValue = true,
+                Writable = true, HasWritable = true,
+                Enumerable = true, HasEnumerable = true,
+                Configurable = true, HasConfigurable = true,
+            });
+        }
+        return globalThis;
+    }
 
     /// <summary>
     /// Resolves <c>String</c>/<c>Number</c>/<c>Boolean</c><c>.prototype</c> to

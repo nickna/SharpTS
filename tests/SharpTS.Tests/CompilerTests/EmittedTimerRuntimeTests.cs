@@ -233,6 +233,18 @@ public class EmittedTimerRuntimeTests
                 Assert.Same(marker, await promise.WaitAsync(TimeSpan.FromSeconds(10)));
                 var immediate = Call(assembly, runtime.RequireTimerPromises().SetImmediatePromise, marker)!;
                 var immediateTask = Assert.IsAssignableFrom<Task<object?>>(immediate.GetType().GetProperty("Task")!.GetValue(immediate));
+                // Native timer completion now hands off to its actual loop.
+                // This reflection-only fixture supplies the entry point's pump
+                // while retaining the original ten-second completion deadline.
+                var loop = Call(assembly, runtime.EventLoop.GetInstance)!;
+                var pump = loop.GetType().GetMethod(runtime.EventLoop.PumpOnce.Name)!;
+                var elapsed = System.Diagnostics.Stopwatch.StartNew();
+                while (!immediateTask.IsCompleted && elapsed.Elapsed < TimeSpan.FromSeconds(10))
+                {
+                    pump.Invoke(loop, null);
+                    if (!immediateTask.IsCompleted) Thread.Sleep(1);
+                }
+                Assert.True(immediateTask.IsCompleted, "Timer completion exceeded the original ten-second deadline.");
                 Assert.Same(marker, await immediateTask.WaitAsync(TimeSpan.FromSeconds(10)));
             }
         }

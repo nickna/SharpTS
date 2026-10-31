@@ -53,6 +53,12 @@ public abstract partial class ExpressionEmitterBase
             }).ToArray();
         else arguments = expression.TypeArgs?.Select(ResolveTypeArg).ToArray() ?? [];
 
+        if (Ctx.Runtime?.DynamicConstruction.NativeMetadata is { } native)
+        {
+            EmitNativeConstructorClosure(constructor, expression, checkedArguments, arguments, native);
+            return;
+        }
+
         var done = IL.DefineLabel();
         var type = IL.DeclareLocal(Types.Type);
         IL.Emit(OpCodes.Ldloc, constructor);
@@ -170,8 +176,10 @@ public abstract partial class ExpressionEmitterBase
         if (Ctx.LexicalCaptureWriteBacks.TryGetValue(name, out var writeBacks))
         {
             int start = Ctx.RuntimeClassCaptureWriteBackStarts.GetValueOrDefault(declaration);
-            foreach (var (displayClass, field) in writeBacks.Skip(start))
+            var lexicalBinding = Ctx.Locals.GetLocal(name);
+            foreach (var (capturedBinding, displayClass, field) in writeBacks.Skip(start))
             {
+                if (!ReferenceEquals(capturedBinding, lexicalBinding)) continue;
                 IL.Emit(OpCodes.Ldloc, displayClass);
                 IL.Emit(OpCodes.Ldloc, definition);
                 IL.Emit(OpCodes.Stfld, field);
@@ -576,17 +584,16 @@ public abstract partial class ExpressionEmitterBase
         }
         else IL.Emit(OpCodes.Ldnull);
         var parent = _helpers.SpillStoreObject();
-        IL.Emit(OpCodes.Ldtoken, factory!.Template);
-        IL.Emit(OpCodes.Call, Types.TypeGetTypeFromHandle);
-        IL.Emit(OpCodes.Call, Ctx.Runtime!.ClassInitialization.RunDefinition);
+        EmitClassDefinitionInitialization(factory!.Template);
         var keys = IL.DeclareLocal(Types.ObjectArray);
         EmitDefinitionKeyArray(factory.Keys);
         IL.Emit(OpCodes.Stloc, keys);
         var captures = IL.DeclareLocal(Types.ObjectArray);
         EmitDefinitionCaptureArray(expression, Ctx.ClassExprCaptureSlots!.GetValueOrDefault(expression)?.Keys.ToArray() ?? []);
         IL.Emit(OpCodes.Stloc, captures);
-        IL.Emit(OpCodes.Ldtoken, factory.Template);
-        IL.Emit(OpCodes.Call, Types.TypeGetTypeFromHandle);
+        var nativeReceiverInitializers = Ctx.Runtime?.NativeReceiverInitializers;
+        var templateEmission = NativeReceiverInitializerLookup.EmitTemplateValue(nativeReceiverInitializers,
+            Types, IL, factory.Template, Ctx.CurrentMethod, Ctx.CurrentClassBuilder);
         IL.Emit(OpCodes.Ldnull);
         IL.Emit(OpCodes.Ldftn, factory.Method);
         IL.Emit(OpCodes.Newobj, Types.GetConstructor(typeof(Func<object[], object, object, object>), Types.Object, Types.IntPtr));
@@ -595,10 +602,19 @@ public abstract partial class ExpressionEmitterBase
         IL.Emit(OpCodes.Ldloc, parent);
         IL.Emit(OpCodes.Ldloc, keys);
         IL.Emit(OpCodes.Ldloc, captures);
-        IL.Emit(OpCodes.Call, Ctx.Runtime.ClassDefinitions.Create);
+        NativeReceiverInitializerLookup.EmitTemplateCreate(nativeReceiverInitializers, IL,
+            templateEmission, Ctx.Runtime!.ClassDefinitions.Create, Ctx.NativeClosedFamilies);
         IL.Emit(OpCodes.Dup);
         IL.Emit(OpCodes.Call, factory.Initializer);
         SetStackUnknown();
+    }
+
+    protected void EmitClassDefinitionInitialization(Type owner)
+    {
+        if (Ctx.NativeClassInitialization?.TryEmit(IL, owner) == true) return;
+        IL.Emit(OpCodes.Ldtoken, owner);
+        IL.Emit(OpCodes.Call, Types.TypeGetTypeFromHandle);
+        IL.Emit(OpCodes.Call, Ctx.Runtime!.ClassInitialization.RunDefinition);
     }
 
     protected void EmitDefinitionComputedKeys(MethodBuilder method, IReadOnlyList<Expr> keys)

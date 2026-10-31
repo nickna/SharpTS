@@ -146,6 +146,17 @@ public partial class RuntimeEmitter
         unionValues.ValueGetter = _types.GetProperty(unionValues.Interface, "Value")!.GetGetMethod()!;
     }
 
+    private void EmitSourceDataDefinitionContract(ModuleBuilder module, EmittedObjectFieldRuntime fields)
+    {
+        var builder = EmitTypeDefinitions.DefineType(module, "<>SourceDataDefinition",
+            TypeAttributes.NotPublic | TypeAttributes.Interface | TypeAttributes.Abstract);
+        builder.DefineMethod("DefineValue", MethodAttributes.Public | MethodAttributes.Abstract
+            | MethodAttributes.Virtual | MethodAttributes.HideBySig | MethodAttributes.NewSlot,
+            _types.Void, [_types.String, _types.Object]);
+        var contract = builder.CreateType()!;
+        fields.DeclareSourceDataDefinition(contract, contract.GetMethod("DefineValue")!);
+    }
+
     /// <summary>
     /// Emits the $IHasFields interface for unified property access.
     /// Implemented by $Object and user-defined classes to provide a standard way

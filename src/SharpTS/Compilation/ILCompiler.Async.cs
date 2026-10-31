@@ -722,7 +722,7 @@ public partial class ILCompiler
         // snapshot path the pivot redirects — no DC exclusion is needed here, unlike async functions (#837).
         var renameResult = GeneratorBlockScopeRenamer.Compute(arrow, arrowReadCapturesShareStorage: false,
             preserveDebugBindings: EmitDebugSymbols,
-            outerCaptureNames: _closures.Analyzer.GetLoopBodyCellCaptures(arrow)?.Keys);
+            outerCaptureNames: _closures.Analyzer.GetCaptures(arrow));
         _arrowBlockScopeRenames = renameResult.Renames;
         _arrowBlockScopeCaptureRenames = renameResult.CaptureRenames;
 
@@ -1073,7 +1073,7 @@ public partial class ILCompiler
                 stubMethod,
                 smBuilder,
                 func,
-                coerceSloppyDynamicThis: !(_isStrictMode || BodyDeclaresUseStrict(func.Body)));
+                coerceSloppyDynamicThis: !IsStrictFunction(func));
 
             // Create context for MoveNext emission
             var il = smBuilder.MoveNextMethod.GetILGenerator();
@@ -1088,7 +1088,7 @@ public partial class ILCompiler
             ctx.CommonJsExportFields = _modules.CommonJsExportFields;
             ctx.CommonJsGetExportsMethods = _modules.CommonJsGetExportsMethods;
             // Check for function-level "use strict" directive
-            ctx.IsStrictMode = _isStrictMode || BodyDeclaresUseStrict(func.Body);
+            ctx.IsStrictMode = IsStrictFunction(func);
             // Entry-point display class for captured top-level variables
             ApplyCapturedTopLevelVariableAccess(ctx);
             ctx.ArrowEntryPointDCFields = _closures.ArrowEntryPointDCFields.Count > 0 ? _closures.ArrowEntryPointDCFields : null;
@@ -1251,7 +1251,7 @@ public partial class ILCompiler
         ctx.AsyncArrowBuilders = _async.ArrowBuilders.Count > 0
             ? _async.ArrowBuilders : null;
         ctx.UnionGenerator = _unionGenerator;
-        ctx.IsStrictMode = _isStrictMode || BodyDeclaresUseStrict(function.Body);
+        ctx.IsStrictMode = IsStrictFunction(function);
         ApplyCommonJsModuleAccess(ctx);
         ApplyCapturedTopLevelVariableAccess(ctx);
         ctx.TopLevelStaticVars =
@@ -1292,6 +1292,8 @@ public partial class ILCompiler
 
         // Create a new context for arrow MoveNext emission
         var ctx = CreateNestedAsyncArrowContext(il, parentCtx, arrowBuilder.MoveNextMethod);
+        if (_arrowToNamespace.TryGetValue(arrow, out var arrowNamespace))
+            ctx.CurrentNamespacePath = arrowNamespace;
         ctx.CapturesConstructorThisCell = _constructorReceiverArrows.Contains(arrow);
         if (arrowBuilder.CapturedFieldMap.ContainsKey(CompilationContext.SuperOwnerCaptureName))
             ctx.ClassDefinitionVariableName = CompilationContext.SuperOwnerCaptureName;
@@ -1356,6 +1358,46 @@ public partial class ILCompiler
         return expression == null ? null : _classExprs.DefinitionFields[expression];
     }
 
+    private readonly Dictionary<FieldBuilder, (Type Receiver, MethodInfo Target)> _asyncLockFieldReaders = new(ReferenceEqualityComparer.Instance);
+
+    private (Type Receiver, MethodInfo Target) GetAsyncLockFieldReader(FieldBuilder field)
+    {
+        if (_asyncLockFieldReaders.TryGetValue(field, out var cached)) return cached;
+        var owner = (TypeBuilder)field.DeclaringType!;
+        Type receiver = owner;
+        MethodBuilder? contractMethod = null;
+        var attributes = MethodAttributes.Assembly | MethodAttributes.HideBySig
+            | (field.IsStatic ? MethodAttributes.Static : 0);
+        if (!field.IsStatic && owner.IsGenericTypeDefinition)
+        {
+            // As with generic super-call bridges, a nongeneric contract retains
+            // the receiver's actual closed owner instead of casting C<T> to C<object>.
+            var contract = EmitTypeDefinitions.DefineType(_moduleBuilder,
+                "<>AsyncLockReader$" + _asyncLockFieldReaders.Count,
+                TypeAttributes.NotPublic | TypeAttributes.Interface | TypeAttributes.Abstract, null);
+            contractMethod = contract.DefineMethod("Read",
+                MethodAttributes.Public | MethodAttributes.Abstract | MethodAttributes.Virtual,
+                field.FieldType, Type.EmptyTypes);
+            contract.CreateType();
+            EmitTypeDefinitions.AddInterfaceImplementation(owner, contract);
+            receiver = contract;
+            attributes = (attributes & ~MethodAttributes.MemberAccessMask) | MethodAttributes.Private
+                | MethodAttributes.Virtual | MethodAttributes.Final | MethodAttributes.NewSlot;
+        }
+        var reader = owner.DefineMethod("<>__ReadAsyncLock_" + field.Name,
+            attributes, field.FieldType, Type.EmptyTypes);
+        if (contractMethod != null) owner.DefineMethodOverride(reader, contractMethod);
+        var il = reader.GetILGenerator();
+        if (!field.IsStatic) il.Emit(OpCodes.Ldarg_0);
+        il.Emit(field.IsStatic ? OpCodes.Ldsfld : OpCodes.Ldfld, field);
+        il.Emit(OpCodes.Ret);
+        MethodInfo target = (MethodInfo?)contractMethod ?? (owner.IsGenericTypeDefinition
+            ? EmitterTypeHelpers.ResolveMethod(CanonicalGenericClassOwner(owner), reader) : reader);
+        var result = (receiver, target);
+        _asyncLockFieldReaders.Add(field, result);
+        return result;
+    }
+
     private void EmitAsyncStubMethod(
         MethodBuilder stubMethod,
         AsyncStateMachineBuilder smBuilder,
@@ -1364,7 +1406,8 @@ public partial class ILCompiler
         FieldBuilder? asyncLockField = null,
         FieldBuilder? lockReentrancyField = null,
         string? functionDCKey = null,
-        bool coerceSloppyDynamicThis = false)
+        bool coerceSloppyDynamicThis = false,
+        int? lockReceiverParameterIndex = null)
     {
         var parameters = function.Parameters;
         var il = stubMethod.GetILGenerator();
@@ -1429,32 +1472,31 @@ public partial class ILCompiler
         // We copy these directly here so MoveNext doesn't need to cast ThisField
         if (smBuilder.HasLockDecorator && asyncLockField != null && lockReentrancyField != null)
         {
-            if (isInstanceMethod)
+            void LoadLockReference(FieldBuilder field)
             {
-                // Instance method: sm.<>__asyncLockRef = this._asyncLock;
-                il.Emit(OpCodes.Ldloca, smLocal);
-                il.Emit(OpCodes.Ldarg_0);  // 'this'
-                il.Emit(OpCodes.Ldfld, asyncLockField);
-                il.Emit(OpCodes.Stfld, smBuilder.AsyncLockRefField!);
-
-                // sm.<>__lockReentrancyRef = this._lockReentrancy;
-                il.Emit(OpCodes.Ldloca, smLocal);
-                il.Emit(OpCodes.Ldarg_0);  // 'this'
-                il.Emit(OpCodes.Ldfld, lockReentrancyField);
-                il.Emit(OpCodes.Stfld, smBuilder.LockReentrancyRefField!);
+                if (ReferenceEquals(stubMethod.DeclaringType, field.DeclaringType))
+                {
+                    if (!field.IsStatic) il.Emit(OpCodes.Ldarg_0);
+                    il.Emit(field.IsStatic ? OpCodes.Ldsfld : OpCodes.Ldfld, field);
+                    return;
+                }
+                // Canonical method values have a separate CLR holder. Read the
+                // existing private gate through its declaring class, using the
+                // explicit guest receiver for instance methods.
+                var reader = GetAsyncLockFieldReader(field);
+                if (!field.IsStatic)
+                {
+                    il.Emit(OpCodes.Ldarg, (short)(lockReceiverParameterIndex ?? 0));
+                    il.Emit(OpCodes.Castclass, reader.Receiver);
+                }
+                il.Emit(reader.Target.DeclaringType!.IsInterface ? OpCodes.Callvirt : OpCodes.Call, reader.Target);
             }
-            else
-            {
-                // Static method: sm.<>__asyncLockRef = ClassName._staticAsyncLock;
-                il.Emit(OpCodes.Ldloca, smLocal);
-                il.Emit(OpCodes.Ldsfld, asyncLockField);  // Static field - no 'this'
-                il.Emit(OpCodes.Stfld, smBuilder.AsyncLockRefField!);
-
-                // sm.<>__lockReentrancyRef = ClassName._staticLockReentrancy;
-                il.Emit(OpCodes.Ldloca, smLocal);
-                il.Emit(OpCodes.Ldsfld, lockReentrancyField);  // Static field - no 'this'
-                il.Emit(OpCodes.Stfld, smBuilder.LockReentrancyRefField!);
-            }
+            il.Emit(OpCodes.Ldloca, smLocal);
+            LoadLockReference(asyncLockField);
+            il.Emit(OpCodes.Stfld, smBuilder.AsyncLockRefField!);
+            il.Emit(OpCodes.Ldloca, smLocal);
+            LoadLockReference(lockReentrancyField);
+            il.Emit(OpCodes.Stfld, smBuilder.LockReentrancyRefField!);
         }
 
         // Copy parameters to state machine fields. General fields are object-typed;
@@ -1626,8 +1668,8 @@ public partial class ILCompiler
         FieldBuilder? lockReentrancyField = null;
         if (hasLock)
         {
-            var className = methodBuilder.DeclaringType!.FullName!;
-            if (isInstanceMethod)
+            var className = currentClassName ?? methodBuilder.DeclaringType!.FullName!;
+            if (!method.IsStatic)
             {
                 _locks.AsyncLockFields.TryGetValue(className, out asyncLockField);
                 _locks.ReentrancyFields.TryGetValue(className, out lockReentrancyField);
@@ -1639,6 +1681,15 @@ public partial class ILCompiler
             }
         }
 
+        int? lockReceiverParameterIndex = null;
+        if (hasLock && lexicalThisParameterName != null)
+        {
+            int guestParameter = method.Parameters.FindIndex(parameter => parameter.Name.Lexeme == lexicalThisParameterName);
+            if (guestParameter < 0)
+                throw new InvalidOperationException("The async guest receiver parameter has not been declared.");
+            lockReceiverParameterIndex = guestParameter + (isInstanceMethod ? 1 : 0);
+        }
+
         // Emit stub method body (creates state machine and starts it)
         EmitAsyncStubMethod(
             methodBuilder,
@@ -1647,7 +1698,8 @@ public partial class ILCompiler
             isInstanceMethod: isInstanceMethod,
             asyncLockField,
             lockReentrancyField,
-            functionDCKey: methodDCKey);
+            functionDCKey: methodDCKey,
+            lockReceiverParameterIndex: lockReceiverParameterIndex);
 
         // Create context for MoveNext emission
         var il = smBuilder.MoveNextMethod.GetILGenerator();
@@ -1853,6 +1905,8 @@ public partial class ILCompiler
 
             // Create context for MoveNext emission
             var ctx = CreateModuleMemberContext(il, arrowBuilder.MoveNextMethod);
+            if (_arrowToNamespace.TryGetValue(arrow, out var arrowNamespace))
+                ctx.CurrentNamespacePath = arrowNamespace;
             ctx.AsyncArrowBuilders = _async.ArrowBuilders;
             ctx.AsyncArrowOuterBuilders = _async.ArrowOuterBuilders;
             ctx.AsyncArrowParentBuilders = _async.ArrowParentBuilders;

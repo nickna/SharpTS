@@ -22,7 +22,7 @@ public partial class ILCompiler
 
         // Resolve typed parameters from TypeMap
         var paramTypes = ParameterTypeResolver.ResolveMethodParameters(
-            className, method.Name.Lexeme, method.Parameters, _typeMapper, _typeMap);
+            className, method.Name.Lexeme, method.Parameters, _typeMapper, _typeMap, isStaticMethod: true);
         // Keep return type as object (async methods return Task<object>)
         var returnType = method.IsAsync ? _types.TaskOfObject : typeof(object);
         var methodBuilder = typeBuilder.DefineMethod(
@@ -51,8 +51,8 @@ public partial class ILCompiler
 
         // Check if we need a static constructor
         // Note: Declare fields are excluded - they have no initialization
-        var staticFieldsWithInit = classStmt.Fields.Where(f => f.IsStatic && !f.IsPrivate && !f.IsDeclare && f.Initializer != null).ToList();
-        var staticPrivateFieldsWithInit = classStmt.Fields.Where(f => f.IsStatic && f.IsPrivate && f.Initializer != null).ToList();
+        var staticFieldsForInitialization = classStmt.Fields.Where(f => f.IsStatic && !f.IsPrivate && !f.IsDeclare
+            && (f.Initializer != null || f.ComputedKey is null)).ToList();
         var staticAutoAccessorsWithInit = classStmt.AutoAccessors?.Where(a => a.IsStatic && a.Initializer != null).ToList() ?? [];
         bool hasStaticLockFields = _locks.StaticSyncLockFields.ContainsKey(qualifiedClassName);
         var privateElements = _classes.PrivateElements.Require(qualifiedClassName);
@@ -99,7 +99,12 @@ public partial class ILCompiler
         // ECMAScript creates Constructor.prototype as part of class evaluation.
         // Register it before user static fields/blocks so they can observe it.
         EmitClassPrototypeRegistration(
-            il, typeBuilder, GetClassConstructorLength(classStmt.Methods));
+            il, typeBuilder, GetClassConstructorLength(classStmt.Methods), cctor);
+
+        var pendingFields = classStmt.Fields.Where(field => field.IsStatic && !field.IsPrivate && !field.IsDeclare
+            && field.ComputedKey is null && field.Name.Lexeme is not ("name" or "length" or "prototype")
+            && !classStmt.Methods.Any(method => method.IsStatic && method.Name.Lexeme == field.Name.Lexeme))
+            .Select(field => field.Name.Lexeme).ToHashSet(StringComparer.Ordinal);
 
         // Initialize static @lock decorator fields
         if (_locks.StaticSyncLockFields.TryGetValue(qualifiedClassName, out var staticSyncLockField))
@@ -150,8 +155,18 @@ public partial class ILCompiler
             emitter = new ILEmitter(ctx);
         }
 
+        // Hide fields in the canonical definition initializer, after any
+        // deferred split. Closed generic type initializers must not re-hide
+        // fields whose source initialization already finished.
+        if (hasStaticInitializers)
+            foreach (var name in pendingFields)
+            {
+                EmitCanonicalClassConstructorValue(il, typeBuilder);
+                il.Emit(OpCodes.Ldstr, name);
+                il.Emit(OpCodes.Call, _runtime.ObjectState.MarkBuiltinDeleted);
+            }
         // Methods exist before user static fields/blocks execute. Publish once
-        // here, so a guest replacement or deletion during initialization remains
+        // so a guest replacement or deletion during initialization remains
         // authoritative. Deferred keys were already published by the registrar.
         EmitComputedMemberRegistrations(emitter, il, typeBuilder);
 
@@ -174,26 +189,33 @@ public partial class ILCompiler
                             EmitComputedStaticFieldInitializer(emitter, il, typeBuilder, field, computedKey);
                             break;
                         }
-                        if (field.Initializer != null)
+                        EmitStaticFieldInitialValue(emitter, il, field);
+                        if (!field.IsPrivate && pendingFields.Contains(field.Name.Lexeme))
                         {
-                            emitter.EmitExpression(field.Initializer);
-                            emitter.EmitBoxIfNeeded(field.Initializer);
+                            var value = il.DeclareLocal(_types.Object);
+                            il.Emit(OpCodes.Stloc, value);
+                            EmitStaticFieldDefinitionGuard(il, typeBuilder, field.Name.Lexeme);
+                            il.Emit(OpCodes.Ldloc, value);
+                        }
 
-                            if (field.IsPrivate)
-                            {
-                                string fieldName = field.Name.Lexeme;
-                                if (fieldName.StartsWith('#'))
-                                    fieldName = fieldName[1..];
-                                il.Emit(OpCodes.Stsfld, staticPrivateFieldBuilders[fieldName]);
-                            }
-                            else if (classStaticFields != null)
-                            {
-                                var staticField = classStaticFields[field.Name.Lexeme];
-                                il.Emit(OpCodes.Stsfld, staticField);
-                            }
+                        if (field.IsPrivate)
+                        {
+                            string fieldName = field.Name.Lexeme;
+                            if (fieldName.StartsWith('#'))
+                                fieldName = fieldName[1..];
+                            il.Emit(OpCodes.Stsfld, staticPrivateFieldBuilders[fieldName]);
+                        }
+                        else if (classStaticFields != null)
+                        {
+                            var staticField = classStaticFields[field.Name.Lexeme];
+                            il.Emit(OpCodes.Stsfld, staticField);
                         }
                         if (field.IsPrivate)
                             EmitStaticPrivatePresence(il, privateElements, field.Name.Lexeme.TrimStart('#'));
+                        else if (pendingFields.Contains(field.Name.Lexeme))
+                        {
+                            EmitRestoreStaticFieldPresence(il, typeBuilder, field.Name.Lexeme);
+                        }
                         break;
 
                     case Stmt.StaticBlock block:
@@ -206,32 +228,29 @@ public partial class ILCompiler
         }
         else
         {
-            // Old behavior: initialize static private fields with their initializers
+            // Legacy ASTs without an ordered initializer list still install every named field.
             if (privateElements.StaticFields.Count > 0)
             {
                 var staticPrivateFieldBuilders = privateElements.StaticFields;
-                foreach (var field in classStmt.Fields.Where(f => f.IsStatic && f.IsPrivate && f.Initializer != null))
+                foreach (var field in classStmt.Fields.Where(f => f.IsStatic && f.IsPrivate && !f.IsDeclare))
                 {
                     string fieldName = field.Name.Lexeme;
                     if (fieldName.StartsWith('#'))
                         fieldName = fieldName[1..];
 
                     var staticPrivateField = staticPrivateFieldBuilders[fieldName];
-                    emitter.EmitExpression(field.Initializer!);
-                    emitter.EmitBoxIfNeeded(field.Initializer!);
+                    EmitStaticFieldInitialValue(emitter, il, field);
                     il.Emit(OpCodes.Stsfld, staticPrivateField);
                     EmitStaticPrivatePresence(il, privateElements, fieldName);
                 }
             }
 
             // Initialize static field initializers
-            if (staticFieldsWithInit.Count > 0 && _classes.StaticFields.TryGetValue(qualifiedClassName, out var classStaticFields))
+            if (staticFieldsForInitialization.Count > 0 && _classes.StaticFields.TryGetValue(qualifiedClassName, out var classStaticFields))
             {
-                foreach (var field in staticFieldsWithInit)
+                foreach (var field in staticFieldsForInitialization)
                 {
-                    // Emit the initializer expression
-                    emitter.EmitExpression(field.Initializer!);
-                    emitter.EmitBoxIfNeeded(field.Initializer!);
+                    EmitStaticFieldInitialValue(emitter, il, field);
 
                     // Store in static field using the stored FieldBuilder
                     var staticField = classStaticFields[field.Name.Lexeme];
@@ -251,12 +270,56 @@ public partial class ILCompiler
             _classes.DeferredDefinitions.MarkInitializerEmitted(deferredDefinition);
     }
 
+    private void EmitStaticFieldInitialValue(ILEmitter emitter, ILGenerator il, Stmt.Field field)
+    {
+        if (field.Initializer is { } initializer)
+        {
+            emitter.EmitExpression(initializer);
+            emitter.EmitBoxIfNeeded(initializer);
+        }
+        else il.Emit(OpCodes.Ldsfld, _runtime.Sentinels.UndefinedInstance);
+    }
+
     private void EmitStaticPrivatePresence(ILGenerator il, PrivateClassElements elements, string name)
     {
         il.Emit(OpCodes.Ldsfld, EmitterTypeHelpers.SelfFieldReference(elements.StaticPresence!));
         il.Emit(OpCodes.Ldstr, name);
         il.Emit(OpCodes.Callvirt, _types.GetMethod(typeof(HashSet<string>), "Add", typeof(string)));
         il.Emit(OpCodes.Pop);
+    }
+
+    private void EmitStaticFieldDefinitionGuard(ILGenerator il, Type owner, string name)
+    {
+        var allowed = il.DefineLabel();
+        EmitCanonicalClassConstructorValue(il, owner);
+        il.Emit(OpCodes.Call, _runtime.ObjectState.IsExtensible);
+        il.Emit(OpCodes.Brtrue, allowed);
+        EmitCanonicalClassConstructorValue(il, owner);
+        il.Emit(OpCodes.Ldstr, name);
+        il.Emit(OpCodes.Call, _runtime.ObjectOwnProperties.HasOwnProperty);
+        il.Emit(OpCodes.Brtrue, allowed);
+        GuestErrorEmitter.ThrowTypeError(il, _runtime, $"Cannot define property '{name}' on a non-extensible class constructor");
+        il.MarkLabel(allowed);
+    }
+
+    private void EmitRestoreStaticFieldPresence(ILGenerator il, Type owner, string name)
+    {
+        var deleted = il.DeclareLocal(_types.Object);
+        var done = il.DefineLabel();
+        il.Emit(OpCodes.Ldsfld, _runtime.ObjectState.DeletedBuiltins);
+        EmitCanonicalClassConstructorValue(il, owner);
+        il.Emit(OpCodes.Ldloca, deleted);
+        il.Emit(OpCodes.Callvirt, _types.GetMethod(_types.ConditionalWeakTableObjectObject, "TryGetValue", _types.Object, _types.Object.MakeByRefType()));
+        il.Emit(OpCodes.Brfalse, done);
+        il.Emit(OpCodes.Ldloc, deleted);
+        il.Emit(OpCodes.Castclass, _types.HashSetOfString);
+        il.Emit(OpCodes.Ldstr, name);
+        il.Emit(OpCodes.Callvirt, _types.GetMethod(_types.HashSetOfString, "Remove", _types.String));
+        il.Emit(OpCodes.Pop);
+        il.MarkLabel(done);
+        EmitCanonicalClassConstructorValue(il, owner);
+        il.Emit(OpCodes.Ldstr, name);
+        il.Emit(OpCodes.Call, _runtime.ObjectKeys.RecordConstructorKey);
     }
 
     /// <summary>
@@ -278,9 +341,6 @@ public partial class ILCompiler
         foreach (var member in GetClassMemberRegistrations(typeBuilder))
         {
             if (capturedKeys != null && member.Builder?.IsStatic == true) continue;
-            // Constant static accessors were installed before user initialization.
-            if (member.Accessor is { IsStatic: true } && GetConstantComputedAccessorName(member.Key) != null
-                && GetNominalClassDeclaration(typeBuilder) != null) continue;
             EmitClassMemberRegistration(il, typeBuilder, member, () => EmitKey(member));
         }
         il.MarkLabel(noCapturedKeys);
@@ -319,14 +379,17 @@ public partial class ILCompiler
         if (GetNominalClassDeclaration(owner) is { } declaration)
         {
             var methods = _classes.InstanceMethods.GetValueOrDefault(owner.FullName!);
-            foreach (var method in declaration.Methods.Where(method => method.Body != null && !method.IsStatic
-                         && !method.IsPrivate && method.ComputedKey == null && method.Name.Lexeme != "constructor"))
-                if (methods?.TryGetValue(method.Name.Lexeme, out var builder) == true)
+            var staticMethods = _classes.StaticMethods.GetValueOrDefault(owner.FullName!);
+            foreach (var method in declaration.Methods.Where(method => method.Body != null
+                         && !method.IsPrivate && method.ComputedKey == null && (method.IsStatic || method.Name.Lexeme != "constructor")))
+                if ((method.IsStatic ? staticMethods : methods)?.TryGetValue(method.Name.Lexeme, out var builder) == true)
                     members.Add(new(method, null, null, new Expr.Literal(method.Name.Lexeme), builder, method.Name.SourceOrderOffset));
-            foreach (var accessor in (declaration.Accessors ?? []).Where(accessor => !accessor.IsStatic && accessor.ComputedKey == null))
+            foreach (var accessor in (declaration.Accessors ?? []).Where(accessor => accessor.ComputedKey == null))
                 if (_classes.AccessorBuilders.TryGetValue(accessor, out var builder))
                     members.Add(new(null, accessor, null, new Expr.Literal(accessor.Name.Lexeme), builder, accessor.Name.SourceOrderOffset));
             foreach (var source in _receiverAutoAccessors.Where(entry => ReferenceEquals(entry.Value.Owner, owner)).Select(entry => entry.Key))
+                members.Add(new(null, null, source, new Expr.Literal(source.Name.Lexeme), null, source.Name.SourceOrderOffset));
+            foreach (var source in (declaration.AutoAccessors ?? []).Where(accessor => accessor.IsStatic))
                 members.Add(new(null, null, source, new Expr.Literal(source.Name.Lexeme), null, source.Name.SourceOrderOffset));
         }
         return members.OrderBy(member => member.Position);
@@ -337,7 +400,10 @@ public partial class ILCompiler
     {
         if (member.AutoAccessor is { } autoAccessor)
         {
-            EmitReceiverAutoAccessorDescriptors(il, owner, autoAccessor, descriptorOwner);
+            if (autoAccessor.IsStatic)
+                EmitStaticAutoAccessorDescriptor(il, owner, autoAccessor, descriptorOwner == null ? null
+                    : () => EmitCanonicalClassConstructorValue(il, descriptorOwner));
+            else EmitReceiverAutoAccessorDescriptors(il, owner, autoAccessor, descriptorOwner);
             return;
         }
         var key = il.DeclareLocal(_types.Object);
@@ -353,17 +419,19 @@ public partial class ILCompiler
         if (CanOwnDeclaredSymbolMethodValue(owner))
         {
             EmitDeclaredComputedMethodDescriptor(il, owner, method, member.Builder!, key, descriptorOwner,
-                sourceOrdered: !method.IsStatic);
+                sourceOrdered: true);
             il.Emit(OpCodes.Ldloc, key); il.Emit(OpCodes.Isinst, _runtime.Symbols.Type);
             il.Emit(OpCodes.Brtrue, done);
         }
         if (method.ComputedKey != null)
         {
-            il.Emit(OpCodes.Ldtoken, owner); il.Emit(OpCodes.Call, _types.TypeGetTypeFromHandle);
+            var symbolEmission = NativeOwnerClosure.EmitSymbolOwner(_nativeOwnerClosure, _types, owner, member.Builder!, il);
             il.Emit(OpCodes.Ldloc, key);
+            int symbolMethodTokenOffset = il.ILOffset;
             EmitMethodInfoLiteral(il, member.Builder!, owner);
+            NativeOwnerClosure.RecordSymbolMethod(_nativeOwnerClosure, il, symbolEmission, member.Builder!, symbolMethodTokenOffset);
             il.Emit(method.IsStatic ? OpCodes.Ldc_I4_1 : OpCodes.Ldc_I4_0);
-            il.Emit(OpCodes.Call, _runtime.SymbolAccessors.RegisterMethod);
+            NativeOwnerClosure.EmitSymbolRegistration(_nativeOwnerClosure, il, symbolEmission, _runtime.SymbolAccessors.RegisterMethod);
         }
         il.MarkLabel(done);
     }
@@ -462,8 +530,8 @@ public partial class ILCompiler
         var keys = deferred.Select(entry => entry.Key).ToArray();
         _classes.DeferredDefinitions.Declare(source, typeBuilder, initializer, registrar, keys, fieldKeys, capturedKeys);
         if (hasGenericKeys)
-            typeBuilder.SetCustomAttribute(_runtime.ClassInitialization.CanonicalStaticStorageAttributeConstructor,
-                CustomAttributeEncoder.EmptyBlob);
+            NativeOwnerClosure.EmitStoragePolicy(_nativeOwnerClosure, typeBuilder,
+                _runtime.ClassInitialization.CanonicalStaticStorageAttributeConstructor);
     }
 
     private void EmitComputedStaticFieldInitializer(ILEmitter emitter, ILGenerator il,

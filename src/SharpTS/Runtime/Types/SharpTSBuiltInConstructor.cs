@@ -24,6 +24,11 @@ public sealed class SharpTSBuiltInConstructor : ISharpTSCallable
         _factory = factory;
     }
 
+    internal SharpTS.Execution.PromiseIntrinsicState? PromiseRealm { get; private init; }
+
+    internal SharpTSBuiltInConstructor CloneForRealm(SharpTS.Execution.PromiseIntrinsicState realm)
+        => new(Name, _factory) { PromiseRealm = realm };
+
     public int Arity() => 0;
 
     public object? Call(Interp interpreter, List<object?> arguments)

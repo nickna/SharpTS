@@ -18,6 +18,8 @@ public partial class CompilationContext
     // Module types (module path -> TypeBuilder)
     public Dictionary<string, TypeBuilder>? ModuleTypes { get; set; }
 
+    internal IReadOnlyDictionary<string, MethodBuilder>? ModuleNamespaceMethods { get; set; }
+
     // Module initialization methods (module path -> init method)
     // Used to ensure modules are initialized before their exports are accessed
     public Dictionary<string, MethodBuilder>? ModuleInitMethods { get; set; }
@@ -144,6 +146,20 @@ public partial class CompilationContext
             string path = string.Join('.', parts.Take(i));
             if (EnumMembers?.ContainsKey(QualifyNamespaceEnum(path, EnumModuleQualify(name))) == true
                 && NamespaceFields.TryGetValue(path, out var field)) return field;
+        }
+        return null;
+    }
+
+    internal FieldBuilder? ResolveNamespaceVariableField(string name)
+    {
+        if (CurrentNamespacePath == null || NamespaceVarFields == null) return null;
+        string? path = CurrentNamespacePath;
+        while (path != null)
+        {
+            if (NamespaceVarFields.TryGetValue(path, out var fields)
+                && fields.TryGetValue(name, out var field)) return field;
+            int separator = path.LastIndexOf('.');
+            path = separator < 0 ? null : path[..separator];
         }
         return null;
     }

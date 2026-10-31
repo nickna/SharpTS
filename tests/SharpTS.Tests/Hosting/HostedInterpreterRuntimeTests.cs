@@ -7,6 +7,9 @@ using SharpTS.Hosting;
 using SharpTS.Modules;
 using SharpTS.Parsing;
 using SharpTS.References;
+using SharpTS.Runtime;
+using SharpTS.Runtime.BuiltIns;
+using SharpTS.Runtime.Types;
 using SharpTS.TypeSystem;
 using Xunit;
 
@@ -15,6 +18,31 @@ namespace SharpTS.Tests.Hosting;
 [Collection("ProcessLifecycleTests")]
 public sealed class HostedInterpreterRuntimeTests
 {
+    [Theory]
+    [InlineData(false)]
+    [InlineData(true)]
+    public void HostedTopLevelAwait_ExportsEveryCommaDeclaration(bool compiled)
+    {
+        var sources = new Dictionary<string, string>
+        {
+            ["producer.ts"] = "export const first=await Promise.resolve(3),second=4;",
+            ["main.ts"] = "import {first,second} from './producer';console.log(first,second);",
+        };
+        if (compiled)
+        {
+            AssertCompiledHostedEnumOutput(sources, "3 4\n");
+            return;
+        }
+        var dispatcher = new DeterministicHostDispatcher();
+        using var output = new StringWriter();
+        var errors = new RecordingErrorSink();
+        using var runtime = new HostedInterpreterRuntime(dispatcher, new RecordingLifetime(), errors,
+            CreateProgram(sources, "main.ts"), output, output);
+        RunInitialization(runtime, dispatcher);
+        Assert.Equal("3 4\n", output.ToString().Replace("\r\n", "\n"));
+        Assert.Empty(errors.Errors);
+    }
+
     [Fact]
     public void CompiledHostedTopLevelAwait_InitializesEnumObjectsInDeclarationOrder()
     {
@@ -1073,6 +1101,76 @@ public sealed class HostedInterpreterRuntimeTests
     }
 
     [Fact]
+    public void GracefulShutdown_DrainsNestedPromiseAndMicrotaskJobsBeforeExit()
+    {
+        const string source = """
+            process.on('beforeExit', () => {
+                console.log('beforeExit');
+                queueMicrotask(() => {
+                    console.log('microtask');
+                    queueMicrotask(() => console.log('nested'));
+                });
+                Promise.resolve().then(() => console.log('promise'));
+            });
+            process.on('exit', () => {
+                console.log('exit');
+                process.removeAllListeners('beforeExit');
+                process.removeAllListeners('exit');
+            });
+            export {};
+            """;
+        var dispatcher = new DeterministicHostDispatcher();
+        using var output = new StringWriter();
+        var errors = new RecordingErrorSink();
+        using var runtime = CreateRuntime(source, dispatcher, new RecordingLifetime(), errors, output);
+        RunInitialization(runtime, dispatcher);
+
+        Task shutdown = runtime.ShutdownAsync();
+        dispatcher.RunUntil(() => shutdown.IsCompleted);
+        shutdown.GetAwaiter().GetResult();
+
+        Assert.Equal(["beforeExit", "microtask", "promise", "nested", "exit"], Lines(output));
+        Assert.Empty(errors.Errors);
+    }
+
+    [Fact]
+    public void GracefulShutdown_CheckpointAcceptsOwnerJobsAndRejectsExternalWork()
+    {
+        var dispatcher = new DeterministicHostDispatcher();
+        using var output = new StringWriter();
+        var errors = new RecordingErrorSink();
+        using var runtime = CreateRuntime("console.log('ready');export {};", dispatcher, new RecordingLifetime(), errors, output);
+        RunInitialization(runtime, dispatcher);
+        Assert.Equal("ready\n", output.ToString().Replace("\r\n", "\n"));
+        var calls = new List<string>();
+        SharpTSProcess.Instance.AddListenerDirect("beforeExit", BuiltInMethod.CreateV2("beforeExit", 0, 1,
+            (interpreter, _, _) =>
+            {
+                calls.Add("beforeExit");
+                Assert.True(Task.Run(() =>
+                    interpreter.EnqueuePromiseJob(() => calls.Add("foreign-job"))).Wait(TimeSpan.FromSeconds(5)));
+                runtime.Notify(() => calls.Add("notification"));
+                runtime.EnqueueMicrotask(() => calls.Add("host-microtask"));
+                interpreter.EnqueueCallback(() => calls.Add("macrotask"));
+                interpreter.EnqueuePromiseJob(() =>
+                {
+                    calls.Add("owner-job");
+                    interpreter.EnqueueAfterPromiseCheckpoint(() => calls.Add("after-checkpoint"));
+                });
+                return RuntimeValue.Undefined;
+            }), once: true);
+        SharpTSProcess.Instance.AddListenerDirect("exit", BuiltInMethod.CreateV2("exit", 0, 1,
+            (_, _, _) => { calls.Add("exit"); return RuntimeValue.Undefined; }), once: true);
+
+        Task shutdown = runtime.ShutdownAsync();
+        dispatcher.RunUntil(() => shutdown.IsCompleted);
+        shutdown.GetAwaiter().GetResult();
+
+        Assert.Empty(errors.Errors);
+        Assert.Equal(["beforeExit", "owner-job", "after-checkpoint", "exit"], calls);
+    }
+
+    [Fact]
     public void ProcessExit_SkipsBeforeExitAndRequestsSuppliedCode()
     {
         const string source = """
@@ -1320,6 +1418,49 @@ public sealed class HostedInterpreterRuntimeTests
         Assert.Equal([(13, dispatcher.OwnerThreadId)], lifetime.Exits);
     }
 
+    [Fact]
+    public void CompiledHostedTopLevelAwait_HoistsFunctionIdentityBeforeSuspension()
+    {
+        SharpTSProgram program = CreateProgram(
+            new Dictionary<string, string>
+            {
+                ["dependency.ts"] = """
+                    export const original = increment;
+                    export default increment(11) + await Promise.resolve(1);
+                    export function increment(value: number): number { return value + 1; }
+                    """,
+                ["main.ts"] = """
+                    import answer, { original, increment } from './dependency';
+                    function main(): number { return original === increment ? answer : 1; }
+                    export {};
+                    """,
+            },
+            "main.ts");
+        var compiler = new ILCompiler($"hosted_tla_default_export_{Guid.NewGuid():N}");
+        compiler.EnableHostedOutput();
+        compiler.CompileModules(
+            program.RuntimeModules.ToList(),
+            program.Resolver,
+            program.TypeMap);
+
+        byte[] bytes = compiler.SaveToBytes();
+        using var verifier = new ILVerifier(extraProbeDirectories: [AppContext.BaseDirectory]);
+        using var assemblyStream = new MemoryStream(bytes);
+        Assert.Empty(verifier.Verify(assemblyStream));
+        var dispatcher = new DeterministicHostDispatcher();
+        var lifetime = new RecordingLifetime();
+        using ISharpTSHostedRuntime runtime = SharpTSHostedAssembly.CreateRuntime(
+            System.Reflection.Assembly.Load(bytes),
+            dispatcher,
+            lifetime,
+            new RecordingErrorSink());
+        Task initialization = runtime.InitializeAsync();
+        dispatcher.RunUntil(() => runtime.State == SharpTSHostedRuntimeState.Stopped);
+        initialization.GetAwaiter().GetResult();
+
+        Assert.Equal([(13, dispatcher.OwnerThreadId)], lifetime.Exits);
+    }
+
     [Theory]
     [InlineData("13", true)]
     [InlineData("null", false)]
@@ -1477,6 +1618,38 @@ public sealed class HostedInterpreterRuntimeTests
                 diagnostic.Severity == DiagnosticSeverity.Error);
     }
 
+    [Fact]
+    public void CompiledVmLifetimeEndsWithTheActualHostedCaller()
+    {
+        SharpTSProgram program = CreateProgram("""
+            import * as vm from 'node:vm';
+            const value:any=vm.runInNewContext('new Promise(()=>{})');
+            console.log(typeof value.then);
+            export {};
+            """);
+        var compiler = new ILCompiler($"hosted_vm_owner_{Guid.NewGuid():N}");
+        compiler.EnableHostedOutput();
+        compiler.CompileModules(program.RuntimeModules.ToList(), program.Resolver, program.TypeMap);
+        var assembly = System.Reflection.Assembly.Load(compiler.SaveToBytes());
+        var dispatcher = new DeterministicHostDispatcher();
+        using var output = Infrastructure.AsyncLocalConsoleRedirector.Capture();
+        using ISharpTSHostedRuntime runtime = SharpTSHostedAssembly.CreateRuntime(
+            assembly, dispatcher, new RecordingLifetime(), new RecordingErrorSink());
+        Task initialization = runtime.InitializeAsync();
+        dispatcher.RunUntil(() => initialization.IsCompleted);
+        initialization.GetAwaiter().GetResult();
+        Assert.Contains("function", output.GetOutput());
+        var hostField = assembly.GetType("$Runtime")!.GetField("_vmExecutionHost",
+            System.Reflection.BindingFlags.NonPublic | System.Reflection.BindingFlags.Static)!;
+        object host = Assert.IsAssignableFrom<IDisposable>(hostField.GetValue(null));
+        using (Runtime.BuiltIns.Modules.Interpreter.VmModuleInterpreter.EnterExecutionHost(host)) { }
+        Task shutdown = runtime.ShutdownAsync();
+        dispatcher.RunUntil(() => shutdown.IsCompleted);
+        shutdown.GetAwaiter().GetResult();
+        Assert.Null(hostField.GetValue(null));
+        Assert.Throws<ObjectDisposedException>(() =>
+            Runtime.BuiltIns.Modules.Interpreter.VmModuleInterpreter.EnterExecutionHost(host));
+    }
     private static HostedInterpreterRuntime CreateRunningRuntime(DeterministicHostDispatcher dispatcher)
     {
         var runtime = CreateRuntime(

@@ -173,6 +173,11 @@ public partial class TypeChecker
                 result = objectUnion.FlattenedTypes.All(t => IsCompatible(expected, t));
                 return true;
             }
+            if (actual is TypeInfo.Intersection objectIntersection)
+            {
+                result = objectIntersection.FlattenedTypes.Any(t => IsCompatible(expected, t));
+                return true;
+            }
             if (IsPrimitiveType(actual)) { result = false; return true; }  // reject primitives
             if (actual is TypeInfo.Null or TypeInfo.Undefined or TypeInfo.Void) { result = false; return true; }
             // Accept: Record, Array, Instance, Class, Function, Map, Set, etc.

@@ -46,7 +46,7 @@ public partial class TypeChecker
                     TypeInfo.GenericClass or TypeInfo.MutableClass => true,
                 TypeInfo.Record record => record.CallSignatures is { Count: > 0 } ||
                     record.ConstructorSignatures is { Count: > 0 },
-                TypeInfo.Interface iface => iface.CallSignatures is { Count: > 0 } ||
+                TypeInfo.Interface iface => iface.HasFunctionTypeofFacet || iface.CallSignatures is { Count: > 0 } ||
                     iface.ConstructorSignatures is { Count: > 0 } || iface.Extends?.Any(Visit) == true,
                 TypeInfo.GenericInterface generic => generic.CallSignatures is { Count: > 0 } ||
                     generic.ConstructorSignatures is { Count: > 0 } || generic.Extends?.Any(Visit) == true,

@@ -413,11 +413,14 @@ public class StrictModeTests
             const obj = {
                 get x() { return 1; }
             };
-            obj.x = 2;
+            let errorName = "";
+            try { obj.x = 2; }
+            catch (error) { errorName = (error as Error).name; }
+            console.log(errorName);
+            console.log(obj.x);
             """;
 
-        var ex = Assert.ThrowsAny<Exception>(() => TestHarness.Run(source, mode));
-        Assert.Contains("getter", ex.Message);
+        Assert.Equal("TypeError\n1\n", TestHarness.Run(source, mode));
     }
 
     [Theory, ModeData]

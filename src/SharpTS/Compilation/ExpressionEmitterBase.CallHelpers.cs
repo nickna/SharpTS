@@ -234,7 +234,8 @@ public abstract partial class ExpressionEmitterBase
                 // closures and methods outside exact alias-call analysis.
                 if (hasRestParam && !hasSpreadArguments
                     && c.Arguments.Count >= restInfo.RegularParamCount
-                    && c.Arguments.Skip(restInfo.RegularParamCount).All(arg => IsNumericType(Ctx.TypeMap?.Get(arg)))
+                    && c.Arguments.Skip(restInfo.RegularParamCount).All(arg => IsNumericType(Ctx.TypeMap?.Get(arg))
+                        && Ctx.TypeMap?.IsUndefinedReachableReturn(arg) != true)
                     && Ctx.LiteralNumericRestMethods?.TryGetValue(resolvedFuncName, out var literalMethods) == true
                     && literalMethods.TryGetValue(c.Arguments.Count - restInfo.RegularParamCount, out var literalCompanion))
                 {
@@ -473,6 +474,8 @@ public abstract partial class ExpressionEmitterBase
             && expression is Expr.Literal or Expr.Variable or Expr.Assign or Expr.Call
                 or Expr.PrefixIncrement or Expr.PostfixIncrement)
         {
+            Ctx.NativeClrAdmission?.RecordUnclassifiedSourceBoundary(call,
+                "static eval lowering is outside the captured CLR source proof");
             EmitCalleeSideEffect();
             EmitExpression(expression);
             EnsureBoxed();
@@ -493,6 +496,8 @@ public abstract partial class ExpressionEmitterBase
         if (!isStaticGlobal && !isCapturedGlobal)
             return false;
 
+        Ctx.NativeClrAdmission?.RecordUnclassifiedSourceBoundary(call,
+            "static eval global-read lowering is outside the captured CLR source proof");
         EmitCalleeSideEffect();
         if (isStaticGlobal)
         {
@@ -920,6 +925,7 @@ public abstract partial class ExpressionEmitterBase
 
     private void EmitRestParameterCall(List<Expr> arguments, int regularCount, ParameterInfo[] targetParams, bool allowNumericStorage = false)
     {
+        allowNumericStorage &= !arguments.Any(argument => Ctx.TypeMap?.IsUndefinedReachableReturn(argument) == true);
         bool hasSpreads = arguments.Any(a => a is Expr.Spread);
         if (hasSpreads)
         {
@@ -1661,7 +1667,6 @@ public abstract partial class ExpressionEmitterBase
     {
         LocalBuilder calleeLocal;
         var callReference = UnwrapCallReference(c.Callee);
-        bool originalOptionalValue = RequiresOriginalOptionalCallValue(c.Callee, callReference);
 
         // #923: a direct method-style value-call `o.m(...)` must bind `this` to the receiver. The
         // generic value-call below passes a null receiver (correct for a detached call like `f()`),
@@ -1676,7 +1681,7 @@ public abstract partial class ExpressionEmitterBase
         // the receiver is now preserved. Strategy-resolved callees, detached `f()` (Expr.Variable),
         // and `arr[i]()` (Expr.Index) keep the null-receiver path below.
         LocalBuilder? receiverLocal = null;
-        if (!originalOptionalValue && callReference is Expr.Get methodGet && !ReceiverHasGetStrategy(methodGet.Object))
+        if (callReference is Expr.Get methodGet && !ReceiverHasGetStrategy(methodGet.Object))
         {
             // Evaluate the receiver once, spill it (a MoveNext re-entry from a suspending argument
             // wipes plain IL locals, #400), enforce RequireObjectCoercible before the arguments'
@@ -1685,13 +1690,26 @@ public abstract partial class ExpressionEmitterBase
             EmitExpression(methodGet.Object);
             EnsureBoxed();
             receiverLocal = _helpers.SpillStoreObject();
-            EmitThrowIfReceiverUndefined(receiverLocal, methodGet.Name.Lexeme);
+            IL.Emit(OpCodes.Ldsfld, Ctx.Runtime!.Sentinels.UndefinedInstance);
+            calleeLocal = _helpers.SpillStoreObject();
+            Label? skippedRead = null;
+            if (methodGet.Optional || HasOptionalLink(methodGet.Object))
+            {
+                skippedRead = IL.DefineLabel();
+                IL.Emit(OpCodes.Ldloc, receiverLocal);
+                IL.Emit(OpCodes.Brfalse, skippedRead.Value);
+                IL.Emit(OpCodes.Ldloc, receiverLocal);
+                IL.Emit(OpCodes.Isinst, Ctx.Runtime.Sentinels.UndefinedType);
+                IL.Emit(OpCodes.Brtrue, skippedRead.Value);
+            }
+            else EmitThrowIfReceiverUndefined(receiverLocal, methodGet.Name.Lexeme);
             IL.Emit(OpCodes.Ldloc, receiverLocal);
             IL.Emit(OpCodes.Ldstr, methodGet.Name.Lexeme);
             IL.Emit(OpCodes.Call, Ctx.Runtime!.ObjectRead.Property);
-            calleeLocal = _helpers.SpillStoreObject();
+            IL.Emit(OpCodes.Stloc, calleeLocal);
+            if (skippedRead is { } skip) IL.MarkLabel(skip);
         }
-        else if (!originalOptionalValue && callReference is Expr.GetIndex methodIndex)
+        else if (callReference is Expr.GetIndex methodIndex)
         {
             // Computed member calls have the same Reference receiver semantics as
             // dot-member calls: `obj[key]()` invokes the resolved function with
@@ -1702,8 +1720,18 @@ public abstract partial class ExpressionEmitterBase
             EmitExpression(methodIndex.Object);
             EnsureBoxed();
             receiverLocal = _helpers.SpillStoreObject();
-            if (methodIndex.Optional)
-                EmitThrowIfReceiverUndefined(receiverLocal, "[]");
+            IL.Emit(OpCodes.Ldsfld, Ctx.Runtime!.Sentinels.UndefinedInstance);
+            calleeLocal = _helpers.SpillStoreObject();
+            Label? skippedRead = null;
+            if (methodIndex.Optional || HasOptionalLink(methodIndex.Object))
+            {
+                skippedRead = IL.DefineLabel();
+                IL.Emit(OpCodes.Ldloc, receiverLocal);
+                IL.Emit(OpCodes.Brfalse, skippedRead.Value);
+                IL.Emit(OpCodes.Ldloc, receiverLocal);
+                IL.Emit(OpCodes.Isinst, Ctx.Runtime.Sentinels.UndefinedType);
+                IL.Emit(OpCodes.Brtrue, skippedRead.Value);
+            }
 
             EmitExpression(methodIndex.Index);
             EnsureBoxed();
@@ -1713,7 +1741,8 @@ public abstract partial class ExpressionEmitterBase
             IL.Emit(OpCodes.Ldloc, receiverLocal);
             IL.Emit(OpCodes.Ldloc, indexLocal);
             IL.Emit(OpCodes.Call, Ctx.Runtime!.ObjectRead.Index);
-            calleeLocal = _helpers.SpillStoreObject();
+            IL.Emit(OpCodes.Stloc, calleeLocal);
+            if (skippedRead is { } skip) IL.MarkLabel(skip);
         }
         else
         {
@@ -1806,9 +1835,11 @@ public abstract partial class ExpressionEmitterBase
         Expr.Get g => g.Optional || HasOptionalLink(g.Object),
         Expr.GetIndex gi => gi.Optional || HasOptionalLink(gi.Object),
         Expr.Call call => call.Optional || HasOptionalLink(call.Callee),
-        Expr.Grouping gr => HasOptionalLink(gr.Expression),
+        Expr.Grouping => false,
         Expr.Instantiation instantiation => HasOptionalLink(instantiation.Expression),
         Expr.TypeAssertion ta => HasOptionalLink(ta.Expression),
+        Expr.NonNullAssertion assertion => HasOptionalLink(assertion.Expression),
+        Expr.Satisfies satisfies => HasOptionalLink(satisfies.Expression),
         _ => false
     };
 
@@ -1818,21 +1849,6 @@ public abstract partial class ExpressionEmitterBase
     /// receiver that becomes `this`.
     /// </summary>
     private static Expr UnwrapCallReference(Expr expr) => ExpressionUnwrapper.Unwrap(expr);
-
-    private static bool RequiresOriginalOptionalCallValue(Expr original, Expr reference)
-    {
-        // Preserve the old value path only when the newly supported wrapper
-        // exposes an optional chain. Already-recognized member References keep
-        // their established dispatch, including their receiver's own wrappers.
-        while (true)
-        {
-            if (original is Expr.Grouping grouping) original = grouping.Expression;
-            else if (original is Expr.Instantiation instantiation) original = instantiation.Expression;
-            else if (original is Expr.TypeAssertion assertion) original = assertion.Expression;
-            else break;
-        }
-        return (original is Expr.NonNullAssertion or Expr.Satisfies) && ReferenceHasOptionalLink(reference);
-    }
 
     /// <summary>
     /// Intercepts a method call whose callee chain contains an optional link
@@ -1847,7 +1863,9 @@ public abstract partial class ExpressionEmitterBase
     /// </summary>
     protected bool TryEmitOptionalChainMethodCall(Expr.Call c)
     {
-        if (c.Optional || c.Callee is not Expr.Get g || !HasOptionalLink(g))
+        Expr reference = c.Callee;
+        while (reference is Expr.NonNullAssertion assertion) reference = assertion.Expression;
+        if (c.Optional || reference is not Expr.Get g || !HasOptionalLink(g))
             return false;
 
         // When an argument can suspend, the receiver and resolved fn are live across that
@@ -2161,6 +2179,13 @@ public abstract partial class ExpressionEmitterBase
             IL.Emit(OpCodes.Isinst, requiredInstanceType);
             IL.Emit(OpCodes.Brfalse, dynamicCall);
         }
+        if (GuardClassMethodPrototype)
+        {
+            IL.Emit(OpCodes.Ldloc, receiverLocal);
+            IL.Emit(OpCodes.Ldstr, methodName);
+            IL.Emit(OpCodes.Call, Ctx.Runtime!.ObjectOwnProperties.HasOwnProperty);
+            IL.Emit(OpCodes.Brtrue, dynamicCall);
+        }
         if (!GuardClassMethodPrototype)
             IL.Emit(OpCodes.Br, nominal);
         IL.Emit(OpCodes.Ldloc, receiverLocal);
@@ -2398,18 +2423,6 @@ public abstract partial class ExpressionEmitterBase
     /// </summary>
     protected bool TryEmitDerivedPromiseStatic(Type classBuilder, string methodName, List<Expr> arguments)
     {
-        // withResolvers returns a {promise, resolve, reject} object, not a
-        // task — delegate to the base emitter without subclass wrapping.
-        if (methodName == "withResolvers")
-        {
-            if (Ctx.TypeEmitterRegistry?.GetStaticStrategy("Promise") is not { } promiseStatics)
-                return false;
-            if (!promiseStatics.TryEmitStaticCall(this, methodName, arguments))
-                return false;
-            SetStackUnknown();
-            return true;
-        }
-
         var promise = Ctx.Runtime!.RequirePromise();
         MethodInfo? wrapper = methodName switch
         {
@@ -2421,6 +2434,7 @@ public abstract partial class ExpressionEmitterBase
             "allSettled" => promise.AllSettledStatic,
             "allSettledKeyed" => promise.AllSettledKeyedStatic,
             "any" => promise.AnyStatic,
+            "withResolvers" => promise.WithResolversStatic,
             _ => null
         };
         if (wrapper is null) return false;
@@ -2429,7 +2443,7 @@ public abstract partial class ExpressionEmitterBase
         // list first so spreads, surplus effects and suspension retain normal
         // call order before the static wrapper constructs its capability.
         EmitStaticCallArguments(arguments, wrapper, wrapper.GetParameters()[1..]);
-        var value = _helpers.SpillStoreObject();
+        var value = wrapper.GetParameters().Length > 1 ? _helpers.SpillStoreObject() : null;
         Type constructorType = classBuilder;
         if (classBuilder.IsGenericTypeDefinition)
         {
@@ -2438,7 +2452,7 @@ public abstract partial class ExpressionEmitterBase
         }
         IL.Emit(OpCodes.Ldtoken, constructorType);
         IL.Emit(OpCodes.Call, Types.TypeGetTypeFromHandle);
-        IL.Emit(OpCodes.Ldloc, value);
+        if (value is not null) IL.Emit(OpCodes.Ldloc, value);
         IL.Emit(OpCodes.Call, wrapper);
         SetStackUnknown();
         return true;

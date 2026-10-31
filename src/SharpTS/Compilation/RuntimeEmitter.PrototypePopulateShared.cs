@@ -118,13 +118,14 @@ public partial class RuntimeEmitter
             catch { /* already named — ignore */ }
         }
         var wrapperLocal = il.DeclareLocal(_types.Object);
-        _types.EmitLoadMethodInfo(il, helper);
+        var parameterProducer = EmitReflectedMethodLiteral(il, helper);
         il.Emit(OpCodes.Ldstr, jsName);
         il.Emit(OpCodes.Ldc_I4, jsLength);
         // Use the declaration cache shared by GetProperty's synthesized
         // Object.prototype method path so descriptor.value and direct reads
         // preserve function identity.
-        il.Emit(OpCodes.Call, functionGetOrCreate);
+        if (functionGetOrCreate is MethodBuilder factory) EmitReflectedFunctionFactory(il, factory, parameterProducer);
+        else il.Emit(OpCodes.Call, functionGetOrCreate);
         il.Emit(OpCodes.Stloc, wrapperLocal);
         // Fast-path dict store
         il.Emit(OpCodes.Ldsfld, protoField);

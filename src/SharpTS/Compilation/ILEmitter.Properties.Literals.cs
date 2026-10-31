@@ -23,7 +23,7 @@ public partial class ILEmitter
                 EmitExpressionAsDouble(a.Elements[i]);
                 IL.Emit(OpCodes.Stelem_R8);
             }
-            IL.Emit(OpCodes.Newobj, _ctx.Runtime!.ArrayStorage.NumericLiteralCtor);
+            NativePrototypeFieldsLookup.EmitCarrierCreate(_ctx.Runtime!.NativePrototypeFields, IL, _ctx.Runtime!.ArrayStorage.NumericLiteralCtor);
             SetStackUnknown();
             return;
         }
@@ -55,7 +55,7 @@ public partial class ILEmitter
             // Literal initialization is private: append into the final backing store,
             // without calling observable Array.prototype methods or copying a list.
             IL.Emit(OpCodes.Ldc_I4, a.Elements.Count);
-            IL.Emit(OpCodes.Newobj, _ctx.Runtime!.ArrayStorage.RestCtor);
+            NativePrototypeFieldsLookup.EmitCarrierCreate(_ctx.Runtime!.NativePrototypeFields, IL, _ctx.Runtime!.ArrayStorage.RestCtor);
             foreach (var element in a.Elements)
             {
                 IL.Emit(OpCodes.Dup);
@@ -197,7 +197,7 @@ public partial class ILEmitter
                 IL.Emit(OpCodes.Box, _ctx.Types.Double);
             IL.Emit(numeric ? OpCodes.Stelem_R8 : OpCodes.Stelem_Ref);
         }
-        if (numeric) IL.Emit(OpCodes.Newobj, _ctx.Runtime!.ArrayStorage.NumericLiteralCtor);
+        if (numeric) NativePrototypeFieldsLookup.EmitCarrierCreate(_ctx.Runtime!.NativePrototypeFields, IL, _ctx.Runtime!.ArrayStorage.NumericLiteralCtor);
         else IL.Emit(OpCodes.Call, _ctx.Runtime!.ArrayOperations.Create);
         SetStackUnknown();
     }
@@ -207,6 +207,7 @@ public partial class ILEmitter
         // Check if any property is a spread, computed key, or accessor (getter/setter)
         bool hasSpreads = o.Properties.Any(p => p.IsSpread);
         bool hasComputedKeys = o.Properties.Any(p => p.Key is Expr.ComputedKey);
+        bool hasPrototypeSetter = o.Properties.Any(p => p.IsPrototypeSetter);
         bool hasAccessors = o.Properties.Any(p => p.Kind is Expr.ObjectPropertyKind.Getter or Expr.ObjectPropertyKind.Setter);
 
         if (hasAccessors)
@@ -214,16 +215,18 @@ public partial class ILEmitter
             // Object has getters/setters - use $Object type which supports accessors
             EmitObjectLiteralWithAccessors(o);
         }
-        else if (!hasSpreads && !hasComputedKeys)
+        else if (!hasSpreads && !hasComputedKeys && !hasPrototypeSetter)
         {
             if (TryEmitJsonScalarRecordLiteral(o))
             {
+                RecordVmSourceObjectLiteral();
                 SetStackUnknown();
                 return;
             }
 
             if (TryEmitCompactObjectRecordLiteral(o))
             {
+                RecordVmSourceObjectLiteral();
                 SetStackUnknown();
                 return;
             }
@@ -259,9 +262,14 @@ public partial class ILEmitter
                 IL.Emit(OpCodes.Callvirt, _ctx.Types.GetMethod(_ctx.Types.DictionaryStringObject, "set_Item", _ctx.Types.String, _ctx.Types.Object));
             }
         }
+        else if (hasComputedKeys || hasPrototypeSetter)
+        {
+            EmitDictionaryObjectLiteral(o);
+        }
         else
         {
-            // Complex case: has spreads or computed keys, use Dictionary<string, object?> and SetIndex.
+            // Keep promoted source storage, but complete every copied/explicit
+            // data property through the same own-definition path.
             // A record's merged field count is only a bounded capacity hint, never a proof
             // of runtime keys: optional/deleted fields and structurally wider values still
             // go through the full copy operation. Cap the hint to avoid large speculative
@@ -279,10 +287,9 @@ public partial class ILEmitter
                 IL.Emit(OpCodes.Newobj, _ctx.Types.GetConstructor(_ctx.Types.DictionaryStringObject));
             }
 
+            var target = _helpers.SpillStoreObject();
             foreach (var prop in o.Properties)
             {
-                IL.Emit(OpCodes.Dup);
-
                 if (prop.IsSpread)
                 {
                     if (prop.Value is Expr.Variable variable &&
@@ -293,42 +300,35 @@ public partial class ILEmitter
                         foreach (var field in source.Shape.Fields)
                         {
                             var builder = source.Shape.FieldBuilders[field.Name];
-                            IL.Emit(OpCodes.Dup);
                             IL.Emit(OpCodes.Ldstr, field.Name);
+                            var key = _helpers.SpillStoreObject();
                             IL.Emit(OpCodes.Ldloca, source.Local);
                             IL.Emit(OpCodes.Ldfld, builder);
                             if (builder.FieldType.IsValueType)
                                 IL.Emit(OpCodes.Box, builder.FieldType);
-                            IL.Emit(OpCodes.Callvirt, _ctx.Types.GetMethod(
-                                _ctx.Types.DictionaryStringObject, "set_Item", _ctx.Types.String, _ctx.Types.Object));
+                            var value = _helpers.SpillStoreObject();
+                            EmitLiteralDataDefinition(target, key, value);
                         }
-                        IL.Emit(OpCodes.Pop); // consume the duplicate target, like MergeIntoObject
                         continue;
                     }
                     // Spread: merge the object into target
-                    EmitExpression(prop.Value);
-                    EmitBoxIfNeeded(prop.Value);
-                    IL.Emit(OpCodes.Call, _ctx.Runtime!.ObjectConstruction.MergeIntoDictionary);
-                }
-                else if (prop.Key is Expr.ComputedKey ck)
-                {
-                    // Computed key: evaluate key expression and use SetIndex
-                    EmitExpression(ck.Expression);
-                    EmitBoxIfNeeded(ck.Expression);
-                    EmitExpression(prop.Value);
-                    EmitBoxIfNeeded(prop.Value);
-                    IL.Emit(OpCodes.Call, _ctx.Runtime!.ObjectWrite.Index);
+                    var spread = SpillBoxed(prop.Value);
+                    EmitPropertyWriteOperation(() =>
+                    {
+                        IL.Emit(OpCodes.Ldloc, target);
+                        IL.Emit(OpCodes.Castclass, _ctx.Types.DictionaryStringObject);
+                        IL.Emit(OpCodes.Ldloc, spread);
+                        IL.Emit(OpCodes.Call, _ctx.Runtime!.ObjectConstruction.MergeIntoDictionary);
+                    });
                 }
                 else
                 {
-                    // Static key: set directly
-                    EmitStaticPropertyKey(prop.Key!);
-                    EmitExpression(prop.Value);
-                    EmitBoxIfNeeded(prop.Value);
-                    IL.Emit(OpCodes.Callvirt, _ctx.Types.GetMethod(_ctx.Types.DictionaryStringObject, "set_Item", _ctx.Types.String, _ctx.Types.Object));
+                    var key = SpillObjectLiteralKey(prop.Key!);
+                    var value = SpillBoxed(prop.Value);
+                    EmitLiteralDataDefinition(target, key, value);
                 }
             }
-
+            IL.Emit(OpCodes.Ldloc, target);
             // Result is already Dictionary<string, object?>, no CreateObject needed
         }
         // The stack now holds a Dictionary reference (or $Object wrapper).
@@ -337,12 +337,14 @@ public partial class ILEmitter
         // expression left behind — e.g. `const x = 0; const y = {};` used to
         // emit `Box Double` on the fresh Dictionary pointer, producing a
         // double whose bits were the reinterpreted heap address.
+        RecordVmSourceObjectLiteral();
         SetStackUnknown();
     }
 
     private bool TryEmitJsonScalarRecordLiteral(Expr.ObjectLiteral literal)
     {
-        if (_ctx.RuntimeFeatures?.UsesJSON != true || _ctx.ProgramType is null)
+        if (_ctx.RuntimeFeatures?.UsesJSON != true || _ctx.ProgramType is null ||
+            literal.Properties.Any(property => _ctx.TypeMap?.IsUndefinedReachableReturn(property.Value) == true))
             return false;
 
         JsonSerializationShape.Record? record = null;
@@ -397,7 +399,7 @@ public partial class ILEmitter
                         break;
                 }
             }
-            IL.Emit(OpCodes.Newobj, typedCtor);
+            NativePrototypeFieldsLookup.EmitCarrierCreate(_ctx.Runtime!.NativePrototypeFields, IL, typedCtor);
         }
         else if (_ctx.Runtime.Records.ScalarInlineCtors.TryGetValue(
             literal.Properties.Count, out var inlineCtor))
@@ -407,7 +409,7 @@ public partial class ILEmitter
                 EmitExpression(property.Value);
                 EmitBoxIfNeeded(property.Value);
             }
-            IL.Emit(OpCodes.Newobj, inlineCtor);
+            NativePrototypeFieldsLookup.EmitCarrierCreate(_ctx.Runtime!.NativePrototypeFields, IL, inlineCtor);
         }
         else
         {
@@ -421,7 +423,7 @@ public partial class ILEmitter
                 EmitBoxIfNeeded(literal.Properties[i].Value);
                 IL.Emit(OpCodes.Stelem_Ref);
             }
-            IL.Emit(OpCodes.Newobj, _ctx.Runtime.Records.RequireScalars().ArrayConstructor);
+            NativePrototypeFieldsLookup.EmitCarrierCreate(_ctx.Runtime!.NativePrototypeFields, IL, _ctx.Runtime.Records.RequireScalars().ArrayConstructor);
         }
         return true;
     }
@@ -481,7 +483,7 @@ public partial class ILEmitter
             else
                 EmitConversionForParameter(property.Value, ctorParameters[index].ParameterType);
         }
-        IL.Emit(OpCodes.Newobj, exactCtor);
+        NativePrototypeFieldsLookup.EmitCarrierCreate(_ctx.Runtime!.NativePrototypeFields, IL, exactCtor);
         return true;
     }
 
@@ -491,111 +493,7 @@ public partial class ILEmitter
     /// </summary>
     protected override void EmitObjectLiteralWithAccessors(Expr.ObjectLiteral o)
     {
-        // Create $Object: new $Object(new Dictionary<string, object?>())
-        IL.Emit(OpCodes.Newobj, _ctx.Types.GetConstructor(_ctx.Types.DictionaryStringObject));
-        IL.Emit(OpCodes.Newobj, _ctx.Runtime!.ObjectStorage.Constructor);
-
-        // Store in local for repeated use
-        var objLocal = IL.DeclareLocal(_ctx.Runtime!.ObjectStorage.Type);
-        IL.Emit(OpCodes.Stloc, objLocal);
-
-        foreach (var prop in o.Properties)
-        {
-            if (prop.IsSpread)
-            {
-                // Spread: merge the source object's properties into target $Object
-                IL.Emit(OpCodes.Ldloc, objLocal);
-                EmitExpression(prop.Value);
-                EmitBoxIfNeeded(prop.Value);
-                IL.Emit(OpCodes.Call, _ctx.Runtime!.ObjectConstruction.MergeIntoObject);
-                continue;
-            }
-
-            // Computed-key accessors handle their own key emission below;
-            // static-key path needs the resolved string up front.
-            string propKey = prop.Key is Expr.ComputedKey
-                ? "" // unused — accessor branches below dispatch on prop.Key
-                : GetPropertyKeyString(prop.Key!);
-
-            switch (prop.Kind)
-            {
-                case Expr.ObjectPropertyKind.Getter:
-                    if (prop.Key is Expr.ComputedKey gck)
-                    {
-                        // Computed-key getter (Symbol or runtime string).
-                        // $Runtime.DefineSymbolAccessor(obj, key, getter, null).
-                        IL.Emit(OpCodes.Ldloc, objLocal);
-                        EmitExpression(gck.Expression);
-                        EmitBoxIfNeeded(gck.Expression);
-                        EmitExpression(prop.Value);
-                        EmitBoxIfNeeded(prop.Value);
-                        IL.Emit(OpCodes.Ldnull);
-                        IL.Emit(OpCodes.Call, _ctx.Runtime!.ObjectConstruction.DefineSymbolAccessor);
-                    }
-                    else
-                    {
-                        // obj.DefineGetter(name, getterFunction)
-                        IL.Emit(OpCodes.Ldloc, objLocal);
-                        IL.Emit(OpCodes.Ldstr, propKey);
-                        EmitExpression(prop.Value); // Emits the getter function (arrow function)
-                        EmitBoxIfNeeded(prop.Value);
-                        IL.Emit(OpCodes.Callvirt, _ctx.Runtime!.ObjectStorage.DefineGetter);
-                    }
-                    break;
-
-                case Expr.ObjectPropertyKind.Setter:
-                    if (prop.Key is Expr.ComputedKey sck)
-                    {
-                        IL.Emit(OpCodes.Ldloc, objLocal);
-                        EmitExpression(sck.Expression);
-                        EmitBoxIfNeeded(sck.Expression);
-                        IL.Emit(OpCodes.Ldnull);
-                        EmitExpression(prop.Value);
-                        EmitBoxIfNeeded(prop.Value);
-                        IL.Emit(OpCodes.Call, _ctx.Runtime!.ObjectConstruction.DefineSymbolAccessor);
-                    }
-                    else
-                    {
-                        // obj.DefineSetter(name, setterFunction)
-                        IL.Emit(OpCodes.Ldloc, objLocal);
-                        IL.Emit(OpCodes.Ldstr, propKey);
-                        EmitExpression(prop.Value); // Emits the setter function (arrow function)
-                        EmitBoxIfNeeded(prop.Value);
-                        IL.Emit(OpCodes.Callvirt, _ctx.Runtime!.ObjectStorage.DefineSetter);
-                    }
-                    break;
-
-                case Expr.ObjectPropertyKind.Method:
-                case Expr.ObjectPropertyKind.Value:
-                default:
-                    if (prop.Key is Expr.ComputedKey vck)
-                    {
-                        // Computed-key data property: route through $Runtime.SetIndex
-                        // so symbol keys hit the symbol-dict.
-                        IL.Emit(OpCodes.Ldloc, objLocal);
-                        EmitExpression(vck.Expression);
-                        EmitBoxIfNeeded(vck.Expression);
-                        EmitExpression(prop.Value);
-                        EmitBoxIfNeeded(prop.Value);
-                        IL.Emit(OpCodes.Call, _ctx.Runtime!.ObjectWrite.Index);
-                    }
-                    else
-                    {
-                        // Regular property: obj.SetProperty(name, value)
-                        IL.Emit(OpCodes.Ldloc, objLocal);
-                        IL.Emit(OpCodes.Ldstr, propKey);
-                        EmitExpression(prop.Value);
-                        EmitBoxIfNeeded(prop.Value);
-                        IL.Emit(OpCodes.Callvirt, _ctx.Runtime!.ObjectStorage.SetProperty);
-                    }
-                    break;
-            }
-        }
-
-        // Leave the $Object on the stack. Reset the stack-type tracker —
-        // see EmitObjectLiteral for the rationale.
-        IL.Emit(OpCodes.Ldloc, objLocal);
-        SetStackUnknown();
+        base.EmitObjectLiteralWithAccessors(o);
     }
 
     /// <summary>

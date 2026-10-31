@@ -21,6 +21,7 @@ internal sealed class LoopBodyCellAnalyzer : AstVisitorBase
         public bool CanOwnGeneratorCells { get; } = canOwnGeneratorCells;
         public bool CanRelayClassSelf { get; } = canRelayClassSelf;
         public Expr.ClassExpr? ClassCaptureOwner { get; } = classCaptureOwner;
+        public bool InParameterDefaults { get; set; }
     }
 
     private sealed class Binding(Token name, Owner owner, bool candidate, Binding? shadowOf, bool lexical,
@@ -42,7 +43,9 @@ internal sealed class LoopBodyCellAnalyzer : AstVisitorBase
         public bool BodyVarDeclared { get; set; }
         public bool NeedsUndefinedCell { get; set; }
         public bool ParameterPattern { get; set; }
+        public bool FormalParameter { get; set; }
         public bool ClassStaticBlockVar { get; set; }
+        public bool OrdinaryBlockDeclaration { get; set; }
     }
 
     private readonly List<Owner> _owners = [];
@@ -156,6 +159,21 @@ internal sealed class LoopBodyCellAnalyzer : AstVisitorBase
                 declarations.Add(binding.Name);
             }
         }
+        // Repeated block declarations cannot use the unique-name entry-point lift.
+        // Keep each captured binding live through its own declaration cell instead
+        // of copying its current value into every accessor/arrow display class.
+        // The existing lexical transport proof excludes unsupported callable chains.
+        foreach (var owner in _declarations.Values.GroupBy(binding => binding.Owner))
+            foreach (var module in owner.GroupBy(binding => binding.ModuleOwner ?? _singleSourceRootOwner,
+                         ReferenceEqualityComparer.Instance))
+                foreach (var names in module.GroupBy(binding => binding.Name.Lexeme, StringComparer.Ordinal))
+                {
+                    if (!names.Skip(1).Any()) continue;
+                    foreach (var binding in names)
+                        if (binding.OrdinaryBlockDeclaration && !binding.Candidate && binding.ShadowOf is null
+                            && binding.Owner.CanOwnCells && binding.Captured && binding.GeneratorEligible)
+                            _cells.Add(binding.Name);
+                }
         HashSet<Token> generatorCells = new(ReferenceEqualityComparer.Instance);
         foreach (var binding in _declarations.Values.Where(b => b.GeneratorCaptured))
         {
@@ -318,6 +336,8 @@ internal sealed class LoopBodyCellAnalyzer : AstVisitorBase
             Declare(name, direct || (relatedShadow && _owners[^1].CanOwnCells),
                 unsupportedShadows && !handlerCandidate, relatedShadow ? parent : null,
                 lexical: generatorLexicals, ordinaryHandlerCandidate: handlerCandidate || blockCandidate);
+            // For headers use their separate copy-forward policy, not block-entry cells.
+            if (ordinaryBlock && allowCandidates) _declarations[name].OrdinaryBlockDeclaration = true;
         }
         switch (statement)
         {
@@ -347,6 +367,9 @@ internal sealed class LoopBodyCellAnalyzer : AstVisitorBase
     {
         var binding = VisibleBinding(name);
         if (binding is null) return;
+        if (binding.FormalParameter && binding.Owner.InParameterDefaults &&
+            !ReferenceEquals(binding.Owner, _owners[^1]))
+            binding.ParameterPattern = true;
         if (binding.ParameterPattern)
         {
             if (ReferenceEquals(binding.Owner, _owners[^1])) return;
@@ -586,7 +609,7 @@ internal sealed class LoopBodyCellAnalyzer : AstVisitorBase
     {
         if (stmt.ComputedKey is { } key) Visit(key);
         VisitCallable(stmt, stmt.Parameters, stmt.Body ?? [], null,
-            !stmt.IsAsync && !stmt.IsGenerator, stmt.Name, canRelayClassSelf: false);
+            !stmt.IsAsync && !stmt.IsGenerator, stmt.Name);
     }
 
     private void VisitCallable(object node, List<Stmt.Parameter> parameters, List<Stmt> body,
@@ -607,20 +630,27 @@ internal sealed class LoopBodyCellAnalyzer : AstVisitorBase
             if (self is not null) Declare(self);
             if (node is Stmt.Function or Expr.ArrowFunction { HasOwnThis: true })
                 Declare(new Token(TokenType.IDENTIFIER, "arguments", null, 0));
-            foreach (var parameter in parameters) Declare(parameter.Name);
+            foreach (var parameter in parameters)
+            {
+                Declare(parameter.Name);
+                _declarations[parameter.Name].FormalParameter = true;
+            }
             var initializers = Runtime.ParameterBinder.ParameterInitializers(body);
             foreach (var initializer in initializers?.Values.AsEnumerable() ?? [])
                 foreach (var name in LexicalDeclarationBindings.Collect(initializer.Statements))
                 {
                     Declare(name);
                     _declarations[name].ParameterPattern = synchronous && !directSuspension;
+                    _declarations[name].FormalParameter = true;
                 }
+            _owners[^1].InParameterDefaults = true;
             foreach (var parameter in parameters)
             {
                 if (parameter.DefaultValue is { } value) Visit(value);
                 if (initializers?.TryGetValue(parameter.Name.Lexeme, out var initializer) == true)
                     Visit(initializer);
             }
+            _owners[^1].InParameterDefaults = false;
             var statements = Runtime.ParameterBinder.BodyStatements(body);
             EnterScope(statements, allowCandidates: false, hoistVars: true);
             try

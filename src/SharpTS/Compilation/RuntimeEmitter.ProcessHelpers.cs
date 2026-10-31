@@ -880,10 +880,8 @@ public partial class RuntimeEmitter
 
         // Create new TSFunction(null, implMethod)
         il.Emit(OpCodes.Ldnull); // target (static method)
-        il.Emit(OpCodes.Ldtoken, implMethod);
-        il.Emit(OpCodes.Call, _types.MethodBaseGetMethodFromHandle);
-        il.Emit(OpCodes.Castclass, _types.MethodInfo);
-        il.Emit(OpCodes.Newobj, runtime.FunctionConstruction.Constructor);
+        var parameterProducer = EmitReflectedMethodLiteralViaHandle(il, implMethod);
+        EmitReflectedFunctionConstructor(il, runtime.FunctionConstruction.Constructor, parameterProducer, cached: false);
         il.Emit(OpCodes.Ret);
     }
 

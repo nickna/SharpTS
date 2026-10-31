@@ -175,7 +175,7 @@ public partial class RuntimeEmitter
 
         // return new $Buffer(result)
         il.Emit(OpCodes.Ldloc, result);
-        il.Emit(OpCodes.Newobj, buffer.Ctor);
+        NativePrototypeFieldsLookup.EmitCarrierCreate(_nativePrototypeFields, il, buffer.Ctor);
         il.Emit(OpCodes.Ret);
     }
 
@@ -323,7 +323,7 @@ public partial class RuntimeEmitter
         // str = new $Buffer(BufferBytesOf(source)).ToEncodedString(coerce(from))
         il.Emit(OpCodes.Ldarg_0);
         il.Emit(OpCodes.Call, buffer.BytesOf);
-        il.Emit(OpCodes.Newobj, buffer.Ctor);
+        NativePrototypeFieldsLookup.EmitCarrierCreate(_nativePrototypeFields, il, buffer.Ctor);
         il.Emit(OpCodes.Ldarg_1);
         il.Emit(OpCodes.Call, buffer.CoerceString);
         il.Emit(OpCodes.Callvirt, buffer.ToStringMethod);

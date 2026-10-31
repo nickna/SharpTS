@@ -11,14 +11,16 @@ public partial class RuntimeEmitter
         EmittedFunctionValueRuntime FunctionValues,
         EmittedFunctionAttributesRuntime FunctionAttributes,
         Type UndefinedType,
-        MethodBuilder InvokeMethodUnwrapped
+        MethodBuilder InvokeMethodUnwrapped,
+        MethodInfo? NativeProxyRejection,
+        EmittedVmRuntime? Vm = null
     );
 
     private readonly record struct ReflectGetInputs(MethodInfo InvokeMethodUnwrapped,
         MethodInfo ObjectGetOwnPropertyDescriptor, MethodInfo HasOwnPropertyHelperMethod,
         MethodInfo GetFunctionMethod, MethodInfo InvokeMethodValue, FieldInfo UndefinedInstance, Type UndefinedType,
         MethodInfo GetProperty, MethodInfo GetPrototypeOf, MethodInfo GetIndex, MethodInfo IsSymbol,
-        MethodInfo FindOwnSymbolMethod);
+        MethodInfo FindOwnSymbolMethod, MethodInfo? NativeProxyRejection, EmittedErrorRuntime Errors);
 
     private readonly record struct ReflectToPropertyKeyInputs(Type SymbolType, FieldInfo SymbolToPrimitive,
         Type UndefinedType, MethodInfo ToJsString, MethodInfo GetProperty, MethodInfo InvokeMethodValue,
@@ -29,10 +31,10 @@ public partial class RuntimeEmitter
         MethodInfo DeleteProperty, MethodInfo DeleteIndex, MethodInfo IsSymbol,
         Type UndefinedType, MethodInfo GetProperty, MethodInfo TypeOf,
         MethodInfo CreateException, ConstructorInfo TypeErrorConstructor,
-        EmittedFunctionBindingRuntime FunctionBindings);
+        EmittedFunctionBindingRuntime FunctionBindings, MethodInfo? NativeProxyRejection);
 
     private readonly record struct ReflectPreventExtensionsInputs(MethodInfo InvokeMethodUnwrapped,
-        MethodInfo ObjectPreventExtensions, MethodInfo ObjectIsExtensible, MethodInfo GetProperty);
+        MethodInfo ObjectPreventExtensions, MethodInfo ObjectIsExtensible, MethodInfo GetProperty, MethodInfo? NativeProxyRejection);
 
     private readonly record struct ReflectSetInputs(ProxySetCallInputs ProxySet,
         MethodInfo ObjectGetOwnPropertyDescriptor, MethodInfo IsFrozen, MethodInfo HasOwnPropertyHelperMethod,
@@ -42,28 +44,31 @@ public partial class RuntimeEmitter
     private readonly record struct ReflectSetPrototypeOfInputs(MethodInfo CreateException,
         ConstructorInfo TypeErrorConstructor, MethodInfo InvokeMethodUnwrapped, MethodInfo ObjectGetPrototypeOf,
         MethodInfo ObjectSetPrototypeOf, MethodInfo ObjectIsExtensible, Type UndefinedType, Type TSSymbolType,
-        MethodInfo GetProperty);
+        MethodInfo GetProperty, MethodInfo? NativeProxyRejection);
 
     private readonly record struct ReflectDefinePropertyInputs(MethodInfo InvokeMethodUnwrapped,
         MethodInfo ObjectGetOwnPropertyDescriptor, MethodInfo HasOwnPropertyHelperMethod, MethodInfo ToPropertyKey,
         MethodInfo ObjectDefineProperty, MethodInfo ObjectIsExtensible, MethodInfo GetProperty,
-        PropertyDescriptorConversionInputs DescriptorConversion);
+        PropertyDescriptorConversionInputs DescriptorConversion, MethodInfo? NativeProxyRejection);
 
     private readonly record struct ReflectOwnKeysInputs(MethodInfo CreateException,
         ConstructorInfo TypeErrorConstructor, ProxyOwnKeysCallInputs ProxyOwnKeys,
         MethodInfo GetOrdinaryOwnPropertyKeys, MethodInfo GetOwnPropertySymbols, MethodInfo GetOwnPropertyNames,
         Type UndefinedType, Type TSSymbolType);
 
-    private readonly record struct ReflectApplyInputs(MethodInfo InvokeMethodValue);
+    private readonly record struct ReflectApplyInputs(MethodInfo InvokeMethodValue,
+        CallableValidationInputs Callable, MethodInfo FromArrayLike);
 
     private readonly record struct ReflectConstructInputs(MethodInfo CreateException,
         ConstructorInfo TypeErrorConstructor, MethodInfo InvokeMethodUnwrapped, MethodInfo CreateErrorFromTypeOrNull,
         MethodInfo ToNumber, MethodInfo IsConstructorMethod, MethodInfo ConstructDynamicValue, Type UndefinedType,
-        MethodInfo GetProperty, EmittedDataViewRuntime? DataView, EmittedPromiseRuntime? Promise);
+        MethodInfo GetProperty, EmittedDataViewRuntime? DataView, EmittedPromiseRuntime? Promise,
+        MethodInfo FromArrayLike, MethodInfo? NativeProxyRejection);
 
     private readonly record struct ReflectValueFormMethodsInputs(MethodInfo Get, MethodInfo Set,
         MethodInfo DefineProperty, MethodInfo ObjectGetOwnPropertyDescriptor,
-        MethodInfo ObjectGetPrototypeOf, MethodInfo ObjectIsExtensible, MethodInfo HasIn);
+        MethodInfo ObjectGetPrototypeOf, MethodInfo ObjectIsExtensible, MethodInfo HasIn, FieldInfo UndefinedInstance,
+        MethodInfo TypeOf, MethodInfo CreateException, ConstructorInfo TypeErrorConstructor);
 
     /// <summary>ToPropertyKey preserves Symbol results of string-hint ToPrimitive.</summary>
     private void EmitReflectToPropertyKey(EmittedReflectRuntime reflect, ReflectToPropertyKeyInputs inputs)
@@ -185,41 +190,7 @@ public partial class RuntimeEmitter
         EmitProxyTypeCheck(
             il, () => il.Emit(OpCodes.Ldarg_0), proxyLabel, notProxyLabel);
         il.MarkLabel(proxyLabel);
-        EmitProxyMethodCallUnwrapped(
-            il, inputs.InvokeMethodUnwrapped, () => il.Emit(OpCodes.Ldarg_0),
-            "TrapGetCompiled", () =>
-            {
-                il.Emit(OpCodes.Ldc_I4_6);
-                il.Emit(OpCodes.Newarr, _types.Object);
-                il.Emit(OpCodes.Dup);
-                il.Emit(OpCodes.Ldc_I4_0);
-                il.Emit(OpCodes.Ldloc, key);
-                il.Emit(OpCodes.Stelem_Ref);
-                il.Emit(OpCodes.Dup);
-                il.Emit(OpCodes.Ldc_I4_1);
-                il.Emit(OpCodes.Ldarg_2);
-                il.Emit(OpCodes.Stelem_Ref);
-                EmitDelegate(2, reflect.Get,
-                    typeof(Func<object, object, object, object?>));
-                EmitDelegate(3, inputs.GetProperty,
-                    typeof(Func<object, string, object?>));
-                EmitDelegate(4, inputs.GetFunctionMethod,
-                    typeof(Func<object, string, object?>));
-                EmitDelegate(5, inputs.ObjectGetOwnPropertyDescriptor,
-                    typeof(Func<object, object, object?>));
-
-                void EmitDelegate(int slot, MethodInfo target, Type delegateType)
-                {
-                    il.Emit(OpCodes.Dup);
-                    il.Emit(OpCodes.Ldc_I4, slot);
-                    il.Emit(OpCodes.Ldnull);
-                    il.Emit(OpCodes.Ldftn, target);
-                    il.Emit(OpCodes.Newobj, _types.GetConstructor(
-                        delegateType, _types.Object, _types.IntPtr)!);
-                    il.Emit(OpCodes.Stelem_Ref);
-                }
-            });
-        il.Emit(OpCodes.Ret);
+        EmitProxyReflectGet(il, reflect, inputs, key);
 
         il.MarkLabel(notProxyLabel);
         var descriptorLocal = il.DeclareLocal(_types.Object);
@@ -328,39 +299,8 @@ public partial class RuntimeEmitter
             [_types.Object, _types.Object]);
         reflectNamespace.DeleteProperty = method;
         var il = method.GetILGenerator();
-        // Reflect requires an Object target before any observable key coercion.
-        // Keep this validation out of the shared delete-expression helpers.
-        var invalidTarget = il.DefineLabel();
-        var validTarget = il.DefineLabel();
-        var targetType = il.DeclareLocal(_types.String);
-        il.Emit(OpCodes.Ldarg_0);
-        il.Emit(OpCodes.Brfalse, invalidTarget);
-        // Interop can retain CLR numeric carriers that TypeOf does not yet
-        // classify as JS numbers. Reject those specific primitives here,
-        // while preserving managed structs and enums as object targets.
-        foreach (var primitiveType in new[] { _types.Byte, _types.SByte,
-                     _types.Int16, _types.UInt16, _types.Int32, _types.UInt32,
-                     _types.Int64, _types.UInt64, _types.Single, _types.Double,
-                     _types.Decimal, _types.Char })
-        {
-            il.Emit(OpCodes.Ldarg_0);
-            il.Emit(OpCodes.Isinst, primitiveType);
-            il.Emit(OpCodes.Brtrue, invalidTarget);
-        }
-        il.Emit(OpCodes.Ldarg_0);
-        il.Emit(OpCodes.Call, inputs.TypeOf);
-        il.Emit(OpCodes.Stloc, targetType);
-        foreach (var kind in new[] { "object", "function" })
-        {
-            il.Emit(OpCodes.Ldloc, targetType);
-            il.Emit(OpCodes.Ldstr, kind);
-            il.Emit(OpCodes.Call, _types.StringOpEquality);
-            il.Emit(OpCodes.Brtrue, validTarget);
-        }
-        il.MarkLabel(invalidTarget);
-        GuestErrorEmitter.ThrowError(il, inputs.CreateException,
-            inputs.TypeErrorConstructor, "Reflect.deleteProperty requires an object target");
-        il.MarkLabel(validTarget);
+        EmitRequireReflectObjectTarget(il, () => il.Emit(OpCodes.Ldarg_0),
+            inputs.TypeOf, inputs.CreateException, inputs.TypeErrorConstructor, "deleteProperty");
         var keyLocal = il.DeclareLocal(_types.Object);
         var stringKeyLocal = il.DeclareLocal(_types.String);
         il.Emit(OpCodes.Ldarg_1);
@@ -404,7 +344,7 @@ public partial class RuntimeEmitter
                         delegateType, _types.Object, _types.IntPtr)!);
                     il.Emit(OpCodes.Stelem_Ref);
                 }
-            });
+            }, inputs.NativeProxyRejection);
         il.Emit(OpCodes.Unbox_Any, _types.Boolean);
         il.Emit(OpCodes.Ret);
 
@@ -511,7 +451,7 @@ public partial class RuntimeEmitter
                         delegateType, _types.Object, _types.IntPtr)!);
                     il.Emit(OpCodes.Stelem_Ref);
                 }
-            });
+            }, inputs.NativeProxyRejection);
         il.Emit(OpCodes.Unbox_Any, _types.Boolean);
         il.Emit(OpCodes.Ret);
 
@@ -670,29 +610,28 @@ public partial class RuntimeEmitter
 
         il.MarkLabel(notFrozenLabel);
 
-        // The common no-explicit-receiver case can use the existing ordinary
-        // string property store directly. Symbol writes use DefineOwnProperty
-        // so a rejected addition returns false instead of SetIndex's void result.
-        var distinctReceiverLabel = il.DefineLabel();
-        il.Emit(OpCodes.Ldloc, keyLocal);
-        il.Emit(OpCodes.Call, inputs.IsSymbol);
-        il.Emit(OpCodes.Brtrue, distinctReceiverLabel);
-        il.Emit(OpCodes.Ldarg_0);
+        // OrdinarySet defines or updates the receiver through its actual
+        // [[DefineOwnProperty]] operation, including when Receiver is Target.
+        // The generic named-property store cannot update array element storage.
+        // Only the data-property path requires an object Receiver. Accessor
+        // invocation above preserves explicitly supplied null/undefined values.
+        var receiverIsObject = il.DefineLabel();
+        var receiverIsPrimitive = il.DefineLabel();
         il.Emit(OpCodes.Ldarg_3);
-        il.Emit(OpCodes.Bne_Un, distinctReceiverLabel);
-        il.Emit(OpCodes.Ldarg_0);
-        il.Emit(OpCodes.Ldloc, keyLocal);
-        il.Emit(OpCodes.Castclass, _types.String);
-        il.Emit(OpCodes.Ldarg_2);
-        il.Emit(OpCodes.Call, inputs.SetProperty);
-        il.Emit(OpCodes.Ldc_I4_1);
+        il.Emit(OpCodes.Brfalse, receiverIsPrimitive);
+        foreach (var primitive in new[] { inputs.UndefinedType, _types.String, _types.Double, _types.Boolean, _types.BigInteger })
+        {
+            il.Emit(OpCodes.Ldarg_3);
+            il.Emit(OpCodes.Isinst, primitive);
+            il.Emit(OpCodes.Brtrue, receiverIsPrimitive);
+        }
+        il.Emit(OpCodes.Ldarg_3);
+        il.Emit(OpCodes.Call, inputs.IsSymbol);
+        il.Emit(OpCodes.Brfalse, receiverIsObject);
+        il.MarkLabel(receiverIsPrimitive);
+        il.Emit(OpCodes.Ldc_I4_0);
         il.Emit(OpCodes.Ret);
-
-        // With a distinct receiver, OrdinarySet defines/updates the property
-        // on Receiver. Probe its own descriptor first (observable for Proxy),
-        // then send a partial or complete descriptor through
-        // [[DefineOwnProperty]] as required.
-        il.MarkLabel(distinctReceiverLabel);
+        il.MarkLabel(receiverIsObject);
         var receiverDescriptorLocal = il.DeclareLocal(_types.Object);
         il.Emit(OpCodes.Ldarg_3);
         il.Emit(OpCodes.Ldloc, keyLocal);
@@ -856,7 +795,7 @@ public partial class RuntimeEmitter
                         delegateType, _types.Object, _types.IntPtr)!);
                     il.Emit(OpCodes.Stelem_Ref);
                 }
-            });
+            }, inputs.NativeProxyRejection);
         il.Emit(OpCodes.Unbox_Any, _types.Boolean);
         il.Emit(OpCodes.Ret);
         il.MarkLabel(notProxyLabel);
@@ -925,6 +864,16 @@ public partial class RuntimeEmitter
         il.Emit(OpCodes.Ldarg_1);
         il.Emit(OpCodes.Call, inputs.ToPropertyKey);
         il.Emit(OpCodes.Stloc, reflectDefineKeyLocal);
+
+        // ToPropertyDescriptor precedes [[DefineOwnProperty]], including Proxy
+        // trap acquisition. Keep only the validated partial record so neither
+        // forwarding nor invariant checks can read the original getters again.
+        var originalDescriptor = il.DeclareLocal(_types.Object);
+        il.Emit(OpCodes.Ldarg_2);
+        il.Emit(OpCodes.Stloc, originalDescriptor);
+        var convertedDescriptor = EmitConvertPropertyDescriptor(
+            il, inputs.DescriptorConversion, originalDescriptor);
+
         var proxyDefineLabel = il.DefineLabel();
         var ordinaryDefineLabel = il.DefineLabel();
         EmitProxyTypeCheck(
@@ -933,7 +882,7 @@ public partial class RuntimeEmitter
         il.MarkLabel(proxyDefineLabel);
         EmitProxyMethodCallUnwrapped(
             il, inputs.InvokeMethodUnwrapped, () => il.Emit(OpCodes.Ldarg_0),
-            "TrapDefinePropertyCompiled", () =>
+            "TrapDefineConvertedPropertyCompiled", () =>
             {
                 il.Emit(OpCodes.Ldc_I4_7);
                 il.Emit(OpCodes.Newarr, _types.Object);
@@ -943,7 +892,7 @@ public partial class RuntimeEmitter
                 il.Emit(OpCodes.Stelem_Ref);
                 il.Emit(OpCodes.Dup);
                 il.Emit(OpCodes.Ldc_I4_1);
-                il.Emit(OpCodes.Ldarg_2);
+                il.Emit(OpCodes.Ldloc, convertedDescriptor);
                 il.Emit(OpCodes.Stelem_Ref);
                 EmitDelegate(2, assignment.DefinePropertyObjectAdapter,
                     typeof(Func<object, object, object, object?>));
@@ -966,20 +915,10 @@ public partial class RuntimeEmitter
                         delegateType, _types.Object, _types.IntPtr)!);
                     il.Emit(OpCodes.Stelem_Ref);
                 }
-            });
+            }, inputs.NativeProxyRejection);
         il.Emit(OpCodes.Unbox_Any, _types.Boolean);
         il.Emit(OpCodes.Ret);
         il.MarkLabel(ordinaryDefineLabel);
-
-        // ToPropertyDescriptor is observable and may throw a guest value or a
-        // validation TypeError. Complete it before the ordinary refusal catch.
-        // Replay only its null-prototype partial record, preserving omitted
-        // fields without reading any original descriptor getter a second time.
-        var originalDescriptor = il.DeclareLocal(_types.Object);
-        il.Emit(OpCodes.Ldarg_2);
-        il.Emit(OpCodes.Stloc, originalDescriptor);
-        var convertedDescriptor = EmitConvertPropertyDescriptor(
-            il, inputs.DescriptorConversion, originalDescriptor);
 
         // try { ObjectDefineProperty(target, key, convertedDescriptor); return true; }
         // catch { return false; }
@@ -1221,31 +1160,11 @@ public partial class RuntimeEmitter
         var il = method.GetILGenerator();
         var argsLocal = il.DeclareLocal(_types.ObjectArray);
 
-        // Convert argsList (arg2) to object[]
-        // Check if it's a List<object?>
-        var isListLabel = il.DefineLabel();
-        var gotArgsLabel = il.DefineLabel();
-
+        EmitRequireCallable(il, inputs.Callable, () => il.Emit(OpCodes.Ldarg_0),
+            "Reflect.apply: target is not callable");
         il.Emit(OpCodes.Ldarg_2);
-        il.Emit(OpCodes.Isinst, _types.ListOfObject);
-        var listLocal = il.DeclareLocal(_types.ListOfObject);
-        il.Emit(OpCodes.Stloc, listLocal);
-        il.Emit(OpCodes.Ldloc, listLocal);
-        il.Emit(OpCodes.Brtrue, isListLabel);
-
-        // Not a list - use empty args
-        il.Emit(OpCodes.Ldc_I4_0);
-        il.Emit(OpCodes.Newarr, _types.Object);
+        il.Emit(OpCodes.Call, inputs.FromArrayLike);
         il.Emit(OpCodes.Stloc, argsLocal);
-        il.Emit(OpCodes.Br, gotArgsLabel);
-
-        // Is a list - call ToArray()
-        il.MarkLabel(isListLabel);
-        il.Emit(OpCodes.Ldloc, listLocal);
-        il.Emit(OpCodes.Callvirt, _types.GetMethod(_types.ListOfObject, "ToArray")!);
-        il.Emit(OpCodes.Stloc, argsLocal);
-
-        il.MarkLabel(gotArgsLabel);
 
         il.Emit(OpCodes.Ldarg_1); // thisArg
         il.Emit(OpCodes.Ldarg_0);
@@ -1302,6 +1221,36 @@ public partial class RuntimeEmitter
         il.Emit(OpCodes.Ret);
         il.MarkLabel(notUndefinedLabel);
 
+        if (inputs.Vm is { } vm)
+        {
+            var ordinaryValue = il.DefineLabel();
+            var eligibilityReady = il.DefineLabel();
+            var eligible = il.DeclareLocal(_types.Boolean);
+            il.Emit(OpCodes.Ldarg_0);
+            il.Emit(OpCodes.Call, vm.IsMappedValue);
+            il.Emit(OpCodes.Brfalse, ordinaryValue);
+            // This output's inverse wrapper map is the only route to Core
+            // constructor metadata. Reflect still owns its caller-realm
+            // precondition error before any executor/constructor runs.
+            il.BeginExceptionBlock();
+            EmitVmCoreInvoke(il, "IsVmConstructorValue", body =>
+            {
+                body.Emit(OpCodes.Ldarg_0);
+                body.Emit(OpCodes.Call, vm.RestoreValue);
+            });
+            il.Emit(OpCodes.Unbox_Any, _types.Boolean);
+            il.Emit(OpCodes.Stloc, eligible);
+            il.Emit(OpCodes.Leave, eligibilityReady);
+            il.BeginCatchBlock(_types.Exception);
+            il.Emit(OpCodes.Call, vm.ConvertException);
+            il.Emit(OpCodes.Throw);
+            il.EndExceptionBlock();
+            il.MarkLabel(eligibilityReady);
+            il.Emit(OpCodes.Ldloc, eligible);
+            il.Emit(OpCodes.Ret);
+            il.MarkLabel(ordinaryValue);
+        }
+
         // A Proxy has [[Construct]] exactly when its (possibly nested) target
         // does. Revocation is observable and must throw here.
         var proxyLabel = il.DefineLabel();
@@ -1323,7 +1272,7 @@ public partial class RuntimeEmitter
                     typeof(Func<object, bool>),
                     _types.Object, _types.IntPtr)!);
                 il.Emit(OpCodes.Stelem_Ref);
-            });
+            }, inputs.NativeProxyRejection);
         il.Emit(OpCodes.Unbox_Any, _types.Boolean);
         il.Emit(OpCodes.Ret);
         il.MarkLabel(notProxyLabel);
@@ -1549,30 +1498,10 @@ public partial class RuntimeEmitter
         GuestErrorEmitter.ThrowError(il, inputs.CreateException, inputs.TypeErrorConstructor, "Reflect.construct: newTarget is not a constructor");
         il.MarkLabel(newTargetOkLabel);
 
-        // Convert argsList (arg1) to object[]
-        var isListLabel = il.DefineLabel();
-        var gotArgsLabel = il.DefineLabel();
-
+        // Snapshot length, then read every index after both constructor checks.
         il.Emit(OpCodes.Ldarg_1);
-        il.Emit(OpCodes.Isinst, _types.ListOfObject);
-        var listLocal = il.DeclareLocal(_types.ListOfObject);
-        il.Emit(OpCodes.Stloc, listLocal);
-        il.Emit(OpCodes.Ldloc, listLocal);
-        il.Emit(OpCodes.Brtrue, isListLabel);
-
-        // Not a list - use empty args
-        il.Emit(OpCodes.Ldc_I4_0);
-        il.Emit(OpCodes.Newarr, _types.Object);
+        il.Emit(OpCodes.Call, inputs.FromArrayLike);
         il.Emit(OpCodes.Stloc, argsLocal);
-        il.Emit(OpCodes.Br, gotArgsLabel);
-
-        // Is a list - call ToArray()
-        il.MarkLabel(isListLabel);
-        il.Emit(OpCodes.Ldloc, listLocal);
-        il.Emit(OpCodes.Callvirt, _types.GetMethod(_types.ListOfObject, "ToArray")!);
-        il.Emit(OpCodes.Stloc, argsLocal);
-
-        il.MarkLabel(gotArgsLabel);
 
         var proxyTargetLabel = il.DefineLabel();
         var notProxyTargetLabel = il.DefineLabel();
@@ -1610,7 +1539,7 @@ public partial class RuntimeEmitter
                     typeof(Func<object, string, object?>),
                     _types.Object, _types.IntPtr)!);
                 il.Emit(OpCodes.Stelem_Ref);
-            });
+            }, inputs.NativeProxyRejection);
         il.Emit(OpCodes.Ret);
         il.MarkLabel(notProxyTargetLabel);
 
@@ -1782,7 +1711,7 @@ public partial class RuntimeEmitter
             return method;
         }
 
-        static void EmitArgument(ILGenerator il, int index)
+        void EmitArgument(ILGenerator il, int index, bool undefinedForMissing = false)
         {
             var present = il.DefineLabel();
             var done = il.DefineLabel();
@@ -1791,7 +1720,8 @@ public partial class RuntimeEmitter
             il.Emit(OpCodes.Conv_I4);
             il.Emit(OpCodes.Ldc_I4, index);
             il.Emit(OpCodes.Bgt, present);
-            il.Emit(OpCodes.Ldnull);
+            if (undefinedForMissing) il.Emit(OpCodes.Ldsfld, inputs.UndefinedInstance);
+            else il.Emit(OpCodes.Ldnull);
             il.Emit(OpCodes.Br, done);
             il.MarkLabel(present);
             il.Emit(OpCodes.Ldarg_0);
@@ -1852,7 +1782,7 @@ public partial class RuntimeEmitter
         Define("deleteProperty", il =>
         {
             EmitArgument(il, 0);
-            EmitArgument(il, 1);
+            EmitArgument(il, 1, undefinedForMissing: true);
             il.Emit(OpCodes.Call, reflectNamespace.DeleteProperty);
             BoxBoolean(il);
             il.Emit(OpCodes.Ret);
@@ -1862,16 +1792,23 @@ public partial class RuntimeEmitter
             var target = il.DeclareLocal(_types.Object);
             EmitArgument(il, 0);
             il.Emit(OpCodes.Stloc, target);
+            EmitRequireReflectObjectTarget(il, () => il.Emit(OpCodes.Ldloc, target),
+                inputs.TypeOf, inputs.CreateException, inputs.TypeErrorConstructor, "get");
             il.Emit(OpCodes.Ldloc, target);
-            EmitArgument(il, 1);
+            EmitArgument(il, 1, undefinedForMissing: true);
             EmitArgumentOrLocal(il, 2, target);
             il.Emit(OpCodes.Call, inputs.Get);
             il.Emit(OpCodes.Ret);
         });
         Define("getOwnPropertyDescriptor", il =>
         {
+            var target = il.DeclareLocal(_types.Object);
             EmitArgument(il, 0);
-            EmitArgument(il, 1);
+            il.Emit(OpCodes.Stloc, target);
+            EmitRequireReflectObjectTarget(il, () => il.Emit(OpCodes.Ldloc, target),
+                inputs.TypeOf, inputs.CreateException, inputs.TypeErrorConstructor, "getOwnPropertyDescriptor");
+            il.Emit(OpCodes.Ldloc, target);
+            EmitArgument(il, 1, undefinedForMissing: true);
             il.Emit(OpCodes.Call, inputs.ObjectGetOwnPropertyDescriptor);
             il.Emit(OpCodes.Ret);
         });
@@ -1915,9 +1852,11 @@ public partial class RuntimeEmitter
             var target = il.DeclareLocal(_types.Object);
             EmitArgument(il, 0);
             il.Emit(OpCodes.Stloc, target);
+            EmitRequireReflectObjectTarget(il, () => il.Emit(OpCodes.Ldloc, target),
+                inputs.TypeOf, inputs.CreateException, inputs.TypeErrorConstructor, "set");
             il.Emit(OpCodes.Ldloc, target);
-            EmitArgument(il, 1);
-            EmitArgument(il, 2);
+            EmitArgument(il, 1, undefinedForMissing: true);
+            EmitArgument(il, 2, undefinedForMissing: true);
             EmitArgumentOrLocal(il, 3, target);
             il.Emit(OpCodes.Call, inputs.Set);
             BoxBoolean(il);
@@ -1931,5 +1870,42 @@ public partial class RuntimeEmitter
             BoxBoolean(il);
             il.Emit(OpCodes.Ret);
         });
+    }
+
+    // Public Reflect methods reject primitives before property-key conversion.
+    // Internal property/super operations retain their broader receiver contract.
+    private void EmitRequireReflectObjectTarget(ILGenerator il, Action emitTarget,
+        MethodInfo typeOf, MethodInfo createException, ConstructorInfo typeErrorConstructor, string operation)
+    {
+        var invalidTarget = il.DefineLabel();
+        var validTarget = il.DefineLabel();
+        var targetType = il.DeclareLocal(_types.String);
+        emitTarget();
+        il.Emit(OpCodes.Brfalse, invalidTarget);
+        // Retain the existing Reflect.deleteProperty primitive-carrier rules,
+        // including CLR numerics not classified by TypeOf as JS numbers.
+        foreach (var primitiveType in new[] { _types.Byte, _types.SByte,
+                     _types.Int16, _types.UInt16, _types.Int32, _types.UInt32,
+                     _types.Int64, _types.UInt64, _types.Single, _types.Double,
+                     _types.Decimal, _types.Char })
+        {
+            emitTarget();
+            il.Emit(OpCodes.Isinst, primitiveType);
+            il.Emit(OpCodes.Brtrue, invalidTarget);
+        }
+        emitTarget();
+        il.Emit(OpCodes.Call, typeOf);
+        il.Emit(OpCodes.Stloc, targetType);
+        foreach (var kind in new[] { "object", "function" })
+        {
+            il.Emit(OpCodes.Ldloc, targetType);
+            il.Emit(OpCodes.Ldstr, kind);
+            il.Emit(OpCodes.Call, _types.StringOpEquality);
+            il.Emit(OpCodes.Brtrue, validTarget);
+        }
+        il.MarkLabel(invalidTarget);
+        GuestErrorEmitter.ThrowError(il, createException,
+            typeErrorConstructor, $"Reflect.{operation} requires an object target");
+        il.MarkLabel(validTarget);
     }
 }

@@ -68,11 +68,18 @@ public partial class Parser
 
     private Expr AssignmentCore()
     {
+        bool singleAsyncArrow = Check(TokenType.ASYNC)
+            && Peek().Line == PeekNext().Line
+            && (PeekNext().Type == TokenType.IDENTIFIER || IsContextualKeyword(PeekNext().Type))
+            && PeekAt(2).Type == TokenType.ARROW
+            && PeekNext().Line == PeekAt(2).Line;
+        int arrowStart = CurrentSourceStart();
+        if (singleAsyncArrow) Advance();
         // Check for single-parameter arrow function without parentheses: x => expr.
         // Also accept TS contextual keywords as the param name (e.g.
         // `namespace => …`, `type => …`), since they are valid JS identifiers.
         if ((Check(TokenType.IDENTIFIER) || IsContextualKeyword(Peek().Type))
-            && CheckNext(TokenType.ARROW))
+            && CheckNext(TokenType.ARROW) && Peek().Line == PeekNext().Line)
         {
             Token raw = Advance(); // consume identifier/contextual keyword
             Token paramName = raw.Type == TokenType.IDENTIFIER
@@ -100,13 +107,10 @@ public partial class Parser
             var param = new Stmt.Parameter(paramName, null, null);
             RecordEditorRange(param, raw.Span, EditorSyntaxKind.ParameterList, EditorSyntaxRole.Parameter);
             RecordEditorName(paramName, param, EditorSyntaxRole.DeclarationName);
-            var arrow = new Expr.ArrowFunction(Name: null, TypeParams: null, ThisType: null, Parameters: [param], ExpressionBody: exprBody, BlockBody: body, ReturnType: null);
-            RecordFunctionExpressionSyntax(arrow, raw.Start, raw.Start, raw.End, headerEnd, bodyStart);
+            var arrow = new Expr.ArrowFunction(Name: null, TypeParams: null, ThisType: null, Parameters: [param], ExpressionBody: exprBody, BlockBody: body, ReturnType: null, IsAsync: singleAsyncArrow);
+            RecordFunctionExpressionSyntax(arrow, arrowStart, raw.Start, raw.End, headerEnd, bodyStart);
             return arrow;
         }
-
-        // Check for single-parameter async arrow function: async x => expr
-        // This case is handled in Primary() for async (params) => but we need async x => too
 
         Expr expr = Ternary();
 
@@ -138,7 +142,8 @@ public partial class Parser
                 onVariable: (name, val) => new Expr.CompoundAssign(name, op, val),
                 onGet: (get, val) => new Expr.CompoundSet(get.Object, get.Name, op, val),
                 onGetIndex: (gi, val) => new Expr.CompoundSetIndex(gi.Object, gi.Index, op, val),
-                onGetPrivate: (gp, val) => new Expr.CompoundSetPrivate(gp.Object, gp.Name, op, val));
+                onGetPrivate: (gp, val) => new Expr.CompoundSetPrivate(gp.Object, gp.Name, op, val),
+                onSuper: (reference, val) => new Expr.SetSuper(reference, val, op));
         }
 
         // Logical assignment operators (&&=, ||=, ??=) - have short-circuit semantics
@@ -150,7 +155,8 @@ public partial class Parser
                 onVariable: (name, val) => new Expr.LogicalAssign(name, op, val),
                 onGet: (get, val) => new Expr.LogicalSet(get.Object, get.Name, op, val),
                 onGetIndex: (gi, val) => new Expr.LogicalSetIndex(gi.Object, gi.Index, op, val),
-                onGetPrivate: (gp, val) => new Expr.LogicalSetPrivate(gp.Object, gp.Name, op, val));
+                onGetPrivate: (gp, val) => new Expr.LogicalSetPrivate(gp.Object, gp.Name, op, val),
+                onSuper: (reference, val) => new Expr.SetSuper(reference, val, op));
         }
 
         return expr;
@@ -531,7 +537,7 @@ public partial class Parser
             Token op = Previous();
             Expr operand = Unary();
             ValidateOptionalAssignmentTarget(operand);
-            if (operand is not (Expr.Variable or Expr.Get or Expr.GetIndex))
+            if (operand is not (Expr.Variable or Expr.Get or Expr.GetIndex or Expr.GetPrivate))
             {
                 throw new Exception("Invalid operand for prefix increment/decrement.");
             }
@@ -714,7 +720,7 @@ public partial class Parser
             else if (!HasLineTerminatorBeforeCurrent() && Match(TokenType.PLUS_PLUS, TokenType.MINUS_MINUS))
             {
                 Token op = Previous();
-                if (expr is not (Expr.Variable or Expr.Get or Expr.GetIndex))
+                if (expr is not (Expr.Variable or Expr.Get or Expr.GetIndex or Expr.GetPrivate))
                     throw new Exception("Invalid operand for postfix increment/decrement.");
                 ValidateOptionalAssignmentTarget(expr);
                 expr = CompleteExpression(new Expr.PostfixIncrement(expr, op), start);
@@ -1192,7 +1198,8 @@ public partial class Parser
 
                         Consume(TokenType.COLON, "Expect ':' after string property key.");
                         Expr stringValue = Expression();
-                        properties.Add(new Expr.Property(key, stringValue));
+                        properties.Add(new Expr.Property(key, stringValue,
+                            IsPrototypeSetter: stringKey.Literal is "__proto__"));
                         continue;
                     }
 
@@ -1219,6 +1226,7 @@ public partial class Parser
                     Token name = ConsumePropertyName("Expect property name.");
                     Expr value;
                     bool isShorthandDefault = false;
+                    bool isPrototypeSetter = false;
 
                     if (Check(TokenType.LEFT_PAREN))
                     {
@@ -1228,6 +1236,7 @@ public partial class Parser
                     else if (Match(TokenType.COLON))
                     {
                         // Explicit property: { x: value }
+                        isPrototypeSetter = name.Lexeme == "__proto__";
                         value = Expression();
                     }
                     else if (Match(TokenType.EQUAL))
@@ -1247,7 +1256,8 @@ public partial class Parser
                     }
 
                     properties.Add(new Expr.Property(new Expr.IdentifierKey(name), value,
-                        IsShorthandDefault: isShorthandDefault));
+                        IsShorthandDefault: isShorthandDefault,
+                        IsPrototypeSetter: isPrototypeSetter));
                 } while (Match(TokenType.COMMA));
             }
             if (Check(TokenType.SEMICOLON))
@@ -1270,9 +1280,10 @@ public partial class Parser
         // `async` is also a valid plain identifier (e.g. a destructured binding named `async`,
         // `if (async)`) when it isn't immediately followed by one of the tokens above — only
         // commit to the async-function forms when one of those follows.
-        if (Check(TokenType.ASYNC) &&
+        if (Check(TokenType.ASYNC) && Peek().Line == PeekNext().Line &&
             (PeekNext().Type == TokenType.FUNCTION || PeekNext().Type == TokenType.LESS || PeekNext().Type == TokenType.LEFT_PAREN))
         {
+            var asyncCursor = SaveCursor();
             Advance(); // consume 'async'
 
             // `async function ...` is an async function expression — defer to the shared
@@ -1289,10 +1300,15 @@ public partial class Parser
                 if (genericArrow != null) return genericArrow;
             }
 
-            Consume(TokenType.LEFT_PAREN, "Expect '(' after 'async' in async arrow function.");
-            Expr? arrowFunc = TryParseArrowFunction(isAsync: true);
-            if (arrowFunc != null) return arrowFunc;
-            throw new Exception("Parse Error: Expected arrow function after 'async ('.");
+            if (Match(TokenType.LEFT_PAREN))
+            {
+                Expr? arrowFunc = TryParseArrowFunction(isAsync: true);
+                if (arrowFunc != null) return arrowFunc;
+            }
+            // Without an arrow this is the contextual identifier `async`,
+            // possibly followed by an ordinary call or type argument list.
+            RestoreCursor(asyncCursor);
+            return new Expr.Variable(Advance());
         }
         if (Check(TokenType.ASYNC))
         {
@@ -1309,7 +1325,7 @@ public partial class Parser
             // otherwise the outer speculation can consume `async` as a
             // would-be parameter and leave the nested parameter list to the
             // grouping parser.
-            if (Check(TokenType.ASYNC) && PeekNext().Type == TokenType.LEFT_PAREN)
+            if (Check(TokenType.ASYNC) && PeekNext().Type == TokenType.LEFT_PAREN && Peek().Line == PeekNext().Line)
             {
                 int asyncStart = _current;
                 Advance();
@@ -1640,6 +1656,13 @@ public partial class Parser
                 RestoreCursor(savedCursor);
                 return null;
             }
+        }
+
+        // Async arrow headers cannot cross a line terminator before =>.
+        if (isAsync && Previous().Line != Peek().Line)
+        {
+            RestoreCursor(savedCursor);
+            return null;
         }
 
         // Must see '=>' for it to be an arrow function

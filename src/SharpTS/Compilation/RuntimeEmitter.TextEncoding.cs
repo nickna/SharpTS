@@ -315,7 +315,8 @@ public partial class RuntimeEmitter
     /// <summary>
     /// Emits $TextDecoderDecodeMethod wrapper for compiled mode decode calls.
     /// </summary>
-    internal void EmitTSTextDecoderDecodeMethodClass(ModuleBuilder moduleBuilder, EmittedTextEncodingRuntime textEncoding, EmittedBufferRuntime buffer, EmittedTypedArrayRuntime typedArrays)
+    internal void EmitTSTextDecoderDecodeMethodClass(ModuleBuilder moduleBuilder, EmittedTextEncodingRuntime textEncoding, EmittedBufferRuntime buffer, EmittedTypedArrayRuntime typedArrays,
+        EmittedNativeCallableRuntime? nativeCallables = null)
     {
         var typeBuilder = EmitTypeDefinitions.DefineType(moduleBuilder,
             "$TextDecoderDecodeMethod",
@@ -351,6 +352,7 @@ public partial class RuntimeEmitter
             [_types.ObjectArray]
         );
         textEncoding.DecodeMethodInvoke = invokeMethod;
+        nativeCallables?.Register(typeBuilder, invokeMethod);
 
         var invokeIL = invokeMethod.GetILGenerator();
         var bytesLocal = invokeIL.DeclareLocal(_types.Object);

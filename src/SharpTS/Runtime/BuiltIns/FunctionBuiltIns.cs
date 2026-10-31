@@ -248,7 +248,8 @@ public static class FunctionBuiltIns
     // Canonical static methods are strict and distinguish an absent receiver
     // from explicit null. Other callables retain their existing normalization.
     private static object? DefaultThisArgument(ISharpTSCallable callable)
-        => callable is SharpTSFunction { PrivateOwner: not null }
+        => callable is IUndefinedThisDefault
+            or SharpTSFunction { PrivateOwner: not null }
             or SharpTSAsyncFunction { PrivateOwner: not null }
             or SharpTSGeneratorFunction { PrivateOwner: not null }
             or SharpTSAsyncGeneratorFunction { PrivateOwner: not null }
@@ -287,6 +288,9 @@ public static class FunctionBuiltIns
             klass.ValidateCall();
         if (callable is SharpTSProxy proxy)
             return proxy.TrapApply(thisArg, args, interp);
+
+        if (callable is CompiledCallableAdapter compiled)
+            return compiled.CallWithThis(thisArg, args);
 
         if (callable is SharpTSTextDecoder.TextDecoderDecodeMethod decode)
             return decode.CallWithReceiver(thisArg, args);
@@ -570,6 +574,11 @@ public class BoundFunction : ISharpTSCallable
         // including null/primitives, rather than a synthetic instance view.
         if (!_ignoreThisArg && FunctionBuiltIns.BindClassReceiver(_target, _thisArg) is { } classMethod)
             return classMethod.CallV2(interpreter, combined);
+        if (!_ignoreThisArg && _target is BuiltInMethod intrinsic && _target is IUndefinedThisDefault)
+            return intrinsic.Bind(_thisArg).CallV2(interpreter, combined);
+
+        if (!_ignoreThisArg && _target is CompiledCallableAdapter compiled)
+            return RuntimeValue.FromBoxed(compiled.CallWithThis(_thisArg, CallableInterop.ToBoxedList(combined)));
 
         // Delegate to target's V2 path if available
         if (!_ignoreThisArg && _thisArg != null)
@@ -630,6 +639,11 @@ public class BoundFunction : ISharpTSCallable
 
         if (!_ignoreThisArg && FunctionBuiltIns.BindClassReceiver(_target, _thisArg) is { } classMethod)
             return classMethod.Call(interpreter, combinedArgs);
+        if (!_ignoreThisArg && _target is BuiltInMethod intrinsic && _target is IUndefinedThisDefault)
+            return intrinsic.Bind(_thisArg).Call(interpreter, combinedArgs);
+
+        if (!_ignoreThisArg && _target is CompiledCallableAdapter compiled)
+            return compiled.CallWithThis(_thisArg, combinedArgs);
 
         // Handle binding 'this' for the target function
         if (!_ignoreThisArg && _thisArg != null)

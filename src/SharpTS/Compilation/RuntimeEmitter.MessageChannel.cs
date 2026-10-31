@@ -509,7 +509,7 @@ public partial class RuntimeEmitter
 
     private void EmitMessageChannelClass(ModuleBuilder moduleBuilder, EmittedMessageChannelRuntime channels)
     {
-        var typeBuilder = moduleBuilder.DefineType(
+        var typeBuilder = EmitTypeDefinitions.DefineType(moduleBuilder,
             "$MessageChannel",
             TypeAttributes.Public | TypeAttributes.Class | TypeAttributes.BeforeFieldInit
         );

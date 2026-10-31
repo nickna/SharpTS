@@ -1,4 +1,5 @@
 using SharpTS.Tests.Infrastructure;
+using SharpTS.TypeSystem;
 using SharpTS.TypeSystem.Exceptions;
 using Xunit;
 
@@ -16,25 +17,25 @@ public class DiscriminatedUnionAssignabilityTests
     public void BooleanDiscriminant_CoversBothConstituents()
     {
         // IteratorResult shape: done: boolean splits across done: true / done: false.
-        TestHarness.RunInterpreted("""
+        new TypeChecker().Check(TestHarness.ParseOrThrow("""
             type S = { done: boolean, value: number };
             type T = { done: true, value: number } | { done: false, value: number };
             declare let s: S;
             declare let t: T;
             t = s;
-            """);
+            """));
     }
 
     [Fact]
     public void LiteralUnionDiscriminant_MatchingCombinations_Assignable()
     {
-        TestHarness.RunInterpreted("""
+        new TypeChecker().Check(TestHarness.ParseOrThrow("""
             type S = { a: 0 | 2, b: 4 };
             type T = { a: 0, b: 1 | 4 } | { a: 1, b: 2 } | { a: 2, b: 3 | 4 };
             declare let s: S;
             declare let t: T;
             t = s;
-            """);
+            """));
     }
 
     [Fact]
@@ -43,7 +44,7 @@ public class DiscriminatedUnionAssignabilityTests
         // `value` is correlated with the target's number/undefined branches while `kind`
         // supplies the other axis. Neither source object relates to one target constituent
         // without distributing both discriminant properties.
-        TestHarness.RunInterpreted("""
+        new TypeChecker().Check(TestHarness.ParseOrThrow("""
             type Source = { kind: "a" | "b", value: number | undefined };
             type Target =
                 | { kind: "a" | "b", value: number }
@@ -52,7 +53,7 @@ public class DiscriminatedUnionAssignabilityTests
             declare let source: Source;
             declare let target: Target;
             target = source;
-            """);
+            """));
     }
 
     [Fact]

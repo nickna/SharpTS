@@ -55,6 +55,10 @@ public partial class TypeChecker
         {
             // Apply current substitutions to the check type
             TypeInfo checkType = SubstituteWithoutConditionalEval(conditional.CheckType, substitutions);
+            // An inner deferred conditional can become concrete at this instantiation.
+            // Evaluate it before treating its result as the outer check operand.
+            if (checkType is TypeInfo.ConditionalType innerConditional)
+                checkType = EvaluateConditionalType(innerConditional, substitutions);
 
             // A check type that is an indexed access over a CONCRETE object (e.g. `Part["updatePart"]`
             // in the key-filter idiom) must be resolved to the member type before the extends-test,
@@ -80,12 +84,15 @@ public partial class TypeChecker
             // yet — defer, preserving the declaration's distributivity (tsc isGenericType deferral).
             if (IsGenericTypeShape(checkType))
             {
-                return new TypeInfo.ConditionalType(
+                var deferred = new TypeInfo.ConditionalType(
                     checkType,
                     SubstituteWithoutConditionalEval(conditional.ExtendsType, substitutions),
                     SubstituteWithoutConditionalEval(conditional.TrueType, substitutions),
                     SubstituteWithoutConditionalEval(conditional.FalseType, substitutions)
                 ) { IsDistributive = conditional.IsDistributive };
+                DeferredTypeAliasPresentation.Substitute(conditional, deferred,
+                    type => SubstituteWithoutConditionalEval(type, substitutions));
+                return deferred;
             }
 
             // Apply substitutions to the extends type
@@ -793,6 +800,19 @@ public partial class TypeChecker
         for (int i = 0; i < extendsFunc.ParamTypes.Count; i++)
         {
             TypeInfo extendsParam = extendsFunc.ParamTypes[i];
+            if (extendsFunc.HasRestParam && extendsFunc.MinArity == 0 && extendsFunc.ParamTypes.Count == 1 &&
+                extendsParam is TypeInfo.Any or TypeInfo.Array { ElementType: TypeInfo.Any })
+            {
+                // The canonical any-rest pattern binds no parameter infers and
+                // permits an empty source signature. Check its parameter relation
+                // before extracting the return, including any's exclusion from never.
+                var source = ExpandTupleRestSignature(checkFunc);
+                for (int j = 0; j < source.ParamTypes.Count; j++)
+                    if (EffectiveParamType(source, j) is TypeInfo.Never) return false;
+                if (!IsCompatible(extendsFunc with { ReturnType = TypeInfo.Any.Shared },
+                    checkFunc with { ReturnType = TypeInfo.Any.Shared })) return false;
+                break;
+            }
             TypeInfo checkParam = i < checkFunc.ParamTypes.Count
                 ? checkFunc.ParamTypes[i]
                 : TypeInfo.Any.Shared;

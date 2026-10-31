@@ -64,8 +64,7 @@ public partial class RuntimeEmitter
         // `Array.prototype.constructor === Array` both hold.
         EmitInstallConstructor(il, runtime, runtime.ArrayOperations.PrototypeField, arrDescLocal, setItem, () =>
         {
-            il.Emit(OpCodes.Ldtoken, _types.IListOfObject);
-            il.Emit(OpCodes.Call, _types.GetMethod(_types.Type, "GetTypeFromHandle", _types.RuntimeTypeHandle));
+            EmitRuntimeConstructorValue(il, _types.IListOfObject);
         });
 
         // For each named method: dict[jsName] = new $TSFunction(null, methodInfo)
@@ -94,15 +93,18 @@ public partial class RuntimeEmitter
             catch { /* already named — preserve the existing parameter */ }
             il.Emit(OpCodes.Ldsfld, runtime.ArrayOperations.PrototypeField);
             il.Emit(OpCodes.Ldstr, jsName);
-            _types.EmitLoadMethodInfo(il, helper);
+            var parameterProducer = EmitReflectedMethodLiteral(il, helper);
             il.Emit(OpCodes.Ldc_I4, jsLength);
+            int installerOffset = il.ILOffset;
             il.Emit(OpCodes.Call, installMethod);
+            _nativeUnionParameters?.RecordArrayInstallerContributor(installMethod, parameterProducer, method, il, installerOffset);
         }
 
         // Callback/search function values need adapters when property lookup or
         // reflection can expose them. Simple programs retain the compact raw
         // wiring; opaque Object/Reflect/eval routes conservatively keep adapters.
         bool usesPrototypeAdapters = _emitHosted
+            || _features.UsesVm
             || _features.UsesArrayReceiverScopes
             || _features.UsesArrayPrototypeMutation
             || _features.UsesDynamicPropertyDescriptors

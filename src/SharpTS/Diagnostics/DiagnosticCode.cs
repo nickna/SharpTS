@@ -54,6 +54,24 @@ public enum DiagnosticCode
     // Compile errors (4XX)
     /// <summary>IL compilation error (general).</summary>
     CompileError = 4,
+    /// <summary>The native guest profile requires a standalone emitted assembly.</summary>
+    NativeGuestRuntimeDependency = 401,
+    /// <summary>The experimental native guest profile does not accept external references.</summary>
+    NativeGuestExternalReferences = 402,
+    /// <summary>A native project destination is already occupied.</summary>
+    NativeGuestOutputDirectory = 403,
+    /// <summary>Experimental native guest target differs from the compiler host.</summary>
+    NativeGuestTargetMismatch = 404,
+    /// <summary>A CLR value escapes the bounded native typed domain.</summary>
+    NativeGuestClrEscape = 405,
+    /// <summary>The final native guest image does not prove receiver-field coverage.</summary>
+    NativeGuestReceiverCertificate = 406,
+    /// <summary>The external NativeAOT SDK/toolchain is unavailable.</summary>
+    NativeGuestToolchain = 407,
+    /// <summary>The strict external native publish failed.</summary>
+    NativeGuestPublish = 408,
+    /// <summary>The native artifact could not be validated or promoted.</summary>
+    NativeGuestPublishOutput = 409,
 
     // Config errors (5XX)
     /// <summary>Configuration error.</summary>

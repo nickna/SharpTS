@@ -162,7 +162,7 @@ public static class ParameterTypeResolver
     /// </summary>
     private static Type WidenIfUndefinedReachableParam(Type mapped, Stmt.Parameter param, TypeMap? typeMap)
     {
-        if (typeMap?.IsAssertedAssignmentStorage(param.Name) == true)
+        if (typeMap?.IsAssertedAssignmentStorage(param.Name) == true || typeMap?.IsRawNumericStorage(param.Name) == true)
             return typeof(object);
         if ((mapped == typeof(double) || mapped == typeof(bool)) &&
             typeMap != null && typeMap.IsUndefinedReachableNumericParam(param))
@@ -421,7 +421,8 @@ public static class ParameterTypeResolver
         string methodName,
         List<Stmt.Parameter> parameters,
         TypeMapper typeMapper,
-        TypeMap? typeMap)
+        TypeMap? typeMap,
+        bool? isStaticMethod = null)
     {
         if (typeMap == null)
             return parameters.Select(p => ResolveParameterType(p, typeMapper)).ToArray();
@@ -431,15 +432,16 @@ public static class ParameterTypeResolver
             return parameters.Select(p => ResolveParameterType(p, typeMapper)).ToArray();
 
         TSTypeInfo.Function? funcType = typeMap.GetClassMethodImplementation(parameters);
-        bool isStatic = false;
+        bool isStatic = isStaticMethod ?? (!classType.Methods.ContainsKey(methodName)
+            && classType.StaticMethods.ContainsKey(methodName));
 
         // Check instance methods
-        if (classType.Methods.TryGetValue(methodName, out var methodType))
+        if (!isStatic && classType.Methods.TryGetValue(methodName, out var methodType))
         {
             funcType ??= ExtractFunctionType(methodType, typeMap);
         }
         // Check static methods
-        else if (classType.StaticMethods.TryGetValue(methodName, out var staticMethodType))
+        else if (isStatic && classType.StaticMethods.TryGetValue(methodName, out var staticMethodType))
         {
             funcType ??= ExtractFunctionType(staticMethodType, typeMap);
             isStatic = true;

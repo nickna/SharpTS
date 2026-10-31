@@ -217,6 +217,12 @@ public class LocalVariableResolver : IVariableResolver
             return MapTypeToStackType(field.FieldType);
         }
 
+        if (_ctx.ResolveNamespaceVariableField(name) is { } namespaceField)
+        {
+            _il.Emit(OpCodes.Ldsfld, namespaceField);
+            return MapTypeToStackType(namespaceField.FieldType);
+        }
+
         // 5. Entry-point display class fields (captured top-level vars)
         if (_ctx.CapturedTopLevelVars?.Contains(name) == true &&
             _ctx.EntryPointDisplayClassFields?.TryGetValue(name, out var entryPointField) == true)
@@ -281,9 +287,17 @@ public class LocalVariableResolver : IVariableResolver
         return false;
     }
 
-    internal StackType? TryLoadParameter(string name)
+    internal StackType? TryLoadParameter(string name, LocalBuilder? fallbackLocal = null)
     {
-        if (!_ctx.TryGetParameter(name, out var argIndex)) return null;
+        bool hasArgument = _ctx.TryGetParameter(name, out var argIndex);
+        if (!hasArgument && fallbackLocal is null) return null;
+        if (_ctx.ParameterCaptureCells.TryGetValue(name, out var binding))
+        {
+            _il.Emit(OpCodes.Ldloc, binding.Cell);
+            _il.Emit(OpCodes.Ldfld, LexicalCellStorage.ForDeclaration(_ctx, binding.Declaration).ValueField);
+            _ctx.EmitLexicalTdzValueCheck(_il, name, provenCell: true);
+            return StackType.Unknown;
+        }
 
         // Once seeded, this callable's own shared storage is authoritative.
         // A parent display-class reference never supplies an owned parameter.
@@ -310,11 +324,15 @@ public class LocalVariableResolver : IVariableResolver
         {
             _il.Emit(OpCodes.Ldloc, displayClass);
             _il.Emit(OpCodes.Ldfld, field);
-            if (field.FieldType.IsValueType)
-                _il.Emit(OpCodes.Box, field.FieldType);
-            // Retain the parameter's physical representation for typed loads
-            // and callers that consult TryGetParameterType for boxing decisions.
-            _ctx.EmitConvertForParamSlot(_il, name);
+            // A child can write a checker-accepted `any` value that no longer
+            // fits the original argument slot. The shared field is the value's
+            // authoritative representation after parameter initialization.
+            return MapTypeToStackType(field.FieldType);
+        }
+        else if (!hasArgument && fallbackLocal is not null)
+        {
+            _il.Emit(OpCodes.Ldloc, fallbackLocal);
+            return MapTypeToStackType(fallbackLocal.LocalType);
         }
         else
             _il.Emit(OpCodes.Ldarg, argIndex);
@@ -559,6 +577,12 @@ public class LocalVariableResolver : IVariableResolver
             return true;
         }
 
+        if (_ctx.ResolveNamespaceVariableField(name) is { } namespaceField)
+        {
+            _il.Emit(OpCodes.Stsfld, namespaceField);
+            return true;
+        }
+
         // 5. Entry-point display class fields (captured top-level vars)
         if (_ctx.CapturedTopLevelVars?.Contains(name) == true &&
             _ctx.EntryPointDisplayClassFields?.TryGetValue(name, out var entryPointField) == true)
@@ -637,7 +661,7 @@ public class LocalVariableResolver : IVariableResolver
         }
 
         // 2. __this parameter (object method shorthand, function-expression receiver)
-        if (_ctx.TryGetParameter("__this", out var thisArgIndex))
+        if (_ctx.TryGetParameter(CompilationContext.ThisParameterName, out var thisArgIndex))
         {
             _il.Emit(OpCodes.Ldarg, thisArgIndex);
             // A nullish __this denotes a sloppy-mode bare call with no receiver

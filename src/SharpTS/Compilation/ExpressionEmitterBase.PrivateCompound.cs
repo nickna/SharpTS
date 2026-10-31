@@ -24,6 +24,24 @@ public abstract partial class ExpressionEmitterBase
         SetStackUnknown();
     }
 
+    protected void EmitPrivateIncrement(Expr.GetPrivate field, TokenType operation, bool isPrefix)
+    {
+        var receiver = SpillBoxed(field.Object);
+        var reference = ResolvePrivateFieldReference(field.Name, receiver);
+        EmitPrivateFieldReferenceRead(reference);
+        // ToNumeric may invoke guest code. Retain the original field reference
+        // across conversion and return the converted old value for postfix.
+        IL.Emit(OpCodes.Call, Ctx.Runtime!.NumericCoercion.ToNumeric);
+        var oldValue = _helpers.SpillStoreObject();
+        IL.Emit(OpCodes.Ldloc, oldValue);
+        IL.Emit(operation == TokenType.PLUS_PLUS ? OpCodes.Ldc_I4_1 : OpCodes.Ldc_I4_0);
+        IL.Emit(OpCodes.Call, Ctx.Runtime.Operators.UpdateNumeric);
+        var newValue = _helpers.SpillStoreObject();
+        EmitPrivateFieldReferenceWrite(reference, newValue);
+        IL.Emit(OpCodes.Ldloc, isPrefix ? newValue : oldValue);
+        SetStackUnknown();
+    }
+
     private PrivateFieldReference ResolvePrivateFieldReference(Token fieldName, LocalBuilder receiver)
     {
         string name = fieldName.Lexeme.TrimStart('#');

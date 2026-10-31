@@ -6,7 +6,8 @@ namespace SharpTS.Compilation;
 public partial class RuntimeEmitter
 {
     private void EmitFunctionPrototypeType(ModuleBuilder moduleBuilder,
-        EmittedFunctionPrototypeRuntime prototype, FieldInfo undefined)
+        EmittedFunctionPrototypeRuntime prototype, FieldInfo undefined,
+        EmittedNativeCallableRuntime? nativeCallables = null)
     {
         // Keep the existing dictionary/descriptor surface while exposing the
         // ordinary callable bridge used by Proxy and hybrid runtime consumers.
@@ -34,6 +35,7 @@ public partial class RuntimeEmitter
             il = method.GetILGenerator();
             il.Emit(OpCodes.Ldsfld, undefined);
             il.Emit(OpCodes.Ret);
+            if (name == "Invoke") nativeCallables?.Register(type, method);
         }
         type.CreateType();
     }

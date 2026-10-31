@@ -26,7 +26,7 @@ public partial class RuntimeEmitter
         var resultLocal = il.DeclareLocal(_types.TaskOfObject);
         var thenLocal = il.DeclareLocal(_types.Object);
         var tcsLocal = il.DeclareLocal(tcsType);
-        var rootLocal = il.DeclareLocal(_types.TaskOfObject);
+        var rootLocal = il.DeclareLocal(_types.Object);
         var jobLocal = il.DeclareLocal(jobType.Type);
         var exceptionLocal = il.DeclareLocal(_types.Exception);
         var wrapValueLabel = il.DefineLabel();
@@ -34,8 +34,7 @@ public partial class RuntimeEmitter
         var doneLabel = il.DefineLabel();
 
         il.BeginExceptionBlock();
-        il.Emit(OpCodes.Ldarg_0);
-        il.Emit(OpCodes.Brfalse, wrapValueLabel);
+        EmitPromisePrimitiveValueBranch(il, runtime, wrapValueLabel);
 
         il.Emit(OpCodes.Ldarg_0);
         il.Emit(OpCodes.Ldstr, "then");
@@ -59,7 +58,7 @@ public partial class RuntimeEmitter
         il.Emit(OpCodes.Callvirt, _types.GetMethod(tcsType, "TrySetResult", _types.Object));
         il.Emit(OpCodes.Pop);
         il.Emit(OpCodes.Ldloc, tcsLocal);
-        il.Emit(OpCodes.Callvirt, _types.GetProperty(tcsType, "Task").GetGetMethod()!);
+        NativePrototypeFieldsLookup.EmitUnprovedCarrierResult(_nativePrototypeFields, il, _types.GetProperty(tcsType, "Task").GetGetMethod()!);
         il.Emit(OpCodes.Stloc, resultLocal);
         il.Emit(OpCodes.Leave, doneLabel);
 
@@ -74,11 +73,17 @@ public partial class RuntimeEmitter
         // owns its newly created task; each job still has a separate resolving pair.
         var haveRootLabel = il.DefineLabel();
         il.Emit(OpCodes.Ldarg_1);
+        il.Emit(OpCodes.Isinst, _types.TaskOfObject);
+        il.Emit(OpCodes.Stloc, rootLocal);
+        il.Emit(OpCodes.Ldloc, rootLocal);
+        il.Emit(OpCodes.Brtrue, haveRootLabel);
+        il.Emit(OpCodes.Ldarg_1);
+        il.Emit(OpCodes.Isinst, _types.MakeGenericType(_types.StrongBoxOpen, _types.TaskOfObject));
         il.Emit(OpCodes.Stloc, rootLocal);
         il.Emit(OpCodes.Ldloc, rootLocal);
         il.Emit(OpCodes.Brtrue, haveRootLabel);
         il.Emit(OpCodes.Ldloc, tcsLocal);
-        il.Emit(OpCodes.Callvirt, _types.GetProperty(tcsType, "Task").GetGetMethod()!);
+        NativePrototypeFieldsLookup.EmitUnprovedCarrierResult(_nativePrototypeFields, il, _types.GetProperty(tcsType, "Task").GetGetMethod()!);
         il.Emit(OpCodes.Stloc, rootLocal);
         il.MarkLabel(haveRootLabel);
 
@@ -99,7 +104,7 @@ public partial class RuntimeEmitter
         il.Emit(OpCodes.Call, runtime.Microtasks.QueuePromiseJob);
 
         il.Emit(OpCodes.Ldloc, tcsLocal);
-        il.Emit(OpCodes.Callvirt, _types.GetProperty(tcsType, "Task").GetGetMethod()!);
+        NativePrototypeFieldsLookup.EmitUnprovedCarrierResult(_nativePrototypeFields, il, _types.GetProperty(tcsType, "Task").GetGetMethod()!);
         il.Emit(OpCodes.Stloc, resultLocal);
         il.Emit(OpCodes.Leave, doneLabel);
 
@@ -135,7 +140,7 @@ public partial class RuntimeEmitter
         var ctor = typeBuilder.DefineConstructor(
             MethodAttributes.Public,
             CallingConventions.Standard,
-            [_types.Object, _types.Object, _types.TaskCompletionSourceOfObject, _types.TaskOfObject]);
+            [_types.Object, _types.Object, _types.TaskCompletionSourceOfObject, _types.Object]);
         {
             var il = ctor.GetILGenerator();
             var boxLocal = il.DeclareLocal(typeof(System.Runtime.CompilerServices.StrongBox<bool>));

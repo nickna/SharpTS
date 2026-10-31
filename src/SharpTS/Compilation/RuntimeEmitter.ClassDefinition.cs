@@ -5,7 +5,8 @@ namespace SharpTS.Compilation;
 
 public partial class RuntimeEmitter
 {
-    private void DefineClassDefinitionTypes(ModuleBuilder module, EmittedClassDefinitionRuntime definitions)
+    private void DefineClassDefinitionTypes(ModuleBuilder module, EmittedClassDefinitionRuntime definitions,
+        EmittedNativeCallableRuntime? nativeCallables = null)
     {
         var contract = module.DefineType("$IClassDefinitionInstance",
             TypeAttributes.Public | TypeAttributes.Interface | TypeAttributes.Abstract);
@@ -13,7 +14,7 @@ public partial class RuntimeEmitter
             MethodAttributes.Public | MethodAttributes.Abstract | MethodAttributes.Virtual,
             _types.Object, Type.EmptyTypes);
         var instanceInterface = contract.CreateType()!;
-        var type = module.DefineType("$ClassDefinition", TypeAttributes.Public | TypeAttributes.Sealed);
+        var type = EmitTypeDefinitions.DefineType(module, "$ClassDefinition", TypeAttributes.Public | TypeAttributes.Sealed);
         var constructor = type.DefineConstructor(MethodAttributes.Public, CallingConventions.Standard, Type.EmptyTypes);
         var il = constructor.GetILGenerator();
         il.Emit(OpCodes.Ldarg_0);
@@ -35,13 +36,14 @@ public partial class RuntimeEmitter
         var read = type.DefineMethod("ReadProperty", MethodAttributes.Public | MethodAttributes.Static,
             _types.Object, [type, _types.String]);
         var invoke = type.DefineMethod("Invoke", MethodAttributes.Public, _types.Object, [_types.ObjectArray]);
+        nativeCallables?.Register(type, invoke);
         TypeBuilder? captureType = null;
         FieldBuilder? captureOwner = null, captureField = null;
         ConstructorBuilder? captureConstructor = null;
         MethodBuilder? readCapture = null, writeCapture = null, findEnvironment = null;
         if (_features.UsesUserClasses)
         {
-            captureType = module.DefineType("$ClassCapture", TypeAttributes.Public | TypeAttributes.Sealed);
+            captureType = EmitTypeDefinitions.DefineType(module, "$ClassCapture", TypeAttributes.Public | TypeAttributes.Sealed);
             captureOwner = captureType.DefineField("Owner", _types.Object, FieldAttributes.Assembly);
             captureField = captureType.DefineField("Field", _types.FieldInfo, FieldAttributes.Assembly);
             captureConstructor = captureType.DefineConstructor(MethodAttributes.Public, CallingConventions.Standard,
@@ -97,7 +99,7 @@ public partial class RuntimeEmitter
         var definition = il.DeclareLocal(definitions.Type);
         var prototype = il.DeclareLocal(_types.Object);
         var templatePrototype = il.DeclareLocal(_types.Object);
-        il.Emit(OpCodes.Newobj, definitions.Constructor);
+        NativePrototypeFieldsLookup.EmitCarrierCreate(_nativePrototypeFields, il, definitions.Constructor);
         il.Emit(OpCodes.Stloc, definition);
         il.Emit(OpCodes.Ldloc, definition);
         il.Emit(OpCodes.Ldarg_0);
@@ -212,13 +214,13 @@ public partial class RuntimeEmitter
         il.Emit(OpCodes.Ldloc, basePrototype);
         il.Emit(OpCodes.Call, storage.SetPrototype);
         EmitDataDescriptor(prototype, "constructor", () => il.Emit(OpCodes.Ldloc, definition), true);
-        EmitDataDescriptor(definition, "prototype", () => il.Emit(OpCodes.Ldloc, prototype), false, false);
-        EmitDataDescriptor(definition, "name", () => il.Emit(OpCodes.Ldarg_2), false);
         EmitDataDescriptor(definition, "length", () =>
         {
             il.Emit(OpCodes.Ldarg_3);
             il.Emit(OpCodes.Box, _types.Double);
         }, false);
+        EmitDataDescriptor(definition, "name", () => il.Emit(OpCodes.Ldarg_2), false);
+        EmitDataDescriptor(definition, "prototype", () => il.Emit(OpCodes.Ldloc, prototype), false, false);
         il.Emit(OpCodes.Ldloc, definition);
         il.Emit(OpCodes.Ldarg_S, (byte)4);
         var parentPresent = il.DefineLabel();

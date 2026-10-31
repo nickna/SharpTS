@@ -9,6 +9,39 @@ public sealed class EmittedReflectedMethodRuntime
     internal EmittedReflectedMethodRuntime() { }
     public bool IsComplete { get; private set; }
     private bool _callableFinalized;
+    internal System.Reflection.MethodInfo? NativePropertyGetter { get; private set; }
+    internal EmittedNativeMethodLookupRuntime? NativeMethodLookup { get; private set; }
+
+    internal void DeclareNativeMethodLookup(ModuleBuilder module, EmittedNativeMethodLookupRuntime lookup)
+    {
+        EnsureMutable();
+        if (NativeMethodLookup is not null || !ReferenceEquals(module, lookup.Module))
+            throw new InvalidOperationException("Native method lookup requires one same-output query family.");
+        NativeMethodLookup = lookup;
+    }
+
+    internal void DeclareNativePropertyGetter(ModuleBuilder module, MethodBuilder getter)
+    {
+        EnsureMutable();
+        if (NativePropertyGetter is not null || !ReferenceEquals(module, getter.Module) || !getter.IsStatic || getter.IsGenericMethod ||
+            getter.ReturnType != typeof(System.Reflection.MethodInfo) || getter.GetParameters().Length != 2 ||
+            getter.GetParameters()[0].ParameterType != typeof(Type) || getter.GetParameters()[1].ParameterType != typeof(string))
+            throw new InvalidOperationException("Native property lookup requires one exact static Type/string metadata helper.");
+        NativePropertyGetter = getter;
+    }
+
+    public MethodBuilder? NativeProxyRejection { get; private set; }
+
+    internal void DeclareNativeProxyRejection(TypeBuilder owner, MethodBuilder method)
+    {
+        EnsureMutable();
+        ArgumentNullException.ThrowIfNull(owner);
+        ArgumentNullException.ThrowIfNull(method);
+        if (NativeProxyRejection is not null || method.DeclaringType != owner || !method.IsStatic || method.IsGenericMethod ||
+            method.ReturnType != typeof(object) || method.GetParameters().Length != 0)
+            throw new InvalidOperationException("Native Proxy rejection requires one exact static object-returning helper.");
+        NativeProxyRejection = method;
+    }
 
     private MethodBuilder? _toPascalCase;
     public MethodBuilder ToPascalCase
@@ -123,6 +156,8 @@ public sealed class EmittedReflectedMethodRuntime
         _ = InvokeUnwrapped;
         if (!_callableFinalized)
             throw new InvalidOperationException("Reflected callable has not been finalized.");
+        if (NativeProxyRejection is { } rejection && rejection.GetILGenerator().ILOffset == 0)
+            throw new InvalidOperationException("Native Proxy rejection body is incomplete.");
         IsComplete = true;
     }
 }

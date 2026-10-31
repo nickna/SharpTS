@@ -56,7 +56,7 @@ public partial class ILCompiler
         context.IsStaticSuperContext = owner.Source.IsStatic;
         context.HasGuestReceiver = true;
         context.UseNominalSuperCallBridge = true;
-        context.GuestThisVariableName = "__this";
+        context.GuestThisVariableName = CompilationContext.ThisParameterName;
         var genericParameters = _classes.GenericParameters.Require(owner.Owner);
         var canonicalArguments = owner.Owner.IsGenericTypeDefinition
             ? CanonicalGenericClassOwner(owner.Owner).GetGenericArguments() : Type.EmptyTypes;
@@ -84,7 +84,7 @@ public partial class ILCompiler
         il.Emit(OpCodes.Pop);
         il.Emit(OpCodes.Newobj, adapter.Constructor);
         EmitMethodInfoLiteral(il, adapter.Method, adapter.Type);
-        il.Emit(OpCodes.Newobj, _runtime.FunctionConstruction.Constructor);
+        NativeSourceFunctionEmission.EmitConstructor(il, _types, _runtime, adapter.Method, actualOwner: adapter.Type);
         il.Emit(OpCodes.Dup);
         il.Emit(OpCodes.Stsfld, adapter.Value);
         il.MarkLabel(haveValue);
@@ -100,16 +100,7 @@ public partial class ILCompiler
         bool sourceOrdered = false)
     {
         var registrationDone = il.DefineLabel();
-        if (source.IsStatic && owner.IsGenericTypeDefinition && descriptorOwner == null)
-        {
-            // A source generic class has one constructor object. Initializing
-            // another CLR instantiation must not restore a deleted/replaced slot.
-            il.Emit(OpCodes.Ldtoken, EmitGenerics.MakeGenericType(owner, owner.GetGenericArguments()));
-            il.Emit(OpCodes.Call, _types.TypeGetTypeFromHandle);
-            il.Emit(OpCodes.Ldtoken, CanonicalGenericClassOwner(owner));
-            il.Emit(OpCodes.Call, _types.TypeGetTypeFromHandle);
-            il.Emit(OpCodes.Bne_Un, registrationDone);
-        }
+        EmitCanonicalClassMemberRegistrationGuard(il, owner, descriptorOwner, registrationDone);
 
         // Static plain members are installed before computed names. Preserve
         // their later-source collision wins; ordered instance installation lets
@@ -151,7 +142,7 @@ public partial class ILCompiler
         var metadata = il.DeclareLocal(_runtime.FunctionValues.Type);
         il.Emit(OpCodes.Ldloc, target);
         EmitMethodInfoLiteral(il, adapter.Method, adapter.Type);
-        il.Emit(OpCodes.Newobj, _runtime.FunctionConstruction.Constructor);
+        NativeSourceFunctionEmission.EmitConstructor(il, _types, _runtime, adapter.Method, actualOwner: adapter.Type);
         il.Emit(OpCodes.Stloc, metadata);
         il.Emit(OpCodes.Ldloc, target);
         EmitMethodInfoLiteral(il, adapter.Method, adapter.Type);
@@ -161,7 +152,7 @@ public partial class ILCompiler
         il.Emit(OpCodes.Call, _runtime.Symbols.MethodName);
         il.Emit(OpCodes.Ldloc, metadata);
         il.Emit(OpCodes.Callvirt, _runtime.FunctionValues.LengthGetter);
-        il.Emit(OpCodes.Newobj, _runtime.FunctionConstruction.CachedConstructor);
+        NativeSourceFunctionEmission.EmitCachedConstructor(il, _types, _runtime, adapter.Method, actualOwner: adapter.Type);
         il.Emit(OpCodes.Stsfld, adapter.Value);
         il.MarkLabel(haveValue);
 

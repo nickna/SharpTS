@@ -168,7 +168,8 @@ public static class ObjectLocalPromotionAnalyzer
                 Visit(expr.Value);
                 // The written value must be the SAME primitive kind as the field; otherwise the typed
                 // slot would coerce it (a number field written with `any`/string diverges). Disqualify.
-                if (ClassifyKind(_typeMap.Get(expr.Value)) != FieldKind(c.Shape, expr.Name.Lexeme))
+                if (_typeMap.IsUndefinedReachableReturn(expr.Value) ||
+                    ClassifyKind(_typeMap.Get(expr.Value)) != FieldKind(c.Shape, expr.Name.Lexeme))
                     Disqualified.Add(v.Name.Lexeme);
                 return;
             }
@@ -369,7 +370,7 @@ public static class ObjectLocalPromotionAnalyzer
                 if (prop.Key is not Expr.IdentifierKey idk)
                     return false; // computed / string-literal / numeric keys: not o.KEY-accessible
                 var fname = idk.Name.Lexeme;
-                if (ClassifyKind(_typeMap.Get(prop.Value)) is not { } kind)
+                if (_typeMap.IsUndefinedReachableReturn(prop.Value) || ClassifyKind(_typeMap.Get(prop.Value)) is not { } kind)
                     return false; // non-primitive / undefined-admitting field
                 if (!hasSpread && names.Contains(fname))
                     return false; // retain the original conservative rule for ordinary literals

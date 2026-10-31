@@ -127,7 +127,7 @@ public partial class RuntimeEmitter
         il.MarkLabel(notPromiseLabel);
         il.Emit(OpCodes.Ldarg_0);
         il.Emit(OpCodes.Call, EmitGenerics.MakeGenericMethod(_types.GetMethod(_types.Task, "FromResult")!, _types.Object));
-        il.Emit(OpCodes.Newobj, promise.Ctor);
+        NativePrototypeFieldsLookup.EmitCarrierCreate(_nativePrototypeFields, il, promise.Ctor);
         il.Emit(OpCodes.Ret);
     }
 
@@ -157,7 +157,7 @@ public partial class RuntimeEmitter
         // return new $Promise(tcs.Task);
         il.Emit(OpCodes.Ldloc, tcsLocal);
         il.Emit(OpCodes.Callvirt, _types.GetProperty(_types.TaskCompletionSourceOfObject, "Task").GetGetMethod()!);
-        il.Emit(OpCodes.Newobj, promise.Ctor);
+        NativePrototypeFieldsLookup.EmitCarrierCreate(_nativePrototypeFields, il, promise.Ctor);
         il.Emit(OpCodes.Ret);
     }
 

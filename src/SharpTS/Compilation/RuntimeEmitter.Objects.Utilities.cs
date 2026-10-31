@@ -26,7 +26,12 @@ public partial class RuntimeEmitter
     private readonly record struct MergeIntoTSObjectInputs(
         MethodInfo IHasFieldsFieldsGetter,
         Type IHasFieldsInterface,
-        EmittedObjectStorageRuntime ObjectStorage
+        EmittedObjectStorageRuntime ObjectStorage,
+        EmittedDescriptorStorageRuntime DescriptorStorage,
+        EmittedObjectDescriptorRuntime ObjectDescriptors,
+        MethodInfo MergeIntoDictionary,
+        MethodInfo OwnKeys,
+        MethodInfo GetIndex
     );
 
     private readonly record struct TSObjectMergeEnumerableInputs(
@@ -168,12 +173,28 @@ public partial class RuntimeEmitter
         il.Emit(OpCodes.Call, inputs.Booleans.IsTruthy);
         il.Emit(OpCodes.Brfalse, nextKey);
 
-        il.Emit(OpCodes.Ldarg_0);
-        il.Emit(OpCodes.Ldloc, keyLocal);
-        il.Emit(OpCodes.Ldarg_1);
-        il.Emit(OpCodes.Ldloc, keyLocal);
-        il.Emit(OpCodes.Call, inputs.GetIndex);
-        il.Emit(OpCodes.Call, inputs.SetIndex);
+        if (NeedsObjectDefinitionBodies)
+        {
+            var value = il.DeclareLocal(_types.Object);
+            il.Emit(OpCodes.Ldarg_1);
+            il.Emit(OpCodes.Ldloc, keyLocal);
+            il.Emit(OpCodes.Call, inputs.GetIndex);
+            il.Emit(OpCodes.Stloc, value);
+            LiteralPropertyEmitter.Emit(_types, il, inputs.DescriptorStorage,
+                inputs.ObjectDescriptors.DefineProperty,
+                () => il.Emit(OpCodes.Ldarg_0),
+                () => il.Emit(OpCodes.Ldloc, keyLocal),
+                () => il.Emit(OpCodes.Ldloc, value));
+        }
+        else
+        {
+            il.Emit(OpCodes.Ldarg_0);
+            il.Emit(OpCodes.Ldloc, keyLocal);
+            il.Emit(OpCodes.Ldarg_1);
+            il.Emit(OpCodes.Ldloc, keyLocal);
+            il.Emit(OpCodes.Call, inputs.GetIndex);
+            il.Emit(OpCodes.Call, inputs.SetIndex);
+        }
 
         il.MarkLabel(nextKey);
         il.Emit(OpCodes.Ldloc, indexLocal);
@@ -208,6 +229,14 @@ public partial class RuntimeEmitter
         var copyStart = il.DefineLabel();
         var copyNext = il.DefineLabel();
 
+        if (NeedsObjectDefinitionBodies)
+        {
+            // Earlier computed literal definitions may already own descriptors.
+            // The general CreateDataProperty stream must update those values too.
+            il.Emit(OpCodes.Ldarg_0);
+            il.Emit(OpCodes.Call, inputs.DescriptorStorage.HasPropertyDescriptors);
+            il.Emit(OpCodes.Brtrue, fallback);
+        }
         il.Emit(OpCodes.Ldarg_1);
         il.Emit(OpCodes.Isinst, dictType);
         il.Emit(OpCodes.Stloc, source);
@@ -294,6 +323,52 @@ public partial class RuntimeEmitter
         objectConstruction.MergeIntoObject = method;
 
         var il = method.GetILGenerator();
+        if (NeedsObjectDefinitionBodies)
+        {
+            var temporary = il.DeclareLocal(_types.DictionaryStringObject);
+            var keys = il.DeclareLocal(_types.ListOfObject);
+            var index = il.DeclareLocal(_types.Int32);
+            var key = il.DeclareLocal(_types.Object);
+            var value = il.DeclareLocal(_types.Object);
+            il.Emit(OpCodes.Newobj, _types.DictionaryStringObjectCtor);
+            il.Emit(OpCodes.Stloc, temporary);
+            il.Emit(OpCodes.Ldloc, temporary);
+            il.Emit(OpCodes.Ldarg_1);
+            il.Emit(OpCodes.Call, inputs.MergeIntoDictionary);
+            il.Emit(OpCodes.Ldloc, temporary);
+            il.Emit(OpCodes.Call, inputs.OwnKeys);
+            il.Emit(OpCodes.Stloc, keys);
+            il.Emit(OpCodes.Ldc_I4_0);
+            il.Emit(OpCodes.Stloc, index);
+            var loop = il.DefineLabel();
+            var done = il.DefineLabel();
+            il.MarkLabel(loop);
+            il.Emit(OpCodes.Ldloc, index);
+            il.Emit(OpCodes.Ldloc, keys);
+            il.Emit(OpCodes.Callvirt, _types.GetProperty(_types.ListOfObject, "Count").GetGetMethod()!);
+            il.Emit(OpCodes.Bge, done);
+            il.Emit(OpCodes.Ldloc, keys);
+            il.Emit(OpCodes.Ldloc, index);
+            il.Emit(OpCodes.Callvirt, _types.GetProperty(_types.ListOfObject, "Item").GetGetMethod()!);
+            il.Emit(OpCodes.Stloc, key);
+            il.Emit(OpCodes.Ldloc, temporary);
+            il.Emit(OpCodes.Ldloc, key);
+            il.Emit(OpCodes.Call, inputs.GetIndex);
+            il.Emit(OpCodes.Stloc, value);
+            LiteralPropertyEmitter.Emit(_types, il, inputs.DescriptorStorage,
+                inputs.ObjectDescriptors.DefineProperty,
+                () => il.Emit(OpCodes.Ldarg_0),
+                () => il.Emit(OpCodes.Ldloc, key),
+                () => il.Emit(OpCodes.Ldloc, value));
+            il.Emit(OpCodes.Ldloc, index);
+            il.Emit(OpCodes.Ldc_I4_1);
+            il.Emit(OpCodes.Add);
+            il.Emit(OpCodes.Stloc, index);
+            il.Emit(OpCodes.Br, loop);
+            il.MarkLabel(done);
+            il.Emit(OpCodes.Ret);
+            return;
+        }
         var dictLabel = il.DefineLabel();
         var tsObjectLabel = il.DefineLabel();
         var endLabel = il.DefineLabel();
@@ -489,6 +564,18 @@ public partial class RuntimeEmitter
         il.Emit(OpCodes.Call, _types.GetProperty(_types.KeyValuePairStringObject, "Key").GetGetMethod()!);
         il.Emit(OpCodes.Ldloca, fkvLocal);
         il.Emit(OpCodes.Call, _types.GetProperty(_types.KeyValuePairStringObject, "Value").GetGetMethod()!);
+        if (inputs.ObjectStorage.ModuleNamespaces is { } namespaces)
+        {
+            var rawValue = il.DeclareLocal(_types.Object);
+            il.Emit(OpCodes.Stloc, rawValue);
+            EmitModuleNamespaceDataRead(il, namespaces, rawValue,
+                () => il.Emit(OpCodes.Ldarg_0),
+                () =>
+                {
+                    il.Emit(OpCodes.Ldloca, fkvLocal);
+                    il.Emit(OpCodes.Call, _types.GetProperty(_types.KeyValuePairStringObject, "Key").GetGetMethod()!);
+                });
+        }
         il.Emit(OpCodes.Callvirt, _types.GetMethod(_types.DictionaryStringObject, "set_Item", _types.String, _types.Object));
         il.Emit(OpCodes.Br, fieldsLoopStart);
         il.MarkLabel(fieldsLoopEnd);
@@ -641,25 +728,55 @@ public partial class RuntimeEmitter
         il.Emit(OpCodes.Call, inputs.Symbols.IsSymbol);
         il.Emit(OpCodes.Brfalse, stringKeyLabel);
 
-        // Symbol path: build $CompiledPropertyDescriptor and store in symbol-dict.
+        // A second accessor definition for the same literal key preserves the
+        // other accessor half. A previous data property starts a fresh pair.
         il.MarkLabel(symKeyLabel);
+        var symbolStorage = il.DeclareLocal(_types.DictionaryObjectObject);
+        var previous = il.DeclareLocal(_types.Object);
         var descLocal = il.DeclareLocal(inputs.DescriptorStorage.DescriptorType);
-        il.Emit(OpCodes.Newobj, inputs.DescriptorStorage.DescriptorConstructor);
-        il.Emit(OpCodes.Stloc, descLocal);
-        // desc.Getter = arg2
-        il.Emit(OpCodes.Ldloc, descLocal);
-        il.Emit(OpCodes.Ldarg_2);
-        il.Emit(OpCodes.Callvirt, inputs.DescriptorStorage.DescriptorGetter.GetSetMethod()!);
-        // desc.Setter = arg3
-        il.Emit(OpCodes.Ldloc, descLocal);
-        il.Emit(OpCodes.Ldarg_3);
-        il.Emit(OpCodes.Callvirt, inputs.DescriptorStorage.DescriptorSetter.GetSetMethod()!);
-        // GetSymbolDict(obj)[key] = desc
         il.Emit(OpCodes.Ldarg_0);
         il.Emit(OpCodes.Call, inputs.Symbols.GetStorage);
+        il.Emit(OpCodes.Stloc, symbolStorage);
+        il.Emit(OpCodes.Ldloc, symbolStorage);
+        il.Emit(OpCodes.Ldarg_1);
+        il.Emit(OpCodes.Ldloca, previous);
+        il.Emit(OpCodes.Callvirt, _types.GetMethod(
+            _types.DictionaryObjectObject, "TryGetValue"));
+        il.Emit(OpCodes.Pop);
+        il.Emit(OpCodes.Ldloc, previous);
+        il.Emit(OpCodes.Isinst, inputs.DescriptorStorage.DescriptorType);
+        il.Emit(OpCodes.Stloc, descLocal);
+        var createPair = il.DefineLabel();
+        var havePair = il.DefineLabel();
+        il.Emit(OpCodes.Ldloc, descLocal);
+        il.Emit(OpCodes.Brfalse, createPair);
+        il.Emit(OpCodes.Ldloc, descLocal);
+        il.Emit(OpCodes.Callvirt, inputs.DescriptorStorage.DescriptorGetter.GetGetMethod()!);
+        il.Emit(OpCodes.Brtrue, havePair);
+        il.Emit(OpCodes.Ldloc, descLocal);
+        il.Emit(OpCodes.Callvirt, inputs.DescriptorStorage.DescriptorSetter.GetGetMethod()!);
+        il.Emit(OpCodes.Brtrue, havePair);
+        il.MarkLabel(createPair);
+        il.Emit(OpCodes.Newobj, inputs.DescriptorStorage.DescriptorConstructor);
+        il.Emit(OpCodes.Stloc, descLocal);
+        il.MarkLabel(havePair);
+        void EmitAccessorHalf(int argument, PropertyInfo property)
+        {
+            var omitted = il.DefineLabel();
+            il.Emit(OpCodes.Ldarg_S, (byte)argument);
+            il.Emit(OpCodes.Brfalse, omitted);
+            il.Emit(OpCodes.Ldloc, descLocal);
+            il.Emit(OpCodes.Ldarg_S, (byte)argument);
+            il.Emit(OpCodes.Callvirt, property.GetSetMethod()!);
+            il.MarkLabel(omitted);
+        }
+        EmitAccessorHalf(2, inputs.DescriptorStorage.DescriptorGetter);
+        EmitAccessorHalf(3, inputs.DescriptorStorage.DescriptorSetter);
+        il.Emit(OpCodes.Ldloc, symbolStorage);
         il.Emit(OpCodes.Ldarg_1);
         il.Emit(OpCodes.Ldloc, descLocal);
-        il.Emit(OpCodes.Callvirt, _types.GetMethod(_types.DictionaryObjectObject, "set_Item", _types.Object, _types.Object));
+        il.Emit(OpCodes.Callvirt, _types.GetMethod(
+            _types.DictionaryObjectObject, "set_Item", _types.Object, _types.Object));
         il.Emit(OpCodes.Br, endLabel);
 
         // String path: stringify key, route to $Object.DefineGetter/DefineSetter.

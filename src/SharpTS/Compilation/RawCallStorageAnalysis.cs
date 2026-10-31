@@ -8,7 +8,7 @@ namespace SharpTS.Compilation;
 /// Keeps checked source identities across lifting. Representation flow uses the checker's
 /// immutable value-binding snapshot, never a second name resolver or the editor index.
 /// </summary>
-internal sealed class RawCallStorageAnalysis
+internal sealed partial class RawCallStorageAnalysis
 {
     private sealed record Slot(object Declaration, Token Name, Expr? Initializer, Stmt.Parameter? Parameter);
     private sealed record Flow(Token Target, Expr Value, object? Declaration);
@@ -16,10 +16,14 @@ internal sealed class RawCallStorageAnalysis
     private readonly TypeMap _map;
     private readonly List<Slot> _slots = [];
     private readonly List<Flow> _flows = [];
+    private readonly List<Expr.Call> _dateStaticCalls = [];
+    private readonly List<Expr> _erasedGenericFieldReads = [];
     private readonly HashSet<BindingSymbol> _rawBindings = new(ReferenceEqualityComparer.Instance);
     private readonly HashSet<BindingSymbol> _rawCallBindings = new(ReferenceEqualityComparer.Instance);
     private readonly HashSet<object> _rawSlots = new(ReferenceEqualityComparer.Instance);
     private readonly HashSet<object> _rawCallSlots = new(ReferenceEqualityComparer.Instance);
+    private readonly HashSet<BindingSymbol> _rawNumericBindings = new(ReferenceEqualityComparer.Instance);
+    private readonly HashSet<object> _rawNumericSlots = new(ReferenceEqualityComparer.Instance);
     private readonly Dictionary<object, HashSet<object>> _rewrites = new(ReferenceEqualityComparer.Instance);
     private readonly Dictionary<Expr, HashSet<Expr>> _equivalentExpressions = new(ReferenceEqualityComparer.Instance);
     private readonly Dictionary<Token, List<Slot>> _slotsByToken = new(ReferenceEqualityComparer.Instance);
@@ -27,6 +31,9 @@ internal sealed class RawCallStorageAnalysis
     internal IReadOnlyList<Stmt> Statements { get; }
     internal IReadOnlyList<IReadOnlyList<Stmt>> Modules { get; }
     internal HashSet<Expr> Returns { get; } = new(ReferenceEqualityComparer.Instance);
+    internal HashSet<Expr.Call> Calls { get; } = new(ReferenceEqualityComparer.Instance);
+    internal bool HasMutableDateStaticProducer { get; private set; }
+    internal bool HasErasedGenericFieldProducer => _erasedGenericFieldReads.Count != 0;
     internal HashSet<Stmt.Function> Functions { get; } = new(ReferenceEqualityComparer.Instance);
 
     private RawCallStorageAnalysis(IEnumerable<Stmt> statements, TypeMap map,
@@ -49,13 +56,36 @@ internal sealed class RawCallStorageAnalysis
             _rawSlots.Add(slot.Declaration);
             if (map.GetValueBinding(slot.Name) is { } binding) _rawBindings.Add(binding);
         }
+        _ = SeedNumericOperations();
     }
 
     internal static RawCallStorageAnalysis Capture(IEnumerable<Stmt> statements, TypeMap map,
         IEnumerable<IEnumerable<Stmt>>? modules = null) => new(statements, map, modules);
 
-    internal void Analyze(List<Stmt> rewritten, RuntimeFeatureSet? features) =>
+    internal void Analyze(List<Stmt> rewritten, RuntimeFeatureSet? features)
+    {
+        // A replaced Date static can return any guest value despite its checked
+        // number result. Keep its actual call and lifted equivalents boxed,
+        // including values forwarded through locals, returns and arguments.
+        if (features?.UsesDateConstructorMutation != false && _dateStaticCalls.Count > 0)
+        {
+            _hasNumericProducer = true;
+            HasMutableDateStaticProducer = true;
+            foreach (var call in _dateStaticCalls)
+                foreach (var expression in EquivalentExpressions(call))
+                    _map.MarkRawNumericResult(expression);
+        }
+        // Source generic fields use object storage even when an instantiated
+        // annotation says number. The fact is a representation veto only.
+        if (HasErasedGenericFieldProducer)
+        {
+            _hasNumericProducer = true;
+            foreach (var read in _erasedGenericFieldReads)
+                foreach (var expression in EquivalentExpressions(read))
+                    _map.MarkRawNumericResult(expression);
+        }
         ForwardedReturnValueAnalyzer.Analyze(rewritten, _map, features, modules: null, this);
+    }
 
     /// <summary>Only the lifter's equivalent with-clones carry expression proof identity.</summary>
     internal void RecordRewrite(object source, object target)
@@ -87,27 +117,44 @@ internal sealed class RawCallStorageAnalysis
         }
     }
 
-    internal bool IsRawBinding(Token token, bool callEvidenceOnly) =>
-        _map.GetValueBinding(token) is { } binding
-            && (callEvidenceOnly ? _rawCallBindings : _rawBindings).Contains(binding);
+    internal enum Evidence { Any, Call, Numeric }
 
-    internal bool Propagate(Func<Expr, bool, bool> passesRawValue)
+    internal bool IsRawBinding(Token token, Evidence evidence) =>
+        _map.GetValueBinding(token) is { } binding && (evidence switch
+        {
+            Evidence.Call => _rawCallBindings,
+            Evidence.Numeric => _rawNumericBindings,
+            _ => _rawBindings
+        }).Contains(binding);
+
+    internal bool Propagate(Func<Expr, Evidence, bool> passesRawValue)
+    {
+        bool changed = SeedNumericOperations();
+        if (HasNumericProducer) changed |= PropagateCallableValues();
+        foreach (var flow in _flows)
+            changed |= MarkRawFlow(flow.Target, flow.Declaration,
+                passesRawValue(flow.Value, Evidence.Any), passesRawValue(flow.Value, Evidence.Call),
+                passesRawValue(flow.Value, Evidence.Numeric));
+        return PropagateArguments(passesRawValue) | changed;
+    }
+
+    private bool MarkRawFlow(Token name, object? declaration, bool raw, bool callRaw, bool numericRaw)
     {
         bool changed = false;
-        foreach (var flow in _flows)
+        if (raw)
         {
-            bool raw = passesRawValue(flow.Value, false);
-            bool callRaw = passesRawValue(flow.Value, true);
-            if (raw)
-            {
-                if (flow.Declaration is { } declaration) changed |= _rawSlots.Add(declaration);
-                if (_map.GetValueBinding(flow.Target) is { } binding) changed |= _rawBindings.Add(binding);
-            }
-            if (callRaw)
-            {
-                if (flow.Declaration is { } declaration) changed |= _rawCallSlots.Add(declaration);
-                if (_map.GetValueBinding(flow.Target) is { } binding) changed |= _rawCallBindings.Add(binding);
-            }
+            if (declaration is not null) changed |= _rawSlots.Add(declaration);
+            if (_map.GetValueBinding(name) is { } binding) changed |= _rawBindings.Add(binding);
+        }
+        if (callRaw)
+        {
+            if (declaration is not null) changed |= _rawCallSlots.Add(declaration);
+            if (_map.GetValueBinding(name) is { } binding) changed |= _rawCallBindings.Add(binding);
+        }
+        if (numericRaw)
+        {
+            if (declaration is not null) changed |= _rawNumericSlots.Add(declaration);
+            if (_map.GetValueBinding(name) is { } binding) changed |= _rawNumericBindings.Add(binding);
         }
         return changed;
     }
@@ -121,10 +168,11 @@ internal sealed class RawCallStorageAnalysis
 
         foreach (var slot in _slots)
         {
-            bool raw = _rawSlots.Contains(slot.Declaration) || IsRawBinding(slot.Name, false);
-            bool callRaw = _rawCallSlots.Contains(slot.Declaration) || IsRawBinding(slot.Name, true);
+            bool raw = _rawSlots.Contains(slot.Declaration) || IsRawBinding(slot.Name, Evidence.Any);
+            bool callRaw = _rawCallSlots.Contains(slot.Declaration) || IsRawBinding(slot.Name, Evidence.Call);
             if (!raw && !callRaw) continue;
-            foreach (var node in Descendants(slot.Declaration)) PublishSlot(node, callRaw);
+            bool numericRaw = _rawNumericSlots.Contains(slot.Declaration) || IsRawBinding(slot.Name, Evidence.Numeric);
+            foreach (var node in Descendants(slot.Declaration)) PublishSlot(node, callRaw, numericRaw);
             if (slot.Initializer is { } initializer)
                 foreach (var node in Descendants(initializer))
                     if (node is Expr value) _map.MarkUndefinedReachableNumericLocal(value);
@@ -144,23 +192,26 @@ internal sealed class RawCallStorageAnalysis
         foreach (var statement in rewritten) emitted.Visit(statement);
     }
 
-    private void PublishSlot(object node, bool callRaw)
+    private void PublishSlot(object node, bool callRaw, bool numericRaw)
     {
         switch (node)
         {
             case Stmt.Parameter parameter:
                 _map.MarkUndefinedReachableNumericParam(parameter);
                 if (callRaw) _map.MarkRawCallStorage(parameter.Name);
+                if (numericRaw) _map.MarkRawNumericStorage(parameter.Name);
                 break;
             case Stmt.Var variable:
                 _map.MarkUndefinedReachableNumericLocal(variable);
                 if (variable.Initializer is { } value) _map.MarkUndefinedReachableNumericLocal(value);
                 if (callRaw) _map.MarkRawCallStorage(variable.Name);
+                if (numericRaw) _map.MarkRawNumericStorage(variable.Name);
                 break;
             case Stmt.Const constant:
                 _map.MarkUndefinedReachableNumericLocal(constant);
                 _map.MarkUndefinedReachableNumericLocal(constant.Initializer);
                 if (callRaw) _map.MarkRawCallStorage(constant.Name);
+                if (numericRaw) _map.MarkRawNumericStorage(constant.Name);
                 break;
         }
     }
@@ -193,9 +244,10 @@ internal sealed class RawCallStorageAnalysis
         protected override void Slot(object declaration, Token name, Expr? initializer, Stmt.Parameter? parameter = null)
         {
             if (!Analysis._slotsByToken.TryGetValue(name, out var sources)) return;
-            if (!sources.Any(slot => Analysis._rawSlots.Contains(slot.Declaration)) && !Analysis.IsRawBinding(name, false)) return;
-            bool callRaw = sources.Any(slot => Analysis._rawCallSlots.Contains(slot.Declaration)) || Analysis.IsRawBinding(name, true);
-            Analysis.PublishSlot(declaration, callRaw);
+            if (!sources.Any(slot => Analysis._rawSlots.Contains(slot.Declaration)) && !Analysis.IsRawBinding(name, Evidence.Any)) return;
+            bool callRaw = sources.Any(slot => Analysis._rawCallSlots.Contains(slot.Declaration)) || Analysis.IsRawBinding(name, Evidence.Call);
+            bool numericRaw = sources.Any(slot => Analysis._rawNumericSlots.Contains(slot.Declaration)) || Analysis.IsRawBinding(name, Evidence.Numeric);
+            Analysis.PublishSlot(declaration, callRaw, numericRaw);
         }
     }
 
@@ -203,8 +255,86 @@ internal sealed class RawCallStorageAnalysis
     {
         protected RawCallStorageAnalysis Analysis { get; } = analysis;
         private readonly HashSet<object> _seen = new(ReferenceEqualityComparer.Instance);
+        private bool _emittedSourceBody = true;
+        protected override void VisitGet(Expr.Get expression)
+        {
+            if (collect && _emittedSourceBody && PrimitiveFieldValueAnalysis.IsErasedGenericField(expression, Analysis._map))
+                Analysis._erasedGenericFieldReads.Add(expression);
+            base.VisitGet(expression);
+        }
+        protected override void VisitGetIndex(Expr.GetIndex expression)
+        {
+            if (collect && _emittedSourceBody && PrimitiveFieldValueAnalysis.IsErasedGenericField(expression, Analysis._map))
+                Analysis._erasedGenericFieldReads.Add(expression);
+            base.VisitGetIndex(expression);
+        }
+        protected override void VisitCall(Expr.Call call)
+        {
+            if (collect && _emittedSourceBody) Analysis.Calls.Add(call);
+            if (collect && _emittedSourceBody && call.Callee is Expr.Get
+                {
+                    Object: Expr.Variable { Name.Lexeme: "Date" },
+                    Name.Lexeme: "now" or "UTC" or "parse"
+                })
+                Analysis._dateStaticCalls.Add(call);
+            if (collect && _emittedSourceBody) Analysis._argumentSites.Add(new(call.Callee, Array.AsReadOnly(call.Arguments.ToArray())));
+            base.VisitCall(call);
+        }
+        protected override void VisitCallPrivate(Expr.CallPrivate call)
+        {
+            if (collect && _emittedSourceBody) Analysis._argumentSites.Add(new(null, Array.AsReadOnly(call.Arguments.ToArray())));
+            base.VisitCallPrivate(call);
+        }
+        protected override void VisitTaggedTemplateLiteral(Expr.TaggedTemplateLiteral tagged)
+        {
+            if (collect && _emittedSourceBody) Analysis._argumentSites.Add(new(null, Array.AsReadOnly(tagged.Expressions.ToArray())));
+            base.VisitTaggedTemplateLiteral(tagged);
+        }
+        protected override void VisitUnary(Expr.Unary expression)
+        {
+            if (collect && _emittedSourceBody && expression.Operator.Type is TokenType.MINUS or TokenType.TILDE)
+                Analysis._numericOperations.Add((expression, expression.Right));
+            base.VisitUnary(expression);
+        }
+        protected override void VisitPrefixIncrement(Expr.PrefixIncrement update)
+        {
+            if (collect && _emittedSourceBody)
+            {
+                Analysis._numericOperations.Add((update, update.Operand));
+                if (update.Operand is Expr.Get or Expr.GetIndex or Expr.GetPrivate or Expr.Super)
+                    Analysis._argumentSites.Add(new(null, Array.AsReadOnly<Expr>([update])));
+            }
+            base.VisitPrefixIncrement(update);
+        }
+        protected override void VisitPostfixIncrement(Expr.PostfixIncrement update)
+        {
+            if (collect && _emittedSourceBody)
+            {
+                Analysis._numericOperations.Add((update, update.Operand));
+                if (update.Operand is Expr.Get or Expr.GetIndex or Expr.GetPrivate or Expr.Super)
+                    Analysis._argumentSites.Add(new(null, Array.AsReadOnly<Expr>([update])));
+            }
+            base.VisitPostfixIncrement(update);
+        }
         public override void Visit(Stmt statement) { if (_seen.Add(statement)) base.Visit(statement); }
-        public override void Visit(Expr expression) { if (_seen.Add(expression)) base.Visit(expression); }
+        public override void Visit(Expr expression)
+        {
+            if (!_seen.Add(expression)) return;
+            Expr? setterValue = expression switch
+            {
+                Expr.Set assignment => assignment.Value,
+                Expr.SetIndex assignment => assignment.Value,
+                Expr.SetSuper assignment => assignment.Value,
+                Expr.SetPrivate assignment => assignment.Value,
+                Expr.LogicalSet assignment => assignment.Value,
+                Expr.LogicalSetIndex assignment => assignment.Value,
+                Expr.LogicalSetPrivate assignment => assignment.Value,
+                _ => null
+            };
+            if (collect && _emittedSourceBody && setterValue is not null)
+                Analysis._argumentSites.Add(new(null, Array.AsReadOnly(new[] { setterValue })));
+            base.Visit(expression);
+        }
         protected virtual void Slot(object declaration, Token name, Expr? initializer, Stmt.Parameter? parameter = null) =>
             Analysis.AddSlot(declaration, name, initializer, parameter);
         protected override void VisitVar(Stmt.Var statement)
@@ -267,18 +397,22 @@ internal sealed class RawCallStorageAnalysis
         protected override void VisitFunction(Stmt.Function function)
         {
             if (collect) Analysis.Functions.Add(function);
+            if (collect && _emittedSourceBody && function.Body is not null && !function.IsDeclare)
+                Analysis.RegisterCallable(function, function.Parameters, function.Name);
             Parameters(function.Parameters); Decorators(function.Decorators);
             if (function.ComputedKey is { } key) Visit(key);
             foreach (var statement in function.Body ?? []) Visit(statement);
         }
         protected override void VisitArrowFunction(Expr.ArrowFunction arrow)
         {
+            if (collect && _emittedSourceBody) Analysis.RegisterCallable(arrow, arrow.Parameters, arrow.Name);
             Parameters(arrow.Parameters);
             if (arrow.ExpressionBody is { } body) { if (collect) Analysis.Returns.Add(body); Visit(body); }
             foreach (var statement in arrow.BlockBody ?? []) Visit(statement);
         }
         protected override void VisitNew(Expr.New expression)
         {
+            if (collect && _emittedSourceBody) Analysis._argumentSites.Add(new(null, Array.AsReadOnly(expression.Arguments.ToArray())));
             if (expression.Callee is { } callee) Visit(callee);
             base.VisitNew(expression);
         }
@@ -291,12 +425,20 @@ internal sealed class RawCallStorageAnalysis
         protected override void VisitObjectLiteral(Expr.ObjectLiteral expression)
         {
             foreach (var property in expression.Properties)
-                if (property.SetterParam is { } parameter) Parameters([parameter]);
+                if (property.SetterParam is { } parameter)
+                {
+                    if (collect && _emittedSourceBody) Analysis._sourceParameters.Add(parameter);
+                    Parameters([parameter]);
+                }
             base.VisitObjectLiteral(expression);
         }
         protected override void VisitAccessor(Stmt.Accessor accessor)
         {
-            if (accessor.SetterParam is { } parameter) Parameters([parameter]);
+            if (accessor.SetterParam is { } parameter)
+            {
+                if (collect && _emittedSourceBody) Analysis._sourceParameters.Add(parameter);
+                Parameters([parameter]);
+            }
             Decorators(accessor.Decorators);
             base.VisitAccessor(accessor);
         }
@@ -305,8 +447,14 @@ internal sealed class RawCallStorageAnalysis
         protected override void VisitClass(Stmt.Class declaration)
         {
             Decorators(declaration.Decorators);
-            Members(declaration.SuperclassExpr, declaration.Fields, declaration.Methods,
-                declaration.Accessors, declaration.AutoAccessors, declaration.StaticInitializers);
+            bool previous = _emittedSourceBody;
+            _emittedSourceBody &= ILCompiler.EmitsSourceClassBody(declaration);
+            try
+            {
+                Members(declaration.SuperclassExpr, declaration.Fields, declaration.Methods,
+                    declaration.Accessors, declaration.AutoAccessors, declaration.StaticInitializers);
+            }
+            finally { _emittedSourceBody = previous; }
         }
         protected override void VisitClassExpr(Expr.ClassExpr expression) =>
             Members(expression.SuperclassExpr, expression.Fields, expression.Methods,

@@ -20,6 +20,7 @@ public partial class ILCompiler
         if (genericParameters.Length > 0)
         {
             var parameters = body.DefineGenericParameters(genericParameters.Select(parameter => parameter.Name).ToArray());
+            _nativeGenericMethodNormalization?.RecordDefinition(body, parameters);
             bodyGenericParameters = parameters;
             for (int i = 0; i < parameters.Length; i++)
             {
@@ -51,6 +52,13 @@ public partial class ILCompiler
         body.DefineParameter(sourceParameters.Length + 1, ParameterAttributes.None, "__newTarget");
         entry.SetCustomAttribute(_runtime.FunctionAttributes.NewTargetCoreCtor,
             CustomAttributeEncoder.Encode(_runtime.FunctionAttributes.NewTargetCoreCtor, body.Name));
+        if (_nativeGenericMethodNormalization is not null && genericParameters.Length > 0)
+        {
+            if (_functions.GenericParameters.TryGetErasedValueInvocationTarget(entry, out var erased))
+                _functions.GenericParameters.DeclareErasedValueInvocationTarget(body, erased.GetGenericArguments());
+            _nativeGenericMethodNormalization.RecordConstructedBody(entry, body);
+        }
+        _nativeConstructedBodies?.RecordSourcePair(entry, body);
         _newTargetBodies.Add(entry, body);
         var il = entry.GetILGenerator();
         int first = entry.IsStatic ? 0 : 1;
@@ -116,7 +124,7 @@ public partial class ILCompiler
 
     private void EmitConstructedClassPrototype(CompilationContext context)
     {
-        if ((_features?.UsesReflect != true && _features?.UsesClassPrototypeMutation != true)
+        if ((!context.IsRuntimeReceiverInitializer && _features?.UsesReflect != true && _features?.UsesClassPrototypeMutation != true)
             || context.NewTargetParameterIndex is not { } argument)
             return;
 

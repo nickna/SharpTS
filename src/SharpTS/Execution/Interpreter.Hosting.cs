@@ -16,10 +16,15 @@ public partial class Interpreter
 {
     private int? _hostedOwnerThreadId;
     private volatile bool _hostedAcceptingWork;
+    private int _hostedShutdownCheckpointDepth;
     private Action? _hostedWorkAvailable;
     private Action? _hostedTimerChanged;
     private Action<Exception>? _hostedUnhandledError;
     private Action<int>? _hostedProcessExit;
+
+    private bool AcceptsHostedMicrotasks => _hostedWorkAvailable is null || _hostedAcceptingWork
+        || (_hostedShutdownCheckpointDepth > 0
+            && _hostedOwnerThreadId == System.Environment.CurrentManagedThreadId);
     private RuntimeEnvironment? _hostedScriptEnvironment;
     private int _hostedExitCode;
     private readonly HashSet<string> _hostedPreparedModules =
@@ -154,7 +159,7 @@ public partial class Interpreter
                 continue;
             newModules.Add(module);
             if (!module.IsScript && !module.IsCommonJs)
-                _loadedModules.TryAdd(module.Path, new ModuleInstance());
+                _loadedModules.TryAdd(module.Path, CreateModuleInstance(module));
         }
 
         var variableResolver = new VariableResolver(this);
@@ -358,11 +363,14 @@ public partial class Interpreter
                 ExecutionResult result = await ExecuteStatementAsync(export.Declaration);
                 if (result.IsAbrupt)
                     return result;
-                _currentModuleInstance!.DefaultExport = GetDeclaredValue(export.Declaration);
+                var declaration = export.Declaration;
+                RuntimeEnvironment bindingEnvironment = _environment;
+                _currentModuleInstance!.SetDefaultExport(GetDeclaredValue(declaration, bindingEnvironment));
+                _currentModuleInstance.SetLiveExport("default", () => GetDeclaredValue(declaration, bindingEnvironment));
             }
             else if (export.DefaultExpr != null)
             {
-                _currentModuleInstance!.DefaultExport = (await EvaluateAsync(export.DefaultExpr)).ToObject();
+                _currentModuleInstance!.SetDefaultExport((await EvaluateAsync(export.DefaultExpr)).ToObject());
             }
             return ExecutionResult.Success();
         }
@@ -374,8 +382,15 @@ public partial class Interpreter
                 return result;
             if (!IsTypeOnlyDeclaration(export.Declaration))
             {
-                string name = GetDeclaredName(export.Declaration);
-                _currentModuleInstance!.SetExport(name, GetDeclaredValue(export.Declaration));
+                foreach (var declaration in ExportDeclarationSequence.Declarations(export.Declaration))
+                {
+                    if (IsTypeOnlyDeclaration(declaration)) continue;
+                    string name = GetDeclaredName(declaration);
+                    RuntimeEnvironment bindingEnvironment = _environment;
+                    _currentModuleInstance!.SetExport(name, GetDeclaredValue(declaration, bindingEnvironment));
+                    _currentModuleInstance!.SetLiveExport(name,
+                        () => GetDeclaredValue(declaration, bindingEnvironment));
+                }
             }
             return ExecutionResult.Success();
         }
@@ -387,6 +402,11 @@ public partial class Interpreter
     internal bool TryExecuteOneHostedMacrotask(bool timerDeadlineElapsed, out bool ranTimer)
     {
         AssertHostedOwnerThread();
+        return TryExecuteOneOwnedMacrotask(timerDeadlineElapsed, out ranTimer);
+    }
+
+    private bool TryExecuteOneOwnedMacrotask(bool timerDeadlineElapsed, out bool ranTimer)
+    {
         ranTimer = false;
         if (!_hostedAcceptingWork)
             return false;
@@ -494,10 +514,8 @@ public partial class Interpreter
         // when it completes and ahead of previously posted continuations.
         var completion = new TaskCompletionSource<object?>(TaskCreationOptions.RunContinuationsAsynchronously);
         ExecutionContext? registrationContext = ExecutionContext.Capture();
-        lock (_microtaskQueueLock)
+        EnqueuePromiseJob(() =>
         {
-            _microtaskQueue.Enqueue(() =>
-            {
                 Task<object?> reactionTask;
                 try
                 {
@@ -536,10 +554,7 @@ public partial class Interpreter
                     CancellationToken.None,
                     TaskContinuationOptions.ExecuteSynchronously,
                     TaskScheduler.Default);
-            });
-            Volatile.Write(ref _hasMicrotasks, 1);
-        }
-        WakeEventLoop();
+        });
         return completion.Task;
     }
 
@@ -577,11 +592,22 @@ public partial class Interpreter
         }
     }
 
-    internal void EmitHostedBeforeExit(int exitCode)
+    internal void RunHostedBeforeExitCheckpoint(int exitCode)
     {
         AssertHostedOwnerThread();
-        if (!_exitEventEmitted)
-            SharpTSProcess.Instance.EmitWith(this, "beforeExit", (double)exitCode);
+        // Shutdown still rejects external notifications and new macrotasks.
+        // Its own lifecycle listener and jobs may finish this owner checkpoint.
+        _hostedShutdownCheckpointDepth++;
+        try
+        {
+            if (!_exitEventEmitted)
+                SharpTSProcess.Instance.EmitWith(this, "beforeExit", (double)exitCode);
+            ProcessMicrotasks();
+        }
+        finally
+        {
+            _hostedShutdownCheckpointDepth--;
+        }
     }
 
     internal void EmitHostedExit(int exitCode)

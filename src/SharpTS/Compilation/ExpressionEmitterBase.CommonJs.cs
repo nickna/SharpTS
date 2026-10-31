@@ -186,7 +186,7 @@ public abstract partial class ExpressionEmitterBase
             // require('assert') and require('assert/strict') return a callable
             // function object rather than an ESM namespace object.
             if (resolvedPath is "stdlib:node/assert.ts" or "stdlib:node/assert/strict.ts" &&
-                exportFields.TryGetValue("$default", out var defaultField))
+                exportFields.TryGetValue("default", out var defaultField))
             {
                 IL.Emit(OpCodes.Ldsfld, defaultField);
                 SetStackUnknown();
@@ -200,7 +200,7 @@ public abstract partial class ExpressionEmitterBase
             IL.Emit(OpCodes.Newobj, dictCtor);
             foreach (var (exportName, field) in exportFields)
             {
-                if (exportName == "$default" || exportName == "$exportAssignment") continue;
+                if (exportName == "$exportAssignment") continue;
                 IL.Emit(OpCodes.Dup);
                 IL.Emit(OpCodes.Ldstr, exportName);
                 IL.Emit(OpCodes.Ldsfld, field);

@@ -58,6 +58,7 @@ public sealed class SharpTSFunctionGlobal : ISharpTSCallable
 public sealed class SharpTSFunctionPrototype : ISharpTSMutableBuiltIn, ISharpTSSymbolPropertyBag,
     ISharpTSNonConstructorCallable
 {
+    internal SharpTSObjectPrototype? RealmObjectPrototype { get; set; }
     internal bool HasExplicitPrototype { get; private set; }
     internal object? ExplicitPrototype { get; private set; }
 

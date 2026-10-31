@@ -121,7 +121,7 @@ public partial class RuntimeEmitter
     /// </summary>
     private DnsDisplay1Construction EmitDnsDisplayClass1(ModuleBuilder moduleBuilder)
     {
-        var type = moduleBuilder.DefineType(
+        var type = EmitTypeDefinitions.DefineType(moduleBuilder,
             "$DnsDisplay1",
             TypeAttributes.Public | TypeAttributes.Sealed | TypeAttributes.BeforeFieldInit);
 
@@ -175,7 +175,7 @@ public partial class RuntimeEmitter
     /// </summary>
     private DnsDisplay2Construction EmitDnsDisplayClass2(ModuleBuilder moduleBuilder)
     {
-        var type = moduleBuilder.DefineType(
+        var type = EmitTypeDefinitions.DefineType(moduleBuilder,
             "$DnsDisplay2",
             TypeAttributes.Public | TypeAttributes.Sealed | TypeAttributes.BeforeFieldInit);
 

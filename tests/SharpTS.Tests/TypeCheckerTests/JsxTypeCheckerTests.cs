@@ -78,6 +78,35 @@ public class JsxTypeCheckerTests
         Assert.Equal("Element", ((TypeInfo.Interface)callType!).Name);
     }
 
+    [Theory]
+    [InlineData(false)]
+    [InlineData(true)]
+    public void DirectAttributesAndInlineSpreadsKeepContextualLiteralDomains(bool spread)
+    {
+        var literal = new Expr.ObjectLiteral([Attribute("x", new Expr.Literal(2.0)), Attribute("y", new Expr.Literal(true))]);
+        var props = spread ? new Expr.ObjectLiteral([Spread(literal)]) : literal;
+        var call = JsxCall(JsxElementKind.Component, "Fixed", new Expr.Variable(Identifier("Fixed")), props);
+        Assert.Empty(Check(call, JsxPrelude + "declare function Fixed(props:{x:2,y:true}):JSX.Element;").Diagnostics);
+    }
+
+    [Fact]
+    public void RetainedSpreadValuesKeepTheirOrdinaryWidenedMemberTypes()
+    {
+        var call = JsxCall(JsxElementKind.Component, "Fixed", new Expr.Variable(Identifier("Fixed")),
+            new Expr.ObjectLiteral([Spread(new Expr.Variable(Identifier("value")))]));
+        var result = Check(call, JsxPrelude + "declare function Fixed(props:{x:2,y:true}):JSX.Element; const value={x:2,y:true};");
+        Assert.Contains(result.Diagnostics, diagnostic => diagnostic.TsCode == "TS2322");
+    }
+
+    [Fact]
+    public void NestedObjectAttributeReceivesItsDeclaredLiteralMemberContext()
+    {
+        var value = new Expr.ObjectLiteral([Attribute("kind", new Expr.Literal("fixed"))]);
+        var call = JsxCall(JsxElementKind.Component, "Fixed", new Expr.Variable(Identifier("Fixed")),
+            new Expr.ObjectLiteral([Attribute("data", value)]));
+        Assert.Empty(Check(call, JsxPrelude + "declare function Fixed(props:{data:{kind:'fixed'}}):JSX.Element;").Diagnostics);
+    }
+
     [Fact]
     public void UnknownIntrinsicTag_ReportsTs2339()
     {

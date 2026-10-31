@@ -148,7 +148,7 @@ public class SharpTSErrorClass : SharpTSClass
                 : "";
             if (hasMessage)
                 instance.SetRawField("message", message);
-            instance.SetRawField("stack", $"{errorTypeName}: {message}");
+            instance.SetRawField("stack", interpreter.CreateErrorStack($"{errorTypeName}: {message}"));
             if (arguments.Count > 0)
                 instance.SetRawField("errors", arguments[0]);
             // Cause is in the third argument's options
@@ -169,7 +169,7 @@ public class SharpTSErrorClass : SharpTSClass
                 : "";
             if (hasMessage)
                 instance.SetRawField("message", message);
-            instance.SetRawField("stack", $"{errorTypeName}: {message}");
+            instance.SetRawField("stack", interpreter.CreateErrorStack($"{errorTypeName}: {message}"));
             // Cause is in the second argument's options
             if (arguments.Count > 1
                 && IsObjectValue(arguments[1])
@@ -185,6 +185,7 @@ public class SharpTSErrorClass : SharpTSClass
         // later user-created expandos remain enumerable.
         foreach (var key in new[] { "name", "message", "stack", "cause", "errors" })
             instance.MarkNonEnumerable(key);
+        interpreter.RecordVmCreatedError(instance);
     }
 
     private static bool IsObjectValue(object? value) => value is not

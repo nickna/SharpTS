@@ -12,7 +12,9 @@ public sealed class ObjectDefinitionRuntimeFeatureGatingTests
     [Theory]
     [InlineData("console.log(1);", false)]
     [InlineData("const value = { slot: 1 }; console.log(value.slot);", false)]
-    [InlineData(ObjectDefinitionRuntimeReachabilityTests.LiteralAccessorSource, false)]
+    // Literal accessors now use ordered own-property definitions even when the
+    // source never refers to Object.defineProperty directly.
+    [InlineData(ObjectDefinitionRuntimeReachabilityTests.LiteralAccessorSource, true)]
     [InlineData("const O = Object;", true)]
     [InlineData("const R = Reflect;", true)]
     [InlineData("const define = Object.defineProperty;", true)]

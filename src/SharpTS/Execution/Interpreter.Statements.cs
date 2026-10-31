@@ -255,7 +255,10 @@ public partial class Interpreter
     private void ReserveLexicalDeclarations(IEnumerable<Stmt> statements)
     {
         foreach (var name in LexicalDeclarationBindings.Collect(statements))
+        {
+            if (name.IsGeneratedTemporary && _environment.VmLexicalBindings is not null) continue;
             _environment.ReserveLexical(name.Lexeme);
+        }
     }
 
     /// <summary>
@@ -797,6 +800,8 @@ public partial class Interpreter
         IEnumerable<string> keys = obj switch
         {
             SharpTSProxy proxy => proxy.TrapOwnEnumerableKeys(this),
+            SharpTSClass klass => EnumeratePrototypeForInKeys(klass),
+            ISharpTSCallable callable => EnumeratePrototypeForInKeys(callable),
             ISharpTSOwnPropertyObject ownPropertyObject => ownPropertyObject.OwnProperties.OwnEnumerableKeys(),
             // Own enumerable keys only, hiding boxed-primitive internal slots and
             // honoring enumerability — consistent with Object.keys (#475).
@@ -806,17 +811,10 @@ public partial class Interpreter
             // for...in skips holes per ECMA-262 (only own enumerable index properties
             // that actually exist — holes don't).
             SharpTSArray a => a.OwnEnumerableKeys(),
-            // JS functions are objects; enumerate user-assigned properties. Lodash iterates
-            // its own utility namespace (which is a function returning the wrapper) with
-            // `for (var key in _) { ... }` to copy members onto the mixin target.
-            ISharpTSFunctionObject function => function.OwnProperties.OwnEnumerableKeys(),
-            SharpTSFunction f => f.PropertyKeys,
-            SharpTSArrowFunction af => af.PropertyKeys,
             SharpTSMath math => math.OwnEnumerableKeys(),
             SharpTSJSON json => json.OwnEnumerableKeys(),
             SharpTSDate date => date.OwnEnumerableKeys(),
             SharpTSRegExp regex => regex.OwnEnumerableKeys(),
-            SharpTSObjectNamespace objectNamespace => objectNamespace.OwnEnumerableKeys(),
             SharpTSGlobalThis globalThis => globalThis.OwnEnumerableKeys(),
             // Every built-in prototype singleton at once — Object/Array/String/Number/
             // Boolean/Function.prototype. Naming them individually is how Object.prototype
@@ -825,15 +823,27 @@ public partial class Interpreter
             // Plain Dictionary<string, object?> from runtime helpers (e.g.,
             // Web Streams iterator results) — see SharpTSReadableStream.MakeReadResult.
             IDictionary<string, object?> d => d.Keys,
-            // ECMA-262 §17 — built-in functions have only `name` and `length`
-            // as own properties, both non-enumerable. for-in yields nothing,
-            // but throwing here would crash test262's verifyProperty (which
-            // for-in iterates its target object before checking enumerability).
-            ISharpTSCallable => Enumerable.Empty<string>(),
             _ => throw new InterpreterException("for...in requires an object.")
         };
 
         return IterateWithBreakContinue(keys.Cast<object?>(), forIn.Variable, forIn.IsDeclaration && !forIn.IsVar, forIn.Body, labels);
+    }
+
+    private IEnumerable<string> EnumeratePrototypeForInKeys(object receiver)
+    {
+        var visited = new HashSet<string>(StringComparer.Ordinal);
+        object? current = receiver;
+        for (int depth = 0; depth < 64 && current is not (null or SharpTSUndefined); depth++)
+        {
+            var keys = (SharpTSArray)ObjectBuiltIns.GetOwnPropertyNames(this, [current])!;
+            foreach (var key in keys.OfType<string>())
+            {
+                if (!visited.Add(key)) continue;
+                if (ObjectBuiltIns.OwnPropertyDescriptorOf(this, current, key)?.Enumerable == true)
+                    yield return key;
+            }
+            current = ObjectBuiltIns.PrototypeOf(this, current);
+        }
     }
 
     /// <summary>
@@ -930,6 +940,35 @@ public partial class Interpreter
     /// <returns>An enumerable of values if the object has a Symbol.iterator, null otherwise.</returns>
     private IEnumerable<object?>? TryGetSymbolIterator(object? iterable)
     {
+        if (iterable is SharpTSProxy proxy)
+        {
+            // GetMethod must run the proxy's ordinary symbol Get once, even
+            // when no iterator exists and the consumer uses array-like reads.
+            var iteratorFn = GetSymbolPropertyValue(proxy, SharpTSSymbol.Iterator);
+            if (iteratorFn is null or SharpTSUndefined)
+                return null;
+            if (iteratorFn is not ISharpTSCallable)
+                throw new ThrowException(new SharpTSTypeError("[Symbol.iterator] must be a function"));
+            return EnumerateWithIteratorProtocol(BindMemberCallReceiver(iteratorFn, proxy)!);
+        }
+
+        if (iterable is SharpTSMap or SharpTSSet)
+        {
+            var iteratorFn = GetSymbolPropertyValue(iterable, SharpTSSymbol.Iterator);
+            if (iteratorFn is not ISharpTSCallable)
+                throw new ThrowException(new SharpTSTypeError("[Symbol.iterator] must be a function"));
+            return EnumerateWithIteratorProtocol(BindMemberCallReceiver(iteratorFn, iterable)!);
+        }
+
+        if (iterable is SharpTSGenerator generator
+            && ((ISharpTSOwnPropertyObject)generator).OwnProperties.HasSymbolProperty(SharpTSSymbol.Iterator))
+        {
+            var iteratorFn = PerformIndexGet(null!, generator, SharpTSSymbol.Iterator).ToObject();
+            if (iteratorFn is not ISharpTSCallable)
+                throw new ThrowException(new SharpTSTypeError("[Symbol.iterator] must be a function"));
+            return EnumerateWithIteratorProtocol(BindMemberCallReceiver(iteratorFn, generator)!);
+        }
+
         // Class constructors can implement the protocol through static methods or getters.
         // Property reads preserve the canonical function; acquisition supplies the receiver.
         if (iterable is SharpTSClass klass)
@@ -1184,11 +1223,8 @@ public partial class Interpreter
     /// ECMA-262 7.4.6 IteratorClose: invoke an iterator's <c>return()</c> method
     /// when iteration is abandoned before the iterator reports done (a for-of
     /// break/throw, or a spread / <c>Array.from(items, mapFn)</c> element callback
-    /// throwing). Best-effort: a missing/undefined <c>return</c> is a no-op, and any
-    /// abrupt completion from <c>return()</c> itself is swallowed — this runs inside
-    /// a <c>finally</c> during exception unwind, so letting <c>return()</c> throw
-    /// would mask the original completion (which is what the spec discards when the
-    /// triggering completion is itself a throw).
+    /// throwing). The consumer preserves an existing throw completion while
+    /// disposing its enumerator. Other completions propagate close failures.
     /// </summary>
     private void TryCallIteratorReturn(object? iterator)
     {
@@ -1201,19 +1237,12 @@ public partial class Interpreter
         };
         if (returnMethod is null or SharpTSUndefined) return;
 
-        try
-        {
-            returnMethod = BindMemberCallReceiver(returnMethod, iterator);
-
-            // SharpTSFunction also implements ISharpTSCallable, so this covers both.
-            if (returnMethod is ISharpTSCallable callable)
-                callable.Call(this, []);
-        }
-        catch
-        {
-            // Swallow — see remarks. IteratorClose must not let return()'s failure
-            // replace the completion that triggered it.
-        }
+        returnMethod = BindMemberCallReceiver(returnMethod, iterator);
+        if (returnMethod is not ISharpTSCallable callable)
+            throw new ThrowException(new SharpTSTypeError("Iterator.return must be a function."));
+        var result = callable.Call(this, []);
+        if (result is null or SharpTSUndefined or double or string or bool or SharpTSBigInt or SharpTSSymbol)
+            throw new ThrowException(new SharpTSTypeError("Iterator.return must return an object."));
     }
 
     /// <summary>
@@ -1358,7 +1387,7 @@ public partial class Interpreter
         if (isDeclaration)
             loopEnv.Define(variable.Lexeme, value);
         else
-            _environment.Assign(variable, value);
+            AssignVariableValue(variable, RuntimeValue.FromBoxed(value));
         return loopEnv;
     }
 
@@ -2071,6 +2100,7 @@ public partial class Interpreter
 
     internal ExecutionResult VisitVar(Stmt.Var varStmt)
     {
+        if (varStmt.IsDeclare) return ExecutionResult.Success();
         object? value = SharpTSUndefined.Instance;
         if (varStmt.Initializer != null)
         {
@@ -2078,6 +2108,8 @@ public partial class Interpreter
                 .GetAwaiter().GetResult().ToObject();
         }
         var target = varStmt.IsVar ? _environment.VarDeclarationTarget ?? _environment : _environment;
+        if (target.TryDefineVmTemporary(varStmt.Name, RuntimeValue.FromBoxed(value)))
+            return ExecutionResult.Success();
         if (varStmt.IsVar && varStmt.Initializer is null && target.IsDefinedLocally(varStmt.Name.Lexeme))
             return ExecutionResult.Success();
         target.Define(varStmt.Name.Lexeme, value);
@@ -2141,6 +2173,7 @@ public partial class Interpreter
         }
 
         object? superclass = null;
+        SharpTSBuiltInConstructor? intrinsicPromiseParent = null;
         if (classStmt.SuperclassExpr != null)
         {
             superclass = (await ctx.EvaluateExprAsync(classStmt.SuperclassExpr)).ToObject();
@@ -2156,8 +2189,9 @@ public partial class Interpreter
 
             // `extends Promise` (#242): same substitution for the Promise
             // constructor sentinel.
-            if (superclass is SharpTSBuiltInConstructor { Name: BuiltInNames.Promise })
+            if (superclass is SharpTSBuiltInConstructor { Name: BuiltInNames.Promise } promiseParent)
             {
+                intrinsicPromiseParent = promiseParent;
                 superclass = SharpTSPromiseClass.PromiseBase;
             }
 
@@ -2487,6 +2521,11 @@ public partial class Interpreter
 
         klass.BindPrivateMemberOwners();
         klass.InitializerEnvironment = _environment;
+        if (klass is SharpTSPromiseClass promiseClass)
+            promiseClass.IntrinsicParentConstructor = intrinsicPromiseParent;
+        if (classStmt.Name.Lexeme == BuiltInNames.EventEmitter
+            && Modules.Stdlib.Providers.EmbeddedStdlibProvider.TryExtractSpecifier(_currentModule?.Path ?? "") == "events")
+            klass.NativeConstructionTarget = SharpTSEventEmitterConstructor.Instance;
         klass.OrderedInstanceFields = classStmt.Fields.Where(field => !field.IsStatic && !field.IsDeclare)
             .SelectMany(field => (field.IsPrivate ? instancePrivateFields : instanceFields)
                 .Where(captured => captured.Name == field.Name)).ToList();

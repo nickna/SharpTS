@@ -180,6 +180,8 @@ public partial class CompilationContext
     /// Example: import { readFile } from 'fs/promises' maps readFile to ("fs/promises", "readFile").
     /// </summary>
     public Dictionary<string, (string ModuleName, string MethodName)>? BuiltInModuleMethodBindings { get; set; }
+    internal IReadOnlyDictionary<BindingSymbol, (string ModuleName, string MemberName)>? NativeModuleConstructorBindings { get; set; }
+    internal IReadOnlyDictionary<BindingSymbol, string>? NativeModuleNamespaceBindings { get; set; }
 
     /// <summary>
     /// All imported names from any module (builtin, primitive, stdlib TS, or user).

@@ -84,6 +84,10 @@ public partial class RuntimeEmitter
             _types.Object,
             [_types.MethodInfo, _types.Object]);
 
+        if (_nativeUnionParameters is { } conversion)
+            conversion.ReflectionSymbolFactory = typeBuilder.DefineMethod("GetOrCreateCertifiedStaticSymbolMethod",
+                MethodAttributes.Assembly | MethodAttributes.Static, _types.Object, [_types.MethodInfo, _types.Object]);
+
         // #351 generic-class helpers (forward-declared; bodies filled alongside
         // the Find* bodies). FindSymbol* calls them in its base-chain walk.
         symbolAccessors.RegistryKey = typeBuilder.DefineMethod(
@@ -122,7 +126,10 @@ public partial class RuntimeEmitter
         EmittedStringCoercionRuntime stringCoercion,
         EmittedFunctionConstructionRuntime functionConstruction,
         EmittedFunctionValueRuntime functionValues,
-        MethodBuilder symbolMethodName
+        MethodBuilder symbolMethodName,
+        bool userClasses,
+        NativeSourceOwnerCatalog? sourceOwners = null,
+        MethodInfo? nativeInitializer = null
     )
     {
         var outer = SymOuterDictType;
@@ -156,7 +163,7 @@ public partial class RuntimeEmitter
             innerTryGetValue,
             innerSetItem
         );
-        EmitSymbolGenericHelperBodies(symbolAccessors);
+        EmitSymbolGenericHelperBodies(symbolAccessors, userClasses, sourceOwners);
         EmitFindSymbolAccessorBody(
             symbolAccessors,
             symbolAccessors.FindGetter,
@@ -167,7 +174,8 @@ public partial class RuntimeEmitter
             outerTryGetValue,
             innerTryGetValue,
             getBaseType,
-            getType
+            getType,
+            nativeInitializer: nativeInitializer
         );
         EmitFindSymbolAccessorBody(
             symbolAccessors,
@@ -180,7 +188,8 @@ public partial class RuntimeEmitter
             innerTryGetValue,
             getBaseType,
             getType,
-            ownOnly: true
+            ownOnly: true,
+            nativeInitializer: nativeInitializer
         );
         EmitFindSymbolAccessorBody(
             symbolAccessors,
@@ -192,7 +201,8 @@ public partial class RuntimeEmitter
             outerTryGetValue,
             innerTryGetValue,
             getBaseType,
-            getType
+            getType,
+            nativeInitializer: nativeInitializer
         );
         // #647: methods reuse the same base-chain walk, reading the method slots.
         EmitFindSymbolAccessorBody(
@@ -205,7 +215,8 @@ public partial class RuntimeEmitter
             outerTryGetValue,
             innerTryGetValue,
             getBaseType,
-            getType
+            getType,
+            nativeInitializer: nativeInitializer
         );
         EmitFindSymbolAccessorBody(
             symbolAccessors,
@@ -218,7 +229,8 @@ public partial class RuntimeEmitter
             innerTryGetValue,
             getBaseType,
             getType,
-            ownOnly: true
+            ownOnly: true,
+            nativeInitializer: nativeInitializer
         );
         EmitGetOrCreateStaticSymbolMethod(symbolAccessors, functionConstruction, functionValues, symbolMethodName);
         symbolAccessors.MarkBodiesEmitted();
@@ -230,77 +242,87 @@ public partial class RuntimeEmitter
         EmittedFunctionValueRuntime functionValues,
         MethodBuilder symbolMethodName)
     {
-        var il = symbolAccessors.GetOrCreateStaticMethod.GetILGenerator();
-        var keyType = StaticSymbolMethodKeyType;
-        var cacheType = StaticSymbolMethodCacheType;
-        var key = il.DeclareLocal(keyType);
-        var existing = il.DeclareLocal(_types.Object);
-        var metadata = il.DeclareLocal(functionValues.Type);
-        var missing = il.DefineLabel();
+        EmitBody(symbolAccessors.GetOrCreateStaticMethod, certified: false);
+        if (_nativeUnionParameters?.ReflectionSymbolFactory is { } actualFactory) EmitBody(actualFactory, certified: true);
 
-        // CLR instantiations of one source class share its JavaScript methods.
-        // Canonicalize only their cache identity: invocation still needs the
-        // valid closed MethodInfo returned by FindMethod. External CLR types
-        // retain their separate constructed-generic method identities.
-        var keyMethod = il.DeclareLocal(_types.MethodInfo);
-        var declaringType = il.DeclareLocal(_types.Type);
-        var haveKeyMethod = il.DefineLabel();
-        il.Emit(OpCodes.Ldarg_0);
-        il.Emit(OpCodes.Stloc, keyMethod);
-        il.Emit(OpCodes.Ldarg_0);
-        il.Emit(OpCodes.Callvirt, _types.GetProperty(typeof(MemberInfo), "DeclaringType")!.GetGetMethod()!);
-        il.Emit(OpCodes.Stloc, declaringType);
-        il.Emit(OpCodes.Ldloc, declaringType);
-        il.Emit(OpCodes.Brfalse, haveKeyMethod);
-        il.Emit(OpCodes.Ldloc, declaringType);
-        il.Emit(OpCodes.Callvirt, _types.GetProperty(_types.Type, "IsConstructedGenericType")!.GetGetMethod()!);
-        il.Emit(OpCodes.Brfalse, haveKeyMethod);
-        il.Emit(OpCodes.Ldloc, declaringType);
-        il.Emit(OpCodes.Callvirt, _types.GetProperty(typeof(MemberInfo), "Module")!.GetGetMethod()!);
-        il.Emit(OpCodes.Ldtoken, symbolAccessors.GetOrCreateStaticMethod.DeclaringType!);
-        il.Emit(OpCodes.Call, _types.TypeGetTypeFromHandle);
-        il.Emit(OpCodes.Callvirt, _types.GetProperty(typeof(MemberInfo), "Module")!.GetGetMethod()!);
-        il.Emit(OpCodes.Bne_Un, haveKeyMethod);
-        il.Emit(OpCodes.Ldarg_0);
-        il.Emit(OpCodes.Callvirt, _types.GetProperty(_types.MethodBase, "MethodHandle")!.GetGetMethod()!);
-        il.Emit(OpCodes.Ldloc, declaringType);
-        il.Emit(OpCodes.Callvirt, _types.GetMethodNoParams(_types.Type, "GetGenericTypeDefinition"));
-        il.Emit(OpCodes.Callvirt, _types.GetProperty(_types.Type, "TypeHandle")!.GetGetMethod()!);
-        il.Emit(OpCodes.Call, _types.MethodBaseGetMethodFromHandleWithType);
-        il.Emit(OpCodes.Castclass, _types.MethodInfo);
-        il.Emit(OpCodes.Stloc, keyMethod);
-        il.MarkLabel(haveKeyMethod);
-        il.Emit(OpCodes.Ldloc, keyMethod);
-        il.Emit(OpCodes.Ldarg_1);
-        il.Emit(OpCodes.Newobj, _types.GetConstructor(keyType, _types.MethodInfo, _types.Object));
-        il.Emit(OpCodes.Stloc, key);
-        il.Emit(OpCodes.Ldsfld, symbolAccessors.StaticCallableCache);
-        il.Emit(OpCodes.Ldloc, key);
-        il.Emit(OpCodes.Ldloca, existing);
-        il.Emit(OpCodes.Callvirt, _types.GetMethod(cacheType, "TryGetValue", keyType, _types.Object.MakeByRefType()));
-        il.Emit(OpCodes.Brfalse, missing);
-        il.Emit(OpCodes.Ldloc, existing);
-        il.Emit(OpCodes.Ret);
+        void EmitBody(MethodBuilder factory, bool certified)
+        {
+            var il = factory.GetILGenerator();
+            var keyType = StaticSymbolMethodKeyType;
+            var cacheType = StaticSymbolMethodCacheType;
+            var key = il.DeclareLocal(keyType);
+            var existing = il.DeclareLocal(_types.Object);
+            var metadata = il.DeclareLocal(functionValues.Type);
+            var missing = il.DefineLabel();
 
-        // A first read retains ordinary source name/default/rest length derivation
-        // and the existing canonical callable factory. Cache its result for reads.
-        il.MarkLabel(missing);
-        il.Emit(OpCodes.Ldnull);
-        il.Emit(OpCodes.Ldarg_0);
-        il.Emit(OpCodes.Newobj, functionConstruction.Constructor);
-        il.Emit(OpCodes.Stloc, metadata);
-        il.Emit(OpCodes.Ldsfld, symbolAccessors.StaticCallableCache);
-        il.Emit(OpCodes.Ldloc, key);
-        il.Emit(OpCodes.Ldarg_0);
-        il.Emit(OpCodes.Ldarg_1);
-        il.Emit(OpCodes.Ldloc, metadata);
-        il.Emit(OpCodes.Callvirt, functionValues.NameGetter);
-        il.Emit(OpCodes.Call, symbolMethodName);
-        il.Emit(OpCodes.Ldloc, metadata);
-        il.Emit(OpCodes.Callvirt, functionValues.LengthGetter);
-        il.Emit(OpCodes.Call, functionConstruction.GetOrCreate);
-        il.Emit(OpCodes.Callvirt, _types.GetMethod(cacheType, "GetOrAdd", keyType, _types.Object));
-        il.Emit(OpCodes.Ret);
+            // CLR instantiations of one source class share its JavaScript methods.
+            // Canonicalize only their cache identity: invocation still needs the
+            // valid closed MethodInfo returned by FindMethod. External CLR types
+            // retain their separate constructed-generic method identities.
+            var keyMethod = il.DeclareLocal(_types.MethodInfo);
+            var declaringType = il.DeclareLocal(_types.Type);
+            var haveKeyMethod = il.DefineLabel();
+            il.Emit(OpCodes.Ldarg_0);
+            il.Emit(OpCodes.Stloc, keyMethod);
+            il.Emit(OpCodes.Ldarg_0);
+            il.Emit(OpCodes.Callvirt, _types.GetProperty(typeof(MemberInfo), "DeclaringType")!.GetGetMethod()!);
+            il.Emit(OpCodes.Stloc, declaringType);
+            il.Emit(OpCodes.Ldloc, declaringType);
+            il.Emit(OpCodes.Brfalse, haveKeyMethod);
+            il.Emit(OpCodes.Ldloc, declaringType);
+            il.Emit(OpCodes.Callvirt, _types.GetProperty(_types.Type, "IsConstructedGenericType")!.GetGetMethod()!);
+            il.Emit(OpCodes.Brfalse, haveKeyMethod);
+            il.Emit(OpCodes.Ldloc, declaringType);
+            il.Emit(OpCodes.Callvirt, _types.GetProperty(typeof(MemberInfo), "Module")!.GetGetMethod()!);
+            il.Emit(OpCodes.Ldtoken, symbolAccessors.GetOrCreateStaticMethod.DeclaringType!);
+            il.Emit(OpCodes.Call, _types.TypeGetTypeFromHandle);
+            il.Emit(OpCodes.Callvirt, _types.GetProperty(typeof(MemberInfo), "Module")!.GetGetMethod()!);
+            il.Emit(OpCodes.Bne_Un, haveKeyMethod);
+            il.Emit(OpCodes.Ldarg_0);
+            il.Emit(OpCodes.Callvirt, _types.GetProperty(_types.MethodBase, "MethodHandle")!.GetGetMethod()!);
+            il.Emit(OpCodes.Ldloc, declaringType);
+            il.Emit(OpCodes.Callvirt, _types.GetMethodNoParams(_types.Type, "GetGenericTypeDefinition"));
+            il.Emit(OpCodes.Callvirt, _types.GetProperty(_types.Type, "TypeHandle")!.GetGetMethod()!);
+            il.Emit(OpCodes.Call, _types.MethodBaseGetMethodFromHandleWithType);
+            il.Emit(OpCodes.Castclass, _types.MethodInfo);
+            il.Emit(OpCodes.Stloc, keyMethod);
+            il.MarkLabel(haveKeyMethod);
+            il.Emit(OpCodes.Ldloc, keyMethod);
+            il.Emit(OpCodes.Ldarg_1);
+            il.Emit(OpCodes.Newobj, _types.GetConstructor(keyType, _types.MethodInfo, _types.Object));
+            il.Emit(OpCodes.Stloc, key);
+            il.Emit(OpCodes.Ldsfld, symbolAccessors.StaticCallableCache);
+            il.Emit(OpCodes.Ldloc, key);
+            il.Emit(OpCodes.Ldloca, existing);
+            il.Emit(OpCodes.Callvirt, _types.GetMethod(cacheType, "TryGetValue", keyType, _types.Object.MakeByRefType()));
+            il.Emit(OpCodes.Brfalse, missing);
+            il.Emit(OpCodes.Ldloc, existing);
+            il.Emit(OpCodes.Ret);
+
+            // A first read retains ordinary source name/default/rest length derivation
+            // and the existing canonical callable factory. Cache its result for reads.
+            il.MarkLabel(missing);
+            il.Emit(OpCodes.Ldnull);
+            int parameterOffset = il.ILOffset;
+            il.Emit(OpCodes.Ldarg_0);
+            var parameterProducer = certified ? _nativeUnionParameters!.RecordSymbolFactoryParameter(il, factory, parameterOffset) : null;
+            if (certified) EmitReflectedFunctionConstructor(il, functionConstruction.Constructor, parameterProducer, cached: false);
+            else il.Emit(OpCodes.Newobj, functionConstruction.Constructor);
+            il.Emit(OpCodes.Stloc, metadata);
+            il.Emit(OpCodes.Ldsfld, symbolAccessors.StaticCallableCache);
+            il.Emit(OpCodes.Ldloc, key);
+            il.Emit(OpCodes.Ldarg_0);
+            il.Emit(OpCodes.Ldarg_1);
+            il.Emit(OpCodes.Ldloc, metadata);
+            il.Emit(OpCodes.Callvirt, functionValues.NameGetter);
+            il.Emit(OpCodes.Call, symbolMethodName);
+            il.Emit(OpCodes.Ldloc, metadata);
+            il.Emit(OpCodes.Callvirt, functionValues.LengthGetter);
+            if (certified) EmitReflectedFunctionFactory(il, functionConstruction.GetOrCreate, parameterProducer);
+            else il.Emit(OpCodes.Call, functionConstruction.GetOrCreate);
+            il.Emit(OpCodes.Callvirt, _types.GetMethod(cacheType, "GetOrAdd", keyType, _types.Object));
+            il.Emit(OpCodes.Ret);
+        }
     }
 
     /// <summary>
@@ -392,7 +414,8 @@ public partial class RuntimeEmitter
     /// two so the base-chain walk both finds the slot and produces an invokable
     /// (closed) accessor MethodInfo.
     /// </summary>
-    private void EmitSymbolGenericHelperBodies(EmittedSymbolAccessorRuntime symbolAccessors)
+    private void EmitSymbolGenericHelperBodies(EmittedSymbolAccessorRuntime symbolAccessors, bool userClasses,
+        NativeSourceOwnerCatalog? sourceOwners = null)
     {
         var isConstructedGeneric = _types.GetProperty(_types.Type, "IsConstructedGenericType")!.GetGetMethod()!;
         var isGenericType = _types.GetProperty(_types.Type, "IsGenericType")!.GetGetMethod()!;
@@ -431,13 +454,31 @@ public partial class RuntimeEmitter
 
             il.Emit(OpCodes.Ldarg_0);
             il.Emit(OpCodes.Stloc, owner);
-            il.Emit(OpCodes.Ldloc, owner);
-            il.Emit(OpCodes.Callvirt, isGenericType);
-            il.Emit(OpCodes.Brfalse, closedOwner);
-            il.Emit(OpCodes.Ldloc, owner);
-            il.Emit(OpCodes.Callvirt, containsGenericParams);
-            il.Emit(OpCodes.Brfalse, closedOwner);
-            EmitCloseOpenGenericOwner(il, owner);
+            // Only source classes contribute generic symbol owners. All built-in
+            // carriers are non-generic, so do not emit dynamic closure for them.
+            if (userClasses)
+            {
+                il.Emit(OpCodes.Ldloc, owner);
+                il.Emit(OpCodes.Callvirt, isGenericType);
+                il.Emit(OpCodes.Brfalse, closedOwner);
+                il.Emit(OpCodes.Ldloc, owner);
+                il.Emit(OpCodes.Callvirt, containsGenericParams);
+                il.Emit(OpCodes.Brfalse, closedOwner);
+                if (sourceOwners != null)
+                {
+                    var foreignOwner = il.DefineLabel();
+                    // The legacy helper accepts foreign open CLR owners too; the finite path needs its own guard.
+                    il.Emit(OpCodes.Ldtoken, sourceOwners.Contract);
+                    il.Emit(OpCodes.Call, _types.TypeGetTypeFromHandle);
+                    il.Emit(OpCodes.Ldloc, owner);
+                    il.Emit(OpCodes.Callvirt, _types.GetMethod(_types.Type, "IsAssignableFrom", _types.Type));
+                    il.Emit(OpCodes.Brfalse, foreignOwner);
+                    EmitCloseOwnedGenericOwner(il, owner, sourceOwners);
+                    il.Emit(OpCodes.Br, closedOwner);
+                    il.MarkLabel(foreignOwner);
+                }
+                EmitCloseOpenGenericOwner(il, owner);
+            }
 
             il.MarkLabel(closedOwner);
             il.Emit(OpCodes.Ldloc, owner);
@@ -609,7 +650,8 @@ public partial class RuntimeEmitter
         MethodInfo innerTryGetValue,
         MethodInfo getBaseType,
         MethodInfo getType,
-        bool ownOnly = false
+        bool ownOnly = false,
+        MethodInfo? nativeInitializer = null
     )
     {
         var il = method.GetILGenerator();
@@ -662,7 +704,7 @@ public partial class RuntimeEmitter
         // both cctor execution and reflective Invoke; closed/non-generic owners
         // pass through unchanged.
         il.Emit(OpCodes.Ldloc, ownerLocal);
-        il.Emit(OpCodes.Call, symbolAccessors.ClosedOwner);
+        il.Emit(OpCodes.Call, _nativeOwnerClosure?.SymbolOwner ?? symbolAccessors.ClosedOwner);
         il.Emit(OpCodes.Stloc, closedOwnerLocal);
         // Static-side accessors are registered in the owner class's .cctor, which
         // the CLR runs lazily — merely using the class as a Type value (typeof) does
@@ -676,8 +718,12 @@ public partial class RuntimeEmitter
             il.Emit(OpCodes.Ldloc, asTypeLocal);
             il.Emit(OpCodes.Brfalse, skipCctor);
             il.Emit(OpCodes.Ldloc, closedOwnerLocal);
-            il.Emit(OpCodes.Callvirt, getTypeHandle);
-            il.Emit(OpCodes.Call, runClassCtor);
+            if (nativeInitializer is not null) il.Emit(OpCodes.Call, nativeInitializer);
+            else
+            {
+                il.Emit(OpCodes.Callvirt, getTypeHandle);
+                il.Emit(OpCodes.Call, runClassCtor);
+            }
             il.MarkLabel(skipCctor);
         }
         // if (!reg.TryGetValue(SymbolRegistryKey(owner), out inner)) goto nextBase;

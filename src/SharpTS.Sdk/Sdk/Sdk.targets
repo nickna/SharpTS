@@ -1,4 +1,26 @@
 <Project>
+  <!-- Native guests enter the ordinary SDK compile/publish graph as a small
+       Roslyn wrapper referencing the SharpTS-emitted assembly. Set these before
+       the base targets derive executable/reference/publish properties. -->
+  <PropertyGroup>
+    <SharpTSTarget Condition="'$(SharpTSTarget)' == '' and '$(PublishAot)' == 'true'">native-aot</SharpTSTarget>
+    <SharpTSTarget Condition="'$(SharpTSTarget)' == ''">dll</SharpTSTarget>
+    <_SharpTSRequestedRuntimeIdentifier>$(RuntimeIdentifier)</_SharpTSRequestedRuntimeIdentifier>
+    <_SharpTSCallerNoWarn>$(NoWarn)</_SharpTSCallerNoWarn>
+    <PublishAot Condition="'$(SharpTSTarget)' == 'native-aot' and '$(PublishAot)' == ''">true</PublishAot>
+  </PropertyGroup>
+  <PropertyGroup Condition="'$(SharpTSTarget)' == 'native-aot'">
+    <OutputType>Exe</OutputType>
+    <SkipCompilerExecution>false</SkipCompilerExecution>
+    <SkipCopyBuildProduct>false</SkipCopyBuildProduct>
+    <UseAppHost>true</UseAppHost>
+    <SharpTSUseReferenceAssemblies>true</SharpTSUseReferenceAssemblies>
+    <ServerGarbageCollection>false</ServerGarbageCollection>
+    <ConcurrentGarbageCollection>true</ConcurrentGarbageCollection>
+    <IlcTreatWarningsAsErrors>true</IlcTreatWarningsAsErrors>
+    <ILLinkTreatWarningsAsErrors>true</ILLinkTreatWarningsAsErrors>
+    <TrimmerSingleWarn>false</TrimmerSingleWarn>
+  </PropertyGroup>
   <!-- Import the base targets before declaring SharpTS hooks. MSBuild evaluation
        is order-dependent; this keeps the base SDK from overwriting the target
        chain customizations declared later in this file. -->
@@ -17,7 +39,7 @@
   <!-- Publish consumes @(IntermediateAssembly) as the primary build product.
        Point it at the assembly emitted by SharpTS so the base SDK publishes the
        real TypeScript output instead of looking for a Roslyn-produced obj file. -->
-  <ItemGroup>
+  <ItemGroup Condition="'$(SharpTSTarget)' != 'native-aot'">
     <IntermediateAssembly Remove="@(IntermediateAssembly)" />
     <IntermediateAssembly Include="$(SharpTSOutputPath)$(SharpTSOutputFileName)" />
   </ItemGroup>
@@ -25,6 +47,35 @@
   <!-- Import the MSBuild tasks assembly -->
   <UsingTask TaskName="SharpTS.Sdk.Tasks.ReadTsConfigTask"
              AssemblyFile="$(SharpTSTasksAssembly)" />
+
+  <UsingTask TaskName="SharpTS.Sdk.Tasks.NativeReferenceClosureTask"
+             AssemblyFile="$(SharpTSTasksAssembly)" />
+
+  <Target Name="_SharpTSValidateTarget" BeforeTargets="PrepareForBuild;CollectPackageReferences">
+    <Error Code="SHARPTSSDK001" Condition="'$(SharpTSTarget)' != 'dll' and '$(SharpTSTarget)' != 'native-aot'"
+           Text="SharpTSTarget must be dll or native-aot; received '$(SharpTSTarget)'." />
+    <Error Code="SHARPTSSDK001" Condition="'$(PublishAot)' == 'true' and '$(SharpTSTarget)' != 'native-aot'"
+           Text="PublishAot=true requires SharpTSTarget=native-aot so the generated guest enters the native publish graph." />
+  </Target>
+
+  <!-- Reject user references before restore/reference resolution can silently
+       omit them from the first native guest closure. SDK implicit framework and
+       compiler packages remain part of Microsoft's supported publish graph. -->
+  <Target Name="_SharpTSValidateNativeReferences" BeforeTargets="CollectPackageReferences"
+          Condition="'$(SharpTSTarget)' == 'native-aot'">
+    <ItemGroup>
+      <_SharpTSExplicitReference Include="@(Reference)" Condition="'%(Reference.IsImplicitlyDefined)' != 'true' and '%(Reference.SharpTSNativeGuest)' != 'true'" />
+      <_SharpTSUnsupportedReference Include="@(_SharpTSExplicitReference)" Condition="'%(_SharpTSExplicitReference.HintPath)' == '' or !Exists('%(_SharpTSExplicitReference.HintPath)')" />
+      <_SharpTSUnsupportedProjectReference Include="@(ProjectReference)" />
+      <_SharpTSUnsupportedPackageReference Include="@(PackageReference)" Condition="'%(PackageReference.IsImplicitlyDefined)' != 'true'" />
+    </ItemGroup>
+    <Error Code="SHARPTS402" Condition="'@(_SharpTSUnsupportedReference)' != ''"
+           Text="The native guest profile requires an explicit executable DLL HintPath for Reference: @(_SharpTSUnsupportedReference, ', '). Supply the complete managed implementation DLL graph or use managed output." />
+    <Error Code="SHARPTS402" Condition="'@(_SharpTSUnsupportedProjectReference)' != ''"
+           Text="The native guest profile does not support ProjectReference: @(_SharpTSUnsupportedProjectReference, ', '). Use managed DLL output for external references." />
+    <Error Code="SHARPTS402" Condition="'@(_SharpTSUnsupportedPackageReference)' != ''"
+           Text="The native guest profile does not support PackageReference: @(_SharpTSUnsupportedPackageReference, ', '). Use managed DLL output for external references." />
+  </Target>
 
   <!-- Read tsconfig.json settings if available -->
   <Target Name="_SharpTSReadTsConfig"
@@ -79,19 +130,10 @@
     </PropertyGroup>
   </Target>
 
-  <!-- Main compilation target -->
-  <Target Name="SharpTSCompile"
-          DependsOnTargets="_SharpTSReadTsConfig;_SharpTSValidateInputs;_SharpTSResolveEntryPoint;ResolveAssemblyReferences"
-          BeforeTargets="CoreCompile"
-          Outputs="$(SharpTSOutputPath)$(SharpTSOutputFileName)">
-
-    <!-- Ensure output directory exists -->
-    <MakeDir Directories="$(SharpTSOutputPath)" Condition="!Exists('$(SharpTSOutputPath)')" />
-
-    <!-- Build command line arguments -->
+  <Target Name="_SharpTSBuildCompilerArguments"
+          DependsOnTargets="_SharpTSReadTsConfig;_SharpTSValidateInputs;_SharpTSResolveEntryPoint">
     <PropertyGroup>
       <_SharpTSArgs>--compile "$(_SharpTSAbsoluteEntryPoint)"</_SharpTSArgs>
-      <_SharpTSArgs>$(_SharpTSArgs) -o "$(SharpTSOutputPath)$(SharpTSOutputFileName)"</_SharpTSArgs>
       <_SharpTSArgs>$(_SharpTSArgs) --msbuild-errors</_SharpTSArgs>
       <_SharpTSArgs>$(_SharpTSArgs) --quiet</_SharpTSArgs>
       <_SharpTSArgs>$(_SharpTSArgs) --gc-profile &quot;$(_SharpTSGcProfileNormalized)&quot;</_SharpTSArgs>
@@ -108,6 +150,18 @@
       <_SharpTSArgs Condition="'$(SharpTSDeclarationDir)' != ''">$(_SharpTSArgs) --declarationDir "$(SharpTSDeclarationDir)"</_SharpTSArgs>
       <_SharpTSArgs Condition="'$(SharpTSVerifyIL)' == 'true'">$(_SharpTSArgs) --verify</_SharpTSArgs>
       <_SharpTSArgs Condition="'$(SharpTSUseReferenceAssemblies)' == 'true'">$(_SharpTSArgs) --ref-asm</_SharpTSArgs>
+    </PropertyGroup>
+  </Target>
+
+  <!-- Main managed compilation keeps its existing direct IL output contract. -->
+  <Target Name="SharpTSCompile"
+          DependsOnTargets="_SharpTSBuildCompilerArguments;ResolveAssemblyReferences"
+          BeforeTargets="CoreCompile"
+          Condition="'$(SharpTSTarget)' != 'native-aot'"
+          Outputs="$(SharpTSOutputPath)$(SharpTSOutputFileName)">
+    <MakeDir Directories="$(SharpTSOutputPath)" Condition="!Exists('$(SharpTSOutputPath)')" />
+    <PropertyGroup>
+      <_SharpTSArgs>$(_SharpTSArgs) -o "$(SharpTSOutputPath)$(SharpTSOutputFileName)"</_SharpTSArgs>
       <!-- Pass assembly references from ReferencePath (populated by ResolveAssemblyReferences) -->
       <_SharpTSArgs>$(_SharpTSArgs) @(ReferencePath->'-r "%(Identity)"', ' ')</_SharpTSArgs>
     </PropertyGroup>
@@ -127,8 +181,75 @@
            Text="SharpTS compilation failed with exit code $(_SharpTSExitCode)." />
   </Target>
 
+  <Target Name="_SharpTSPrepareNativeGuest"
+          DependsOnTargets="_SharpTSBuildCompilerArguments;_SharpTSValidateNativeReferences"
+          Condition="'$(SharpTSTarget)' == 'native-aot' and '$(DesignTimeBuild)' != 'true'">
+    <PropertyGroup>
+      <!-- ILLink itself appends IL2121 for redundant suppression notices. Keep
+           that existing SDK default, while rejecting caller-requested IL2121
+           and every other effective IL warning suppression. NoWarn is unchanged. -->
+      <_SharpTSEffectiveNativeNoWarn>$([System.Text.RegularExpressions.Regex]::Replace('$(NoWarn)', '(?i)(^|[;,\s])IL2121(?=$|[;,\s])', '$1'))</_SharpTSEffectiveNativeNoWarn>
+    </PropertyGroup>
+    <Error Code="SHARPTSSDK001" Condition="'$(PublishAot)' != 'true' or '$(_SharpTSRequestedRuntimeIdentifier)' == ''"
+           Text="SharpTSTarget=native-aot requires PublishAot=true and an explicit RuntimeIdentifier (dotnet publish -r RID)." />
+    <Error Code="SHARPTSSDK001" Condition="'$(_SharpTSGcProfileNormalized)' != 'workstation' or '$(ServerGarbageCollection)' != 'false' or '$(ConcurrentGarbageCollection)' != 'true'"
+           Text="The native guest profile requires workstation GC: SharpTSGcProfile=workstation, ServerGarbageCollection=false, ConcurrentGarbageCollection=true." />
+    <Error Code="SHARPTSSDK001" Condition="'$(SharpTSEmitDeclarationOnly)' == 'true'"
+           Text="The native guest profile cannot publish emitDeclarationOnly output. Disable SharpTSEmitDeclarationOnly or use managed DLL output." />
+    <Error Code="SHARPTSSDK001" Condition="'$(AssemblyName)' == 'Guest'"
+           Text="AssemblyName=Guest is reserved by the first native guest profile. Choose another wrapper/output AssemblyName to avoid shadowing the generated Guest assembly." />
+    <Error Code="SHARPTSSDK001" Condition="'$(IlcTreatWarningsAsErrors)' != 'true' or '$(ILLinkTreatWarningsAsErrors)' != 'true' or '$(SuppressTrimAnalysisWarnings)' == 'true' or '$(TrimmerSingleWarn)' == 'true' or $([System.Text.RegularExpressions.Regex]::IsMatch('$(_SharpTSCallerNoWarn);$(_SharpTSEffectiveNativeNoWarn);$(WarningsNotAsErrors)', '(?i)(^|[;,\s])(IL[0-9*]+|[23][0-9]{3})($|[;,\s])'))"
+           Text="The native guest profile requires visible strict trim/AOT diagnostics: IlcTreatWarningsAsErrors=true, ILLinkTreatWarningsAsErrors=true, TrimmerSingleWarn=false, no SuppressTrimAnalysisWarnings, and no IL warning entries in NoWarn or WarningsNotAsErrors." />
+    <Error Code="SHARPTSSDK001" Condition="'$(SharpTSOutputPath)' != '$(OutputPath)' or '$(SharpTSOutputFileName)' != '$(AssemblyName).dll'"
+           Text="Native guest paths use AssemblyName, OutputPath, and PublishDir. SharpTSOutputPath and SharpTSOutputFileName customize managed DLL output only." />
+    <PropertyGroup>
+      <!-- Each invocation owns a fresh attempt. Previous inspectable projects
+           are retained; no directory is emptied or recursively removed. -->
+      <_SharpTSNativeProjectDirectory>$([MSBuild]::NormalizePath('$(MSBuildProjectDirectory)', '$(IntermediateOutputPath)', 'sharpts-native', '$([System.Guid]::NewGuid().ToString(&quot;N&quot;))'))</_SharpTSNativeProjectDirectory>
+      <_SharpTSArgs>$(_SharpTSArgs) @(_SharpTSExplicitReference->'-r &quot;%(HintPath)&quot;', ' ')</_SharpTSArgs>
+      <_SharpTSArgs>$(_SharpTSArgs) --emit-native-project &quot;$(_SharpTSNativeProjectDirectory)&quot; --runtime &quot;$(RuntimeIdentifier)&quot;</_SharpTSArgs>
+      <_SharpTSArgs Condition="'$(DebugSymbols)' == 'true' and '$(DebugType)' != 'none'">$(_SharpTSArgs) --debug</_SharpTSArgs>
+    </PropertyGroup>
+    <Message Importance="high" Text="SharpTS: Exporting native guest to $(_SharpTSNativeProjectDirectory)" />
+    <Exec Command="dotnet &quot;$(SharpTSCompilerExe)&quot; $(_SharpTSArgs)"
+          WorkingDirectory="$(MSBuildProjectDirectory)" ConsoleToMSBuild="true"
+          StandardOutputImportance="normal" StandardErrorImportance="high" />
+    <NativeReferenceClosureTask ProjectDirectory="$(_SharpTSNativeProjectDirectory)">
+      <Output TaskParameter="CapturedReferences" ItemName="_SharpTSCapturedNativeReference" />
+    </NativeReferenceClosureTask>
+    <ItemGroup>
+      <Reference Remove="@(_SharpTSExplicitReference)" />
+      <Reference Include="@(_SharpTSCapturedNativeReference)" />
+      <Compile Include="$(_SharpTSNativeProjectDirectory)/Program.cs" />
+      <Reference Include="Guest">
+        <HintPath>$(_SharpTSNativeProjectDirectory)/guest/Guest.dll</HintPath>
+        <Private>true</Private>
+        <SharpTSNativeGuest>true</SharpTSNativeGuest>
+      </Reference>
+    </ItemGroup>
+  </Target>
+
+  <!-- A wrapper must not shadow a framework assembly used by its guest. Use
+       the SDK's resolved references, and refuse before Roslyn/ILC can produce
+       an executable whose guest calls bind back to the wrapper itself. -->
+  <Target Name="_SharpTSValidateNativeWrapperIdentity"
+          AfterTargets="ResolveReferences" BeforeTargets="CoreCompile"
+          Condition="'$(SharpTSTarget)' == 'native-aot' and '$(DesignTimeBuild)' != 'true'">
+    <ItemGroup>
+      <_SharpTSNativeConflictingReference Include="@(ReferencePath)"
+          Condition="'%(ReferencePath.Filename)' == '$(AssemblyName)'" />
+    </ItemGroup>
+    <Error Code="SHARPTSSDK001" Condition="'@(_SharpTSNativeConflictingReference)' != ''"
+           Text="AssemblyName '$(AssemblyName)' shadows a resolved native guest reference: @(_SharpTSNativeConflictingReference->'%(Filename)', ', '). Choose a different wrapper/output AssemblyName." />
+  </Target>
+
+  <Target Name="_SharpTSValidateNativeResolvedReferences" AfterTargets="ResolveReferences" BeforeTargets="CoreCompile"
+          Condition="'$(SharpTSTarget)' == 'native-aot' and '$(DesignTimeBuild)' != 'true'">
+    <NativeReferenceClosureTask ProjectDirectory="$(_SharpTSNativeProjectDirectory)" ValidateResolution="true" ResolvedReferences="@(ReferencePath)" />
+  </Target>
+
   <!-- Clean target integration -->
-  <Target Name="SharpTSClean" BeforeTargets="Clean">
+  <Target Name="SharpTSClean" BeforeTargets="Clean" Condition="'$(SharpTSTarget)' != 'native-aot'">
     <Delete Files="$(SharpTSOutputPath)$(SharpTSOutputFileName)"
             Condition="Exists('$(SharpTSOutputPath)$(SharpTSOutputFileName)')" />
     <Delete Files="$(SharpTSOutputPath)$(_SharpTSRuntimeConfigFileName)"
@@ -142,7 +263,7 @@
        runnable after `dotnet publish`. -->
   <Target Name="_SharpTSAddRuntimeConfigToPublish"
           AfterTargets="ComputeFilesToPublish"
-          Condition="Exists('$(SharpTSOutputPath)$(_SharpTSRuntimeConfigFileName)')">
+          Condition="'$(SharpTSTarget)' != 'native-aot' and Exists('$(SharpTSOutputPath)$(_SharpTSRuntimeConfigFileName)')">
     <ItemGroup>
       <ResolvedFileToPublish Include="$(SharpTSOutputPath)$(_SharpTSRuntimeConfigFileName)">
         <RelativePath>$(_SharpTSRuntimeConfigFileName)</RelativePath>
@@ -154,5 +275,6 @@
   <!-- Integrate with Build target chain -->
   <PropertyGroup>
     <BuildDependsOn>SharpTSCompile;$(BuildDependsOn)</BuildDependsOn>
+    <ResolveReferencesDependsOn Condition="'$(SharpTSTarget)' == 'native-aot'">_SharpTSPrepareNativeGuest;$(ResolveReferencesDependsOn)</ResolveReferencesDependsOn>
   </PropertyGroup>
 </Project>

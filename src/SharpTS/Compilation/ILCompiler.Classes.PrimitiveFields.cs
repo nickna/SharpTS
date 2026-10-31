@@ -6,6 +6,18 @@ namespace SharpTS.Compilation;
 
 public partial class ILCompiler
 {
+    private void EmitUninitializedParameterProperties(ILGenerator il, TypeBuilder owner, Stmt.Function? constructor)
+    {
+        foreach (var parameter in constructor?.Parameters.Where(parameter => parameter.IsParameterProperty) ?? [])
+        {
+            if (!GetClassRegistry().TryGetOwnGuestDataField(owner, parameter.Name.Lexeme, out var field)
+                || (!field.IsPrimitive && field.NativeType != _types.Object && field.BackingField != null)) continue;
+            il.Emit(OpCodes.Ldarg_0);
+            il.Emit(OpCodes.Ldsfld, _runtime.Sentinels.UndefinedInstance);
+            il.Emit(OpCodes.Call, EmitterTypeHelpers.SelfMethodReference(field.GuestSetter));
+        }
+    }
+
     private void DefineGuestDataField(TypeBuilder owner, Stmt.Field source, Type nativeType,
         FieldBuilder? backing = null, MethodBuilder? getter = null, MethodBuilder? setter = null)
     {
@@ -33,9 +45,10 @@ public partial class ILCompiler
     {
         foreach (var field in GetClassRegistry().GetOwnGuestDataFields(owner))
         {
+            bool nativeOwn = _nativeOwnSourceDeclarations.ContainsKey(owner);
             var get = field.GuestGetter.GetILGenerator();
             var native = get.DefineLabel();
-            if (field.IsPrimitive || field.BackingField == null)
+            if (field.IsPrimitive || field.BackingField == null || nativeOwn)
             {
                 var dictionary = get.DeclareLocal(_types.DictionaryStringObject);
                 var value = get.DeclareLocal(_types.Object);
@@ -62,6 +75,10 @@ public partial class ILCompiler
 
             var set = field.GuestSetter.GetILGenerator();
             var raw = set.DefineLabel();
+            if (nativeOwn && field.NativeType != _types.Object)
+            {
+                set.Emit(OpCodes.Ldarg_1); set.Emit(OpCodes.Isinst, field.NativeType); set.Emit(OpCodes.Brfalse, raw);
+            }
             if (field.IsPrimitive)
             {
                 set.Emit(OpCodes.Ldarg_1);
@@ -81,10 +98,11 @@ public partial class ILCompiler
                     set.Emit(OpCodes.Unbox_Any, field.NativeType);
                 else if (field.NativeType != _types.Object) set.Emit(OpCodes.Castclass, field.NativeType);
                 set.Emit(OpCodes.Stfld, EmitterTypeHelpers.SelfFieldReference(typedBacking));
+                if (nativeOwn) EmitClearGuestFieldOverride(set, store, field.SourceName);
                 set.Emit(OpCodes.Ret);
             }
             set.MarkLabel(raw);
-            if (field.IsPrimitive || field.BackingField == null)
+            if (field.IsPrimitive || field.BackingField == null || nativeOwn)
             {
                 set.Emit(OpCodes.Ldarg_0);
                 set.Emit(OpCodes.Call, EmitterTypeHelpers.SelfMethodReference(ensureFields));

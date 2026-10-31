@@ -1,0 +1,24 @@
+cask "sharpts-native" do
+  version "@VERSION@"
+  sha256 "@SHA256@"
+
+  url "https://github.com/nickna/SharpTS/releases/download/v#{version}/sharpts-native-#{version}-osx-arm64.tar.gz"
+  name "SharpTS Native AOT"
+  desc "Native TypeScript runtime with closed interop; excludes managed tooling"
+  homepage "https://github.com/nickna/SharpTS"
+
+  livecheck do
+    skip "Updated from validated stable upstream releases"
+  end
+
+  conflicts_with cask: "sharpts"
+  depends_on arch: :arm64
+
+  binary "sharpts"
+
+  caveats <<~EOS
+    Native AOT uses a closed .NET interop catalog. Use the managed sharpts cask
+    for arbitrary DLL/NuGet references, --verify, --gen-decl, and compiled
+    child_process.fork. Compiled DLL output requires a compatible .NET host.
+  EOS
+end

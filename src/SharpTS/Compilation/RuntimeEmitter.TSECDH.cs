@@ -1132,7 +1132,8 @@ public partial class RuntimeEmitter
     /// Phase 2: Add Invoke method and finalize $BoundECDHMethod type.
     /// Called after ECDH methods are defined (Invoke calls them).
     /// </summary>
-    private void EmitBoundECDHMethodFinalize(BoundEcdhConstruction construction, EmittedCryptoRuntime crypto)
+    private void EmitBoundECDHMethodFinalize(BoundEcdhConstruction construction, EmittedCryptoRuntime crypto,
+        EmittedNativeCallableRuntime? nativeCallables = null)
     {
         // Invoke method: public object? Invoke(object[] args)
         var invoke = construction.TypeBuilder.DefineMethod(
@@ -1142,6 +1143,7 @@ public partial class RuntimeEmitter
             [typeof(object[])]
         );
         _ = invoke;
+        nativeCallables?.Register(construction.TypeBuilder, invoke);
 
         var il = invoke.GetILGenerator();
 

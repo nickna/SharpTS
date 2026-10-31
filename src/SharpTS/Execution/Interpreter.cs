@@ -273,6 +273,7 @@ public partial class Interpreter : IDisposable
     {
         if (_workerTerminationToken.IsCancellationRequested)
             throw new Runtime.Exceptions.WorkerTerminatedException();
+        _vmEvaluation?.Host.CheckCancellation();
         if (_vmTimeoutToken.IsCancellationRequested)
         {
             throw new Runtime.Exceptions.ThrowException(
@@ -474,29 +475,21 @@ public partial class Interpreter : IDisposable
     /// <param name="callback">The callback function to execute as a microtask.</param>
     internal void QueueMicrotask(ISharpTSCallable callback)
     {
-        lock (_microtaskQueueLock)
+        EnqueuePromiseJob(() =>
         {
-            _microtaskQueue.Enqueue(() =>
+            if (!_isDisposed)
             {
-                if (!_isDisposed)
+                try
                 {
-                    try
-                    {
-                        callback.Call(this, []);
-                    }
-                    catch (Exception ex)
-                    {
-                        if (_hostedUnhandledError != null)
-                            _hostedUnhandledError(ex);
-                        else
-                            Error.WriteLine($"Uncaught exception in microtask: {ex.Message}");
-                    }
+                    callback.Call(this, []);
                 }
-            });
-            Volatile.Write(ref _hasMicrotasks, 1);
-        }
-        // Wake the event loop to process microtasks promptly
-        WakeEventLoop();
+                catch (Exception ex)
+                {
+                    if (_hostedUnhandledError != null) _hostedUnhandledError(ex);
+                    else Error.WriteLine($"Uncaught exception in microtask: {ex.Message}");
+                }
+            }
+        });
     }
 
     /// <summary>
@@ -552,9 +545,10 @@ public partial class Interpreter : IDisposable
 
     internal void EnqueueAfterPromiseCheckpoint(Action callback)
     {
+        if (_vmEvaluation is { } evaluation) { evaluation.Queue(callback, afterCheckpoint: true); return; }
         lock (_microtaskQueueLock)
         {
-            if (_isDisposed || (_hostedWorkAvailable != null && !_hostedAcceptingWork)) return;
+            if (_isDisposed || !AcceptsHostedMicrotasks) return;
             _afterPromiseCheckpointQueue.Enqueue(callback);
             Volatile.Write(ref _hasMicrotasks, 1);
         }
@@ -565,9 +559,10 @@ public partial class Interpreter : IDisposable
     // before timers and captured listener errors are dispatched.
     internal void EnqueuePromiseJob(Action continuation)
     {
+        if (_vmEvaluation is { } evaluation) { evaluation.Queue(continuation); return; }
         lock (_microtaskQueueLock)
         {
-            if (_isDisposed || (_hostedWorkAvailable != null && !_hostedAcceptingWork)) return;
+            if (_isDisposed || !AcceptsHostedMicrotasks) return;
             _microtaskQueue.Enqueue(continuation);
             Volatile.Write(ref _hasMicrotasks, 1);
         }
@@ -692,6 +687,7 @@ public partial class Interpreter : IDisposable
     internal void Ref()
     {
         Interlocked.Increment(ref _activeHandles);
+        _vmEvaluation?.AddRef();
     }
 
     /// <summary>
@@ -701,6 +697,7 @@ public partial class Interpreter : IDisposable
     internal void Unref()
     {
         int newValue = Interlocked.Decrement(ref _activeHandles);
+        _vmEvaluation?.RemoveRef();
 
         // Wake the event loop when count reaches zero so it can check exit conditions
         if (newValue == 0)
@@ -1111,7 +1108,7 @@ public partial class Interpreter : IDisposable
         if (_processingMicrotasks) return;
         // A hosted runtime owns event-loop turns. Pumping from an ordinary guest
         // loop reenters synchronous rendering (and other application code).
-        if (_hostedOwnerThreadId.HasValue) return;
+        if (_hostedOwnerThreadId.HasValue || _vmEvaluation is not null) return;
         // Legacy loop polling can deliver timers, but a synchronous loop is not a
         // Promise checkpoint. Pending jobs also prevent timers overtaking that checkpoint.
         if (!processMicrotasks && HasMicrotasks()) return;
@@ -1208,6 +1205,10 @@ public partial class Interpreter : IDisposable
         }
 
         _isDisposed = true;
+        Exception? vmCleanupFailure = null;
+        try { _vmExecutionHost?.Dispose(); }
+        catch (Exception exception) { vmCleanupFailure = exception; }
+        _vmHostShutdown.Dispose();
 
         // Signal the event loop to exit via cooperative cancellation
         try { _shutdownCts.Cancel(); }
@@ -1252,12 +1253,17 @@ public partial class Interpreter : IDisposable
 
         // Reset singletons to prevent listener/state leakage
         // across interpreter runs (e.g., in test suites or REPL restarts).
-        Runtime.Types.SharpTSStdin.Instance.ResetReadableState();
-        Runtime.Types.SharpTSStdout.Instance.ResetWritableState();
-        Runtime.Types.SharpTSStderr.Instance.ResetWritableState();
-        Runtime.Types.SharpTSAgent.ResetGlobalAgent();
+        if (!_vmOwnedEvaluation)
+        {
+            Runtime.Types.SharpTSStdin.Instance.ResetReadableState();
+            Runtime.Types.SharpTSStdout.Instance.ResetWritableState();
+            Runtime.Types.SharpTSStderr.Instance.ResetWritableState();
+            Runtime.Types.SharpTSAgent.ResetGlobalAgent();
+        }
 
         GC.SuppressFinalize(this);
+        if (vmCleanupFailure is not null)
+            System.Runtime.ExceptionServices.ExceptionDispatchInfo.Capture(vmCleanupFailure).Throw();
     }
 
     public void Resolve(Expr expr, int depth)
@@ -1271,6 +1277,8 @@ public partial class Interpreter : IDisposable
     /// </summary>
     private RuntimeValue LookupVariableRV(Token name, Expr expr, bool allowUnresolvable = false)
     {
+        if (name.IsGeneratedTemporary && _environment.TryReadVmTemporary(name, out var temporary))
+            return temporary;
         // Fast path: resolved locals with known depth
         if (_locals.TryGetValue(expr, out int distance))
         {
@@ -1284,17 +1292,40 @@ public partial class Interpreter : IDisposable
             return rv;
         }
 
+        if (_environment.VmGlobalObject is { } vmGlobal)
+        {
+            if (vmGlobal.HasProperty(name.Lexeme))
+                return RuntimeValue.FromBoxed(GetPropertyValue(vmGlobal, name.Lexeme));
+            if (vmGlobal.IsDeletedProperty(name.Lexeme))
+            {
+                if (allowUnresolvable) return RuntimeValue.Undefined;
+                throw new InterpreterException($"ReferenceError: Undefined variable '{name.Lexeme}'.");
+            }
+            // Preserve virtual globals exposed by this existing facade even
+            // when its older presence inventory omits their physical slot.
+            if (vmGlobal.GetProperty(name.Lexeme) is not SharpTSUndefined and var intrinsic)
+                return RuntimeValue.FromBoxed(intrinsic);
+        }
+
         // Per-realm globalThis and its Node `global` alias: each realm has its
         // own global object so guest `globalThis.x = …` stays realm-local. A user
         // `let globalThis`/`let global` already won via the environment check above.
         if (name.Lexeme == "globalThis" || name.Lexeme == "global")
         {
-            return RuntimeValue.FromBoxed(GlobalThis);
+            var globalObject = _environment.VmGlobalObject ?? GlobalThis;
+            if (globalObject.HasUserProperty(name.Lexeme))
+                return RuntimeValue.FromBoxed(GetPropertyValue(globalObject, name.Lexeme));
+            if (globalObject.IsDeletedProperty(name.Lexeme))
+            {
+                if (allowUnresolvable) return RuntimeValue.Undefined;
+                throw new InterpreterException($"ReferenceError: Undefined variable '{name.Lexeme}'.");
+            }
+            return RuntimeValue.FromBoxed(globalObject);
         }
 
-        // Global function bindings live on the global object. Keep lexical bindings
-        // above this lookup, and leave immutable constants on their existing path.
-        if (IsGlobalFunctionBinding(name.Lexeme))
+        // Mutable global bindings live on the global object. Lexical bindings
+        // above this lookup and immutable constants retain their existing paths.
+        if (IsMutableGlobalObjectBinding(name.Lexeme))
         {
             if (GlobalThis.HasUserProperty(name.Lexeme))
                 return RuntimeValue.FromBoxed(GetPropertyValue(GlobalThis, name.Lexeme));
@@ -1332,6 +1363,21 @@ public partial class Interpreter : IDisposable
         // is what routes this to a guest ReferenceError at the catch binding
         // (Interpreter.Statements.cs TryCreateGuestErrorFromMessage).
         throw new InterpreterException($"ReferenceError: Undefined variable '{name.Lexeme}'.");
+    }
+
+    private static bool IsMutableGlobalObjectBinding(string name)
+        => (IsRealmIntrinsicName(name) || _globalConstants.ContainsKey(name))
+            && name is not (BuiltInNames.Undefined or BuiltInNames.NaN or BuiltInNames.Infinity);
+
+    private void AssignVariableValue(Token name, RuntimeValue value)
+    {
+        if (name.IsGeneratedTemporary && _environment.TryAssignVmTemporary(name, value)) return;
+        if (!_environment.IsDefined(name.Lexeme) && _environment.VmGlobalObject is { } vmGlobal)
+            WriteGlobalObjectVariable(vmGlobal, name.Lexeme, value, _environment.IsStrictMode);
+        else if (!_environment.IsDefined(name.Lexeme) && IsMutableGlobalObjectBinding(name.Lexeme))
+            WriteClassicGlobalVariable(name.Lexeme, value, _environment.IsStrictMode);
+        else
+            _environment.Assign(name, value);
     }
 
     private bool IsGlobalFunctionBinding(string name)
@@ -1504,6 +1550,34 @@ public partial class Interpreter : IDisposable
     }
 
     /// <summary>
+    /// Executes an ordinary script statement list and returns its completion value.
+    /// Promise values remain actual values; hosts choose their microtask checkpoint.
+    /// </summary>
+    internal object? InterpretScriptCompletion(List<Stmt> statements)
+    {
+        HoistFunctionDeclarations(statements);
+        HoistLocalLoopVarDeclarations(statements);
+        var completion = ExecutionResult.Success();
+        foreach (var statement in statements)
+        {
+            ThrowIfExecutionCancelled();
+            completion = Execute(statement).UpdateEmpty(completion);
+            if (completion.Type == ExecutionResult.ResultType.Throw)
+            {
+                if (VmModuleInterpreter.IsExecutingVmScript)
+                {
+                    if (completion.FromGuestThrow) _vmEvaluation?.MarkGuestAbrupt();
+                    VmModuleInterpreter.RecordVmErrorValue(completion.Value.ToObject(), this);
+                    VmModuleInterpreter.RetainVmErrorValue(completion.Value.ToObject());
+                }
+                throw ThrowException.FromResult(completion.Value.ToObject(), completion.FromGuestThrow);
+            }
+            if (completion.IsAbrupt) return SharpTSUndefined.Instance;
+        }
+        return completion.HasValue ? completion.Value.ToObject() : SharpTSUndefined.Instance;
+    }
+
+    /// <summary>
     /// Implements the global <c>eval(source)</c> function. Lexes, parses, and interprets
     /// <paramref name="source"/> in the interpreter's current environment, returning the
     /// execution completion value, or <c>undefined</c> for an empty completion.
@@ -1535,18 +1609,7 @@ public partial class Interpreter : IDisposable
             throw new ThrowException(new SharpTSError($"SyntaxError: {detail}"));
         }
 
-        HoistFunctionDeclarations(parseResult.Statements);
-        HoistLocalLoopVarDeclarations(parseResult.Statements);
-        var completion = ExecutionResult.Success();
-        foreach (var statement in parseResult.Statements)
-        {
-            ThrowIfExecutionCancelled();
-            completion = Execute(statement).UpdateEmpty(completion);
-            if (completion.Type == ExecutionResult.ResultType.Throw)
-                throw ThrowException.FromResult(completion.Value.ToObject(), completion.FromGuestThrow);
-            if (completion.IsAbrupt) return SharpTSUndefined.Instance;
-        }
-        return completion.HasValue ? completion.Value.ToObject() : SharpTSUndefined.Instance;
+        return InterpretScriptCompletion(parseResult.Statements);
     }
 
     /// <summary>
@@ -1779,7 +1842,7 @@ public partial class Interpreter : IDisposable
         }
 
         // Create module instance to track exports (TryAdd returns false if already executed)
-        var moduleInstance = new ModuleInstance();
+        var moduleInstance = CreateModuleInstance(module);
         if (!_loadedModules.TryAdd(module.Path, moduleInstance))
         {
             return;
@@ -1952,7 +2015,11 @@ public partial class Interpreter : IDisposable
                     }
                     else
                     {
-                        env.Define(import.DefaultImport.Lexeme, importedModuleInstance.DefaultExport);
+                        var source = importedModuleInstance;
+                        string localName = import.DefaultImport.Lexeme;
+                        env.DefineObjectBinding(localName,
+                            () => RuntimeValue.FromBoxed(source.DefaultExport),
+                            (_, _) => throw StrictModeErrors.TypeError($"Cannot assign to import '{localName}'"));
                     }
                 }
 
@@ -1991,7 +2058,11 @@ public partial class Interpreter : IDisposable
                         }
                         else
                         {
-                            value = importedModuleInstance.GetExport(importedName);
+                            var source = importedModuleInstance;
+                            env.DefineObjectBinding(localName,
+                                () => RuntimeValue.FromBoxed(source.GetExport(importedName)),
+                                (_, _) => throw StrictModeErrors.TypeError($"Cannot assign to import '{localName}'"));
+                            continue;
                         }
                         env.Define(localName, value);
                     }
@@ -2029,7 +2100,10 @@ public partial class Interpreter : IDisposable
 
                 if (_currentModuleInstance != null)
                 {
-                    _currentModuleInstance.DefaultExport = GetDeclaredValue(export.Declaration);
+                    var declaration = export.Declaration;
+                    RuntimeEnvironment bindingEnvironment = _environment;
+                    _currentModuleInstance.SetDefaultExport(GetDeclaredValue(declaration, bindingEnvironment));
+                    _currentModuleInstance.SetLiveExport("default", () => GetDeclaredValue(declaration, bindingEnvironment));
                 }
             }
             else if (export.DefaultExpr != null)
@@ -2037,7 +2111,7 @@ public partial class Interpreter : IDisposable
                 var value = Evaluate(export.DefaultExpr);
                 if (_currentModuleInstance != null)
                 {
-                    _currentModuleInstance.DefaultExport = value;
+                    _currentModuleInstance.SetDefaultExport(value);
                 }
             }
         }
@@ -2049,8 +2123,15 @@ public partial class Interpreter : IDisposable
             // Skip type-only declarations (interface, type alias) - they have no runtime value
             if (_currentModuleInstance != null && !IsTypeOnlyDeclaration(export.Declaration))
             {
-                string name = GetDeclaredName(export.Declaration);
-                _currentModuleInstance.SetExport(name, GetDeclaredValue(export.Declaration));
+                foreach (var declaration in ExportDeclarationSequence.Declarations(export.Declaration))
+                {
+                    if (IsTypeOnlyDeclaration(declaration)) continue;
+                    string name = GetDeclaredName(declaration);
+                    RuntimeEnvironment bindingEnvironment = _environment;
+                    _currentModuleInstance.SetExport(name, GetDeclaredValue(declaration, bindingEnvironment));
+                    _currentModuleInstance.SetLiveExport(name,
+                        () => GetDeclaredValue(declaration, bindingEnvironment));
+                }
             }
         }
         else if (export.NamedExports != null && export.FromModulePath == null)
@@ -2062,10 +2143,11 @@ public partial class Interpreter : IDisposable
                     continue;
                 string localName = spec.LocalName.Lexeme;
                 string exportedName = spec.ExportedName?.Lexeme ?? localName;
-                var value = _environment.Get(spec.LocalName).ToObject();
                 if (_currentModuleInstance != null)
                 {
-                    _currentModuleInstance.SetExport(exportedName, value);
+                    RuntimeEnvironment bindingEnvironment = _environment;
+                    _currentModuleInstance.SetLiveExport(exportedName,
+                        () => bindingEnvironment.Get(spec.LocalName).ToObject());
                 }
             }
         }
@@ -2092,7 +2174,7 @@ public partial class Interpreter : IDisposable
             {
                 // For CJS sources, read from the live module.exports object via the full
                 // property-access path so accessor-defined named exports work (matching the
-                // import-side fix). ESM sources use the static Exports dictionary as before.
+                // import-side fix). ESM re-exports retain the source binding.
                 SharpTSObject? cjsExports = sourceModuleInstance.CommonJsModuleObject != null
                     ? sourceModuleInstance.CommonJsModuleObject.GetProperty("exports") as SharpTSObject
                     : null;
@@ -2106,10 +2188,13 @@ public partial class Interpreter : IDisposable
                             continue;
                         string importedName = spec.LocalName.Lexeme;
                         string exportedName = spec.ExportedName?.Lexeme ?? importedName;
-                        object? value = cjsExports != null
-                            ? EvaluateGetOnRecord(cjsExports, importedName)
-                            : sourceModuleInstance.GetExport(importedName);
-                        _currentModuleInstance.SetExport(exportedName, value);
+                        if (cjsExports != null)
+                            _currentModuleInstance.SetExport(exportedName, EvaluateGetOnRecord(cjsExports, importedName));
+                        else
+                        {
+                            var source = sourceModuleInstance;
+                            _currentModuleInstance.SetLiveExport(exportedName, () => source.GetExport(importedName));
+                        }
                     }
                 }
                 else if (cjsExports != null)
@@ -2133,9 +2218,11 @@ public partial class Interpreter : IDisposable
                 else
                 {
                     // Re-export all: export * from './module'
-                    foreach (var (name, value) in sourceModuleInstance.Exports)
+                    foreach (var name in sourceModuleInstance.Exports.Keys)
                     {
-                        _currentModuleInstance.SetExport(name, value);
+                        if (name == "default") continue;
+                        var source = sourceModuleInstance;
+                        _currentModuleInstance.SetLiveExport(name, () => source.GetExport(name));
                     }
                 }
             }
@@ -2148,7 +2235,7 @@ public partial class Interpreter : IDisposable
     /// Checks if a declaration is type-only (interface or type alias) with no runtime value.
     /// </summary>
     private bool IsTypeOnlyDeclaration(Stmt decl) =>
-        decl is Stmt.Interface or Stmt.TypeAlias;
+        decl is Stmt.Interface or Stmt.TypeAlias or Stmt.Var { IsDeclare: true };
 
     /// <summary>
     /// Executes a CommonJS-style require import: import x = require('path')
@@ -2279,7 +2366,7 @@ public partial class Interpreter : IDisposable
                 HoistTopLevelVarDeclarations(sequence.Statements);
                 continue;
             }
-            if (stmt is not Stmt.Var { IsVar: true } variable) continue;
+            if (stmt is not Stmt.Var { IsVar: true, IsDeclare: false } variable) continue;
 
             RegisterClassicGlobalVar(variable.Name.Lexeme);
         }
@@ -2287,12 +2374,12 @@ public partial class Interpreter : IDisposable
 
     private void RegisterClassicGlobalVar(string name)
     {
-        if (GlobalThis.GetOwnPropertyDescriptor(name) is null)
+        if (GlobalThis.GetOwnPropertyDescriptor(name) is null || GlobalThis.NeedsVmGlobalVariable(name))
         {
             object? initialValue = _environment.IsDefinedLocally(name) && !_environment.HasObjectBinding(name)
                 ? _environment.GetAt(0, name).ToObject()
                 : SharpTSUndefined.Instance;
-            if (!GlobalThis.DefineProperty(name, new SharpTSPropertyDescriptor(
+            if (!GlobalThis.DefineGlobalVariable(name, new SharpTSPropertyDescriptor(
                     initialValue, writable: true, enumerable: true, configurable: false)
                     { HasValue = true }))
                 throw new InterpreterException($"TypeError: Cannot declare global variable '{name}'.");
@@ -2320,19 +2407,22 @@ public partial class Interpreter : IDisposable
     }
 
     private void WriteClassicGlobalVariable(string name, RuntimeValue value, bool strictMode)
+        => WriteGlobalObjectVariable(GlobalThis, name, value, strictMode);
+
+    private void WriteGlobalObjectVariable(SharpTSGlobalThis target, string name, RuntimeValue value, bool strictMode)
     {
-        if (strictMode && !GlobalThis.HasProperty(name))
+        if (strictMode && !target.HasProperty(name))
             throw new InterpreterException($"ReferenceError: Undefined variable '{name}'.");
         object? boxed = value.ToObject();
-        if (!TryAssignThroughDescriptor(GlobalThis.GetOwnPropertyDescriptor(name),
-                GlobalThis, name, boxed, strictMode))
-            GlobalThis.SetProperty(name, boxed);
+        if (!TryAssignThroughDescriptor(target.GetOwnPropertyDescriptor(name),
+                target, name, boxed, strictMode))
+            target.SetProperty(name, boxed);
     }
 
     /// <summary>
     /// Gets the name of a declaration.
     /// </summary>
-    private string GetDeclaredName(Stmt decl)
+    private static string GetDeclaredName(Stmt decl)
     {
         return decl switch
         {
@@ -2350,7 +2440,9 @@ public partial class Interpreter : IDisposable
     /// <summary>
     /// Gets the value of a declaration from the environment.
     /// </summary>
-    private object? GetDeclaredValue(Stmt decl)
+    private object? GetDeclaredValue(Stmt decl) => GetDeclaredValue(decl, _environment);
+
+    private static object? GetDeclaredValue(Stmt decl, RuntimeEnvironment bindingEnvironment)
     {
         string name = GetDeclaredName(decl);
         var token = decl switch
@@ -2364,7 +2456,7 @@ public partial class Interpreter : IDisposable
             Stmt.Namespace n => n.Name,
             _ => throw new InterpreterException($"Cannot get value of declaration type {decl.GetType().Name}")
         };
-        return _environment.Get(token).ToObject();
+        return bindingEnvironment.Get(token).ToObject();
     }
 
 }

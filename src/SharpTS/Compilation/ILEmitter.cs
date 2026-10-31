@@ -35,6 +35,7 @@ public partial class ILEmitter : StatementEmitterBase, IEmitterContext
     private readonly CompilationContext _ctx;
     private readonly LocalVariableResolver _resolver;
     private Expr.Variable? _constructorParameterPropertyValue;
+    private LocalBuilder? _constructorParameterPropertyLocal;
     private readonly Stack<AbruptCompletionScope> _abruptCompletionScopes = [];
     private readonly Stack<IteratorLoopCompletionScope> _iteratorLoopCompletionScopes = [];
     private readonly Stack<LocalThrowScope> _localThrowScopes = [];
@@ -368,6 +369,7 @@ public partial class ILEmitter : StatementEmitterBase, IEmitterContext
 
     private void EmitVariableDeclarationWithLexicalTdz(Stmt.Var declaration)
     {
+        if (declaration.IsDeclare) return;
         if (declaration.IsVar)
         {
             EmitVarDeclaration(declaration);

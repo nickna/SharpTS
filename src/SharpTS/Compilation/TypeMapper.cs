@@ -1,4 +1,8 @@
 using System.Reflection.Emit;
+using MethodInfo = System.Reflection.MethodInfo;
+using ConstructorInfo = System.Reflection.ConstructorInfo;
+using FieldInfo = System.Reflection.FieldInfo;
+using ParameterInfo = System.Reflection.ParameterInfo;
 using SharpTS.Parsing;
 using SharpTS.TypeSystem;
 
@@ -20,8 +24,21 @@ public class TypeMapper
 {
     private readonly ModuleBuilder _moduleBuilder;
     private readonly TypeProvider _types;
+    internal AssemblyReferenceLoader? ExternalMetadata { get; set; }
+    internal MethodInfo[] CloseExternalGenericCandidates(IEnumerable<MethodInfo> methods, IReadOnlyList<Type?> arguments,
+        IReadOnlyList<Type>? explicitArguments, Type? expectedReturn) =>
+        ExternalMetadata?.CloseGenericCandidates(methods, arguments, explicitArguments, expectedReturn) ??
+        SharpTS.Runtime.DotNet.DotNetGenericMethodInference.CloseCandidates(methods, arguments, explicitArguments, expectedReturn);
+    internal object? DefaultForEmission(ParameterInfo parameter) =>
+        ExternalMetadata is { } loader ? loader.DefaultForEmission(parameter) : parameter.DefaultValue;
+    internal MethodInfo ForEmission(MethodInfo value) => ExternalMetadata?.ForEmission(value) ?? value;
+    internal ConstructorInfo ForEmission(ConstructorInfo value) => ExternalMetadata?.ForEmission(value) ?? value;
+    internal FieldInfo ForEmission(FieldInfo value) => ExternalMetadata?.ForEmission(value) ?? value;
+    internal Type CoreAtomForEmission(Type value) => ExternalMetadata?.CoreAtomForEmission(value) ?? value;
+    internal Type ForEmission(Type value) => ExternalMetadata?.ForEmission(value) ?? value;
     private readonly Dictionary<int, string> _checkedClassNames = [];
     private readonly HashSet<int> _dynamicClassInstances = [];
+    private readonly HashSet<int> _receiverConstructionClasses = [];
     internal HeldClassConstructionInfo? HeldClassConstructions { get; set; }
 
     internal void RegisterDynamicClassInstance(int declarationId)
@@ -30,9 +47,19 @@ public class TypeMapper
     }
 
     internal bool IsDynamicClassInstance(TypeInfo? type)
+        => HasClassInAncestry(type, _dynamicClassInstances);
+
+    internal void RegisterReceiverConstruction(int declarationId)
+    {
+        if (declarationId != 0) _receiverConstructionClasses.Add(declarationId);
+    }
+
+    internal bool RequiresReceiverConstruction(TypeInfo? type) => HasClassInAncestry(type, _receiverConstructionClasses);
+
+    private static bool HasClassInAncestry(TypeInfo? type, HashSet<int> declarations)
     {
         // A constructor's replacement can also become the result of derived construction.
-        if (_dynamicClassInstances.Count == 0) return false;
+        if (declarations.Count == 0) return false;
         var visited = new HashSet<TypeInfo>(ReferenceEqualityComparer.Instance);
         while (type != null && visited.Add(type))
         {
@@ -53,7 +80,7 @@ public class TypeMapper
                 TypeInfo.MutableClass c => (c.DeclarationId, c.Superclass),
                 _ => (0, (TypeInfo?)null)
             };
-            if (_dynamicClassInstances.Contains(declaration)) return true;
+            if (declarations.Contains(declaration)) return true;
             type = superclass;
         }
         return false;

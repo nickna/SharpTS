@@ -20,6 +20,14 @@ public sealed class EmittedMicrotaskRuntime
         internal set => Set(ref _queueMicrotask, value);
     }
 
+    private MethodBuilder? _queueMicrotaskValue;
+    // Optional global-value adapter; the required typed queue remains public.
+    internal MethodBuilder QueueMicrotaskValue
+    {
+        get => Require(_queueMicrotaskValue);
+        set => Set(ref _queueMicrotaskValue, value);
+    }
+
     private MethodBuilder? _queuePromiseJob;
     public MethodBuilder QueuePromiseJob
     {
