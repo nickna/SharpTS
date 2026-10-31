@@ -3120,16 +3120,8 @@ public partial class ILEmitter
         if (!IsNullPlaceholderGlobal(csi.Object))
             EmitThrowIfUndefinedIndexReceiver(objLocal, indexLocal, isWrite: false);
 
-        // Normalize the computed property key once, before the read and RHS.
-        if (_ctx.TypeMap?.Get(csi.Object) is not { } receiverType ||
-            !DotNetTypeSynthesizer.TryGetClrType(receiverType, out _))
-        {
-            IL.Emit(OpCodes.Ldloc, indexLocal);
-            IL.Emit(OpCodes.Call, _ctx.Runtime!.Reflect.ToPropertyKey);
-            IL.Emit(OpCodes.Stloc, indexLocal);
-        }
-
-        // Get current value: GetIndex(obj, index)
+        // Retain the raw referenced name. GetIndex and SetIndex each convert
+        // their own key, so PutValue observes coercion after the RHS.
         IL.Emit(OpCodes.Ldloc, objLocal);
         IL.Emit(OpCodes.Ldloc, indexLocal);
         IL.Emit(OpCodes.Call, _ctx.Runtime!.ObjectRead.Index);
