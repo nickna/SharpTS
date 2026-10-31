@@ -1108,8 +1108,11 @@ public static partial class ObjectBuiltIns
         if (target is SharpTSObjectPrototype objectPrototype && propertyKey is string prototypeName)
         {
             var change = ToPropertyDescriptor(interpreter, descriptor);
+            var current = OwnPropertyDescriptorOf(interpreter, objectPrototype, prototypeName);
+            if (current is null && !PropertyDescriptorStore.IsExtensible(objectPrototype))
+                return false;
             return objectPrototype.GetOwnPropertyDescriptor(prototypeName) is null
-                && OwnPropertyDescriptorOf(interpreter, objectPrototype, prototypeName) is { HasValue: true } current
+                && current is { HasValue: true }
                 ? objectPrototype.DefineExistingDataProperty(prototypeName, current, change)
                 : objectPrototype.DefineExtraProperty(prototypeName, change);
         }
