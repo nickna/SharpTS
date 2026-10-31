@@ -1586,8 +1586,10 @@ public static class PromiseBuiltIns
                 && ReferenceEquals(promiseClass, SharpTSPromiseClass.PromiseBase);
         if (isBaseConstructor)
         {
-            var completion = new TaskCompletionSource<object?>(
-                TaskCreationOptions.RunContinuationsAsynchronously);
+            // Publish settlement on this checkpoint's thread. Await and then
+            // enqueue their own guest reactions; a ThreadPool hop here can let
+            // timers overtake those not-yet-published jobs.
+            var completion = new TaskCompletionSource<object?>();
             var result = new SharpTSPromise(completion.Task)
             {
                 IntrinsicConstructor = receiver as SharpTSBuiltInConstructor ?? interpreter.PromiseGlobalValue,
