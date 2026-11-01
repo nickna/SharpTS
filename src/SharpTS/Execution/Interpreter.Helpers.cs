@@ -199,7 +199,8 @@ public partial class Interpreter
     /// <returns><c>true</c> if the element was found; otherwise <c>false</c>.</returns>
     private bool TryGetIndex(object? obj, object? index, out object? value)
     {
-        if (obj is SharpTSTypedArray typedArray && RuntimeValue.FromBoxed(index).IsObject)
+        if (obj is SharpTSTypedArray typedArray
+            && (index is double || RuntimeValue.FromBoxed(index).IsObject))
         {
             value = ReadTypedArrayReferenceValue(typedArray, ToPropertyKey(index));
             return true;
@@ -248,7 +249,8 @@ public partial class Interpreter
     /// <returns><c>true</c> if the element was set; otherwise <c>false</c>.</returns>
     private bool TrySetIndex(object? obj, object? index, object? value)
     {
-        if (obj is SharpTSTypedArray typedArray && RuntimeValue.FromBoxed(index).IsObject)
+        if (obj is SharpTSTypedArray typedArray
+            && (index is double || RuntimeValue.FromBoxed(index).IsObject))
         {
             WriteTypedArrayReferenceValue(typedArray, ToPropertyKey(index), value, _environment.IsStrictMode);
             return true;

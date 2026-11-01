@@ -213,18 +213,18 @@ public partial class Interpreter
             return newValue;
         }
 
-        // Typed-array element compound assignment (e.g. `a[i] += 1` on an Int32Array). Read the
-        // element (a boxed double, or BigInteger for BigInt arrays), apply the op, narrow back via
-        // the typed-array setter. The compiled side has a dedicated unboxed fast path; this keeps the
-        // interpreter consistent (previously it threw "not supported on this type").
-        if (obj is SharpTSTypedArray typedArray && index is double typedIdx)
+        // Normalize numeric keys before checking physical storage. Fractional
+        // and non-finite values must not alias an integer element after a cast.
+        if (obj is SharpTSTypedArray typedArray && index is double)
         {
-            int ti = (int)typedIdx;
-            RuntimeValue current = RuntimeValue.FromBoxed(typedArray[ti]);
+            object key = ToPropertyKey(index);
+            RuntimeValue current = RuntimeValue.FromBoxed(
+                ReadTypedArrayReferenceValue(typedArray, key));
             RuntimeValue addValue = await ctx.EvaluateExprAsync(compound.Value);
             RuntimeValue newValue = ApplyCompoundOperatorRV(
                 compound.Operator.Type, current, addValue);
-            typedArray[ti] = newValue.ToObject();
+            WriteTypedArrayReferenceValue(typedArray, key,
+                newValue.ToObject(), _environment.IsStrictMode);
             return newValue;
         }
 
