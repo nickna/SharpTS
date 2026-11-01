@@ -464,6 +464,7 @@ public sealed class GlobalIsNaNValueTests
             TestHarness.Run(source, ExecutionMode.Interpreted));
     }
 
+    // Interpreted only: compiled array and boxed conversion hooks are tracked in #2929.
     [Fact]
     public void GlobalIsNaNSkipsNonCallableProxyConversionMethods()
     {
