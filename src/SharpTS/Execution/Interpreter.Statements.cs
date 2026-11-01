@@ -31,12 +31,15 @@ public partial class Interpreter
     private class UsingTracker
     {
         private readonly Interpreter _interpreter;
-        private readonly List<(object? Resource, bool IsAsync)> _resources = new();
+        private readonly List<(object? Resource, ISharpTSCallable? Method, bool IsAsync, bool AwaitResult)> _resources = new();
 
         public UsingTracker(Interpreter interpreter) => _interpreter = interpreter;
 
-        public void Add(object? resource, bool isAsync) =>
-            _resources.Add((resource, isAsync));
+        public void Add(object? resource, bool isAsync)
+        {
+            var (method, awaitResult) = _interpreter.AcquireUsingDisposeMethod(resource, isAsync);
+            _resources.Add((resource, method, isAsync, awaitResult));
+        }
 
         public bool HasResources => _resources.Count > 0;
 
@@ -52,10 +55,10 @@ public partial class Interpreter
             // Dispose in reverse order (LIFO)
             for (int i = _resources.Count - 1; i >= 0; i--)
             {
-                var (resource, isAsync) = _resources[i];
+                var (resource, method, isAsync, awaitResult) = _resources[i];
                 try
                 {
-                    _interpreter.DisposeResource(resource, isAsync);
+                    _interpreter.DisposeResource(resource, method, isAsync, awaitResult);
                 }
                 catch (Exception disposalError)
                 {
@@ -64,6 +67,7 @@ public partial class Interpreter
                 }
             }
 
+            _resources.Clear();
             return currentError;
         }
     }
@@ -1688,7 +1692,7 @@ public partial class Interpreter
 
     /// <summary>
     /// Executes a 'using' or 'await using' declaration.
-    /// Evaluates the initializer, defines the variable, and registers the resource for disposal.
+    /// Acquires the disposer before initializing the binding and retains it until scope exit.
     /// </summary>
     private ExecutionResult ExecuteUsingDeclaration(Stmt.Using usingStmt)
     {
@@ -1710,32 +1714,54 @@ public partial class Interpreter
         {
             object? resource = Evaluate(binding.Initializer);
 
+            // Acquisition can invoke a getter or throw. Keep the lexical binding
+            // uninitialized until that operation has completed successfully.
+            tracker.Add(resource, usingStmt.IsAsync);
+
             // Define variable in the current scope
             if (binding.Name != null)
             {
                 _environment.Define(binding.Name.Lexeme, resource);
             }
-
-            // Register for disposal at scope exit
-            tracker.Add(resource, usingStmt.IsAsync);
         }
 
         return ExecutionResult.Success();
     }
 
     /// <summary>
-    /// Disposes a single resource using Symbol.dispose or Symbol.asyncDispose.
+    /// Captures and validates the actual disposal method without invoking it.
     /// </summary>
     /// <param name="resource">The resource to dispose.</param>
     /// <param name="isAsync">True for Symbol.asyncDispose, false for Symbol.dispose.</param>
-    private void DisposeResource(object? resource, bool isAsync)
+    private (ISharpTSCallable? Method, bool AwaitResult) AcquireUsingDisposeMethod(object? resource, bool isAsync)
     {
-        // Null/undefined resources are skipped
         if (resource == null || resource is SharpTSUndefined)
-            return;
+            return (null, false);
 
         var symbol = isAsync ? SharpTSSymbol.AsyncDispose : SharpTSSymbol.Dispose;
-        object? disposeMethod = GetSymbolProperty(resource, symbol);
+        object? disposeMethod = GetSymbolPropertyValue(resource, symbol);
+        bool awaitResult = isAsync;
+        if (isAsync && disposeMethod is null or SharpTSUndefined)
+        {
+            disposeMethod = GetSymbolPropertyValue(resource, SharpTSSymbol.Dispose);
+            // Async-from-sync disposal does not await a synchronous method's result.
+            awaitResult = false;
+        }
+
+        if (disposeMethod is ISharpTSCallable callable &&
+            disposeMethod is not SharpTSProxy { IsCallable: false })
+            return (callable, awaitResult);
+        if (disposeMethod is null or SharpTSUndefined &&
+            (resource is IDisposable || isAsync && resource is IAsyncDisposable))
+            return (null, false);
+        throw new ThrowException(new SharpTSTypeError("Resource disposal method must be callable"));
+    }
+
+    /// <summary>Invokes the acquired method with its original resource receiver.</summary>
+    private void DisposeResource(object? resource, ISharpTSCallable? disposeMethod, bool isAsync, bool awaitResult)
+    {
+        if (resource == null || resource is SharpTSUndefined)
+            return;
 
         if (disposeMethod == null)
         {
@@ -1750,59 +1776,14 @@ public partial class Interpreter
                 asyncDisposable.DisposeAsync().AsTask().GetAwaiter().GetResult();
                 return;
             }
-            // No disposal method - silently skip (TypeScript allows this)
+            // Registration admitted only these actual CLR fallback interfaces.
             return;
         }
 
-        // Call the dispose method with the resource as 'this' context
-        object? result = null;
-
-        if (disposeMethod is SharpTSFunction func)
-        {
-            // Bind the function to the resource and call it
-            // For SharpTSInstance resources, use the instance bind
-            if (resource is SharpTSInstance instance)
-            {
-                var boundFunc = func.Bind(instance);
-                result = boundFunc.Call(this, []);
-            }
-            else
-            {
-                // For other objects (SharpTSObject), create a temporary scope with 'this'
-                var prevEnv = _environment;
-                _environment = new RuntimeEnvironment(_environment);
-                _environment.Define("this", resource);
-                try
-                {
-                    result = func.Call(this, []);
-                }
-                finally
-                {
-                    _environment = prevEnv;
-                }
-            }
-        }
-        else if (disposeMethod is SharpTSArrowFunction arrowFunc)
-        {
-            // Arrow functions with HasOwnThis need 'this' bound
-            if (arrowFunc.HasOwnThis)
-            {
-                var boundFunc = arrowFunc.Bind(resource!);
-                result = boundFunc.Call(this, []);
-            }
-            else
-            {
-                // Arrow functions without own 'this' use lexical scope
-                result = arrowFunc.Call(this, []);
-            }
-        }
-        else if (disposeMethod is ISharpTSCallable callable)
-        {
-            result = callable.Call(this, []);
-        }
+        object? result = FunctionBuiltIns.CallWithThis(this, disposeMethod, resource, []);
 
         // Wait for async disposal to complete
-        if (isAsync)
+        if (awaitResult)
         {
             if (result is SharpTSPromise promise)
             {
@@ -1813,23 +1794,6 @@ public partial class Interpreter
                 task.GetAwaiter().GetResult();
             }
         }
-    }
-
-    /// <summary>
-    /// Gets a property from an object using a symbol key.
-    /// </summary>
-    private object? GetSymbolProperty(object? obj, SharpTSSymbol symbol)
-    {
-        if (obj is SharpTSObject tsObject)
-        {
-            return tsObject.GetBySymbol(symbol);
-        }
-        if (obj is SharpTSInstance instance)
-        {
-            return instance.GetBySymbol(symbol);
-        }
-        // For other types, return null (no symbol property access)
-        return null;
     }
 
     /// <summary>
