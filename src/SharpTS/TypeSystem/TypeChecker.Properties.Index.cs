@@ -12,6 +12,15 @@ namespace SharpTS.TypeSystem;
 /// </remarks>
 public partial class TypeChecker
 {
+    private static bool HasBigIntElements(TypeInfo.TypedArray array) =>
+        array.ElementType is "BigInt64" or "BigUint64";
+
+    private static TypeInfo TypedArrayElementType(TypeInfo.TypedArray array) =>
+        HasBigIntElements(array) ? TypeInfo.BigInt.Shared : new TypeInfo.Primitive(TokenType.TYPE_NUMBER);
+
+    private bool IsTypedArrayElementValue(TypeInfo.TypedArray array, TypeInfo value) =>
+        HasBigIntElements(array) ? IsBigInt(value) : IsNumber(value);
+
     /// <summary>
     /// noUncheckedIndexedAccess adds undefined to reads whose key is not known to
     /// designate an existing property/tuple element.
@@ -518,10 +527,10 @@ public partial class TypeChecker
                 return WithUncheckedUndefined(TypeInfo.String.Shared);
             }
 
-            // TypedArray index access returns number
-            if (objType is TypeInfo.TypedArray)
+            // Numeric and BigInt typed arrays retain their respective element kinds.
+            if (objType is TypeInfo.TypedArray typedArray)
             {
-                return WithUncheckedUndefined(new TypeInfo.Primitive(Parsing.TokenType.TYPE_NUMBER));
+                return WithUncheckedUndefined(TypedArrayElementType(typedArray));
             }
 
             // Buffer index access returns number (Buffer is a Uint8Array subclass)
@@ -1077,6 +1086,21 @@ public partial class TypeChecker
         // Handle Union types - verify assignment is valid for all union members
         if (objType is TypeInfo.Union union)
         {
+            // Typed-array unions expose the union of their numeric element
+            // types, as in TypeScript's number | bigint index signature.
+            if ((IsNumber(indexType) || indexType is TypeInfo.NumberLiteral)
+                && union.FlattenedTypes.Count > 0
+                && union.FlattenedTypes.All(member => member is TypeInfo.TypedArray))
+            {
+                bool acceptsNumber = union.FlattenedTypes.Any(member => !HasBigIntElements((TypeInfo.TypedArray)member));
+                bool acceptsBigInt = union.FlattenedTypes.Any(member => HasBigIntElements((TypeInfo.TypedArray)member));
+                if (!IsTypeOfKind(valueType, type =>
+                    (acceptsNumber && (type is TypeInfo.Primitive { Type: TokenType.TYPE_NUMBER } or TypeInfo.NumberLiteral))
+                    || (acceptsBigInt && (type is TypeInfo.BigInt or TypeInfo.BigIntLiteral))))
+                    throw new TypeCheckException($" Cannot assign '{valueType}' to indexed union '{objType}'.", tsCode: "TS2322");
+                return valueType;
+            }
+
             foreach (var member in union.FlattenedTypes)
             {
                 // Verify the index is valid for each member
@@ -1218,8 +1242,7 @@ public partial class TypeChecker
             // TypedArray index assignment
             if (objType is TypeInfo.TypedArray typedArrayType)
             {
-                // TypedArrays accept number values
-                if (!IsNumber(valueType) && valueType is not TypeInfo.Any)
+                if (!IsTypedArrayElementValue(typedArrayType, valueType))
                 {
                     throw new TypeCheckException($" Cannot assign '{valueType}' to {typedArrayType.ElementType}Array.", tsCode: "TS2322");
                 }
@@ -1718,9 +1741,8 @@ public partial class TypeChecker
             }
             if (objType is TypeInfo.Array arrayType)
                 return WithUncheckedUndefined(arrayType.ElementType);
-            // TypedArray index access returns number
-            if (objType is TypeInfo.TypedArray)
-                return WithUncheckedUndefined(new TypeInfo.Primitive(Parsing.TokenType.TYPE_NUMBER));
+            if (objType is TypeInfo.TypedArray typedArray)
+                return WithUncheckedUndefined(TypedArrayElementType(typedArray));
             // Buffer index access returns number (Buffer is a Uint8Array subclass)
             if (objType is TypeInfo.Buffer)
                 return WithUncheckedUndefined(new TypeInfo.Primitive(Parsing.TokenType.TYPE_NUMBER));
@@ -1916,9 +1938,9 @@ public partial class TypeChecker
                 return null;
             }
             // TypedArray index assignment
-            if (objType is TypeInfo.TypedArray)
+            if (objType is TypeInfo.TypedArray typedArray)
             {
-                if (IsNumber(valueType) || valueType is TypeInfo.Any)
+                if (IsTypedArrayElementValue(typedArray, valueType))
                     return valueType;
                 return null;
             }
