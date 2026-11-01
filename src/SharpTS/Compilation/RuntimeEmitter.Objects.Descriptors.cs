@@ -842,7 +842,8 @@ public partial class RuntimeEmitter
         EmitDefinePropertyArrayLengthCoercion(
         ILGenerator il,
         DefinePropertyArrayLengthCoercionInputs inputs,
-        LocalBuilder propNameLocal
+        LocalBuilder propNameLocal,
+        LocalBuilder? convertedDescriptor = null
     )
     {
         // ECMA-262 10.4.2.4 ArraySetLength steps 3-4: newLen =
@@ -878,11 +879,11 @@ public partial class RuntimeEmitter
         il.Emit(OpCodes.Call, _types.GetMethod(_types.String, "op_Equality", _types.String, _types.String));
         il.Emit(OpCodes.Brfalse, skipArrayLenCheck);
         var lenValLocal = il.DeclareLocal(_types.Object);
-        il.Emit(OpCodes.Ldarg_2);
+        LoadDescriptor();
         il.Emit(OpCodes.Ldstr, "value");
         il.Emit(OpCodes.Call, inputs.ArrayOperations.HasArrayLikeProperty);
         il.Emit(OpCodes.Brfalse, skipArrayLenCheck);
-        il.Emit(OpCodes.Ldarg_2);
+        LoadDescriptor();
         il.Emit(OpCodes.Ldstr, "value");
         il.Emit(OpCodes.Call, inputs.GetProperty);
         il.Emit(OpCodes.Stloc, lenValLocal);
@@ -947,6 +948,12 @@ public partial class RuntimeEmitter
         il.MarkLabel(skipArrayLenCheck);
 
         return (lenWasCoercedLocal, lenValLocal, coercedLenLocal);
+
+        void LoadDescriptor()
+        {
+            if (convertedDescriptor is null) il.Emit(OpCodes.Ldarg_2);
+            else il.Emit(OpCodes.Ldloc, convertedDescriptor);
+        }
     }
 
     // The input is an already-converted partial record. Copying its data

@@ -2485,6 +2485,9 @@ public partial class RuntimeEmitter
                             runtime.Operators.HasIn, runtime.Sentinels.UndefinedType),
                         runtime.Reflect.Get, runtime.Operators.TypeOf,
                         runtime.Sentinels.UndefinedType),
+                    new DefinePropertyArrayLengthCoercionInputs(
+                        runtime.Arguments.Type, runtime.ArrayOperations, runtime.Errors,
+                        runtime.ObjectRead.Property, runtime.NumericCoercion),
                     NativeProxyRejection: runtime.ReflectedMethods.NativeProxyRejection
                 )
             );

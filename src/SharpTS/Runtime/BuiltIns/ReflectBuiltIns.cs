@@ -561,19 +561,21 @@ public static class ReflectBuiltIns
                         _ => false
                     });
                 var propertyKey = (string)key;
+                // ArraySetLength conversions can complete abruptly; those are
+                // guest throws, not refused ordinary descriptor definitions.
+                if (target is SharpTSArray or SharpTSArrayPrototype
+                    && propertyKey == "length"
+                    && descriptor.HasValue)
+                {
+                    descriptor.Value = ArrayBuiltIns.CoerceArrayLength(
+                        interpreter, descriptor.Value);
+                }
                 try
                 {
                     if (target is ISharpTSPrimitiveConstructor primitiveConstructor)
                         return RuntimeValue.FromBoolean(primitiveConstructor.DefineExtraProperty(propertyKey, descriptor));
                     ObjectBuiltIns.PreserveOmittedAttributes(
                         target, propertyKey, descriptor, descriptorArg, interpreter);
-                    if (target is SharpTSArray or SharpTSArrayPrototype
-                        && propertyKey == "length"
-                        && descriptor.HasValue)
-                    {
-                        descriptor.Value = ArrayBuiltIns.CoerceArrayLength(
-                            interpreter, descriptor.Value);
-                    }
                     switch (target)
                     {
                         case SharpTSObject obj:

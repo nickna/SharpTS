@@ -50,7 +50,8 @@ public partial class RuntimeEmitter
     private readonly record struct ReflectDefinePropertyInputs(MethodInfo InvokeMethodUnwrapped,
         MethodInfo ObjectGetOwnPropertyDescriptor, MethodInfo HasOwnPropertyHelperMethod, MethodInfo ToPropertyKey,
         MethodInfo ObjectDefineProperty, MethodInfo ObjectIsExtensible, MethodInfo GetProperty,
-        PropertyDescriptorConversionInputs DescriptorConversion, MethodInfo? NativeProxyRejection);
+        PropertyDescriptorConversionInputs DescriptorConversion,
+        DefinePropertyArrayLengthCoercionInputs ArrayLengthCoercion, MethodInfo? NativeProxyRejection);
 
     private readonly record struct ReflectOwnKeysInputs(MethodInfo CreateException,
         ConstructorInfo TypeErrorConstructor, ProxyOwnKeysCallInputs ProxyOwnKeys,
@@ -974,6 +975,25 @@ public partial class RuntimeEmitter
         il.Emit(OpCodes.Unbox_Any, _types.Boolean);
         il.Emit(OpCodes.Ret);
         il.MarkLabel(ordinaryDefineLabel);
+
+        // ArraySetLength must propagate its conversions' abrupt completions.
+        // Use the already-converted private record, outside the refusal catch;
+        // only its normalized numeric value reaches ObjectDefineProperty.
+        var stringKey = il.DeclareLocal(_types.String);
+        il.Emit(OpCodes.Ldloc, reflectDefineKeyLocal);
+        il.Emit(OpCodes.Isinst, _types.String);
+        il.Emit(OpCodes.Stloc, stringKey);
+        var (lengthWasCoerced, _, coercedLength) = EmitDefinePropertyArrayLengthCoercion(
+            il, inputs.ArrayLengthCoercion, stringKey, convertedDescriptor);
+        var lengthReady = il.DefineLabel();
+        il.Emit(OpCodes.Ldloc, lengthWasCoerced);
+        il.Emit(OpCodes.Brfalse, lengthReady);
+        il.Emit(OpCodes.Ldloc, convertedDescriptor);
+        il.Emit(OpCodes.Ldstr, "value");
+        il.Emit(OpCodes.Ldloc, coercedLength);
+        il.Emit(OpCodes.Callvirt, _types.GetMethod(_types.DictionaryStringObject,
+            "set_Item", _types.String, _types.Object));
+        il.MarkLabel(lengthReady);
 
         // try { ObjectDefineProperty(target, key, convertedDescriptor); return true; }
         // catch { return false; }
