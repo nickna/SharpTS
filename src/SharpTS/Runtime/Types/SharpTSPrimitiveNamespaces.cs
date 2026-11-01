@@ -821,7 +821,8 @@ public sealed class SharpTSNumberPrototype : ISharpTSMutableBuiltIn, ISharpTSSym
         HasExplicitPrototype = true;
     }
 
-    private readonly PrototypePropertyOverlay _overlay = new(IsBuiltIn);
+    private readonly PrototypePropertyOverlay _overlay = new(IsBuiltIn,
+        initialStringKeys: ["constructor", "toExponential", "toFixed", "toPrecision", "toString", "valueOf", "toLocaleString"]);
     private readonly System.Collections.Concurrent.ConcurrentDictionary<string, NumberPrototypeMethodWrapper>
         _methodCache = new(StringComparer.Ordinal);
     public bool HasExtra(string name) => _overlay.HasExtra(name);
@@ -1118,7 +1119,8 @@ public sealed class SharpTSBooleanPrototype : ISharpTSMutableBuiltIn, ISharpTSSy
         HasExplicitPrototype = true;
     }
 
-    private readonly PrototypePropertyOverlay _overlay = new(IsBuiltIn);
+    private readonly PrototypePropertyOverlay _overlay = new(IsBuiltIn,
+        initialStringKeys: ["constructor", "toString", "valueOf"]);
     public bool HasExtra(string name) => _overlay.HasExtra(name);
     public object? TryGetExtra(string name) => _overlay.GetProperty(name);
     public void SetExtra(string name, object? value)
