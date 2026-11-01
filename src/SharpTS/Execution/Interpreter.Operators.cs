@@ -646,7 +646,7 @@ public partial class Interpreter
         if (rv.Kind == ValueKind.Undefined) return double.NaN;
         if (rv.IsString)
         {
-            var s = rv.AsString().Trim();
+            var s = TrimStrWhiteSpace(rv.AsString());
             if (s.Length == 0) return 0.0;
             if (s.Length >= 2 && s[0] == '0')
             {
@@ -705,6 +705,31 @@ public partial class Interpreter
     }
 
     /// <summary>
+    /// Trims ECMAScript's <c>StrWhiteSpace</c> (WhiteSpace plus LineTerminator,
+    /// ECMA-262) from both ends of a numeric-string coercion. The set is fixed
+    /// by the spec, not by <see cref="char.IsWhiteSpace"/>: NEL (U+0085) and
+    /// ZWSP (U+200B) are NOT StrWhiteSpace, while ZWNBSP (U+FEFF) IS.
+    /// </summary>
+    internal static string TrimStrWhiteSpace(string value)
+    {
+        int start = 0;
+        while (start < value.Length && IsStrWhiteSpace(value[start])) start++;
+        int end = value.Length;
+        while (end > start && IsStrWhiteSpace(value[end - 1])) end--;
+        return start == 0 && end == value.Length ? value : value[start..end];
+    }
+
+    // ECMAScript StrWhiteSpace: TAB VT FF SP NBSP <USP> plus LF CR LS PS —
+    // exactly U+0009 U+000A U+000B U+000C U+000D U+0020 U+00A0 U+1680
+    // U+2000..U+200A U+2028 U+2029 U+202F U+205F U+3000 U+FEFF (25 code points).
+    private static bool IsStrWhiteSpace(char c) =>
+        c is (char)0x0009 or (char)0x000A or (char)0x000B or (char)0x000C or (char)0x000D
+            or (char)0x0020 or (char)0x00A0 or (char)0x1680
+            or (>= (char)0x2000 and <= (char)0x200A)
+            or (char)0x2028 or (char)0x2029 or (char)0x202F or (char)0x205F
+            or (char)0x3000 or (char)0xFEFF;
+
+    /// <summary>
     /// ToNumber including the object-to-primitive step. Array length
     /// descriptors use this before validating the uint32 result.
     /// </summary>
@@ -749,76 +774,76 @@ public partial class Interpreter
     }
 
     /// <summary>
-    /// ECMA-262 §7.1.1 ToPrimitive / OrdinaryToPrimitive for the cases the
-    /// interpreter must coerce explicitly: boxed primitive wrappers, class instances,
-    /// and plain objects carrying <c>valueOf</c>/<c>toString</c>. Calls the
-    /// conversion methods in hint order (honoring a user override — #574), then
-    /// falls back to a wrapper's <c>__primitiveValue</c> (#708). Primitive values
-    /// pass through unchanged.
+    /// ECMA-262 §7.1.1 ToPrimitive(O, hint) for every object kind: a conversion
+    /// hook — @@toPrimitive, then <c>valueOf</c>/<c>toString</c> in hint order —
+    /// resolves through ordinary (inherited) property lookup and converts before
+    /// that kind's fast path, so own or prototype-level reassignments (e.g.
+    /// <c>Array.prototype.valueOf</c>) are honored (#574). Each fast path below
+    /// runs only when no hook resolves and keeps its pre-fix observable result;
+    /// a boxed wrapper converts through its inherited
+    /// Number/String/Boolean.prototype methods, whose valueOf unwraps the
+    /// <c>__primitiveValue</c> (#708). Primitive values pass through unchanged.
     /// </summary>
     private object? ToPrimitive(object? value, PrimitiveHint hint)
     {
+        // Preserve the existing Date string/default conversion path; number
+        // conversions use the same hook machinery as other object kinds.
+        if (value is SharpTSDate && hint != PrimitiveHint.Number)
+            return value;
+
+        // Full hook machinery for every kind whose intrinsic chain converts
+        // exactly like its fast path. Arrays and arguments are excluded: their
+        // fast paths differ from the chain's resolution (join via
+        // Array.prototype.toString, "[object Arguments]" via its brand), so
+        // they gate the machinery on a hook actually being present below.
+        if (IsObjectLike(value))
+        {
+            // GetMethod(@@toPrimitive) can invoke a getter, so perform this
+            // lookup exactly once, even when the ordinary array fast path wins.
+            if (TryCallExoticToPrimitive(value!, hint, out var exotic))
+                return exotic;
+            if (value is not SharpTSArray
+                && TryOrdinaryToPrimitive(value!, hint, out var hooked))
+                return hooked;
+        }
+
         // Number.prototype is itself a Number object with [[NumberData]] +0.
         if (value is SharpTSNumberPrototype) return 0.0;
         // String.prototype is itself a String object with [[StringData]] "".
         if (value is SharpTSStringPrototype) return "";
         // Boolean.prototype is itself a Boolean object with [[BooleanData]] false.
         if (value is SharpTSBooleanPrototype) return false;
-        // Arrays have no own valueOf/toString and inherit Array.prototype.toString
-        // (= join(',')); OrdinaryToPrimitive resolves to it for every hint (valueOf
-        // returns the array, not a primitive, so it is skipped). e.g. `'' + [1,2,3]`
-        // -> "1,2,3" and `[1,2,3] == "1,2,3"` -> true. The console/debug ToString
-        // ("[1, 2, 3]") is intentionally NOT used here.
-        if (value is SharpTSArguments) return "[object Arguments]";
-        if (value is SharpTSArray arr)
-        {
-            // Array.prototype conversion methods are mutable. Keep the direct
-            // join fast path for the ordinary realm, but perform the full
-            // lookup when either method has been overridden.
-            var arrayPrototype = GetArrayPrototype();
-            if (arrayPrototype.HasExtra("toString") || arrayPrototype.HasExtra("valueOf"))
-                return OrdinaryToPrimitiveObject(arr, hint);
-            return ArrayBuiltIns.ToJsString(this, arr);
-        }
-        if (value is SharpTSGlobalThis)
-            return OrdinaryToPrimitiveObject(value, hint);
-        if (value is ISharpTSCallable)
-            return OrdinaryToPrimitiveObject(value, hint);
-        if (value is SharpTSInstance instance)
-        {
-            if (TryCallExoticToPrimitive(instance, hint, out var instancePrimitive))
-                return instancePrimitive;
-            return OrdinaryToPrimitiveObject(instance, hint);
-        }
-        if (value is not SharpTSObject obj) return value;
-        if (TryCallExoticToPrimitive(obj, hint, out var exoticResult))
-            return exoticResult;
-        bool isWrapper = TryGetBoxedPrimitiveValue(obj, out var primitiveValue);
 
-        string first = hint == PrimitiveHint.String ? "toString" : "valueOf";
-        string second = hint == PrimitiveHint.String ? "valueOf" : "toString";
-        if (!isWrapper)
+        // Arguments stringify as "[object Arguments]" (Object.prototype.toString's
+        // brand form), never through Array.prototype's join, so the machinery
+        // runs only when a conversion hook is actually present.
+        if (value is SharpTSArguments arguments)
         {
-            if (TryCallConversion(obj, first, out var firstResult))
-                return firstResult;
-            if (TryCallConversion(obj, second, out var secondResult))
-                return secondResult;
+            if (!CarriesConversionHook(arguments))
+                return "[object Arguments]";
+            return OrdinaryToPrimitiveObject(arguments, hint);
+        }
+
+        // Arrays inherit Array.prototype.toString (= join(',')), so a hook-less
+        // array keeps the direct join fast path; e.g. `'' + [1,2,3]` -> "1,2,3"
+        // and `[1,2,3] == "1,2,3"` -> true. The console/debug ToString
+        // ("[1, 2, 3]") is intentionally NOT used here.
+        if (value is SharpTSArray array)
+        {
+            if (!CarriesConversionHook(array))
+                return ArrayBuiltIns.ToJsString(this, array);
+            return OrdinaryToPrimitiveObject(array, hint);
+        }
+
+        // No conversion hook resolved: globalThis, callables and instances
+        // threw TypeError here before the hook-first rework (OrdinaryToPrimitive's
+        // exhausted-hooks arm); keep that observable behavior.
+        if (value is SharpTSGlobalThis or ISharpTSCallable or SharpTSInstance)
             throw new ThrowException(new SharpTSTypeError(
                 "Cannot convert object to primitive value"));
-        }
-
-        // An own override of the hint-preferred conversion always wins.
-        if (TryCallOwnConversion(obj, first, out var r1)) return r1;
-        // For a boxed wrapper, the *inherited* preferred conversion
-        // (Number/String/Boolean.prototype.toString|valueOf) returns the
-        // [[PrimitiveValue]] and short-circuits before the second method is
-        // tried — so an own override of the *other* method must not leak into a
-        // string→valueOf or number→toString coercion (#574). Use the primitive
-        // directly. A plain object (no internal slot) keeps the two-step
-        // OrdinaryToPrimitive fallback.
-        if (isWrapper) return primitiveValue;
-        if (TryCallOwnConversion(obj, second, out var r2)) return r2;
-        return primitiveValue;
+        if (value is not SharpTSObject) return value;
+        throw new ThrowException(new SharpTSTypeError(
+            "Cannot convert object to primitive value"));
     }
 
     // The VM boundary has already proved the actual object and owner. Use the
@@ -836,41 +861,57 @@ public partial class Interpreter
         if (TryCallExoticToPrimitive(value, preferred, out var primitive)) return primitive;
         return OrdinaryToPrimitiveObject(value, preferred);
     }
-    private object? OrdinaryToPrimitiveObject(object receiver, PrimitiveHint hint)
-    {
-        string first = hint == PrimitiveHint.String ? "toString" : "valueOf";
-        string second = hint == PrimitiveHint.String ? "valueOf" : "toString";
-        foreach (string name in new[] { first, second })
-        {
-            if (GetPropertyValue(receiver, name) is not ISharpTSCallable callable)
-                continue;
-            var result = FunctionBuiltIns.CallWithThis(this, callable, receiver, []);
-            if (!IsObjectLike(result)) return result;
-        }
-        throw new ThrowException(new SharpTSTypeError(
-            "Cannot convert object to primitive value"));
-    }
 
     /// <summary>
-    /// Invokes an own <c>valueOf</c>/<c>toString</c> on <paramref name="obj"/> bound
-    /// to it; succeeds only when the result is a primitive (per OrdinaryToPrimitive,
-    /// an object result is skipped so the next method is tried).
+    /// ECMA-262 §7.1.1 OrdinaryToPrimitive(O, hint) when it succeeds: the first
+    /// hint-ordered method (<c>valueOf</c> for number/default, <c>toString</c>
+    /// for string) whose inherited resolution is callable and returns a
+    /// primitive. Reports false instead of throwing when no method yields one;
+    /// the throwing form is <see cref="OrdinaryToPrimitiveObject"/>.
     /// </summary>
-    private bool TryCallOwnConversion(SharpTSObject obj, string name, out object? result)
+    private bool TryOrdinaryToPrimitive(object receiver, PrimitiveHint hint, out object? result)
     {
         result = null;
-        if (!obj.HasProperty(name)) return false;
-        var fn = obj.GetProperty(name);
-        if (fn is SharpTSArrowFunction af && af.HasOwnThis) fn = af.Bind(obj);
-        if (fn is not ISharpTSCallable callable) return false;
-        // Zero-arg span, not a shared List: a callee mutating its arguments must
-        // not corrupt other calls (the old shared static list was handed to
-        // arbitrary guest callables).
-        var r = callable.CallV2(this, ReadOnlySpan<RuntimeValue>.Empty).ToObject();
-        if (IsObjectLike(r)) return false;
-        result = r;
-        return true;
+        string first = hint == PrimitiveHint.String ? "toString" : "valueOf";
+        string second = hint == PrimitiveHint.String ? "valueOf" : "toString";
+        ReadOnlySpan<string> order = [first, second];
+        foreach (string name in order)
+        {
+            if (GetPropertyValue(receiver, name) is not ISharpTSCallable callable
+                || callable is SharpTSProxy { IsCallable: false })
+                continue;
+            var converted = FunctionBuiltIns.CallWithThis(this, callable, receiver, []);
+            if (!IsObjectLike(converted))
+            {
+                result = converted;
+                return true;
+            }
+        }
+        return false;
     }
+
+    private object? OrdinaryToPrimitiveObject(object receiver, PrimitiveHint hint)
+        => TryOrdinaryToPrimitive(receiver, hint, out var result)
+            ? result
+            : throw new ThrowException(new SharpTSTypeError(
+                "Cannot convert object to primitive value"));
+
+    /// <summary>
+    /// True when an array or arguments object carries a conversion hook beyond
+    /// its kind's intrinsic stringify (join / "[object Arguments]"): an own
+    /// <c>valueOf</c>/<c>toString</c>, an
+    /// Array.prototype override of either method, or an Object.prototype-level
+    /// override (arrays have no Array.prototype.valueOf to shadow it, so that
+    /// override IS the chain's valueOf resolution). Hook-less receivers keep
+    /// their fast path byte-for-byte.
+    /// </summary>
+    private bool CarriesConversionHook(SharpTSArray array)
+        => array.HasOwnProperty("valueOf")
+            || array.HasOwnProperty("toString")
+            || GetArrayPrototype().HasExtra("valueOf")
+            || GetArrayPrototype().HasExtra("toString")
+            || GetObjectPrototype().HasExtra("valueOf")
+            || GetObjectPrototype().HasExtra("toString");
 
     /// <summary>
     /// String-coerces a class instance by resolving and invoking its
@@ -959,14 +1000,18 @@ public partial class Interpreter
             ThrowIfSymbolStringCoercion(boxedSymbol);
         }
 
+        if (TryGetBoxedPrimitiveValue(obj, out _))
+        {
+            var primitive = ToPrimitive(obj, PrimitiveHint.String);
+            ThrowIfSymbolStringCoercion(primitive);
+            return Stringify(primitive);
+        }
+
         if (TryCallExoticToPrimitive(obj, PrimitiveHint.String, out var exoticResult))
         {
             ThrowIfSymbolStringCoercion(exoticResult);
             return Stringify(exoticResult);
         }
-
-        if (TryGetBoxedPrimitiveValue(obj, out _))
-            return Stringify(ToPrimitive(obj, PrimitiveHint.String));
 
         if (TryCallConversion(obj, "toString", out var stringResult))
         {
