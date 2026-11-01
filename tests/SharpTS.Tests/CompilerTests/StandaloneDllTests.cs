@@ -3806,7 +3806,7 @@ public partial class StandaloneDllTests
     ];
 
     [Theory]
-    [MemberData(nameof(StructuredCloneMetadataPrograms))]
+    [SerializableMemberData(nameof(StructuredCloneMetadataPrograms))]
     public void Isolated_StructuredCloneMetadata_PreservesDataErrorsAndWorkerBoundaries(Dictionary<string, string> files, string expected, string entryPoint, bool standalone)
     {
         using var tempDir = IntegrationTests.CliTestHelper.CreateTempDirectory();
@@ -3979,7 +3979,7 @@ public partial class StandaloneDllTests
     ];
 
     [Theory]
-    [MemberData(nameof(StringCoreMetadataPrograms))]
+    [SerializableMemberData(nameof(StringCoreMetadataPrograms))]
     public void Isolated_StringCoreMetadata_PreservesMethodsPrototypesAndUnicode(Dictionary<string, string> files, string expected, string entryPoint, bool standalone)
     {
         using var tempDir = IntegrationTests.CliTestHelper.CreateTempDirectory();
@@ -4120,7 +4120,7 @@ public partial class StandaloneDllTests
     ];
 
     [Theory]
-    [MemberData(nameof(TemplateMetadataPrograms))]
+    [SerializableMemberData(nameof(TemplateMetadataPrograms))]
     public void Isolated_TemplateMetadata_PreservesRawValuesInvocationAndEvaluationOrder(Dictionary<string, string> files, string expected, string entryPoint, bool standalone)
     {
         using var tempDir = IntegrationTests.CliTestHelper.CreateTempDirectory();
@@ -4317,7 +4317,7 @@ public partial class StandaloneDllTests
     ];
 
     [Theory]
-    [MemberData(nameof(StringCoercionMetadataPrograms))]
+    [SerializableMemberData(nameof(StringCoercionMetadataPrograms))]
     public void Isolated_StringCoercionMetadata_PreservesDisplayLanguageAndPrimitiveConversions(Dictionary<string, string> files, string expected, string entryPoint, bool standalone)
     {
         using var tempDir = IntegrationTests.CliTestHelper.CreateTempDirectory();
@@ -4482,7 +4482,7 @@ public partial class StandaloneDllTests
     ];
 
     [Theory]
-    [MemberData(nameof(BoxedPrimitiveMetadataPrograms))]
+    [SerializableMemberData(nameof(BoxedPrimitiveMetadataPrograms))]
     public void Isolated_BoxedPrimitiveMetadata_PreservesWrappersAndDefaultHintConversions(Dictionary<string, string> files, string expected, string entryPoint, bool standalone)
     {
         using var tempDir = IntegrationTests.CliTestHelper.CreateTempDirectory();
@@ -4672,7 +4672,7 @@ public partial class StandaloneDllTests
     ];
 
     [Theory]
-    [MemberData(nameof(NumberMetadataPrograms))]
+    [SerializableMemberData(nameof(NumberMetadataPrograms))]
     public void Isolated_NumberMetadata_PreservesParsingFormattingAndPrototypeBehavior(Dictionary<string, string> files, string expected, string entryPoint, bool standalone)
     {
         using var tempDir = IntegrationTests.CliTestHelper.CreateTempDirectory();
@@ -4877,7 +4877,7 @@ public partial class StandaloneDllTests
     ];
 
     [Theory]
-    [MemberData(nameof(MathMetadataPrograms))]
+    [SerializableMemberData(nameof(MathMetadataPrograms))]
     public void Isolated_MathMetadata_PreservesAdaptersSummationAndSingletonBehavior(Dictionary<string, string> files, string expected, string entryPoint, bool standalone)
     {
         using var tempDir = IntegrationTests.CliTestHelper.CreateTempDirectory();
@@ -13153,7 +13153,7 @@ public partial class StandaloneDllTests
     ];
 
     [Theory]
-    [MemberData(nameof(BroadcastChannelMetadataPrograms))]
+    [SerializableMemberData(nameof(BroadcastChannelMetadataPrograms))]
     public void Isolated_BroadcastChannelMetadata_PreservesRegistryDeliveryAndCloneBehavior(Dictionary<string, string> files, string expected, string entryPoint, bool standalone)
     {
         using var tempDir = IntegrationTests.CliTestHelper.CreateTempDirectory();
@@ -13170,7 +13170,7 @@ public partial class StandaloneDllTests
     }
 
     [Theory]
-    [MemberData(nameof(WorkerMetadataPrograms))]
+    [SerializableMemberData(nameof(WorkerMetadataPrograms))]
     public void Isolated_WorkerMetadata_PreservesContextEnvironmentAndBridgeDeployment(Dictionary<string, string> files, string expected, string entryPoint, bool standalone)
     {
         using var tempDir = IntegrationTests.CliTestHelper.CreateTempDirectory();
@@ -13187,7 +13187,7 @@ public partial class StandaloneDllTests
     }
 
     [Theory]
-    [MemberData(nameof(MessageChannelMetadataPrograms))]
+    [SerializableMemberData(nameof(MessageChannelMetadataPrograms))]
     public void Isolated_MessageChannelMetadata_PreservesCloningQueueDeliveryAndWorkerTransfers(Dictionary<string, string> files, string expected, string entryPoint, bool standalone)
     {
         using var tempDir = IntegrationTests.CliTestHelper.CreateTempDirectory();
@@ -14125,7 +14125,7 @@ public partial class StandaloneDllTests
     ];
 
     [Theory]
-    [MemberData(nameof(ModuleLoadingMetadataPrograms))]
+    [SerializableMemberData(nameof(ModuleLoadingMetadataPrograms))]
     public void Isolated_ModuleLoadingMetadata_PreservesExportsRegistryAndImports(Dictionary<string, string> files, string entryPoint, string expected)
     {
         using var tempDir = IntegrationTests.CliTestHelper.CreateTempDirectory();
