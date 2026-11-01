@@ -7,33 +7,38 @@ namespace SharpTS.Runtime.Types;
 /// </summary>
 /// <remarks>
 /// When using 'using' declarations, if both the block body and disposal throw errors,
-/// the disposal error becomes the 'suppressed' property and the original error becomes
-/// the 'error' property. If multiple disposals fail, errors chain as:
-/// SuppressedError(SuppressedError(original, first), second)
+/// the disposal error becomes the 'error' property and the prior error becomes
+/// the 'suppressed' property. Later cleanup failures wrap the prior completion.
 /// </remarks>
-public class SharpTSSuppressedError : Exception
+public class SharpTSSuppressedError : Exception, ISharpTSOwnPropertyObject
 {
+    private readonly SharpTSObject _properties = new([]);
+    SharpTSObject ISharpTSOwnPropertyObject.OwnProperties => _properties;
     /// <summary>
-    /// Original error from the block (or a previously wrapped SuppressedError).
+    /// The latest cleanup error.
     /// </summary>
     public object? Error { get; }
 
     /// <summary>
-    /// Suppressed error from the disposal that failed.
+    /// The prior error from the block or an earlier cleanup.
     /// </summary>
     public object? Suppressed { get; }
 
     /// <summary>
     /// Creates a new SuppressedError wrapping both the original and disposal errors.
     /// </summary>
-    /// <param name="error">The original error from the block.</param>
-    /// <param name="suppressed">The suppressed error from disposal.</param>
+    /// <param name="error">The latest cleanup error.</param>
+    /// <param name="suppressed">The prior error being suppressed.</param>
     /// <param name="message">Optional custom message (defaults to standard message).</param>
     public SharpTSSuppressedError(object? error, object? suppressed, string? message = null)
         : base(message ?? "An error was suppressed during disposal")
     {
         Error = error;
         Suppressed = suppressed;
+        _properties.DefineProperty("error", new SharpTSPropertyDescriptor(
+            error, writable: true, enumerable: false, configurable: true) { HasValue = true });
+        _properties.DefineProperty("suppressed", new SharpTSPropertyDescriptor(
+            suppressed, writable: true, enumerable: false, configurable: true) { HasValue = true });
     }
 
     /// <summary>

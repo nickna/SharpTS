@@ -52,29 +52,25 @@ public partial class Interpreter
         /// <summary>
         /// Disposes all resources in reverse order, aggregating errors via SuppressedError.
         /// </summary>
-        /// <param name="pendingError">Any error that occurred in the block before disposal.</param>
-        /// <returns>The final error to throw (original, SuppressedError, or null if no errors).</returns>
-        public object? DisposeAll(object? pendingError)
+        /// <returns>The pending completion, updated only when cleanup fails.</returns>
+        public ExecutionResult DisposeAll(ExecutionResult completion)
         {
-            object? currentError = pendingError;
-
-            // Dispose in reverse order (LIFO)
-            for (int i = _resources.Count - 1; i >= 0; i--)
+            var resources = _resources.ToArray();
+            _resources.Clear();
+            for (int i = resources.Length - 1; i >= 0; i--)
             {
-                var (resource, method, isAsync, awaitResult) = _resources[i];
+                var (resource, method, isAsync, awaitResult) = resources[i];
                 try
                 {
                     _interpreter.DisposeResource(resource, method, isAsync, awaitResult);
                 }
+                catch (Runtime.Exceptions.WorkerTerminatedException) { throw; }
                 catch (Exception disposalError)
                 {
-                    // Wrap in SuppressedError: original error becomes 'error', disposal becomes 'suppressed'
-                    currentError = new SharpTSSuppressedError(currentError, disposalError);
+                    completion = _interpreter.CombineUsingDisposalFailure(completion, disposalError);
                 }
             }
-
-            _resources.Clear();
-            return currentError;
+            return completion;
         }
 
         public async ValueTask<ExecutionResult> DisposeAllAsync(ExecutionResult completion)
@@ -91,16 +87,7 @@ public partial class Interpreter
                 catch (Runtime.Exceptions.WorkerTerminatedException) { throw; }
                 catch (Exception exception)
                 {
-                    bool guest = IsGuestUsingFailure(exception);
-                    object? error = _interpreter.TranslateException(exception);
-                    if (completion.Type == ExecutionResult.ResultType.Throw)
-                    {
-                        object? pending = completion.Value.ToObject();
-                        if (!completion.FromGuestThrow) pending = _interpreter.CoerceCaughtValueForBinding(pending);
-                        if (!guest) error = _interpreter.CoerceCaughtValueForBinding(error);
-                        completion = ExecutionResult.Throw(new SharpTSSuppressedError(error, pending));
-                    }
-                    else completion = ExecutionResult.Throw(error, fromGuestThrow: guest);
+                    completion = _interpreter.CombineUsingDisposalFailure(completion, exception);
                 }
             }
             return completion;
@@ -215,7 +202,6 @@ public partial class Interpreter
         var tracker = new UsingTracker(this, environment);
         _usingTrackerStack.Push(tracker);
 
-        object? pendingError = null;
         ExecutionResult blockResult = ExecutionResult.Success();
 
         try
@@ -237,11 +223,6 @@ public partial class Interpreter
                     blockResult = result;
                     if (result.IsAbrupt)
                     {
-                        // Capture the result but continue to finally for disposal
-                        if (result.Type == ExecutionResult.ResultType.Throw)
-                        {
-                            pendingError = result.Value.ToObject();
-                        }
                         blockResult = result;
                         break;
                     }
@@ -268,8 +249,7 @@ public partial class Interpreter
             // throw crossing back through this frame — preserve its guest origin so a downstream
             // catch still binds it verbatim rather than re-typing it (cross-boundary #694).
             bool isGuestThrow = ex is ThrowException;
-            pendingError = TranslateException(ex);
-            blockResult = ExecutionResult.Throw(pendingError, fromGuestThrow: isGuestThrow);
+            blockResult = ExecutionResult.Throw(TranslateException(ex), fromGuestThrow: isGuestThrow);
         }
         finally
         {
@@ -278,13 +258,7 @@ public partial class Interpreter
 
             if (tracker.HasResources)
             {
-                var finalError = tracker.DisposeAll(pendingError);
-
-                // If disposal added errors (SuppressedError), update the result
-                if (finalError != null && finalError != pendingError)
-                {
-                    blockResult = ExecutionResult.Throw(finalError);
-                }
+                blockResult = tracker.DisposeAll(blockResult);
             }
         }
 

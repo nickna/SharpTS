@@ -26,6 +26,19 @@ public partial class Interpreter
         ThrowException or SharpTSPromiseRejectedException or
         AggregateException { InnerException: SharpTSPromiseRejectedException };
 
+    private ExecutionResult CombineUsingDisposalFailure(ExecutionResult completion, Exception exception)
+    {
+        bool guest = IsGuestUsingFailure(exception);
+        object? error = TranslateException(exception);
+        if (completion.Type != ExecutionResult.ResultType.Throw)
+            return ExecutionResult.Throw(error, fromGuestThrow: guest);
+
+        object? pending = completion.Value.ToObject();
+        if (!completion.FromGuestThrow) pending = CoerceCaughtValueForBinding(pending);
+        if (!guest) error = CoerceCaughtValueForBinding(error);
+        return ExecutionResult.Throw(new SharpTSSuppressedError(error, pending));
+    }
+
     private async ValueTask<ExecutionResult> ExecuteUsingHandlerBlockCore(
         IEvaluationContext context, List<Stmt> statements, RuntimeEnvironment environment)
     {

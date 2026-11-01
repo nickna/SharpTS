@@ -1413,7 +1413,7 @@ public partial class Interpreter
             return RuntimeValue.FromBoxed(GetPropertyValue(primitiveConstructor, get.Name.Lexeme));
 
         if (obj is ISharpTSGeneratorFunctionValue or SharpTSGenerator or SharpTSAsyncGenerator
-            or SharpTSMap or SharpTSSet)
+            or SharpTSMap or SharpTSSet or SharpTSSuppressedError)
             return RuntimeValue.FromBoxed(GetPropertyValue(obj, get.Name.Lexeme));
 
         if (NeedsLiveFunctionPrototypeRead(obj, get.Name.Lexeme))
