@@ -11,22 +11,11 @@ public partial class RuntimeEmitter
     private readonly record struct AbstractNumberInputs(
         Type UndefinedType,
         Type SymbolType,
-        Type ObjectType,
-        Type FunctionType,
-        Type BoundFunctionType,
-        Type HasFieldsType,
-        Type DescriptorType,
-        MethodInfo DescriptorGetterGetter,
-        MethodInfo DescriptorSetterGetter,
-        MethodInfo DescriptorValueGetter,
+        EmittedArrayStorageRuntime ArrayStorage,
         FieldInfo SymbolToPrimitive,
-        MethodInfo GetSymbolDictionary,
-        MethodInfo GetIndex,
-        MethodInfo GetProperty,
+        MethodInfo ReflectGet,
         MethodInfo InvokeMethodValue,
         MethodInfo TypeOf,
-        MethodInfo ToJsString,
-        MethodInfo UnwrapIfBoxed,
         MethodInfo CreateException,
         ConstructorInfo TypeErrorCtor);
 
@@ -1287,203 +1276,147 @@ public partial class RuntimeEmitter
 
     private void EmitNumericToPrimitive(ILGenerator il, AbstractNumberInputs peers, LocalBuilder argLocal)
     {
-        var skipToPrimLabelTop = il.DefineLabel();
-        var doToPrimLabelTop = il.DefineLabel();
-
-        // Array objects participate in ToPrimitive(number): their inherited
-        // valueOf returns the array itself, then Array.prototype.toString
-        // supplies the comma-joined primitive. Reuse ToJsString's live
-        // Array.prototype dispatch so ToNumber([1]) becomes 1 rather than
-        // falling through to Convert.ToDouble(List<object>) and NaN.
-        var notArrayToNumberLabel = il.DefineLabel();
-        il.Emit(OpCodes.Ldloc, argLocal);
-        il.Emit(OpCodes.Isinst, _types.ListOfObject);
-        il.Emit(OpCodes.Brfalse, notArrayToNumberLabel);
-        il.Emit(OpCodes.Ldloc, argLocal);
-        il.Emit(OpCodes.Call, peers.ToJsString);
-        il.Emit(OpCodes.Stloc, argLocal);
-        il.Emit(OpCodes.Br, skipToPrimLabelTop);
-        il.MarkLabel(notArrayToNumberLabel);
+        var done = il.DefineLabel();
+        var convertObject = il.DefineLabel();
+        var stringEquality = _types.StringOpEquality;
 
         il.Emit(OpCodes.Ldloc, argLocal);
-        il.Emit(OpCodes.Isinst, _types.DictionaryStringObject);
-        il.Emit(OpCodes.Brtrue, doToPrimLabelTop);
+        il.Emit(OpCodes.Brfalse, done);
         il.Emit(OpCodes.Ldloc, argLocal);
-        il.Emit(OpCodes.Isinst, peers.ObjectType);
-        il.Emit(OpCodes.Brtrue, doToPrimLabelTop);
-        il.Emit(OpCodes.Ldloc, argLocal);
-        il.Emit(OpCodes.Isinst, peers.HasFieldsType);
-        il.Emit(OpCodes.Brfalse, skipToPrimLabelTop);
-        il.MarkLabel(doToPrimLabelTop);
+        il.Emit(OpCodes.Isinst, typeof(IConvertible));
+        il.Emit(OpCodes.Brtrue, done);
 
-        // ECMA-262 7.1.1 ToPrimitive(input, "number"): @@toPrimitive (if defined and
-        // callable) takes priority over OrdinaryToPrimitive. Look up the symbol-keyed
-        // method and invoke with hint "number". Result must be primitive or TypeError.
-        var afterToPrimSymN = il.DefineLabel();
-        var doThrowN = il.DefineLabel();
-        var toPrimFnLocalN = il.DeclareLocal(_types.Object);
+        // Object identity is independent of its CLR storage representation.
+        // The emitted typeof operation covers native carriers and callable
+        // Proxies as well as records, arrays, wrappers and class instances.
+        var inputKind = il.DeclareLocal(_types.String);
+        il.Emit(OpCodes.Ldloc, argLocal);
+        il.Emit(OpCodes.Call, peers.TypeOf);
+        il.Emit(OpCodes.Stloc, inputKind);
+        il.Emit(OpCodes.Ldloc, inputKind);
+        il.Emit(OpCodes.Ldstr, "object");
+        il.Emit(OpCodes.Call, stringEquality);
+        il.Emit(OpCodes.Brtrue, convertObject);
+        il.Emit(OpCodes.Ldloc, inputKind);
+        il.Emit(OpCodes.Ldstr, "function");
+        il.Emit(OpCodes.Call, stringEquality);
+        il.Emit(OpCodes.Brfalse, done);
+        il.MarkLabel(convertObject);
+
+        // Array.prototype.toString consumes the boxed List storage. Materialize
+        // packed numeric elements before the protocol walk, as ToJsString does,
+        // while retaining the same receiver for every hook and accessor.
+        EmitDeoptIfNumericArrayStorage(il, peers.ArrayStorage, () => il.Emit(OpCodes.Ldloc, argLocal));
+
+        // A successful conversion accepts every primitive, including null and
+        // undefined, while every object representation (arrays and functions
+        // included) must continue ordinary conversion or fail the exotic hook.
+        void BranchIfPrimitive(LocalBuilder value, Label primitive)
+        {
+            il.Emit(OpCodes.Ldloc, value);
+            il.Emit(OpCodes.Brfalse, primitive);
+            // CLR interop can return boxed int/float/decimal values rather than
+            // the guest's usual double. Preserve that scalar conversion seam.
+            il.Emit(OpCodes.Ldloc, value);
+            il.Emit(OpCodes.Isinst, typeof(IConvertible));
+            il.Emit(OpCodes.Brtrue, primitive);
+            var kind = il.DeclareLocal(_types.String);
+            il.Emit(OpCodes.Ldloc, value);
+            il.Emit(OpCodes.Call, peers.TypeOf);
+            il.Emit(OpCodes.Stloc, kind);
+            var objectResult = il.DefineLabel();
+            il.Emit(OpCodes.Ldloc, kind);
+            il.Emit(OpCodes.Ldstr, "object");
+            il.Emit(OpCodes.Call, stringEquality);
+            il.Emit(OpCodes.Brtrue, objectResult);
+            il.Emit(OpCodes.Ldloc, kind);
+            il.Emit(OpCodes.Ldstr, "function");
+            il.Emit(OpCodes.Call, stringEquality);
+            il.Emit(OpCodes.Brfalse, primitive);
+            il.MarkLabel(objectResult);
+        }
+
+        void BranchIfCallable(LocalBuilder value, Label callable)
+        {
+            il.Emit(OpCodes.Ldloc, value);
+            il.Emit(OpCodes.Call, peers.TypeOf);
+            il.Emit(OpCodes.Ldstr, "function");
+            il.Emit(OpCodes.Call, stringEquality);
+            il.Emit(OpCodes.Brtrue, callable);
+            // Interop property lookup can expose an unwrapped method token.
+            il.Emit(OpCodes.Ldloc, value);
+            il.Emit(OpCodes.Isinst, _types.MethodInfo);
+            il.Emit(OpCodes.Brtrue, callable);
+        }
+
+        // GetMethod(@@toPrimitive) is observable: read it once and never run
+        // wrapper unwrapping that would probe it again or skip inherited hooks.
+        var ordinary = il.DefineLabel();
+        var hook = il.DeclareLocal(_types.Object);
         il.Emit(OpCodes.Ldloc, argLocal);
         il.Emit(OpCodes.Ldsfld, peers.SymbolToPrimitive);
-        il.Emit(OpCodes.Call, peers.GetIndex);
-        il.Emit(OpCodes.Stloc, toPrimFnLocalN);
-        il.Emit(OpCodes.Ldloc, toPrimFnLocalN);
-        il.Emit(OpCodes.Brfalse, afterToPrimSymN);
-        il.Emit(OpCodes.Ldloc, toPrimFnLocalN);
+        il.Emit(OpCodes.Ldloc, argLocal);
+        il.Emit(OpCodes.Call, peers.ReflectGet);
+        il.Emit(OpCodes.Stloc, hook);
+        il.Emit(OpCodes.Ldloc, hook);
+        il.Emit(OpCodes.Brfalse, ordinary);
+        il.Emit(OpCodes.Ldloc, hook);
         il.Emit(OpCodes.Isinst, peers.UndefinedType);
-        il.Emit(OpCodes.Brtrue, afterToPrimSymN);
-        var toPrimNumberCallableLabel = il.DefineLabel();
-        il.Emit(OpCodes.Ldloc, toPrimFnLocalN);
-        il.Emit(OpCodes.Isinst, peers.FunctionType);
-        il.Emit(OpCodes.Brtrue, toPrimNumberCallableLabel);
-        il.Emit(OpCodes.Ldloc, toPrimFnLocalN);
-        il.Emit(OpCodes.Isinst, peers.BoundFunctionType);
-        il.Emit(OpCodes.Brtrue, toPrimNumberCallableLabel);
-        il.Emit(OpCodes.Ldloc, toPrimFnLocalN);
-        il.Emit(OpCodes.Isinst, _types.MethodInfo);
-        il.Emit(OpCodes.Brtrue, toPrimNumberCallableLabel);
+        il.Emit(OpCodes.Brtrue, ordinary);
+        var callableExotic = il.DefineLabel();
+        BranchIfCallable(hook, callableExotic);
         GuestErrorEmitter.ThrowError(il, peers.CreateException, peers.TypeErrorCtor, "Symbol.toPrimitive is not callable");
-        il.MarkLabel(toPrimNumberCallableLabel);
+        il.MarkLabel(callableExotic);
 
-        var hintArgsNumLocal = il.DeclareLocal(_types.ObjectArray);
+        var result = il.DeclareLocal(_types.Object);
+        il.Emit(OpCodes.Ldloc, argLocal);
+        il.Emit(OpCodes.Ldloc, hook);
         il.Emit(OpCodes.Ldc_I4_1);
         il.Emit(OpCodes.Newarr, _types.Object);
-        il.Emit(OpCodes.Stloc, hintArgsNumLocal);
-        il.Emit(OpCodes.Ldloc, hintArgsNumLocal);
+        il.Emit(OpCodes.Dup);
         il.Emit(OpCodes.Ldc_I4_0);
         il.Emit(OpCodes.Ldstr, "number");
         il.Emit(OpCodes.Stelem_Ref);
-        var toPrimResultLocalN = il.DeclareLocal(_types.Object);
-        il.Emit(OpCodes.Ldloc, argLocal);
-        il.Emit(OpCodes.Ldloc, toPrimFnLocalN);
-        il.Emit(OpCodes.Ldloc, hintArgsNumLocal);
         il.Emit(OpCodes.Call, peers.InvokeMethodValue);
-        il.Emit(OpCodes.Stloc, toPrimResultLocalN);
-        // Object result → TypeError per ECMA-262 7.1.1 step 1.b.iii.
-        il.Emit(OpCodes.Ldloc, toPrimResultLocalN);
-        il.Emit(OpCodes.Isinst, _types.DictionaryStringObject);
-        il.Emit(OpCodes.Brtrue, doThrowN);
-        il.Emit(OpCodes.Ldloc, toPrimResultLocalN);
-        il.Emit(OpCodes.Isinst, peers.ObjectType);
-        il.Emit(OpCodes.Brtrue, doThrowN);
-        il.Emit(OpCodes.Ldloc, toPrimResultLocalN);
-        il.Emit(OpCodes.Isinst, peers.HasFieldsType);
-        il.Emit(OpCodes.Brtrue, doThrowN);
-        il.Emit(OpCodes.Ldloc, toPrimResultLocalN);
-        il.Emit(OpCodes.Stloc, argLocal);
-        il.Emit(OpCodes.Br, afterToPrimSymN);
-        il.MarkLabel(doThrowN);
+        il.Emit(OpCodes.Stloc, result);
+        var converted = il.DefineLabel();
+        BranchIfPrimitive(result, converted);
         GuestErrorEmitter.ThrowError(il, peers.CreateException, peers.TypeErrorCtor, "Cannot convert object to primitive value");
-        il.MarkLabel(afterToPrimSymN);
 
-        // A boxed primitive's inherited valueOf returns its internal
-        // [[PrimitiveValue]]. Use the shared wrapper-aware implementation
-        // (which still honors an own valueOf override), then stop the ordinary
-        // object-method walk once a primitive has been produced. The old path
-        // continued into toString for Object(Symbol()), turning it into text
-        // and silently yielding NaN instead of the required Symbol TypeError.
-        var notBoxedNumberLabel = il.DefineLabel();
-        il.Emit(OpCodes.Ldloc, argLocal);
-        il.Emit(OpCodes.Isinst, peers.ObjectType);
-        il.Emit(OpCodes.Brfalse, notBoxedNumberLabel);
-        il.Emit(OpCodes.Ldloc, argLocal);
-        il.Emit(OpCodes.Call, peers.UnwrapIfBoxed);
-        il.Emit(OpCodes.Stloc, argLocal);
-        il.MarkLabel(notBoxedNumberLabel);
-
-        var continueOrdinaryNumberLabel = il.DefineLabel();
-        il.Emit(OpCodes.Ldloc, argLocal);
-        il.Emit(OpCodes.Isinst, _types.DictionaryStringObject);
-        il.Emit(OpCodes.Brtrue, continueOrdinaryNumberLabel);
-        il.Emit(OpCodes.Ldloc, argLocal);
-        il.Emit(OpCodes.Isinst, peers.ObjectType);
-        il.Emit(OpCodes.Brtrue, continueOrdinaryNumberLabel);
-        il.Emit(OpCodes.Ldloc, argLocal);
-        il.Emit(OpCodes.Isinst, peers.HasFieldsType);
-        il.Emit(OpCodes.Brfalse, skipToPrimLabelTop);
-        il.MarkLabel(continueOrdinaryNumberLabel);
-
-        var emptyArgsLocalT = il.DeclareLocal(_types.ObjectArray);
+        // OrdinaryToPrimitive uses the original receiver for both reads and
+        // calls. An object result from valueOf reaches toString, including on
+        // wrappers whose inherited intrinsic methods read the primitive slot.
+        il.MarkLabel(ordinary);
+        var emptyArgs = il.DeclareLocal(_types.ObjectArray);
         il.Emit(OpCodes.Ldc_I4_0);
         il.Emit(OpCodes.Newarr, _types.Object);
-        il.Emit(OpCodes.Stloc, emptyArgsLocalT);
-
-        void TryToPrim2(string name, Label afterLabel)
+        il.Emit(OpCodes.Stloc, emptyArgs);
+        foreach (var name in new[] { "valueOf", "toString" })
         {
-            var fnLocal = il.DeclareLocal(_types.Object);
+            var next = il.DefineLabel();
+            var callable = il.DefineLabel();
             il.Emit(OpCodes.Ldloc, argLocal);
             il.Emit(OpCodes.Ldstr, name);
-            il.Emit(OpCodes.Call, peers.GetProperty);
-            il.Emit(OpCodes.Stloc, fnLocal);
-            il.Emit(OpCodes.Ldloc, fnLocal);
-            il.Emit(OpCodes.Brfalse, afterLabel);
-            il.Emit(OpCodes.Ldloc, fnLocal);
-            il.Emit(OpCodes.Isinst, peers.UndefinedType);
-            il.Emit(OpCodes.Brtrue, afterLabel);
-            // OrdinaryToPrimitive skips non-callable properties. InvokeValue's
-            // generic fallback intentionally throws for such values, so guard
-            // here before attempting valueOf/toString.
-            il.Emit(OpCodes.Ldloc, fnLocal);
-            il.Emit(OpCodes.Call, peers.TypeOf);
-            il.Emit(OpCodes.Ldstr, "function");
-            il.Emit(OpCodes.Call, _types.GetMethod(_types.String, "op_Equality", _types.String, _types.String));
-            il.Emit(OpCodes.Brfalse, afterLabel);
-
-            var resLoc = il.DeclareLocal(_types.Object);
             il.Emit(OpCodes.Ldloc, argLocal);
-            il.Emit(OpCodes.Ldloc, fnLocal);
-            il.Emit(OpCodes.Ldloc, emptyArgsLocalT);
+            il.Emit(OpCodes.Call, peers.ReflectGet);
+            il.Emit(OpCodes.Stloc, hook);
+            BranchIfCallable(hook, callable);
+            il.Emit(OpCodes.Br, next);
+            il.MarkLabel(callable);
+            il.Emit(OpCodes.Ldloc, argLocal);
+            il.Emit(OpCodes.Ldloc, hook);
+            il.Emit(OpCodes.Ldloc, emptyArgs);
             il.Emit(OpCodes.Call, peers.InvokeMethodValue);
-            il.Emit(OpCodes.Stloc, resLoc);
-
-            il.Emit(OpCodes.Ldloc, resLoc);
-            il.Emit(OpCodes.Isinst, _types.DictionaryStringObject);
-            il.Emit(OpCodes.Brtrue, afterLabel);
-            il.Emit(OpCodes.Ldloc, resLoc);
-            il.Emit(OpCodes.Isinst, peers.ObjectType);
-            il.Emit(OpCodes.Brtrue, afterLabel);
-            il.Emit(OpCodes.Ldloc, resLoc);
-            il.Emit(OpCodes.Isinst, peers.HasFieldsType);
-            il.Emit(OpCodes.Brtrue, afterLabel);
-            il.Emit(OpCodes.Ldloc, resLoc);
-            il.Emit(OpCodes.Stloc, argLocal);
+            il.Emit(OpCodes.Stloc, result);
+            BranchIfPrimitive(result, converted);
+            il.MarkLabel(next);
         }
-
-        var afterValueOfT = il.DefineLabel();
-        TryToPrim2("valueOf", afterValueOfT);
-        il.MarkLabel(afterValueOfT);
-
-        var afterToStringT = il.DefineLabel();
-        var stillObjT = il.DefineLabel();
-        il.Emit(OpCodes.Ldloc, argLocal);
-        il.Emit(OpCodes.Isinst, _types.DictionaryStringObject);
-        il.Emit(OpCodes.Brtrue, stillObjT);
-        il.Emit(OpCodes.Ldloc, argLocal);
-        il.Emit(OpCodes.Isinst, peers.ObjectType);
-        il.Emit(OpCodes.Brtrue, stillObjT);
-        il.Emit(OpCodes.Ldloc, argLocal);
-        il.Emit(OpCodes.Isinst, peers.HasFieldsType);
-        il.Emit(OpCodes.Brfalse, afterToStringT);
-        il.MarkLabel(stillObjT);
-        TryToPrim2("toString", afterToStringT);
-        il.MarkLabel(afterToStringT);
-
-        // ECMA-262 7.1.1.1: if both methods returned non-primitives, throw TypeError.
-        var afterTeT = il.DefineLabel();
-        var stillObjTeT = il.DefineLabel();
-        il.Emit(OpCodes.Ldloc, argLocal);
-        il.Emit(OpCodes.Isinst, _types.DictionaryStringObject);
-        il.Emit(OpCodes.Brtrue, stillObjTeT);
-        il.Emit(OpCodes.Ldloc, argLocal);
-        il.Emit(OpCodes.Isinst, peers.ObjectType);
-        il.Emit(OpCodes.Brtrue, stillObjTeT);
-        il.Emit(OpCodes.Ldloc, argLocal);
-        il.Emit(OpCodes.Isinst, peers.HasFieldsType);
-        il.Emit(OpCodes.Brfalse, afterTeT);
-        il.MarkLabel(stillObjTeT);
         GuestErrorEmitter.ThrowError(il, peers.CreateException, peers.TypeErrorCtor, "Cannot convert object to primitive value");
-        il.MarkLabel(afterTeT);
 
-        il.MarkLabel(skipToPrimLabelTop);
+        il.MarkLabel(converted);
+        il.Emit(OpCodes.Ldloc, result);
+        il.Emit(OpCodes.Stloc, argLocal);
+        il.MarkLabel(done);
     }
 
     private void EmitToNumeric(TypeBuilder typeBuilder, EmittedNumericCoercionRuntime numeric,
@@ -1525,7 +1458,7 @@ public partial class RuntimeEmitter
         // ECMA-262 7.1.4 ToNumber on object: ToPrimitive(value, "number") which
         // tries valueOf first, then toString. Without this, Math.hypot(obj-with-
         // throwing-valueOf) silently returns NaN instead of propagating the
-        // throw. Apply for Dictionary or $Object only.
+        // throw. Every supported guest object kind uses the shared hook walk.
         var argLocal = il.DeclareLocal(_types.Object);
         il.Emit(OpCodes.Ldarg_0);
         il.Emit(OpCodes.Stloc, argLocal);
@@ -1566,112 +1499,8 @@ public partial class RuntimeEmitter
         il.Emit(OpCodes.Ret);
         il.MarkLabel(notStringNumberLabel);
 
-        // ECMA-262 ToNumber: strings with "0x"/"0X" prefix parse as hex. Convert.ToDouble
-        // throws on those, so special-case before the fallback. Without this, tests that
-        // set `length: "0x0002"` on array-likes surface as NaN → 0 → empty iteration.
-        var tryParseInt64 = _types.GetMethod(_types.Int64, "Parse", _types.String, typeof(System.Globalization.NumberStyles), typeof(System.IFormatProvider));
-        var notHexLabel = il.DefineLabel();
-        var strLocal = il.DeclareLocal(_types.String);
-        il.Emit(OpCodes.Ldloc, argLocal);
-        il.Emit(OpCodes.Isinst, _types.String);
-        il.Emit(OpCodes.Dup);
-        il.Emit(OpCodes.Stloc, strLocal);
-        il.Emit(OpCodes.Brfalse, notHexLabel);
-
-        // if (strLocal.Length >= 2 && (strLocal[0] == '0') && (strLocal[1] == 'x' || strLocal[1] == 'X'))
-        il.Emit(OpCodes.Ldloc, strLocal);
-        il.Emit(OpCodes.Callvirt, _types.GetProperty(_types.String, "Length").GetGetMethod()!);
-        il.Emit(OpCodes.Ldc_I4_2);
-        il.Emit(OpCodes.Blt, notHexLabel);
-
-        il.Emit(OpCodes.Ldloc, strLocal);
-        il.Emit(OpCodes.Ldc_I4_0);
-        il.Emit(OpCodes.Callvirt, _types.GetMethod(_types.String, "get_Chars", [_types.Int32])!);
-        il.Emit(OpCodes.Ldc_I4, (int)'0');
-        il.Emit(OpCodes.Bne_Un, notHexLabel);
-
-        // second char == 'x' or 'X': compare with OR'd check. Use (ch | 0x20) == 'x'.
-        il.Emit(OpCodes.Ldloc, strLocal);
-        il.Emit(OpCodes.Ldc_I4_1);
-        il.Emit(OpCodes.Callvirt, _types.GetMethod(_types.String, "get_Chars", [_types.Int32])!);
-        il.Emit(OpCodes.Ldc_I4, 0x20);
-        il.Emit(OpCodes.Or);
-        il.Emit(OpCodes.Ldc_I4, (int)'x');
-        il.Emit(OpCodes.Bne_Un, notHexLabel);
-
-        // Hex-parse: strLocal.Substring(2), try Int64.Parse with HexNumber style.
-        il.BeginExceptionBlock();
-        il.Emit(OpCodes.Ldloc, strLocal);
-        il.Emit(OpCodes.Ldc_I4_2);
-        il.Emit(OpCodes.Callvirt, _types.GetMethod(_types.String, "Substring", [_types.Int32])!);
-        il.Emit(OpCodes.Ldc_I4, (int)System.Globalization.NumberStyles.HexNumber);
-        // CultureInfo.InvariantCulture — property getter, not a static field. Use Call.
-        il.Emit(OpCodes.Call, typeof(System.Globalization.CultureInfo).GetProperty("InvariantCulture")!.GetGetMethod()!);
-        il.Emit(OpCodes.Call, tryParseInt64);
-        il.Emit(OpCodes.Conv_R8);
-        il.Emit(OpCodes.Stloc, resultLocal);
-        il.BeginCatchBlock(_types.Exception);
-        il.Emit(OpCodes.Pop);
-        il.Emit(OpCodes.Ldc_R8, double.NaN);
-        il.Emit(OpCodes.Stloc, resultLocal);
-        il.EndExceptionBlock();
-        il.Emit(OpCodes.Ldloc, resultLocal);
-        il.Emit(OpCodes.Ret);
-
-        il.MarkLabel(notHexLabel);
-
-        // ECMA-262: strings with "0b"/"0B" parse as binary literals,
-        // "0o"/"0O" as octal. Convert.ToDouble doesn't recognize these.
-        // Pattern: "0[bB][01]+" or "0[oO][0-7]+".
-        EmitParsePrefixedInt(il, strLocal, resultLocal, 'b', 2);
-        EmitParsePrefixedInt(il, strLocal, resultLocal, 'o', 8);
-
-        // Handle "Infinity"/"+Infinity"/"-Infinity" strings before Convert.ToDouble
-        // (which throws FormatException on those — caught below as NaN, but
-        // ECMA-262 specifies +Infinity/-Infinity numeric values).
-        var notInfStrLabel = il.DefineLabel();
-        il.Emit(OpCodes.Ldloc, strLocal);
-        il.Emit(OpCodes.Brfalse, notInfStrLabel);
-
-        // Trim and check
-        var trimmedLocal = il.DeclareLocal(_types.String);
-        il.Emit(OpCodes.Ldloc, strLocal);
-        il.Emit(OpCodes.Callvirt, _types.GetMethod(_types.String, "Trim", Type.EmptyTypes)!);
-        il.Emit(OpCodes.Stloc, trimmedLocal);
-
-        // "Infinity" → +Inf
-        var notPlainInf = il.DefineLabel();
-        il.Emit(OpCodes.Ldloc, trimmedLocal);
-        il.Emit(OpCodes.Ldstr, "Infinity");
-        il.Emit(OpCodes.Call, _types.GetMethod(_types.String, "op_Equality", [_types.String, _types.String])!);
-        il.Emit(OpCodes.Brfalse, notPlainInf);
-        il.Emit(OpCodes.Ldc_R8, double.PositiveInfinity);
-        il.Emit(OpCodes.Ret);
-        il.MarkLabel(notPlainInf);
-
-        // "+Infinity" → +Inf
-        var notPlusInf = il.DefineLabel();
-        il.Emit(OpCodes.Ldloc, trimmedLocal);
-        il.Emit(OpCodes.Ldstr, "+Infinity");
-        il.Emit(OpCodes.Call, _types.GetMethod(_types.String, "op_Equality", [_types.String, _types.String])!);
-        il.Emit(OpCodes.Brfalse, notPlusInf);
-        il.Emit(OpCodes.Ldc_R8, double.PositiveInfinity);
-        il.Emit(OpCodes.Ret);
-        il.MarkLabel(notPlusInf);
-
-        // "-Infinity" → -Inf
-        var notMinusInf = il.DefineLabel();
-        il.Emit(OpCodes.Ldloc, trimmedLocal);
-        il.Emit(OpCodes.Ldstr, "-Infinity");
-        il.Emit(OpCodes.Call, _types.GetMethod(_types.String, "op_Equality", [_types.String, _types.String])!);
-        il.Emit(OpCodes.Brfalse, notMinusInf);
-        il.Emit(OpCodes.Ldc_R8, double.NegativeInfinity);
-        il.Emit(OpCodes.Ret);
-        il.MarkLabel(notMinusInf);
-
-        il.MarkLabel(notInfStrLabel);
-
-        // Use Convert.ToDouble with try-catch fallback to NaN
+        // Strings returned above through the shared parser. Remaining
+        // primitive/CLR scalars retain Convert.ToDouble with a NaN fallback.
         il.BeginExceptionBlock();
         il.Emit(OpCodes.Ldloc, argLocal);
         il.Emit(OpCodes.Call, _types.GetMethod(_types.Convert, "ToDouble", _types.Object));
@@ -1880,6 +1709,85 @@ public partial class RuntimeEmitter
         numeric.ConvertToNumber = method;
     }
 
+    private void EmitTrimNumericString(ILGenerator il, LocalBuilder text)
+    {
+        // StrWhiteSpaceChar is a fixed ECMAScript set. NEL is excluded and BOM
+        // is included, so neither string.Trim nor char.IsWhiteSpace is suitable.
+        const string whitespace = "\u0009\u000A\u000B\u000C\u000D\u0020\u00A0\u1680"
+            + "\u2000\u2001\u2002\u2003\u2004\u2005\u2006\u2007\u2008\u2009\u200A"
+            + "\u2028\u2029\u202F\u205F\u3000\uFEFF";
+        var start = il.DeclareLocal(_types.Int32);
+        var end = il.DeclareLocal(_types.Int32);
+        var scanStart = il.DefineLabel();
+        var scanEnd = il.DefineLabel();
+        var trimmed = il.DefineLabel();
+        var substring = il.DefineLabel();
+        var done = il.DefineLabel();
+        var length = _types.GetProperty(_types.String, "Length").GetGetMethod()!;
+        var character = _types.GetMethod(_types.String, "get_Chars", _types.Int32);
+        var indexOf = _types.GetMethod(_types.String, "IndexOf", _types.Char);
+
+        il.Emit(OpCodes.Ldc_I4_0);
+        il.Emit(OpCodes.Stloc, start);
+        il.Emit(OpCodes.Ldloc, text);
+        il.Emit(OpCodes.Callvirt, length);
+        il.Emit(OpCodes.Stloc, end);
+
+        il.MarkLabel(scanStart);
+        il.Emit(OpCodes.Ldloc, start);
+        il.Emit(OpCodes.Ldloc, end);
+        il.Emit(OpCodes.Bge, trimmed);
+        il.Emit(OpCodes.Ldstr, whitespace);
+        il.Emit(OpCodes.Ldloc, text);
+        il.Emit(OpCodes.Ldloc, start);
+        il.Emit(OpCodes.Callvirt, character);
+        il.Emit(OpCodes.Callvirt, indexOf);
+        il.Emit(OpCodes.Ldc_I4_0);
+        il.Emit(OpCodes.Blt, scanEnd);
+        il.Emit(OpCodes.Ldloc, start);
+        il.Emit(OpCodes.Ldc_I4_1);
+        il.Emit(OpCodes.Add);
+        il.Emit(OpCodes.Stloc, start);
+        il.Emit(OpCodes.Br, scanStart);
+
+        il.MarkLabel(scanEnd);
+        il.Emit(OpCodes.Ldloc, end);
+        il.Emit(OpCodes.Ldloc, start);
+        il.Emit(OpCodes.Ble, trimmed);
+        il.Emit(OpCodes.Ldstr, whitespace);
+        il.Emit(OpCodes.Ldloc, text);
+        il.Emit(OpCodes.Ldloc, end);
+        il.Emit(OpCodes.Ldc_I4_1);
+        il.Emit(OpCodes.Sub);
+        il.Emit(OpCodes.Callvirt, character);
+        il.Emit(OpCodes.Callvirt, indexOf);
+        il.Emit(OpCodes.Ldc_I4_0);
+        il.Emit(OpCodes.Blt, trimmed);
+        il.Emit(OpCodes.Ldloc, end);
+        il.Emit(OpCodes.Ldc_I4_1);
+        il.Emit(OpCodes.Sub);
+        il.Emit(OpCodes.Stloc, end);
+        il.Emit(OpCodes.Br, scanEnd);
+
+        // Keep the original string when its boundaries are already correct.
+        il.MarkLabel(trimmed);
+        il.Emit(OpCodes.Ldloc, start);
+        il.Emit(OpCodes.Brtrue, substring);
+        il.Emit(OpCodes.Ldloc, end);
+        il.Emit(OpCodes.Ldloc, text);
+        il.Emit(OpCodes.Callvirt, length);
+        il.Emit(OpCodes.Beq, done);
+        il.MarkLabel(substring);
+        il.Emit(OpCodes.Ldloc, text);
+        il.Emit(OpCodes.Ldloc, start);
+        il.Emit(OpCodes.Ldloc, end);
+        il.Emit(OpCodes.Ldloc, start);
+        il.Emit(OpCodes.Sub);
+        il.Emit(OpCodes.Callvirt, _types.GetMethod(_types.String, "Substring", _types.Int32, _types.Int32));
+        il.Emit(OpCodes.Stloc, text);
+        il.MarkLabel(done);
+    }
+
     private void EmitConvertToNumber(TypeBuilder typeBuilder, EmittedNumericCoercionRuntime numeric,
         AbstractNumberInputs peers, MethodInfo bigIntToNumber)
     {
@@ -1897,10 +1805,9 @@ public partial class RuntimeEmitter
         // ECMA-262 7.1.4 ToNumber on object: ToPrimitive(value, "number") which
         // tries valueOf first, then toString. Without this, Number({valueOf:
         // () => 1}) returns NaN (object falls through to nan-label).
-        // Apply for Dictionary or $Object only — those hold user-defined
-        // valueOf/toString. Boxed primitives (via $Object marker fields) are
-        // also $Object, which is correct: their valueOf returns the underlying
-        // primitive per ECMA-262 19.x.3.7.
+        // The shared hook walk includes array/arguments storage, callables,
+        // Dates and wrappers; inherited intrinsic valueOf methods extract
+        // boxed primitive values through their normal guest-visible calls.
         var argLocal = il.DeclareLocal(_types.Object);
         il.Emit(OpCodes.Ldarg_0);
         il.Emit(OpCodes.Stloc, argLocal);
@@ -2000,8 +1907,8 @@ public partial class RuntimeEmitter
         var resultLocal = il.DeclareLocal(_types.Double);
         il.Emit(OpCodes.Ldloc, argLocal);
         il.Emit(OpCodes.Castclass, _types.String);
-        il.Emit(OpCodes.Callvirt, _types.GetMethodNoParams(_types.String, "Trim"));
         il.Emit(OpCodes.Stloc, trimmedLocal);
+        EmitTrimNumericString(il, trimmedLocal);
 
         // if (trimmed.Length == 0) return 0.0
         var nonEmptyLabel = il.DefineLabel();
@@ -2096,9 +2003,11 @@ public partial class RuntimeEmitter
         il.Emit(OpCodes.Ret);
         il.MarkLabel(notCiInfLabel);
 
-        // double.TryParse(trimmed, NumberStyles.Float, CultureInfo.InvariantCulture, out result)
+        // Whitespace has already been handled by the ECMAScript policy above.
         il.Emit(OpCodes.Ldloc, trimmedLocal);
-        il.Emit(OpCodes.Ldc_I4, (int)System.Globalization.NumberStyles.Float);
+        il.Emit(OpCodes.Ldc_I4, (int)(System.Globalization.NumberStyles.AllowLeadingSign
+            | System.Globalization.NumberStyles.AllowDecimalPoint
+            | System.Globalization.NumberStyles.AllowExponent));
         il.Emit(OpCodes.Call, typeof(System.Globalization.CultureInfo).GetProperty("InvariantCulture")!.GetGetMethod()!);
         il.Emit(OpCodes.Ldloca, resultLocal);
         il.Emit(OpCodes.Call, typeof(double).GetMethod("TryParse", [typeof(string), typeof(System.Globalization.NumberStyles), typeof(IFormatProvider), typeof(double).MakeByRefType()])!);

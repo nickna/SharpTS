@@ -1870,16 +1870,19 @@ does not invoke object conversion hooks. Local toString/valueOf builders remain 
 descriptors, function identity, receiver branding and mutable guest prototype state are unchanged.
 The broader construction/shared-infrastructure audit remains separate.
 
-General numeric conversion metadata lives in required `EmittedNumericCoercionRuntime`. Its five
-checked declarations are ToNumber, ConvertToNumber, JsNumberToInt32, JsToInt32 and
+General numeric conversion metadata lives in required `EmittedNumericCoercionRuntime`. Its six
+checked declarations are ToNumber, ToNumeric, ConvertToNumber, JsNumberToInt32, JsToInt32 and
 ToIntegerOrInfinity. ToNumber and JsToInt32 remain early forward declarations for RegExp;
 later declarations and bodies keep their existing order. Five emission boundaries take the owner
 and immutable inputs for primitive/object conversion, descriptors, invocation and guest errors.
 Explicit Number conversion receives the required BigInt numeric adapter independently of optional
 BigInt operations. The native int32 body and prefixed-integer parser retain their local BCL inputs.
-Completion validates all five declarations and freezes metadata assignments. Native signatures,
-inlining, conversion hooks, abrupt completions, undefined defaults and generated instructions stay
-unchanged. TSFunction's indirect ToNumber lookup retains its generated name and per-assembly cache.
+Completion validates all six declarations and freezes metadata assignments. Number-hint object
+conversion resolves exotic and ordinary hooks through emitted Reflect.Get with the original
+receiver, including inherited accessors. Object or function results cannot finish conversion;
+numeric strings trim the fixed ECMAScript whitespace set. Native signatures and undefined defaults
+are preserved. Explicit Number conversion accepts BigInt; abstract ToNumber rejects it. TSFunction's
+indirect ToNumber lookup retains its generated name and per-assembly cache.
 
 Cooperative cancellation lives in required `EmittedCancellationRuntime`. Its public per-assembly
 flag is declared at the original early runtime-field position. The check signature is reserved

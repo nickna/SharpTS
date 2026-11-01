@@ -74,7 +74,7 @@ public sealed class GlobalThisStaticEmitter : IStaticTypeEmitterStrategy
                 return true;
 
             case "isNaN":
-                if (arguments.Count > 0) { emitter.EmitExpression(arguments[0]); emitter.EmitBoxIfNeeded(arguments[0]); } else { il.Emit(OpCodes.Ldnull); }
+                if (arguments.Count > 0) { emitter.EmitExpression(arguments[0]); emitter.EmitBoxIfNeeded(arguments[0]); } else { il.Emit(OpCodes.Ldsfld, ctx.Runtime!.Sentinels.UndefinedInstance); }
                 il.Emit(OpCodes.Call, ctx.Runtime!.Numbers.GlobalIsNaN);
                 il.Emit(OpCodes.Box, ctx.Types.Boolean);
                 return true;
