@@ -21,4 +21,13 @@ public sealed class AsyncUsingInitializerTests
         Assert.NotEmpty(name);
         Assert.Equal(expected, TestHarness.RunInterpreted(source));
     }
+
+    [Theory, MemberData(nameof(Cases))]
+    public void CompiledAwaitsInitializersBeforeAcquisition(string name, string source, string expected)
+    {
+        Assert.NotEmpty(name);
+        var (errors, output) = TestHarness.CompileVerifyAndRun(source);
+        Assert.Empty(errors);
+        Assert.Equal(expected, output);
+    }
 }
