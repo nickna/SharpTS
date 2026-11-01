@@ -30,6 +30,8 @@ public sealed class UsingSuppressionValueTests
         yield return ["async-null-undefined", "/// <reference lib=\"esnext.disposable\" />\nasync function run(){try{await using resource={async[Symbol.asyncDispose](){await 0;throw undefined}};throw null}catch(error:any){console.log(error.error===undefined,error.suppressed===null)}}run();", "true true\n"];
         yield return ["async-two-cleanup", "/// <reference lib=\"esnext.disposable\" />\nconst a={},b={};async function run(){try{await using one={async[Symbol.asyncDispose](){await 0;throw a}},two={async[Symbol.asyncDispose](){await 0;throw b}};}catch(error:any){console.log(error.error===a,error.suppressed===b)}}run();", "true true\n"];
         yield return ["async-sync-fallback-suppression", "/// <reference lib=\"esnext.disposable\" />\nconst a={},b={};async function run(){try{await using resource={[Symbol.dispose](){throw a}};await 0;throw b}catch(error:any){console.log(error.error===a,error.suppressed===b)}}run();", "true true\n"];
+        yield return ["catch-inside-resource-scope", "/// <reference lib=\"esnext.disposable\" />\nconst body={},cleanup={},log:string[]=[];try{{using resource={[Symbol.dispose](){log.push(\"dispose\");throw cleanup}};try{throw body}catch(error){console.log(error===body,log.length)}}}catch(error){console.log(error===cleanup,log.join(\",\"))}", "true 0\ntrue dispose\n"];
+        yield return ["nested-resource-suppression", "/// <reference lib=\"esnext.disposable\" />\nconst body={},outer={},inner={},log:string[]=[];try{{using one={[Symbol.dispose](){log.push(\"outer\");throw outer}};{using two={[Symbol.dispose](){log.push(\"inner\");throw inner}};throw body}}}catch(error:any){console.log(error.error===outer,error.suppressed.error===inner,error.suppressed.suppressed===body,log.join(\",\"))}", "true true true inner,outer\n"];
     }
 
     // The separately owned compiled #3361 repair consumes these same exact cases.
@@ -40,14 +42,32 @@ public sealed class UsingSuppressionValueTests
         Assert.Equal(expected, TestHarness.Run(source, ExecutionMode.Interpreted));
     }
 
+    [Theory, MemberData(nameof(Cases))]
+    public void CompiledCleanupPreservesTheActualCompletion(string name, string source, string expected)
+    {
+        Assert.NotEmpty(name);
+        var (errors, output) = TestHarness.CompileVerifyAndRun(source);
+        Assert.Empty(errors);
+        Assert.Equal(expected, output);
+    }
+
     // ECMA-262 SuppressedError: error/suppressed are writable, nonenumerable, configurable.
     // Node 22 lacks the native constructor; TypeScript's fallback instead assigns enumerable
     // fields. Its discrepant raw output is retained as an oracle limitation, not our contract.
-    [Fact]
-    public void SuppressionFieldsHaveTheirSpecifiedOwnDescriptors()
+    [Theory]
+    [InlineData(ExecutionMode.Interpreted)]
+    [InlineData(ExecutionMode.Compiled)]
+    public void SuppressionFieldsHaveTheirSpecifiedOwnDescriptors(ExecutionMode mode)
     {
         const string source = "/// <reference lib=\"esnext.disposable\" />\ntry{{using resource={[Symbol.dispose](){throw 2}};throw 1}}catch(error:any){const a=Object.getOwnPropertyDescriptor(error,\"error\")!,b=Object.getOwnPropertyDescriptor(error,\"suppressed\")!;console.log(a.value,a.writable,a.enumerable,a.configurable,b.value,b.writable,b.enumerable,b.configurable,Object.keys(error).length,Object.getOwnPropertyNames(error).filter(k=>k===\"error\"||k===\"suppressed\").join(\",\"))}";
-        Assert.Equal("2 true false true 1 true false true 0 error,suppressed\n",
-            TestHarness.Run(source, ExecutionMode.Interpreted));
+        string output;
+        if (mode == ExecutionMode.Compiled)
+        {
+            var (errors, compiledOutput) = TestHarness.CompileVerifyAndRun(source);
+            Assert.Empty(errors);
+            output = compiledOutput;
+        }
+        else output = TestHarness.Run(source, mode);
+        Assert.Equal("2 true false true 1 true false true 0 error,suppressed\n", output);
     }
 }

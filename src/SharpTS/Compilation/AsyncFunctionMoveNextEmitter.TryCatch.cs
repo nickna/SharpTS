@@ -300,7 +300,15 @@ public abstract partial class AsyncFunctionMoveNextEmitter
         // Finally block - must always execute
         if (t.FinallyBlock != null)
         {
-            if (hasAwaitsInFinally)
+            bool usingCleanup = IsAsyncUsingFinally(t);
+            if (usingCleanup)
+            {
+                EmitAsyncUsingFinally(t.FinallyBlock, caughtExceptionLocal, exceptionPresentLocal);
+                // A failed cleanup replaces a pending return/break before it
+                // can dispatch, while an ordinary source finally stays unchanged.
+                EmitRethrowPending(caughtExceptionLocal, exceptionPresentLocal);
+            }
+            else if (hasAwaitsInFinally)
             {
                 // Finally with awaits - need special handling
                 // The finally must run regardless of exception, so we emit it
@@ -322,6 +330,13 @@ public abstract partial class AsyncFunctionMoveNextEmitter
 
         // Entering a catch clears presence. An unhandled try failure or a new catch-body failure
         // must propagate even when its exact value is null.
+        EmitRethrowPending(caughtExceptionLocal, exceptionPresentLocal);
+
+        IL.MarkLabel(afterTryCatchLabel);
+    }
+
+    private void EmitRethrowPending(LocalBuilder caughtExceptionLocal, LocalBuilder exceptionPresentLocal)
+    {
         var noExceptionLabel = IL.DefineLabel();
         IL.Emit(OpCodes.Ldloc, exceptionPresentLocal);
         IL.Emit(OpCodes.Brfalse, noExceptionLabel);
@@ -330,7 +345,6 @@ public abstract partial class AsyncFunctionMoveNextEmitter
         IL.Emit(OpCodes.Throw);
         IL.MarkLabel(noExceptionLabel);
 
-        IL.MarkLabel(afterTryCatchLabel);
     }
 
     private void EmitFinallyBodyWithAwaits(List<Stmt> finallyBody, LocalBuilder caughtExceptionLocal, LocalBuilder exceptionPresentLocal)

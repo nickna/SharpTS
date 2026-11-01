@@ -3519,9 +3519,21 @@ public partial class ILEmitter
 
         // Now emit using declarations and remaining statements in a try/finally
         var builder = _ctx.ILBuilder;
+        var pending = IL.DeclareLocal(_ctx.Types.Object);
+        var hasPending = IL.DeclareLocal(_ctx.Types.Boolean);
+        var cleanupFailed = IL.DeclareLocal(_ctx.Types.Boolean);
+        IL.Emit(OpCodes.Ldnull);
+        IL.Emit(OpCodes.Stloc, pending);
+        IL.Emit(OpCodes.Ldc_I4_0);
+        IL.Emit(OpCodes.Stloc, hasPending);
+        IL.Emit(OpCodes.Ldc_I4_0);
+        IL.Emit(OpCodes.Stloc, cleanupFailed);
+        _ctx.ExceptionBlockDepth++;
+        builder.BeginExceptionBlock();
         _ctx.ExceptionBlockDepth++;
         builder.BeginExceptionBlock();
 
+        _usingCompletionDepth++;
         for (int i = firstUsingIndex; i < statements.Count; i++)
         {
             var stmt = statements[i];
@@ -3537,10 +3549,29 @@ public partial class ILEmitter
                 emitStatement(stmt);
             }
         }
+        _usingCompletionDepth--;
+
+        // Keep the original carrier when cleanup succeeds. Its actual guest
+        // value is needed only if a later disposer also fails.
+        builder.BeginCatchBlock(_ctx.Types.Exception);
+        IL.Emit(OpCodes.Call, _ctx.Runtime!.Errors.WrapException);
+        IL.Emit(OpCodes.Stloc, pending);
+        IL.Emit(OpCodes.Ldc_I4_1);
+        IL.Emit(OpCodes.Stloc, hasPending);
+        IL.Emit(OpCodes.Rethrow);
+        builder.EndExceptionBlock();
+        _ctx.ExceptionBlockDepth--;
 
         // Finally block - dispose resources in reverse order
         builder.BeginFinallyBlock();
-        EmitUsingDisposal(usingResources);
+        EmitUsingDisposal(usingResources, pending, hasPending, cleanupFailed);
+        var noCleanupFailure = IL.DefineLabel();
+        IL.Emit(OpCodes.Ldloc, cleanupFailed);
+        IL.Emit(OpCodes.Brfalse, noCleanupFailure);
+        IL.Emit(OpCodes.Ldloc, pending);
+        IL.Emit(OpCodes.Call, _ctx.Runtime!.Errors.CreateException);
+        IL.Emit(OpCodes.Throw);
+        IL.MarkLabel(noCleanupFailure);
         builder.EndExceptionBlock();
         _ctx.ExceptionBlockDepth--;
     }
@@ -3627,7 +3658,8 @@ public partial class ILEmitter
     }
 
     /// <summary>Invokes registered disposers in reverse order without another lookup.</summary>
-    private void EmitUsingDisposal(List<UsingResourceLocals> resources)
+    private void EmitUsingDisposal(List<UsingResourceLocals> resources,
+        LocalBuilder pending, LocalBuilder hasPending, LocalBuilder cleanupFailed)
     {
         // Retiring the whole scope before invoking user code prevents unreached
         // declarations on a later loop iteration from disposing stale resources.
@@ -3650,9 +3682,30 @@ public partial class ILEmitter
             var done = IL.DefineLabel();
             IL.Emit(OpCodes.Ldloc, registrations[i]);
             IL.Emit(OpCodes.Brfalse, done);
+            IL.BeginExceptionBlock();
             UsingResourceEmitter.Dispose(IL, _ctx.Types, _ctx.Runtime!,
                 () => IL.Emit(OpCodes.Ldloc, resource.Resource),
                 () => IL.Emit(OpCodes.Ldloc, resource.Method));
+            IL.BeginCatchBlock(_ctx.Types.Exception);
+            IL.Emit(OpCodes.Call, _ctx.Runtime!.Errors.WrapException);
+            var failure = IL.DeclareLocal(_ctx.Types.Object);
+            IL.Emit(OpCodes.Stloc, failure);
+            var firstFailure = IL.DefineLabel();
+            var storeFailure = IL.DefineLabel();
+            IL.Emit(OpCodes.Ldloc, hasPending);
+            IL.Emit(OpCodes.Brfalse, firstFailure);
+            UsingResourceEmitter.CombineFailure(IL, _ctx.Types, _ctx.Runtime!,
+                () => IL.Emit(OpCodes.Ldloc, failure), () => IL.Emit(OpCodes.Ldloc, pending));
+            IL.Emit(OpCodes.Br, storeFailure);
+            IL.MarkLabel(firstFailure);
+            IL.Emit(OpCodes.Ldloc, failure);
+            IL.MarkLabel(storeFailure);
+            IL.Emit(OpCodes.Stloc, pending);
+            IL.Emit(OpCodes.Ldc_I4_1);
+            IL.Emit(OpCodes.Stloc, hasPending);
+            IL.Emit(OpCodes.Ldc_I4_1);
+            IL.Emit(OpCodes.Stloc, cleanupFailed);
+            IL.EndExceptionBlock();
             IL.MarkLabel(done);
         }
     }
@@ -4638,7 +4691,8 @@ public partial class ILEmitter
             catchValue,
             catchBody,
             _abruptCompletionScopes.Count,
-            _iteratorLoopCompletionScopes.Count));
+            _iteratorLoopCompletionScopes.Count,
+            _usingCompletionDepth));
         try
         {
             EmitOrdinaryHandlerStatements(t.TryBlock);
@@ -4830,7 +4884,8 @@ public partial class ILEmitter
     {
         if (_localThrowScopes.TryPeek(out var localThrow) &&
             localThrow.AbruptCompletionDepth == _abruptCompletionScopes.Count &&
-            localThrow.IteratorCompletionDepth == _iteratorLoopCompletionScopes.Count)
+            localThrow.IteratorCompletionDepth == _iteratorLoopCompletionScopes.Count &&
+            localThrow.UsingCompletionDepth == _usingCompletionDepth)
         {
             EmitExpression(t.Value);
             EmitBoxIfNeeded(t.Value);

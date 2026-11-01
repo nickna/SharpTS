@@ -11,6 +11,50 @@ public abstract partial class AsyncFunctionMoveNextEmitter
     private readonly Dictionary<Stmt, AsyncUsingFields> _asyncUsingCleanups = new(ReferenceEqualityComparer.Instance);
     private int _asyncUsingCount;
 
+    private bool IsAsyncUsingFinally(Stmt.TryCatch statement) =>
+        statement.FinallyBlock is { Count: 1 } cleanup && _asyncUsingCleanups.ContainsKey(cleanup[0]);
+
+    private void EmitAsyncUsingFinally(List<Stmt> cleanup, LocalBuilder pending, LocalBuilder hasPending)
+    {
+        int id = _finallyExceptionCount++;
+        var pendingField = DefineStateMachineField($"<>usingPending{id}", Types.Object);
+        var presentField = DefineStateMachineField($"<>usingPendingPresent{id}", Types.Boolean);
+        IL.Emit(OpCodes.Ldarg_0);
+        IL.Emit(OpCodes.Ldloc, pending);
+        IL.Emit(OpCodes.Stfld, pendingField);
+        IL.Emit(OpCodes.Ldarg_0);
+        IL.Emit(OpCodes.Ldloc, hasPending);
+        IL.Emit(OpCodes.Stfld, presentField);
+        var failure = IL.DeclareLocal(Types.Object);
+        var failed = IL.DeclareLocal(Types.Boolean);
+        IL.Emit(OpCodes.Ldc_I4_0);
+        IL.Emit(OpCodes.Stloc, failed);
+        EmitTryBodyWithAwaits(cleanup, failure, failed);
+        IL.Emit(OpCodes.Ldarg_0);
+        IL.Emit(OpCodes.Ldfld, pendingField);
+        IL.Emit(OpCodes.Stloc, pending);
+        IL.Emit(OpCodes.Ldarg_0);
+        IL.Emit(OpCodes.Ldfld, presentField);
+        IL.Emit(OpCodes.Stloc, hasPending);
+        var done = IL.DefineLabel();
+        var firstFailure = IL.DefineLabel();
+        var storeFailure = IL.DefineLabel();
+        IL.Emit(OpCodes.Ldloc, failed);
+        IL.Emit(OpCodes.Brfalse, done);
+        IL.Emit(OpCodes.Ldloc, hasPending);
+        IL.Emit(OpCodes.Brfalse, firstFailure);
+        UsingResourceEmitter.CombineFailure(IL, Types, Ctx.Runtime!,
+            () => IL.Emit(OpCodes.Ldloc, failure), () => IL.Emit(OpCodes.Ldloc, pending));
+        IL.Emit(OpCodes.Br, storeFailure);
+        IL.MarkLabel(firstFailure);
+        IL.Emit(OpCodes.Ldloc, failure);
+        IL.MarkLabel(storeFailure);
+        IL.Emit(OpCodes.Stloc, pending);
+        IL.Emit(OpCodes.Ldc_I4_1);
+        IL.Emit(OpCodes.Stloc, hasPending);
+        IL.MarkLabel(done);
+    }
+
     // Keep every checked source node. Only compiler-owned registration/cleanup
     // receipts are synthetic; existing resumable finally routing owns their exits.
     private List<Stmt> LowerAsyncUsingScopes(List<Stmt> statements)

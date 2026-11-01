@@ -5,6 +5,48 @@ namespace SharpTS.Compilation;
 /// <summary>Emits acquisition and invocation for a captured synchronous disposer.</summary>
 internal static class UsingResourceEmitter
 {
+    // Leaves the actual suppression value on the stack. Its two completion
+    // values remain ordinary writable, nonenumerable, configurable own data.
+    public static void CombineFailure(ILGenerator il, TypeProvider types, EmittedRuntime runtime,
+        Action loadError, Action loadSuppressed)
+    {
+        var error = il.DeclareLocal(runtime.Errors.Type);
+        il.Emit(OpCodes.Ldstr, "An error was suppressed during disposal");
+        il.Emit(OpCodes.Newobj, runtime.Errors.MessageConstructor);
+        il.Emit(OpCodes.Stloc, error);
+        il.Emit(OpCodes.Ldloc, error);
+        il.Emit(OpCodes.Ldstr, "SuppressedError");
+        il.Emit(OpCodes.Callvirt, runtime.Errors.NameSetter);
+        DefineValue("error", loadError);
+        DefineValue("suppressed", loadSuppressed);
+        il.Emit(OpCodes.Ldloc, error);
+
+        void DefineValue(string name, Action loadValue)
+        {
+            var storage = runtime.DescriptorStorage;
+            var descriptor = il.DeclareLocal(storage.DescriptorType);
+            il.Emit(OpCodes.Newobj, storage.DescriptorConstructor);
+            il.Emit(OpCodes.Stloc, descriptor);
+            il.Emit(OpCodes.Ldloc, descriptor);
+            loadValue();
+            il.Emit(OpCodes.Callvirt, storage.DescriptorValue.GetSetMethod()!);
+            il.Emit(OpCodes.Ldloc, descriptor);
+            il.Emit(OpCodes.Ldc_I4_1);
+            il.Emit(OpCodes.Callvirt, storage.DescriptorWritable.GetSetMethod()!);
+            il.Emit(OpCodes.Ldloc, descriptor);
+            il.Emit(OpCodes.Ldc_I4_0);
+            il.Emit(OpCodes.Callvirt, storage.DescriptorEnumerable.GetSetMethod()!);
+            il.Emit(OpCodes.Ldloc, descriptor);
+            il.Emit(OpCodes.Ldc_I4_1);
+            il.Emit(OpCodes.Callvirt, storage.DescriptorConfigurable.GetSetMethod()!);
+            il.Emit(OpCodes.Ldloc, error);
+            il.Emit(OpCodes.Ldstr, name);
+            il.Emit(OpCodes.Ldloc, descriptor);
+            il.Emit(OpCodes.Call, storage.DefineProperty);
+            il.Emit(OpCodes.Pop);
+        }
+    }
+
     public static void Acquire(ILGenerator il, TypeProvider types, EmittedRuntime runtime,
         Action loadResource, Action loadMethod, Action storeMethod) =>
         AcquireCore(il, types, runtime, loadResource, loadMethod, storeMethod, null);
