@@ -1720,7 +1720,8 @@ public partial class Interpreter
         }
 
         if (obj is SharpTSTypedArray typedArray && (index is SharpTSSymbol
-            || index is string namedKey && typedArray.UsesOrdinaryNamedPropertyLookup(namedKey)))
+            || index is string namedKey && (typedArray.UsesOrdinaryNamedPropertyLookup(namedKey)
+                || SharpTSTypedArray.IsOrdinaryNamedPropertyKey(namedKey))))
         {
             SetOwnPropertyObjectValue(typedArray, index, value, strictMode);
             return RuntimeValue.FromBoxed(value);

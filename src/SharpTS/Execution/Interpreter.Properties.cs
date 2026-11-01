@@ -3022,7 +3022,9 @@ public partial class Interpreter
             return value;
         }
 
-        if (obj is SharpTSTypedArray typedArray && typedArray.UsesOrdinaryNamedPropertyLookup(set.Name.Lexeme))
+        if (obj is SharpTSTypedArray typedArray
+            && (typedArray.UsesOrdinaryNamedPropertyLookup(set.Name.Lexeme)
+                || SharpTSTypedArray.IsOrdinaryNamedPropertyKey(set.Name.Lexeme)))
         {
             SetOwnPropertyObjectValue(typedArray, set.Name.Lexeme, value, strictMode);
             return value;
