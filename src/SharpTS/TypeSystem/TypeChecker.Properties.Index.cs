@@ -530,6 +530,8 @@ public partial class TypeChecker
             // Numeric and BigInt typed arrays retain their respective element kinds.
             if (objType is TypeInfo.TypedArray typedArray)
             {
+                // A checked BigInt element can still be the missing-index sentinel.
+                if (HasBigIntElements(typedArray)) _typeMap.MarkRawNumericResult(getIndex);
                 return WithUncheckedUndefined(TypedArrayElementType(typedArray));
             }
 

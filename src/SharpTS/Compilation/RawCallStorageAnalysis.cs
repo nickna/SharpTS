@@ -18,6 +18,7 @@ internal sealed partial class RawCallStorageAnalysis
     private readonly List<Flow> _flows = [];
     private readonly List<Expr.Call> _dateStaticCalls = [];
     private readonly List<Expr> _erasedGenericFieldReads = [];
+    private readonly List<Expr.GetIndex> _bigIntTypedArrayReads = [];
     private readonly HashSet<BindingSymbol> _rawBindings = new(ReferenceEqualityComparer.Instance);
     private readonly HashSet<BindingSymbol> _rawCallBindings = new(ReferenceEqualityComparer.Instance);
     private readonly HashSet<object> _rawSlots = new(ReferenceEqualityComparer.Instance);
@@ -34,6 +35,7 @@ internal sealed partial class RawCallStorageAnalysis
     internal HashSet<Expr.Call> Calls { get; } = new(ReferenceEqualityComparer.Instance);
     internal bool HasMutableDateStaticProducer { get; private set; }
     internal bool HasErasedGenericFieldProducer => _erasedGenericFieldReads.Count != 0;
+    internal bool HasBigIntTypedArrayReadProducer => _bigIntTypedArrayReads.Count != 0;
     internal HashSet<Stmt.Function> Functions { get; } = new(ReferenceEqualityComparer.Instance);
 
     private RawCallStorageAnalysis(IEnumerable<Stmt> statements, TypeMap map,
@@ -81,6 +83,15 @@ internal sealed partial class RawCallStorageAnalysis
         {
             _hasNumericProducer = true;
             foreach (var read in _erasedGenericFieldReads)
+                foreach (var expression in EquivalentExpressions(read))
+                    _map.MarkRawNumericResult(expression);
+        }
+        // Missing BigInt elements retain object storage despite their checked element type.
+        // Only the checker's actual read veto and its owned lifted equivalents flow onward.
+        if (HasBigIntTypedArrayReadProducer)
+        {
+            _hasNumericProducer = true;
+            foreach (var read in _bigIntTypedArrayReads)
                 foreach (var expression in EquivalentExpressions(read))
                     _map.MarkRawNumericResult(expression);
         }
@@ -268,6 +279,9 @@ internal sealed partial class RawCallStorageAnalysis
         {
             if (collect && _emittedSourceBody && PrimitiveFieldValueAnalysis.IsErasedGenericField(expression, Analysis._map))
                 Analysis._erasedGenericFieldReads.Add(expression);
+            if (collect && _emittedSourceBody && Analysis._map.IsRawNumericResult(expression)
+                && Analysis._map.Get(expression.Object) is TypeInfo.TypedArray { ElementType: "BigInt64" or "BigUint64" })
+                Analysis._bigIntTypedArrayReads.Add(expression);
             base.VisitGetIndex(expression);
         }
         protected override void VisitCall(Expr.Call call)
