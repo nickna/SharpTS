@@ -1366,6 +1366,13 @@ public partial class TypeChecker
             }
         }
 
+        foreach (var parameter in ctorSig.TypeParams)
+        {
+            if (parameter.Constraint is { } constraint &&
+                !IsCompatible(Substitute(constraint, inferred), inferred[parameter.Name]))
+                return null;
+        }
+
         // Substitute and check argument compatibility
         var substitutedParamTypes = ctorSig.ParamTypes.Select(p => Substitute(p, inferred)).ToList();
         if (!TryMatchConstructorArgs(argTypes, substitutedParamTypes, ctorSig.MinArity, ctorSig.HasRestParam))
