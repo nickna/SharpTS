@@ -297,6 +297,8 @@ public partial class Interpreter
         return RuntimeValue.FromBoxed(await AwaitPreservingEnvironment(completion.Task));
     }
 
+    private InterpreterSynchronizationContext? _nativeAwaitRegistrationContext;
+
     private Task<object?> QueueNativeAwait(Task<object?> task)
     {
         // A native Await reaction becomes eligible only when its input settles.
@@ -306,11 +308,25 @@ public partial class Interpreter
         if (task.IsCompleted)
             EnqueuePromiseJob(() => TransferCompletion(task, completion));
         else
-            _ = task.ContinueWith(
-                settled => EnqueuePromiseJob(() => TransferCompletion(settled, completion)),
-                CancellationToken.None,
-                TaskContinuationOptions.ExecuteSynchronously,
-                TaskScheduler.Default);
+        {
+            // A task with RunContinuationsAsynchronously can delay a default-
+            // scheduler continuation until after the loop observes quiescence.
+            // A separate registration context targets the same owner queue but
+            // is never current while jobs run. This also forces Post when an
+            // ordinary task settles inside an owner job, preserving one queued
+            // Await reaction instead of resuming inside its producer.
+            var previousContext = InstallEventLoopSyncContext();
+            try
+            {
+                _nativeAwaitRegistrationContext ??= new InterpreterSynchronizationContext(EnqueuePromiseJob);
+                SynchronizationContext.SetSynchronizationContext(_nativeAwaitRegistrationContext);
+                task.GetAwaiter().OnCompleted(() => TransferCompletion(task, completion));
+            }
+            finally
+            {
+                SynchronizationContext.SetSynchronizationContext(previousContext);
+            }
+        }
         return completion.Task;
     }
 
