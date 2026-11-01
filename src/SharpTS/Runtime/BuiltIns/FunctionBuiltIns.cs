@@ -591,7 +591,7 @@ public class BoundFunction : ISharpTSCallable
 
             if (_target is SharpTSArrowFunction arrow && arrow.HasOwnThis)
             {
-                var boundArrow = arrow.Bind(_thisArg);
+                var boundArrow = arrow.Bind(arrow.IsStrict ? _thisArg : BuiltInConstructorFactory.ToObject(_thisArg, interpreter)!);
                 return boundArrow.CallV2(interpreter, combined);
             }
 
@@ -659,7 +659,7 @@ public class BoundFunction : ISharpTSCallable
 
             if (_target is SharpTSArrowFunction arrow && arrow.HasOwnThis)
             {
-                var boundArrow = arrow.Bind(_thisArg);
+                var boundArrow = arrow.Bind(arrow.IsStrict ? _thisArg : BuiltInConstructorFactory.ToObject(_thisArg, interpreter)!);
                 return boundArrow.Call(interpreter, combinedArgs);
             }
 
