@@ -637,6 +637,22 @@ public static partial class ObjectBuiltIns
                 objectPrototype.FreezeOwnProperties();
                 PropertyDescriptorStore.Freeze(objectPrototype);
                 return RuntimeValue.FromObject(objectPrototype);
+            case SharpTSStringPrototype stringPrototype:
+                stringPrototype.FreezeOwnProperties();
+                PropertyDescriptorStore.Freeze(stringPrototype);
+                return RuntimeValue.FromObject(stringPrototype);
+            case SharpTSNumberPrototype numberPrototype:
+                numberPrototype.FreezeOwnProperties();
+                PropertyDescriptorStore.Freeze(numberPrototype);
+                return RuntimeValue.FromObject(numberPrototype);
+            case SharpTSBooleanPrototype booleanPrototype:
+                booleanPrototype.FreezeOwnProperties();
+                PropertyDescriptorStore.Freeze(booleanPrototype);
+                return RuntimeValue.FromObject(booleanPrototype);
+            case SharpTSArrayPrototype arrayPrototype:
+                arrayPrototype.FreezeOwnProperties();
+                PropertyDescriptorStore.Freeze(arrayPrototype);
+                return RuntimeValue.FromObject(arrayPrototype);
             case SharpTSObject obj:
                 obj.Freeze();
                 return RuntimeValue.FromObject(obj);
@@ -714,6 +730,22 @@ public static partial class ObjectBuiltIns
                 objectPrototype.SealOwnProperties();
                 PropertyDescriptorStore.Seal(objectPrototype);
                 return RuntimeValue.FromObject(objectPrototype);
+            case SharpTSStringPrototype stringPrototype:
+                stringPrototype.SealOwnProperties();
+                PropertyDescriptorStore.Seal(stringPrototype);
+                return RuntimeValue.FromObject(stringPrototype);
+            case SharpTSNumberPrototype numberPrototype:
+                numberPrototype.SealOwnProperties();
+                PropertyDescriptorStore.Seal(numberPrototype);
+                return RuntimeValue.FromObject(numberPrototype);
+            case SharpTSBooleanPrototype booleanPrototype:
+                booleanPrototype.SealOwnProperties();
+                PropertyDescriptorStore.Seal(booleanPrototype);
+                return RuntimeValue.FromObject(booleanPrototype);
+            case SharpTSArrayPrototype arrayPrototype:
+                arrayPrototype.SealOwnProperties();
+                PropertyDescriptorStore.Seal(arrayPrototype);
+                return RuntimeValue.FromObject(arrayPrototype);
             case SharpTSObject obj:
                 obj.Seal();
                 return RuntimeValue.FromObject(obj);

@@ -83,8 +83,7 @@ internal sealed class PrototypePropertyOverlay(
         {
             // A virtual own data slot already exists even before its overlay is
             // materialized. Preserve its value and omitted attributes on update.
-            var current = new SharpTSPropertyDescriptor(
-                getMember(name), writable: true, enumerable: false, configurable: configurable);
+            var current = GetVirtualDataDescriptor(name, getMember, configurable);
             return DefineExistingBuiltInDataProperty(name, current, descriptor);
         }
         return DefineProperty(name, descriptor);
@@ -111,6 +110,7 @@ internal sealed class PrototypePropertyOverlay(
 
     public bool DeleteProperty(string name)
     {
+        if (!HasExtra(name) && HasOwnProperty(name) && _extras.IsSealed) return false;
         if (HasExtra(name) && !_extras.DeleteProperty(name)) return false;
         if (isBuiltIn(name)) _deletedBuiltIns.Add(name);
         _stringKeyOrder?.Remove(name);
@@ -122,6 +122,16 @@ internal sealed class PrototypePropertyOverlay(
 
     public SharpTSPropertyDescriptor? GetOwnPropertyDescriptor(string name)
         => _extras.GetOwnPropertyDescriptor(name);
+
+    internal SharpTSPropertyDescriptor? GetOwnPropertyDescriptor(
+        string name, Func<string, object?> getMember, bool configurable = true)
+        => _extras.GetOwnPropertyDescriptor(name)
+            ?? (HasOwnProperty(name) ? GetVirtualDataDescriptor(name, getMember, configurable) : null);
+
+    private SharpTSPropertyDescriptor GetVirtualDataDescriptor(
+        string name, Func<string, object?> getMember, bool configurable)
+        => new(getMember(name), writable: !_extras.IsFrozen, enumerable: false,
+            configurable: configurable && !_extras.IsSealed);
     public ISharpTSCallable? GetGetter(string name) => _extras.GetGetter(name);
     public ISharpTSCallable? GetSetter(string name) => _extras.GetSetter(name);
     public IEnumerable<string> OwnEnumerableKeys() => _extras.OwnEnumerableKeys();
