@@ -1,12 +1,12 @@
 using SharpTS.Tests.Infrastructure;
 using Xunit;
 
-namespace SharpTS.Tests.CompilerTests;
+namespace SharpTS.Tests.SharedTests;
 
 public sealed class TypedArrayReflectLengthTests
 {
-    // These controls exercise the compiler PDS/Proxy and alternate-receiver boundary.
-    // The supported default path also has a separate shared dual-mode fixture.
+    // Both engines preserve ordinary named descriptors, original receivers and
+    // explicit prototypes; physical integer-indexed storage stays separate.
     public static IEnumerable<object[]> Cases()
     {
         yield return ["original", "const value:any=new Uint8Array(3);console.log(Reflect.get(value,'length'));\n", "3\n"];
@@ -27,12 +27,24 @@ public sealed class TypedArrayReflectLengthTests
         yield return ["first-class-and-ordinary-controls", "const get:any=Reflect.get,value:any=new Uint8Array(3);console.log(get(value,'length'),Reflect.get([1,2],'length'),Reflect.get({length:9},'length',{}));", "3 2 9\n"];
     }
 
-    [Theory, MemberData(nameof(Cases))]
-    public void PreservesDescriptorReceiverAndPrototypePrecedence(string name, string source, string expected)
+    public static IEnumerable<object[]> Modes() => Cases().SelectMany(row =>
+        new[] { ExecutionMode.Interpreted, ExecutionMode.Compiled }.Select(mode =>
+            new object[] { row[0], row[1], row[2], mode }));
+
+    [Theory, MemberData(nameof(Modes))]
+    public void PreservesDescriptorReceiverAndPrototypePrecedence(
+        string name, string source, string expected, ExecutionMode mode)
     {
         Assert.NotEmpty(name);
-        var (errors, output) = TestHarness.CompileVerifyAndRun(source);
-        Assert.Empty(errors);
-        Assert.Equal(expected, output);
+        if (mode == ExecutionMode.Compiled)
+        {
+            var (errors, output) = TestHarness.CompileVerifyAndRun(source);
+            Assert.Empty(errors);
+            Assert.Equal(expected, output);
+        }
+        else
+        {
+            Assert.Equal(expected, TestHarness.Run(source, mode));
+        }
     }
 }

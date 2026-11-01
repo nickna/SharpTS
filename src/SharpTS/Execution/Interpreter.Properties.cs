@@ -502,6 +502,23 @@ public partial class Interpreter
                 continue;
             }
 
+            if (current is SharpTSTypedArray typedArray && typedArray.UsesOrdinaryNamedPropertyLookup(name))
+            {
+                if (TryReadDescriptor(typedArray.GetNamedOwnPropertyDescriptor(name), receiver, out var ownValue))
+                    return ownValue;
+                if (typedArray.HasExplicitPrototype)
+                {
+                    current = typedArray.ExplicitPrototype;
+                    continue;
+                }
+                if (name == "length")
+                {
+                    if (receiver is not SharpTSTypedArray typedReceiver)
+                        throw new ThrowException(new SharpTSTypeError("TypedArray length called on incompatible receiver"));
+                    return typedReceiver.GetMember(name);
+                }
+            }
+
             if (current is string text)
             {
                 if (name == "length") return (double)text.Length;
@@ -1794,8 +1811,8 @@ public partial class Interpreter
             return RuntimeValue.FromBoxed(accessor.GetProperty(memberName));
 
         // Resolve the view's intrinsic length before shared Array-category extras.
-        if (obj is SharpTSTypedArray typedArray && memberName == "length")
-            return RuntimeValue.FromBoxed(typedArray.GetMember(memberName));
+        if (obj is SharpTSTypedArray typedArray && typedArray.UsesOrdinaryNamedPropertyLookup(memberName))
+            return RuntimeValue.FromBoxed(GetPropertyValue(typedArray, memberName));
 
         // Named properties from Object.defineProperty
         if (obj is SharpTSArray array && array.HasNamedProperty(memberName))
@@ -2963,6 +2980,12 @@ public partial class Interpreter
             or SharpTSPromise { HasExplicitPrototype: true })
         {
             SetOwnPropertyObjectValue(obj, set.Name.Lexeme, value, strictMode);
+            return value;
+        }
+
+        if (obj is SharpTSTypedArray typedArray && typedArray.UsesOrdinaryNamedPropertyLookup(set.Name.Lexeme))
+        {
+            SetOwnPropertyObjectValue(typedArray, set.Name.Lexeme, value, strictMode);
             return value;
         }
 

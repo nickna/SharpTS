@@ -1683,6 +1683,13 @@ public partial class Interpreter
             return RuntimeValue.FromBoxed(value);
         }
 
+        if (obj is SharpTSTypedArray typedArray && index is string namedKey
+            && typedArray.UsesOrdinaryNamedPropertyLookup(namedKey))
+        {
+            SetOwnPropertyObjectValue(typedArray, namedKey, value, strictMode);
+            return RuntimeValue.FromBoxed(value);
+        }
+
         if (obj is ISharpTSOwnPropertyObject or SharpTSObjectPrototype
             or SharpTSPromise { HasExplicitPrototype: true })
         {

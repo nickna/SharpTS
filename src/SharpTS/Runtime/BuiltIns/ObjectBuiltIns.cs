@@ -166,6 +166,15 @@ public static partial class ObjectBuiltIns
                 foreach (var key in date.OwnEnumerableKeys())
                     yield return new(key, includeValues ? date.TryGetExtra(key) : null);
                 yield break;
+            case SharpTSTypedArray typedArray:
+                foreach (var key in typedArray.OwnEnumerableKeys().ToList())
+                {
+                    if (PropertySemantics.TryGetArrayIndex(key, out uint index) && index < typedArray.Length)
+                        yield return new(key, includeValues ? typedArray[(int)index] : null);
+                    else if (typedArray.GetNamedOwnPropertyDescriptor(key)?.Enumerable == true)
+                        yield return new(key, includeValues ? interpreter.GetPropertyValue(typedArray, key) : null);
+                }
+                yield break;
             case SharpTSRegExp regex:
                 foreach (var key in regex.OwnEnumerableKeys())
                     yield return new(key,
@@ -1009,6 +1018,9 @@ public static partial class ObjectBuiltIns
                         interpreter, descriptor.Value);
                 success = arr.DefineProperty(propertyKey, descriptor);
                 break;
+            case SharpTSTypedArray typedArray:
+                success = typedArray.DefineNamedProperty(propertyKey, descriptor);
+                break;
             case SharpTSArrayGlobal arrayGlobal:
                 success = arrayGlobal.DefineExtraProperty(propertyKey, descriptor);
                 break;
@@ -1255,6 +1267,8 @@ public static partial class ObjectBuiltIns
                     ?? GetBuiltInOwnPropertyDescriptor(interpreter, target, propertyKey),
             SharpTSInstance inst => inst.GetOwnPropertyDescriptor(propertyKey),
             SharpTSArray arr => arr.GetOwnPropertyDescriptor(propertyKey),
+            SharpTSTypedArray typedArray => typedArray.GetOwnPropertyDescriptor(propertyKey)
+                ?? (propertyKey == "length" ? null : GetBuiltInOwnPropertyDescriptor(interpreter, target, propertyKey)),
             SharpTSArrayPrototype arrayPrototype when !arrayPrototype.HasOwnProperty(propertyKey) => null,
             SharpTSArrayPrototype arrayPrototype => arrayPrototype.GetOwnPropertyDescriptor(propertyKey)
                 ?? GetBuiltInOwnPropertyDescriptor(interpreter, target, propertyKey),
@@ -1904,6 +1918,7 @@ public static partial class ObjectBuiltIns
             SharpTSClass klass => klass.OwnStaticStringKeys().Cast<object?>()
                 .Concat(klass.OwnStaticSymbolKeys()).ToList(),
             SharpTSInstance inst => inst.GetFieldNames().Cast<object?>().ToList(),
+            SharpTSTypedArray typedArray => typedArray.OwnStringKeys().Cast<object?>().ToList(),
             SharpTSArray arr => GetOwnPropertyNamesFromArray(arr),
             SharpTSMath math => math.OwnStringKeys().Cast<object?>()
                 .Concat(math.GetSymbolPropertyNames().Cast<object?>()).ToList(),
@@ -1976,6 +1991,7 @@ public static partial class ObjectBuiltIns
             SharpTSProxy proxy => proxy.TrapOwnPropertyKeys(interpreter)
                 .OfType<string>().Cast<object?>().ToList(),
             SharpTSInstance inst => inst.GetFieldNames().Select(k => (object?)k).ToList(),
+            SharpTSTypedArray typedArray => typedArray.OwnStringKeys().Cast<object?>().ToList(),
             SharpTSArray arr => GetOwnPropertyNamesFromArray(arr),
             SharpTSMath math => math.OwnStringKeys().Cast<object?>().ToList(),
             SharpTSJSON json => json.OwnStringKeys().Cast<object?>().ToList(),
@@ -2621,6 +2637,7 @@ public static partial class ObjectBuiltIns
         // prototype objects. Their conceptual chains still reach Object.prototype.
         // Keep this fallback limited to native types without an explicit prototype
         // carrier: ordinary null roots and Proxy trap results remain authoritative.
+        SharpTSTypedArray { HasExplicitPrototype: true } typedArray => typedArray.ExplicitPrototype,
         SharpTSMap or SharpTSSet or SharpTSWeakMap or SharpTSWeakSet
             or SharpTSWeakRef or SharpTSFinalizationRegistry
             or SharpTSArrayBuffer or SharpTSSharedArrayBuffer or SharpTSDataView
@@ -2719,6 +2736,13 @@ public static partial class ObjectBuiltIns
                 if (!array.IsExtensible) return false;
                 if (WouldCreatePrototypeCycle(interpreter, array, proto)) return false;
                 array.SetExplicitPrototype(proto);
+                return true;
+
+            case SharpTSTypedArray typedArray:
+                if (typedArray.HasExplicitPrototype && ReferenceEquals(typedArray.ExplicitPrototype, proto)) return true;
+                if (!PropertyDescriptorStore.IsExtensible(typedArray)) return false;
+                if (WouldCreatePrototypeCycle(interpreter, typedArray, proto)) return false;
+                typedArray.SetExplicitPrototype(proto);
                 return true;
 
             case SharpTSObject obj:

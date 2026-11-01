@@ -194,6 +194,8 @@ public static class ReflectBuiltIns
                         return RuntimeValue.FromBoolean(prototype.DeleteProperty(propertyKey));
                     case SharpTSBooleanPrototype prototype:
                         return RuntimeValue.FromBoolean(prototype.DeleteProperty(propertyKey));
+                    case SharpTSTypedArray typedArray when SharpTSTypedArray.IsOrdinaryNamedPropertyKey(propertyKey):
+                        return RuntimeValue.FromBoolean(typedArray.DeleteNamedProperty(propertyKey, false));
                     case SharpTSClass klass:
                         return RuntimeValue.FromBoolean(klass.DeleteStaticProperty(propertyKey));
                     case ISharpTSPrimitiveConstructor primitiveConstructor:
@@ -580,6 +582,8 @@ public static class ReflectBuiltIns
                             return RuntimeValue.FromBoolean(inst.DefineProperty(propertyKey, descriptor));
                         case SharpTSPromise promise:
                             return RuntimeValue.FromBoolean(promise.DefineProperty(propertyKey, descriptor));
+                        case SharpTSTypedArray typedArray:
+                            return RuntimeValue.FromBoolean(typedArray.DefineNamedProperty(propertyKey, descriptor));
                         case SharpTSArray arr:
                             return RuntimeValue.FromBoolean(arr.DefineProperty(propertyKey, descriptor));
                         case SharpTSClass klass:
@@ -668,6 +672,9 @@ public static class ReflectBuiltIns
                     case SharpTSArray array:
                         keys.AddRange(array.OwnStringKeys().Select(k => (object?)k));
                         keys.AddRange(array.GetSymbolPropertyNames().Select(s => (object?)s));
+                        break;
+                    case SharpTSTypedArray typedArray:
+                        keys.AddRange(typedArray.OwnStringKeys().Cast<object?>());
                         break;
                     case SharpTSInstance inst:
                         keys.AddRange(inst.GetFieldNames().Select(k => (object?)k));

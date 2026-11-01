@@ -161,6 +161,7 @@ public partial class Interpreter
         if (arrayObjectKey || inputView is not null || globalTarget is not null || HasCanonicalIndexProperties(obj)
             || UsesPrimitivePrototypePropertyReads(obj)
             || UsesNonextensibleBuiltInPrototypeStringIndex(obj, index)
+            || UsesTypedArrayNamedStringIndex(obj, index)
             || obj is BuiltInMethod or SharpTSObject or SharpTSInstance)
         {
             object key = globalTarget is null ? ToPropertyKey(index) : globalTarget.Key;
@@ -385,6 +386,7 @@ public partial class Interpreter
         if (arrayObjectKey || inputView is not null || globalTarget is not null
             || UsesPrimitivePrototypePropertyReads(obj)
             || UsesNonextensibleBuiltInPrototypeStringIndex(obj, index)
+            || UsesTypedArrayNamedStringIndex(obj, index)
             || obj is ISharpTSOwnPropertyObject or BuiltInMethod or SharpTSObjectNamespace or SharpTSObjectPrototype)
         {
             object key = globalTarget is null ? ToPropertyKey(index) : globalTarget.Key;
@@ -1203,6 +1205,8 @@ public partial class Interpreter
             ISharpTSOwnPropertyObject ownPropertyObject => ownPropertyObject.OwnProperties.GetOwnPropertyDescriptor(name) is null
                 || ownPropertyObject.OwnProperties.DeletePropertyStrict(name, strictMode),
             SharpTSArray array => array.DeletePropertyStrict(name, strictMode),
+            SharpTSTypedArray typedArray when SharpTSTypedArray.IsOrdinaryNamedPropertyKey(name)
+                => typedArray.DeleteNamedProperty(name, strictMode),
             SharpTSObject tsObj => tsObj.DeletePropertyStrict(name, strictMode),
             ISharpTSFunctionObject function => FunctionObjectProperties.GetProperties(function, this)
                 .GetOwnPropertyDescriptor(name) is null || FunctionObjectProperties.GetProperties(function, this)

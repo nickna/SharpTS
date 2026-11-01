@@ -304,6 +304,7 @@ public sealed class SharpTSObjectUnboundMethod : ISharpTSCallable, IBuiltInFunct
             SharpTSBooleanNamespace booleanNamespace => booleanNamespace.HasOwnProperty(key),
             SharpTSFunctionPrototype functionPrototype => functionPrototype.HasOwnProperty(key),
             SharpTSArrayPrototype arrayPrototype => arrayPrototype.HasOwnProperty(key),
+            SharpTSTypedArray typedArray => typedArray.GetOwnPropertyDescriptor(key) is not null,
             SharpTSStringPrototype stringPrototype => stringPrototype.HasOwnProperty(key),
             SharpTSNumberPrototype numberPrototype => numberPrototype.HasOwnProperty(key),
             SharpTSBooleanPrototype booleanPrototype => booleanPrototype.HasOwnProperty(key),

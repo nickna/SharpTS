@@ -16,6 +16,88 @@ namespace SharpTS.Runtime.Types;
 /// </remarks>
 public abstract class SharpTSTypedArray : ITypeCategorized
 {
+    // Ordinary named properties are separate from integer-indexed storage.
+    // Keep this lazy so intrinsic reads and element operations allocate no bag.
+    private SharpTSObject? _ordinaryProperties;
+
+    internal bool HasExplicitPrototype => _ordinaryProperties is { } properties
+        && (properties.Prototype is not null || properties.IsNullPrototype);
+    internal object? ExplicitPrototype => _ordinaryProperties?.Prototype;
+
+    internal void SetExplicitPrototype(object? prototype)
+    {
+        var properties = GetOrdinaryProperties();
+        properties.Prototype = prototype;
+        properties.IsNullPrototype = prototype is null;
+    }
+
+    internal SharpTSPropertyDescriptor? GetNamedOwnPropertyDescriptor(string name)
+    {
+        if (_ordinaryProperties is not { } properties) return null;
+        SynchronizeOrdinaryIntegrity(properties);
+        return properties.GetOwnPropertyDescriptor(name);
+    }
+
+    internal SharpTSPropertyDescriptor? GetOwnPropertyDescriptor(string name)
+    {
+        if (GetNamedOwnPropertyDescriptor(name) is { } named) return named;
+        return PropertySemantics.TryGetArrayIndex(name, out uint index) && index < Length
+            ? new SharpTSPropertyDescriptor(this[(int)index], writable: true, enumerable: true, configurable: true)
+                { HasValue = true }
+            : null;
+    }
+
+    internal bool DefineNamedProperty(string name, SharpTSPropertyDescriptor descriptor)
+        => IsOrdinaryNamedPropertyKey(name) && GetOrdinaryProperties().DefineProperty(name, descriptor);
+
+    internal bool DeleteNamedProperty(string name, bool strictMode)
+    {
+        if (_ordinaryProperties is not { } properties) return true;
+        SynchronizeOrdinaryIntegrity(properties);
+        return properties.DeletePropertyStrict(name, strictMode);
+    }
+
+    internal bool UsesOrdinaryNamedPropertyLookup(string name)
+        => name == "length" || GetNamedOwnPropertyDescriptor(name) is not null
+            || HasExplicitPrototype && IsOrdinaryNamedPropertyKey(name);
+
+    internal IEnumerable<string> OwnStringKeys()
+    {
+        for (int index = 0; index < Length; index++)
+            yield return index.ToString(System.Globalization.CultureInfo.InvariantCulture);
+        if (_ordinaryProperties is not { } properties) yield break;
+        SynchronizeOrdinaryIntegrity(properties);
+        foreach (var name in properties.OwnVisibleStringKeys()) yield return name;
+    }
+
+    internal IEnumerable<string> OwnEnumerableKeys()
+    {
+        for (int index = 0; index < Length; index++)
+            yield return index.ToString(System.Globalization.CultureInfo.InvariantCulture);
+        if (_ordinaryProperties is not { } properties) yield break;
+        SynchronizeOrdinaryIntegrity(properties);
+        foreach (var name in properties.OwnEnumerableKeys()) yield return name;
+    }
+
+    internal static bool IsOrdinaryNamedPropertyKey(string name)
+        => name != "-0" && (!double.TryParse(name, System.Globalization.NumberStyles.Float,
+            System.Globalization.CultureInfo.InvariantCulture, out double number)
+            || Compilation.RuntimeTypes.FormatNumber(number) != name);
+
+    private SharpTSObject GetOrdinaryProperties()
+    {
+        var properties = _ordinaryProperties ??= new SharpTSObject([]);
+        SynchronizeOrdinaryIntegrity(properties);
+        return properties;
+    }
+
+    private void SynchronizeOrdinaryIntegrity(SharpTSObject properties)
+    {
+        if (Compilation.PropertyDescriptorStore.IsFrozen(this)) properties.Freeze();
+        else if (Compilation.PropertyDescriptorStore.IsSealed(this)) properties.Seal();
+        else if (!Compilation.PropertyDescriptorStore.IsExtensible(this)) properties.PreventExtensions();
+    }
+
     protected readonly byte[] _buffer;
     protected readonly int _byteOffset;
     protected readonly int _length;  // In elements, not bytes

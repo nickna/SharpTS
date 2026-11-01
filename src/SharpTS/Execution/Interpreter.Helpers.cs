@@ -38,6 +38,9 @@ public partial class Interpreter
             case SharpTSObjectPrototype objectPrototype:
                 value = GetPropertyValue(objectPrototype, name.Lexeme);
                 return true;
+            case SharpTSTypedArray typedArray when typedArray.UsesOrdinaryNamedPropertyLookup(name.Lexeme):
+                value = GetPropertyValue(typedArray, name.Lexeme);
+                return true;
             case SharpTSProxy proxy:
                 value = proxy.TrapGet(name.Lexeme, this);
                 return true;
@@ -90,6 +93,9 @@ public partial class Interpreter
                 return true;
             case SharpTSObjectPrototype objectPrototype:
                 value = RuntimeValue.FromBoxed(GetPropertyValue(objectPrototype, name.Lexeme));
+                return true;
+            case SharpTSTypedArray typedArray when typedArray.UsesOrdinaryNamedPropertyLookup(name.Lexeme):
+                value = RuntimeValue.FromBoxed(GetPropertyValue(typedArray, name.Lexeme));
                 return true;
             case SharpTSProxy proxy:
                 value = proxy.TrapGetRV(name.Lexeme, this);
@@ -148,6 +154,9 @@ public partial class Interpreter
                 return true;
             case SharpTSStringPrototype stringPrototype:
                 SetOwnPropertyObjectValue(stringPrototype, name.Lexeme, value, _environment.IsStrictMode);
+                return true;
+            case SharpTSTypedArray typedArray when typedArray.UsesOrdinaryNamedPropertyLookup(name.Lexeme):
+                SetOwnPropertyObjectValue(typedArray, name.Lexeme, value, _environment.IsStrictMode);
                 return true;
             case SharpTSProxy proxy:
                 proxy.TrapSet(name.Lexeme, value, this);
@@ -209,7 +218,8 @@ public partial class Interpreter
             return true;
         }
         if (HasCanonicalIndexProperties(obj) || UsesPrimitivePrototypePropertyReads(obj)
-            || UsesNonextensibleBuiltInPrototypeStringIndex(obj, index))
+            || UsesNonextensibleBuiltInPrototypeStringIndex(obj, index)
+            || UsesTypedArrayNamedStringIndex(obj, index))
         {
             value = GetOwnPropertyObjectValue(obj!, ToPropertyKey(index));
             return true;
@@ -254,7 +264,8 @@ public partial class Interpreter
             SetGlobalIndexValue(global, value, _environment.IsStrictMode);
             return true;
         }
-        if (HasCanonicalIndexProperties(obj) || UsesNonextensibleBuiltInPrototypeStringIndex(obj, index))
+        if (HasCanonicalIndexProperties(obj) || UsesNonextensibleBuiltInPrototypeStringIndex(obj, index)
+            || UsesTypedArrayNamedStringIndex(obj, index))
         {
             SetOwnPropertyObjectValue(obj!, ToPropertyKey(index), value, _environment.IsStrictMode);
             return true;
@@ -280,6 +291,10 @@ public partial class Interpreter
 
     private static bool UsesNonextensibleBuiltInPrototypeStringIndex(object? target, object? key)
         => key is string && UsesNonextensibleBuiltInPrototypeWrite(target);
+
+    private static bool UsesTypedArrayNamedStringIndex(object? target, object? key)
+        => target is SharpTSTypedArray typedArray && key is string name
+            && typedArray.UsesOrdinaryNamedPropertyLookup(name);
 
     private bool HasCanonicalIndexProperties(object? target)
         => target is ISharpTSOwnPropertyObject or SharpTSObject or SharpTSObjectNamespace or SharpTSObjectPrototype
