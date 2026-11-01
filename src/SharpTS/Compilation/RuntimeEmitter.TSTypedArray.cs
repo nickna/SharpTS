@@ -525,6 +525,8 @@ public partial class RuntimeEmitter
 
         il.MarkLabel(afterLengthLabel);
 
+        EmitTypedArrayViewValidation(il, bytesPerElement, bufByteLengthLocal, actualLengthLocal, runtime.Errors);
+
         // Call base(buffer, byteOffset, actualLength, buffer)
         il.Emit(OpCodes.Ldarg_0);
         il.Emit(OpCodes.Ldloc, byteArrayLocal);

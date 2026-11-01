@@ -123,12 +123,20 @@ public abstract class SharpTSTypedArray : ITypeCategorized
 
     private void ValidateBounds()
     {
-        if (_byteOffset < 0)
-            throw new Exception("RangeError: byteOffset cannot be negative");
-        if (_byteOffset % BytesPerElement != 0)
-            throw new Exception($"RangeError: byteOffset must be a multiple of {BytesPerElement}");
-        if (_byteOffset + _length * BytesPerElement > _buffer.Length)
-            throw new Exception("RangeError: buffer too small for specified view");
+        GetViewLength(_buffer.Length, _byteOffset, _length, BytesPerElement);
+    }
+
+    protected static int GetViewLength(int bufferByteLength, int byteOffset, int? length, int bytesPerElement)
+    {
+        if (byteOffset < 0 || byteOffset > bufferByteLength || byteOffset % bytesPerElement != 0)
+            throw new Exception("RangeError: Invalid typed array buffer offset");
+        int remainingBytes = bufferByteLength - byteOffset;
+        if (length is null && remainingBytes % bytesPerElement != 0)
+            throw new Exception("RangeError: Invalid typed array buffer length");
+        int actualLength = length ?? remainingBytes / bytesPerElement;
+        if (actualLength < 0 || actualLength > remainingBytes / bytesPerElement)
+            throw new Exception("RangeError: Invalid typed array buffer length");
+        return actualLength;
     }
 
     /// <summary>
@@ -570,11 +578,11 @@ public class SharpTSInt8Array : SharpTSTypedArray
 
     public SharpTSInt8Array(int length) : base(length) { }
     public SharpTSInt8Array(SharpTSSharedArrayBuffer buffer, int byteOffset = 0, int? length = null)
-        : base(buffer, byteOffset, length ?? (buffer.ByteLength - byteOffset)) { }
+        : base(buffer, byteOffset, GetViewLength(buffer.ByteLength, byteOffset, length, 1)) { }
     public SharpTSInt8Array(SharpTSArrayBuffer buffer, int byteOffset = 0, int? length = null)
-        : base(buffer, byteOffset, length ?? (buffer.ByteLength - byteOffset)) { }
+        : base(buffer, byteOffset, GetViewLength(buffer.ByteLength, byteOffset, length, 1)) { }
     public SharpTSInt8Array(byte[] buffer, int byteOffset = 0, int? length = null)
-        : base(buffer, byteOffset, length ?? (buffer.Length - byteOffset)) { }
+        : base(buffer, byteOffset, GetViewLength(buffer.Length, byteOffset, length, 1)) { }
 
     public override object? this[int index]
     {
@@ -611,11 +619,11 @@ public class SharpTSUint8Array : SharpTSTypedArray
 
     public SharpTSUint8Array(int length) : base(length) { }
     public SharpTSUint8Array(SharpTSSharedArrayBuffer buffer, int byteOffset = 0, int? length = null)
-        : base(buffer, byteOffset, length ?? (buffer.ByteLength - byteOffset)) { }
+        : base(buffer, byteOffset, GetViewLength(buffer.ByteLength, byteOffset, length, 1)) { }
     public SharpTSUint8Array(SharpTSArrayBuffer buffer, int byteOffset = 0, int? length = null)
-        : base(buffer, byteOffset, length ?? (buffer.ByteLength - byteOffset)) { }
+        : base(buffer, byteOffset, GetViewLength(buffer.ByteLength, byteOffset, length, 1)) { }
     public SharpTSUint8Array(byte[] buffer, int byteOffset = 0, int? length = null)
-        : base(buffer, byteOffset, length ?? (buffer.Length - byteOffset)) { }
+        : base(buffer, byteOffset, GetViewLength(buffer.Length, byteOffset, length, 1)) { }
 
     public override object? this[int index]
     {
@@ -652,11 +660,11 @@ public class SharpTSUint8ClampedArray : SharpTSTypedArray
 
     public SharpTSUint8ClampedArray(int length) : base(length) { }
     public SharpTSUint8ClampedArray(SharpTSSharedArrayBuffer buffer, int byteOffset = 0, int? length = null)
-        : base(buffer, byteOffset, length ?? (buffer.ByteLength - byteOffset)) { }
+        : base(buffer, byteOffset, GetViewLength(buffer.ByteLength, byteOffset, length, 1)) { }
     public SharpTSUint8ClampedArray(SharpTSArrayBuffer buffer, int byteOffset = 0, int? length = null)
-        : base(buffer, byteOffset, length ?? (buffer.ByteLength - byteOffset)) { }
+        : base(buffer, byteOffset, GetViewLength(buffer.ByteLength, byteOffset, length, 1)) { }
     public SharpTSUint8ClampedArray(byte[] buffer, int byteOffset = 0, int? length = null)
-        : base(buffer, byteOffset, length ?? (buffer.Length - byteOffset)) { }
+        : base(buffer, byteOffset, GetViewLength(buffer.Length, byteOffset, length, 1)) { }
 
     public override object? this[int index]
     {
@@ -700,11 +708,11 @@ public class SharpTSInt16Array : SharpTSTypedArray
 
     public SharpTSInt16Array(int length) : base(length) { }
     public SharpTSInt16Array(SharpTSSharedArrayBuffer buffer, int byteOffset = 0, int? length = null)
-        : base(buffer, byteOffset, length ?? (buffer.ByteLength - byteOffset) / 2) { }
+        : base(buffer, byteOffset, GetViewLength(buffer.ByteLength, byteOffset, length, 2)) { }
     public SharpTSInt16Array(SharpTSArrayBuffer buffer, int byteOffset = 0, int? length = null)
-        : base(buffer, byteOffset, length ?? (buffer.ByteLength - byteOffset) / 2) { }
+        : base(buffer, byteOffset, GetViewLength(buffer.ByteLength, byteOffset, length, 2)) { }
     public SharpTSInt16Array(byte[] buffer, int byteOffset = 0, int? length = null)
-        : base(buffer, byteOffset, length ?? (buffer.Length - byteOffset) / 2) { }
+        : base(buffer, byteOffset, GetViewLength(buffer.Length, byteOffset, length, 2)) { }
 
     public override object? this[int index]
     {
@@ -757,11 +765,11 @@ public class SharpTSUint16Array : SharpTSTypedArray
 
     public SharpTSUint16Array(int length) : base(length) { }
     public SharpTSUint16Array(SharpTSSharedArrayBuffer buffer, int byteOffset = 0, int? length = null)
-        : base(buffer, byteOffset, length ?? (buffer.ByteLength - byteOffset) / 2) { }
+        : base(buffer, byteOffset, GetViewLength(buffer.ByteLength, byteOffset, length, 2)) { }
     public SharpTSUint16Array(SharpTSArrayBuffer buffer, int byteOffset = 0, int? length = null)
-        : base(buffer, byteOffset, length ?? (buffer.ByteLength - byteOffset) / 2) { }
+        : base(buffer, byteOffset, GetViewLength(buffer.ByteLength, byteOffset, length, 2)) { }
     public SharpTSUint16Array(byte[] buffer, int byteOffset = 0, int? length = null)
-        : base(buffer, byteOffset, length ?? (buffer.Length - byteOffset) / 2) { }
+        : base(buffer, byteOffset, GetViewLength(buffer.Length, byteOffset, length, 2)) { }
 
     public override object? this[int index]
     {
@@ -814,11 +822,11 @@ public class SharpTSInt32Array : SharpTSTypedArray
 
     public SharpTSInt32Array(int length) : base(length) { }
     public SharpTSInt32Array(SharpTSSharedArrayBuffer buffer, int byteOffset = 0, int? length = null)
-        : base(buffer, byteOffset, length ?? (buffer.ByteLength - byteOffset) / 4) { }
+        : base(buffer, byteOffset, GetViewLength(buffer.ByteLength, byteOffset, length, 4)) { }
     public SharpTSInt32Array(SharpTSArrayBuffer buffer, int byteOffset = 0, int? length = null)
-        : base(buffer, byteOffset, length ?? (buffer.ByteLength - byteOffset) / 4) { }
+        : base(buffer, byteOffset, GetViewLength(buffer.ByteLength, byteOffset, length, 4)) { }
     public SharpTSInt32Array(byte[] buffer, int byteOffset = 0, int? length = null)
-        : base(buffer, byteOffset, length ?? (buffer.Length - byteOffset) / 4) { }
+        : base(buffer, byteOffset, GetViewLength(buffer.Length, byteOffset, length, 4)) { }
 
     public override object? this[int index]
     {
@@ -880,11 +888,11 @@ public class SharpTSUint32Array : SharpTSTypedArray
 
     public SharpTSUint32Array(int length) : base(length) { }
     public SharpTSUint32Array(SharpTSSharedArrayBuffer buffer, int byteOffset = 0, int? length = null)
-        : base(buffer, byteOffset, length ?? (buffer.ByteLength - byteOffset) / 4) { }
+        : base(buffer, byteOffset, GetViewLength(buffer.ByteLength, byteOffset, length, 4)) { }
     public SharpTSUint32Array(SharpTSArrayBuffer buffer, int byteOffset = 0, int? length = null)
-        : base(buffer, byteOffset, length ?? (buffer.ByteLength - byteOffset) / 4) { }
+        : base(buffer, byteOffset, GetViewLength(buffer.ByteLength, byteOffset, length, 4)) { }
     public SharpTSUint32Array(byte[] buffer, int byteOffset = 0, int? length = null)
-        : base(buffer, byteOffset, length ?? (buffer.Length - byteOffset) / 4) { }
+        : base(buffer, byteOffset, GetViewLength(buffer.Length, byteOffset, length, 4)) { }
 
     public override object? this[int index]
     {
@@ -937,11 +945,11 @@ public class SharpTSFloat32Array : SharpTSTypedArray
 
     public SharpTSFloat32Array(int length) : base(length) { }
     public SharpTSFloat32Array(SharpTSSharedArrayBuffer buffer, int byteOffset = 0, int? length = null)
-        : base(buffer, byteOffset, length ?? (buffer.ByteLength - byteOffset) / 4) { }
+        : base(buffer, byteOffset, GetViewLength(buffer.ByteLength, byteOffset, length, 4)) { }
     public SharpTSFloat32Array(SharpTSArrayBuffer buffer, int byteOffset = 0, int? length = null)
-        : base(buffer, byteOffset, length ?? (buffer.ByteLength - byteOffset) / 4) { }
+        : base(buffer, byteOffset, GetViewLength(buffer.ByteLength, byteOffset, length, 4)) { }
     public SharpTSFloat32Array(byte[] buffer, int byteOffset = 0, int? length = null)
-        : base(buffer, byteOffset, length ?? (buffer.Length - byteOffset) / 4) { }
+        : base(buffer, byteOffset, GetViewLength(buffer.Length, byteOffset, length, 4)) { }
 
     public override object? this[int index]
     {
@@ -994,11 +1002,11 @@ public class SharpTSFloat64Array : SharpTSTypedArray
 
     public SharpTSFloat64Array(int length) : base(length) { }
     public SharpTSFloat64Array(SharpTSSharedArrayBuffer buffer, int byteOffset = 0, int? length = null)
-        : base(buffer, byteOffset, length ?? (buffer.ByteLength - byteOffset) / 8) { }
+        : base(buffer, byteOffset, GetViewLength(buffer.ByteLength, byteOffset, length, 8)) { }
     public SharpTSFloat64Array(SharpTSArrayBuffer buffer, int byteOffset = 0, int? length = null)
-        : base(buffer, byteOffset, length ?? (buffer.ByteLength - byteOffset) / 8) { }
+        : base(buffer, byteOffset, GetViewLength(buffer.ByteLength, byteOffset, length, 8)) { }
     public SharpTSFloat64Array(byte[] buffer, int byteOffset = 0, int? length = null)
-        : base(buffer, byteOffset, length ?? (buffer.Length - byteOffset) / 8) { }
+        : base(buffer, byteOffset, GetViewLength(buffer.Length, byteOffset, length, 8)) { }
 
     public override object? this[int index]
     {
@@ -1051,11 +1059,11 @@ public class SharpTSBigInt64Array : SharpTSTypedArray
 
     public SharpTSBigInt64Array(int length) : base(length) { }
     public SharpTSBigInt64Array(SharpTSSharedArrayBuffer buffer, int byteOffset = 0, int? length = null)
-        : base(buffer, byteOffset, length ?? (buffer.ByteLength - byteOffset) / 8) { }
+        : base(buffer, byteOffset, GetViewLength(buffer.ByteLength, byteOffset, length, 8)) { }
     public SharpTSBigInt64Array(SharpTSArrayBuffer buffer, int byteOffset = 0, int? length = null)
-        : base(buffer, byteOffset, length ?? (buffer.ByteLength - byteOffset) / 8) { }
+        : base(buffer, byteOffset, GetViewLength(buffer.ByteLength, byteOffset, length, 8)) { }
     public SharpTSBigInt64Array(byte[] buffer, int byteOffset = 0, int? length = null)
-        : base(buffer, byteOffset, length ?? (buffer.Length - byteOffset) / 8) { }
+        : base(buffer, byteOffset, GetViewLength(buffer.Length, byteOffset, length, 8)) { }
 
     public override object? this[int index]
     {
@@ -1124,11 +1132,11 @@ public class SharpTSBigUint64Array : SharpTSTypedArray
 
     public SharpTSBigUint64Array(int length) : base(length) { }
     public SharpTSBigUint64Array(SharpTSSharedArrayBuffer buffer, int byteOffset = 0, int? length = null)
-        : base(buffer, byteOffset, length ?? (buffer.ByteLength - byteOffset) / 8) { }
+        : base(buffer, byteOffset, GetViewLength(buffer.ByteLength, byteOffset, length, 8)) { }
     public SharpTSBigUint64Array(SharpTSArrayBuffer buffer, int byteOffset = 0, int? length = null)
-        : base(buffer, byteOffset, length ?? (buffer.ByteLength - byteOffset) / 8) { }
+        : base(buffer, byteOffset, GetViewLength(buffer.ByteLength, byteOffset, length, 8)) { }
     public SharpTSBigUint64Array(byte[] buffer, int byteOffset = 0, int? length = null)
-        : base(buffer, byteOffset, length ?? (buffer.Length - byteOffset) / 8) { }
+        : base(buffer, byteOffset, GetViewLength(buffer.Length, byteOffset, length, 8)) { }
 
     public override object? this[int index]
     {
