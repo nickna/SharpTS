@@ -3195,12 +3195,23 @@ public partial class RuntimeEmitter
             // TypedArray handler - call emitted typed-array member helper
             il.MarkLabel(typedArrayLabel);
             var intrinsicTypedArrayMember = il.DefineLabel();
+            var noTypedArrayOwnDescriptor = il.DefineLabel();
+            var typedArrayOwnDescriptor = il.DeclareLocal(inputs.DescriptorStorage.DescriptorType);
+            il.Emit(OpCodes.Ldarg_0);
+            il.Emit(OpCodes.Ldarg_1);
+            il.Emit(OpCodes.Call, inputs.DescriptorStorage.GetPropertyDescriptor);
+            il.Emit(OpCodes.Stloc, typedArrayOwnDescriptor);
+            il.Emit(OpCodes.Ldloc, typedArrayOwnDescriptor);
+            il.Emit(OpCodes.Brfalse, noTypedArrayOwnDescriptor);
+            EmitDescriptorReadAndReturn(il, inputs.DescriptorStorage, typedArrayOwnDescriptor,
+                () => il.Emit(OpCodes.Ldarg_0), inputs.InvokeMethodValue, inputs.UndefinedInstance, inputs.UndefinedType);
+            il.MarkLabel(noTypedArrayOwnDescriptor);
             il.Emit(OpCodes.Ldarg_1);
             il.Emit(OpCodes.Ldstr, "length");
             il.Emit(OpCodes.Call, _types.GetMethod(_types.String, "op_Equality", _types.String, _types.String));
             il.Emit(OpCodes.Brfalse, intrinsicTypedArrayMember);
-            // Ordinary length reads use the same own-descriptor and explicit
-            // prototype lookup as Reflect.get, with the target as Receiver.
+            // Ordinary length reads consult the live own descriptor and actual
+            // prototype with the original typed-array receiver.
             il.Emit(OpCodes.Ldarg_0);
             il.Emit(OpCodes.Ldarg_1);
             il.Emit(OpCodes.Ldarg_0);
