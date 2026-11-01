@@ -65,6 +65,7 @@ public partial class RuntimeEmitter
         FieldBuilder ArgumentsLengthField,
         TypeBuilder ArgumentsType,
         EmittedArrayStorageRuntime ArrayStorage,
+        EmittedTypedArrayRuntime TypedArrays,
         TypeBuilder BoundAnyFunctionType,
         TypeBuilder BoundTSFunctionType,
         EmittedCommonJsRuntime? CommonJs,
@@ -99,6 +100,7 @@ public partial class RuntimeEmitter
         EmittedClassDefinitionRuntime ClassDefinitions,
         EmittedArrayOperationsRuntime ArrayOperations,
         EmittedArrayStorageRuntime ArrayStorage,
+        EmittedTypedArrayRuntime TypedArrays,
         TypeBuilder BoundAnyFunctionType,
         TypeBuilder BoundTSFunctionType,
         EmittedCommonJsRuntime? CommonJs,
@@ -814,6 +816,33 @@ public partial class RuntimeEmitter
             [_types.Object, _types.String, _types.Object, _types.Boolean]);
     }
 
+    private void EmitTypedArrayPropertySet(ILGenerator il, EmittedTypedArrayRuntime typedArrays,
+        EmittedReflectAssignment? assignment, EmittedErrorRuntime errors, bool forwardStrict)
+    {
+        if (typedArrays.Implementation is not { } arrays || assignment is null) return;
+        var notTypedArray = il.DefineLabel();
+        il.Emit(OpCodes.Ldarg_0);
+        il.Emit(OpCodes.Isinst, arrays.BaseType);
+        il.Emit(OpCodes.Brfalse, notTypedArray);
+        il.Emit(OpCodes.Ldarg_0);
+        il.Emit(OpCodes.Ldarg_1);
+        il.Emit(OpCodes.Ldarg_2);
+        il.Emit(OpCodes.Ldarg_0);
+        il.Emit(OpCodes.Call, assignment.Set);
+        if (forwardStrict)
+        {
+            var accepted = il.DefineLabel();
+            il.Emit(OpCodes.Brtrue, accepted);
+            il.Emit(OpCodes.Ldarg_3);
+            il.Emit(OpCodes.Brfalse, accepted);
+            EmitThrowTypeErrorWithName(il, errors, "Cannot assign to property '", "'");
+            il.MarkLabel(accepted);
+        }
+        else il.Emit(OpCodes.Pop);
+        il.Emit(OpCodes.Ret);
+        il.MarkLabel(notTypedArray);
+    }
+
     private void EmitSetProperty(EmittedObjectWriteRuntime objectWrite, SetPropertyInputs inputs)
     {
         // Signature forward-declared by DefineRuntimeClassPhase1.
@@ -875,6 +904,8 @@ public partial class RuntimeEmitter
             );
             il.MarkLabel(notProxyLabel);
         }
+
+        EmitTypedArrayPropertySet(il, inputs.TypedArrays, inputs.ReflectAssignment, inputs.Errors, forwardStrict: false);
 
         // OrdinarySetWithOwnDescriptor consults an inherited descriptor before
         // creating a new own property. This shared check covers intrinsic CLR
@@ -2986,6 +3017,8 @@ public partial class RuntimeEmitter
             il.Emit(OpCodes.Ret);
             il.MarkLabel(strictSetNotProxyLabel);
         }
+
+        EmitTypedArrayPropertySet(il, inputs.TypedArrays, inputs.ReflectAssignment, inputs.Errors, forwardStrict: true);
 
         // Constructor metadata descriptors are synthesized rather than stored
         // in PDS. Strict writes must consult that same guest descriptor.

@@ -579,7 +579,8 @@ public partial class RuntimeEmitter
         descriptors.DefineProperty = method;
 
         var il = method.GetILGenerator();
-        if (!NeedsObjectDefinitionBodies)
+        if (!NeedsObjectDefinitionBodies
+            && !(_features.HasAnyTypedArray && _features.UsesPropertyWrites))
         {
             // No source or internal caller can select this entrypoint. Preserve
             // its required metadata handle without the unused descriptor body.
