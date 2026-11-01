@@ -52,7 +52,8 @@ public partial class RuntimeEmitter
             _features.UsesTextEncoding ? runtime.RequireTextEncoding().DecoderType : null,
             _features.UsesCrypto ? runtime.WebCrypto.GetObject : null,
             _features.UsesFetch ? runtime.Fetch.RequireImplementation().Invoke : null,
-            runtime.Abort?.GetControllerConstructor);
+            runtime.Abort?.GetControllerConstructor,
+            _features.UsesStructuredClone ? runtime.StructuredClone.Clone : null);
         EmitGlobalThisGetProperty(runtime.GlobalObject,
             new GlobalPropertyReadInputs(runtime.DescriptorStorage, runtime.Invocation.Method,
                 runtime.ObjectState.IsBuiltinDeleted, runtime.Sentinels.UndefinedInstance,
@@ -73,7 +74,7 @@ public partial class RuntimeEmitter
         Type? DateType, Type? RegExpType, FieldBuilder? ReflectSingleton, MethodBuilder? PopulateReflectSingleton,
         Type? BufferType, Type? ArrayBufferType, Type? EncoderType, Type? DecoderType,
         MethodBuilder? GetCryptoObject, MethodBuilder? FetchInvoke,
-        MethodBuilder? GetAbortControllerConstructor);
+        MethodBuilder? GetAbortControllerConstructor, MethodBuilder? StructuredClone);
 
     private readonly record struct GlobalPropertyReadInputs(
         EmittedDescriptorStorageRuntime Descriptors, MethodBuilder InvokeMethod,
@@ -210,6 +211,7 @@ public partial class RuntimeEmitter
         var encodeURIComponentLabel = il.DefineLabel();
         var decodeURIComponentLabel = il.DefineLabel();
         var evalLabel = il.DefineLabel();
+        var structuredCloneLabel = il.DefineLabel();
         var returnLabel = il.DefineLabel();
         var checkBuiltInsLabel = il.DefineLabel();
         var checkDeletedLabel = il.DefineLabel();
@@ -347,6 +349,14 @@ public partial class RuntimeEmitter
         il.Emit(OpCodes.Ldstr, "isFinite");
         il.Emit(OpCodes.Call, _types.GetMethod(_types.String, "op_Equality", _types.String, _types.String));
         il.Emit(OpCodes.Brtrue, isFiniteLabel);
+
+        if (inputs.Optional.StructuredClone is not null)
+        {
+            il.Emit(OpCodes.Ldarg_0);
+            il.Emit(OpCodes.Ldstr, "structuredClone");
+            il.Emit(OpCodes.Call, _types.GetMethod(_types.String, "op_Equality", _types.String, _types.String));
+            il.Emit(OpCodes.Brtrue, structuredCloneLabel);
+        }
 
         // URI functions are ordinary first-class globals as well as recognized
         // direct-call intrinsics.
@@ -584,6 +594,13 @@ public partial class RuntimeEmitter
         il.MarkLabel(isFiniteLabel);
         EmitGetOrCreateTSFn(inputs.Numbers.IsFinite, "isFinite", 1);
         il.Emit(OpCodes.Br, returnLabel);
+
+        if (inputs.Optional.StructuredClone is { } structuredClone)
+        {
+            il.MarkLabel(structuredCloneLabel);
+            EmitGetOrCreateTSFn(structuredClone, "structuredClone", 2);
+            il.Emit(OpCodes.Br, returnLabel);
+        }
 
         il.MarkLabel(encodeURIComponentLabel);
         EmitGetOrCreateTSFn(inputs.UriComponents.Encode, "encodeURIComponent", 1);

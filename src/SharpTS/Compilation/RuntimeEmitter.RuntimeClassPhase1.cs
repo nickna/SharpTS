@@ -318,5 +318,13 @@ public partial class RuntimeEmitter
             _types.Object,
             FieldAttributes.Public | FieldAttributes.Static);
         runtime.GlobalObject.CompleteDeclarations();
+
+        // Global callable values need the clone wrapper before its worker-runtime
+        // body is emitted. Preserve its existing signature and scoped owner.
+        runtime.StructuredClone.Clone = typeBuilder.DefineMethod(
+            "StructuredClone",
+            MethodAttributes.Public | MethodAttributes.Static,
+            _types.Object,
+            [_types.Object, _types.Object]);
     }
 }

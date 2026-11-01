@@ -615,12 +615,8 @@ public partial class RuntimeEmitter
         coreIl.Emit(OpCodes.Ldloc, clonedSetLocal);
         coreIl.Emit(OpCodes.Ret);
 
-        var method = runtimeType.DefineMethod(
-            "StructuredClone",
-            MethodAttributes.Public | MethodAttributes.Static,
-            _types.Object,
-            [_types.Object, _types.Object]
-        );
+        // The global callable table consumes the phase-1 declaration.
+        var method = clone.Clone;
 
         var il = method.GetILGenerator();
         if (transfer.Enabled)
@@ -632,7 +628,6 @@ public partial class RuntimeEmitter
             il.Emit(OpCodes.Ret);
         }
 
-        clone.Clone = method;
     }
 
     private void EmitStructuredCloneTransferWrapper(ILGenerator il, MethodInfo cloneCore,

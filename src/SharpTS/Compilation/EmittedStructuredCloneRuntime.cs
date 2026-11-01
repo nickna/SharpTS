@@ -10,7 +10,7 @@ public sealed class EmittedStructuredCloneRuntime
 
     public bool IsComplete { get; private set; }
 
-    // The exception is declared before $Runtime; Clone is published after its wrapper body.
+    // The exception is declared before $Runtime; Clone is reserved in phase 1 and filled by worker emission.
     private TypeBuilder? _errorType;
     public TypeBuilder ErrorType
     {
