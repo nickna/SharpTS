@@ -2370,7 +2370,8 @@ public partial class RuntimeEmitter
                 runtime.Records,
                 runtime.Symbols,
                 runtime.Sentinels.UndefinedType,
-                NativeProxyRejection: runtime.ReflectedMethods.NativeProxyRejection
+                NativeProxyRejection: runtime.ReflectedMethods.NativeProxyRejection,
+                TypedArrays: runtime.TypedArrays
             ),
             prototypeStoreField
         );
