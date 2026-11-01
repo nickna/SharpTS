@@ -2865,7 +2865,7 @@ public static partial class ObjectBuiltIns
             // this preflight rather than having their traps invoked here.
             candidate = candidate switch
             {
-                SharpTSObject or SharpTSArray or SharpTSClassPrototype or SharpTSInstance or SharpTSArrayGlobal or SharpTSClass or SharpTSPromise
+                SharpTSObject or SharpTSArray or SharpTSTypedArray or SharpTSClassPrototype or SharpTSInstance or SharpTSArrayGlobal or SharpTSClass or SharpTSPromise
                     or SharpTSFunctionPrototype or SharpTSNumberPrototype or SharpTSBooleanPrototype
                     or Dictionary<string, object?>
                     => PrototypeOf(interpreter, candidate),
