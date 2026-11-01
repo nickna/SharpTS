@@ -846,6 +846,7 @@ public partial class RuntimeEmitter
                 runtime.Map,
                 runtime.Promise,
                 runtime.Set,
+                runtime.TypedArrays,
                 runtime.Symbols,
                 runtime.FunctionValues.Type,
                 runtime.Sentinels.UndefinedType,
