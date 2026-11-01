@@ -392,6 +392,96 @@ public sealed class GlobalIsNaNValueTests
             TestHarness.Run(source, ExecutionMode.Interpreted));
     }
 
+    // Interpreted only: StringPrototypeMethodWrapper dispatches these intrinsics.
+    [Fact]
+    public void BoxedStringValueOfAndIntrinsicToStringIgnoreConversionHooks()
+    {
+        var source = """
+            const s: any = new String("7");
+            let calls = 0;
+            s.toString = () => { calls++; return "bad"; };
+            console.log(isNaN(s), Number(s), s.valueOf(), String.prototype.toString.call(s), calls);
+            console.log(s.charAt(0), calls);
+            s.toString = String.prototype.toString;
+            console.log(Number(s), s.charAt(0));
+            console.log(JSON.stringify(String.prototype.charAt(0)), String.prototype.indexOf("x"));
+            """;
+
+        Assert.Equal(
+            "false 7 7 7 0\nb 1\n7 7\n\"\" -1\n",
+            TestHarness.Run(source, ExecutionMode.Interpreted));
+    }
+
+    // Interpreted only: StringPrototypeMethodWrapper dispatches these methods.
+    [Fact]
+    public void BoxedStringGenericMethodsUseTheFullConversionProtocol()
+    {
+        var source = """
+            const exotic: any = new String("ab");
+            let hints = "";
+            exotic[Symbol.toPrimitive] = (hint: string) => { hints += hint; return "xy"; };
+            console.log(exotic.charAt(0), exotic.valueOf(), String.prototype.toString.call(exotic), hints);
+            const fallback: any = new String("ab");
+            let reads = 0;
+            Object.defineProperty(fallback, Symbol.toPrimitive, {
+                get() { reads++; return undefined; }
+            });
+            fallback.toString = undefined;
+            fallback.valueOf = () => "yz";
+            console.log(fallback.charAt(1), reads);
+            const failing: any = new String("ab");
+            failing.toString = () => ({});
+            failing.valueOf = () => ({});
+            try { console.log(failing.charAt(0)); }
+            catch (error) { console.log(error.name, error instanceof TypeError); }
+            """;
+
+        Assert.Equal(
+            "x ab ab string\nz 1\nTypeError true\n",
+            TestHarness.Run(source, ExecutionMode.Interpreted));
+    }
+
+    // Interpreted only: compiled array conversion hooks are tracked in #2929.
+    [Fact]
+    public void GlobalIsNaNReadsArrayExoticConversionAccessorExactlyOnce()
+    {
+        var source = """
+            let reads = 0;
+            let calls = 0;
+            const array: any = [];
+            Object.defineProperty(array, Symbol.toPrimitive, {
+                get() {
+                    reads++;
+                    return (hint: string) => { calls++; console.log(hint); return 7; };
+                }
+            });
+            console.log(isNaN(array), reads, calls);
+            console.log(Number(array), reads, calls);
+            """;
+
+        Assert.Equal(
+            "number\nfalse 1 1\nnumber\n7 2 2\n",
+            TestHarness.Run(source, ExecutionMode.Interpreted));
+    }
+
+    [Fact]
+    public void GlobalIsNaNSkipsNonCallableProxyConversionMethods()
+    {
+        var source = """
+            const array: any = [1];
+            array.valueOf = new Proxy({}, {});
+            console.log(isNaN(array), Number(array));
+            const boxed: any = new Number(1);
+            boxed.valueOf = new Proxy({}, {});
+            boxed.toString = () => "bad";
+            console.log(isNaN(boxed), Number(boxed));
+            """;
+
+        Assert.Equal(
+            "false 1\ntrue NaN\n",
+            TestHarness.Run(source, ExecutionMode.Interpreted));
+    }
+
     // Interpreted only: the shared numeric coercion hook machinery is interpreter-side (nickna/SharpTS#2929).
     // Pins: an arguments object's conversion hooks run exactly once — valueOf runs once (n increments to 1), both hooks return objects, so the coercion throws TypeError with n still 1.
     [Fact]

@@ -786,12 +786,8 @@ public partial class Interpreter
     /// </summary>
     private object? ToPrimitive(object? value, PrimitiveHint hint)
     {
-        // A Date runs the machinery only for the number hint: Node's default and
-        // string-hint conversion is dominated by the intrinsic
-        // Date.prototype[@@toPrimitive], which the symbol lookup cannot resolve,
-        // so the pre-fix fall-through (the Date itself; its downstream string
-        // conversion, e.g. `new Date(0) + 1`) stays the behavior there. The
-        // number hint runs the machinery so an own valueOf converts.
+        // Preserve the existing Date string/default conversion path; number
+        // conversions use the same hook machinery as other object kinds.
         if (value is SharpTSDate && hint != PrimitiveHint.Number)
             return value;
 
@@ -800,11 +796,15 @@ public partial class Interpreter
         // fast paths differ from the chain's resolution (join via
         // Array.prototype.toString, "[object Arguments]" via its brand), so
         // they gate the machinery on a hook actually being present below.
-        if (IsObjectLike(value)
-            && value is not SharpTSArray
-            && TryToPrimitiveViaHooks(value, hint, out var hooked))
+        if (IsObjectLike(value))
         {
-            return hooked;
+            // GetMethod(@@toPrimitive) can invoke a getter, so perform this
+            // lookup exactly once, even when the ordinary array fast path wins.
+            if (TryCallExoticToPrimitive(value!, hint, out var exotic))
+                return exotic;
+            if (value is not SharpTSArray
+                && TryOrdinaryToPrimitive(value!, hint, out var hooked))
+                return hooked;
         }
 
         // Number.prototype is itself a Number object with [[NumberData]] +0.
@@ -821,10 +821,7 @@ public partial class Interpreter
         {
             if (!CarriesConversionHook(arguments))
                 return "[object Arguments]";
-            return TryToPrimitiveViaHooks(arguments, hint, out var argumentsHooked)
-                ? argumentsHooked
-                : throw new ThrowException(new SharpTSTypeError(
-                    "Cannot convert object to primitive value"));
+            return OrdinaryToPrimitiveObject(arguments, hint);
         }
 
         // Arrays inherit Array.prototype.toString (= join(',')), so a hook-less
@@ -835,10 +832,7 @@ public partial class Interpreter
         {
             if (!CarriesConversionHook(array))
                 return ArrayBuiltIns.ToJsString(this, array);
-            return TryToPrimitiveViaHooks(array, hint, out var arrayHooked)
-                ? arrayHooked
-                : throw new ThrowException(new SharpTSTypeError(
-                    "Cannot convert object to primitive value"));
+            return OrdinaryToPrimitiveObject(array, hint);
         }
 
         // No conversion hook resolved: globalThis, callables and instances
@@ -869,24 +863,6 @@ public partial class Interpreter
     }
 
     /// <summary>
-    /// ECMA-262 §7.1.1 ToPrimitive through the guest-visible hook machinery:
-    /// GetMethod(O, @@toPrimitive), then OrdinaryToPrimitive — the hint-ordered
-    /// <c>valueOf</c>/<c>toString</c> through inherited property lookup. True
-    /// only when a hook produced a primitive; false lets the caller fall back
-    /// to its kind fast path. A present-but-broken hook (@@toPrimitive not
-    /// callable or returning an object) still throws, per spec.
-    /// </summary>
-    private bool TryToPrimitiveViaHooks(object receiver, PrimitiveHint hint, out object? result)
-    {
-        if (TryCallExoticToPrimitive(receiver, hint, out var exotic))
-        {
-            result = exotic;
-            return true;
-        }
-        return TryOrdinaryToPrimitive(receiver, hint, out result);
-    }
-
-    /// <summary>
     /// ECMA-262 §7.1.1 OrdinaryToPrimitive(O, hint) when it succeeds: the first
     /// hint-ordered method (<c>valueOf</c> for number/default, <c>toString</c>
     /// for string) whose inherited resolution is callable and returns a
@@ -901,7 +877,8 @@ public partial class Interpreter
         ReadOnlySpan<string> order = [first, second];
         foreach (string name in order)
         {
-            if (GetPropertyValue(receiver, name) is not ISharpTSCallable callable)
+            if (GetPropertyValue(receiver, name) is not ISharpTSCallable callable
+                || callable is SharpTSProxy { IsCallable: false })
                 continue;
             var converted = FunctionBuiltIns.CallWithThis(this, callable, receiver, []);
             if (!IsObjectLike(converted))
@@ -922,7 +899,7 @@ public partial class Interpreter
     /// <summary>
     /// True when an array or arguments object carries a conversion hook beyond
     /// its kind's intrinsic stringify (join / "[object Arguments]"): an own
-    /// <c>valueOf</c>/<c>toString</c>, @@toPrimitive anywhere on its chain, an
+    /// <c>valueOf</c>/<c>toString</c>, an
     /// Array.prototype override of either method, or an Object.prototype-level
     /// override (arrays have no Array.prototype.valueOf to shadow it, so that
     /// override IS the chain's valueOf resolution). Hook-less receivers keep
@@ -934,9 +911,7 @@ public partial class Interpreter
             || GetArrayPrototype().HasExtra("valueOf")
             || GetArrayPrototype().HasExtra("toString")
             || GetObjectPrototype().HasExtra("valueOf")
-            || GetObjectPrototype().HasExtra("toString")
-            || GetSymbolPropertyValue(array, SharpTSSymbol.ToPrimitive)
-                is not (null or SharpTSUndefined);
+            || GetObjectPrototype().HasExtra("toString");
 
     /// <summary>
     /// String-coerces a class instance by resolving and invoking its
@@ -1025,14 +1000,18 @@ public partial class Interpreter
             ThrowIfSymbolStringCoercion(boxedSymbol);
         }
 
+        if (TryGetBoxedPrimitiveValue(obj, out _))
+        {
+            var primitive = ToPrimitive(obj, PrimitiveHint.String);
+            ThrowIfSymbolStringCoercion(primitive);
+            return Stringify(primitive);
+        }
+
         if (TryCallExoticToPrimitive(obj, PrimitiveHint.String, out var exoticResult))
         {
             ThrowIfSymbolStringCoercion(exoticResult);
             return Stringify(exoticResult);
         }
-
-        if (TryGetBoxedPrimitiveValue(obj, out _))
-            return Stringify(ToPrimitive(obj, PrimitiveHint.String));
 
         if (TryCallConversion(obj, "toString", out var stringResult))
         {
