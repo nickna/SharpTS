@@ -404,7 +404,8 @@ public partial class Interpreter
         }
         bool arrayReferenceKey = UsesArrayRawIndexReference(obj, index);
         var globalTarget = ResolveGlobalIndexTarget(obj, index);
-        var typedArrayStringTarget = index is string or double ? obj as SharpTSTypedArray : null;
+        var typedArrayStringTarget = index is string or double || RuntimeValue.FromBoxed(index).IsObject
+            ? obj as SharpTSTypedArray : null;
         if (arrayReferenceKey || inputView is not null || globalTarget is not null
             || typedArrayStringTarget is not null
             || UsesPrimitivePrototypePropertyReads(obj)
