@@ -82,6 +82,7 @@ public partial class Interpreter
     {
         var environment = _environment;
         var generator = CurrentAsyncGenerator;
+        bool ownsHostTask = false;
         try
         {
             object? result = SharpTSUndefined.Instance;
@@ -101,6 +102,11 @@ public partial class Interpreter
                 // An async-from-sync method's return value is ignored, but its
                 // async disposal still has an Await checkpoint.
                 if (method is not null && !awaitResult) result = SharpTSUndefined.Instance;
+                if (result is Task { IsCompleted: false })
+                {
+                    Ref();
+                    ownsHostTask = true;
+                }
                 Task<object?> task = result is Task hostTask && result is not Task<object?>
                     ? AwaitUsingHostTask(hostTask) : AwaitAsyncIterationValue(result);
                 await AwaitPreservingEnvironment(QueueNativeAwait(task));
@@ -110,6 +116,7 @@ public partial class Interpreter
         {
             _environment = environment;
             CurrentAsyncGenerator = generator;
+            if (ownsHostTask) Unref();
         }
     }
 
