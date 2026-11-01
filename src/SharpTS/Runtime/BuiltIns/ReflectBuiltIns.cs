@@ -396,6 +396,7 @@ public static class ReflectBuiltIns
                     SharpTSObjectPrototype objectPrototype => PropertyDescriptorStore.IsExtensible(objectPrototype),
                     SharpTSClassPrototype prototype => PropertyDescriptorStore.IsExtensible(prototype),
                     SharpTSStringPrototype or SharpTSNumberPrototype or SharpTSBooleanPrototype or SharpTSArrayPrototype
+                        or SharpTSTypedArray
                         => PropertyDescriptorStore.IsExtensible(target),
                     ISharpTSCallable callable => PropertyDescriptorStore.IsExtensible(callable),
                     Dictionary<string, object?> dict => PropertyDescriptorStore.IsExtensible(dict),
@@ -439,6 +440,9 @@ public static class ReflectBuiltIns
                             ObjectBuiltIns.PreventExtensionsTarget(interpreter, objectPrototype));
                     case SharpTSClassPrototype prototype:
                         PropertyDescriptorStore.PreventExtensions(prototype);
+                        break;
+                    case SharpTSTypedArray typedArray:
+                        PropertyDescriptorStore.PreventExtensions(typedArray);
                         break;
                     case SharpTSFunctionPrototype functionPrototype:
                         functionPrototype.PreventExtensionsOwnProperties();
