@@ -1348,37 +1348,10 @@ public partial class ILEmitter
             return;
         }
 
-        // Numeric typed-array fast path (#3, generalizing #878 past Float64): when the receiver is
-        // a variable statically typed as a numeric typed array, read the element UNBOXED via
-        // $XArray.GetUnboxed → native double on the stack. Eliminates the Runtime.GetIndex dispatch,
-        // the GetTypedArrayElement isinst/castclass, the virtual Get, and the per-element box. BigInt
-        // and Uint8Clamped have no entry → fall through to the boxed path. Out-of-range access faults
-        // exactly as the boxed path does today. Receiver is side-effect-free, so it is loaded once.
-        if (!gi.Optional && gi.Object is Expr.Variable
-            && _ctx.TypeMap?.Get(gi.Object) is TypeInfo.TypedArray gta
-            && _ctx.Runtime!.TypedArrays.Implementation?.GetNumericType(gta.ElementType) is { } gtaType
-            && _ctx.Runtime!.TypedArrays.RequireImplementation().GetUnboxedByElement.TryGetValue(gta.ElementType, out var taGetU))
-        {
-            if (TryGetDirectTypedArrayBacking(gi.Object, gta.ElementType, out var backing))
-            {
-                EmitIndexAsInt32(gi.Index);
-                var indexLocal = IL.DeclareLocal(_ctx.Types.Int32);
-                IL.Emit(OpCodes.Stloc, indexLocal);
-                EmitDirectTypedArrayRead(backing, indexLocal);
-                SetStackType(StackType.Double);
-                return;
-            }
-
-            // Receiver: hoisted loop-invariant cast when available, else per-access cast (#928).
-            EmitTypedArrayReceiver(gi.Object, gtaType);
-            // Native-int fast path when the index is an integer loop counter (#928).
-            EmitIndexAsInt32(gi.Index);
-            // Non-virtual call to the sealed-type accessor → the JIT inlines it (AggressiveInlining)
-            // so the receiver's _buffer load and the element bounds check can hoist out of loops.
-            IL.Emit(OpCodes.Call, taGetU);
-            SetStackType(StackType.Double);
+        // Preserve the raw value for value consumers; numeric consumers use the
+        // same range guard with an unboxed Number result via EmitExpressionAsDouble.
+        if (TryEmitGuardedTypedArrayRead(gi, numericConsumer: false))
             return;
-        }
 
         // Descriptor-driven fast path: when receiver is statically known to be an array,
         // emit direct List<T> access — skips runtime type dispatch,

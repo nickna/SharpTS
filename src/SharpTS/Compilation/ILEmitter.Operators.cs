@@ -380,6 +380,38 @@ public partial class ILEmitter
             return;
         }
 
+        // An actual Number literal cannot equal a missing element (undefined).
+        // The numeric guard's NaN arm preserves that result without boxing each
+        // valid element. Other value comparisons keep the undefined sentinel.
+        bool guardedNumberComparison = false;
+        if (b.Left is Expr.GetIndex leftRead && b.Right is Expr.Literal { Value: double rightLiteral }
+            && TryEmitGuardedTypedArrayRead(leftRead, numericConsumer: true))
+        {
+            EmitDoubleConstant(rightLiteral);
+            guardedNumberComparison = true;
+        }
+        else if (b.Left is Expr.Literal { Value: double leftLiteral } && b.Right is Expr.GetIndex rightRead)
+        {
+            // The literal has no observable evaluation; emit it after the read
+            // so a refused fast path leaves the evaluation stack untouched.
+            if (TryEmitGuardedTypedArrayRead(rightRead, numericConsumer: true))
+            {
+                EmitDoubleConstant(leftLiteral);
+                guardedNumberComparison = true;
+            }
+        }
+        if (guardedNumberComparison)
+        {
+            IL.Emit(OpCodes.Ceq);
+            if (isNegated)
+            {
+                IL.Emit(OpCodes.Ldc_I4_0);
+                IL.Emit(OpCodes.Ceq);
+            }
+            SetStackType(StackType.Boolean);
+            return;
+        }
+
         // A number annotation can still have an object-backed value, such as a
         // default parameter supplied with null through an any alias. Capture the
         // actual emitted representation without converting either operand. Both
@@ -1270,8 +1302,8 @@ public partial class ILEmitter
     /// Emits the common three-point Int32 stencil with one element-range guard and unchecked
     /// neighboring reads. The ordinary lowering independently checks <c>i - 1</c>, <c>i</c>, and
     /// <c>i + 1</c> against the byte array. For an exact non-escaping backing all three indexes and
-    /// reads are pure, so one unsigned center/range check preserves the same first-fault behavior
-    /// while letting RyuJIT use a single base-plus-scaled-index address in the hot body.
+    /// reads are pure, so one unsigned center/range check selects NaN for invalid neighbors
+    /// while letting RyuJIT use a single base-plus-scaled-index address in the valid hot body.
     /// <summary>
     /// Emits a direct Int32 typed-array stencil calculation for a supported expression.
     /// </summary>
@@ -1289,14 +1321,25 @@ public partial class ILEmitter
             return false;
         }
 
+        var invalidIndex = IL.DefineLabel();
+        var done = IL.DefineLabel();
+        // The native counter may exceed Int32. Reject a lossy round-trip
+        // before its narrowed value can pass the neighboring-element guard.
+        IL.Emit(OpCodes.Ldloc, _ctx.Locals.GetLocal(counterName)!);
+        IL.Emit(OpCodes.Ldloc, _ctx.Locals.GetLocal(counterName)!);
+        IL.Emit(OpCodes.Conv_I4);
+        IL.Emit(OpCodes.Conv_I8);
+        IL.Emit(OpCodes.Bne_Un, invalidIndex);
         IL.Emit(OpCodes.Ldloc, _ctx.Locals.GetLocal(counterName)!);
         IL.Emit(OpCodes.Conv_I4);
         var centerIndex = IL.DeclareLocal(_ctx.Types.Int32);
         IL.Emit(OpCodes.Stloc, centerIndex);
 
         var inRange = EmitInt32StencilRangeTest(backing, centerIndex);
-        IL.Emit(OpCodes.Newobj, _ctx.Types.GetDefaultConstructor(typeof(IndexOutOfRangeException)));
-        IL.Emit(OpCodes.Throw);
+        IL.MarkLabel(invalidIndex);
+        // An invalid neighbor reads undefined; the pure numeric stencil is NaN.
+        IL.Emit(OpCodes.Ldc_R8, double.NaN);
+        IL.Emit(OpCodes.Br, done);
         IL.MarkLabel(inRange);
 
         var centerReference = IL.DeclareLocal(_ctx.Types.Byte.MakeByRefType());
@@ -1317,6 +1360,7 @@ public partial class ILEmitter
         EmitDirectInt32ReadAsInt64(centerReference, 4);
         IL.Emit(OpCodes.Add);
         IL.Emit(OpCodes.Conv_R8);
+        IL.MarkLabel(done);
         SetStackType(StackType.Double);
         return true;
     }

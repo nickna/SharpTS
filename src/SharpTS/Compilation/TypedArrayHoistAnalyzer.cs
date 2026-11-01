@@ -71,6 +71,8 @@ public static class TypedArrayHoistAnalyzer
 
             foreach (var receiver in candidate.PermittedReceivers)
                 typeMap.MarkStableTypedArrayBackingReceiver(receiver);
+            foreach (var read in candidate.PresentReads)
+                typeMap.MarkPresentTypedArrayRead(read);
         }
     }
 
@@ -98,9 +100,11 @@ public static class TypedArrayHoistAnalyzer
         type is TypeInfo.Primitive { Type: TokenType.TYPE_NUMBER }
             or TypeInfo.NumberLiteral;
 
-    private sealed class StableBackingCandidate(string elementType)
+    private sealed class StableBackingCandidate(string elementType, double? literalLength)
     {
         public string ElementType { get; } = elementType;
+        public double? LiteralLength { get; } = literalLength;
+        public HashSet<Expr.GetIndex> PresentReads { get; } = new(ReferenceEqualityComparer.Instance);
         public HashSet<Expr.Variable> PermittedReceivers { get; } =
             new(ReferenceEqualityComparer.Instance);
     }
@@ -135,7 +139,9 @@ public static class TypedArrayHoistAnalyzer
                 && constructor.Name.Lexeme == typedArray.ElementType + "Array"
                 && IsNumber(_typeMap.Get(length)))
             {
-                Candidates.TryAdd(key, new StableBackingCandidate(typedArray.ElementType));
+                double? literalLength = length is Expr.Literal { Value: double count }
+                    && count >= 0 && count <= int.MaxValue && count == Math.Truncate(count) ? count : null;
+                Candidates.TryAdd(key, new StableBackingCandidate(typedArray.ElementType, literalLength));
             }
         }
 
@@ -160,6 +166,12 @@ public static class TypedArrayHoistAnalyzer
                 && IsNumber(_typeMap.Get(expression.Index))
                 && TryPermitReceiver(receiver))
             {
+                if (Candidates.TryGetValue(Binding(receiver.Name), out var candidate)
+                    && candidate.PermittedReceivers.Contains(receiver)
+                    && candidate.LiteralLength is { } count
+                    && expression.Index is Expr.Literal { Value: double index }
+                    && index >= 0 && index < count && index == Math.Truncate(index))
+                    candidate.PresentReads.Add(expression);
                 Visit(expression.Index);
                 return;
             }

@@ -678,6 +678,8 @@ public partial class ILCompiler
         Phase2_AnalyzeClosures(statements, modules);
         _closures.ConstArrowBindings = ConstArrowBindingAnalyzer.Collect(statements);
         StableExactClassMethodCallAnalyzer.Analyze(statements, _typeMap, _features, _typeMapper);
+        // Presence must be decided before return/storage summaries define CLR signatures.
+        TypedArrayHoistAnalyzer.Analyze(statements, _typeMap, _closures.Analyzer);
         if (_rawCallStorage is not null) _rawCallStorage.Analyze(statements, _features);
         else ForwardedReturnValueAnalyzer.Analyze(statements, _typeMap, _features, modules);
         StableMapIterationAnalyzer.Analyze(statements, _typeMap, _closures.Analyzer);
@@ -699,7 +701,6 @@ public partial class ILCompiler
             statements, _typeMap, _closures.Analyzer, _features, _typeMapper);
         _classes.CompactStorageClasses.UnionWith(
             CompactClassStorageAnalyzer.Analyze(statements, _typeMap, _features, _typeMapper));
-        TypedArrayHoistAnalyzer.Analyze(statements, _typeMap, _closures.Analyzer);
         ArrayLocalPromotionAnalyzer.Analyze(statements, _typeMap, _closures.Analyzer, _features);
         StringAccumulatorPromotionAnalyzer.Analyze(statements, _typeMap, _closures.Analyzer);
         // Callee identity proofs stay inside their module. The combined object-local pass

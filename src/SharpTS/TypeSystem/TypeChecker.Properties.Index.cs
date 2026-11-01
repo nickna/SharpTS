@@ -530,6 +530,9 @@ public partial class TypeChecker
             // Numeric and BigInt typed arrays retain their respective element kinds.
             if (objType is TypeInfo.TypedArray typedArray)
             {
+                // The checked element kind does not prove a present runtime index.
+                // Keep this negative representation fact available to argument flow.
+                _typeMap.MarkUndefinedReachableReturn(getIndex);
                 // A checked BigInt element can still be the missing-index sentinel.
                 if (HasBigIntElements(typedArray)) _typeMap.MarkRawNumericResult(getIndex);
                 return WithUncheckedUndefined(TypedArrayElementType(typedArray));

@@ -937,6 +937,9 @@ public partial class TypeChecker
                                  || ValueMayBeUndefinedSentinel(n.Right, taintedLocals),
         Expr.Assign a => ValueMayBeUndefinedSentinel(a.Value, taintedLocals),
         Expr.Variable v when taintedLocals != null && taintedLocals.Contains(v.Name.Lexeme) => true,
+        // Numeric element annotations do not prove that a runtime index is present.
+        Expr.GetIndex get when _typeMap.Get(get.Object) is TypeInfo.TypedArray
+            && _typeMap.IsUndefinedReachableReturn(get) => true,
         Expr.Get get when ClassAccessorReadMayBeUndefined(_typeMap.Get(get.Object), get.Name.Lexeme) => true,
         Expr.GetIndex get when _typeMap.Get(get.Index) is TypeInfo.StringLiteral key &&
             ClassAccessorReadMayBeUndefined(_typeMap.Get(get.Object), key.Value) => true,

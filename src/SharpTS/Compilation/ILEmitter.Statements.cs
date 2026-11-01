@@ -1264,8 +1264,11 @@ public partial class ILEmitter
 
         var inRange = EmitInt32StencilRangeTest(backing, centerIndex);
         EmitInt64AccumulatorStore(accumulatorDouble, accumulatorInteger);
-        IL.Emit(OpCodes.Newobj, _ctx.Types.GetDefaultConstructor(typeof(IndexOutOfRangeException)));
-        IL.Emit(OpCodes.Throw);
+        // Resume the same iteration in the semantic Number body. Invalid reads
+        // produce NaN there; the stale integer accumulator must never overwrite it.
+        IL.Emit(OpCodes.Ldc_I4_0);
+        IL.Emit(OpCodes.Stloc, fastActive);
+        IL.Emit(OpCodes.Br, slowStart);
         IL.MarkLabel(inRange);
 
         IL.Emit(OpCodes.Ldloc, backing.BufferLocal);
