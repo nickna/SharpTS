@@ -255,7 +255,7 @@ public partial class RuntimeEmitter
 
         // Indexer: public object this[int index] { get; set; }
         EmitTypedArrayIndexer(typeBuilder, arrays, bytesPerElement, signed, clamped, isFloat, isBigInt,
-            isBigInt ? runtime.BigInt.Implementation?.ToBigInt : null);
+            runtime.NumericCoercion.ToNumber, isBigInt ? runtime.BigInt.Implementation?.ToBigInt : null);
 
         // Unboxed numeric element accessors (#3): GetUnboxed/SetUnboxed return/accept a native
         // double, for the compiled fast path (ILEmitter binds them at statically-typed sites).
@@ -547,6 +547,7 @@ public partial class RuntimeEmitter
         bool clamped,
         bool isFloat,
         bool isBigInt,
+        MethodInfo toNumber,
         MethodInfo? toBigInt)
     {
         // Getter: public object Get(int index)
@@ -678,7 +679,7 @@ public partial class RuntimeEmitter
             setIl.Emit(OpCodes.Ldfld, arrays.BufferField);
             setIl.Emit(OpCodes.Ldloc, setIndexLocal);
             setIl.Emit(OpCodes.Ldarg_2);
-            setIl.Emit(OpCodes.Call, typeof(Convert).GetMethod("ToDouble", [typeof(object)])!);
+            setIl.Emit(OpCodes.Call, toNumber);
             if (clamped)
             {
                 // ToUint8Clamp compares the original double before narrowing.
@@ -715,13 +716,13 @@ public partial class RuntimeEmitter
         }
         else if (bytesPerElement == 2)
         {
-            // Unsafe.WriteUnaligned(ref _buffer[byteIdx], (short|ushort)(int)Convert.ToDouble(value));
+            // Unsafe.WriteUnaligned(ref _buffer[byteIdx], (short|ushort)(int)ToNumber(value));
             setIl.Emit(OpCodes.Ldarg_0);
             setIl.Emit(OpCodes.Ldfld, arrays.BufferField);
             setIl.Emit(OpCodes.Ldloc, setIndexLocal);
             setIl.Emit(OpCodes.Ldelema, typeof(byte));
             setIl.Emit(OpCodes.Ldarg_2);
-            setIl.Emit(OpCodes.Call, typeof(Convert).GetMethod("ToDouble", [typeof(object)])!);
+            setIl.Emit(OpCodes.Call, toNumber);
             setIl.Emit(OpCodes.Conv_I4);
             if (signed)
             {
@@ -742,15 +743,16 @@ public partial class RuntimeEmitter
             setIl.Emit(OpCodes.Ldelema, typeof(byte));
             if (isFloat)
             {
-                // Unsafe.WriteUnaligned(ref _buffer[byteIdx], Convert.ToSingle(value));
+                // Unsafe.WriteUnaligned(ref _buffer[byteIdx], (float)ToNumber(value));
                 setIl.Emit(OpCodes.Ldarg_2);
-                setIl.Emit(OpCodes.Call, typeof(Convert).GetMethod("ToSingle", [typeof(object)])!);
+                setIl.Emit(OpCodes.Call, toNumber);
+                setIl.Emit(OpCodes.Conv_R4);
                 setIl.Emit(OpCodes.Call, UnsafeWriteUnaligned(typeof(float)));
             }
             else
             {
                 setIl.Emit(OpCodes.Ldarg_2);
-                setIl.Emit(OpCodes.Call, typeof(Convert).GetMethod("ToDouble", [typeof(object)])!);
+                setIl.Emit(OpCodes.Call, toNumber);
                 if (signed)
                 {
                     setIl.Emit(OpCodes.Conv_I4);
@@ -771,9 +773,9 @@ public partial class RuntimeEmitter
             setIl.Emit(OpCodes.Ldelema, typeof(byte));
             if (isFloat)
             {
-                // Unsafe.WriteUnaligned(ref _buffer[byteIdx], Convert.ToDouble(value));
+                // Unsafe.WriteUnaligned(ref _buffer[byteIdx], ToNumber(value));
                 setIl.Emit(OpCodes.Ldarg_2);
-                setIl.Emit(OpCodes.Call, typeof(Convert).GetMethod("ToDouble", [typeof(object)])!);
+                setIl.Emit(OpCodes.Call, toNumber);
                 setIl.Emit(OpCodes.Call, UnsafeWriteUnaligned(typeof(double)));
             }
             else if (isBigInt)
@@ -797,7 +799,7 @@ public partial class RuntimeEmitter
             else
             {
                 setIl.Emit(OpCodes.Ldarg_2);
-                setIl.Emit(OpCodes.Call, typeof(Convert).GetMethod("ToDouble", [typeof(object)])!);
+                setIl.Emit(OpCodes.Call, toNumber);
                 setIl.Emit(OpCodes.Conv_I8);
                 setIl.Emit(OpCodes.Call, UnsafeWriteUnaligned(typeof(long)));
             }
