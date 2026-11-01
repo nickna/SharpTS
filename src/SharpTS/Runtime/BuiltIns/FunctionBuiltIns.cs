@@ -580,21 +580,21 @@ public class BoundFunction : ISharpTSCallable
         if (!_ignoreThisArg && _target is CompiledCallableAdapter compiled)
             return RuntimeValue.FromBoxed(compiled.CallWithThis(_thisArg, CallableInterop.ToBoxedList(combined)));
 
-        // Delegate to target's V2 path if available
+        if (!_ignoreThisArg && _target is SharpTSFunction fn)
+        {
+            var boundFn = CreateBoundSharpTSFunction(fn, _thisArg, interpreter);
+            return boundFn.CallV2(interpreter, combined);
+        }
+
+        if (!_ignoreThisArg && _target is SharpTSArrowFunction arrow && arrow.HasOwnThis)
+        {
+            var boundArrow = arrow.Bind(NormalizeBoundThis(arrow.IsStrict, _thisArg, interpreter)!);
+            return boundArrow.CallV2(interpreter, combined);
+        }
+
+        // Other callable kinds retain their existing receiver protocol.
         if (!_ignoreThisArg && _thisArg != null)
         {
-            if (_target is SharpTSFunction fn)
-            {
-                var boundFn = CreateBoundSharpTSFunction(fn, _thisArg, interpreter);
-                return boundFn.CallV2(interpreter, combined);
-            }
-
-            if (_target is SharpTSArrowFunction arrow && arrow.HasOwnThis)
-            {
-                var boundArrow = arrow.Bind(arrow.IsStrict ? _thisArg : BuiltInConstructorFactory.ToObject(_thisArg, interpreter)!);
-                return boundArrow.CallV2(interpreter, combined);
-            }
-
             // Async function expressions (HasOwnThis) and async function
             // declarations rebind 'this'; true async arrows capture lexically
             // and fall through to the unbound target call below.
@@ -645,24 +645,20 @@ public class BoundFunction : ISharpTSCallable
         if (!_ignoreThisArg && _target is CompiledCallableAdapter compiled)
             return compiled.CallWithThis(_thisArg, combinedArgs);
 
-        // Handle binding 'this' for the target function
+        if (!_ignoreThisArg && _target is SharpTSFunction fn)
+        {
+            var boundFn = CreateBoundSharpTSFunction(fn, _thisArg, interpreter);
+            return boundFn.Call(interpreter, combinedArgs);
+        }
+
+        if (!_ignoreThisArg && _target is SharpTSArrowFunction arrow && arrow.HasOwnThis)
+        {
+            var boundArrow = arrow.Bind(NormalizeBoundThis(arrow.IsStrict, _thisArg, interpreter)!);
+            return boundArrow.Call(interpreter, combinedArgs);
+        }
+
         if (!_ignoreThisArg && _thisArg != null)
         {
-            if (_target is SharpTSFunction fn)
-            {
-                // For regular functions, we need to invoke with proper 'this' binding
-                // Since SharpTSFunction.Bind requires SharpTSInstance, we need a workaround
-                // We'll create a special environment handling in the BoundFunction call
-                var boundFn = CreateBoundSharpTSFunction(fn, _thisArg, interpreter);
-                return boundFn.Call(interpreter, combinedArgs);
-            }
-
-            if (_target is SharpTSArrowFunction arrow && arrow.HasOwnThis)
-            {
-                var boundArrow = arrow.Bind(arrow.IsStrict ? _thisArg : BuiltInConstructorFactory.ToObject(_thisArg, interpreter)!);
-                return boundArrow.Call(interpreter, combinedArgs);
-            }
-
             // Async function expressions (HasOwnThis) and async function
             // declarations rebind 'this'; true async arrows capture lexically
             // and fall through to the unbound target call below.
@@ -694,9 +690,16 @@ public class BoundFunction : ISharpTSCallable
     /// <summary>
     /// Creates a SharpTSFunction-like callable that binds 'this' to any object.
     /// </summary>
-    private static ISharpTSCallable CreateBoundSharpTSFunction(SharpTSFunction fn, object thisArg, Interpreter interpreter)
+    private static ISharpTSCallable CreateBoundSharpTSFunction(SharpTSFunction fn, object? thisArg, Interpreter interpreter)
     {
-        return fn.BindThis(fn.IsStrict ? thisArg : BuiltInConstructorFactory.ToObject(thisArg, interpreter));
+        return fn.BindThis(NormalizeBoundThis(fn.IsStrict, thisArg, interpreter));
+    }
+
+    private static object? NormalizeBoundThis(bool strict, object? receiver, Interpreter interpreter)
+    {
+        if (strict) return receiver;
+        if (receiver is null or SharpTSUndefined) return interpreter.GlobalThis;
+        return BuiltInConstructorFactory.ToObject(receiver, interpreter);
     }
 
     private static ISharpTSCallable BindNativeReceiver(
