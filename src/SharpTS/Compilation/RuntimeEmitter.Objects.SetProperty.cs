@@ -3241,20 +3241,41 @@ public partial class RuntimeEmitter
             // Callable setters run even on frozen receivers. Missing setters
             // reject before the ordinary data/integrity checks.
             var arrayCheckFrozenLabel = il.DefineLabel();
+            var arrayCheckInheritedLabel = il.DefineLabel();
             var arrayDescLocal = il.DeclareLocal(inputs.DescriptorStorage.DescriptorType);
             il.Emit(OpCodes.Ldarg_0);
             il.Emit(OpCodes.Ldarg_1);
             il.Emit(OpCodes.Call, inputs.DescriptorStorage.GetPropertyDescriptor);
             il.Emit(OpCodes.Stloc, arrayDescLocal);
             il.Emit(OpCodes.Ldloc, arrayDescLocal);
-            il.Emit(OpCodes.Brfalse, arrayCheckFrozenLabel);
+            il.Emit(OpCodes.Brfalse, arrayCheckInheritedLabel);
             EmitArrayDescriptorSetPolicy(
                 il, inputs.DescriptorStorage, inputs.UndefinedType, inputs.InvokeMethodValue,
                 arrayDescLocal, arrayCheckFrozenLabel, arrayRejectLabel);
+            il.MarkLabel(arrayCheckInheritedLabel);
+            // Array length is an intrinsic own slot even without a PDS entry.
+            il.Emit(OpCodes.Ldarg_1);
+            il.Emit(OpCodes.Ldstr, "length");
+            il.Emit(OpCodes.Call, _types.StringOpEquality);
+            il.Emit(OpCodes.Brtrue, arrayCheckFrozenLabel);
+            EmitArrayIndexPrototypeSetPolicy(il,
+                new ArrayIndexPrototypeSetInputs(inputs.DescriptorStorage, inputs.InvokeMethodUnwrapped,
+                    inputs.InvokeMethodValue, inputs.ObjectDescriptors, inputs.ObjectPrototypes,
+                    inputs.ObjectRead, inputs.ProxySelected, inputs.ReflectAssignment,
+                    inputs.UndefinedType, inputs.NativeProxyRejection),
+                () => il.Emit(OpCodes.Ldarg_1), arrayCheckFrozenLabel, arrayRejectLabel);
             il.MarkLabel(arrayCheckFrozenLabel);
             il.Emit(OpCodes.Ldarg_0);
             il.Emit(OpCodes.Call, inputs.DescriptorStorage.IsFrozen);
-            il.Emit(OpCodes.Brfalse, arrayDoStoreLabel);
+            il.Emit(OpCodes.Brtrue, arrayRejectLabel);
+            il.Emit(OpCodes.Ldarg_1);
+            il.Emit(OpCodes.Ldstr, "length");
+            il.Emit(OpCodes.Call, _types.StringOpEquality);
+            il.Emit(OpCodes.Brtrue, arrayDoStoreLabel);
+            il.Emit(OpCodes.Ldarg_0);
+            il.Emit(OpCodes.Ldarg_1);
+            il.Emit(OpCodes.Call, inputs.DescriptorStorage.CanAddProperty);
+            il.Emit(OpCodes.Brtrue, arrayDoStoreLabel);
             il.MarkLabel(arrayRejectLabel);
             il.Emit(OpCodes.Ldarg_3);
             var arraySloppyReturnLabel = il.DefineLabel();
@@ -3670,14 +3691,16 @@ public partial class RuntimeEmitter
         // whose bounds/length policy applies only to array storage indices.
         var strictArrayParsedIndexLocal = il.DeclareLocal(_types.Int64);
         var strictArrayIndexedKeyLabel = il.DefineLabel();
+        var strictArrayNamedKeyLabel = il.DefineLabel();
         il.Emit(OpCodes.Ldloc, strictArrayKeyLocal);
         il.Emit(OpCodes.Ldloca, strictArrayParsedIndexLocal);
         il.Emit(OpCodes.Call, _types.GetMethod(
             _types.Int64, "TryParse", _types.String, _types.Int64.MakeByRefType()));
-        il.Emit(OpCodes.Brfalse, strictArrayIndexedKeyLabel);
+        il.Emit(OpCodes.Brfalse, strictArrayNamedKeyLabel);
         il.Emit(OpCodes.Ldloc, strictArrayParsedIndexLocal);
         il.Emit(OpCodes.Ldc_I8, 0L);
         il.Emit(OpCodes.Bge, strictArrayIndexedKeyLabel);
+        il.MarkLabel(strictArrayNamedKeyLabel);
         il.Emit(OpCodes.Ldarg_0);
         il.Emit(OpCodes.Ldloc, strictArrayKeyLocal);
         il.Emit(OpCodes.Ldarg_2);
