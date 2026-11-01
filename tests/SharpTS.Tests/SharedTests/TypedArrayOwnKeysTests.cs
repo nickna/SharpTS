@@ -39,4 +39,11 @@ public sealed class TypedArrayOwnKeysTests
         Assert.Empty(errors);
         Assert.Equal(expected, output);
     }
+
+    [Theory, MemberData(nameof(Cases))]
+    public void InterpretedKeysIncludePhysicalElementsBeforeNamedProperties(string name, string source, string expected)
+    {
+        Assert.NotEmpty(name);
+        Assert.Equal(expected, TestHarness.RunInterpreted(source));
+    }
 }
