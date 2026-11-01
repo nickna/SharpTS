@@ -693,7 +693,20 @@ public static class ReflectBuiltIns
                         keys.AddRange(json.GetSymbolPropertyNames().Cast<object?>());
                         break;
                     case SharpTSStringPrototype stringPrototype:
-                        keys.AddRange(stringPrototype.GetSymbolPropertyNames().Select(s => (object?)s));
+                        keys.AddRange(stringPrototype.OwnStringKeys().Cast<object?>());
+                        keys.AddRange(stringPrototype.GetSymbolPropertyNames().Cast<object?>());
+                        break;
+                    case SharpTSNumberPrototype numberPrototype:
+                        keys.AddRange(numberPrototype.OwnStringKeys().Cast<object?>());
+                        keys.AddRange(numberPrototype.GetSymbolPropertyNames().Cast<object?>());
+                        break;
+                    case SharpTSBooleanPrototype booleanPrototype:
+                        keys.AddRange(booleanPrototype.OwnStringKeys().Cast<object?>());
+                        keys.AddRange(booleanPrototype.GetSymbolPropertyNames().Cast<object?>());
+                        break;
+                    case SharpTSArrayPrototype arrayPrototype:
+                        keys.AddRange(arrayPrototype.OwnStringKeys().Cast<object?>());
+                        keys.AddRange(arrayPrototype.GetSymbolPropertyNames().Cast<object?>());
                         break;
                     case Dictionary<string, object?> dict:
                         keys.AddRange(dict.Keys.Select(k => (object?)k));

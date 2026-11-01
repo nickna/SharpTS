@@ -187,6 +187,8 @@ public sealed class SharpTSArrayPrototype : ISharpTSMutableBuiltIn, ISharpTSSymb
     public bool DeleteProperty(string name) => _overlay.DeleteProperty(name);
 
     public IEnumerable<string> OwnEnumerableKeys() => _overlay.OwnEnumerableKeys();
+    internal IEnumerable<string> OwnStringKeys() => _overlay.OwnVisibleStringKeys();
+    internal IEnumerable<SharpTSSymbol> GetSymbolPropertyNames() => _overlay.GetSymbolPropertyNames();
 
     // All Array.prototype methods now route through ArrayBuiltIns so instance
     // dispatch and generic call/apply share the same receiver semantics.

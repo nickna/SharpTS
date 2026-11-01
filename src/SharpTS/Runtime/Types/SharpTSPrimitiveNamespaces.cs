@@ -848,6 +848,8 @@ public sealed class SharpTSNumberPrototype : ISharpTSMutableBuiltIn, ISharpTSSym
         => _overlay.SetBySymbolStrict(symbol, value, strictMode);
 
     public IEnumerable<string> OwnEnumerableKeys() => _overlay.OwnEnumerableKeys();
+    internal IEnumerable<string> OwnStringKeys() => _overlay.OwnVisibleStringKeys();
+    internal IEnumerable<SharpTSSymbol> GetSymbolPropertyNames() => _overlay.GetSymbolPropertyNames();
 
     private static bool IsBuiltIn(string name)
         => name == "constructor" || NumberBuiltIns.GetPrototypeMethod(name) != null;
@@ -1133,6 +1135,8 @@ public sealed class SharpTSBooleanPrototype : ISharpTSMutableBuiltIn, ISharpTSSy
     public bool DeleteProperty(string name) => _overlay.DeleteProperty(name);
     public bool HasOwnProperty(string name) => _overlay.HasOwnProperty(name);
     public IEnumerable<string> OwnEnumerableKeys() => _overlay.OwnEnumerableKeys();
+    internal IEnumerable<string> OwnStringKeys() => _overlay.OwnVisibleStringKeys();
+    internal IEnumerable<SharpTSSymbol> GetSymbolPropertyNames() => _overlay.GetSymbolPropertyNames();
     public object? GetMember(string name)
     {
         if (_overlay.TryGetOverride(name, out var value)) return value;
