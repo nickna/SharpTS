@@ -526,6 +526,26 @@ public static partial class ObjectBuiltIns
                 continue;
             }
 
+            if (args[i] is SharpTSTypedArray typedArraySource)
+            {
+                var keys = typedArraySource.OwnStringKeys().Cast<object>()
+                    .Concat(typedArraySource.GetSymbolPropertyNames()).ToList();
+                foreach (var key in keys)
+                {
+                    var descriptor = key is SharpTSSymbol symbol
+                        ? typedArraySource.GetOwnPropertyDescriptor(symbol)
+                        : typedArraySource.GetOwnPropertyDescriptor((string)key);
+                    if (descriptor?.Enumerable != true) continue;
+                    if (key is SharpTSSymbol symbolKey)
+                        SetAssignedSymbol(interpreter, target, symbolKey,
+                            interpreter.GetSymbolPropertyValue(typedArraySource, symbolKey));
+                    else
+                        SetAssignedProperty(interpreter, target, (string)key,
+                            interpreter.GetPropertyValue(typedArraySource, (string)key));
+                }
+                continue;
+            }
+
             foreach (var entry in EnumerateOwnEnumerable(interpreter, args[i], "Object.assign"))
                 SetAssignedProperty(interpreter, target, entry.Key, entry.Value);
             switch (args[i])
