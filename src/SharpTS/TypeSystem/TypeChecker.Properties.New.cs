@@ -1366,7 +1366,7 @@ public partial class TypeChecker
             if (!inferred.ContainsKey(tp.Name))
             {
                 if (tp.Default != null)
-                    inferred[tp.Name] = tp.Default;
+                    inferred[tp.Name] = Substitute(tp.Default, inferred);
                 else
                     return null; // Cannot infer
             }
