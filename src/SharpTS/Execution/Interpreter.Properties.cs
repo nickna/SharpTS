@@ -814,6 +814,13 @@ public partial class Interpreter
         object? current = obj;
         for (int depth = 0; depth < 64 && current is not (null or SharpTSUndefined); depth++)
         {
+            if (current is SharpTSTypedArray typedArray)
+            {
+                if (TryReadDescriptor(typedArray.GetOwnPropertyDescriptor(symbol), receiver, out var value))
+                    return value;
+                current = ObjectBuiltIns.PrototypeOf(this, typedArray);
+                continue;
+            }
             if (current is VmInputPropertyView inputView && ReferenceEquals(symbol, SharpTSSymbol.ToStringTag))
                 return inputView.ReadToStringTag(receiver);
             if (current is SharpTSProxy proxy)
@@ -1167,6 +1174,12 @@ public partial class Interpreter
         {
             if (current is SharpTSProxy prototypeProxy)
                 return prototypeProxy.TrapHas(symbol, this);
+            if (current is SharpTSTypedArray typedArray)
+            {
+                if (typedArray.GetOwnPropertyDescriptor(symbol) is not null) return true;
+                current = ObjectBuiltIns.PrototypeOf(this, typedArray);
+                continue;
+            }
             if (TryGetPromiseConstructorSymbolProperties(current, out var intrinsicProperties))
             {
                 if (intrinsicProperties.GetOwnPropertyDescriptor(symbol) is not null) return true;

@@ -917,6 +917,10 @@ public static partial class ObjectBuiltIns
                             "Cannot redefine symbol property"));
                     }
                     return target;
+                case SharpTSTypedArray typedArray:
+                    if (!typedArray.DefineProperty(symKey, descriptor))
+                        throw new ThrowException(new SharpTSTypeError("Cannot redefine symbol property"));
+                    return target;
                 case SharpTSDate symDate:
                     if (!symDate.DefineProperty(symKey, descriptor))
                         throw new ThrowException(new SharpTSTypeError("Cannot redefine symbol property"));
@@ -1622,6 +1626,8 @@ public static partial class ObjectBuiltIns
                 return descriptor.ToObject();
             case SharpTSArray array when array.GetOwnPropertyDescriptor(key) is { } descriptor:
                 return descriptor.ToObject();
+            case SharpTSTypedArray typedArray when typedArray.GetOwnPropertyDescriptor(key) is { } descriptor:
+                return descriptor.ToObject();
             case SharpTSDate date when date.GetOwnPropertyDescriptor(key) is { } descriptor:
                 return descriptor.ToObject();
             case SharpTSMath math when math.GetOwnPropertyDescriptor(key) is { } descriptor:
@@ -1929,7 +1935,8 @@ public static partial class ObjectBuiltIns
             SharpTSClass klass => klass.OwnStaticStringKeys().Cast<object?>()
                 .Concat(klass.OwnStaticSymbolKeys()).ToList(),
             SharpTSInstance inst => inst.GetFieldNames().Cast<object?>().ToList(),
-            SharpTSTypedArray typedArray => typedArray.OwnStringKeys().Cast<object?>().ToList(),
+            SharpTSTypedArray typedArray => typedArray.OwnStringKeys().Cast<object?>()
+                .Concat(typedArray.GetSymbolPropertyNames()).ToList(),
             SharpTSArray arr => GetOwnPropertyNamesFromArray(arr),
             SharpTSMath math => math.OwnStringKeys().Cast<object?>()
                 .Concat(math.GetSymbolPropertyNames().Cast<object?>()).ToList(),
@@ -2546,6 +2553,7 @@ public static partial class ObjectBuiltIns
                 .OfType<SharpTSSymbol>().Cast<object?>().ToList(),
             SharpTSInstance inst => inst.GetSymbolPropertyNames().Select(s => (object?)s).ToList(),
             SharpTSArray array => array.GetSymbolPropertyNames().Select(s => (object?)s).ToList(),
+            SharpTSTypedArray typedArray => typedArray.GetSymbolPropertyNames().Cast<object?>().ToList(),
             SharpTSDate date => date.GetSymbolPropertyNames().Cast<object?>().ToList(),
             SharpTSMath math => math.GetSymbolPropertyNames().Select(s => (object?)s).ToList(),
             SharpTSStringPrototype stringPrototype

@@ -161,7 +161,7 @@ public partial class Interpreter
         if (arrayObjectKey || inputView is not null || globalTarget is not null || HasCanonicalIndexProperties(obj)
             || UsesPrimitivePrototypePropertyReads(obj)
             || UsesNonextensibleBuiltInPrototypeStringIndex(obj, index)
-            || UsesTypedArrayNamedStringIndex(obj, index)
+            || UsesTypedArrayOrdinaryIndex(obj, index)
             || obj is BuiltInMethod or SharpTSObject or SharpTSInstance)
         {
             object key = globalTarget is null ? ToPropertyKey(index) : globalTarget.Key;
@@ -386,7 +386,7 @@ public partial class Interpreter
         if (arrayObjectKey || inputView is not null || globalTarget is not null
             || UsesPrimitivePrototypePropertyReads(obj)
             || UsesNonextensibleBuiltInPrototypeStringIndex(obj, index)
-            || UsesTypedArrayNamedStringIndex(obj, index)
+            || UsesTypedArrayOrdinaryIndex(obj, index)
             || obj is ISharpTSOwnPropertyObject or BuiltInMethod or SharpTSObjectNamespace or SharpTSObjectPrototype)
         {
             object key = globalTarget is null ? ToPropertyKey(index) : globalTarget.Key;
@@ -1366,6 +1366,7 @@ public partial class Interpreter
             SharpTSClass klass => klass.DeleteStaticSymbolProperty(symbol, strictMode),
             SharpTSClassPrototype prototype => prototype.DeleteBySymbolStrict(symbol, strictMode),
             SharpTSArray array => array.DeleteBySymbolStrict(symbol, strictMode),
+            SharpTSTypedArray typedArray => typedArray.DeleteBySymbolStrict(symbol, strictMode),
             SharpTSDate date => date.DeleteBySymbolStrict(symbol, strictMode),
             SharpTSMath math => math.DeleteBySymbolStrict(symbol, strictMode),
             ISharpTSPrimitiveConstructor constructor => constructor.DeleteBySymbolStrict(symbol, strictMode),

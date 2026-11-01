@@ -50,6 +50,26 @@ public abstract class SharpTSTypedArray : ITypeCategorized
     internal bool DefineNamedProperty(string name, SharpTSPropertyDescriptor descriptor)
         => IsOrdinaryNamedPropertyKey(name) && GetOrdinaryProperties().DefineProperty(name, descriptor);
 
+    internal bool DefineProperty(SharpTSSymbol symbol, SharpTSPropertyDescriptor descriptor)
+        => GetOrdinaryProperties().DefineProperty(symbol, descriptor);
+
+    internal SharpTSPropertyDescriptor? GetOwnPropertyDescriptor(SharpTSSymbol symbol)
+    {
+        if (_ordinaryProperties is not { } properties) return null;
+        SynchronizeOrdinaryIntegrity(properties);
+        return properties.GetOwnPropertyDescriptor(symbol);
+    }
+
+    internal IEnumerable<SharpTSSymbol> GetSymbolPropertyNames()
+        => _ordinaryProperties?.GetSymbolPropertyNames() ?? [];
+
+    internal bool DeleteBySymbolStrict(SharpTSSymbol symbol, bool strictMode)
+    {
+        if (_ordinaryProperties is not { } properties) return true;
+        SynchronizeOrdinaryIntegrity(properties);
+        return properties.DeleteBySymbolStrict(symbol, strictMode);
+    }
+
     internal bool DeleteNamedProperty(string name, bool strictMode)
     {
         if (_ordinaryProperties is not { } properties) return true;

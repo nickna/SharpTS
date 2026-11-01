@@ -1802,6 +1802,7 @@ public class SharpTSProxy : ISharpTSCallable
                 break;
             case SharpTSTypedArray typedArray:
                 keys.AddRange(typedArray.OwnStringKeys());
+                keys.AddRange(typedArray.GetSymbolPropertyNames());
                 break;
             case Dictionary<string, object?> dict:
                 keys.AddRange(dict.Keys);

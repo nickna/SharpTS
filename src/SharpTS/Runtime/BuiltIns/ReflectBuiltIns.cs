@@ -549,6 +549,7 @@ public static class ReflectBuiltIns
                         SharpTSObject obj => obj.DefineProperty(symbolKey, descriptor),
                         SharpTSInstance inst => inst.DefineProperty(symbolKey, descriptor),
                         SharpTSArray array => array.DefineProperty(symbolKey, descriptor),
+                        SharpTSTypedArray typedArray => typedArray.DefineProperty(symbolKey, descriptor),
                         SharpTSClass klass => klass.DefineStaticSymbolProperty(symbolKey, descriptor),
                         SharpTSClassPrototype prototype => prototype.DefineSymbolProperty(symbolKey, descriptor),
                         SharpTSFunctionPrototype prototype => prototype.DefineProperty(symbolKey, descriptor),
@@ -677,6 +678,7 @@ public static class ReflectBuiltIns
                         break;
                     case SharpTSTypedArray typedArray:
                         keys.AddRange(typedArray.OwnStringKeys().Cast<object?>());
+                        keys.AddRange(typedArray.GetSymbolPropertyNames());
                         break;
                     case SharpTSInstance inst:
                         keys.AddRange(inst.GetFieldNames().Select(k => (object?)k));

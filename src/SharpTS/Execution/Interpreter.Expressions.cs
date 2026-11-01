@@ -1251,6 +1251,8 @@ public partial class Interpreter
 
         if (HasArrayObjectKey(obj, index))
             index = ToPropertyKey(index);
+        if (obj is SharpTSTypedArray && index is SharpTSSymbol typedArraySymbol)
+            return RuntimeValue.FromBoxed(GetSymbolPropertyValue(obj, typedArraySymbol));
         // Proxy: intercept index access via get trap
         if (obj is SharpTSProxy proxy)
         {
@@ -1705,10 +1707,10 @@ public partial class Interpreter
             return RuntimeValue.FromBoxed(value);
         }
 
-        if (obj is SharpTSTypedArray typedArray && index is string namedKey
-            && typedArray.UsesOrdinaryNamedPropertyLookup(namedKey))
+        if (obj is SharpTSTypedArray typedArray && (index is SharpTSSymbol
+            || index is string namedKey && typedArray.UsesOrdinaryNamedPropertyLookup(namedKey)))
         {
-            SetOwnPropertyObjectValue(typedArray, namedKey, value, strictMode);
+            SetOwnPropertyObjectValue(typedArray, index, value, strictMode);
             return RuntimeValue.FromBoxed(value);
         }
 

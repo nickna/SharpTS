@@ -219,7 +219,7 @@ public partial class Interpreter
         }
         if (HasCanonicalIndexProperties(obj) || UsesPrimitivePrototypePropertyReads(obj)
             || UsesNonextensibleBuiltInPrototypeStringIndex(obj, index)
-            || UsesTypedArrayNamedStringIndex(obj, index))
+            || UsesTypedArrayOrdinaryIndex(obj, index))
         {
             value = GetOwnPropertyObjectValue(obj!, ToPropertyKey(index));
             return true;
@@ -265,7 +265,7 @@ public partial class Interpreter
             return true;
         }
         if (HasCanonicalIndexProperties(obj) || UsesNonextensibleBuiltInPrototypeStringIndex(obj, index)
-            || UsesTypedArrayNamedStringIndex(obj, index)
+            || UsesTypedArrayOrdinaryIndex(obj, index)
             || (UsesExplicitPrimitivePrototypeLink(obj) && index is string or SharpTSSymbol))
         {
             SetOwnPropertyObjectValue(obj!, ToPropertyKey(index), value, _environment.IsStrictMode);
@@ -297,9 +297,9 @@ public partial class Interpreter
     private static bool UsesNonextensibleBuiltInPrototypeStringIndex(object? target, object? key)
         => key is string && UsesNonextensibleBuiltInPrototypeWrite(target);
 
-    private static bool UsesTypedArrayNamedStringIndex(object? target, object? key)
-        => target is SharpTSTypedArray typedArray && key is string name
-            && typedArray.UsesOrdinaryNamedPropertyLookup(name);
+    private static bool UsesTypedArrayOrdinaryIndex(object? target, object? key)
+        => target is SharpTSTypedArray typedArray && (key is SharpTSSymbol
+            || key is string name && typedArray.UsesOrdinaryNamedPropertyLookup(name));
 
     private bool HasCanonicalIndexProperties(object? target)
         => target is ISharpTSOwnPropertyObject or SharpTSObject or SharpTSObjectNamespace or SharpTSObjectPrototype
