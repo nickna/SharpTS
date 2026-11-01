@@ -2558,6 +2558,8 @@ public static partial class ObjectBuiltIns
             SharpTSMath math => math.GetSymbolPropertyNames().Select(s => (object?)s).ToList(),
             SharpTSStringPrototype stringPrototype
                 => stringPrototype.GetSymbolPropertyNames().Select(s => (object?)s).ToList(),
+            SharpTSNumberPrototype numberPrototype => numberPrototype.GetSymbolPropertyNames().Cast<object?>().ToList(),
+            SharpTSBooleanPrototype booleanPrototype => booleanPrototype.GetSymbolPropertyNames().Cast<object?>().ToList(),
             SharpTSFunctionPrototype functionPrototype
                 => functionPrototype.GetSymbolPropertyNames().Cast<object?>().ToList(),
             SharpTSClassPrototype prototype => prototype.GetSymbolPropertyNames().Cast<object?>().ToList(),
