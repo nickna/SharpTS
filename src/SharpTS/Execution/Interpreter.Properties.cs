@@ -502,6 +502,11 @@ public partial class Interpreter
                 continue;
             }
 
+            if (current is SharpTSTypedArray physicalArray
+                && PropertySemantics.TryGetArrayIndex(name, out uint physicalIndex)
+                && physicalIndex < physicalArray.Length)
+                return physicalArray[(int)physicalIndex];
+
             if (current is SharpTSTypedArray typedArray && typedArray.UsesOrdinaryNamedPropertyLookup(name))
             {
                 if (TryReadDescriptor(typedArray.GetNamedOwnPropertyDescriptor(name), receiver, out var ownValue))

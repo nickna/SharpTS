@@ -236,8 +236,21 @@ public partial class RuntimeEmitter
         il.MarkLabel(noGetterFieldLabel);
         if (inputs.TypedArrays.Implementation is { } ownTypedArrays)
         {
+            var ownTypedValue = il.DefineLabel();
+            var physicalOwnData = il.DefineLabel();
             var otherOwnData = il.DefineLabel();
-            EmitTypedArrayLengthTargetGuard(ownTypedArrays, otherOwnData);
+            EmitTypedArrayLengthTargetGuard(ownTypedArrays, physicalOwnData);
+            il.Emit(OpCodes.Br, ownTypedValue);
+            il.MarkLabel(physicalOwnData);
+            var physicalKey = il.DeclareLocal(_types.String);
+            var physicalIndex = il.DeclareLocal(_types.Int32);
+            il.Emit(OpCodes.Ldloc, key);
+            il.Emit(OpCodes.Isinst, _types.String);
+            il.Emit(OpCodes.Stloc, physicalKey);
+            il.Emit(OpCodes.Ldloc, physicalKey);
+            il.Emit(OpCodes.Brfalse, otherOwnData);
+            EmitTypedArrayPhysicalIndexGuard(il, ownTypedArrays, physicalKey, physicalIndex, otherOwnData);
+            il.MarkLabel(ownTypedValue);
             il.Emit(OpCodes.Ldloc, descriptorLocal);
             il.Emit(OpCodes.Ldstr, "value");
             il.Emit(OpCodes.Call, inputs.GetProperty);
