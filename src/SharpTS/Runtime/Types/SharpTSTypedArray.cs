@@ -140,17 +140,17 @@ public abstract class SharpTSTypedArray : ITypeCategorized
     /// <summary>
     /// Gets the number of elements in this typed array.
     /// </summary>
-    public int Length => _length;
+    public int Length => IsArrayBufferDetached ? 0 : _length;
 
     /// <summary>
     /// Gets the byte offset within the underlying buffer.
     /// </summary>
-    public int ByteOffset => _byteOffset;
+    public int ByteOffset => IsArrayBufferDetached ? 0 : _byteOffset;
 
     /// <summary>
     /// Gets the length in bytes of this typed array.
     /// </summary>
-    public int ByteLength => _length * BytesPerElement;
+    public int ByteLength => Length * BytesPerElement;
 
     /// <summary>
     /// Gets whether this typed array is backed by a SharedArrayBuffer.
@@ -269,11 +269,20 @@ public abstract class SharpTSTypedArray : ITypeCategorized
     /// </summary>
     public abstract void SetVolatile(int index, object? value);
 
+    private bool IsArrayBufferDetached => _arrayBuffer?.IsDetached == true;
+
+    private void ValidateAttachedBuffer()
+    {
+        if (IsArrayBufferDetached)
+            throw new ThrowException(new SharpTSTypeError("Cannot operate on a detached ArrayBuffer"));
+    }
+
     /// <summary>
     /// Gets the byte offset for an element index.
     /// </summary>
     protected int GetByteIndex(int index)
     {
+        ValidateAttachedBuffer();
         if (index < 0 || index >= _length)
             throw new Exception("RangeError: Index out of bounds");
         return _byteOffset + index * BytesPerElement;
@@ -314,6 +323,7 @@ public abstract class SharpTSTypedArray : ITypeCategorized
     /// </summary>
     private (int start, int count) ClampRange(int begin, int? end)
     {
+        ValidateAttachedBuffer();
         begin = begin < 0 ? Math.Max(_length + begin, 0) : Math.Min(begin, _length);
         int actualEnd = end.HasValue
             ? (end.Value < 0 ? Math.Max(_length + end.Value, 0) : Math.Min(end.Value, _length))
@@ -352,8 +362,10 @@ public abstract class SharpTSTypedArray : ITypeCategorized
     /// </summary>
     public void Set(object source, int offset = 0)
     {
+        ValidateAttachedBuffer();
         if (source is SharpTSTypedArray typedSource)
         {
+            typedSource.ValidateAttachedBuffer();
             if (offset + typedSource.Length > _length)
                 throw new Exception("RangeError: Source too large for target");
 
@@ -397,6 +409,7 @@ public abstract class SharpTSTypedArray : ITypeCategorized
     /// </summary>
     public SharpTSTypedArray Fill(object? value, int start = 0, int? end = null)
     {
+        ValidateAttachedBuffer();
         int actualEnd = end ?? _length;
         start = Math.Max(0, Math.Min(start, _length));
         actualEnd = Math.Max(start, Math.Min(actualEnd, _length));
@@ -426,6 +439,7 @@ public abstract class SharpTSTypedArray : ITypeCategorized
     /// </summary>
     public SharpTSTypedArray CopyWithin(int target, int start, int? end = null)
     {
+        ValidateAttachedBuffer();
         int actualEnd = end ?? _length;
         target = Math.Max(0, Math.Min(target, _length));
         start = Math.Max(0, Math.Min(start, _length));
@@ -450,6 +464,7 @@ public abstract class SharpTSTypedArray : ITypeCategorized
     /// </summary>
     public SharpTSTypedArray Reverse()
     {
+        ValidateAttachedBuffer();
         int bpe = BytesPerElement;
         var buf = _buffer.AsSpan();
         Span<byte> temp = stackalloc byte[8]; // max BytesPerElement (Float64/BigInt64) is 8
@@ -493,6 +508,7 @@ public abstract class SharpTSTypedArray : ITypeCategorized
     /// </summary>
     public double IndexOf(object? value, int fromIndex = 0)
     {
+        ValidateAttachedBuffer();
         fromIndex = Math.Max(0, fromIndex);
 
         for (int i = fromIndex; i < _length; i++)
@@ -509,6 +525,7 @@ public abstract class SharpTSTypedArray : ITypeCategorized
     /// </summary>
     public double LastIndexOf(object? value, int? fromIndex = null)
     {
+        ValidateAttachedBuffer();
         int start = fromIndex ?? _length - 1;
         start = Math.Min(start, _length - 1);
 
@@ -534,6 +551,7 @@ public abstract class SharpTSTypedArray : ITypeCategorized
     /// </summary>
     public SharpTSArray ToArray()
     {
+        ValidateAttachedBuffer();
         var elements = new List<object?>(_length);
         for (int i = 0; i < _length; i++)
         {
@@ -635,6 +653,7 @@ public abstract class SharpTSTypedArray : ITypeCategorized
 
             "join" => BuiltInMethod.CreateV2("join", 0, 1, (_, _, args) =>
             {
+                ValidateAttachedBuffer();
                 string separator = args.Length > 0 ? args[0].ToObject()?.ToString() ?? "," : ",";
                 var parts = new string[_length];
                 for (int i = 0; i < _length; i++)
@@ -646,6 +665,7 @@ public abstract class SharpTSTypedArray : ITypeCategorized
 
             "toString" => BuiltInMethod.CreateV2("toString", 0, (_, _, _) =>
             {
+                ValidateAttachedBuffer();
                 var parts = new string[_length];
                 for (int i = 0; i < _length; i++)
                 {
