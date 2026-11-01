@@ -38,6 +38,9 @@ public partial class RuntimeEmitter
     {
         if (_features.UsesArrayReceiverScopes)
             EmitArrayReceiverScopedAdapters(typeBuilder, runtime);
+        // The function-value adapter must resolve the already-registered
+        // receiver scope rather than inherit an enclosing callback's receiver.
+        EmitArrayIncludesProto(typeBuilder, runtime);
         var method = runtime.ArrayOperations.PrototypePopulateMethod;
 
         var il = method.GetILGenerator();

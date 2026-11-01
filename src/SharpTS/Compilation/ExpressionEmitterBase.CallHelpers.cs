@@ -2786,7 +2786,7 @@ public abstract partial class ExpressionEmitterBase
                     IL.Emit(OpCodes.Ldnull);
                 // ArrayIncludes already returns a boxed bool — do not re-box
                 // (double-boxing reinterprets the object reference as a bool).
-                IL.Emit(OpCodes.Call, Ctx.Runtime!.ArrayOperations.Includes);
+                IL.Emit(OpCodes.Call, Ctx.Runtime!.ArrayOperations.WithReceiverScope(Ctx.Runtime.ArrayOperations.Includes));
                 break;
             case "indexOf":
             case "lastIndexOf":

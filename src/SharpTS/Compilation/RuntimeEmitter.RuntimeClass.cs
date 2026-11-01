@@ -2670,7 +2670,6 @@ public partial class RuntimeEmitter
                 runtime.Symbols.ToPrimitive, runtime.Symbols.GetStorage, runtime.ObjectRead.Property, runtime.Invocation.Method,
                 runtime.Operators.TypeOf, runtime.BoxedPrimitives.IsOfType, runtime.Errors.CreateException, runtime.Errors.TypeErrorConstructor));
         EmitArrayIncludes(typeBuilder, runtime);
-        EmitArrayIncludesProto(typeBuilder, runtime);
         EmitArrayIncludesDouble(typeBuilder, runtime);
         EmitArrayIndexOf(typeBuilder, runtime);
         EmitArrayLastIndexOf(typeBuilder, runtime);

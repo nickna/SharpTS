@@ -301,7 +301,7 @@ public partial class ILEmitter
                 // `true` almost always and flakily `false` when the pointer's
                 // low byte happened to be 0. (Contrast ArrayIndexOf below, which
                 // returns a native double, so its Box is correct.)
-                IL.Emit(OpCodes.Call, _ctx.Runtime!.ArrayOperations.Includes);
+                IL.Emit(OpCodes.Call, _ctx.Runtime!.ArrayOperations.WithReceiverScope(_ctx.Runtime.ArrayOperations.Includes));
                 break;
 
             case "indexOf":

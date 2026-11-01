@@ -52,7 +52,7 @@ public partial class RuntimeEmitter
         il.Emit(OpCodes.Ldc_I4_1);
         il.Emit(OpCodes.Ldelem_Ref);
         il.MarkLabel(afterFromIndex);
-        il.Emit(OpCodes.Call, runtime.ArrayOperations.Includes);
+        il.Emit(OpCodes.Call, runtime.ArrayOperations.WithReceiverScope(runtime.ArrayOperations.Includes));
         il.Emit(OpCodes.Ret);
     }
 
