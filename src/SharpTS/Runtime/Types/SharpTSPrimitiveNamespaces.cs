@@ -265,6 +265,7 @@ public sealed class SharpTSStringPrototype : ISharpTSMutableBuiltIn, ISharpTSSym
     public bool DeleteProperty(string name) => _overlay.DeleteProperty(name);
 
     public IEnumerable<string> OwnEnumerableKeys() => _overlay.OwnEnumerableKeys();
+    internal IEnumerable<string> OwnStringKeys() => _overlay.OwnVisibleStringKeys();
 
     public object? GetMember(string name)
     {

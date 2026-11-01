@@ -1970,6 +1970,7 @@ public static partial class ObjectBuiltIns
             SharpTSGlobalThis globalObject => globalObject.OwnStringKeys().Cast<object?>().ToList(),
             ISharpTSPrimitiveConstructor primitiveConstructor => primitiveConstructor.OwnStringKeys().Cast<object?>().ToList(),
             SharpTSFunctionPrototype functionPrototype => functionPrototype.OwnStringKeys().Cast<object?>().ToList(),
+            SharpTSStringPrototype stringPrototype => stringPrototype.OwnStringKeys().Cast<object?>().ToList(),
             SharpTSClassPrototype prototype => prototype.OwnStringKeys().Cast<object?>().ToList(),
             SharpTSClass klass => klass.OwnStaticStringKeys().Cast<object?>().ToList(),
             SharpTSProxy proxy => proxy.TrapOwnPropertyKeys(interpreter)
