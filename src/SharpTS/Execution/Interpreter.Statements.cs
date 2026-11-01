@@ -33,7 +33,13 @@ public partial class Interpreter
         private readonly Interpreter _interpreter;
         private readonly List<(object? Resource, ISharpTSCallable? Method, bool IsAsync, bool AwaitResult)> _resources = new();
 
-        public UsingTracker(Interpreter interpreter) => _interpreter = interpreter;
+        public RuntimeEnvironment OwnerScope { get; }
+
+        public UsingTracker(Interpreter interpreter, RuntimeEnvironment ownerScope)
+        {
+            _interpreter = interpreter;
+            OwnerScope = ownerScope;
+        }
 
         public void Add(object? resource, bool isAsync)
         {
@@ -69,6 +75,35 @@ public partial class Interpreter
 
             _resources.Clear();
             return currentError;
+        }
+
+        public async ValueTask<ExecutionResult> DisposeAllAsync(ExecutionResult completion)
+        {
+            var resources = _resources.ToArray();
+            _resources.Clear();
+            for (int index = resources.Length - 1; index >= 0; index--)
+            {
+                var (resource, method, isAsync, awaitResult) = resources[index];
+                try
+                {
+                    await _interpreter.DisposeResourceAsync(resource, method, isAsync, awaitResult);
+                }
+                catch (Runtime.Exceptions.WorkerTerminatedException) { throw; }
+                catch (Exception exception)
+                {
+                    bool guest = IsGuestUsingFailure(exception);
+                    object? error = _interpreter.TranslateException(exception);
+                    if (completion.Type == ExecutionResult.ResultType.Throw)
+                    {
+                        object? pending = completion.Value.ToObject();
+                        if (!completion.FromGuestThrow) pending = _interpreter.CoerceCaughtValueForBinding(pending);
+                        if (!guest) error = _interpreter.CoerceCaughtValueForBinding(error);
+                        completion = ExecutionResult.Throw(new SharpTSSuppressedError(error, pending));
+                    }
+                    else completion = ExecutionResult.Throw(error, fromGuestThrow: guest);
+                }
+            }
+            return completion;
         }
     }
 
@@ -177,7 +212,7 @@ public partial class Interpreter
     public ExecutionResult ExecuteBlock(List<Stmt> statements, RuntimeEnvironment environment)
     {
         // Create a tracker for using declarations in this scope
-        var tracker = new UsingTracker(this);
+        var tracker = new UsingTracker(this, environment);
         _usingTrackerStack.Push(tracker);
 
         object? pendingError = null;
@@ -516,6 +551,9 @@ public partial class Interpreter
             RuntimeEnvironment catchEnv = CreateCatchEnvironment(
                 tryCatch, errorValue, fromHostException);
 
+            if (tryCatch.CatchBlock.Any(statement => statement is Stmt.Using))
+                return (true, await ExecuteUsingHandlerBlockCore(ctx, tryCatch.CatchBlock, catchEnv));
+
             using (PushScope(catchEnv))
             {
                 ReserveLexicalDeclarations(tryCatch.CatchBlock);
@@ -559,6 +597,9 @@ public partial class Interpreter
     /// </summary>
     private async ValueTask<ExecutionResult> ExecuteHandlerBlockCore(IEvaluationContext ctx, List<Stmt> statements)
     {
+        if (statements.Any(statement => statement is Stmt.Using))
+            return await ExecuteUsingHandlerBlockCore(ctx, statements, CreateHandlerEnvironment());
+
         using var scope = PushScope(CreateHandlerEnvironment());
         ReserveLexicalDeclarations(statements);
         var completion = ExecutionResult.Success();
@@ -1698,15 +1739,15 @@ public partial class Interpreter
     {
         // Get or create the tracker for the current scope
         UsingTracker tracker;
-        if (_usingTrackerStack.Count > 0)
+        if (FindUsingTracker() is { } activeTracker)
         {
-            tracker = _usingTrackerStack.Peek();
+            tracker = activeTracker;
         }
         else
         {
             // If no tracker exists, create one for the current scope
             // This handles using declarations at module/script level
-            tracker = new UsingTracker(this);
+            tracker = new UsingTracker(this, _environment);
             _usingTrackerStack.Push(tracker);
         }
 

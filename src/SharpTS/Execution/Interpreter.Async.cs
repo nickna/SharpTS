@@ -84,6 +84,9 @@ public partial class Interpreter
 
     internal async Task<ExecutionResult> ExecuteBlockAsync(List<Stmt> statements, RuntimeEnvironment environment)
     {
+        if (statements.Any(statement => statement is Stmt.Using))
+            return await ExecuteUsingHandlerBlockCore(new AsyncEvaluationContext(this), statements, environment);
+
         using (PushScope(environment))
         {
             ReserveLexicalDeclarations(statements);
