@@ -1065,6 +1065,17 @@ public partial class Interpreter
                 continue;
             }
 
+            if (obj is SharpTSTypedArray typedArray)
+            {
+                if (typedArray.GetOwnPropertyDescriptor(name) is not null) return true;
+                if (!SharpTSTypedArray.IsOrdinaryNamedPropertyKey(name)) return false;
+                if (typedArray.HasExplicitPrototype)
+                {
+                    obj = ObjectBuiltIns.PrototypeOf(this, typedArray);
+                    continue;
+                }
+            }
+
             if (obj is SharpTSArray array)
             {
                 if (array.HasOwnProperty(name)) return true;
