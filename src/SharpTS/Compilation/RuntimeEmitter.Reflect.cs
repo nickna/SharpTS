@@ -40,7 +40,8 @@ public partial class RuntimeEmitter
     private readonly record struct ReflectSetInputs(ProxySetCallInputs ProxySet,
         MethodInfo ObjectGetOwnPropertyDescriptor, MethodInfo IsFrozen, MethodInfo HasOwnPropertyHelperMethod,
         MethodInfo ToPropertyKey, MethodInfo ObjectGetPrototypeOf, MethodInfo IsTruthy, MethodInfo InvokeMethodValue,
-        Type UndefinedType, MethodInfo GetProperty, MethodInfo SetProperty, MethodInfo IsSymbol);
+        Type UndefinedType, MethodInfo GetProperty, MethodInfo SetProperty, MethodInfo IsSymbol,
+        EmittedTypedArrayRuntime TypedArrays, MethodInfo HasPrototypeEntry);
 
     private readonly record struct ReflectSetPrototypeOfInputs(MethodInfo CreateException,
         ConstructorInfo TypeErrorConstructor, MethodInfo InvokeMethodUnwrapped, MethodInfo ObjectGetPrototypeOf,
@@ -652,6 +653,30 @@ public partial class RuntimeEmitter
         // retaining the original Receiver. This is how inherited read-only
         // accessors such as RegExp.prototype.global reject assignment.
         il.MarkLabel(targetDescriptorMissingLabel);
+        if (inputs.TypedArrays.Implementation is { } typedArrays)
+        {
+            var ordinaryPrototype = il.DefineLabel();
+            il.Emit(OpCodes.Ldarg_0);
+            il.Emit(OpCodes.Isinst, typedArrays.BaseType);
+            il.Emit(OpCodes.Brfalse, ordinaryPrototype);
+            il.Emit(OpCodes.Ldarg_0);
+            il.Emit(OpCodes.Call, inputs.HasPrototypeEntry);
+            il.Emit(OpCodes.Brtrue, ordinaryPrototype);
+            var readOnlyMetadata = il.DefineLabel();
+            foreach (string name in new[] { "length", "byteLength", "byteOffset", "buffer", "BYTES_PER_ELEMENT" })
+            {
+                il.Emit(OpCodes.Ldloc, keyLocal);
+                il.Emit(OpCodes.Isinst, _types.String);
+                il.Emit(OpCodes.Ldstr, name);
+                il.Emit(OpCodes.Call, _types.StringOpEquality);
+                il.Emit(OpCodes.Brtrue, readOnlyMetadata);
+            }
+            il.Emit(OpCodes.Br, ordinaryPrototype);
+            il.MarkLabel(readOnlyMetadata);
+            il.Emit(OpCodes.Ldc_I4_0);
+            il.Emit(OpCodes.Ret);
+            il.MarkLabel(ordinaryPrototype);
+        }
         var targetPrototypeLocal = il.DeclareLocal(_types.Object);
         il.Emit(OpCodes.Ldarg_0);
         il.Emit(OpCodes.Call, inputs.ObjectGetPrototypeOf);

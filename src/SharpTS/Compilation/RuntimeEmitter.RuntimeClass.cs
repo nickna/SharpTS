@@ -2472,7 +2472,9 @@ public partial class RuntimeEmitter
                     runtime.Sentinels.UndefinedType,
                     runtime.ObjectRead.Property,
                     runtime.ObjectWrite.Property,
-                    runtime.Symbols.IsSymbol
+                    runtime.Symbols.IsSymbol,
+                    runtime.TypedArrays,
+                    runtime.DescriptorStorage.HasPrototypeEntry
                 )
             );
             EmitReflectDefineProperty(

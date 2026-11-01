@@ -692,9 +692,10 @@ public class SharpTSProxy : ISharpTSCallable
 
         SharpTSPropertyDescriptor? ownDescriptor =
             GetOwnPropertyDescriptorForSet(interpreter, target, prop);
-        // The implicit TypedArray length is an inherited getter without a
-        // setter, not an own data field or a place to create an assignment.
-        if (ownDescriptor is null && prop is "length"
+        // Implicit TypedArray metadata is inherited and read-only. Own
+        // descriptors and explicit prototype chains retain their own behavior.
+        if (ownDescriptor is null
+            && prop is "length" or "byteLength" or "byteOffset" or "buffer" or "BYTES_PER_ELEMENT"
             && target is SharpTSTypedArray { HasExplicitPrototype: false })
             return false;
         if (ownDescriptor == null)
