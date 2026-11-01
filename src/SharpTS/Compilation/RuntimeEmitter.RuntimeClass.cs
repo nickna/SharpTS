@@ -637,9 +637,9 @@ public partial class RuntimeEmitter
             cctorIL.Emit(OpCodes.Stsfld, nonAutoAwaitPromisesField);
         }
 
-        // Link the built-in singletons (Math, JSON, Boolean/Number/String/Array
-        // prototypes) to Object.prototype via PDS. ECMA-262 declares each of
-        // these intrinsic objects has [[Prototype]] = %Object.prototype% — tests
+        // Give globalThis an ordinary inherited conversion path, and link Math,
+        // JSON and Boolean/Number/String/Array prototypes to Object.prototype
+        // via PDS. These intrinsic dictionaries inherit Object.prototype — tests
         // probe `Object.getPrototypeOf(Math) === Object.prototype` etc. PDS
         // entries are keyed by reference, so this only fires for the singleton
         // dictionaries themselves; user-built objects that mutate Math (e.g.
@@ -650,6 +650,7 @@ public partial class RuntimeEmitter
             cctorIL.Emit(OpCodes.Ldsfld, objectPrototypeField);
             cctorIL.Emit(OpCodes.Call, runtime.DescriptorStorage.SetPrototype);
         }
+        EmitLinkProto(globalThisSingletonField);
         EmitLinkProto(mathSingletonField);
         EmitLinkProto(jsonSingletonField);
         EmitLinkProto(booleanPrototypeField);
@@ -1404,18 +1405,13 @@ public partial class RuntimeEmitter
         // both bound by this point (ToJsString's Symbol arm uses them too).
         EmitStringifyCoerce(runtime.StringCoercion,
             runtime.Symbols.Type, runtime.ObjectStorage.Type, runtime.ObjectFields.Interface, runtime.Errors.CreateException, runtime.Errors.TypeErrorConstructor);
-        // ToNumber/ConvertToNumber bodies: emit AFTER GetProperty/InvokeMethodValue
-        // so their ToPrimitive(value, "number") on Dictionary/$Object args can
-        // call those helpers.
+        // Numeric conversion uses the forward-declared Reflect.Get helper to
+        // resolve object hooks while preserving their original receiver.
         runtime.ObjectRead.Index = typeBuilder.DefineMethod("GetIndex",
             MethodAttributes.Public | MethodAttributes.Static,
             _types.Object, [_types.Object, _types.Object]);
-        var numberInputs = new AbstractNumberInputs(runtime.Sentinels.UndefinedType, runtime.Symbols.Type, runtime.ObjectStorage.Type,
-                runtime.FunctionValues.Type, runtime.FunctionBindings.AnyType, runtime.ObjectFields.Interface,
-                runtime.DescriptorStorage.DescriptorType, runtime.DescriptorStorage.DescriptorGetter.GetGetMethod()!,
-                runtime.DescriptorStorage.DescriptorSetter.GetGetMethod()!, runtime.DescriptorStorage.DescriptorValue.GetGetMethod()!,
-                runtime.Symbols.ToPrimitive, runtime.Symbols.GetStorage, runtime.ObjectRead.Index, runtime.ObjectRead.Property, runtime.Invocation.Method,
-                runtime.Operators.TypeOf, runtime.StringCoercion.ToJsString, runtime.BoxedPrimitives.UnwrapIfBoxedOrdinary,
+        var numberInputs = new AbstractNumberInputs(runtime.Sentinels.UndefinedType, runtime.Symbols.Type,
+                runtime.ArrayStorage, runtime.Symbols.ToPrimitive, runtime.Reflect.Get, runtime.Invocation.Method, runtime.Operators.TypeOf,
                 runtime.Errors.CreateException, runtime.Errors.TypeErrorConstructor);
         EmitToNumber(typeBuilder, runtime.NumericCoercion, numberInputs);
         EmitConvertToNumber(typeBuilder, runtime.NumericCoercion, numberInputs, runtime.BigInt.ToNumber);
