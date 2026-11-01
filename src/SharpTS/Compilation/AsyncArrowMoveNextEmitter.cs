@@ -232,10 +232,7 @@ public partial class AsyncArrowMoveNextEmitter : AsyncFunctionMoveNextEmitter, I
         }
 
         // Emit the body
-        foreach (var stmt in body)
-        {
-            EmitStatement(stmt);
-        }
+        EmitAsyncUsingStatements(body);
 
         // Implicit completion: a body that runs off the end resolves with `undefined`.
         EmitImplicitReturnUndefined();

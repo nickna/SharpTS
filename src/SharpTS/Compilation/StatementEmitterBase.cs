@@ -1636,14 +1636,18 @@ public abstract partial class StatementEmitterBase : ExpressionEmitterBase
         try
         {
             EnterLoopBodyCellScope(b.Statements, cells);
-            foreach (var stmt in b.Statements)
-                EmitStatement(stmt);
+            EmitScopedStatements(b.Statements);
         }
         finally
         {
             ExitLoopBodyCellScope(cells);
             Ctx.Locals.ExitScope();
         }
+    }
+
+    protected virtual void EmitScopedStatements(List<Stmt> statements)
+    {
+        foreach (var statement in statements) EmitStatement(statement);
     }
 
     /// <summary>

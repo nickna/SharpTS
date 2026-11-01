@@ -19,14 +19,25 @@ public sealed class AsyncUsingHandlerDisposalTests
         yield return ["async-guest-prefix-identity", "/// <reference lib=\"esnext.disposable\" />\nconst marker=\"RangeError: guest\",log:string[]=[];async function run(){try{using resource={[Symbol.dispose](){log.push(\"dispose\")}};await 0;throw marker}catch(error){console.log(error===marker,typeof error,log.join(\",\"))}}run();", "true string dispose\n"];
         yield return ["async-ordinary-block", "/// <reference lib=\"esnext.disposable\" />\nasync function run(){const log:string[]=[];{using resource={[Symbol.dispose](){log.push(\"dispose\")}};}await 0;log.push(\"after\");console.log(log.join(\",\"))}run();", "dispose,after\n"];
         yield return ["async-function-body", "/// <reference lib=\"esnext.disposable\" />\nconst log:string[]=[];async function run(){using resource={[Symbol.dispose](){log.push(\"dispose\")}};await 0;log.push(\"body\")}run().then(()=>console.log(log.join(\",\")));", "body,dispose\n"];
+        yield return ["async-arrow-owner", "/// <reference lib=\"esnext.disposable\" />\nconst run=async()=>{const log:string[]=[];try{using resource={[Symbol.dispose](){log.push(\"dispose\")}};await 0;log.push(\"body\")}finally{log.push(\"finally\")}console.log(log.join(\",\"))};run();", "body,dispose,finally\n"];
+        yield return ["async-forward-capture-tdz", "/// <reference lib=\"esnext.disposable\" />\nasync function run(){const log:string[]=[];{const read=()=>resource;let caught=false;try{read()}catch(error){caught=error instanceof ReferenceError}using resource={id:3,[Symbol.dispose](){log.push(\"dispose\")}};await 0;console.log(caught,read()===resource,resource.id)}console.log(log.join(\",\"))}run();", "true true 3\ndispose\n"];
+        yield return ["initializer-await-and-pending-return", "/// <reference lib=\"esnext.disposable\" />\nconst log:string[]=[];async function run(){try{await using first=await Promise.resolve({async[Symbol.asyncDispose](){log.push(\"first-start\");await 0;log.push(\"first-end\")}});await using second={async[Symbol.asyncDispose](){log.push(\"second-start\");await 0;log.push(\"second-end\")}};log.push(\"body\");return 7}finally{log.push(\"finally\")}}run().then(value=>console.log(value,log.join(\",\")));", "7 body,second-start,second-end,first-start,first-end,finally\n"];
+        yield return ["loop-resource-values-after-resume", "/// <reference lib=\"esnext.disposable\" />\nconst log:string[]=[];async function run(){for(let id=0;id<2;id++){using resource={id,[Symbol.dispose](){log.push(\"d\"+this.id)}};await 0;log.push(\"b\"+resource.id)}}run().then(()=>console.log(log.join(\",\")));", "b0,d0,b1,d1\n"];
     }
 
-    // The independently reproduced compiled counterpart is #3356 and consumes
-    // this same corpus after its async-emitter repair. Do not change expectations.
     [Theory, MemberData(nameof(Cases))]
     public void InterpretedHandlersDisposeWithinTheirActualScope(string name, string source, string expected)
     {
         Assert.NotEmpty(name);
         Assert.Equal(expected, TestHarness.Run(source, ExecutionMode.Interpreted));
+    }
+
+    [Theory, MemberData(nameof(Cases))]
+    public void CompiledHandlersDisposeWithinTheirActualScope(string name, string source, string expected)
+    {
+        Assert.NotEmpty(name);
+        var (errors, output) = TestHarness.CompileVerifyAndRun(source);
+        Assert.Empty(errors);
+        Assert.Equal(expected, output);
     }
 }

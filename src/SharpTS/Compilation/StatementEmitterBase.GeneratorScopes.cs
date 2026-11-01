@@ -114,7 +114,7 @@ public abstract partial class StatementEmitterBase
     protected void EmitGeneratorScopedStatements(List<Stmt> statements, bool ordinaryHandler = false) =>
         WithGeneratorLexicalScope(statements, () =>
         {
-            foreach (var statement in statements) EmitStatement(statement);
+            EmitScopedStatements(statements);
         }, ordinaryHandler: ordinaryHandler);
 
     protected bool TryInitializeGeneratorCatchBinding(Token binding, LocalBuilder value, bool ordinaryHandler = false)

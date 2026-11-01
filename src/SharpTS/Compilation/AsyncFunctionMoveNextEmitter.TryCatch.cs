@@ -96,9 +96,9 @@ public abstract partial class AsyncFunctionMoveNextEmitter
     protected override void EmitTryCatch(Stmt.TryCatch t)
     {
         // Check if this try block contains any await points
-        bool hasAwaitsInTry = AnyStmtContainsSuspension(t.TryBlock);
-        bool hasAwaitsInCatch = t.CatchBlock != null && AnyStmtContainsSuspension(t.CatchBlock);
-        bool hasAwaitsInFinally = t.FinallyBlock != null && AnyStmtContainsSuspension(t.FinallyBlock);
+        bool hasAwaitsInTry = AnyStmtContainsSuspension(LowerAsyncUsingScopes(t.TryBlock));
+        bool hasAwaitsInCatch = t.CatchBlock != null && AnyStmtContainsSuspension(LowerAsyncUsingScopes(t.CatchBlock));
+        bool hasAwaitsInFinally = t.FinallyBlock != null && AnyStmtContainsSuspension(LowerAsyncUsingScopes(t.FinallyBlock));
 
         // Even a wholly synchronous finally needs the flag-based exit routing in
         // an async state machine.  Completing the Task from a return inside a
@@ -147,7 +147,7 @@ public abstract partial class AsyncFunctionMoveNextEmitter
             WithGeneratorLexicalScope(t.CatchBlock, () =>
             {
                 EmitGeneratorCatchBinding(t, caught);
-                foreach (var statement in t.CatchBlock) EmitStatement(statement);
+                EmitAsyncUsingStatements(t.CatchBlock);
             }, t, t.CatchParam);
         }
 
@@ -363,8 +363,7 @@ public abstract partial class AsyncFunctionMoveNextEmitter
     private void EmitTryBodyWithAwaitsCore(List<Stmt> tryBody, LocalBuilder caughtExceptionLocal, LocalBuilder exceptionPresentLocal)
         => EmitTryBodyWithAwaitsCore(() =>
         {
-            foreach (var stmt in tryBody)
-                EmitStatement(stmt);
+            EmitAsyncUsingStatements(tryBody);
         }, caughtExceptionLocal, exceptionPresentLocal);
 
     // The same resumable protected region can guard a generated iterator-close span.

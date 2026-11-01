@@ -420,6 +420,12 @@ public class ClosureAnalyzer : AstVisitorBase
                 DeclareVariable(lt.Name.Lexeme, isPerIterationBinding: true);
             else if (stmt is Stmt.Const ct)
                 DeclareVariable(ct.Name.Lexeme, isPerIterationBinding: true);
+            else if (stmt is Stmt.Using resource)
+            {
+                foreach (var binding in resource.Bindings)
+                    if (binding.Name is { } token)
+                        DeclareVariable(token.Lexeme, isPerIterationBinding: true);
+            }
             else if (stmt is Stmt.Class cl)
                 DeclareVariable(cl.Name.Lexeme, isPerIterationBinding: true);
         }
@@ -817,6 +823,14 @@ public class ClosureAnalyzer : AstVisitorBase
     {
         DeclareVariable(stmt.Name.Lexeme, isPerIterationBinding: true);
         base.VisitConst(stmt);
+    }
+
+    protected override void VisitUsing(Stmt.Using stmt)
+    {
+        foreach (var binding in stmt.Bindings)
+            if (binding.Name is { } token)
+                DeclareVariable(token.Lexeme, isPerIterationBinding: true);
+        base.VisitUsing(stmt);
     }
 
     protected override void VisitFunction(Stmt.Function stmt)

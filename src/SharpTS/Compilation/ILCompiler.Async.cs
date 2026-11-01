@@ -801,6 +801,26 @@ public partial class ILCompiler
                 AnalyzeArrowExprForAwaits(c.Initializer, ref awaitCount, ref seenAwait, declaredVariables, usedAfterAwait, declaredBeforeAwait);
                 break;
             }
+            case Stmt.Using resource:
+                foreach (var binding in resource.Bindings)
+                {
+                    if (binding.Name is { } token)
+                    {
+                        var name = ArrowStorageName(binding, token.Lexeme);
+                        declaredVariables.Add(name);
+                        if (!seenAwait) declaredBeforeAwait.Add(name);
+                    }
+                    AnalyzeArrowExprForAwaits(binding.Initializer, ref awaitCount, ref seenAwait,
+                        declaredVariables, usedAfterAwait, declaredBeforeAwait);
+                }
+                // This walker reserves a count, not numbered source await points.
+                // Each async resource adds one cleanup await after its scope body.
+                if (resource.IsAsync)
+                {
+                    awaitCount += resource.Bindings.Count;
+                    seenAwait = true;
+                }
+                break;
             case Stmt.Expression e:
                 AnalyzeArrowExprForAwaits(e.Expr, ref awaitCount, ref seenAwait, declaredVariables, usedAfterAwait, declaredBeforeAwait);
                 break;
