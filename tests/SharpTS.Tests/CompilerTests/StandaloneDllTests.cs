@@ -5177,6 +5177,26 @@ public partial class StandaloneDllTests
         },
         new object[]
         {
+            "array_numeric_hooks", "let trace='';const value:any=[9];value[Symbol.toPrimitive]=(hint:string)=>{trace+=hint;return 7;};console.log(isNaN(value),Number(value),+value,value*2,value|0,Math.abs(value),trace);",
+            "false 7 7 14 7 7 numbernumbernumbernumbernumbernumber\n", "main.ts"
+        },
+        new object[]
+        {
+            "nonfinite_arrays_and_omitted_argument", "function numeric(value:any){return Number(value);}function nan(value:any){return isNaN(value);}console.log(isNaN(),globalThis.isNaN());console.log(Number([Infinity]),Number([NaN]),isNaN([NaN]));console.log(numeric([Infinity]),numeric([NaN]),nan([NaN]));",
+            "true true\nInfinity NaN true\nInfinity NaN true\n", "main.ts"
+        },
+        new object[]
+        {
+            "function_and_date_hooks", "const fn:any=()=>1;fn.valueOf=()=>6;const date:any=new Date(0);console.log(Number(fn),isNaN(fn),Number(date),isNaN(date));",
+            "6 false 0 false\n", "main.ts"
+        },
+        new object[]
+        {
+            "numeric_whitespace", "const nel=String.fromCharCode(0x85);const bom=String.fromCharCode(0xfeff);console.log(isNaN(nel as any),Number(nel+'1'),Number(bom+'1'+bom),+bom,Number(String.fromCharCode(0x180e)),Number(String.fromCharCode(0x200b)));",
+            "true NaN 1 0 NaN NaN\n", "main.ts"
+        },
+        new object[]
+        {
             "boxed", "console.log(Number(Object(3)),Number(Object(false)),Number(Object('7')));",
             "3 0 7\n", "main.ts"
         },

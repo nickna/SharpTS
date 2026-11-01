@@ -26,6 +26,33 @@ public sealed class GlobalIsNaNValueTests
     }
 
     [Theory, ModeData]
+    public void GlobalIsNaNReturnsTrueWhenTheArgumentIsOmitted(ExecutionMode mode)
+    {
+        var source = """
+            console.log(isNaN(), globalThis.isNaN());
+            """;
+
+        Assert.Equal(
+            "true true\n",
+            TestHarness.Run(source, mode));
+    }
+
+    [Theory, ModeData]
+    public void GlobalIsNaNPreservesNonFiniteNumericArrayLiteralElements(ExecutionMode mode)
+    {
+        var source = """
+            console.log(Number([Infinity]), Number([-Infinity]), Number([NaN]), isNaN([NaN] as any));
+            function toNumber(value: any) { return Number(value); }
+            function toIsNaN(value: any) { return isNaN(value); }
+            console.log(toNumber([Infinity]), toNumber([-Infinity]), toNumber([NaN]), toIsNaN([NaN]));
+            """;
+
+        Assert.Equal(
+            "Infinity -Infinity NaN true\nInfinity -Infinity NaN true\n",
+            TestHarness.Run(source, mode));
+    }
+
+    [Theory, ModeData]
     public void GlobalIsNaNConvertsObjectsInOrderAndPropagatesCoercionErrors(ExecutionMode mode)
     {
         var source = """
@@ -65,9 +92,8 @@ public sealed class GlobalIsNaNValueTests
             TestHarness.Run(source, mode));
     }
 
-    // Interpreted only: compiled numeric conversion skips array and boxed conversion hooks (nickna/SharpTS#2929).
-    [Fact]
-    public void GlobalIsNaNPreservesArrayAndBoxedConversionHooks()
+    [Theory, ModeData]
+    public void GlobalIsNaNPreservesArrayAndBoxedConversionHooks(ExecutionMode mode)
     {
         var source = """
             const a: any = [];
@@ -82,12 +108,11 @@ public sealed class GlobalIsNaNValueTests
 
         Assert.Equal(
             "true\ntrue\n",
-            TestHarness.Run(source, ExecutionMode.Interpreted));
+            TestHarness.Run(source, mode));
     }
 
-    // Interpreted only: compiled numeric string conversion trims .NET whitespace instead of ECMAScript whitespace (nickna/SharpTS#2930).
-    [Fact]
-    public void GlobalIsNaNUsesECMAScriptWhitespaceForTheNELCharacter()
+    [Theory, ModeData]
+    public void GlobalIsNaNUsesECMAScriptWhitespaceForTheNELCharacter(ExecutionMode mode)
     {
         var source = """
             const nel = String.fromCharCode(0x85);
@@ -96,12 +121,11 @@ public sealed class GlobalIsNaNValueTests
 
         Assert.Equal(
             "true true\n",
-            TestHarness.Run(source, ExecutionMode.Interpreted));
+            TestHarness.Run(source, mode));
     }
 
-    // Interpreted only: compiled numeric conversion skips array conversion hooks (nickna/SharpTS#2929).
-    [Fact]
-    public void GlobalIsNaNHonorsArrayConversionHooks()
+    [Theory, ModeData]
+    public void GlobalIsNaNHonorsArrayConversionHooks(ExecutionMode mode)
     {
         var source = """
             let trace = "";
@@ -149,7 +173,7 @@ public sealed class GlobalIsNaNValueTests
 
         Assert.Equal(
             "function true NaN pp\nfalse 7 pp\nfalse 5 pp\nTypeError true p\ntrue NaN\nfalse 7\ntrue NaN\nfalse 5\nTypeError true\nfalse 0\ntrue number;\n",
-            TestHarness.Run(source, ExecutionMode.Interpreted));
+            TestHarness.Run(source, mode));
     }
 
     [Theory, ModeData]
@@ -212,9 +236,8 @@ public sealed class GlobalIsNaNValueTests
             TestHarness.Run(source, mode));
     }
 
-    // Interpreted only: compiled numeric conversion skips conversion hooks on other fast-path object kinds (nickna/SharpTS#2929).
-    [Fact]
-    public void GlobalIsNaNHonorsConversionHooksOnOtherFastPathKinds()
+    [Theory, ModeData]
+    public void GlobalIsNaNHonorsConversionHooksOnOtherFastPathKinds(ExecutionMode mode)
     {
         var source = """
             let trace = "";
@@ -281,12 +304,187 @@ public sealed class GlobalIsNaNValueTests
 
         Assert.Equal(
             "function false 7\ntrue NaN\ntrue NaN\nfunction false 7\nfalse 7\ntrue NaN\nfalse 0\nfalse 42\nfunction false 7\ntrue NaN\ntrue NaN\ntrue NaN\nfalse 0\nfalse 0\nfalse 0\n",
-            TestHarness.Run(source, ExecutionMode.Interpreted));
+            TestHarness.Run(source, mode));
     }
 
-    // Interpreted only: compiled numeric conversion skips conversion hooks on arrays and other fast-path object kinds (nickna/SharpTS#2929).
+    [Theory, ModeData]
+    public void GlobalIsNaNHonorsClassConstructorConversionHooks(ExecutionMode mode)
+    {
+        var source = """
+            class Box {}
+            const constructor: any = Box;
+            let trace = "";
+            constructor[Symbol.toPrimitive] = (hint: string) => { trace += hint + ";"; return 7; };
+            console.log(isNaN(constructor), Number(constructor), trace);
+            class Fallback {}
+            const fallback: any = Fallback;
+            trace = "";
+            fallback.valueOf = () => { trace += "v"; return {}; };
+            fallback.toString = () => { trace += "s"; return "bad"; };
+            console.log(isNaN(fallback), Number(fallback), trace);
+            """;
+
+        Assert.Equal(
+            "false 7 number;number;\ntrue NaN vsvs\n",
+            TestHarness.Run(source, mode));
+    }
+
+    [Theory, ModeData]
+    public void GlobalIsNaNHonorsNativeObjectConversionHooks(ExecutionMode mode)
+    {
+        var source = """
+            const factories: any[] = [() => new Map(), () => new Set(), () => /x/, () => Promise.resolve(1)];
+            for (const factory of factories) {
+                const original: any = factory();
+                console.log(isNaN(original), Number(original));
+                const exotic: any = factory();
+                exotic[Symbol.toPrimitive] = () => 9;
+                console.log(isNaN(exotic), Number(exotic));
+                const ordinary: any = factory();
+                Object.defineProperty(ordinary, "valueOf", { configurable: true, value: () => 7 });
+                console.log(isNaN(ordinary), Number(ordinary));
+            }
+            """;
+
+        Assert.Equal(
+            "true NaN\nfalse 9\nfalse 7\ntrue NaN\nfalse 9\nfalse 7\ntrue NaN\nfalse 9\nfalse 7\ntrue NaN\nfalse 9\nfalse 7\n",
+            TestHarness.Run(source, mode));
+    }
+
+    // Compiled only: interpreter globalThis lacks the Object.prototype conversion chain and own symbol-property support.
     [Fact]
-    public void GlobalIsNaNTracesConversionOrderAndHint()
+    public void GlobalIsNaNPreservesGlobalObjectDefaultAndCustomConversions()
+    {
+        var source = """
+            const root: any = globalThis;
+            console.log(Number(root), isNaN(root));
+            const exoticDescriptor: any = Object.getOwnPropertyDescriptor(root, Symbol.toPrimitive);
+            const ordinaryDescriptor: any = Object.getOwnPropertyDescriptor(root, "valueOf");
+            try {
+                Object.defineProperty(root, Symbol.toPrimitive, { configurable: true, value: () => 9 });
+                console.log(Number(root), isNaN(root));
+                delete root[Symbol.toPrimitive];
+                Object.defineProperty(root, "valueOf", { configurable: true, value: () => 7 });
+                console.log(Number(root), isNaN(root));
+            } finally {
+                if (exoticDescriptor === undefined) delete root[Symbol.toPrimitive];
+                else Object.defineProperty(root, Symbol.toPrimitive, exoticDescriptor);
+                if (ordinaryDescriptor === undefined) delete root.valueOf;
+                else Object.defineProperty(root, "valueOf", ordinaryDescriptor);
+            }
+            console.log(Number(root), isNaN(root));
+            """;
+
+        Assert.Equal(
+            "NaN true\n9 false\n7 false\nNaN true\n",
+            TestHarness.Run(source, ExecutionMode.Compiled));
+    }
+
+    // Compiled only: interpreter typed arrays cannot store own Symbol.toPrimitive properties.
+    [Fact]
+    public void GlobalIsNaNHonorsTypedArrayExoticConversionHooks()
+    {
+        var source = """
+            const value: any = new Uint8Array([1]);
+            value[Symbol.toPrimitive] = () => 9;
+            console.log(isNaN(value), Number(value));
+            """;
+
+        Assert.Equal(
+            "false 9\n",
+            TestHarness.Run(source, ExecutionMode.Compiled));
+    }
+
+    [Theory, ModeData]
+    public void GlobalIsNaNPropagatesExoticConversionErrorsAcrossObjectKinds(ExecutionMode mode)
+    {
+        var source = """
+            class Box {}
+            const marker = {};
+            const values: any[] = [[], function () {}, (function () { return arguments; })(),
+                new Number(1), new Box(), Box, new Date(0)];
+            for (const value of values) {
+                let trace = "";
+                Object.defineProperty(value, Symbol.toPrimitive, {
+                    configurable: true,
+                    get() {
+                        trace += "g";
+                        return (hint: string) => { trace += hint; throw marker; };
+                    }
+                });
+                try { console.log(isNaN(value)); }
+                catch (error) { console.log(error === marker, trace); }
+            }
+            """;
+
+        Assert.Equal(
+            "true gnumber\ntrue gnumber\ntrue gnumber\ntrue gnumber\ntrue gnumber\ntrue gnumber\ntrue gnumber\n",
+            TestHarness.Run(source, mode));
+    }
+
+    [Theory, ModeData]
+    public void GlobalIsNaNRejectsObjectConversionResultsAndAcceptsNull(ExecutionMode mode)
+    {
+        var source = """
+            class Result {}
+            const objectResults: any[] = [[], function () {}, Result, new Date(0)];
+            for (const result of objectResults) {
+                const exotic: any = {};
+                exotic[Symbol.toPrimitive] = () => result;
+                try { console.log(isNaN(exotic)); }
+                catch (error) { console.log(error.name, error instanceof TypeError); }
+                const ordinary: any = {
+                    valueOf() { return result; },
+                    toString() { return "5"; }
+                };
+                console.log(isNaN(ordinary), Number(ordinary));
+                ordinary.toString = () => result;
+                try { console.log(isNaN(ordinary)); }
+                catch (error) { console.log(error.name, error instanceof TypeError); }
+            }
+            const exoticNull: any = {};
+            exoticNull[Symbol.toPrimitive] = () => null;
+            console.log(isNaN(exoticNull), Number(exoticNull));
+            const ordinaryNull: any = { valueOf() { return null; } };
+            console.log(isNaN(ordinaryNull), Number(ordinaryNull));
+            """;
+
+        Assert.Equal(
+            "TypeError true\nfalse 5\nTypeError true\nTypeError true\nfalse 5\nTypeError true\nTypeError true\nfalse 5\nTypeError true\nTypeError true\nfalse 5\nTypeError true\nfalse 0\nfalse 0\n",
+            TestHarness.Run(source, mode));
+    }
+
+    [Theory, ModeData]
+    public void GlobalIsNaNPreservesArrayAndArgumentsReceiversForInheritedConversionGetters(ExecutionMode mode)
+    {
+        var source = """
+            const args: any = (function () { return arguments; })();
+            const receivers: any[] = [[], args];
+            for (const receiver of receivers) {
+                let trace = "";
+                const descriptor: any = Object.getOwnPropertyDescriptor(Object.prototype, "valueOf");
+                try {
+                    Object.defineProperty(Object.prototype, "valueOf", {
+                        configurable: true,
+                        get() {
+                            trace += "g" + String(this === receiver) + ";";
+                            return function () { trace += "v" + String(this === receiver) + ";"; return 7; };
+                        }
+                    });
+                    console.log(isNaN(receiver), Number(receiver), trace);
+                } finally {
+                    Object.defineProperty(Object.prototype, "valueOf", descriptor);
+                }
+            }
+            """;
+
+        Assert.Equal(
+            "false 7 gtrue;vtrue;gtrue;vtrue;\nfalse 7 gtrue;vtrue;gtrue;vtrue;\n",
+            TestHarness.Run(source, mode));
+    }
+
+    [Theory, ModeData]
+    public void GlobalIsNaNTracesConversionOrderAndHint(ExecutionMode mode)
     {
         var source = """
             let trace = "";
@@ -307,12 +505,11 @@ public sealed class GlobalIsNaNValueTests
 
         Assert.Equal(
             "false vs\nfalse vsvs\nfalse vsvsvs\n",
-            TestHarness.Run(source, ExecutionMode.Interpreted));
+            TestHarness.Run(source, mode));
     }
 
-    // Interpreted only: compiled numeric string conversion trims .NET whitespace instead of ECMAScript whitespace (nickna/SharpTS#2930).
-    [Fact]
-    public void GlobalIsNaNTrimsExactlyTheECMAScriptWhitespaceSet()
+    [Theory, ModeData]
+    public void GlobalIsNaNTrimsExactlyTheECMAScriptWhitespaceSet(ExecutionMode mode)
     {
         var source = """
             const whitespace: number[] = [
@@ -347,7 +544,7 @@ public sealed class GlobalIsNaNValueTests
 
         Assert.Equal(
             "0 mismatches\n",
-            TestHarness.Run(source, ExecutionMode.Interpreted));
+            TestHarness.Run(source, mode));
     }
 
     [Theory, ModeData]
@@ -441,9 +638,8 @@ public sealed class GlobalIsNaNValueTests
             TestHarness.Run(source, ExecutionMode.Interpreted));
     }
 
-    // Interpreted only: compiled array conversion hooks are tracked in #2929.
-    [Fact]
-    public void GlobalIsNaNReadsArrayExoticConversionAccessorExactlyOnce()
+    [Theory, ModeData]
+    public void GlobalIsNaNReadsArrayExoticConversionAccessorExactlyOnce(ExecutionMode mode)
     {
         var source = """
             let reads = 0;
@@ -461,12 +657,11 @@ public sealed class GlobalIsNaNValueTests
 
         Assert.Equal(
             "number\nfalse 1 1\nnumber\n7 2 2\n",
-            TestHarness.Run(source, ExecutionMode.Interpreted));
+            TestHarness.Run(source, mode));
     }
 
-    // Interpreted only: compiled array and boxed conversion hooks are tracked in #2929.
-    [Fact]
-    public void GlobalIsNaNSkipsNonCallableProxyConversionMethods()
+    [Theory, ModeData]
+    public void GlobalIsNaNSkipsNonCallableProxyConversionMethods(ExecutionMode mode)
     {
         var source = """
             const array: any = [1];
@@ -480,13 +675,12 @@ public sealed class GlobalIsNaNValueTests
 
         Assert.Equal(
             "false 1\ntrue NaN\n",
-            TestHarness.Run(source, ExecutionMode.Interpreted));
+            TestHarness.Run(source, mode));
     }
 
-    // Interpreted only: the shared numeric coercion hook machinery is interpreter-side (nickna/SharpTS#2929).
     // Pins: an arguments object's conversion hooks run exactly once — valueOf runs once (n increments to 1), both hooks return objects, so the coercion throws TypeError with n still 1.
-    [Fact]
-    public void GlobalIsNaNArgumentsHooksRunExactlyOnce()
+    [Theory, ModeData]
+    public void GlobalIsNaNArgumentsHooksRunExactlyOnce(ExecutionMode mode)
     {
         var source = """
             const args: any = (function () { return arguments; })();
@@ -499,13 +693,12 @@ public sealed class GlobalIsNaNValueTests
 
         Assert.Equal(
             "TypeError true 1\n",
-            TestHarness.Run(source, ExecutionMode.Interpreted));
+            TestHarness.Run(source, mode));
     }
 
-    // Interpreted only: the shared numeric coercion hook machinery is interpreter-side (nickna/SharpTS#2929).
     // Pins: an Object.prototype-level valueOf override is the resolved hook for an array and diverts the join fast path (Node: 42, then NaN with the "x" override).
-    [Fact]
-    public void GlobalIsNaNHonorsObjectPrototypeLevelValueOf()
+    [Theory, ModeData]
+    public void GlobalIsNaNHonorsObjectPrototypeLevelValueOf(ExecutionMode mode)
     {
         var source = """
             const original: any = Object.prototype.valueOf;
@@ -526,7 +719,7 @@ public sealed class GlobalIsNaNValueTests
 
         Assert.Equal(
             "false 42\ntrue NaN\n",
-            TestHarness.Run(source, ExecutionMode.Interpreted));
+            TestHarness.Run(source, mode));
     }
 
     public static IEnumerable<object[]> Cases()

@@ -273,7 +273,7 @@ public class GlobalFunctionHandler : ICallHandler
 
     private static bool EmitIsNaN(IEmitterContext emitter, System.Reflection.Emit.ILGenerator il, CompilationContext ctx, Expr.Call call)
     {
-        if (call.Arguments.Count > 0) { emitter.EmitExpression(call.Arguments[0]); emitter.EmitBoxIfNeeded(call.Arguments[0]); } else { il.Emit(System.Reflection.Emit.OpCodes.Ldnull); }
+        if (call.Arguments.Count > 0) { emitter.EmitExpression(call.Arguments[0]); emitter.EmitBoxIfNeeded(call.Arguments[0]); } else { il.Emit(System.Reflection.Emit.OpCodes.Ldsfld, ctx.Runtime!.Sentinels.UndefinedInstance); }
         il.Emit(System.Reflection.Emit.OpCodes.Call, ctx.Runtime!.Numbers.GlobalIsNaN);
         emitter.SetStackType(StackType.Boolean);
         return true;
