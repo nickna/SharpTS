@@ -3752,7 +3752,7 @@ public partial class StandaloneDllTests
             {
                 ["main.ts"] = "const value=new ArrayBuffer(4);const copy:any=structuredClone(value,{transfer:[value]});console.log(value.byteLength,copy.byteLength,copy===value);"
             },
-            "4 4 false\n", "main.ts", true
+            "0 4 false\n", "main.ts", true
         },
         new object[]
         {
