@@ -186,6 +186,8 @@ public static class ReflectBuiltIns
                                 || date.DeleteExtra(propertyKey));
                     case SharpTSClassPrototype prototype:
                         return RuntimeValue.FromBoolean(prototype.DeleteProperty(propertyKey));
+                    case SharpTSObjectPrototype prototype:
+                        return RuntimeValue.FromBoolean(prototype.DeleteProperty(propertyKey));
                     case SharpTSArrayPrototype prototype:
                         return RuntimeValue.FromBoolean(prototype.DeleteProperty(propertyKey));
                     case SharpTSStringPrototype prototype:
