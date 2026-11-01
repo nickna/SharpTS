@@ -159,6 +159,8 @@ public partial class Interpreter
         bool arrayObjectKey = HasArrayObjectKey(obj, index);
         var globalTarget = ResolveGlobalIndexTarget(obj, index);
         if (arrayObjectKey || inputView is not null || globalTarget is not null || HasCanonicalIndexProperties(obj)
+            || (obj is SharpTSArray && index is string arrayName
+                && !PropertySemantics.TryGetArrayIndex(arrayName, out _))
             || UsesPrimitivePrototypePropertyReads(obj)
             || UsesNonextensibleBuiltInPrototypeStringIndex(obj, index)
             || UsesTypedArrayOrdinaryIndex(obj, index)
