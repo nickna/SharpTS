@@ -276,7 +276,7 @@ public partial class Interpreter
         }
         if (HasCanonicalIndexProperties(obj) || UsesNonextensibleBuiltInPrototypeStringIndex(obj, index)
             || UsesTypedArrayOrdinaryIndex(obj, index)
-            || (UsesPrimitivePrototypePropertyReads(obj) && index is string)
+            || UsesPrimitivePrototypePropertyReads(obj)
             || (UsesExplicitPrimitivePrototypeLink(obj) && index is string or SharpTSSymbol))
         {
             SetOwnPropertyObjectValue(obj!, ToPropertyKey(index), value, _environment.IsStrictMode);
