@@ -9,7 +9,8 @@ public partial class RuntimeEmitter
     private readonly record struct StringPrototypeInputs(
         Type DescriptorType, PrototypeDescriptorInputs Descriptors, MethodInfo FunctionGetOrCreate,
         ConstructorInfo FunctionCtorWithCache, MethodInfo GetSymbolDictionary, FieldInfo SymbolIterator,
-        FieldInfo ObjectPrototype, MethodInfo SetPrototype);
+        FieldInfo ObjectPrototype, MethodInfo SetPrototype,
+        MethodInfo DescriptorWritableSetter, MethodInfo DescriptorConfigurableSetter);
 
     private readonly record struct StringPrototypeRegExpInputs(
         MethodBuilder Match, MethodBuilder MatchAll, MethodBuilder Search, MethodBuilder Replace, MethodBuilder ReplaceAll, MethodBuilder Split);
@@ -52,6 +53,38 @@ public partial class RuntimeEmitter
         EmitPrototypePopulateGuard(il, strings.PrototypeField);
 
         var strDescLocal = il.DeclareLocal(peers.DescriptorType);
+
+        if (NeedsObjectDefinitionBodies || _features.UsesStringPrototypeMutation || _features.UsesClassPrototypeMutation)
+        {
+            // String.prototype is the empty string wrapper. Its own length is
+            // readonly and nonconfigurable, unlike Array.prototype.length.
+            il.Emit(OpCodes.Ldsfld, strings.PrototypeField);
+            il.Emit(OpCodes.Ldstr, "length");
+            il.Emit(OpCodes.Ldc_R8, 0.0);
+            il.Emit(OpCodes.Box, _types.Double);
+            il.Emit(OpCodes.Callvirt, setItem);
+
+            il.Emit(OpCodes.Newobj, peers.Descriptors.Ctor);
+            il.Emit(OpCodes.Stloc, strDescLocal);
+            il.Emit(OpCodes.Ldloc, strDescLocal);
+            il.Emit(OpCodes.Ldc_R8, 0.0);
+            il.Emit(OpCodes.Box, _types.Double);
+            il.Emit(OpCodes.Callvirt, peers.Descriptors.ValueSetter);
+            il.Emit(OpCodes.Ldloc, strDescLocal);
+            il.Emit(OpCodes.Ldc_I4_0);
+            il.Emit(OpCodes.Callvirt, peers.DescriptorWritableSetter);
+            il.Emit(OpCodes.Ldloc, strDescLocal);
+            il.Emit(OpCodes.Ldc_I4_0);
+            il.Emit(OpCodes.Callvirt, peers.Descriptors.EnumerableSetter);
+            il.Emit(OpCodes.Ldloc, strDescLocal);
+            il.Emit(OpCodes.Ldc_I4_0);
+            il.Emit(OpCodes.Callvirt, peers.DescriptorConfigurableSetter);
+            il.Emit(OpCodes.Ldsfld, strings.PrototypeField);
+            il.Emit(OpCodes.Ldstr, "length");
+            il.Emit(OpCodes.Ldloc, strDescLocal);
+            il.Emit(OpCodes.Call, peers.Descriptors.DefineProperty);
+            il.Emit(OpCodes.Pop);
+        }
 
         // ECMA-262 22.1.3 String.prototype.constructor === String. Compiled
         // bare `String` resolves to typeof(string).

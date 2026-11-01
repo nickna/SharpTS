@@ -2864,7 +2864,8 @@ public partial class RuntimeEmitter
                 new PrototypeDescriptorInputs(runtime.DescriptorStorage.DescriptorConstructor, runtime.DescriptorStorage.DescriptorValue.GetSetMethod()!,
                     runtime.DescriptorStorage.DescriptorEnumerable.GetSetMethod()!, runtime.DescriptorStorage.DefineProperty),
                 runtime.FunctionConstruction.GetOrCreate, runtime.FunctionConstruction.CachedConstructor, runtime.Symbols.GetStorage,
-                runtime.Symbols.Iterator, runtime.ObjectPrototypes.Prototype, runtime.DescriptorStorage.SetPrototype),
+                runtime.Symbols.Iterator, runtime.ObjectPrototypes.Prototype, runtime.DescriptorStorage.SetPrototype,
+                runtime.DescriptorStorage.DescriptorWritable.GetSetMethod()!, runtime.DescriptorStorage.DescriptorConfigurable.GetSetMethod()!),
             runtime.RegExps.Implementation is not null ? new StringPrototypeRegExpInputs(runtime.RegExps.RequireImplementation().StringMatch, runtime.RegExps.RequireImplementation().StringMatchAll,
                 runtime.RegExps.RequireImplementation().StringSearch, runtime.RegExps.RequireImplementation().StringReplace, runtime.RegExps.RequireImplementation().StringReplaceAll, runtime.RegExps.RequireImplementation().StringSplitProto) : null);
         // Boolean.prototype population wires dedicated toString and valueOf helpers.

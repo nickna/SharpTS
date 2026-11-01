@@ -194,6 +194,8 @@ public sealed class SharpTSStringPrototype : ISharpTSMutableBuiltIn, ISharpTSSym
     // instance with its own overlay and method cache.
     internal SharpTSStringPrototype()
     {
+        _overlay.DefineProperty("length", new SharpTSPropertyDescriptor(
+            0d, writable: false, enumerable: false, configurable: false));
         var iterator = new StringPrototypeMethodWrapper(
             "[Symbol.iterator]",
             StringBuiltIns.GetPrototypeMethod("[Symbol.iterator]")!);
