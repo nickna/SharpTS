@@ -2137,6 +2137,7 @@ public partial class ILCompiler
         if (!EmitDebugSymbols)
         {
             _nativeReceiverBinding?.ValidateImage(image);
+            _nativeTypedArrayBuffers?.ValidateImage(image);
             return new CompilationArtifacts(image, null, null);
         }
 
@@ -2160,6 +2161,7 @@ public partial class ILCompiler
             image, pdb.ContentId, pdb.FormatVersion, pdbPath, pdb.Checksum, PdbEmitter.ChecksumAlgorithmName);
 
         _nativeReceiverBinding?.ValidateImage(image);
+        _nativeTypedArrayBuffers?.ValidateImage(image);
 
         return new CompilationArtifacts(image, pdb.Bytes, Path.GetFileName(pdbPath));
     }
