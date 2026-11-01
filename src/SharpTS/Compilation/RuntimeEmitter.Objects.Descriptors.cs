@@ -138,7 +138,8 @@ public partial class RuntimeEmitter
         Type UndefinedType,
         FunctionOwnPrototypeInputs OwnPrototype,
         GuestOwnQueryInputs? GuestOwnProperties = null,
-        NativeSourceOwnerCatalog? SourceOwners = null
+        NativeSourceOwnerCatalog? SourceOwners = null,
+        EmittedTypedArrayRuntime? TypedArrays = null
     );
 
     private readonly record struct SymbolKeyDescriptorLookupInputs(
@@ -1387,6 +1388,7 @@ public partial class RuntimeEmitter
 
         EmitGetOwnDescriptorPrimitiveStringLength(il, propNameLocal, resultDictLocal, endLabel);
         EmitGetOwnDescriptorPrimitiveStringIndex(il, propNameLocal, resultDictLocal, endLabel);
+        EmitGetOwnDescriptorTypedArrayIndex(il, inputs.TypedArrays, propNameLocal, resultDictLocal, endLabel);
 
         EmitGetOwnDescriptorGlobalReceiver(
             il,

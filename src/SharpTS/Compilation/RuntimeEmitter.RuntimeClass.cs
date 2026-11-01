@@ -941,7 +941,8 @@ public partial class RuntimeEmitter
                 runtime.Sentinels.UndefinedType,
                 new FunctionOwnPrototypeInputs(runtime.FunctionValues, runtime.FunctionAttributes, runtime.GeneratorPrototypes.Kind),
                 runtime.GuestOwnProperties == null ? null : new GuestOwnQueryInputs(runtime.GuestOwnProperties, runtime.Reflect.ToPropertyKey),
-                runtime.ClassInitialization.NativeStaticMemberPresence
+                runtime.ClassInitialization.NativeStaticMemberPresence,
+                TypedArrays: runtime.TypedArrays
             )
         );
         // propertyIsEnumerable shares HasOwn's plumbing (PDS lookup + dict
@@ -1883,7 +1884,8 @@ public partial class RuntimeEmitter
                 new FunctionOwnPrototypeInputs(runtime.FunctionValues, runtime.FunctionAttributes, runtime.GeneratorPrototypes.Kind),
                 runtime.ObjectState.IsBuiltinDeleted,
                 runtime.GuestOwnProperties,
-                DateConstructor: runtime.Dates.Implementation?.Type
+                DateConstructor: runtime.Dates.Implementation?.Type,
+                TypedArrays: runtime.TypedArrays
             )
         );
         // Object.assign consumes both halves of [[OwnPropertyKeys]], so make
@@ -1955,7 +1957,8 @@ public partial class RuntimeEmitter
                 runtime.Sentinels.UndefinedType,
                 new FunctionOwnPrototypeInputs(runtime.FunctionValues, runtime.FunctionAttributes, runtime.GeneratorPrototypes.Kind),
                 runtime.ObjectState.IsBuiltinDeleted,
-                runtime.GuestOwnProperties
+                runtime.GuestOwnProperties,
+                TypedArrays: runtime.TypedArrays
             )
         );
         EmitForInKeys(typeBuilder, new ForInInputs(runtime.ObjectKeys, runtime.ObjectPrototypes,
@@ -2222,7 +2225,8 @@ public partial class RuntimeEmitter
                 runtime.Sentinels.UndefinedType,
                 new FunctionOwnPrototypeInputs(runtime.FunctionValues, runtime.FunctionAttributes, runtime.GeneratorPrototypes.Kind),
                 runtime.GuestOwnProperties == null ? null : new GuestOwnQueryInputs(runtime.GuestOwnProperties, runtime.Reflect.ToPropertyKey),
-                SourceOwners: runtime.ClassInitialization.SourceOwners
+                SourceOwners: runtime.ClassInitialization.SourceOwners,
+                TypedArrays: runtime.TypedArrays
             )
         );
         EmitObjectDefineProperties(
