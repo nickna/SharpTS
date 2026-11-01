@@ -333,7 +333,9 @@ public sealed class NativeAotPublishTests
             {
                 Assert.False(preparation.CanReuse);
                 Assert.Empty(preparation.Key);
-                Assert.Contains("Acquiring the matching native cache lock", output.ToString());
+                // The optional deadline can expire before the worker reaches
+                // the lock phase; either path must report the timeout fallback.
+                Assert.Contains("Native cache preparation timed out; publishing without artifact reuse.", output.ToString());
                 Assert.Equal("preserve", File.ReadAllText(prior));
             }
             using var available = await NativePublishCache.LockAsync(root, key, CancellationToken.None);
