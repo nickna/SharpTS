@@ -1830,6 +1830,26 @@ public partial class TypeChecker
             _ => null
         };
         if (name is null) return null;
+        if (receiver is TypeInfo.TypedArray typedArray && index is TypeInfo.StringLiteral)
+        {
+            TypeInfo? declared = _globalDeclarationEnvironment?.GetTypeBinding($"{typedArray.ElementType}Array");
+            // The intrinsic receiver has no concrete buffer type argument.
+            // Preserve the declaration's constrained parameters in its member view.
+            if (declared is TypeInfo.GenericInterface generic)
+                declared = new TypeInfo.InstantiatedGeneric(generic, generic.TypeParams.Cast<TypeInfo>().ToList());
+            if (declared is TypeInfo.InstantiatedGeneric instantiated &&
+                FlattenInstantiatedInterface(instantiated) is { } flattened)
+                declared = flattened;
+            if (declared is TypeInfo.Interface @interface)
+                return ResolveNamedInterfaceMember(@interface, name);
+
+            // Intrinsic numeric properties remain available to the existing
+            // library-free compatibility profile; unknown names stay rejected.
+            if (!Options.RespectLoadedLibraries &&
+                name is "length" or "byteLength" or "byteOffset" or "BYTES_PER_ELEMENT")
+                return TypeInfo.Primitive.Number;
+            return null;
+        }
         if (receiver is TypeInfo.Date)
             return ResolveBuiltInMemberType(TypeCategory.Date, receiver, name);
         if (receiver is not TypeInfo.Instance instance) return null;
