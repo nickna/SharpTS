@@ -349,7 +349,7 @@ public sealed class StablePrimitiveStringIntrinsicTests
         const string source = """
             (String.prototype as any).indexOf = function(
                 search: any, position: any): number {
-                console.log("custom", this, search, position);
+                console.log("custom", String(this), search, position);
                 return 41;
             };
             const input: string = "abcdef";
@@ -374,7 +374,7 @@ public sealed class StablePrimitiveStringIntrinsicTests
         const string source = """
             (String.prototype as any).slice = function(
                 start: any, end: any): string {
-                console.log("custom", this, start, end);
+                console.log("custom", String(this), start, end);
                 return "xy";
             };
             const input: string = "abcdef";
