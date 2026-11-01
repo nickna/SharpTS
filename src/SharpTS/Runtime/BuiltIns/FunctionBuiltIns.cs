@@ -585,7 +585,7 @@ public class BoundFunction : ISharpTSCallable
         {
             if (_target is SharpTSFunction fn)
             {
-                var boundFn = CreateBoundSharpTSFunction(fn, _thisArg);
+                var boundFn = CreateBoundSharpTSFunction(fn, _thisArg, interpreter);
                 return boundFn.CallV2(interpreter, combined);
             }
 
@@ -653,7 +653,7 @@ public class BoundFunction : ISharpTSCallable
                 // For regular functions, we need to invoke with proper 'this' binding
                 // Since SharpTSFunction.Bind requires SharpTSInstance, we need a workaround
                 // We'll create a special environment handling in the BoundFunction call
-                var boundFn = CreateBoundSharpTSFunction(fn, _thisArg);
+                var boundFn = CreateBoundSharpTSFunction(fn, _thisArg, interpreter);
                 return boundFn.Call(interpreter, combinedArgs);
             }
 
@@ -694,9 +694,9 @@ public class BoundFunction : ISharpTSCallable
     /// <summary>
     /// Creates a SharpTSFunction-like callable that binds 'this' to any object.
     /// </summary>
-    private static ISharpTSCallable CreateBoundSharpTSFunction(SharpTSFunction fn, object thisArg)
+    private static ISharpTSCallable CreateBoundSharpTSFunction(SharpTSFunction fn, object thisArg, Interpreter interpreter)
     {
-        return fn.BindThis(thisArg);
+        return fn.BindThis(fn.IsStrict ? thisArg : BuiltInConstructorFactory.ToObject(thisArg, interpreter));
     }
 
     private static ISharpTSCallable BindNativeReceiver(
