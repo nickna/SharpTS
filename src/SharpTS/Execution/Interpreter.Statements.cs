@@ -454,7 +454,7 @@ public partial class Interpreter
             if (pendingResult.Type == ExecutionResult.ResultType.Throw)
             {
                 (exceptionHandled, pendingResult) = await HandleCatchBlockCore(
-                    ctx, tryCatch, pendingResult.Value, fromHostException: false);
+                    ctx, tryCatch, pendingResult.Value, fromHostException: !pendingResult.FromGuestThrow);
             }
         }
         catch (GeneratorReturnException grex)
@@ -593,7 +593,7 @@ public partial class Interpreter
             if (pendingResult.Type == ExecutionResult.ResultType.Throw)
             {
                 (exceptionHandled, pendingResult) = HandleCatchBlock(
-                    tryCatch, pendingResult.Value, fromHostException: false);
+                    tryCatch, pendingResult.Value, fromHostException: !pendingResult.FromGuestThrow);
             }
         }
         catch (GeneratorReturnException grex)
