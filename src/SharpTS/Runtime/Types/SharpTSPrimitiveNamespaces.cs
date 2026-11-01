@@ -393,11 +393,13 @@ internal sealed class StringPrototypeMethodWrapper : ISharpTSCallable, IBuiltInF
                 throw new ThrowException(new SharpTSTypeError(
                     $"String.prototype.{_name} called on incompatible receiver"));
             }
+            // These two intrinsics read [[StringData]] without invoking any
+            // conversion hooks. Generic String methods below perform ToString.
+            return _receiver is SharpTSObject stringObject
+                ? stringObject.GetProperty("__primitiveValue") as string ?? ""
+                : "";
         }
 
-        // ECMA-262 §22.1.3: String.prototype is itself a String object whose
-        // [[StringData]] is "", so `String.prototype.toString()` is "" rather than
-        // the object's "[object String]" stringification.
         var coerced = _receiver is SharpTSStringPrototype
             ? ""
             : interpreter.ToStringForBuiltInArgument(_receiver);
