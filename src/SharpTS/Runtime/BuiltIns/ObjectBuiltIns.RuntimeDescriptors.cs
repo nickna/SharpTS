@@ -101,6 +101,7 @@ public static partial class ObjectBuiltIns
             ISharpTSPrimitiveConstructor primitiveConstructor => primitiveConstructor.GetOwnPropertyDescriptor(propKey),
             SharpTSInstance inst => inst.GetOwnPropertyDescriptor(propKey),
             SharpTSArray arr => arr.GetOwnPropertyDescriptor(propKey),
+            SharpTSTypedArray typedArray => typedArray.GetOwnPropertyDescriptor(propKey),
             System.Collections.IDictionary idict => GetDescriptorFromIDictionary(idict, propKey),
             System.Collections.IList list => GetDescriptorFromList(list, propKey),
             _ => TryGetPropertyDescriptorViaReflection(target, propKey)
