@@ -29,7 +29,8 @@ public partial class RuntimeEmitter
         Type UndefinedType,
         MethodInfo? NativeProxyRejection,
         EmittedGuestOwnPropertyRuntime? GuestOwnProperties = null,
-        Type? DateConstructor = null
+        Type? DateConstructor = null,
+        EmittedTypedArrayRuntime? TypedArrays = null
     );
 
     private readonly record struct DeletePropertyCoreInputs(
@@ -53,7 +54,8 @@ public partial class RuntimeEmitter
         Type UndefinedType,
         MethodInfo? NativeProxyRejection,
         EmittedGuestOwnPropertyRuntime? GuestOwnProperties = null,
-        Type? DateConstructor = null
+        Type? DateConstructor = null,
+        EmittedTypedArrayRuntime? TypedArrays = null
     );
 
     private readonly record struct DeletePropertyStrictInputs(
@@ -77,7 +79,8 @@ public partial class RuntimeEmitter
         Type UndefinedType,
         MethodInfo? NativeProxyRejection,
         EmittedGuestOwnPropertyRuntime? GuestOwnProperties = null,
-        Type? DateConstructor = null
+        Type? DateConstructor = null,
+        EmittedTypedArrayRuntime? TypedArrays = null
     );
 
     /// <summary>
@@ -117,7 +120,8 @@ public partial class RuntimeEmitter
                 inputs.UndefinedType,
                 NativeProxyRejection: inputs.NativeProxyRejection,
                 GuestOwnProperties: inputs.GuestOwnProperties,
-                DateConstructor: inputs.DateConstructor
+                DateConstructor: inputs.DateConstructor,
+                TypedArrays: inputs.TypedArrays
             ),
             strict: false
         );
@@ -330,6 +334,18 @@ public partial class RuntimeEmitter
         }
 
         il.MarkLabel(notProxyLabel);
+
+        if (inputs.TypedArrays?.Implementation is { } typedArrays)
+        {
+            var notPhysicalElement = il.DefineLabel();
+            var key = il.DeclareLocal(_types.String);
+            var index = il.DeclareLocal(_types.Int32);
+            il.Emit(OpCodes.Ldarg_1);
+            il.Emit(OpCodes.Stloc, key);
+            EmitTypedArrayPhysicalIndexGuard(il, typedArrays, key, index, notPhysicalElement);
+            EmitDeleteFail("' of typed array");
+            il.MarkLabel(notPhysicalElement);
+        }
 
         // Standard global bindings are synthesized rather than stored in the
         // mutable global dictionary. Preserve their deletion state in the
@@ -1294,7 +1310,8 @@ public partial class RuntimeEmitter
                 inputs.UndefinedType,
                 NativeProxyRejection: inputs.NativeProxyRejection,
                 GuestOwnProperties: inputs.GuestOwnProperties,
-                DateConstructor: inputs.DateConstructor
+                DateConstructor: inputs.DateConstructor,
+                TypedArrays: inputs.TypedArrays
             ),
             strict: true
         );

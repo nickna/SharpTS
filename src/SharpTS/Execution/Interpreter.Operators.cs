@@ -1250,6 +1250,10 @@ public partial class Interpreter
             ISharpTSOwnPropertyObject ownPropertyObject => ownPropertyObject.OwnProperties.GetOwnPropertyDescriptor(name) is null
                 || ownPropertyObject.OwnProperties.DeletePropertyStrict(name, strictMode),
             SharpTSArray array => array.DeletePropertyStrict(name, strictMode),
+            SharpTSTypedArray typedArray when PropertySemantics.TryGetArrayIndex(name, out uint typedIndex)
+                && typedIndex < typedArray.Length => strictMode
+                    ? throw StrictModeErrors.TypeError($"Cannot delete typed-array element '{name}'")
+                    : false,
             SharpTSTypedArray typedArray when SharpTSTypedArray.IsOrdinaryNamedPropertyKey(name)
                 => typedArray.DeleteNamedProperty(name, strictMode),
             SharpTSObject tsObj => tsObj.DeletePropertyStrict(name, strictMode),

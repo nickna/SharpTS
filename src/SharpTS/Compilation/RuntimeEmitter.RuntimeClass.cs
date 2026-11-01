@@ -1519,7 +1519,8 @@ public partial class RuntimeEmitter
                 runtime.Sentinels.UndefinedType,
                 NativeProxyRejection: runtime.ReflectedMethods.NativeProxyRejection,
                 GuestOwnProperties: runtime.GuestOwnProperties,
-                DateConstructor: runtime.Dates.Implementation?.Type
+                DateConstructor: runtime.Dates.Implementation?.Type,
+                TypedArrays: runtime.TypedArrays
             )
         );
         EmitDeletePropertyStrict(
@@ -1546,7 +1547,8 @@ public partial class RuntimeEmitter
                 runtime.Sentinels.UndefinedType,
                 NativeProxyRejection: runtime.ReflectedMethods.NativeProxyRejection,
                 GuestOwnProperties: runtime.GuestOwnProperties,
-                DateConstructor: runtime.Dates.Implementation?.Type
+                DateConstructor: runtime.Dates.Implementation?.Type,
+                TypedArrays: runtime.TypedArrays
             )
         );
         // (Symbol helpers EmitGetSymbolDict + EmitIsSymbol now emitted earlier

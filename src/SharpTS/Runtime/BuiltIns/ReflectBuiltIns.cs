@@ -194,6 +194,9 @@ public static class ReflectBuiltIns
                         return RuntimeValue.FromBoolean(prototype.DeleteProperty(propertyKey));
                     case SharpTSBooleanPrototype prototype:
                         return RuntimeValue.FromBoolean(prototype.DeleteProperty(propertyKey));
+                    case SharpTSTypedArray typedArray when PropertySemantics.TryGetArrayIndex(propertyKey, out uint typedIndex)
+                        && typedIndex < typedArray.Length:
+                        return RuntimeValue.False;
                     case SharpTSTypedArray typedArray when SharpTSTypedArray.IsOrdinaryNamedPropertyKey(propertyKey):
                         return RuntimeValue.FromBoolean(typedArray.DeleteNamedProperty(propertyKey, false));
                     case SharpTSClass klass:
