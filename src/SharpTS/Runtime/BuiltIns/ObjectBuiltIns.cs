@@ -1315,8 +1315,7 @@ public static partial class ObjectBuiltIns
                     ?? GetBuiltInOwnPropertyDescriptor(interpreter, target, propertyKey),
             SharpTSInstance inst => inst.GetOwnPropertyDescriptor(propertyKey),
             SharpTSArray arr => arr.GetOwnPropertyDescriptor(propertyKey),
-            SharpTSTypedArray typedArray => typedArray.GetOwnPropertyDescriptor(propertyKey)
-                ?? (propertyKey == "length" ? null : GetBuiltInOwnPropertyDescriptor(interpreter, target, propertyKey)),
+            SharpTSTypedArray typedArray => typedArray.GetOwnPropertyDescriptor(propertyKey),
             SharpTSArrayPrototype arrayPrototype when !arrayPrototype.HasOwnProperty(propertyKey) => null,
             SharpTSArrayPrototype arrayPrototype => arrayPrototype.GetOwnPropertyDescriptor(propertyKey)
                 ?? GetBuiltInOwnPropertyDescriptor(interpreter, target, propertyKey),
