@@ -3108,10 +3108,24 @@ public partial class ILEmitter
                 }
             }
 
-            // idx = (int)i  (native-int fast path when the index is an integer loop counter, #928)
-            EmitIndexAsInt32(csi.Index);
+            // Preserve the original primitive Number once. Only a valid
+            // physical index can reach the existing unboxed accessors.
+            EmitExpressionAsDouble(csi.Index);
+            var numericIndex = IL.DeclareLocal(_ctx.Types.Double);
             var idxLocal = IL.DeclareLocal(_ctx.Types.Int32);
-            IL.Emit(OpCodes.Stloc, idxLocal);
+            IL.Emit(OpCodes.Stloc, numericIndex);
+            void LoadPhysicalLength()
+            {
+                if (directBacking is { } lengthBacking) IL.Emit(OpCodes.Ldloc, lengthBacking.LengthLocal);
+                else
+                {
+                    IL.Emit(OpCodes.Ldloc, recvLocal!);
+                    IL.Emit(OpCodes.Callvirt, _ctx.Runtime.TypedArrays.RequireImplementation().LengthGetter);
+                }
+            }
+            var missingRead = IL.DefineLabel();
+            var currentReady = IL.DefineLabel();
+            EmitTypedArrayNumericIndexGuard(numericIndex, idxLocal, missingRead, LoadPhysicalLength);
 
             // cur = direct backing read, or recv.GetUnboxed(idx) on the fallback path.
             if (directBacking is { } directRead)
@@ -3125,10 +3139,20 @@ public partial class ILEmitter
                 IL.Emit(OpCodes.Call, ctaGet);
             }
 
-            // result = cur OP v  (double)
-            EmitCompoundArithmeticDoubleOnStack(csi.Operator.Type, csi.Value);
+            IL.Emit(OpCodes.Br, currentReady);
+            IL.MarkLabel(missingRead);
+            // Numeric compound consumption converts the missing value to NaN.
+            IL.Emit(OpCodes.Ldc_R8, double.NaN);
+            IL.MarkLabel(currentReady);
+            SetStackType(StackType.Double);
+
+            // The RHS is still evaluated exactly once, after the element read.
+            EmitCompoundArithmeticDoubleOnStack(csi.Operator.Type, csi.Value,
+                bitwiseToInt32: _ctx.Runtime.NumericCoercion.JsNumberToInt32);
             var resLocal = IL.DeclareLocal(_ctx.Types.Double);
             IL.Emit(OpCodes.Stloc, resLocal);
+            var skipStore = IL.DefineLabel();
+            EmitTypedArrayNumericIndexGuard(numericIndex, idxLocal, skipStore, LoadPhysicalLength);
 
             if (directBacking is { } directWrite)
             {
@@ -3142,7 +3166,9 @@ public partial class ILEmitter
                 IL.Emit(OpCodes.Call, ctaSet);
             }
 
-            // The compound-assignment expression evaluates to the stored numeric result.
+            IL.MarkLabel(skipStore);
+            // Return the computed Number before element narrowing, including
+            // the result of an ignored invalid-index write.
             IL.Emit(OpCodes.Ldloc, resLocal);
             SetStackType(StackType.Double);
             return;
@@ -3261,16 +3287,20 @@ public partial class ILEmitter
     // Stack in: [cur (double)]. Applies `cur OP value` in native double space (JS bitwise ops route
     // through int32) and leaves the numeric result as a double. Shared by the boxed compound path
     // and the typed-array compound fast path so the two always agree on semantics.
-    private void EmitCompoundArithmeticDoubleOnStack(TokenType opType, Expr value)
+    private void EmitCompoundArithmeticDoubleOnStack(TokenType opType, Expr value, MethodInfo? bitwiseToInt32 = null)
     {
         bool isBitwise = opType is TokenType.AMPERSAND_EQUAL or TokenType.PIPE_EQUAL
             or TokenType.CARET_EQUAL or TokenType.LESS_LESS_EQUAL or TokenType.GREATER_GREATER_EQUAL;
 
         if (isBitwise)
         {
-            IL.Emit(OpCodes.Conv_I4);
+            // Typed-array missing reads introduce NaN; use the existing JS
+            // modulo conversion there. Other callers retain their prior path.
+            if (bitwiseToInt32 is not null) IL.Emit(OpCodes.Call, bitwiseToInt32);
+            else IL.Emit(OpCodes.Conv_I4);
             EmitExpressionAsDouble(value);
-            IL.Emit(OpCodes.Conv_I4);
+            if (bitwiseToInt32 is not null) IL.Emit(OpCodes.Call, bitwiseToInt32);
+            else IL.Emit(OpCodes.Conv_I4);
         }
         else
         {

@@ -37,28 +37,15 @@ public partial class ILEmitter
         IL.Emit(OpCodes.Stloc, numericIndex);
         var invalid = IL.DefineLabel();
         var done = IL.DefineLabel();
-        // Guard the original Number before narrowing. Primitive numeric -0 is
-        // property key "0"; NaN, fractions, infinities and large values are invalid.
-        IL.Emit(OpCodes.Ldloc, numericIndex);
-        IL.Emit(OpCodes.Ldc_R8, 0d);
-        IL.Emit(OpCodes.Blt_Un, invalid);
-        IL.Emit(OpCodes.Ldloc, numericIndex);
-        if (direct is { } lengthBacking)
-            IL.Emit(OpCodes.Ldloc, lengthBacking.LengthLocal);
-        else
+        EmitTypedArrayNumericIndexGuard(numericIndex, physicalIndex, invalid, () =>
         {
-            IL.Emit(OpCodes.Ldloc, receiver!);
-            IL.Emit(OpCodes.Callvirt, arrays.LengthGetter);
-        }
-        IL.Emit(OpCodes.Conv_R8);
-        IL.Emit(OpCodes.Bge_Un, invalid);
-        IL.Emit(OpCodes.Ldloc, numericIndex);
-        IL.Emit(OpCodes.Conv_I4);
-        IL.Emit(OpCodes.Stloc, physicalIndex);
-        IL.Emit(OpCodes.Ldloc, physicalIndex);
-        IL.Emit(OpCodes.Conv_R8);
-        IL.Emit(OpCodes.Ldloc, numericIndex);
-        IL.Emit(OpCodes.Bne_Un, invalid);
+            if (direct is { } lengthBacking) IL.Emit(OpCodes.Ldloc, lengthBacking.LengthLocal);
+            else
+            {
+                IL.Emit(OpCodes.Ldloc, receiver!);
+                IL.Emit(OpCodes.Callvirt, arrays.LengthGetter);
+            }
+        });
 
         if (direct is { } directRead)
             EmitDirectTypedArrayRead(directRead, physicalIndex);
@@ -77,5 +64,26 @@ public partial class ILEmitter
         IL.MarkLabel(done);
         SetStackType(numericConsumer ? StackType.Double : StackType.Unknown);
         return true;
+    }
+
+    // Empty stack at entry and at both exits. Validate the original Number
+    // before narrowing; callers supply only the intrinsic physical length.
+    private void EmitTypedArrayNumericIndexGuard(LocalBuilder numericIndex,
+        LocalBuilder physicalIndex, Label invalid, Action loadLength)
+    {
+        IL.Emit(OpCodes.Ldloc, numericIndex);
+        IL.Emit(OpCodes.Ldc_R8, 0d);
+        IL.Emit(OpCodes.Blt_Un, invalid);
+        IL.Emit(OpCodes.Ldloc, numericIndex);
+        loadLength();
+        IL.Emit(OpCodes.Conv_R8);
+        IL.Emit(OpCodes.Bge_Un, invalid);
+        IL.Emit(OpCodes.Ldloc, numericIndex);
+        IL.Emit(OpCodes.Conv_I4);
+        IL.Emit(OpCodes.Stloc, physicalIndex);
+        IL.Emit(OpCodes.Ldloc, physicalIndex);
+        IL.Emit(OpCodes.Conv_R8);
+        IL.Emit(OpCodes.Ldloc, numericIndex);
+        IL.Emit(OpCodes.Bne_Un, invalid);
     }
 }
