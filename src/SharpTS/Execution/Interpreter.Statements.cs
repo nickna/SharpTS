@@ -1709,7 +1709,10 @@ public partial class Interpreter
     /// Executes a 'using' or 'await using' declaration.
     /// Acquires the disposer before initializing the binding and retains it until scope exit.
     /// </summary>
-    private ExecutionResult ExecuteUsingDeclaration(Stmt.Using usingStmt)
+    private ExecutionResult ExecuteUsingDeclaration(Stmt.Using usingStmt) =>
+        ExecuteUsingDeclarationCore(_syncContext, usingStmt).GetAwaiter().GetResult();
+
+    private async ValueTask<ExecutionResult> ExecuteUsingDeclarationCore(IEvaluationContext context, Stmt.Using usingStmt)
     {
         // Get or create the tracker for the current scope
         UsingTracker tracker;
@@ -1727,7 +1730,7 @@ public partial class Interpreter
 
         foreach (var binding in usingStmt.Bindings)
         {
-            object? resource = Evaluate(binding.Initializer);
+            object? resource = (await context.EvaluateExprAsync(binding.Initializer)).ToObject();
 
             // Acquisition can invoke a getter or throw. Keep the lexical binding
             // uninitialized until that operation has completed successfully.
