@@ -212,7 +212,7 @@ public partial class Interpreter
             value = inputView.Read(name);
             return true;
         }
-        if (HasArrayObjectKey(obj, index))
+        if (UsesArrayRawIndexReference(obj, index))
         {
             value = GetOwnPropertyObjectValue(obj!, ToPropertyKey(index));
             return true;
@@ -227,11 +227,6 @@ public partial class Interpreter
             || UsesTypedArrayOrdinaryIndex(obj, index))
         {
             value = GetOwnPropertyObjectValue(obj!, ToPropertyKey(index));
-            return true;
-        }
-        if (obj is SharpTSArray array && index is double idx)
-        {
-            value = array.Get((int)idx);
             return true;
         }
         if (obj is DotNetInstance external && external.HasReadableIndexer)
@@ -264,7 +259,7 @@ public partial class Interpreter
             PerformIndexSet(inputView, index, value);
             return true;
         }
-        if (HasArrayObjectKey(obj, index))
+        if (UsesArrayRawIndexReference(obj, index))
         {
             PerformIndexSet(obj, index, value);
             return true;
@@ -282,11 +277,6 @@ public partial class Interpreter
             SetOwnPropertyObjectValue(obj!, ToPropertyKey(index), value, _environment.IsStrictMode);
             return true;
         }
-        if (obj is SharpTSArray array && index is double idx)
-        {
-            array.Set((int)idx, value);
-            return true;
-        }
         if (obj is DotNetInstance external && external.HasWritableIndexer)
         {
             external.SetIndex(index, value, this);
@@ -294,6 +284,11 @@ public partial class Interpreter
         }
         return false;
     }
+
+    // Compound/logical/update references retain the raw key until each phase.
+    // Raw numbers must become property keys before selecting physical storage.
+    private static bool UsesArrayRawIndexReference(object? target, object? key)
+        => target is SharpTSArray && (key is double || RuntimeValue.FromBoxed(key).IsObject);
 
     private static bool HasArrayObjectKey(object? target, object? key)
         => target is SharpTSArray && RuntimeValue.FromBoxed(key).IsObject;
