@@ -1250,7 +1250,8 @@ public partial class Interpreter
         if (HasArrayObjectKey(obj, index))
             index = ToPropertyKey(index);
         if (obj is SharpTSTypedArray numericTypedArray
-            && (index is double || RuntimeValue.FromBoxed(index).IsObject))
+            && (index is double || RuntimeValue.FromBoxed(index).IsObject
+                || index is string && !IsTypedArrayOrdinaryReferenceKey(index)))
             return RuntimeValue.FromBoxed(
                 ReadTypedArrayReferenceValue(numericTypedArray, ToPropertyKey(index)));
         if (obj is SharpTSTypedArray && index is SharpTSSymbol typedArraySymbol)
@@ -1710,7 +1711,8 @@ public partial class Interpreter
         }
 
         if (obj is SharpTSTypedArray numericTypedArray
-            && (index is double || RuntimeValue.FromBoxed(index).IsObject))
+            && (index is double || RuntimeValue.FromBoxed(index).IsObject
+                || index is string && !IsTypedArrayOrdinaryReferenceKey(index)))
         {
             WriteTypedArrayReferenceValue(
                 numericTypedArray, ToPropertyKey(index), value, strictMode);
