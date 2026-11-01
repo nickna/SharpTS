@@ -188,6 +188,12 @@ public static class ReflectBuiltIns
                         return RuntimeValue.FromBoolean(prototype.DeleteProperty(propertyKey));
                     case SharpTSArrayPrototype prototype:
                         return RuntimeValue.FromBoolean(prototype.DeleteProperty(propertyKey));
+                    case SharpTSStringPrototype prototype:
+                        return RuntimeValue.FromBoolean(prototype.DeleteProperty(propertyKey));
+                    case SharpTSNumberPrototype prototype:
+                        return RuntimeValue.FromBoolean(prototype.DeleteProperty(propertyKey));
+                    case SharpTSBooleanPrototype prototype:
+                        return RuntimeValue.FromBoolean(prototype.DeleteProperty(propertyKey));
                     case SharpTSClass klass:
                         return RuntimeValue.FromBoolean(klass.DeleteStaticProperty(propertyKey));
                     case ISharpTSPrimitiveConstructor primitiveConstructor:
