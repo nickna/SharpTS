@@ -135,7 +135,7 @@ public partial class Interpreter
     /// <returns><c>true</c> if the property was set; otherwise <c>false</c>.</returns>
     private bool TrySetProperty(object? obj, Token name, object? value)
     {
-        if (UsesNonextensibleBuiltInPrototypeWrite(obj))
+        if (UsesPrimitivePrototypePropertyReads(obj) || UsesNonextensibleBuiltInPrototypeWrite(obj))
         {
             SetOwnPropertyObjectValue(obj!, name.Lexeme, value, _environment.IsStrictMode);
             return true;
