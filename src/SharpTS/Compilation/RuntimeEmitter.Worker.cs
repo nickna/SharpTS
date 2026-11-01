@@ -50,7 +50,9 @@ public partial class RuntimeEmitter
             runtime.Dates.Implementation is not null ? new StructuredCloneDateInputs(runtime.Dates.RequireImplementation().Type, runtime.Dates.RequireImplementation().MillisecondsConstructor, runtime.Dates.RequireImplementation().GetInstanceMethod("GetTime")) : null,
             runtime.RegExps.Implementation is not null ? new StructuredCloneRegExpInputs(runtime.RegExps.RequireImplementation().Type, runtime.RegExps.RequireImplementation().PatternFlagsConstructor,
                 runtime.RegExps.RequireImplementation().SourceGetter, runtime.RegExps.RequireImplementation().FlagsGetter) : null,
-            _features.UsesBuffer ? runtime.RequireBuffer() : null);
+            _features.UsesBuffer ? runtime.RequireBuffer() : null,
+            new StructuredCloneTransferInputs(runtime.ObjectRead.Property, runtime.Operators.TypeOf,
+                GetCollectionConsumerInputs(runtime), _features.UsesStructuredClone || _features.HasAnyTypedArray));
 
         // worker_threads module helpers
         EmitWorkerThreadsModuleHelpers(runtimeType, runtime.Workers);

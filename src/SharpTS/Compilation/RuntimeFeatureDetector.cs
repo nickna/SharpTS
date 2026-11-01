@@ -85,6 +85,7 @@ public sealed partial class RuntimeFeatureDetector
             UsesWebStreams = false,
             UsesCluster = false,
             UsesBroadcastChannel = false,
+            UsesStructuredClone = false,
             UsesAsyncLocalStorage = false,
             UsesReadline = false,
             UsesTextEncoding = false,
@@ -259,6 +260,9 @@ public sealed partial class RuntimeFeatureDetector
             _set.PotentiallyMaterializesUnknownCompactObjectRecordShape = true;
         }
 
+        if (_set.UsesSourceExecution || _set.UsesVm)
+            _set.UsesStructuredClone = true;
+
         return _set;
     }
 
@@ -366,6 +370,9 @@ public sealed partial class RuntimeFeatureDetector
     {
         switch (name)
         {
+            case "structuredClone":
+                _set.UsesStructuredClone = true;
+                break;
             case "queueMicrotask":
                 _set.UsesMicrotaskFunctionValues = true;
                 break;
@@ -620,6 +627,7 @@ public sealed partial class RuntimeFeatureDetector
             // valve; the fine-grained ones still get set by their own triggers.
             case "globalThis":
             case "global":
+                _set.UsesStructuredClone = true;
                 _set.UsesTimerFunctionValues = true;
                 _set.UsesMicrotaskFunctionValues = true;
                 _set.UsesDateConstructorMutation = true;

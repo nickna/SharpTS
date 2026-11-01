@@ -24,14 +24,17 @@ public partial class RuntimeEmitter
         EmittedArrayBufferRuntime ArrayBuffer, EmittedSharedArrayBufferRuntime SharedArrayBuffer,
         EmittedTypedArrayImplementation TypedArrays);
 
+    private readonly record struct StructuredCloneTransferInputs(
+        MethodInfo Property, MethodInfo TypeOf, CollectionConsumerInputs Consumer, bool Enabled);
+
     /// <summary>
-    /// Emits StructuredClone helper.
-    /// Preserves the compiled wrapper signature; its second argument is currently ignored.
+    /// Emits StructuredClone and its receiver-side transfer-list processing.
     /// </summary>
     private void EmitStructuredCloneHelper(
         TypeBuilder runtimeType, EmittedStructuredCloneRuntime clone, EmittedArrayStorageRuntime arrays, Type undefinedType,
         StructuredCloneObjectInputs objects, StructuredCloneErrorInputs errors, StructuredCloneBinaryInputs? binary,
-        StructuredCloneDateInputs? date, StructuredCloneRegExpInputs? regExp, EmittedBufferRuntime? buffer)
+        StructuredCloneDateInputs? date, StructuredCloneRegExpInputs? regExp, EmittedBufferRuntime? buffer,
+        StructuredCloneTransferInputs transfer)
     {
         var cloneCore = runtimeType.DefineMethod(
             "StructuredCloneCore",
@@ -620,10 +623,172 @@ public partial class RuntimeEmitter
         );
 
         var il = method.GetILGenerator();
+        if (transfer.Enabled)
+            EmitStructuredCloneTransferWrapper(il, cloneCore, clone, binary, undefinedType, transfer);
+        else
+        {
+            il.Emit(OpCodes.Ldarg_0);
+            il.Emit(OpCodes.Call, cloneCore);
+            il.Emit(OpCodes.Ret);
+        }
+
+        clone.Clone = method;
+    }
+
+    private void EmitStructuredCloneTransferWrapper(ILGenerator il, MethodInfo cloneCore,
+        EmittedStructuredCloneRuntime clone, StructuredCloneBinaryInputs? binary, Type undefinedType,
+        StructuredCloneTransferInputs inputs)
+    {
+        var transferValue = il.DeclareLocal(_types.Object);
+        var transfers = il.DeclareLocal(_types.ListOfObject);
+        var seen = il.DeclareLocal(_types.ListOfObject);
+        var result = il.DeclareLocal(_types.Object);
+        var index = il.DeclareLocal(_types.Int32);
+        var item = il.DeclareLocal(_types.Object);
+        var withoutTransfer = il.DefineLabel();
+        var validate = il.DefineLabel();
+        var validateItem = il.DefineLabel();
+        var detach = il.DefineLabel();
+        var detachItem = il.DefineLabel();
+
+        // WebIDL dictionaries accept null/undefined as an empty options value.
+        il.Emit(OpCodes.Ldarg_1);
+        il.Emit(OpCodes.Brfalse, withoutTransfer);
+        il.Emit(OpCodes.Ldarg_1);
+        il.Emit(OpCodes.Isinst, undefinedType);
+        il.Emit(OpCodes.Brtrue, withoutTransfer);
+        EmitRequireObject(() => il.Emit(OpCodes.Ldarg_1), "Options cannot be converted to a dictionary");
+        il.Emit(OpCodes.Ldarg_1);
+        il.Emit(OpCodes.Ldstr, "transfer");
+        il.Emit(OpCodes.Call, inputs.Property);
+        il.Emit(OpCodes.Stloc, transferValue);
+        il.Emit(OpCodes.Ldloc, transferValue);
+        il.Emit(OpCodes.Isinst, undefinedType);
+        il.Emit(OpCodes.Brtrue, withoutTransfer);
+        il.Emit(OpCodes.Newobj, _types.GetDefaultConstructor(_types.ListOfObject));
+        il.Emit(OpCodes.Stloc, transfers);
+
+        // Complete sequence conversion before validating transferability. A later
+        // iterator/getter abrupt completion precedes duplicate/invalid-buffer checks.
+        EmitCollectionConsumerLoop(il, inputs.Consumer,
+            () => il.Emit(OpCodes.Ldloc, transferValue), (value, _) =>
+            {
+                il.Emit(OpCodes.Ldloc, transfers);
+                il.Emit(OpCodes.Ldloc, value);
+                il.Emit(OpCodes.Callvirt, _types.GetMethod(_types.ListOfObject, "Add", _types.Object));
+            }, convertValue: value =>
+                EmitRequireObject(() => il.Emit(OpCodes.Ldloc, value), "Transfer value is not an object"));
+
+        il.Emit(OpCodes.Newobj, _types.GetDefaultConstructor(_types.ListOfObject));
+        il.Emit(OpCodes.Stloc, seen);
+        il.Emit(OpCodes.Ldc_I4_0);
+        il.Emit(OpCodes.Stloc, index);
+        il.Emit(OpCodes.Br, validate);
+        il.MarkLabel(validateItem);
+        il.Emit(OpCodes.Ldloc, transfers);
+        il.Emit(OpCodes.Ldloc, index);
+        il.Emit(OpCodes.Callvirt, _types.GetMethod(_types.ListOfObject, "get_Item", _types.Int32));
+        il.Emit(OpCodes.Stloc, item);
+        if (binary is { } types)
+        {
+            var actualBuffer = il.DefineLabel();
+            var attached = il.DefineLabel();
+            var unique = il.DefineLabel();
+            il.Emit(OpCodes.Ldloc, item);
+            il.Emit(OpCodes.Isinst, types.ArrayBuffer.Type);
+            il.Emit(OpCodes.Brtrue, actualBuffer);
+            EmitDataCloneError("Found invalid value in transferList");
+            il.MarkLabel(actualBuffer);
+            il.Emit(OpCodes.Ldloc, item);
+            il.Emit(OpCodes.Castclass, types.ArrayBuffer.Type);
+            il.Emit(OpCodes.Ldfld, types.ArrayBuffer.DetachedField);
+            il.Emit(OpCodes.Brfalse, attached);
+            EmitDataCloneError("ArrayBuffer is already detached");
+            il.MarkLabel(attached);
+            il.Emit(OpCodes.Ldloc, seen);
+            il.Emit(OpCodes.Ldloc, item);
+            il.Emit(OpCodes.Callvirt, _types.GetMethod(_types.ListOfObject, "Contains", _types.Object));
+            il.Emit(OpCodes.Brfalse, unique);
+            EmitDataCloneError("Transfer list contains duplicate ArrayBuffer");
+            il.MarkLabel(unique);
+            il.Emit(OpCodes.Ldloc, seen);
+            il.Emit(OpCodes.Ldloc, item);
+            il.Emit(OpCodes.Callvirt, _types.GetMethod(_types.ListOfObject, "Add", _types.Object));
+        }
+        else
+            EmitDataCloneError("Found invalid value in transferList");
+        il.Emit(OpCodes.Ldloc, index);
+        il.Emit(OpCodes.Ldc_I4_1);
+        il.Emit(OpCodes.Add);
+        il.Emit(OpCodes.Stloc, index);
+        il.MarkLabel(validate);
+        il.Emit(OpCodes.Ldloc, index);
+        il.Emit(OpCodes.Ldloc, transfers);
+        il.Emit(OpCodes.Callvirt, _types.GetMethodNoParams(_types.ListOfObject, "get_Count"));
+        il.Emit(OpCodes.Blt, validateItem);
+
+        il.Emit(OpCodes.Ldarg_0);
+        il.Emit(OpCodes.Call, cloneCore);
+        il.Emit(OpCodes.Stloc, result);
+        if (binary is { } buffers)
+        {
+            il.Emit(OpCodes.Ldc_I4_0);
+            il.Emit(OpCodes.Stloc, index);
+            il.Emit(OpCodes.Br, detach);
+            il.MarkLabel(detachItem);
+            il.Emit(OpCodes.Ldloc, transfers);
+            il.Emit(OpCodes.Ldloc, index);
+            il.Emit(OpCodes.Callvirt, _types.GetMethod(_types.ListOfObject, "get_Item", _types.Int32));
+            il.Emit(OpCodes.Castclass, buffers.ArrayBuffer.Type);
+            il.Emit(OpCodes.Callvirt, buffers.ArrayBuffer.Detach);
+            il.Emit(OpCodes.Ldloc, index);
+            il.Emit(OpCodes.Ldc_I4_1);
+            il.Emit(OpCodes.Add);
+            il.Emit(OpCodes.Stloc, index);
+            il.MarkLabel(detach);
+            il.Emit(OpCodes.Ldloc, index);
+            il.Emit(OpCodes.Ldloc, transfers);
+            il.Emit(OpCodes.Callvirt, _types.GetMethodNoParams(_types.ListOfObject, "get_Count"));
+            il.Emit(OpCodes.Blt, detachItem);
+        }
+        il.Emit(OpCodes.Ldloc, result);
+        il.Emit(OpCodes.Ret);
+
+        il.MarkLabel(withoutTransfer);
         il.Emit(OpCodes.Ldarg_0);
         il.Emit(OpCodes.Call, cloneCore);
         il.Emit(OpCodes.Ret);
 
-        clone.Clone = method;
+        void EmitRequireObject(Action emitValue, string message)
+        {
+            var nonNull = il.DefineLabel();
+            var isObject = il.DefineLabel();
+            var kind = il.DeclareLocal(_types.String);
+            emitValue();
+            il.Emit(OpCodes.Brtrue, nonNull);
+            GuestErrorEmitter.ThrowError(il, inputs.Consumer.Errors.CreateException,
+                inputs.Consumer.Errors.TypeErrorConstructor, message);
+            il.MarkLabel(nonNull);
+            emitValue();
+            il.Emit(OpCodes.Call, inputs.TypeOf);
+            il.Emit(OpCodes.Stloc, kind);
+            foreach (var allowed in new[] { "object", "function" })
+            {
+                il.Emit(OpCodes.Ldloc, kind);
+                il.Emit(OpCodes.Ldstr, allowed);
+                il.Emit(OpCodes.Call, _types.GetMethod(_types.String, "op_Equality", _types.String, _types.String));
+                il.Emit(OpCodes.Brtrue, isObject);
+            }
+            GuestErrorEmitter.ThrowError(il, inputs.Consumer.Errors.CreateException,
+                inputs.Consumer.Errors.TypeErrorConstructor, message);
+            il.MarkLabel(isObject);
+        }
+
+        void EmitDataCloneError(string message)
+        {
+            il.Emit(OpCodes.Ldstr, message);
+            il.Emit(OpCodes.Newobj, clone.ErrorCtor);
+            il.Emit(OpCodes.Throw);
+        }
     }
 }
