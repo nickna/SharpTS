@@ -146,6 +146,9 @@ public partial class Interpreter
             case SharpTSObjectPrototype objectPrototype:
                 SetOwnPropertyObjectValue(objectPrototype, name.Lexeme, value, _environment.IsStrictMode);
                 return true;
+            case SharpTSStringPrototype stringPrototype:
+                SetOwnPropertyObjectValue(stringPrototype, name.Lexeme, value, _environment.IsStrictMode);
+                return true;
             case SharpTSProxy proxy:
                 proxy.TrapSet(name.Lexeme, value, this);
                 return true;

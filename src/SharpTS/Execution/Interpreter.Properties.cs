@@ -3087,6 +3087,10 @@ public partial class Interpreter
             SetClassPrototypeProperty(classPrototype, set.Name.Lexeme, value, strictMode);
             return value;
         }
+        if (obj is SharpTSStringPrototype stringPrototype
+            && TryAssignThroughDescriptor(stringPrototype.GetOwnPropertyDescriptor(set.Name.Lexeme),
+                stringPrototype, set.Name.Lexeme, value, strictMode))
+            return value;
         if (UsesNonextensibleBuiltInPrototypeWrite(obj))
         {
             SetOwnPropertyObjectValue(obj!, set.Name.Lexeme, value, strictMode);

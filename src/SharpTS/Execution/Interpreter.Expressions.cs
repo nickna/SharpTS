@@ -1843,7 +1843,11 @@ public partial class Interpreter
             if (index is SharpTSSymbol stringSymbol)
                 strProto.SetBySymbolStrict(stringSymbol, value, strictMode);
             else
-                strProto.SetExtra(PropertyKeyConverter.ToPropertyKeyString(index), value);
+            {
+                string key = PropertyKeyConverter.ToPropertyKeyString(index);
+                if (!TryAssignThroughDescriptor(strProto.GetOwnPropertyDescriptor(key), strProto, key, value, strictMode))
+                    strProto.SetExtra(key, value);
+            }
             return RuntimeValue.FromBoxed(value);
         }
         if (obj is SharpTSArrayPrototype arrayProto)
