@@ -246,7 +246,7 @@ public partial class RuntimeEmitter
         EmitTypeNameProperty(typeBuilder, name);
 
         // Constructor: public $Uint8Array(int length)
-        var lengthCtor = EmitTypedArrayLengthConstructor(typeBuilder, arrays, bytesPerElement);
+        var lengthCtor = EmitTypedArrayLengthConstructor(typeBuilder, arrays, runtime.RequireArrayBuffer(), bytesPerElement);
         StoreTypedArrayLengthCtor(arrays, name, lengthCtor);
 
         // Constructor: public $Uint8Array(object buffer, int byteOffset, int? length)
@@ -340,7 +340,8 @@ public partial class RuntimeEmitter
         prop.SetGetMethod(getter);
     }
 
-    private ConstructorBuilder EmitTypedArrayLengthConstructor(TypeBuilder typeBuilder, EmittedTypedArrayImplementation arrays, int bytesPerElement)
+    private ConstructorBuilder EmitTypedArrayLengthConstructor(TypeBuilder typeBuilder,
+        EmittedTypedArrayImplementation arrays, EmittedArrayBufferRuntime buffers, int bytesPerElement)
     {
         // Constructor: public $XArray(int length)
         var ctor = typeBuilder.DefineConstructor(
@@ -351,20 +352,21 @@ public partial class RuntimeEmitter
 
         var il = ctor.GetILGenerator();
 
-        // Create new byte array: new byte[length * bytesPerElement]
-        var bufferLocal = il.DeclareLocal(typeof(byte[]));
+        // Allocate the backing bytes through their actual, stable ArrayBuffer owner.
+        var bufferLocal = il.DeclareLocal(buffers.Type);
         il.Emit(OpCodes.Ldarg_1);
         il.Emit(OpCodes.Ldc_I4, bytesPerElement);
         il.Emit(OpCodes.Mul);
-        il.Emit(OpCodes.Newarr, typeof(byte));
+        il.Emit(OpCodes.Newobj, buffers.Ctor);
         il.Emit(OpCodes.Stloc, bufferLocal);
 
-        // Call base(buffer, 0, length, null)
+        // Call base(owner.GetBuffer(), 0, length, owner).
         il.Emit(OpCodes.Ldarg_0);
         il.Emit(OpCodes.Ldloc, bufferLocal);
+        il.Emit(OpCodes.Callvirt, buffers.GetBuffer);
         il.Emit(OpCodes.Ldc_I4_0);
         il.Emit(OpCodes.Ldarg_1);
-        il.Emit(OpCodes.Ldnull);
+        il.Emit(OpCodes.Ldloc, bufferLocal);
         il.Emit(OpCodes.Call, arrays.BaseCtor);
         il.Emit(OpCodes.Ret);
 

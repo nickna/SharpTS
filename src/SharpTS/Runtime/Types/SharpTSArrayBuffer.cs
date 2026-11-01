@@ -51,6 +51,15 @@ public class SharpTSArrayBuffer : ITypeCategorized
     }
 
     /// <summary>
+    /// Owns an existing backing store allocated by the runtime without copying it.
+    /// </summary>
+    internal SharpTSArrayBuffer(byte[] data)
+    {
+        ArgumentNullException.ThrowIfNull(data);
+        _data = data;
+    }
+
+    /// <summary>
     /// Gets a span over the entire buffer for direct memory access.
     /// </summary>
     public Span<byte> AsSpan()

@@ -207,7 +207,7 @@ public abstract class SharpTSTypedArray : ITypeCategorized
         _byteOffset = byteOffset;
         _length = length;
         _sharedBuffer = null;
-        _arrayBuffer = null;
+        _arrayBuffer = new SharpTSArrayBuffer(buffer);
         ValidateBounds();
     }
 
@@ -220,7 +220,7 @@ public abstract class SharpTSTypedArray : ITypeCategorized
         _byteOffset = 0;
         _buffer = new byte[length * BytesPerElement];
         _sharedBuffer = null;
-        _arrayBuffer = null;
+        _arrayBuffer = new SharpTSArrayBuffer(_buffer);
     }
 
     private void ValidateBounds()
@@ -560,7 +560,7 @@ public abstract class SharpTSTypedArray : ITypeCategorized
             "byteLength" => (double)ByteLength,
             "byteOffset" => (double)ByteOffset,
             "BYTES_PER_ELEMENT" => (double)BytesPerElement,
-            "buffer" => _sharedBuffer ?? _arrayBuffer ?? (object?)new SharpTSBuffer(_buffer),
+            "buffer" => _sharedBuffer ?? (object?)_arrayBuffer,
 
             "set" => BuiltInMethod.CreateV2("set", 1, 2, (_, _, args) =>
             {
