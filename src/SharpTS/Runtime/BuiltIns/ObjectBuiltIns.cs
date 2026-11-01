@@ -1960,6 +1960,10 @@ public static partial class ObjectBuiltIns
                 .Concat(json.GetSymbolPropertyNames().Cast<object?>()).ToList(),
             SharpTSRegExp regex => regex.OwnStringKeys().Cast<object?>().ToList(),
             SharpTSProxy proxy => proxy.TrapOwnPropertyKeys(interpreter),
+            SharpTSNumberPrototype numberPrototype => numberPrototype.OwnStringKeys().Cast<object?>()
+                .Concat(numberPrototype.GetSymbolPropertyNames().Cast<object?>()).ToList(),
+            SharpTSBooleanPrototype booleanPrototype => booleanPrototype.OwnStringKeys().Cast<object?>()
+                .Concat(booleanPrototype.GetSymbolPropertyNames().Cast<object?>()).ToList(),
             Dictionary<string, object?> dict => dict.Keys.Cast<object?>().ToList(),
             _ => []
         };
