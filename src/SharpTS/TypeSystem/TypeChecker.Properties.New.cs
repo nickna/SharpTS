@@ -474,6 +474,12 @@ public partial class TypeChecker
         // Handle new DataView(buffer, byteOffset?, byteLength?) constructor
         if (isSimpleName && simpleClassName == "DataView")
         {
+            // Selected library and local constructors own their parameter and
+            // result types, just like ArrayBuffer above.
+            if (_environment.GetValueBinding(simpleClassName) is not null ||
+                (_hasDefaultLibraries && _environment.Get(simpleClassName) is not null))
+                goto CheckDeclaredConstructor;
+
             // DataView requires at least 1 argument (buffer) and up to 3
             if (newExpr.Arguments.Count < 1 || newExpr.Arguments.Count > 3)
             {
