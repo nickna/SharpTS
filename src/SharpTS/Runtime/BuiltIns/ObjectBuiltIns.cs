@@ -596,6 +596,7 @@ public static partial class ObjectBuiltIns
         {
             case SharpTSObjectNamespace:
             case ISharpTSOwnPropertyObject:
+            case SharpTSTypedArray:
                 if (!SharpTSProxy.OrdinarySet(interpreter, target, symbol, value, target))
                     throw new ThrowException(new SharpTSTypeError($"Cannot assign to symbol property '{symbol}'"));
                 break;
