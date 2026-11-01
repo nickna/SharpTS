@@ -1730,8 +1730,9 @@ public class SharpTSProxy : ISharpTSCallable
             {
                 string name when _target is SharpTSProxy proxy
                     => proxy.TrapGetOwnPropertyDescriptor(name, interpreter),
-                string name when _target is SharpTSClass klass && interpreter != null
-                    => ObjectBuiltIns.OwnPropertyDescriptorOf(interpreter, klass, name)?.ToObject(),
+                string name when interpreter != null && _target is
+                    (SharpTSClass or SharpTSNumberPrototype or SharpTSBooleanPrototype)
+                    => ObjectBuiltIns.OwnPropertyDescriptorOf(interpreter, _target, name)?.ToObject(),
                 string name
                     => ObjectBuiltIns.RuntimeGetOwnPropertyDescriptor(_target, name),
                 SharpTSSymbol symbol when _target is SharpTSProxy proxy
@@ -1803,6 +1804,14 @@ public class SharpTSProxy : ISharpTSCallable
             case SharpTSTypedArray typedArray:
                 keys.AddRange(typedArray.OwnStringKeys());
                 keys.AddRange(typedArray.GetSymbolPropertyNames());
+                break;
+            case SharpTSNumberPrototype numberPrototype:
+                keys.AddRange(numberPrototype.OwnStringKeys());
+                keys.AddRange(numberPrototype.GetSymbolPropertyNames());
+                break;
+            case SharpTSBooleanPrototype booleanPrototype:
+                keys.AddRange(booleanPrototype.OwnStringKeys());
+                keys.AddRange(booleanPrototype.GetSymbolPropertyNames());
                 break;
             case Dictionary<string, object?> dict:
                 keys.AddRange(dict.Keys);
