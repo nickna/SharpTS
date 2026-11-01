@@ -47,7 +47,7 @@ jobs:
           New-Item -ItemType Directory -Path $publish -Force | Out-Null
           Copy-Item -Path 'artifacts/desktop-gui/osx-arm64/published single file/*' -Destination $publish -Recurse -Force
 
-      - uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7
+      - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7
         with:
           name: macos-gui-certification-payload
           path: artifacts/macos-distribution-input

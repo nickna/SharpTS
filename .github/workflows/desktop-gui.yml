@@ -106,7 +106,7 @@ jobs:
       - name: Build and audit the exact GUI SDK candidate
         shell: pwsh
         run: tests/fixtures/SharpTS.Gui.Sdk.Consumer/Run-PackagedConsumer.ps1 -RuntimeIdentifier win-x64 -PackageOnly
-      - uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7
+      - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7
         with:
           name: sharpts-gui-sdk-candidate
           path: artifacts/desktop-gui/win-x64/feed/${{ steps.gui_version.outputs.package_file_name }}
@@ -145,7 +145,7 @@ jobs:
             -GuiPackagingEvidence $evidence `
             -OutputFile artifacts/desktop-gui/win-x64/public-native-aot.json
           ./benchmarks/snapshots/validate-snapshot.ps1 artifacts/desktop-gui/win-x64/public-native-aot.json
-      - uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7
+      - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7
         if: always()
         with:
           name: desktop-gui-windows-x64
@@ -179,7 +179,7 @@ jobs:
       - name: Cross-publish packaged ARM64 outputs
         shell: pwsh
         run: tests/fixtures/SharpTS.Gui.Sdk.Consumer/Run-PackagedConsumer.ps1 -RuntimeIdentifier win-arm64 -PublishOnly -CandidatePackage "artifacts/desktop-gui/candidate/${{ needs.gui-sdk-candidate.outputs.package_file_name }}"
-      - uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7
+      - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7
         if: always()
         with:
           name: desktop-gui-windows-arm64-cross-publish
@@ -218,7 +218,7 @@ jobs:
             -GuiPackagingEvidence $evidence `
             -OutputFile artifacts/desktop-gui/win-arm64/public-native-aot.json
           ./benchmarks/snapshots/validate-snapshot.ps1 artifacts/desktop-gui/win-arm64/public-native-aot.json
-      - uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7
+      - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7
         if: always()
         with:
           name: desktop-gui-windows-arm64-native
@@ -271,7 +271,7 @@ jobs:
           -BuildVersion ${{ github.run_number }}
           -Architecture arm64
           -Executable SharpTS.Gui.Sdk.Consumer
-      - uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7
+      - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7
         if: always()
         with:
           name: desktop-gui-macos-arm64

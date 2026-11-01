@@ -79,7 +79,7 @@ jobs:
 
       - name: Upload raw and structured results
         if: always() && env.BENCH_RESULTS_DIR != ''
-        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7
         with:
           name: benchmark-results
           path: ${{ env.BENCH_RESULTS_DIR }}
@@ -119,7 +119,7 @@ jobs:
             (Join-Path $env:COMPILER_RESULTS_DIR 'public-compiler-micro.json')
       - name: Upload compiler evidence
         if: always() && env.COMPILER_RESULTS_DIR != ''
-        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7
         with:
           name: compiler-micro-results
           path: ${{ env.COMPILER_RESULTS_DIR }}
@@ -162,7 +162,7 @@ jobs:
             (Join-Path $env:GUI_RESULTS_DIR 'public-gui.json')
       - name: Upload GUI evidence
         if: always() && env.GUI_RESULTS_DIR != ''
-        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7
         with:
           name: gui-benchmark-results
           path: ${{ env.GUI_RESULTS_DIR }}
@@ -202,7 +202,7 @@ jobs:
             -OutputFile artifacts/public-snapshot.json `
             -RequireAllSuites
           ./benchmarks/snapshots/validate-snapshot.ps1 artifacts/public-snapshot.json
-      - uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7
+      - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7
         with:
           name: public-performance-snapshot
           path: artifacts/public-snapshot.json
