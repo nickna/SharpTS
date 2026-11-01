@@ -158,9 +158,11 @@ public partial class Interpreter
         }
         bool arrayObjectKey = HasArrayObjectKey(obj, index);
         var globalTarget = ResolveGlobalIndexTarget(obj, index);
+        var typedArrayStringTarget = index is string ? obj as SharpTSTypedArray : null;
         if (arrayObjectKey || inputView is not null || globalTarget is not null || HasCanonicalIndexProperties(obj)
             || (obj is SharpTSArray && index is string arrayName
                 && !PropertySemantics.TryGetArrayIndex(arrayName, out _))
+            || typedArrayStringTarget is not null
             || UsesPrimitivePrototypePropertyReads(obj)
             || UsesNonextensibleBuiltInPrototypeStringIndex(obj, index)
             || UsesTypedArrayOrdinaryIndex(obj, index)
@@ -169,12 +171,17 @@ public partial class Interpreter
             object key = globalTarget is null ? ToPropertyKey(index) : globalTarget.Key;
             RuntimeValue current = RuntimeValue.FromBoxed(inputView is not null
                 ? key is string name ? inputView.Read(name) : throw new InterpreterException("Compound index assignment not supported on this type.")
-                : GetOwnPropertyObjectValue(obj, key));
+                : typedArrayStringTarget is not null
+                    ? ReadTypedArrayReferenceValue(typedArrayStringTarget, key)
+                    : GetOwnPropertyObjectValue(obj, key));
             RuntimeValue addValue = await ctx.EvaluateExprAsync(compound.Value);
             RuntimeValue newValue = ApplyCompoundOperatorRV(compound.Operator.Type, current, addValue);
             // GetValue and PutValue each convert the retained raw key. Guest
             // coercion may select a different property after the RHS runs.
-            if (arrayObjectKey || globalTarget is not null || inputView is not null || obj is SharpTSObjectPrototype)
+            if (typedArrayStringTarget is not null)
+                WriteTypedArrayReferenceValue(typedArrayStringTarget, ToPropertyKey(index),
+                    newValue.ToObject(), _environment.IsStrictMode);
+            else if (arrayObjectKey || globalTarget is not null || inputView is not null || obj is SharpTSObjectPrototype)
                 PerformIndexSet(obj, index, newValue.ToObject());
             else SetOwnPropertyObjectValue(obj, ToPropertyKey(index), newValue.ToObject(), _environment.IsStrictMode);
             return newValue;
@@ -409,7 +416,9 @@ public partial class Interpreter
         }
         bool arrayObjectKey = HasArrayObjectKey(obj, index);
         var globalTarget = ResolveGlobalIndexTarget(obj, index);
+        var typedArrayStringTarget = index is string ? obj as SharpTSTypedArray : null;
         if (arrayObjectKey || inputView is not null || globalTarget is not null
+            || typedArrayStringTarget is not null
             || UsesPrimitivePrototypePropertyReads(obj)
             || UsesNonextensibleBuiltInPrototypeStringIndex(obj, index)
             || UsesTypedArrayOrdinaryIndex(obj, index)
@@ -418,7 +427,9 @@ public partial class Interpreter
             object key = globalTarget is null ? ToPropertyKey(index) : globalTarget.Key;
             RuntimeValue currentRV = RuntimeValue.FromBoxed(inputView is not null
                 ? key is string name ? inputView.Read(name) : throw new InterpreterException("Logical index assignment not supported on this type.")
-                : GetOwnPropertyObjectValue(obj, key));
+                : typedArrayStringTarget is not null
+                    ? ReadTypedArrayReferenceValue(typedArrayStringTarget, key)
+                    : GetOwnPropertyObjectValue(obj, key));
             switch (logical.Operator.Type)
             {
                 case TokenType.AND_AND_EQUAL:
@@ -433,7 +444,10 @@ public partial class Interpreter
             }
 
             RuntimeValue newValue = await ctx.EvaluateExprAsync(logical.Value);
-            if (arrayObjectKey || globalTarget is not null || inputView is not null || obj is SharpTSObjectPrototype)
+            if (typedArrayStringTarget is not null)
+                WriteTypedArrayReferenceValue(typedArrayStringTarget, ToPropertyKey(index),
+                    newValue.ToObject(), _environment.IsStrictMode);
+            else if (arrayObjectKey || globalTarget is not null || inputView is not null || obj is SharpTSObjectPrototype)
                 PerformIndexSet(obj, index, newValue.ToObject());
             else SetOwnPropertyObjectValue(obj, ToPropertyKey(index), newValue.ToObject(), _environment.IsStrictMode);
             return newValue;
