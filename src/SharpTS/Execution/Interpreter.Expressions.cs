@@ -1045,9 +1045,7 @@ public partial class Interpreter
             if (index is SharpTSSymbol symbol)
                 return new IndexTarget.ArraySymbol(array, symbol);
             string key = ToPropertyKeyString(index);
-            if (long.TryParse(key, System.Globalization.NumberStyles.None,
-                    System.Globalization.CultureInfo.InvariantCulture, out long parsed)
-                && parsed >= 0 && parsed <= SharpTSArray.MaxWriteIndex)
+            if (PropertySemantics.TryGetArrayIndex(key, out uint parsed))
             {
                 return new IndexTarget.Array(array, parsed);
             }
