@@ -35,4 +35,13 @@ public sealed class TypedArrayRawNumericIndexTests
         Assert.NotEmpty(name);
         Assert.Equal(expected, TestHarness.Run(source, ExecutionMode.Interpreted));
     }
+
+    [Theory, MemberData(nameof(Cases))]
+    public void CompiledNumericReferencesValidateBeforeStorageAccess(string name, string source, string expected)
+    {
+        Assert.NotEmpty(name);
+        var (errors, output) = TestHarness.CompileVerifyAndRun(source);
+        Assert.Empty(errors);
+        Assert.Equal(expected, output);
+    }
 }

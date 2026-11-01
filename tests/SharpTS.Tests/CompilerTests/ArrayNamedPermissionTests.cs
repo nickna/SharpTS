@@ -37,4 +37,11 @@ public sealed class ArrayNamedPermissionTests
         Assert.Empty(errors);
         Assert.Equal(expected, output);
     }
+
+    [Theory, MemberData(nameof(Cases))]
+    public void InterpretedNamedWritesRespectCreationPermission(string name, string source, string expected)
+    {
+        Assert.NotEmpty(name);
+        Assert.Equal(expected, TestHarness.Run(source, ExecutionMode.Interpreted));
+    }
 }
