@@ -2127,7 +2127,8 @@ public partial class RuntimeEmitter
                 NativeProxyRejection: runtime.ReflectedMethods.NativeProxyRejection,
                 GuestOwnProperties: runtime.GuestOwnProperties,
                 SourceOwners: runtime.ClassInitialization.SourceOwners,
-                SourceDataDefinition: runtime.ObjectFields.SourceDataDefinition
+                SourceDataDefinition: runtime.ObjectFields.SourceDataDefinition,
+                TypedArrays: runtime.TypedArrays
             )
         );
         // MergeIntoObject implements CopyDataProperties through GetKeys and
@@ -2495,7 +2496,8 @@ public partial class RuntimeEmitter
                     new DefinePropertyArrayLengthCoercionInputs(
                         runtime.Arguments.Type, runtime.ArrayOperations, runtime.Errors,
                         runtime.ObjectRead.Property, runtime.NumericCoercion),
-                    NativeProxyRejection: runtime.ReflectedMethods.NativeProxyRejection
+                    NativeProxyRejection: runtime.ReflectedMethods.NativeProxyRejection,
+                    TypedArrays: runtime.TypedArrays
                 )
             );
         }

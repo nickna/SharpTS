@@ -1031,7 +1031,7 @@ public static partial class ObjectBuiltIns
                 success = arr.DefineProperty(propertyKey, descriptor);
                 break;
             case SharpTSTypedArray typedArray:
-                success = typedArray.DefineNamedProperty(propertyKey, descriptor);
+                success = DefineTypedArrayProperty(interpreter, typedArray, propertyKey, descriptor);
                 break;
             case SharpTSArrayGlobal arrayGlobal:
                 success = arrayGlobal.DefineExtraProperty(propertyKey, descriptor);
@@ -1171,11 +1171,36 @@ public static partial class ObjectBuiltIns
             : target.DefineExtraProperty(name, change);
     }
 
+    internal static bool DefineTypedArrayProperty(
+        Interpreter interpreter, SharpTSTypedArray target, string name, SharpTSPropertyDescriptor descriptor)
+    {
+        if (SharpTSTypedArray.IsOrdinaryNamedPropertyKey(name))
+            return target.DefineNamedProperty(name, descriptor);
+
+        // IntegerIndexed [[DefineOwnProperty]] validates the existing element
+        // and descriptor before an optional value conversion. Unlike [[Set]],
+        // an invalid numeric index refuses the definition without conversion.
+        if (!PropertySemantics.TryGetArrayIndex(name, out uint index) || index >= target.Length
+            || descriptor.HasGet || descriptor.HasSet
+            || descriptor.HasWritable && !descriptor.Writable
+            || descriptor.HasEnumerable && !descriptor.Enumerable
+            || descriptor.HasConfigurable && !descriptor.Configurable)
+            return false;
+
+        if (descriptor.HasValue)
+            interpreter.WriteTypedArrayReferenceValue(target, name, descriptor.Value, strictMode: false);
+        return true;
+    }
+
     internal static bool DefinePropertyOnProxyTarget(
         Interpreter interpreter, object target, object propertyKey, object descriptor)
     {
         // OrdinarySet consumes a boolean refusal. The public Object entry point
         // below translates the same refusal into TypeError for its own callers.
+        if (target is SharpTSTypedArray typedArray && propertyKey is string typedName
+            && !SharpTSTypedArray.IsOrdinaryNamedPropertyKey(typedName))
+            return DefineTypedArrayProperty(
+                interpreter, typedArray, typedName, ToPropertyDescriptor(interpreter, descriptor));
         if (target is SharpTSObjectPrototype objectPrototype && propertyKey is string prototypeName)
             return DefineObjectPrototypeProperty(
                 interpreter, objectPrototype, prototypeName, ToPropertyDescriptor(interpreter, descriptor));

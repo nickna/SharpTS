@@ -569,6 +569,12 @@ public static class ReflectBuiltIns
                         _ => false
                     });
                 var propertyKey = (string)key;
+                // Physical element conversion is a guest operation. Keep its
+                // abrupt completion outside the ordinary definition-refusal catch.
+                if (target is SharpTSTypedArray typedArrayTarget
+                    && !SharpTSTypedArray.IsOrdinaryNamedPropertyKey(propertyKey))
+                    return RuntimeValue.FromBoolean(ObjectBuiltIns.DefineTypedArrayProperty(
+                        interpreter, typedArrayTarget, propertyKey, descriptor));
                 // ArraySetLength conversions can complete abruptly; those are
                 // guest throws, not refused ordinary descriptor definitions.
                 if (target is SharpTSArray or SharpTSArrayPrototype

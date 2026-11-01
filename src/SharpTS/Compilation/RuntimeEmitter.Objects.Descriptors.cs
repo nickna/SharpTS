@@ -71,7 +71,8 @@ public partial class RuntimeEmitter
         MethodInfo? NativeProxyRejection,
         EmittedGuestOwnPropertyRuntime? GuestOwnProperties = null,
         NativeSourceOwnerCatalog? SourceOwners = null,
-        EmittedSourceDataDefinitionRuntime? SourceDataDefinition = null
+        EmittedSourceDataDefinitionRuntime? SourceDataDefinition = null,
+        EmittedTypedArrayRuntime? TypedArrays = null
     );
 
     private readonly record struct DefinePropertyArrayLengthCoercionInputs(
@@ -658,6 +659,9 @@ public partial class RuntimeEmitter
             method,
             descriptorLocal
         );
+
+        EmitDefineTypedArrayPhysicalProperty(il, inputs.TypedArrays,
+            inputs.Booleans, inputs.Errors, propNameLocal, convertedDescriptor, returnsBoolean: false);
 
         var (lenWasCoercedLocal, _, coercedLenLocal) =
             EmitDefinePropertyArrayLengthCoercion(

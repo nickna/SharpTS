@@ -51,7 +51,8 @@ public partial class RuntimeEmitter
         MethodInfo ObjectGetOwnPropertyDescriptor, MethodInfo HasOwnPropertyHelperMethod, MethodInfo ToPropertyKey,
         MethodInfo ObjectDefineProperty, MethodInfo ObjectIsExtensible, MethodInfo GetProperty,
         PropertyDescriptorConversionInputs DescriptorConversion,
-        DefinePropertyArrayLengthCoercionInputs ArrayLengthCoercion, MethodInfo? NativeProxyRejection);
+        DefinePropertyArrayLengthCoercionInputs ArrayLengthCoercion, MethodInfo? NativeProxyRejection,
+        EmittedTypedArrayRuntime? TypedArrays = null);
 
     private readonly record struct ReflectOwnKeysInputs(MethodInfo CreateException,
         ConstructorInfo TypeErrorConstructor, ProxyOwnKeysCallInputs ProxyOwnKeys,
@@ -996,6 +997,9 @@ public partial class RuntimeEmitter
         il.Emit(OpCodes.Ldloc, reflectDefineKeyLocal);
         il.Emit(OpCodes.Isinst, _types.String);
         il.Emit(OpCodes.Stloc, stringKey);
+        EmitDefineTypedArrayPhysicalProperty(il, inputs.TypedArrays,
+            inputs.DescriptorConversion.Booleans, inputs.DescriptorConversion.Errors,
+            stringKey, convertedDescriptor, returnsBoolean: true);
         var (lengthWasCoerced, _, coercedLength) = EmitDefinePropertyArrayLengthCoercion(
             il, inputs.ArrayLengthCoercion, stringKey, convertedDescriptor);
         var lengthReady = il.DefineLabel();

@@ -271,7 +271,7 @@ public partial class Interpreter
         return index >= 0 ? target[index] : SharpTSUndefined.Instance;
     }
 
-    private void WriteTypedArrayReferenceValue(
+    internal void WriteTypedArrayReferenceValue(
         SharpTSTypedArray target, object key, object? value, bool strictMode)
     {
         if (IsTypedArrayOrdinaryReferenceKey(key))
