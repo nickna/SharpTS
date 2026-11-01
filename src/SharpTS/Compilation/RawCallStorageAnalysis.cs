@@ -280,10 +280,17 @@ internal sealed partial class RawCallStorageAnalysis
             if (collect && _emittedSourceBody && PrimitiveFieldValueAnalysis.IsErasedGenericField(expression, Analysis._map))
                 Analysis._erasedGenericFieldReads.Add(expression);
             if (collect && _emittedSourceBody && Analysis._map.IsRawNumericResult(expression)
-                && Analysis._map.Get(expression.Object) is TypeInfo.TypedArray { ElementType: "BigInt64" or "BigUint64" })
+                && HasBigIntTypedArrayReceiver(Analysis._map.Get(expression.Object)))
                 Analysis._bigIntTypedArrayReads.Add(expression);
             base.VisitGetIndex(expression);
         }
+        private static bool HasBigIntTypedArrayReceiver(TypeInfo? receiver) =>
+            receiver is TypeInfo.TypedArray { ElementType: "BigInt64" or "BigUint64" }
+            || receiver is TypeInfo.Union union
+                && union.FlattenedTypes.All(member => member is TypeInfo.TypedArray)
+                && union.FlattenedTypes.Any(member =>
+                    member is TypeInfo.TypedArray { ElementType: "BigInt64" or "BigUint64" });
+
         protected override void VisitCall(Expr.Call call)
         {
             if (collect && _emittedSourceBody) Analysis.Calls.Add(call);

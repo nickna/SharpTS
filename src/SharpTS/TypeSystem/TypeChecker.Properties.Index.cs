@@ -1747,7 +1747,11 @@ public partial class TypeChecker
             if (objType is TypeInfo.Array arrayType)
                 return WithUncheckedUndefined(arrayType.ElementType);
             if (objType is TypeInfo.TypedArray typedArray)
+            {
+                _typeMap.MarkUndefinedReachableReturn(getIndex);
+                if (HasBigIntElements(typedArray)) _typeMap.MarkRawNumericResult(getIndex);
                 return WithUncheckedUndefined(TypedArrayElementType(typedArray));
+            }
             // Buffer index access returns number (Buffer is a Uint8Array subclass)
             if (objType is TypeInfo.Buffer)
                 return WithUncheckedUndefined(new TypeInfo.Primitive(Parsing.TokenType.TYPE_NUMBER));

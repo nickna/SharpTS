@@ -938,7 +938,7 @@ public partial class TypeChecker
         Expr.Assign a => ValueMayBeUndefinedSentinel(a.Value, taintedLocals),
         Expr.Variable v when taintedLocals != null && taintedLocals.Contains(v.Name.Lexeme) => true,
         // Numeric element annotations do not prove that a runtime index is present.
-        Expr.GetIndex get when _typeMap.Get(get.Object) is TypeInfo.TypedArray
+        Expr.GetIndex get when IsTypedArrayReadReceiver(_typeMap.Get(get.Object))
             && _typeMap.IsUndefinedReachableReturn(get) => true,
         Expr.Get get when ClassAccessorReadMayBeUndefined(_typeMap.Get(get.Object), get.Name.Lexeme) => true,
         Expr.GetIndex get when _typeMap.Get(get.Index) is TypeInfo.StringLiteral key &&
@@ -1005,6 +1005,10 @@ public partial class TypeChecker
         }
         return false;
     }
+
+    private static bool IsTypedArrayReadReceiver(TypeInfo? type) =>
+        type is TypeInfo.TypedArray || type is TypeInfo.Union union
+            && union.FlattenedTypes.All(member => member is TypeInfo.TypedArray);
 
     private static bool TypeAdmitsUndefinedSentinel(TypeInfo? type) => type switch
     {
