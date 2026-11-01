@@ -563,6 +563,8 @@ public static class ReflectBuiltIns
                         SharpTSMath math => math.DefineProperty(symbolKey, descriptor),
                         SharpTSJSON json => json.DefineProperty(symbolKey, descriptor),
                         SharpTSStringPrototype prototype => prototype.DefineProperty(symbolKey, descriptor),
+                        SharpTSNumberPrototype prototype => prototype.DefineOwnSymbolProperty(symbolKey, descriptor),
+                        SharpTSBooleanPrototype prototype => prototype.DefineOwnSymbolProperty(symbolKey, descriptor),
                         SharpTSBigIntPrototype prototype => prototype.DefineProperty(symbolKey, descriptor),
                         _ => false
                     });

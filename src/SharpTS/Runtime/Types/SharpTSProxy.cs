@@ -798,12 +798,12 @@ public class SharpTSProxy : ISharpTSCallable
                 : ownPropertyObject.OwnProperties.GetOwnPropertyDescriptor((string)prop);
         }
         else if (prop is SharpTSSymbol numberSymbol
-            && target is SharpTSNumberPrototype { HasExplicitPrototype: true } numberPrototype)
+            && target is SharpTSNumberPrototype numberPrototype)
         {
             return numberPrototype.GetOwnSymbolPropertyDescriptor(numberSymbol);
         }
         else if (prop is SharpTSSymbol booleanSymbol
-            && target is SharpTSBooleanPrototype { HasExplicitPrototype: true } booleanPrototype)
+            && target is SharpTSBooleanPrototype booleanPrototype)
         {
             return booleanPrototype.GetOwnSymbolPropertyDescriptor(booleanSymbol);
         }

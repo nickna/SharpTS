@@ -1782,6 +1782,8 @@ public partial class Interpreter
                 ISharpTSPrimitiveConstructor symbolConstructor => symbolConstructor.GetOwnPropertyDescriptor(bagSymbol)
                     ?? FindInheritedSymbolDescriptor(symbolConstructor, bagSymbol),
                 SharpTSFunctionPrototype functionPrototype => functionPrototype.GetOwnPropertyDescriptor(bagSymbol),
+                SharpTSNumberPrototype numberPrototype => numberPrototype.GetOwnSymbolPropertyDescriptor(bagSymbol),
+                SharpTSBooleanPrototype booleanPrototype => booleanPrototype.GetOwnSymbolPropertyDescriptor(bagSymbol),
                 _ => null
             };
             if (!TryAssignThroughDescriptor(descriptor, obj, bagSymbol.ToString(), value, strictMode))
