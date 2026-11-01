@@ -861,22 +861,8 @@ public partial class RuntimeEmitter
         il.Emit(OpCodes.Dup);
         il.Emit(OpCodes.Stloc, tsArrayStringKey);
         il.Emit(OpCodes.Brfalse, convertArrayIndexLabel);
-        il.Emit(OpCodes.Ldloc, tsArrayStringKey);
-        il.Emit(OpCodes.Ldloca, tsArrayParsedIndex);
-        il.Emit(OpCodes.Call, _types.GetMethod(_types.UInt32, "TryParse", _types.String, _types.UInt32.MakeByRefType()));
-        il.Emit(OpCodes.Brfalse, routeAsNamedGetLabel);
-        il.Emit(OpCodes.Ldloc, tsArrayParsedIndex);
-        il.Emit(OpCodes.Ldc_I4_M1);
-        il.Emit(OpCodes.Conv_U4);
-        il.Emit(OpCodes.Beq, routeAsNamedGetLabel);
-        il.Emit(OpCodes.Ldloc, tsArrayStringKey);
-        il.Emit(OpCodes.Ldloca, tsArrayParsedIndex);
-        il.Emit(OpCodes.Call, _types.GetMethodNoParams(_types.UInt32, "ToString"));
-        il.Emit(OpCodes.Call, _types.GetMethod(_types.String, "op_Equality", _types.String, _types.String));
-        il.Emit(OpCodes.Brfalse, routeAsNamedGetLabel);
-        il.Emit(OpCodes.Ldloc, tsArrayParsedIndex);
-        il.Emit(OpCodes.Conv_U8);
-        il.Emit(OpCodes.Stloc, tsArrayGetIdx);
+        EmitCanonicalArrayStringIndex(il, tsArrayStringKey, tsArrayParsedIndex,
+            tsArrayGetIdx, routeAsNamedGetLabel);
         il.Emit(OpCodes.Br, doArrayGetLabel);
 
         il.MarkLabel(convertArrayIndexLabel);
@@ -1686,21 +1672,10 @@ public partial class RuntimeEmitter
         il.Emit(OpCodes.Stloc, tsArraySetKeyLocal);
 
         var routeAsNamedLabel = il.DefineLabel();
-        il.Emit(OpCodes.Ldloc, tsArraySetKeyLocal);
-        il.Emit(OpCodes.Ldloca, idxLong);
-        il.Emit(OpCodes.Call, _types.GetMethod(
-            _types.Int64, "TryParse", _types.String, _types.Int64.MakeByRefType()));
-        il.Emit(OpCodes.Brfalse, routeAsNamedLabel);
-
-        // If idx < 0 OR idx >= 2^32-1, route to SetProperty (named property).
+        var parsedArrayIndex = il.DeclareLocal(_types.UInt32);
         var doArraySetLabel = il.DefineLabel();
-        il.Emit(OpCodes.Ldloc, idxLong);
-        il.Emit(OpCodes.Ldc_I4_0);
-        il.Emit(OpCodes.Conv_I8);
-        il.Emit(OpCodes.Blt, routeAsNamedLabel);
-        il.Emit(OpCodes.Ldloc, idxLong);
-        il.Emit(OpCodes.Ldc_I8, (long)uint.MaxValue - 1);
-        il.Emit(OpCodes.Bgt, routeAsNamedLabel);
+        EmitCanonicalArrayStringIndex(il, tsArraySetKeyLocal, parsedArrayIndex,
+            idxLong, routeAsNamedLabel);
         il.Emit(OpCodes.Br, doArraySetLabel);
 
         il.MarkLabel(routeAsNamedLabel);
