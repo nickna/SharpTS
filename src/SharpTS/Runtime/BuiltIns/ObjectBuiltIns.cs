@@ -2022,6 +2022,8 @@ public static partial class ObjectBuiltIns
             ISharpTSPrimitiveConstructor primitiveConstructor => primitiveConstructor.OwnStringKeys().Cast<object?>().ToList(),
             SharpTSFunctionPrototype functionPrototype => functionPrototype.OwnStringKeys().Cast<object?>().ToList(),
             SharpTSStringPrototype stringPrototype => stringPrototype.OwnStringKeys().Cast<object?>().ToList(),
+            SharpTSNumberPrototype numberPrototype => numberPrototype.OwnStringKeys().Cast<object?>().ToList(),
+            SharpTSBooleanPrototype booleanPrototype => booleanPrototype.OwnStringKeys().Cast<object?>().ToList(),
             SharpTSClassPrototype prototype => prototype.OwnStringKeys().Cast<object?>().ToList(),
             SharpTSClass klass => klass.OwnStaticStringKeys().Cast<object?>().ToList(),
             SharpTSProxy proxy => proxy.TrapOwnPropertyKeys(interpreter)
