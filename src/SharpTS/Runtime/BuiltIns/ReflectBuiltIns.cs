@@ -567,7 +567,7 @@ public static class ReflectBuiltIns
                         return RuntimeValue.FromBoolean(primitiveConstructor.DefineExtraProperty(propertyKey, descriptor));
                     ObjectBuiltIns.PreserveOmittedAttributes(
                         target, propertyKey, descriptor, descriptorArg, interpreter);
-                    if (target is SharpTSArray
+                    if (target is SharpTSArray or SharpTSArrayPrototype
                         && propertyKey == "length"
                         && descriptor.HasValue)
                     {

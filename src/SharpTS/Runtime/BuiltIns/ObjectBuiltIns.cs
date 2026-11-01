@@ -1025,6 +1025,9 @@ public static partial class ObjectBuiltIns
                 success = arrayGlobal.DefineExtraProperty(propertyKey, descriptor);
                 break;
             case SharpTSArrayPrototype arrayPrototype:
+                if (propertyKey == "length" && descriptor.HasValue)
+                    descriptor.Value = ArrayBuiltIns.CoerceArrayLength(
+                        interpreter, descriptor.Value);
                 success = arrayPrototype.DefineExtraProperty(propertyKey, descriptor);
                 break;
             case SharpTSMath math:
