@@ -729,8 +729,10 @@ public partial class ILCompiler
         // BuildTopLevelStaticVarsForModule in CreateModuleTopLevelContext.
 
         var emitter = new ILEmitter(ctx);
-        EmitLiveModuleFunctionInitialization(module, emitter);
         bool hasHostedTopLevelAwait = _hosted && TopLevelAwaitDetector.Contains(module.Statements);
+        if (!hasHostedTopLevelAwait && module.Statements.Any(statement => statement is Stmt.Using))
+            emitter.InitializeCapturedLexicalTdzBindings(module.Statements);
+        EmitLiveModuleFunctionInitialization(module, emitter);
         if (hasHostedTopLevelAwait)
         {
             // The internal async module runner executes this module through the
@@ -743,20 +745,20 @@ public partial class ILCompiler
 
         EmitInitializeHoistedVars(il, ctx, GetVarLoopHeadDeclarations(module.Statements));
 
-        foreach (var stmt in module.Statements)
+        emitter.EmitTopLevelStatements(module.Statements, stmt =>
         {
             // Class definitions still execute at their source position. Other
             // declarations are compiled separately in earlier phases.
             if (stmt is Stmt.Function or Stmt.Interface or Stmt.TypeAlias)
             {
-                continue;
+                return;
             }
 
             // Special handling for expression statements to wait for top-level async calls
             if (stmt is Stmt.Expression exprStmt)
             {
                 if (hasHostedTopLevelAwait && exprStmt.Expr is Expr.Await)
-                    continue;
+                    return;
                 if (_hosted)
                     EmitHostedExpression(il, emitter, exprStmt);
                 else
@@ -766,7 +768,7 @@ public partial class ILCompiler
             {
                 emitter.EmitStatement(stmt);
             }
-        }
+        });
 
         il.MarkLabel(skipLabel);
         il.Emit(OpCodes.Ret);
@@ -824,13 +826,13 @@ public partial class ILCompiler
         var emitter = new ILEmitter(ctx);
         EmitInitializeHoistedVars(il, ctx, GetVarLoopHeadDeclarations(script.Statements));
 
-        foreach (var stmt in script.Statements)
+        emitter.EmitTopLevelStatements(script.Statements, stmt =>
         {
             // Class definitions still execute at their source position. Other
             // declarations are compiled separately in earlier phases.
             if (stmt is Stmt.Function or Stmt.Interface or Stmt.TypeAlias)
             {
-                continue;
+                return;
             }
 
             // Special handling for expression statements to wait for top-level async calls
@@ -845,7 +847,7 @@ public partial class ILCompiler
             {
                 emitter.EmitStatement(stmt);
             }
-        }
+        });
 
         il.MarkLabel(skipLabel);
         il.Emit(OpCodes.Ret);

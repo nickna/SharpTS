@@ -3504,15 +3504,17 @@ public partial class ILEmitter
     /// <summary>
     /// Emits a block that contains using declarations with proper try/finally disposal.
     /// </summary>
-    private void EmitBlockWithUsing(List<Stmt> statements, List<UsingResourceLocals> usingResources)
+    private void EmitBlockWithUsing(List<Stmt> statements, List<UsingResourceLocals> usingResources,
+        Action<Stmt>? emitStatement = null)
     {
+        emitStatement ??= EmitStatement;
         // Find the first using declaration index
         int firstUsingIndex = statements.FindIndex(s => s is Stmt.Using);
 
         // Emit statements before the first using
         for (int i = 0; i < firstUsingIndex; i++)
         {
-            EmitStatement(statements[i]);
+            emitStatement(statements[i]);
         }
 
         // Now emit using declarations and remaining statements in a try/finally
@@ -3532,7 +3534,7 @@ public partial class ILEmitter
             }
             else
             {
-                EmitStatement(stmt);
+                emitStatement(stmt);
             }
         }
 
@@ -3541,6 +3543,17 @@ public partial class ILEmitter
         EmitUsingDisposal(usingResources);
         builder.EndExceptionBlock();
         _ctx.ExceptionBlockDepth--;
+    }
+
+    internal void EmitTopLevelStatements(List<Stmt> statements, Action<Stmt> emitStatement)
+    {
+        if (statements.Any(statement => statement is Stmt.Using))
+        {
+            InitializeCapturedLexicalTdzBindings(statements);
+            EmitBlockWithUsing(statements, [], emitStatement);
+        }
+        else
+            foreach (var statement in statements) emitStatement(statement);
     }
 
     private readonly record struct UsingResourceLocals(LocalBuilder Resource, LocalBuilder Method, LocalBuilder Registered);
@@ -3584,9 +3597,33 @@ public partial class ILEmitter
                 RefreshLexicalCaptureSnapshots(token.Lexeme, local);
             }
         }
+        if (binding.Name is { } topLevelName && _ctx.IsModuleTopLevel && !_ctx.Locals.IsInNestedScope)
+            PublishTopLevelUsingResource(topLevelName, resource);
         IL.Emit(OpCodes.Ldc_I4_1);
         IL.Emit(OpCodes.Stloc, registered);
         return new(resource, method, registered);
+    }
+
+    private void PublishTopLevelUsingResource(Token token, LocalBuilder resource)
+    {
+        if (_ctx.CapturedTopLevelVars?.Contains(token.Lexeme) == true
+            && _ctx.EntryPointDisplayClassFields?.TryGetValue(token.Lexeme, out var displayField) == true
+            && (_ctx.EntryPointDisplayClassLocal is not null || _ctx.EntryPointDisplayClassStaticField is not null))
+        {
+            if (_ctx.EntryPointDisplayClassLocal is { } display)
+                IL.Emit(OpCodes.Ldloc, display);
+            else
+                IL.Emit(OpCodes.Ldsfld, _ctx.EntryPointDisplayClassStaticField!);
+            IL.Emit(OpCodes.Ldloc, resource);
+            IL.Emit(OpCodes.Stfld, displayField);
+        }
+        else if (_ctx.TopLevelStaticVars?.TryGetValue(token.Lexeme, out var staticField) == true)
+        {
+            IL.Emit(OpCodes.Ldloc, resource);
+            IL.Emit(OpCodes.Stsfld, staticField);
+        }
+        else return;
+        _ctx.EmitMarkTopLevelLexicalInitialized(IL, token.Lexeme);
     }
 
     /// <summary>Invokes registered disposers in reverse order without another lookup.</summary>
