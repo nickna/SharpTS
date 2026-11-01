@@ -207,23 +207,12 @@ public partial class Interpreter
 
         if (obj is SharpTSTypedArray keyedTypedArray && RuntimeValue.FromBoxed(index).IsObject)
         {
-            int readIndex = ResolveTypedArrayCompoundIndex(keyedTypedArray, ToPropertyKey(index));
-            RuntimeValue current = readIndex >= 0
-                ? RuntimeValue.FromBoxed(keyedTypedArray[readIndex]) : RuntimeValue.Undefined;
+            RuntimeValue current = RuntimeValue.FromBoxed(
+                ReadTypedArrayReferenceValue(keyedTypedArray, ToPropertyKey(index)));
             RuntimeValue addValue = await ctx.EvaluateExprAsync(compound.Value);
             RuntimeValue newValue = ApplyCompoundOperatorRV(compound.Operator.Type, current, addValue);
-            object writeKey = ToPropertyKey(index);
-            // Integer-indexed writes convert the value even when the numeric
-            // index is invalid. Keep the expression result before narrowing.
-            object? stored = newValue.ToObject();
-            if (keyedTypedArray is SharpTSBigInt64Array or SharpTSBigUint64Array)
-            {
-                stored = ToPrimitive(stored, PrimitiveHint.Number);
-                _ = SharpTSTypedArray.ToBigInt64Bits(stored);
-            }
-            else stored = ToNumberWithPrimitive(stored);
-            int writeIndex = ResolveTypedArrayCompoundIndex(keyedTypedArray, writeKey);
-            if (writeIndex >= 0) keyedTypedArray[writeIndex] = stored;
+            WriteTypedArrayReferenceValue(keyedTypedArray, ToPropertyKey(index),
+                newValue.ToObject(), _environment.IsStrictMode);
             return newValue;
         }
 
@@ -265,6 +254,41 @@ public partial class Interpreter
             throw new InterpreterException("Compound index assignment not supported on this type.");
         return double.IsFinite(numeric) && numeric >= 0 && numeric < target.Length && Math.Truncate(numeric) == numeric
             ? (int)numeric : -1;
+    }
+
+    private static bool IsTypedArrayOrdinaryReferenceKey(object key)
+        => key is SharpTSSymbol
+            || key is string name && SharpTSTypedArray.IsOrdinaryNamedPropertyKey(name);
+
+    // The caller has already performed this reference phase's ToPropertyKey.
+    private object? ReadTypedArrayReferenceValue(SharpTSTypedArray target, object key)
+    {
+        if (IsTypedArrayOrdinaryReferenceKey(key))
+            return GetOwnPropertyObjectValue(target, key);
+        int index = ResolveTypedArrayCompoundIndex(target, key);
+        return index >= 0 ? target[index] : SharpTSUndefined.Instance;
+    }
+
+    private void WriteTypedArrayReferenceValue(
+        SharpTSTypedArray target, object key, object? value, bool strictMode)
+    {
+        if (IsTypedArrayOrdinaryReferenceKey(key))
+        {
+            SetOwnPropertyObjectValue(target, key, value, strictMode);
+            return;
+        }
+
+        // Integer-indexed writes convert even for invalid numeric indices.
+        // Ordinary named/Symbol slots retain their values without narrowing.
+        object? stored = value;
+        if (target is SharpTSBigInt64Array or SharpTSBigUint64Array)
+        {
+            stored = ToPrimitive(stored, PrimitiveHint.Number);
+            _ = SharpTSTypedArray.ToBigInt64Bits(stored);
+        }
+        else stored = ToNumberWithPrimitive(stored);
+        int index = ResolveTypedArrayCompoundIndex(target, key);
+        if (index >= 0) target[index] = stored;
     }
 
     /// <summary>
