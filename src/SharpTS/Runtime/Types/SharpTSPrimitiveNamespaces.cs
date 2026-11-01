@@ -847,6 +847,8 @@ public sealed class SharpTSNumberPrototype : ISharpTSMutableBuiltIn, ISharpTSSym
         => _overlay.GetOwnPropertyDescriptor(symbol);
     internal bool DefineOwnSymbolProperty(SharpTSSymbol symbol, SharpTSPropertyDescriptor descriptor)
         => _overlay.DefineProperty(symbol, descriptor);
+    internal bool DeleteBySymbolStrict(SharpTSSymbol symbol, bool strictMode)
+        => _overlay.DeleteBySymbolStrict(symbol, strictMode);
     public ISharpTSCallable? GetExtraGetter(string name) => _overlay.GetGetter(name);
     public ISharpTSCallable? GetExtraSetter(string name) => _overlay.GetSetter(name);
     bool ISharpTSSymbolPropertyBag.HasSymbolProperty(SharpTSSymbol symbol)
@@ -1143,6 +1145,8 @@ public sealed class SharpTSBooleanPrototype : ISharpTSMutableBuiltIn, ISharpTSSy
         => _overlay.GetOwnPropertyDescriptor(symbol);
     internal bool DefineOwnSymbolProperty(SharpTSSymbol symbol, SharpTSPropertyDescriptor descriptor)
         => _overlay.DefineProperty(symbol, descriptor);
+    internal bool DeleteBySymbolStrict(SharpTSSymbol symbol, bool strictMode)
+        => _overlay.DeleteBySymbolStrict(symbol, strictMode);
     public ISharpTSCallable? GetExtraGetter(string name) => _overlay.GetGetter(name);
     public ISharpTSCallable? GetExtraSetter(string name) => _overlay.GetSetter(name);
     bool ISharpTSSymbolPropertyBag.HasSymbolProperty(SharpTSSymbol symbol)
