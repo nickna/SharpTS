@@ -1699,6 +1699,12 @@ public partial class Interpreter
             return RuntimeValue.FromBoxed(value);
         }
 
+        if (UsesExplicitPrimitivePrototypeLink(obj) && index is string or SharpTSSymbol)
+        {
+            SetOwnPropertyObjectValue(obj!, index, value, strictMode);
+            return RuntimeValue.FromBoxed(value);
+        }
+
         if (obj is SharpTSTypedArray typedArray && index is string namedKey
             && typedArray.UsesOrdinaryNamedPropertyLookup(namedKey))
         {

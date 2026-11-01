@@ -1164,6 +1164,14 @@ public static partial class ObjectBuiltIns
         if (target is SharpTSObjectPrototype objectPrototype && propertyKey is string prototypeName)
             return DefineObjectPrototypeProperty(
                 interpreter, objectPrototype, prototypeName, ToPropertyDescriptor(interpreter, descriptor));
+        if (target is SharpTSNumberPrototype { HasExplicitPrototype: true } numberPrototype
+            && propertyKey is SharpTSSymbol numberSymbol)
+            return numberPrototype.DefineOwnSymbolProperty(
+                numberSymbol, ToPropertyDescriptor(interpreter, descriptor));
+        if (target is SharpTSBooleanPrototype { HasExplicitPrototype: true } booleanPrototype
+            && propertyKey is SharpTSSymbol booleanSymbol)
+            return booleanPrototype.DefineOwnSymbolProperty(
+                booleanSymbol, ToPropertyDescriptor(interpreter, descriptor));
         if (target is SharpTSObjectNamespace objectNamespace)
         {
             if (propertyKey is string name)
@@ -2629,6 +2637,8 @@ public static partial class ObjectBuiltIns
             => (object?)classPrototype.Class.Superclass?.Prototype ?? interp?.GetObjectPrototype(),
         // The Number prototype object is ordinary and inherits from this realm's
         // Object.prototype.
+        SharpTSNumberPrototype { HasExplicitPrototype: true } numberPrototype => numberPrototype.ExplicitPrototype,
+        SharpTSBooleanPrototype { HasExplicitPrototype: true } booleanPrototype => booleanPrototype.ExplicitPrototype,
         SharpTSNumberPrototype => interp?.GetObjectPrototype(),
         SharpTSBooleanPrototype => interp?.GetObjectPrototype(),
         SharpTSBigIntPrototype => interp?.GetObjectPrototype(),
@@ -2730,6 +2740,16 @@ public static partial class ObjectBuiltIns
         {
             case SharpTSObjectPrototype:
                 return proto is null;
+
+            case SharpTSNumberPrototype or SharpTSBooleanPrototype:
+                if (ReferenceEquals(PrototypeOf(interpreter, target), proto)) return true;
+                if (!PropertyDescriptorStore.IsExtensible(target)) return false;
+                if (WouldCreatePrototypeCycle(interpreter, target, proto)) return false;
+                if (target is SharpTSNumberPrototype numberPrototype)
+                    numberPrototype.SetExplicitPrototype(proto);
+                else
+                    ((SharpTSBooleanPrototype)target).SetExplicitPrototype(proto);
+                return true;
 
             case SharpTSArray array:
                 if (ReferenceEquals(PrototypeOf(interpreter, array), proto)) return true;
@@ -2835,7 +2855,7 @@ public static partial class ObjectBuiltIns
             candidate = candidate switch
             {
                 SharpTSObject or SharpTSArray or SharpTSClassPrototype or SharpTSInstance or SharpTSArrayGlobal or SharpTSClass or SharpTSPromise
-                    or SharpTSFunctionPrototype
+                    or SharpTSFunctionPrototype or SharpTSNumberPrototype or SharpTSBooleanPrototype
                     or Dictionary<string, object?>
                     => PrototypeOf(interpreter, candidate),
                 ISharpTSCallable function when function is not SharpTSProxy

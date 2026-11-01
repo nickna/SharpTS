@@ -265,7 +265,8 @@ public partial class Interpreter
             return true;
         }
         if (HasCanonicalIndexProperties(obj) || UsesNonextensibleBuiltInPrototypeStringIndex(obj, index)
-            || UsesTypedArrayNamedStringIndex(obj, index))
+            || UsesTypedArrayNamedStringIndex(obj, index)
+            || (UsesExplicitPrimitivePrototypeLink(obj) && index is string or SharpTSSymbol))
         {
             SetOwnPropertyObjectValue(obj!, ToPropertyKey(index), value, _environment.IsStrictMode);
             return true;
@@ -288,6 +289,10 @@ public partial class Interpreter
 
     private static bool UsesPrimitivePrototypePropertyReads(object? target)
         => target is SharpTSStringPrototype or SharpTSNumberPrototype or SharpTSBooleanPrototype;
+
+    private static bool UsesExplicitPrimitivePrototypeLink(object? target)
+        => target is SharpTSNumberPrototype { HasExplicitPrototype: true }
+            or SharpTSBooleanPrototype { HasExplicitPrototype: true };
 
     private static bool UsesNonextensibleBuiltInPrototypeStringIndex(object? target, object? key)
         => key is string && UsesNonextensibleBuiltInPrototypeWrite(target);

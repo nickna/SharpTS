@@ -797,6 +797,16 @@ public class SharpTSProxy : ISharpTSCallable
                 ? ownPropertyObject.OwnProperties.GetOwnPropertyDescriptor(symbol)
                 : ownPropertyObject.OwnProperties.GetOwnPropertyDescriptor((string)prop);
         }
+        else if (prop is SharpTSSymbol numberSymbol
+            && target is SharpTSNumberPrototype { HasExplicitPrototype: true } numberPrototype)
+        {
+            return numberPrototype.GetOwnSymbolPropertyDescriptor(numberSymbol);
+        }
+        else if (prop is SharpTSSymbol booleanSymbol
+            && target is SharpTSBooleanPrototype { HasExplicitPrototype: true } booleanPrototype)
+        {
+            return booleanPrototype.GetOwnSymbolPropertyDescriptor(booleanSymbol);
+        }
         else if (prop is string name)
         {
             return ObjectBuiltIns.OwnPropertyDescriptorOf(interpreter, target, name);

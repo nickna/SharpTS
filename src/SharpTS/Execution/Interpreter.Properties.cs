@@ -978,9 +978,14 @@ public partial class Interpreter
                     return getter is null
                         ? SharpTSUndefined.Instance
                         : BindAccessorToObject(getter, receiver).CallBoxed(this, []);
-                return symbolBag.HasSymbolProperty(symbol)
-                    ? symbolBag.GetBySymbol(symbol)
-                    : SharpTSUndefined.Instance;
+                if (symbolBag.HasSymbolProperty(symbol))
+                    return symbolBag.GetBySymbol(symbol);
+                if (UsesExplicitPrimitivePrototypeLink(current))
+                {
+                    current = ObjectBuiltIns.PrototypeOf(this, current);
+                    continue;
+                }
+                return SharpTSUndefined.Instance;
             }
 
             if (current is SharpTSClass klass)
@@ -1260,6 +1265,11 @@ public partial class Interpreter
             }
             if (current is ISharpTSSymbolPropertyBag symbolBag
                 && symbolBag.HasSymbolProperty(symbol)) return true;
+            if (UsesExplicitPrimitivePrototypeLink(current))
+            {
+                current = ObjectBuiltIns.PrototypeOf(this, current);
+                continue;
+            }
 
             return GetSymbolPropertyValue(current, symbol) is not SharpTSUndefined;
         }
@@ -3114,7 +3124,7 @@ public partial class Interpreter
             && TryAssignThroughDescriptor(stringPrototype.GetOwnPropertyDescriptor(set.Name.Lexeme),
                 stringPrototype, set.Name.Lexeme, value, strictMode))
             return value;
-        if (UsesNonextensibleBuiltInPrototypeWrite(obj))
+        if (UsesNonextensibleBuiltInPrototypeWrite(obj) || UsesExplicitPrimitivePrototypeLink(obj))
         {
             SetOwnPropertyObjectValue(obj!, set.Name.Lexeme, value, strictMode);
             return value;
