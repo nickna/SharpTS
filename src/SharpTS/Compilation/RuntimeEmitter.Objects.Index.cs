@@ -32,6 +32,8 @@ public partial class RuntimeEmitter
         EmittedSymbolRuntime Symbols,
         TypeBuilder TSFunctionType,
         EmittedTypedArrayRuntime TypedArrays,
+        MethodInfo ToNumber,
+        MethodInfo? ToBigInt,
         MethodInfo ToPropertyKey,
         Type UndefinedType,
         MethodInfo? NativeProxyRejection,
@@ -68,6 +70,7 @@ public partial class RuntimeEmitter
         MethodBuilder TSFunctionLengthGetter,
         TypeBuilder TSFunctionType,
         EmittedTypedArrayRuntime TypedArrays,
+        MethodInfo ToNumber,
         FieldInfo UndefinedInstance,
         Type UndefinedType,
         EmittedBooleanRuntime Booleans,
@@ -174,6 +177,9 @@ public partial class RuntimeEmitter
         il.Emit(OpCodes.Ldarg_1);
         il.Emit(OpCodes.Call, inputs.Symbols.IsSymbol);
         il.Emit(OpCodes.Brtrue, symbolKeyLabel);
+
+        EmitTypedArrayCanonicalIndexGet(il, inputs.TypedArrays, inputs.ToNumber,
+            inputs.StringCoercion.ToJsString, inputs.UndefinedInstance);
 
         // globalThis/global sentinel (#271): `root[stringKey]` resolves through
         // GlobalThisGetProperty (the index is coerced to a property-key string),
@@ -1384,6 +1390,9 @@ public partial class RuntimeEmitter
         il.Emit(OpCodes.Ldarg_1);
         il.Emit(OpCodes.Call, inputs.Symbols.IsSymbol);
         il.Emit(OpCodes.Brtrue, symbolKeyLabel);
+
+        EmitTypedArrayCanonicalIndexSet(il, inputs.TypedArrays, inputs.ToNumber,
+            inputs.ToBigInt, inputs.StringCoercion.ToJsString);
 
         EmitGuestOwnNamedIndex(il, inputs.GuestOwnProperties, inputs.GuestOwnSetProperty, write: true);
 

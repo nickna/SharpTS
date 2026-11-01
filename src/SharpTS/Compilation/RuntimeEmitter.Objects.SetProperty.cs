@@ -142,6 +142,8 @@ public partial class RuntimeEmitter
         EmittedReflectAssignment? ReflectAssignment,
         EmittedStringCoercionRuntime StringCoercion,
         EmittedSymbolRuntime Symbols,
+        EmittedTypedArrayRuntime TypedArrays,
+        MethodInfo ToNumber,
         MethodInfo ToPropertyKey,
         Type UndefinedType,
         MethodInfo? NativeProxyRejection
@@ -3637,6 +3639,9 @@ public partial class RuntimeEmitter
         il.Emit(OpCodes.Call, objectWrite.SymbolIndex);
         il.Emit(OpCodes.Ret);
         il.MarkLabel(notSymbolKeyLabel);
+
+        EmitTypedArrayCanonicalIndexStrictSet(il, inputs.TypedArrays, inputs.ToNumber,
+            inputs.StringCoercion.ToJsString, objectWrite.Index);
 
         // Check if $Array (for strict mode support)
         il.Emit(OpCodes.Ldarg_0);
