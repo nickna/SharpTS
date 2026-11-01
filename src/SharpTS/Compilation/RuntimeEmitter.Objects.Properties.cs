@@ -3194,6 +3194,19 @@ public partial class RuntimeEmitter
         {
             // TypedArray handler - call emitted typed-array member helper
             il.MarkLabel(typedArrayLabel);
+            var intrinsicTypedArrayMember = il.DefineLabel();
+            il.Emit(OpCodes.Ldarg_1);
+            il.Emit(OpCodes.Ldstr, "length");
+            il.Emit(OpCodes.Call, _types.GetMethod(_types.String, "op_Equality", _types.String, _types.String));
+            il.Emit(OpCodes.Brfalse, intrinsicTypedArrayMember);
+            // Ordinary length reads use the same own-descriptor and explicit
+            // prototype lookup as Reflect.get, with the target as Receiver.
+            il.Emit(OpCodes.Ldarg_0);
+            il.Emit(OpCodes.Ldarg_1);
+            il.Emit(OpCodes.Ldarg_0);
+            il.Emit(OpCodes.Call, inputs.Reflect.Get);
+            il.Emit(OpCodes.Ret);
+            il.MarkLabel(intrinsicTypedArrayMember);
             il.Emit(OpCodes.Ldarg_0);
             il.Emit(OpCodes.Ldarg_1);
             il.Emit(OpCodes.Call, inputs.TypedArrays.RequireImplementation().GetMember);
