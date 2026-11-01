@@ -120,7 +120,7 @@ public static class StructuredClone
     }
 
     private static bool IsPrimitive(object? value)
-        => value is null or double or string or bool or BigInteger;
+        => value is null or SharpTSUndefined or double or string or bool or BigInteger;
 
     private static bool TryCloneFlatDictionary(
         Dictionary<string, object?> source,
@@ -166,7 +166,7 @@ public static class StructuredClone
         if (value == null)
             return null;
 
-        if (value is double or string or bool or BigInteger)
+        if (value is SharpTSUndefined or double or string or bool or BigInteger)
             return value;
 
         // Check for circular reference
