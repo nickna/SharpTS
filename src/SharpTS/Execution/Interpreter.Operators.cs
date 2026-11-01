@@ -277,15 +277,20 @@ public partial class Interpreter
 
         // Integer-indexed writes convert even for invalid numeric indices.
         // Ordinary named/Symbol slots retain their values without narrowing.
-        object? stored = value;
-        if (target is SharpTSBigInt64Array or SharpTSBigUint64Array)
-        {
-            stored = ToPrimitive(stored, PrimitiveHint.Number);
-            _ = SharpTSTypedArray.ToBigInt64Bits(stored);
-        }
-        else stored = ToNumberWithPrimitive(stored);
+        object? stored = ConvertTypedArrayElementValue(target, value);
         int index = ResolveTypedArrayCompoundIndex(target, key);
         if (index >= 0) target[index] = stored;
+    }
+
+    internal object? ConvertTypedArrayElementValue(SharpTSTypedArray target, object? value)
+    {
+        if (target is SharpTSBigInt64Array or SharpTSBigUint64Array)
+        {
+            object? primitive = ToPrimitive(value, PrimitiveHint.Number);
+            _ = SharpTSTypedArray.ToBigInt64Bits(primitive);
+            return primitive;
+        }
+        return ToNumberWithPrimitive(value);
     }
 
     /// <summary>

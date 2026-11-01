@@ -1,5 +1,6 @@
 using System.Runtime.CompilerServices;
 using System.Runtime.InteropServices;
+using SharpTS.Execution;
 using SharpTS.Runtime.BuiltIns;
 using SharpTS.Runtime.Exceptions;
 using SharpTS.TypeSystem;
@@ -580,102 +581,111 @@ public abstract class SharpTSTypedArray : ITypeCategorized
             "BYTES_PER_ELEMENT" => (double)BytesPerElement,
             "buffer" => _sharedBuffer ?? (object?)_arrayBuffer,
 
-            "set" => BuiltInMethod.CreateV2("set", 1, 2, (_, _, args) =>
+            "set" => BuiltInMethod.CreateV2("set", 1, 2, (interpreter, _, args) =>
             {
                 if (args.Length == 0)
                     throw new Exception("TypedArray.set requires a source argument");
-                int offset = args.Length > 1 && args[1].IsNumber ? (int)args[1].AsNumberUnsafe() : 0;
+                int offset = args.Length > 1 ? ConvertMethodIndex(interpreter, args[1]) : 0;
+                if (offset < 0)
+                    throw new ThrowException(new SharpTSRangeError("Offset is outside the target"));
+                ValidateAttachedBuffer();
+                if (offset > _length)
+                    throw new ThrowException(new SharpTSRangeError("Offset is outside the target"));
                 Set(args[0].ToObject()!, offset);
                 return RuntimeValue.Null;
             }),
 
-            "slice" => BuiltInMethod.CreateV2("slice", 0, 2, (_, _, args) =>
+            "slice" => BuiltInMethod.CreateV2("slice", 0, 2, (interpreter, _, args) =>
             {
-                int begin = args.Length > 0 && args[0].IsNumber ? (int)args[0].AsNumberUnsafe() : 0;
-                int? end = args.Length > 1 && args[1].IsNumber ? (int)args[1].AsNumberUnsafe() : null;
+                ValidateAttachedBuffer();
+                int begin = args.Length > 0 ? ConvertMethodIndex(interpreter, args[0]) : 0;
+                int? end = args.Length > 1 && !args[1].IsUndefined ? ConvertMethodIndex(interpreter, args[1]) : null;
+                // A zero-copy slice may finish after argument conversion detaches its owner.
+                if (IsArrayBufferDetached && RelativeMethodIndex(end ?? _length, _length) <= RelativeMethodIndex(begin, _length))
+                    return RuntimeValue.FromObject(Allocate(0));
                 return RuntimeValue.FromObject(Slice(begin, end));
             }),
 
-            "subarray" => BuiltInMethod.CreateV2("subarray", 0, 2, (_, _, args) =>
+            "subarray" => BuiltInMethod.CreateV2("subarray", 0, 2, (interpreter, _, args) =>
             {
-                int begin = args.Length > 0 && args[0].IsNumber ? (int)args[0].AsNumberUnsafe() : 0;
-                int? end = args.Length > 1 && args[1].IsNumber ? (int)args[1].AsNumberUnsafe() : null;
+                int begin = args.Length > 0 ? ConvertMethodIndex(interpreter, args[0]) : 0;
+                int? end = args.Length > 1 && !args[1].IsUndefined ? ConvertMethodIndex(interpreter, args[1]) : null;
                 return RuntimeValue.FromObject(Subarray(begin, end));
             }),
 
-            "fill" => BuiltInMethod.CreateV2("fill", 1, 3, (_, receiver, args) =>
+            "fill" => BuiltInMethod.CreateV2("fill", 1, 3, (interpreter, receiver, args) =>
             {
                 if (receiver.ToObject() is not SharpTSTypedArray target)
-                    throw new ThrowException(new SharpTSTypeError(
-                        "TypedArray.fill called on incompatible receiver"));
-                if (args.Length == 0)
-                    throw new Exception("TypedArray.fill requires a value argument");
-                int start = args.Length > 1 && args[1].IsNumber ? (int)args[1].AsNumberUnsafe() : 0;
-                int? end = args.Length > 2 && args[2].IsNumber ? (int)args[2].AsNumberUnsafe() : null;
-                return RuntimeValue.FromObject(target.Fill(args[0].ToObject(), start, end));
+                    throw new ThrowException(new SharpTSTypeError("TypedArray.fill called on incompatible receiver"));
+                target.ValidateAttachedBuffer();
+                object? value = interpreter.ConvertTypedArrayElementValue(target,
+                    args.Length > 0 ? args[0].ToObject() : SharpTSUndefined.Instance);
+                int start = args.Length > 1 ? RelativeMethodIndex(ConvertMethodIndex(interpreter, args[1]), target._length) : 0;
+                int end = args.Length > 2 && !args[2].IsUndefined
+                    ? RelativeMethodIndex(ConvertMethodIndex(interpreter, args[2]), target._length) : target._length;
+                return RuntimeValue.FromObject(target.Fill(value, start, end));
             }),
 
-            "copyWithin" => BuiltInMethod.CreateV2("copyWithin", 2, 3, (_, _, args) =>
+            "copyWithin" => BuiltInMethod.CreateV2("copyWithin", 2, 3, (interpreter, _, args) =>
             {
-                if (args.Length < 2)
-                    throw new Exception("TypedArray.copyWithin requires target and start arguments");
-                int target = args[0].IsNumber ? (int)args[0].AsNumberUnsafe() : 0;
-                int start = args[1].IsNumber ? (int)args[1].AsNumberUnsafe() : 0;
-                int? end = args.Length > 2 && args[2].IsNumber ? (int)args[2].AsNumberUnsafe() : null;
+                ValidateAttachedBuffer();
+                int target = args.Length > 0 ? RelativeMethodIndex(ConvertMethodIndex(interpreter, args[0]), _length) : 0;
+                int start = args.Length > 1 ? RelativeMethodIndex(ConvertMethodIndex(interpreter, args[1]), _length) : 0;
+                int end = args.Length > 2 && !args[2].IsUndefined
+                    ? RelativeMethodIndex(ConvertMethodIndex(interpreter, args[2]), _length) : _length;
+                if (end <= start || target >= _length)
+                    return RuntimeValue.FromObject(this);
                 return RuntimeValue.FromObject(CopyWithin(target, start, end));
             }),
 
             "reverse" => BuiltInMethod.CreateV2("reverse", 0, (_, _, _) => RuntimeValue.FromObject(Reverse())),
-
-            "indexOf" => BuiltInMethod.CreateV2("indexOf", 1, 2, (_, _, args) =>
-            {
-                if (args.Length == 0)
-                    throw new Exception("TypedArray.indexOf requires a search element");
-                int fromIndex = args.Length > 1 && args[1].IsNumber ? (int)args[1].AsNumberUnsafe() : 0;
-                return RuntimeValue.FromNumber(IndexOf(args[0].ToObject(), fromIndex));
-            }),
-
-            "lastIndexOf" => BuiltInMethod.CreateV2("lastIndexOf", 1, 2, (_, _, args) =>
-            {
-                if (args.Length == 0)
-                    throw new Exception("TypedArray.lastIndexOf requires a search element");
-                int? fromIndex = args.Length > 1 && args[1].IsNumber ? (int)args[1].AsNumberUnsafe() : null;
-                return RuntimeValue.FromNumber(LastIndexOf(args[0].ToObject(), fromIndex));
-            }),
-
-            "includes" => BuiltInMethod.CreateV2("includes", 1, 2, (_, _, args) =>
-            {
-                if (args.Length == 0)
-                    throw new Exception("TypedArray.includes requires a search element");
-                int fromIndex = args.Length > 1 && args[1].IsNumber ? (int)args[1].AsNumberUnsafe() : 0;
-                return RuntimeValue.FromBoolean(Includes(args[0].ToObject(), fromIndex));
-            }),
-
-            "join" => BuiltInMethod.CreateV2("join", 0, 1, (_, _, args) =>
-            {
-                ValidateAttachedBuffer();
-                string separator = args.Length > 0 ? args[0].ToObject()?.ToString() ?? "," : ",";
-                var parts = new string[_length];
-                for (int i = 0; i < _length; i++)
-                {
-                    parts[i] = this[i]?.ToString() ?? "";
-                }
-                return RuntimeValue.FromString(string.Join(separator, parts));
-            }),
-
-            "toString" => BuiltInMethod.CreateV2("toString", 0, (_, _, _) =>
-            {
-                ValidateAttachedBuffer();
-                var parts = new string[_length];
-                for (int i = 0; i < _length; i++)
-                {
-                    parts[i] = this[i]?.ToString() ?? "";
-                }
-                return RuntimeValue.FromString(string.Join(",", parts));
-            }),
+            "indexOf" => BuiltInMethod.CreateV2("indexOf", 1, 2, (interpreter, _, args) =>
+                SearchMethod(interpreter, args, backwards: false, includes: false)),
+            "lastIndexOf" => BuiltInMethod.CreateV2("lastIndexOf", 1, 2, (interpreter, _, args) =>
+                SearchMethod(interpreter, args, backwards: true, includes: false)),
+            "includes" => BuiltInMethod.CreateV2("includes", 1, 2, (interpreter, _, args) =>
+                SearchMethod(interpreter, args, backwards: false, includes: true)),
+            "join" => BuiltInMethod.CreateV2("join", 0, 1, (interpreter, _, args) => JoinMethod(interpreter, args)),
+            "toString" => BuiltInMethod.CreateV2("toString", 0, (interpreter, _, _) => JoinMethod(interpreter, [])),
 
             _ => null
         };
+    }
+
+    private static int ConvertMethodIndex(Interpreter interpreter, RuntimeValue value)
+    {
+        double number = interpreter.ToNumberWithPrimitive(value.ToObject());
+        if (double.IsNaN(number)) return 0;
+        if (number >= int.MaxValue) return int.MaxValue;
+        if (number <= int.MinValue) return int.MinValue;
+        return (int)number;
+    }
+
+    private static int RelativeMethodIndex(int index, int length)
+        => index < 0 ? Math.Max(length + index, 0) : Math.Min(index, length);
+
+    private RuntimeValue SearchMethod(Interpreter interpreter, ReadOnlySpan<RuntimeValue> args, bool backwards, bool includes)
+    {
+        ValidateAttachedBuffer();
+        if (_length == 0) return includes ? RuntimeValue.False : RuntimeValue.FromNumber(-1);
+        object? value = args.Length > 0 ? args[0].ToObject() : SharpTSUndefined.Instance;
+        int index = args.Length > 1 ? ConvertMethodIndex(interpreter, args[1]) : backwards ? _length - 1 : 0;
+        if (index < 0) index = backwards ? _length + index : Math.Max(_length + index, 0);
+        if (IsArrayBufferDetached)
+            return includes ? RuntimeValue.FromBoolean(value is SharpTSUndefined && index < _length) : RuntimeValue.FromNumber(-1);
+        return includes ? RuntimeValue.FromBoolean(Includes(value, index))
+            : RuntimeValue.FromNumber(backwards ? LastIndexOf(value, index) : IndexOf(value, index));
+    }
+
+    private RuntimeValue JoinMethod(Interpreter interpreter, ReadOnlySpan<RuntimeValue> args)
+    {
+        ValidateAttachedBuffer();
+        string separator = args.Length == 0 || args[0].IsUndefined ? ","
+            : interpreter.ToStringForBuiltInArgument(args[0].ToObject());
+        var parts = new string[_length];
+        for (int i = 0; i < parts.Length; i++)
+            parts[i] = IsArrayBufferDetached ? "" : interpreter.Stringify(this[i]);
+        return RuntimeValue.FromString(string.Join(separator, parts));
     }
 
     public override string ToString()
