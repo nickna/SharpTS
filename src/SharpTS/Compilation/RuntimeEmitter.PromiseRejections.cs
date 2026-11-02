@@ -154,7 +154,15 @@ public partial class RuntimeEmitter
         il.Emit(OpCodes.Ldfld, identityField);
         il.Emit(OpCodes.Stelem_Ref);
         il.Emit(OpCodes.Callvirt, runtime.EventEmitter.Emit);
-        il.Emit(OpCodes.Pop);
+        il.Emit(OpCodes.Brtrue, unref);
+
+        // With no listener, an unhandled rejection is a fatal guest error.
+        // Balance this report's event-loop reference before propagating it.
+        il.Emit(OpCodes.Call, runtime.EventLoop.GetInstance);
+        il.Emit(OpCodes.Callvirt, runtime.EventLoop.Unref);
+        il.Emit(OpCodes.Ldloc, reason);
+        il.Emit(OpCodes.Call, runtime.Errors.CreateException);
+        il.Emit(OpCodes.Throw);
 
         il.MarkLabel(unref);
         il.Emit(OpCodes.Call, runtime.EventLoop.GetInstance);

@@ -523,7 +523,7 @@ public partial class ILCompiler
             il.MarkLabel(haveTask);
             il.Emit(OpCodes.Ldloc, task);
             il.Emit(OpCodes.Call, _runtime.RequirePromise().TrackTopLevelPromiseReaction);
-            il.Emit(OpCodes.Pop);
+            il.Emit(OpCodes.Call, _runtime.RequirePromise().ObserveDiscardedPromiseResult);
             il.MarkLabel(done);
             return;
         }
@@ -549,6 +549,13 @@ public partial class ILCompiler
             il.Emit(OpCodes.Ldloc, exprResult);
             il.Emit(OpCodes.Call, _runtime.RequirePromise().ShouldAutoAwaitPromiseMethod);
             il.Emit(OpCodes.Brfalse, notTaskLabel);
+            if (exprStmt.Expr is not Expr.Await)
+            {
+                // This owner emits expressions directly rather than through EmitStatement.
+                // Retain the existing discarded-promise rejection observation here too.
+                il.Emit(OpCodes.Ldloc, exprResult);
+                il.Emit(OpCodes.Call, _runtime.RequirePromise().ObserveDiscardedPromiseResult);
+            }
         }
 
         // Check for Task<object> first
