@@ -85,6 +85,9 @@ internal sealed partial class ForwardedReturnValueAnalyzer(TypeMap map, RuntimeF
             Expr.Call call => (evidence != RawCallStorageAnalysis.Evidence.Numeric || storage?.HasNumericProducer == true)
                 && (IsPrimitive(map.Get(call)) && !CallReturnsNative(call)
                     || map.Get(call) is TypeInfo.Any or TypeInfo.Unknown or TypeInfo.Inferred
+                    || map.Get(call) is TypeInfo.Primitive { Type: TokenType.TYPE_STRING } or TypeInfo.String or TypeInfo.StringLiteral
+                        && _targets.TryGetValue(call, out var stringTarget)
+                        && FunctionReturnsRawValue(stringTarget, RawCallStorageAnalysis.Evidence.Any, _stringReturnVisiting)
                     || evidence == RawCallStorageAnalysis.Evidence.Numeric
                         && map.Get(call) is TypeInfo.BigInt or TypeInfo.BigIntLiteral
                         && _targets.TryGetValue(call, out var target) && FunctionReturnsRawNumeric(target)
@@ -149,19 +152,25 @@ internal sealed partial class ForwardedReturnValueAnalyzer(TypeMap map, RuntimeF
         TokenType.AMPERSAND or TokenType.PIPE or TokenType.CARET or TokenType.LESS_LESS or TokenType.GREATER_GREATER or
         TokenType.GREATER_GREATER_GREATER;
 
-    private bool FunctionReturnsRawNumeric(Stmt.Function function)
+    private readonly HashSet<Stmt.Function> _stringReturnVisiting = new(ReferenceEqualityComparer.Instance);
+
+    private bool FunctionReturnsRawNumeric(Stmt.Function function) =>
+        FunctionReturnsRawValue(function, RawCallStorageAnalysis.Evidence.Numeric, _numericReturnVisiting);
+
+    private bool FunctionReturnsRawValue(Stmt.Function function, RawCallStorageAnalysis.Evidence evidence,
+        HashSet<Stmt.Function> visiting)
     {
         // This is negative evidence from an actual stable target body, not a
         // native-return classification. Cycles alone establish no producer;
         // the surrounding fixed point revisits callers after real evidence grows.
-        if (!_numericReturnVisiting.Add(function)) return false;
+        if (!visiting.Add(function)) return false;
         try
         {
             var returns = new Returns();
             foreach (var statement in function.Body ?? []) returns.Visit(statement);
-            return returns.Values.Any(value => PassesRawCall(value, RawCallStorageAnalysis.Evidence.Numeric));
+            return returns.Values.Any(value => PassesRawCall(value, evidence));
         }
-        finally { _numericReturnVisiting.Remove(function); }
+        finally { visiting.Remove(function); }
     }
 
     private bool FunctionReturnsRaw(Stmt.Function function)

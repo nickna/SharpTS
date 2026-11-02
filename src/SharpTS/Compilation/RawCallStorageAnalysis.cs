@@ -148,6 +148,7 @@ internal sealed partial class RawCallStorageAnalysis
                 passesRawValue(flow.Value, Evidence.Numeric));
         // Flow facts from this epoch can invalidate a formerly numeric argument.
         changed |= SeedDynamicNumericArguments();
+        changed |= SeedDynamicStringArguments();
         return PropagateArguments(passesRawValue) | changed;
     }
 
