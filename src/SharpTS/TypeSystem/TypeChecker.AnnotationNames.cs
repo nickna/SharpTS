@@ -22,7 +22,12 @@ public partial class TypeChecker
             !_completedTypeDeclarationScopes.Contains(_environment))
             return;
         if (FindUnknownTypeArgument(annotation, [], insideArgument: false) is { } unknown)
-            throw new TypeCheckException($" Cannot find name '{unknown.Name}'.", unknown.Line, tsCode: "TS2304");
+        {
+            var error = new TypeCheckException($" Cannot find name '{unknown.Name}'.", unknown.Line, tsCode: "TS2304");
+            // Recovery must finish the unavailable declaration's callable/member surface.
+            if (_recoveryMode) RecordTypeError(error);
+            else throw error;
+        }
     }
 
     private NamedTypeNode? FindUnknownTypeArgument(TypeNode node, HashSet<string> bound, bool insideArgument)
