@@ -1092,6 +1092,10 @@ public partial class RuntimeEmitter
             il.Emit(OpCodes.Stloc, srcTALocal);
             il.Emit(OpCodes.Ldloc, srcTALocal);
             il.Emit(OpCodes.Castclass, arrays.BaseType);
+            il.Emit(OpCodes.Call, arrays.GetBuffer);
+            il.Emit(OpCodes.Pop);
+            il.Emit(OpCodes.Ldloc, srcTALocal);
+            il.Emit(OpCodes.Castclass, arrays.BaseType);
             il.Emit(OpCodes.Callvirt, arrays.LengthGetter);
             il.Emit(OpCodes.Stloc, taLengthLocal);
             il.Emit(OpCodes.Ldloc, taLengthLocal);

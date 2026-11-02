@@ -12,7 +12,7 @@ public partial class RuntimeEmitter
     {
         var arrays = runtime.TypedArrays.RequireImplementation();
         // First emit the base class
-        EmitTypedArrayBaseType(module, arrays);
+        EmitTypedArrayBaseType(module, arrays, runtime.RequireArrayBuffer(), runtime.Errors, runtime.Sentinels.UndefinedType);
 
         // Then emit concrete types
         EmitConcreteTypedArrayType(module, runtime, "Int8Array", 1, true, false);
@@ -34,7 +34,8 @@ public partial class RuntimeEmitter
     /// <summary>
     /// Emits the abstract $TypedArray base class.
     /// </summary>
-    private void EmitTypedArrayBaseType(ModuleBuilder module, EmittedTypedArrayImplementation arrays)
+    private void EmitTypedArrayBaseType(ModuleBuilder module, EmittedTypedArrayImplementation arrays,
+        EmittedArrayBufferRuntime buffers, EmittedErrorRuntime errors, Type undefinedType)
     {
         arrays.BaseType = EmitTypeDefinitions.DefineType(module,
             "$TypedArray",
@@ -47,6 +48,8 @@ public partial class RuntimeEmitter
         arrays.ByteOffsetField = arrays.BaseType.DefineField("_byteOffset", _types.Int32, FieldAttributes.Family);
         arrays.LengthField = arrays.BaseType.DefineField("_length", _types.Int32, FieldAttributes.Family);
         arrays.ArrayBufferField = arrays.BaseType.DefineField("_arrayBuffer", _types.Object, FieldAttributes.Family);
+
+        var validateAttached = EmitTypedArrayAttachmentMethods(arrays, buffers, errors);
 
         // Abstract properties
         arrays.BytesPerElementGetter = EmitTypedArrayAbstractProperty(arrays.BaseType, "BytesPerElement", _types.Int32);
@@ -93,6 +96,8 @@ public partial class RuntimeEmitter
         il.Emit(OpCodes.Ldarg_0);
         il.Emit(OpCodes.Ldarg, 4);
         il.Emit(OpCodes.Stfld, arrays.ArrayBufferField);
+        il.Emit(OpCodes.Ldarg_0);
+        il.Emit(OpCodes.Call, validateAttached);
         il.Emit(OpCodes.Ret);
 
         // GetBuffer method for internal access
@@ -104,6 +109,8 @@ public partial class RuntimeEmitter
         );
         arrays.GetBuffer = getBufferMethod;
         var getBufferIl = getBufferMethod.GetILGenerator();
+        getBufferIl.Emit(OpCodes.Ldarg_0);
+        getBufferIl.Emit(OpCodes.Call, validateAttached);
         getBufferIl.Emit(OpCodes.Ldarg_0);
         getBufferIl.Emit(OpCodes.Ldfld, arrays.BufferField);
         getBufferIl.Emit(OpCodes.Ret);
@@ -127,7 +134,54 @@ public partial class RuntimeEmitter
         // Bulk instance methods (fill/copyWithin/reverse/set/slice/subarray/indexOf/…) mirroring
         // the interpreter's GetMember surface. Emitted here, before CreateType, so they live on
         // the base type. BCL-only — standalone-safe.
-        EmitTypedArrayBulkMethods(arrays.BaseType, arrays);
+        EmitTypedArrayBulkMethods(arrays.BaseType, arrays, undefinedType);
+    }
+
+    private MethodBuilder EmitTypedArrayAttachmentMethods(EmittedTypedArrayImplementation arrays,
+        EmittedArrayBufferRuntime buffers, EmittedErrorRuntime errors)
+    {
+        var predicate = arrays.BaseType.DefineMethod("IsDetached", MethodAttributes.Assembly | MethodAttributes.HideBySig,
+            _types.Boolean, Type.EmptyTypes);
+        arrays.IsDetached = predicate;
+        var il = predicate.GetILGenerator();
+        var owner = il.DeclareLocal(buffers.Type);
+        var actualOwner = il.DefineLabel();
+        il.Emit(OpCodes.Ldarg_0);
+        il.Emit(OpCodes.Ldfld, arrays.ArrayBufferField);
+        il.Emit(OpCodes.Isinst, buffers.Type);
+        il.Emit(OpCodes.Stloc, owner);
+        il.Emit(OpCodes.Ldloc, owner);
+        il.Emit(OpCodes.Brtrue, actualOwner);
+        il.Emit(OpCodes.Ldc_I4_0);
+        il.Emit(OpCodes.Ret);
+        il.MarkLabel(actualOwner);
+        il.Emit(OpCodes.Ldloc, owner);
+        il.Emit(OpCodes.Ldfld, buffers.DetachedField);
+        il.Emit(OpCodes.Ret);
+
+        var validate = arrays.BaseType.DefineMethod("ValidateAttached", MethodAttributes.Family | MethodAttributes.HideBySig,
+            _types.Void, Type.EmptyTypes);
+        il = validate.GetILGenerator();
+        var attached = il.DefineLabel();
+        il.Emit(OpCodes.Ldarg_0);
+        il.Emit(OpCodes.Call, predicate);
+        il.Emit(OpCodes.Brfalse, attached);
+        GuestErrorEmitter.ThrowError(il, errors.CreateException, errors.TypeErrorConstructor,
+            "Cannot operate on a detached ArrayBuffer");
+        il.MarkLabel(attached);
+        il.Emit(OpCodes.Ret);
+        return validate;
+    }
+
+    private void EmitTypedArrayDetachedZeroPrefix(ILGenerator il, EmittedTypedArrayImplementation arrays)
+    {
+        var attached = il.DefineLabel();
+        il.Emit(OpCodes.Ldarg_0);
+        il.Emit(OpCodes.Call, arrays.IsDetached);
+        il.Emit(OpCodes.Brfalse, attached);
+        il.Emit(OpCodes.Ldc_I4_0);
+        il.Emit(OpCodes.Ret);
+        il.MarkLabel(attached);
     }
 
     private MethodBuilder EmitTypedArrayAbstractProperty(TypeBuilder typeBuilder, string name, Type returnType)
@@ -154,6 +208,7 @@ public partial class RuntimeEmitter
         );
         arrays.LengthGetter = getter;
         var il = getter.GetILGenerator();
+        EmitTypedArrayDetachedZeroPrefix(il, arrays);
         il.Emit(OpCodes.Ldarg_0);
         il.Emit(OpCodes.Ldfld, arrays.LengthField);
         il.Emit(OpCodes.Ret);
@@ -171,6 +226,7 @@ public partial class RuntimeEmitter
         );
         arrays.ByteOffsetGetter = getter;
         var il = getter.GetILGenerator();
+        EmitTypedArrayDetachedZeroPrefix(il, arrays);
         il.Emit(OpCodes.Ldarg_0);
         il.Emit(OpCodes.Ldfld, arrays.ByteOffsetField);
         il.Emit(OpCodes.Ret);
@@ -188,9 +244,9 @@ public partial class RuntimeEmitter
         );
         arrays.ByteLengthGetter = getter;
         var il = getter.GetILGenerator();
-        // return _length * BytesPerElement
+        // Intrinsic length reads the current owner state without consulting own shadows.
         il.Emit(OpCodes.Ldarg_0);
-        il.Emit(OpCodes.Ldfld, arrays.LengthField);
+        il.Emit(OpCodes.Call, arrays.LengthGetter);
         il.Emit(OpCodes.Ldarg_0);
         il.Emit(OpCodes.Callvirt, arrays.BytesPerElementGetter);
         il.Emit(OpCodes.Mul);

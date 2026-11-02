@@ -34,6 +34,13 @@ public sealed class EmittedTypedArrayImplementation
         internal set => Set(ref _baseCtor, value);
     }
 
+    private MethodBuilder? _isDetached;
+    public MethodBuilder IsDetached
+    {
+        get => Require(_isDetached);
+        internal set => Set(ref _isDetached, value);
+    }
+
     private MethodBuilder? _lengthGetter;
     public MethodBuilder LengthGetter
     {
@@ -582,6 +589,7 @@ public sealed class EmittedTypedArrayImplementation
         EnsureMutable();
         _ = BaseType;
         _ = BaseCtor;
+        _ = IsDetached;
         _ = LengthGetter;
         _ = ByteOffsetGetter;
         _ = ByteLengthGetter;

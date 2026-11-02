@@ -153,6 +153,22 @@ public partial class RuntimeEmitter
             il.Emit(OpCodes.Call, stringEquals);
             il.Emit(OpCodes.Brtrue, target);
         }
+        // Set converts its offset first; subarray validates the retained owner when constructing its view.
+        var validateAfterOffset = il.DefineLabel();
+        il.Emit(OpCodes.Ldarg_0);
+        il.Emit(OpCodes.Ldfld, nameField);
+        il.Emit(OpCodes.Ldstr, "set");
+        il.Emit(OpCodes.Call, stringEquals);
+        il.Emit(OpCodes.Brtrue, validateAfterOffset);
+        il.Emit(OpCodes.Ldarg_0);
+        il.Emit(OpCodes.Ldfld, nameField);
+        il.Emit(OpCodes.Ldstr, "subarray");
+        il.Emit(OpCodes.Call, stringEquals);
+        il.Emit(OpCodes.Brtrue, validateAfterOffset);
+        LoadArray();
+        il.Emit(OpCodes.Call, arrays.GetBuffer);
+        il.Emit(OpCodes.Pop);
+        il.MarkLabel(validateAfterOffset);
         Dispatch("fill", lFill);
         Dispatch("copyWithin", lCopyWithin);
         Dispatch("reverse", lReverse);

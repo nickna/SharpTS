@@ -196,6 +196,15 @@ public partial class RuntimeEmitter
             coreIl.Emit(OpCodes.Ldloc, taLocal);
             coreIl.Emit(OpCodes.Brfalse, checkList);
 
+            var attachedView = coreIl.DefineLabel();
+            coreIl.Emit(OpCodes.Ldloc, taLocal);
+            coreIl.Emit(OpCodes.Call, binary.Value.TypedArrays.IsDetached);
+            coreIl.Emit(OpCodes.Brfalse, attachedView);
+            coreIl.Emit(OpCodes.Ldstr, "Cannot clone a detached typed array");
+            coreIl.Emit(OpCodes.Newobj, clone.ErrorCtor);
+            coreIl.Emit(OpCodes.Throw);
+            coreIl.MarkLabel(attachedView);
+
             coreIl.Emit(OpCodes.Ldloc, taLocal);
             coreIl.Emit(OpCodes.Callvirt, binary.Value.TypedArrays.BufferGetter);
             coreIl.Emit(OpCodes.Isinst, binary.Value.SharedArrayBuffer.Type);
