@@ -32,6 +32,14 @@ public sealed class EmittedStructuredCloneRuntime
         internal set => Set(ref _clone, value);
     }
 
+    private MethodBuilder? _guestClone;
+    /// <summary>Actual JavaScript-global entry; bridge-compatible Clone keeps its existing protocol.</summary>
+    public MethodBuilder GuestClone
+    {
+        get => Require(_guestClone);
+        internal set => Set(ref _guestClone, value);
+    }
+
     private static T Require<T>(T? handle, [CallerMemberName] string name = "") where T : class =>
         handle ?? throw new InvalidOperationException($"structured clone metadata '{name}' has not been declared.");
 
@@ -54,6 +62,7 @@ public sealed class EmittedStructuredCloneRuntime
         _ = ErrorType;
         _ = ErrorCtor;
         _ = Clone;
+        _ = GuestClone;
         IsComplete = true;
     }
 }

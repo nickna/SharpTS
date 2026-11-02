@@ -53,7 +53,7 @@ public partial class RuntimeEmitter
             _features.UsesCrypto ? runtime.WebCrypto.GetObject : null,
             _features.UsesFetch ? runtime.Fetch.RequireImplementation().Invoke : null,
             runtime.Abort?.GetControllerConstructor,
-            _features.UsesStructuredClone ? runtime.StructuredClone.Clone : null);
+            (_emitHosted || _features.UsesStructuredClone) ? runtime.StructuredClone.GuestClone : null);
         EmitGlobalThisGetProperty(runtime.GlobalObject,
             new GlobalPropertyReadInputs(runtime.DescriptorStorage, runtime.Invocation.Method,
                 runtime.ObjectState.IsBuiltinDeleted, runtime.Sentinels.UndefinedInstance,

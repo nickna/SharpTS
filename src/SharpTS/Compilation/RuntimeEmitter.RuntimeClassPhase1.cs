@@ -326,5 +326,10 @@ public partial class RuntimeEmitter
             MethodAttributes.Public | MethodAttributes.Static,
             _types.Object,
             [_types.Object, _types.Object]);
+        // No additional body or metadata is retained when the guest API cannot be reached.
+        runtime.StructuredClone.GuestClone = _emitHosted || _features.UsesStructuredClone
+            ? typeBuilder.DefineMethod("StructuredCloneGuest", MethodAttributes.Assembly | MethodAttributes.Static,
+                _types.Object, [_types.Object, _types.Object])
+            : runtime.StructuredClone.Clone;
     }
 }

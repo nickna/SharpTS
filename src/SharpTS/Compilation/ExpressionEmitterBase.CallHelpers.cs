@@ -2409,7 +2409,7 @@ public abstract partial class ExpressionEmitterBase
     {
         EmitBoxedArgOrNull(arguments, 0);
         EmitBoxedArgOrNull(arguments, 1);
-        IL.Emit(OpCodes.Call, Ctx.Runtime!.StructuredClone.Clone);
+        IL.Emit(OpCodes.Call, Ctx.Runtime!.StructuredClone.GuestClone);
     }
 
     protected void EmitFetchCall(List<Expr> arguments)

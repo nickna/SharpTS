@@ -51,23 +51,32 @@ public partial class RuntimeEmitter
 
         // A source without a clone consumer cannot reach the added graph machinery.
         // Hosted and worker/channel consumers keep it even without the global spelling.
-        bool memoEnabled = _emitHosted || _features.UsesStructuredClone || _features.UsesBroadcastChannel;
+        bool guestEntry = _emitHosted || _features.UsesStructuredClone;
+        bool memoEnabled = guestEntry || _features.UsesBroadcastChannel;
         var cloneRecursive = memoEnabled ? runtimeType.DefineMethod(
             "StructuredCloneValue", MethodAttributes.Private | MethodAttributes.Static,
-            _types.Object, [_types.Object, _types.DictionaryObjectObject]) : cloneCore;
+            _types.Object, [_types.Object, _types.DictionaryObjectObject, _types.Boolean]) : cloneCore;
+        MethodBuilder? guestCore = null;
         if (memoEnabled)
         {
-            void EmitEntry(MethodBuilder entry)
+            void EmitEntry(MethodBuilder entry, bool guest)
             {
                 var entryIl = entry.GetILGenerator();
                 entryIl.Emit(OpCodes.Ldarg_0);
                 entryIl.Emit(OpCodes.Call, _types.GetPropertyGetter(typeof(ReferenceEqualityComparer), "Instance"));
                 entryIl.Emit(OpCodes.Newobj, _types.GetConstructor(_types.DictionaryObjectObject,
                     [_types.MakeGenericType(typeof(IEqualityComparer<>), _types.Object)])!);
+                entryIl.Emit(guest ? OpCodes.Ldc_I4_1 : OpCodes.Ldc_I4_0);
                 entryIl.Emit(OpCodes.Call, cloneRecursive);
                 entryIl.Emit(OpCodes.Ret);
             }
-            EmitEntry(cloneCore);
+            EmitEntry(cloneCore, false);
+            if (guestEntry)
+            {
+                guestCore = runtimeType.DefineMethod("StructuredCloneGuestCore",
+                    MethodAttributes.Private | MethodAttributes.Static, _types.Object, [_types.Object]);
+                EmitEntry(guestCore, true);
+            }
         }
         var coreIl = cloneRecursive.GetILGenerator();
         var memoValue = memoEnabled ? coreIl.DeclareLocal(_types.Object) : null;
@@ -78,6 +87,7 @@ public partial class RuntimeEmitter
             if (memoEnabled)
             {
                 coreIl.Emit(OpCodes.Ldarg_1);
+                coreIl.Emit(OpCodes.Ldarg_2);
             }
             coreIl.Emit(OpCodes.Call, cloneRecursive);
         }
@@ -205,6 +215,21 @@ public partial class RuntimeEmitter
         // SharedArrayBuffer is transferred by reference. Skip when typed
         // arrays aren't emitted — no SharedArrayBuffer values can exist.
         coreIl.MarkLabel(checkSharedArrayBuffer);
+        if (guestEntry)
+        {
+            // Only the actual guest-global operation rejects raw CLR task carriers.
+            // Bridge callers retain their existing explicit foreign-value protocol.
+            var notGuestTask = coreIl.DefineLabel();
+            coreIl.Emit(OpCodes.Ldarg_2);
+            coreIl.Emit(OpCodes.Brfalse, notGuestTask);
+            coreIl.Emit(OpCodes.Ldarg_0);
+            coreIl.Emit(OpCodes.Isinst, _types.Task);
+            coreIl.Emit(OpCodes.Brfalse, notGuestTask);
+            coreIl.Emit(OpCodes.Ldstr, "Promise cannot be cloned");
+            coreIl.Emit(OpCodes.Newobj, clone.ErrorCtor);
+            coreIl.Emit(OpCodes.Throw);
+            coreIl.MarkLabel(notGuestTask);
+        }
         if (memoEnabled)
         {
             var unseen = coreIl.DefineLabel();
@@ -788,6 +813,48 @@ public partial class RuntimeEmitter
         // structured-cloned (#1255). Throw rather than alias by reference, matching the
         // interpreter's exhaustive switch (default arm: "Cannot clone value of type X").
         coreIl.MarkLabel(fallbackReturn);
+        if (classes is { } constructorInputs)
+        {
+            var notConstructor = coreIl.DefineLabel();
+            var constructor = coreIl.DeclareLocal(_types.Type);
+            coreIl.Emit(OpCodes.Ldarg_0);
+            coreIl.Emit(OpCodes.Isinst, _types.Type);
+            coreIl.Emit(OpCodes.Stloc, constructor);
+            coreIl.Emit(OpCodes.Ldloc, constructor);
+            coreIl.Emit(OpCodes.Brfalse, notConstructor);
+            NativeTypeIdentityEmitter.EmitRuntimeTypeFence(coreIl, _types,
+                () => coreIl.Emit(OpCodes.Ldloc, constructor), notConstructor);
+            coreIl.Emit(OpCodes.Ldloc, constructor);
+            coreIl.Emit(OpCodes.Callvirt, _types.GetPropertyGetter(_types.Type, "Module"));
+            coreIl.Emit(OpCodes.Ldtoken, constructorInputs.InstanceFields);
+            coreIl.Emit(OpCodes.Call, _types.TypeGetTypeFromHandle);
+            coreIl.Emit(OpCodes.Callvirt, _types.GetPropertyGetter(_types.Type, "Module"));
+            coreIl.Emit(OpCodes.Bne_Un, notConstructor);
+            coreIl.Emit(OpCodes.Ldtoken, constructorInputs.InstanceFields);
+            coreIl.Emit(OpCodes.Call, _types.TypeGetTypeFromHandle);
+            coreIl.Emit(OpCodes.Ldloc, constructor);
+            coreIl.Emit(OpCodes.Callvirt, _types.GetMethod(_types.Type, "IsAssignableFrom", _types.Type));
+            coreIl.Emit(OpCodes.Brfalse, notConstructor);
+            var ready = coreIl.DefineLabel();
+            coreIl.Emit(OpCodes.Ldloc, constructor);
+            coreIl.Emit(OpCodes.Callvirt, _types.GetPropertyGetter(_types.Type, "IsGenericType"));
+            coreIl.Emit(OpCodes.Brfalse, ready);
+            coreIl.Emit(OpCodes.Ldloc, constructor);
+            coreIl.Emit(OpCodes.Callvirt, _types.GetMethodNoParams(_types.Type, "GetGenericTypeDefinition"));
+            coreIl.Emit(OpCodes.Stloc, constructor);
+            coreIl.MarkLabel(ready);
+            var canonical = EmitStaticMemberLookupOwner(coreIl, constructor,
+                constructorInputs.InstanceFields, constructorInputs.SourceOwners);
+            coreIl.Emit(OpCodes.Ldsfld, constructorInputs.RegisteredPrototypes);
+            coreIl.Emit(OpCodes.Ldloc, canonical);
+            coreIl.Emit(OpCodes.Callvirt, _types.GetMethod(constructorInputs.RegisteredPrototypes.FieldType,
+                "ContainsKey", _types.Type));
+            coreIl.Emit(OpCodes.Brfalse, notConstructor);
+            coreIl.Emit(OpCodes.Ldstr, "Class constructors cannot be cloned");
+            coreIl.Emit(OpCodes.Newobj, clone.ErrorCtor);
+            coreIl.Emit(OpCodes.Throw);
+            coreIl.MarkLabel(notConstructor);
+        }
 
         // A value whose CLR type is NOT defined in this dynamically-emitted assembly is
         // foreign — most commonly a SharpTS.dll interpreter runtime value (SharpTSObject/
@@ -834,19 +901,21 @@ public partial class RuntimeEmitter
         coreIl.Emit(OpCodes.Ldloc, clonedSetLocal);
         coreIl.Emit(OpCodes.Ret);
 
-        // The global callable table consumes the phase-1 declaration.
-        var method = clone.Clone;
-
-        var il = method.GetILGenerator();
-        if (transfer.Enabled)
-            EmitStructuredCloneTransferWrapper(il, cloneCore, clone, binary, undefinedType, transfer);
-        else
+        // Both phase-1 entries share the same transfer processing and graph algorithm.
+        void EmitWrapper(MethodBuilder method, MethodBuilder core)
         {
-            il.Emit(OpCodes.Ldarg_0);
-            il.Emit(OpCodes.Call, cloneCore);
-            il.Emit(OpCodes.Ret);
+            var il = method.GetILGenerator();
+            if (transfer.Enabled)
+                EmitStructuredCloneTransferWrapper(il, core, clone, binary, undefinedType, transfer);
+            else
+            {
+                il.Emit(OpCodes.Ldarg_0);
+                il.Emit(OpCodes.Call, core);
+                il.Emit(OpCodes.Ret);
+            }
         }
-
+        EmitWrapper(clone.Clone, cloneCore);
+        if (guestCore is not null) EmitWrapper(clone.GuestClone, guestCore);
     }
 
     private void EmitStructuredCloneTransferWrapper(ILGenerator il, MethodInfo cloneCore,
