@@ -242,6 +242,9 @@ public class EmittedStructuredCloneRuntimeTests
         var type = Assembly.Load(bytes.ToArray()).GetType("$Runtime")!;
         Assert.Equal(expectedMemo,
             type.GetMethod("StructuredCloneValue", BindingFlags.NonPublic | BindingFlags.Static) is not null);
+        var wrap = type.GetMethod("WrapException", BindingFlags.Public | BindingFlags.Static)!;
+        Assert.Equal(expectedMemo, NativeSourceInvocationPlanTests.Instructions(wrap).Any(instruction =>
+            instruction.Code == OpCodes.Isinst && instruction.Member is Type { Name: "$DataCloneError" }));
         var core = type.GetMethod("StructuredCloneCore", BindingFlags.NonPublic | BindingFlags.Static)!;
         Assert.Equal(typeof(object), Assert.Single(core.GetParameters()).ParameterType);
     }

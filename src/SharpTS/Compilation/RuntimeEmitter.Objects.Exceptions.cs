@@ -5,7 +5,7 @@ namespace SharpTS.Compilation;
 
 public partial class RuntimeEmitter
 {
-    private readonly record struct WrapExceptionInputs(EmittedPromiseRuntime? Promise, EmittedStructuredCloneRuntime StructuredClone);
+    private readonly record struct WrapExceptionInputs(EmittedPromiseRuntime? Promise, EmittedStructuredCloneRuntime? StructuredClone);
 
     private void EmitCreateException(EmittedErrorRuntime errors)
     {
@@ -112,30 +112,33 @@ public partial class RuntimeEmitter
         // Preserve the nominal clone failure as an Error value with its guest name.
         // Guest-thrown values and unrelated host exceptions keep their own paths.
         il.MarkLabel(checkDataCloneErrorLabel);
-        il.Emit(OpCodes.Ldloc, exLocal);
-        il.Emit(OpCodes.Isinst, inputs.StructuredClone.ErrorType);
-        il.Emit(OpCodes.Brfalse, checkNodeErrorLabel);
+        if (inputs.StructuredClone is { } clone)
+        {
+            il.Emit(OpCodes.Ldloc, exLocal);
+            il.Emit(OpCodes.Isinst, clone.ErrorType);
+            il.Emit(OpCodes.Brfalse, checkNodeErrorLabel);
 
-        var cloneMessage = il.DeclareLocal(_types.String);
-        var cloneMessageReady = il.DefineLabel();
-        il.Emit(OpCodes.Ldloc, exLocal);
-        il.Emit(OpCodes.Callvirt, _types.GetProperty(_types.Exception, "Message").GetGetMethod()!);
-        il.Emit(OpCodes.Stloc, cloneMessage);
-        il.Emit(OpCodes.Ldloc, cloneMessage);
-        il.Emit(OpCodes.Ldstr, "DataCloneError: ");
-        il.Emit(OpCodes.Callvirt, _types.GetMethod(_types.String, "StartsWith", _types.String));
-        il.Emit(OpCodes.Brfalse, cloneMessageReady);
-        il.Emit(OpCodes.Ldloc, cloneMessage);
-        il.Emit(OpCodes.Ldc_I4, "DataCloneError: ".Length);
-        il.Emit(OpCodes.Callvirt, _types.GetMethod(_types.String, "Substring", _types.Int32));
-        il.Emit(OpCodes.Stloc, cloneMessage);
-        il.MarkLabel(cloneMessageReady);
-        il.Emit(OpCodes.Ldloc, cloneMessage);
-        il.Emit(OpCodes.Newobj, errors.MessageConstructor);
-        il.Emit(OpCodes.Dup);
-        il.Emit(OpCodes.Ldstr, "DataCloneError");
-        il.Emit(OpCodes.Callvirt, errors.NameSetter);
-        il.Emit(OpCodes.Ret);
+            var cloneMessage = il.DeclareLocal(_types.String);
+            var cloneMessageReady = il.DefineLabel();
+            il.Emit(OpCodes.Ldloc, exLocal);
+            il.Emit(OpCodes.Callvirt, _types.GetProperty(_types.Exception, "Message").GetGetMethod()!);
+            il.Emit(OpCodes.Stloc, cloneMessage);
+            il.Emit(OpCodes.Ldloc, cloneMessage);
+            il.Emit(OpCodes.Ldstr, "DataCloneError: ");
+            il.Emit(OpCodes.Callvirt, _types.GetMethod(_types.String, "StartsWith", _types.String));
+            il.Emit(OpCodes.Brfalse, cloneMessageReady);
+            il.Emit(OpCodes.Ldloc, cloneMessage);
+            il.Emit(OpCodes.Ldc_I4, "DataCloneError: ".Length);
+            il.Emit(OpCodes.Callvirt, _types.GetMethod(_types.String, "Substring", _types.Int32));
+            il.Emit(OpCodes.Stloc, cloneMessage);
+            il.MarkLabel(cloneMessageReady);
+            il.Emit(OpCodes.Ldloc, cloneMessage);
+            il.Emit(OpCodes.Newobj, errors.MessageConstructor);
+            il.Emit(OpCodes.Dup);
+            il.Emit(OpCodes.Ldstr, "DataCloneError");
+            il.Emit(OpCodes.Callvirt, errors.NameSetter);
+            il.Emit(OpCodes.Ret);
+        }
 
         // Check for __nodeError marker in Data (Node.js-style fs errors)
         il.MarkLabel(checkNodeErrorLabel);

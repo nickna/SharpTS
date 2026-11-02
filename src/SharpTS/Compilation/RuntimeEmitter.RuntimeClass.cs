@@ -781,7 +781,9 @@ public partial class RuntimeEmitter
         EmitWrapException(
             typeBuilder,
             runtime.Errors,
-            new WrapExceptionInputs(runtime.Promise, runtime.StructuredClone)
+            new WrapExceptionInputs(runtime.Promise,
+                _emitHosted || _features.UsesStructuredClone || _features.UsesBroadcastChannel
+                    ? runtime.StructuredClone : null)
         );
         // ToNumber slot is forward-declared in DefineRuntimeClassPhase1 so
         // $RegExp's Symbol.split limit-coercion (which runs before $Runtime
