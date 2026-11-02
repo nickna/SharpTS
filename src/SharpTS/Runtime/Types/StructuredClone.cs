@@ -52,6 +52,19 @@ public static class StructuredClone
     /// </param>
     /// <returns>A deep clone of the value.</returns>
     public static object? Clone(object? value, IEnumerable<object?>? transfer = null)
+        => CloneOperation(value, transfer, null);
+
+    internal static object? CloneWithInterpreter(object? value, IEnumerable<object?>? transfer,
+        Execution.Interpreter? interpreter) => CloneOperation(value, transfer, interpreter);
+
+    private sealed class CloneMemo(Execution.Interpreter? interpreter)
+        : Dictionary<object, object>(ReferenceEqualityComparer.Instance)
+    {
+        internal Execution.Interpreter? Interpreter { get; } = interpreter;
+    }
+
+    private static object? CloneOperation(object? value, IEnumerable<object?>? transfer,
+        Execution.Interpreter? interpreter)
     {
         // Worker control messages are commonly flat compiled object literals
         // containing only strings, numbers, and booleans. With no transfer list
@@ -69,7 +82,7 @@ public static class StructuredClone
             }
         }
 
-        var cloned = new Dictionary<object, object>();
+        var cloned = new CloneMemo(interpreter);
         var transferred = new HashSet<object>();
         // ArrayBuffers in the transfer list are detached on this (sender) side after the
         // clone — Node neuters a transferred ArrayBuffer (byteLength becomes 0). Collected
@@ -371,14 +384,23 @@ public static class StructuredClone
         var result = new SharpTSObject(fields);
         cloned[source] = result;
 
-        foreach (var (key, value) in source.Fields)
+        // Select enumerable own names before any getter runs. Every nested clone
+        // shares this invocation's real interpreter and reference memo.
+        var interpreter = (cloned as CloneMemo)?.Interpreter;
+        foreach (var key in source.OwnVisibleStringKeys().Where(source.IsOwnEnumerableProperty).ToList())
         {
-            // Check if value is a function (getters/setters would be caught here)
-            if (value is ISharpTSCallable or SharpTSFunction)
+            object? value;
+            if (interpreter is not null)
+                value = interpreter.GetPropertyValue(source, key);
+            else
             {
-                throw new DataCloneError($"Cannot clone object with function property '{key}'");
+                // CLR bridge callers do not acquire an invented interpreter.
+                var descriptor = source.GetOwnPropertyDescriptor(key);
+                if (descriptor?.Get is not null)
+                    throw new DataCloneError("An object getter requires its owning interpreter");
+                value = descriptor is { HasGet: true } or { HasSet: true }
+                    ? SharpTSUndefined.Instance : source.GetProperty(key);
             }
-
             fields[key] = CloneInternal(value, cloned, transferred);
         }
 

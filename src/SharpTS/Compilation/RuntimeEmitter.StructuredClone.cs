@@ -81,6 +81,8 @@ public partial class RuntimeEmitter
         var coreIl = cloneRecursive.GetILGenerator();
         var memoValue = memoEnabled ? coreIl.DeclareLocal(_types.Object) : null;
         var stringResult = coreIl.DeclareLocal(_types.Object);
+        bool ownedProperties = memoEnabled || classes.HasValue || own.CompactRecord is not null;
+        var cloneOwnProperties = coreIl.DefineLabel();
         var memoSet = _types.DictionaryObjectObjectSetItem;
         void CloneValue()
         {
@@ -376,38 +378,41 @@ public partial class RuntimeEmitter
         coreIl.Emit(OpCodes.Stloc, stringResult);
         Remember(stringResult);
         var cloneStringFields = coreIl.DefineLabel();
-        coreIl.MarkLabel(cloneStringFields);
-        coreIl.Emit(OpCodes.Ldloc, sourceDictStringLocal);
-        coreIl.Emit(OpCodes.Castclass, _types.IDictionary);
-        coreIl.Emit(OpCodes.Callvirt, _types.GetMethod(_types.IDictionary, "GetEnumerator"));
-        coreIl.Emit(OpCodes.Stloc, dictEnumLocal);
-        coreIl.Emit(OpCodes.Br, stringDictLoopCheck);
+        if (ownedProperties)
+            coreIl.Emit(OpCodes.Br, cloneOwnProperties);
+        else
+        {
+            coreIl.MarkLabel(cloneStringFields);
+            coreIl.Emit(OpCodes.Ldloc, sourceDictStringLocal);
+            coreIl.Emit(OpCodes.Castclass, _types.IDictionary);
+            coreIl.Emit(OpCodes.Callvirt, _types.GetMethod(_types.IDictionary, "GetEnumerator"));
+            coreIl.Emit(OpCodes.Stloc, dictEnumLocal);
+            coreIl.Emit(OpCodes.Br, stringDictLoopCheck);
 
-        coreIl.MarkLabel(stringDictLoopBody);
-        coreIl.Emit(OpCodes.Ldloc, dictEnumLocal);
-        coreIl.Emit(OpCodes.Callvirt, _types.GetMethod(_types.IDictionaryEnumerator, "get_Key"));
-        coreIl.Emit(OpCodes.Stloc, keyLocal);
-        coreIl.Emit(OpCodes.Ldloc, dictEnumLocal);
-        coreIl.Emit(OpCodes.Callvirt, _types.GetMethod(_types.IDictionaryEnumerator, "get_Value"));
-        CloneValue();
-        coreIl.Emit(OpCodes.Stloc, valueLocal);
+            coreIl.MarkLabel(stringDictLoopBody);
+            coreIl.Emit(OpCodes.Ldloc, dictEnumLocal);
+            coreIl.Emit(OpCodes.Callvirt, _types.GetMethod(_types.IDictionaryEnumerator, "get_Key"));
+            coreIl.Emit(OpCodes.Stloc, keyLocal);
+            coreIl.Emit(OpCodes.Ldloc, dictEnumLocal);
+            coreIl.Emit(OpCodes.Callvirt, _types.GetMethod(_types.IDictionaryEnumerator, "get_Value"));
+            CloneValue();
+            coreIl.Emit(OpCodes.Stloc, valueLocal);
 
-        coreIl.Emit(OpCodes.Ldloc, clonedDictStringLocal);
-        coreIl.Emit(OpCodes.Ldloc, keyLocal);
-        coreIl.Emit(OpCodes.Castclass, _types.String);
-        coreIl.Emit(OpCodes.Ldloc, valueLocal);
-        coreIl.Emit(OpCodes.Callvirt, _types.DictionaryStringObjectSetItem);
+            coreIl.Emit(OpCodes.Ldloc, clonedDictStringLocal);
+            coreIl.Emit(OpCodes.Ldloc, keyLocal);
+            coreIl.Emit(OpCodes.Castclass, _types.String);
+            coreIl.Emit(OpCodes.Ldloc, valueLocal);
+            coreIl.Emit(OpCodes.Callvirt, _types.DictionaryStringObjectSetItem);
 
-        coreIl.MarkLabel(stringDictLoopCheck);
-        coreIl.Emit(OpCodes.Ldloc, dictEnumLocal);
-        coreIl.Emit(OpCodes.Callvirt, _types.GetMethod(_types.IEnumerator, "MoveNext"));
-        coreIl.Emit(OpCodes.Brtrue, stringDictLoopBody);
-        coreIl.Emit(OpCodes.Br, returnClonedStringDict);
+            coreIl.MarkLabel(stringDictLoopCheck);
+            coreIl.Emit(OpCodes.Ldloc, dictEnumLocal);
+            coreIl.Emit(OpCodes.Callvirt, _types.GetMethod(_types.IEnumerator, "MoveNext"));
+            coreIl.Emit(OpCodes.Brtrue, stringDictLoopBody);
+            coreIl.Emit(OpCodes.Br, returnClonedStringDict);
+        }
 
-        // $Object uses the same field loop as a dictionary, while retaining its
-        // allocated wrapper identity before visiting children.
-        // Getters/setters are not preserved — matches the interpreter's CloneObject, which
-        // only copies data fields.
+        // Plain objects retain their allocated wrapper identity before reading
+        // enumerable own values, including getters with the original receiver.
         coreIl.MarkLabel(checkObjectLiteral);
         coreIl.Emit(OpCodes.Ldarg_0);
         coreIl.Emit(OpCodes.Isinst, objects.Type);
@@ -422,10 +427,15 @@ public partial class RuntimeEmitter
         coreIl.Emit(OpCodes.Newobj, objects.Ctor);
         coreIl.Emit(OpCodes.Stloc, stringResult);
         Remember(stringResult);
-        coreIl.Emit(OpCodes.Ldloc, objLiteralSourceLocal);
-        coreIl.Emit(OpCodes.Callvirt, objects.FieldsGetter);
-        coreIl.Emit(OpCodes.Stloc, sourceDictStringLocal);
-        coreIl.Emit(OpCodes.Br, cloneStringFields);
+        if (ownedProperties)
+            coreIl.Emit(OpCodes.Br, cloneOwnProperties);
+        else
+        {
+            coreIl.Emit(OpCodes.Ldloc, objLiteralSourceLocal);
+            coreIl.Emit(OpCodes.Callvirt, objects.FieldsGetter);
+            coreIl.Emit(OpCodes.Stloc, sourceDictStringLocal);
+            coreIl.Emit(OpCodes.Br, cloneStringFields);
+        }
 
         // Dictionary<object, object> deep clone (Map backing store).
         coreIl.MarkLabel(checkObjectDict);
@@ -733,16 +743,24 @@ public partial class RuntimeEmitter
             else coreIl.Emit(OpCodes.Br, fallbackReturn);
 
             coreIl.MarkLabel(ordinaryClass);
+            coreIl.Emit(OpCodes.Newobj, _types.DictionaryStringObjectCtor);
+            coreIl.Emit(OpCodes.Stloc, clonedDictStringLocal);
+            coreIl.Emit(OpCodes.Ldloc, clonedDictStringLocal);
+            coreIl.Emit(OpCodes.Stloc, stringResult);
+            Remember(stringResult);
+            coreIl.Emit(OpCodes.Br, cloneOwnProperties);
+        }
+        coreIl.Emit(OpCodes.Br, fallbackReturn);
+
+        if (ownedProperties)
+        {
+            coreIl.MarkLabel(cloneOwnProperties);
             var names = coreIl.DeclareLocal(_types.ListOfObject);
             var selectedNames = coreIl.DeclareLocal(_types.ListOfObject);
             coreIl.Emit(OpCodes.Newobj, _types.GetDefaultConstructor(_types.ListOfObject));
             coreIl.Emit(OpCodes.Stloc, selectedNames);
             var nextName = coreIl.DefineLabel();
             var namesCheck = coreIl.DefineLabel();
-            var classResult = coreIl.DeclareLocal(_types.DictionaryStringObject);
-            coreIl.Emit(OpCodes.Newobj, _types.DictionaryStringObjectCtor);
-            coreIl.Emit(OpCodes.Stloc, classResult);
-            Remember(classResult);
             coreIl.Emit(OpCodes.Ldarg_0);
             coreIl.Emit(OpCodes.Call, own.OwnNames);
             coreIl.Emit(OpCodes.Stloc, names);
@@ -790,7 +808,7 @@ public partial class RuntimeEmitter
             coreIl.Emit(OpCodes.Call, own.ReadProperty);
             CloneValue();
             coreIl.Emit(OpCodes.Stloc, valueLocal);
-            coreIl.Emit(OpCodes.Ldloc, classResult);
+            coreIl.Emit(OpCodes.Ldloc, clonedDictStringLocal);
             coreIl.Emit(OpCodes.Ldloc, keyLocal);
             coreIl.Emit(OpCodes.Castclass, _types.String);
             coreIl.Emit(OpCodes.Ldloc, valueLocal);
@@ -804,7 +822,7 @@ public partial class RuntimeEmitter
             coreIl.Emit(OpCodes.Ldloc, selectedNames);
             coreIl.Emit(OpCodes.Callvirt, _types.GetMethodNoParams(_types.ListOfObject, "get_Count"));
             coreIl.Emit(OpCodes.Blt, readNext);
-            coreIl.Emit(OpCodes.Ldloc, classResult);
+            coreIl.Emit(OpCodes.Ldloc, stringResult);
             coreIl.Emit(OpCodes.Ret);
         }
 
