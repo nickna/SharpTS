@@ -88,6 +88,7 @@ public partial class Interpreter
     /// </summary>
     internal void NotifyRejectionHandlerAttached(SharpTSPromise promise)
     {
+        promise.IsRejectionHandled = true;
         if (!_reportedRejections.TryGetValue(promise, out _)) return;
         _reportedRejections.Remove(promise);
 
@@ -102,12 +103,26 @@ public partial class Interpreter
         }
     }
 
-    private void ReportUnhandledRejection(Exception exception, SharpTSPromise? promise = null)
+    private void QueueDiscardedRejectionReport(SharpTSPromise promise)
+    {
+        var exception = promise.Task.Exception!.InnerException ?? promise.Task.Exception!;
+        EnqueueCallback(() =>
+        {
+            // The whole script job can attach a consumer before this checkpoint.
+            // Repeated discarded references must not deliver the same rejection twice.
+            if (promise.IsRejectionHandled || _reportedRejections.TryGetValue(promise, out _)) return;
+            ReportUnhandledRejection(exception, promise, deliverOnCurrentCheckpoint: true);
+        });
+    }
+
+    private void ReportUnhandledRejection(Exception exception, SharpTSPromise? promise = null,
+        bool deliverOnCurrentCheckpoint = false)
     {
         object? debuggerReason = exception switch
         {
             SharpTSPromiseRejectedException rejected => rejected.Reason,
             ThrowException thrown => thrown.Value,
+            StructuredClone.DataCloneError cloneError => new HostDataCloneErrorValue(cloneError).CreateGuestError(),
             _ => exception.Message,
         };
         if (DebugController?.BreakOnUnhandledRejection == true)
@@ -130,6 +145,12 @@ public partial class Interpreter
             if (promise != null)
                 _reportedRejections.AddOrUpdate(promise, new object());
 
+            if (deliverOnCurrentCheckpoint)
+            {
+                SharpTSProcess.Instance.EmitWith(this, "unhandledRejection", reason,
+                    promise ?? (object?)SharpTSUndefined.Instance);
+                return;
+            }
             try
             {
                 EnqueueCallback(() =>

@@ -175,7 +175,8 @@ public partial class Interpreter
                             // here hard-hangs when the promise needs a timer or I/O
                             // continuation to settle, because those continuations
                             // only ever run on this thread.
-                            WaitForPromise(promise);
+                            WaitForPromise(promise, reportDiscardedRejection:
+                                exprStmt.Expr is not Expr.Await && !promise.SuppressImplicitTopLevelWait);
                         }
                     }
                     catch (ThrowException tex)

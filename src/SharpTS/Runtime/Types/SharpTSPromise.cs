@@ -40,6 +40,10 @@ public class SharpTSPromise : ITypeCategorized, ISharpTSOwnPropertyObject
     /// </summary>
     internal bool SuppressImplicitTopLevelWait { get; set; }
 
+    // A native reaction/await consumer has taken responsibility for this input.
+    // This is a negative report guard, independent of the legacy implicit wait.
+    internal bool IsRejectionHandled { get; set; }
+
     // Own properties installed on a promise instance via Object.defineProperty
     // (and, for subclass instances, declared fields). Base promises have none
     // until user code adds one — a poisoned `constructor` getter
@@ -181,7 +185,11 @@ public class SharpTSPromise : ITypeCategorized, ISharpTSOwnPropertyObject
     /// Gets the settled fulfillment value. Resolution has already performed
     /// thenable assimilation; observing it must not resolve that value again.
     /// </summary>
-    public Task<object?> GetValueAsync() => _task;
+    public Task<object?> GetValueAsync()
+    {
+        IsRejectionHandled = true;
+        return _task;
+    }
 
     /// <summary>
     /// Unwraps a value if it's a Promise, otherwise returns it unchanged.
