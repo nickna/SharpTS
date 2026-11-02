@@ -39,8 +39,13 @@ public partial class TypeChecker
             // identical semantics by construction, with none of the scanning hazards strings
             // have for COMPOSITE types. Never routes back through ToTypeInfo(string).
             case NamedTypeNode { TypeArguments: null } named:
+            {
                 BindTypeUse(named);
-                return ResolveBareTypeAnnotation(named.Name);
+                TypeInfo resolved = ResolveBareTypeAnnotation(named.Name);
+                if (resolved is not TypeInfo.Any) _resolvedAnnotationTypeNames.Add(named);
+                else _resolvedAnnotationTypeNames.Remove(named);
+                return resolved;
+            }
 
             // Generic references resolve their argument nodes and hand off to the shared
             // instantiation machinery (built-in generics, utility types, generic alias node
@@ -55,7 +60,10 @@ public partial class TypeChecker
                     if (TryToTypeInfo(argNode) is not { } arg) return null;
                     typeArgs.Add(arg);
                 }
-                return ResolveGenericType(named.Name, typeArgs);
+                TypeInfo resolved = ResolveGenericType(named.Name, typeArgs, out bool intrinsic);
+                if (intrinsic || resolved is not TypeInfo.Any) _resolvedAnnotationTypeNames.Add(named);
+                else _resolvedAnnotationTypeNames.Remove(named);
+                return resolved;
             }
 
             case LiteralTypeNode lit:

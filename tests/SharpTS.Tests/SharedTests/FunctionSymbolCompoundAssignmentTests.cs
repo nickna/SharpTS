@@ -59,7 +59,7 @@ public class FunctionSymbolCompoundAssignmentTests
             function right(): number { events.push("rhs"); stored = 100; return 4; }
             console.log(f[index] += right(), stored, events.join(","));
             """;
-        Assert.Equal("5 5 key:string,get,rhs,set:5\n", TestHarness.Run(source, mode));
+        Assert.Equal("5 5 key:string,get,rhs,key:string,set:5\n", TestHarness.Run(source, mode));
     }
 
     [Fact]

@@ -219,10 +219,7 @@ public partial class AsyncMoveNextEmitter : AsyncFunctionMoveNextEmitter, IEmitt
         }
 
         // Emit the function body (will emit await points inline)
-        foreach (var stmt in body)
-        {
-            EmitStatement(stmt);
-        }
+        EmitAsyncUsingStatements(body);
 
         // Falling off the end of the body completes the async function with `undefined`,
         // not null (#587) — the default-null _returnValueLocal would otherwise resolve the

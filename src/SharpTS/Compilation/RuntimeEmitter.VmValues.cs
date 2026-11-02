@@ -29,6 +29,10 @@ public partial class RuntimeEmitter
             _types.Object, [_types.Object]);
         vm.RestoreValue = owner.DefineMethod("RestoreVmValue", MethodAttributes.Assembly | MethodAttributes.Static,
             _types.Object, [_types.Object]);
+        vm.IsPromiseRejectionHandled = owner.DefineMethod("IsVmPromiseRejectionHandled", MethodAttributes.Assembly | MethodAttributes.Static,
+            _types.Boolean, [_types.TaskOfObject]);
+        vm.MarkPromiseRejectionHandled = owner.DefineMethod("MarkVmPromiseRejectionHandled", MethodAttributes.Assembly | MethodAttributes.Static,
+            _types.Void, [_types.TaskOfObject]);
         vm.IsErrorValue = owner.DefineMethod("IsVmErrorValue", MethodAttributes.Assembly | MethodAttributes.Static,
             _types.Boolean, [_types.Object]);
         vm.ReadErrorProperty = owner.DefineMethod("ReadVmErrorProperty", MethodAttributes.Assembly | MethodAttributes.Static,
@@ -52,6 +56,7 @@ public partial class RuntimeEmitter
         var callbackRole = EmitVmNativePromiseCallbackRole(owner, runtime, nativeCallbackSources);
         var host = EmitVmExecutionHost(owner, runtime, callbackRole);
         var transfer = EmitVmPromiseTransfer(owner, runtime, host);
+        var registerHandling = EmitVmPromiseHandling(owner, runtime);
         var callable = EmitVmCallableTransport(owner, runtime);
         EmitVmBoundaryBody(vm.ToStringValue.GetILGenerator(), vm, () =>
             EmitVmCoreInvoke(vm.ToStringValue.GetILGenerator(), "ToStringVmValue", body =>
@@ -241,11 +246,24 @@ public partial class RuntimeEmitter
         il.Emit(OpCodes.Callvirt, add);
         il.Emit(OpCodes.Ldloc, isPromise);
         il.Emit(OpCodes.Brfalse, done);
+        // Only this exact produced mirror Task acquires a negative owner receipt.
+        il.Emit(OpCodes.Ldloc, result);
+        il.Emit(OpCodes.Callvirt, _types.GetProperty(_types.TaskCompletionSourceOfObject, "Task").GetGetMethod()!);
+        il.Emit(OpCodes.Ldarg_0);
+        il.Emit(OpCodes.Call, registerHandling);
         il.Emit(OpCodes.Ldloc, source);
         il.Emit(OpCodes.Ldloc, result);
         il.Emit(OpCodes.Ldsfld, host.Current);
         il.Emit(OpCodes.Newobj, transfer.Constructor);
         il.Emit(OpCodes.Stloc, observer);
+        EmitVmCoreInvoke(il, "RegisterVmPromiseRejectionHandler",
+            body => body.Emit(OpCodes.Ldarg_0), body =>
+            {
+                body.Emit(OpCodes.Ldloc, observer);
+                body.Emit(OpCodes.Ldftn, transfer.NotifyHandled);
+                body.Emit(OpCodes.Newobj, typeof(Action).GetConstructor([_types.Object, _types.IntPtr])!);
+            });
+        il.Emit(OpCodes.Pop);
         il.Emit(OpCodes.Ldloc, source);
         il.Emit(OpCodes.Callvirt, _types.GetProperty(_types.Task, "IsCompleted").GetGetMethod()!);
         il.Emit(OpCodes.Brfalse, pending);

@@ -1114,19 +1114,52 @@ public partial class RuntimeEmitter
             var bodyStreamLocal = il.DeclareLocal(typeof(System.IO.Stream));
             var bodyReadLocal = il.DeclareLocal(_types.Int32);
             var bodyReadSucceededLocal = il.DeclareLocal(_types.Boolean);
+            var bodyReadFinishedLabel = il.DefineLabel();
+
+            void EmitRequestAborted()
+            {
+                // destroy() may already have notified the request's listeners.
+                var abortAlreadyMarkedLabel = il.DefineLabel();
+                il.Emit(OpCodes.Ldloc, reqLocal);
+                il.Emit(OpCodes.Ldfld, http.RequestAbortedField);
+                il.Emit(OpCodes.Brtrue, abortAlreadyMarkedLabel);
+                il.Emit(OpCodes.Ldloc, reqLocal);
+                il.Emit(OpCodes.Ldc_I4_1);
+                il.Emit(OpCodes.Stfld, http.RequestAbortedField);
+                il.Emit(OpCodes.Ldloc, reqLocal);
+                il.Emit(OpCodes.Ldstr, "aborted");
+                il.Emit(OpCodes.Ldc_I4_0);
+                il.Emit(OpCodes.Newarr, _types.Object);
+                il.Emit(OpCodes.Callvirt, runtime.EventEmitter.Emit);
+                il.Emit(OpCodes.Pop);
+                il.MarkLabel(abortAlreadyMarkedLabel);
+            }
 
             il.Emit(OpCodes.Ldc_I4, 16384);
             il.Emit(OpCodes.Newarr, _types.Byte);
             il.Emit(OpCodes.Stloc, bodyBufferLocal);
+
+            // A handler can synchronously abort this response with
+            // closeAllConnections(). Windows then disposes the request before
+            // InputStream is acquired. Only this host acquisition is guarded;
+            // exceptions from the handler and abort listeners still propagate.
+            var bodyStreamReadyLabel = il.DefineLabel();
+            il.BeginExceptionBlock();
             il.Emit(OpCodes.Ldarg_0);
             il.Emit(OpCodes.Ldfld, ctxField);
             il.Emit(OpCodes.Callvirt, typeof(HttpListenerContext).GetProperty("Request")!.GetGetMethod()!);
             il.Emit(OpCodes.Callvirt, typeof(HttpListenerRequest).GetProperty("InputStream")!.GetGetMethod()!);
             il.Emit(OpCodes.Stloc, bodyStreamLocal);
+            il.Emit(OpCodes.Leave, bodyStreamReadyLabel);
+            il.BeginCatchBlock(typeof(ObjectDisposedException));
+            il.Emit(OpCodes.Pop);
+            EmitRequestAborted();
+            il.Emit(OpCodes.Leave, bodyReadFinishedLabel);
+            il.EndExceptionBlock();
+            il.MarkLabel(bodyStreamReadyLabel);
 
             var bodyLoopLabel = il.DefineLabel();
             var bodyLoopCompleteLabel = il.DefineLabel();
-            var bodyReadFinishedLabel = il.DefineLabel();
 
             il.BeginExceptionBlock();
             il.MarkLabel(bodyLoopLabel);
@@ -1184,20 +1217,7 @@ public partial class RuntimeEmitter
 
             // A peer disconnect is an abort, not a clean end. destroy() already
             // emitted the event, so avoid emitting it twice in that path.
-            var abortAlreadyMarkedLabel = il.DefineLabel();
-            il.Emit(OpCodes.Ldloc, reqLocal);
-            il.Emit(OpCodes.Ldfld, http.RequestAbortedField);
-            il.Emit(OpCodes.Brtrue, abortAlreadyMarkedLabel);
-            il.Emit(OpCodes.Ldloc, reqLocal);
-            il.Emit(OpCodes.Ldc_I4_1);
-            il.Emit(OpCodes.Stfld, http.RequestAbortedField);
-            il.Emit(OpCodes.Ldloc, reqLocal);
-            il.Emit(OpCodes.Ldstr, "aborted");
-            il.Emit(OpCodes.Ldc_I4_0);
-            il.Emit(OpCodes.Newarr, _types.Object);
-            il.Emit(OpCodes.Callvirt, runtime.EventEmitter.Emit);
-            il.Emit(OpCodes.Pop);
-            il.MarkLabel(abortAlreadyMarkedLabel);
+            EmitRequestAborted();
             il.Emit(OpCodes.Leave, bodyReadFinishedLabel);
             il.EndExceptionBlock();
 

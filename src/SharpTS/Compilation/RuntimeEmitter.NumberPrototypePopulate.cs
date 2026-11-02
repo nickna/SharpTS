@@ -67,14 +67,15 @@ public partial class RuntimeEmitter
             => EmitWirePrototypeMethodDescriptor(il, peers.Descriptors, peers.FunctionGetOrCreate, numbers.PrototypeField, numDescLocal,
                 setItem, jsName, helper, jsLength);
 
+        // Preserve intrinsic property creation order for own-key enumeration.
+        Wire("toExponential",  numbers.ToExponential,   1);
         Wire("toFixed",        numbers.ToFixed,         1);
         Wire("toPrecision",    numbers.ToPrecision,     1);
-        Wire("toExponential",  numbers.ToExponential,   1);
         // Stub these with NumberToStringRadix so typeof + IsConstructor work.
         // Not actually invoked by user code in the not-a-constructor.js path.
         Wire("toString",       numbers.ToStringRadix,   1);
+        Wire("valueOf",        numberValueOfHelper,     0);
         Wire("toLocaleString", numbers.ToStringRadix,   0);
-        Wire("valueOf",        numberValueOfHelper,           0);
 
         // PDSSetPrototype(NumberPrototypeField, ObjectPrototypeField).
         // Per ECMA-262 §21.1.3 Number.prototype's [[Prototype]] is %Object.prototype%.

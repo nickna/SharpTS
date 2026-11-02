@@ -1429,7 +1429,7 @@ public partial class ILCompiler
 
         var emitter = new ILEmitter(ctx);
 
-        foreach (var stmt in statements)
+        emitter.EmitTopLevelStatements(statements, stmt =>
         {
             // Skip class, function, interface, and enum declarations (already handled)
             // Note: Namespace statements are NOT skipped - they need to emit member storage
@@ -1441,11 +1441,11 @@ public partial class ILCompiler
                 {
                     EmitRuntimeDecorators(classDecl, emitter, il);
                 }
-                continue;
+                return;
             }
             if (stmt is Stmt.Function or Stmt.Interface)
             {
-                continue;
+                return;
             }
 
             // An exported class (`@dec export class`) is wrapped in Stmt.Export, so the
@@ -1461,7 +1461,7 @@ public partial class ILCompiler
                 {
                     EmitRuntimeDecorators(exportedClass, emitter, il);
                 }
-                continue;
+                return;
             }
 
             // Special handling for expression statements to wait for top-level async
@@ -1479,7 +1479,7 @@ public partial class ILCompiler
             {
                 emitter.EmitStatement(stmt);
             }
-        }
+        });
 
     }
 
@@ -1604,20 +1604,20 @@ public partial class ILCompiler
         var emitter = new ILEmitter(ctx);
 
         // Execute top-level statements (module initialization), excluding the main function
-        foreach (var stmt in statements)
+        emitter.EmitTopLevelStatements(statements, stmt =>
         {
             // Class declarations still have runtime definition work (static
             // elements and computed keys) at this exact source position.
             if (stmt is Stmt.Class classDecl)
             {
                 emitter.EmitStatement(classDecl);
-                continue;
+                return;
             }
 
             // Skip the remaining declarations (handled in earlier phases), including main().
             if (stmt is Stmt.Function or Stmt.Interface)
             {
-                continue;
+                return;
             }
 
             // Run top-level code (imports, variable initialization, etc.)
@@ -1672,7 +1672,7 @@ public partial class ILCompiler
             {
                 emitter.EmitStatement(stmt);
             }
-        }
+        });
 
         // Now call the user's main(args) function
         // Load args only when the guest main declares it.

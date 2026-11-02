@@ -1,3 +1,4 @@
+using SharpTS.Tests.Infrastructure;
 using SharpTS.Tests.SharedTests;
 using Xunit;
 
@@ -5,7 +6,7 @@ namespace SharpTS.Tests.CompilerTests;
 
 public partial class StandaloneDllTests
 {
-    [Theory, MemberData(nameof(HeldClassConstructorTests.SavedCases), MemberType = typeof(HeldClassConstructorTests))]
+    [Theory, SerializableMemberData(nameof(HeldClassConstructorTests.SavedCases), MemberType = typeof(HeldClassConstructorTests))]
     public void Isolated_Issue2339HeldClassConstructors_VerifyBeforeExecution(
         string name, Dictionary<string, string> files, string expected)
     {

@@ -60,7 +60,7 @@ public class ObjectStringCompoundAssignmentTests
             function right(): number { events.push("rhs"); stored = 100; return 2; }
             console.log(object[key] += right(), stored, events.join(","));
             """;
-        Assert.Equal("3 3 key:string,get,rhs,set:3\n", TestHarness.Run(source, mode));
+        Assert.Equal("3 3 key:string,get,rhs,key:string,set:3\n", TestHarness.Run(source, mode));
     }
 
     [Theory, ModeData]
@@ -81,7 +81,7 @@ public class ObjectStringCompoundAssignmentTests
             }
             run().catch((error: any) => console.log("unexpected", error.message));
             """;
-        Assert.Equal("3 3 string\n", TestHarness.Run(source, mode));
+        Assert.Equal("3 3 string,string\n", TestHarness.Run(source, mode));
     }
 
     [Theory, ModeData]

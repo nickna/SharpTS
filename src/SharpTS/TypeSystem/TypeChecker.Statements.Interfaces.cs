@@ -19,8 +19,9 @@ public partial class TypeChecker
         new(ReferenceEqualityComparer.Instance);
     private readonly Dictionary<TypeEnvironment, HashSet<Stmt.Interface>> _completedInterfaces =
         new(ReferenceEqualityComparer.Instance);
-    private readonly Dictionary<TypeInfo.Interface, TypeInfo.Interface> _completedInterfaceBindings =
+    private readonly Dictionary<TypeInfo, TypeInfo> _completedInterfaceBindings =
         new(ReferenceEqualityComparer.Instance);
+    private TypeInfo.GenericInterface? _defaultLibraryDataViewType;
     private sealed class AmbientClassMergeState(TypeEnvironment environment, Stmt.Class declaration,
         TypeInfo.MutableClass owner, ClassMetadataCore ownMembers, List<TypeInfo.TypeParameter> parameters)
     {
@@ -37,15 +38,25 @@ public partial class TypeChecker
     {
         _preRegisteredInterfaces.Clear();
         _completedInterfaces.Clear();
+        _completedTypeDeclarationScopes.Clear();
+        _resolvedAnnotationTypeNames.Clear();
         _completedInterfaceBindings.Clear();
+        _defaultLibraryDataViewType = null;
+        ResetTypedArrayDeclarations();
+        _defaultLibraryTypedArrayBindings.Clear();
         _ambientClassMerges.Clear();
     }
 
     private TypeInfo RefreshCompletedInterfaceBinding(TypeInfo type)
     {
-        while (type is TypeInfo.Interface current &&
-            _completedInterfaceBindings.TryGetValue(current, out var completed))
+        while (_completedInterfaceBindings.TryGetValue(type, out var completed))
             type = completed;
+        if (type is TypeInfo.InstantiatedGeneric { GenericDefinition: TypeInfo.GenericInterface } instantiated)
+        {
+            var definition = RefreshCompletedInterfaceBinding(instantiated.GenericDefinition);
+            if (!ReferenceEquals(definition, instantiated.GenericDefinition))
+                return instantiated with { GenericDefinition = definition };
+        }
         return type;
     }
 
@@ -53,10 +64,15 @@ public partial class TypeChecker
     {
         if (TryCompleteAmbientClassInterface(name, type, replacesPreRegistration))
             return;
-        if (_environment.GetLocalTypeBinding(name) is TypeInfo.Interface previous &&
-            type is TypeInfo.Interface completed && !ReferenceEquals(previous, completed))
-            _completedInterfaceBindings[previous] = completed;
+        var previous = _environment.GetLocalTypeBinding(name);
+        if (!ReferenceEquals(previous, type) && (previous, type) is
+            (TypeInfo.Interface, TypeInfo.Interface) or (TypeInfo.GenericInterface, TypeInfo.GenericInterface))
+            _completedInterfaceBindings[previous!] = type;
         _environment.DefineType(name, type);
+        if (_currentModule?.IsDefaultLibrary == true &&
+            ReferenceEquals(_environment, _globalDeclarationEnvironment) && name == "DataView" &&
+            type is TypeInfo.GenericInterface dataView)
+            _defaultLibraryDataViewType = dataView;
     }
 
     private static TypeInfo.Interface RecordAsInterfaceBase(string name, TypeInfo.Record record) =>
@@ -1286,7 +1302,7 @@ public partial class TypeChecker
     /// </summary>
     private TypeInfo.Interface? FlattenInstantiatedInterface(TypeInfo.InstantiatedGeneric ig)
     {
-        if (ig.GenericDefinition is not TypeInfo.GenericInterface gi) return null;
+        if (RefreshCompletedInterfaceBinding(ig.GenericDefinition) is not TypeInfo.GenericInterface gi) return null;
         Dictionary<string, TypeInfo> subs = [];
         for (int i = 0; i < gi.TypeParams.Count && i < ig.TypeArguments.Count; i++)
             subs[gi.TypeParams[i].Name] = ig.TypeArguments[i];
@@ -1297,6 +1313,7 @@ public partial class TypeChecker
         // satisfies, so the interface-extends check (TS2430) never fires under generics (#896). For a
         // non-Record value the helper is identical to Substitute.
         var members = gi.Members.ToDictionary(kv => kv.Key, kv => SubstitutePreservingSignatures(kv.Value, subs));
+        var methodMembers = gi.MethodMembers?.ToHashSet(StringComparer.Ordinal) ?? [];
         var optionalMembers = gi.OptionalMembers.ToHashSet(StringComparer.Ordinal);
         var readonlyMembers = gi.ReadonlyMembers?.ToHashSet(StringComparer.Ordinal) ?? [];
         Dictionary<BindingSymbol, string> symbolMembers = gi.SymbolMemberNames is { } declaredSymbols
@@ -1315,6 +1332,7 @@ public partial class TypeChecker
             foreach (string name in baseInterface.GetAllOptionalMembers())
                 optionalMembers.Add(name);
         }
+        AddRuntimeDataViewMembers(gi, members, methodMembers);
         List<TypeInfo.CallSignature>? callSignatures = gi.CallSignatures?.Select(signature =>
         {
             Dictionary<string, TypeInfo> signatureSubs = signature.TypeParams is null
@@ -1357,10 +1375,31 @@ public partial class TypeChecker
             callSignatures,
             constructorSignatures,
             readonlyMembers.Count > 0 ? readonlyMembers.ToFrozenSet(StringComparer.Ordinal) : null,
-            gi.MethodMembers,
+            methodMembers.Count > 0 ? methodMembers.ToFrozenSet(StringComparer.Ordinal) : null,
             ReadonlyNumberIndex: gi.ReadonlyNumberIndex)
             { ReadonlyStringIndex = gi.ReadonlyStringIndex, ReadonlySymbolIndex = gi.ReadonlySymbolIndex,
                 SymbolMemberNames = symbolMembers.ToFrozenDictionary(ReferenceEqualityComparer.Instance) };
+    }
+
+    private void AddRuntimeDataViewMembers(TypeInfo.GenericInterface definition,
+        Dictionary<string, TypeInfo> members, HashSet<string> methodMembers)
+    {
+        // Execution callers retain runtime compatibility with an ES5-rooted library.
+        // Only the actual supplied library definition receives these native members;
+        // a local interface with the same spelling keeps its own declaration surface.
+        if (Options.RespectLoadedLibraries || _defaultLibraryDataViewType is null ||
+            !ReferenceEquals(definition, RefreshCompletedInterfaceBinding(_defaultLibraryDataViewType)))
+            return;
+        foreach (string name in new[] { "getBigInt64", "getBigUint64", "setBigInt64", "setBigUint64" })
+        {
+            bool getter = name is "getBigInt64" or "getBigUint64";
+            var parameters = getter
+                ? new List<TypeInfo> { TypeInfo.Primitive.Number, TypeInfo.Primitive.Boolean }
+                : new List<TypeInfo> { TypeInfo.Primitive.Number, TypeInfo.BigInt.Shared, TypeInfo.Primitive.Boolean };
+            if (members.TryAdd(name, new TypeInfo.Function(parameters,
+                getter ? TypeInfo.BigInt.Shared : TypeInfo.Void.Shared, RequiredParams: getter ? 1 : 2)))
+                methodMembers.Add(name);
+        }
     }
 
     /// <summary>

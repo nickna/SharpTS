@@ -198,6 +198,7 @@ public partial class TypeChecker
 
     private TypeInfo? GetMemberType(TypeInfo type, string name)
     {
+        type = DeclaredTypedArrayReceiver(type);
         if (type is TypeInfo.Record record)
         {
             return record.Fields.TryGetValue(name, out var t) ? t : null;

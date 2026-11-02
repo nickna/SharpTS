@@ -11,7 +11,7 @@ using static SharpTS.Tests.CompilerTests.NativeSourceInvocationPlanTests;
 
 namespace SharpTS.Tests.CompilerTests;
 
-public sealed class NativePropertyLookupTests
+public sealed partial class NativePropertyLookupTests
 {
     private const BindingFlags Properties = BindingFlags.Instance | BindingFlags.Public | BindingFlags.IgnoreCase;
     private const BindingFlags Helpers = BindingFlags.Static | BindingFlags.Public | BindingFlags.NonPublic;

@@ -21,6 +21,11 @@ public partial class Interpreter
     /// <returns><c>true</c> if the property was found; otherwise <c>false</c>.</returns>
     private bool TryGetProperty(object? obj, Token name, out object? value)
     {
+        if (UsesPrimitivePrototypePropertyReads(obj) || UsesNonextensibleBuiltInPrototypeWrite(obj))
+        {
+            value = GetPropertyValue(obj!, name.Lexeme);
+            return true;
+        }
         switch (obj)
         {
             case VmInputPropertyView inputView:
@@ -29,6 +34,12 @@ public partial class Interpreter
                 return true;
             case SharpTSObjectNamespace objectNamespace:
                 value = GetPropertyValue(objectNamespace, name.Lexeme);
+                return true;
+            case SharpTSObjectPrototype objectPrototype:
+                value = GetPropertyValue(objectPrototype, name.Lexeme);
+                return true;
+            case SharpTSTypedArray typedArray when typedArray.UsesOrdinaryNamedPropertyLookup(name.Lexeme):
+                value = GetPropertyValue(typedArray, name.Lexeme);
                 return true;
             case SharpTSProxy proxy:
                 value = proxy.TrapGet(name.Lexeme, this);
@@ -66,6 +77,11 @@ public partial class Interpreter
     /// </summary>
     private bool TryGetPropertyRV(object? obj, Token name, out RuntimeValue value)
     {
+        if (UsesPrimitivePrototypePropertyReads(obj) || UsesNonextensibleBuiltInPrototypeWrite(obj))
+        {
+            value = RuntimeValue.FromBoxed(GetPropertyValue(obj!, name.Lexeme));
+            return true;
+        }
         switch (obj)
         {
             case VmInputPropertyView inputView:
@@ -74,6 +90,12 @@ public partial class Interpreter
                 return true;
             case SharpTSObjectNamespace objectNamespace:
                 value = RuntimeValue.FromBoxed(GetPropertyValue(objectNamespace, name.Lexeme));
+                return true;
+            case SharpTSObjectPrototype objectPrototype:
+                value = RuntimeValue.FromBoxed(GetPropertyValue(objectPrototype, name.Lexeme));
+                return true;
+            case SharpTSTypedArray typedArray when typedArray.UsesOrdinaryNamedPropertyLookup(name.Lexeme):
+                value = RuntimeValue.FromBoxed(GetPropertyValue(typedArray, name.Lexeme));
                 return true;
             case SharpTSProxy proxy:
                 value = proxy.TrapGetRV(name.Lexeme, this);
@@ -113,6 +135,11 @@ public partial class Interpreter
     /// <returns><c>true</c> if the property was set; otherwise <c>false</c>.</returns>
     private bool TrySetProperty(object? obj, Token name, object? value)
     {
+        if (UsesPrimitivePrototypePropertyReads(obj) || UsesNonextensibleBuiltInPrototypeWrite(obj))
+        {
+            SetOwnPropertyObjectValue(obj!, name.Lexeme, value, _environment.IsStrictMode);
+            return true;
+        }
         switch (obj)
         {
             case VmInputPropertyView inputView:
@@ -121,6 +148,15 @@ public partial class Interpreter
                 return true;
             case SharpTSObjectNamespace objectNamespace:
                 SetOwnPropertyObjectValue(objectNamespace, name.Lexeme, value, _environment.IsStrictMode);
+                return true;
+            case SharpTSObjectPrototype objectPrototype:
+                SetOwnPropertyObjectValue(objectPrototype, name.Lexeme, value, _environment.IsStrictMode);
+                return true;
+            case SharpTSStringPrototype stringPrototype:
+                SetOwnPropertyObjectValue(stringPrototype, name.Lexeme, value, _environment.IsStrictMode);
+                return true;
+            case SharpTSTypedArray typedArray when typedArray.UsesOrdinaryNamedPropertyLookup(name.Lexeme):
+                SetOwnPropertyObjectValue(typedArray, name.Lexeme, value, _environment.IsStrictMode);
                 return true;
             case SharpTSProxy proxy:
                 proxy.TrapSet(name.Lexeme, value, this);
@@ -163,6 +199,12 @@ public partial class Interpreter
     /// <returns><c>true</c> if the element was found; otherwise <c>false</c>.</returns>
     private bool TryGetIndex(object? obj, object? index, out object? value)
     {
+        if (obj is SharpTSTypedArray typedArray
+            && (index is double || RuntimeValue.FromBoxed(index).IsObject))
+        {
+            value = ReadTypedArrayReferenceValue(typedArray, ToPropertyKey(index));
+            return true;
+        }
         if (obj is VmInputPropertyView inputView)
         {
             if (!inputView.CanWrite) return TryGetIndex(inputView.Original, index, out value);
@@ -171,7 +213,7 @@ public partial class Interpreter
             value = inputView.Read(name);
             return true;
         }
-        if (HasArrayObjectKey(obj, index))
+        if (UsesArrayRawIndexReference(obj, index))
         {
             value = GetOwnPropertyObjectValue(obj!, ToPropertyKey(index));
             return true;
@@ -181,14 +223,11 @@ public partial class Interpreter
             value = GetPropertyValue(global.Target, global.Key);
             return true;
         }
-        if (HasCanonicalIndexProperties(obj))
+        if (HasCanonicalIndexProperties(obj) || UsesPrimitivePrototypePropertyReads(obj)
+            || UsesNonextensibleBuiltInPrototypeStringIndex(obj, index)
+            || UsesTypedArrayOrdinaryIndex(obj, index))
         {
             value = GetOwnPropertyObjectValue(obj!, ToPropertyKey(index));
-            return true;
-        }
-        if (obj is SharpTSArray array && index is double idx)
-        {
-            value = array.Get((int)idx);
             return true;
         }
         if (obj is DotNetInstance external && external.HasReadableIndexer)
@@ -210,13 +249,19 @@ public partial class Interpreter
     /// <returns><c>true</c> if the element was set; otherwise <c>false</c>.</returns>
     private bool TrySetIndex(object? obj, object? index, object? value)
     {
+        if (obj is SharpTSTypedArray typedArray
+            && (index is double || RuntimeValue.FromBoxed(index).IsObject))
+        {
+            WriteTypedArrayReferenceValue(typedArray, ToPropertyKey(index), value, _environment.IsStrictMode);
+            return true;
+        }
         if (obj is VmInputPropertyView inputView)
         {
             if (!inputView.CanWrite) return TrySetIndex(inputView.Original, index, value);
             PerformIndexSet(inputView, index, value);
             return true;
         }
-        if (HasArrayObjectKey(obj, index))
+        if (UsesArrayRawIndexReference(obj, index))
         {
             PerformIndexSet(obj, index, value);
             return true;
@@ -226,14 +271,12 @@ public partial class Interpreter
             SetGlobalIndexValue(global, value, _environment.IsStrictMode);
             return true;
         }
-        if (HasCanonicalIndexProperties(obj))
+        if (HasCanonicalIndexProperties(obj) || UsesNonextensibleBuiltInPrototypeStringIndex(obj, index)
+            || UsesTypedArrayOrdinaryIndex(obj, index)
+            || UsesPrimitivePrototypePropertyReads(obj)
+            || (UsesExplicitPrimitivePrototypeLink(obj) && index is string or SharpTSSymbol))
         {
             SetOwnPropertyObjectValue(obj!, ToPropertyKey(index), value, _environment.IsStrictMode);
-            return true;
-        }
-        if (obj is SharpTSArray array && index is double idx)
-        {
-            array.Set((int)idx, value);
             return true;
         }
         if (obj is DotNetInstance external && external.HasWritableIndexer)
@@ -244,11 +287,30 @@ public partial class Interpreter
         return false;
     }
 
+    // Compound/logical/update references retain the raw key until each phase.
+    // Raw numbers must become property keys before selecting physical storage.
+    private static bool UsesArrayRawIndexReference(object? target, object? key)
+        => target is SharpTSArray && (key is double || RuntimeValue.FromBoxed(key).IsObject);
+
     private static bool HasArrayObjectKey(object? target, object? key)
         => target is SharpTSArray && RuntimeValue.FromBoxed(key).IsObject;
 
+    private static bool UsesPrimitivePrototypePropertyReads(object? target)
+        => target is SharpTSStringPrototype or SharpTSNumberPrototype or SharpTSBooleanPrototype;
+
+    private static bool UsesExplicitPrimitivePrototypeLink(object? target)
+        => target is SharpTSNumberPrototype { HasExplicitPrototype: true }
+            or SharpTSBooleanPrototype { HasExplicitPrototype: true };
+
+    private static bool UsesNonextensibleBuiltInPrototypeStringIndex(object? target, object? key)
+        => key is string && UsesNonextensibleBuiltInPrototypeWrite(target);
+
+    private static bool UsesTypedArrayOrdinaryIndex(object? target, object? key)
+        => target is SharpTSTypedArray typedArray && (key is SharpTSSymbol
+            || key is string name && typedArray.UsesOrdinaryNamedPropertyLookup(name));
+
     private bool HasCanonicalIndexProperties(object? target)
-        => target is ISharpTSOwnPropertyObject or SharpTSObject or SharpTSObjectNamespace
+        => target is ISharpTSOwnPropertyObject or SharpTSObject or SharpTSObjectNamespace or SharpTSObjectPrototype
             || FunctionObjectProperties.TryGetStorage(target, this, out _);
 
     // Callers supply an already normalized string or Symbol property key.

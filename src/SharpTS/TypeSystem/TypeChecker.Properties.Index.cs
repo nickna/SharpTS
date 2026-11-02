@@ -12,6 +12,15 @@ namespace SharpTS.TypeSystem;
 /// </remarks>
 public partial class TypeChecker
 {
+    private static bool HasBigIntElements(TypeInfo.TypedArray array) =>
+        array.ElementType is "BigInt64" or "BigUint64";
+
+    private static TypeInfo TypedArrayElementType(TypeInfo.TypedArray array) =>
+        HasBigIntElements(array) ? TypeInfo.BigInt.Shared : new TypeInfo.Primitive(TokenType.TYPE_NUMBER);
+
+    private bool IsTypedArrayElementValue(TypeInfo.TypedArray array, TypeInfo value) =>
+        HasBigIntElements(array) ? IsBigInt(value) : IsNumber(value);
+
     /// <summary>
     /// noUncheckedIndexedAccess adds undefined to reads whose key is not known to
     /// designate an existing property/tuple element.
@@ -54,6 +63,7 @@ public partial class TypeChecker
     {
         // Validate the ordinary indexed read before applying a stable path refinement.
         TypeInfo result = CheckGetIndexCore(getIndex);
+        ObserveDeclaredTypedArrayRead(getIndex, _typeMap.Get(getIndex.Object), result);
         var path = ExtractNarrowingPath(getIndex);
         return path is not null && Narrowing.NarrowingPathExtractor.IsWithinDepthLimit(path)
             ? GetNarrowing(path) ?? result
@@ -65,7 +75,7 @@ public partial class TypeChecker
         if (getIndex.Object is Expr.Super { Method: null } super)
             return CheckComputedSuperIndex(super, getIndex.Index);
 
-        TypeInfo objType = WidenFreshArrayReceiver(getIndex.Object, CheckExpr(getIndex.Object));
+        TypeInfo objType = DeclaredTypedArrayReceiver(WidenFreshArrayReceiver(getIndex.Object, CheckExpr(getIndex.Object)));
         TypeInfo indexType = CheckExpr(getIndex.Index);
         if (_fieldGetterScope is not null)
         {
@@ -518,10 +528,15 @@ public partial class TypeChecker
                 return WithUncheckedUndefined(TypeInfo.String.Shared);
             }
 
-            // TypedArray index access returns number
-            if (objType is TypeInfo.TypedArray)
+            // Numeric and BigInt typed arrays retain their respective element kinds.
+            if (objType is TypeInfo.TypedArray typedArray)
             {
-                return WithUncheckedUndefined(new TypeInfo.Primitive(Parsing.TokenType.TYPE_NUMBER));
+                // The checked element kind does not prove a present runtime index.
+                // Keep this negative representation fact available to argument flow.
+                _typeMap.MarkUndefinedReachableReturn(getIndex);
+                // A checked BigInt element can still be the missing-index sentinel.
+                if (HasBigIntElements(typedArray)) _typeMap.MarkRawNumericResult(getIndex);
+                return WithUncheckedUndefined(TypedArrayElementType(typedArray));
             }
 
             // Buffer index access returns number (Buffer is a Uint8Array subclass)
@@ -731,6 +746,7 @@ public partial class TypeChecker
 
     private void EnsureWritableInterfaceIndex(TypeInfo receiver, TypeInfo index, Expr syntax)
     {
+        receiver = DeclaredTypedArrayReceiver(receiver);
         if (receiver is TypeInfo.InstantiatedGeneric generic && FlattenInstantiatedInterface(generic) is { } flattened)
             receiver = flattened;
         if (receiver is TypeInfo.Union union)
@@ -854,7 +870,7 @@ public partial class TypeChecker
 
     private TypeInfo CheckSetIndex(Expr.SetIndex setIndex)
     {
-        TypeInfo objType = CheckExpr(setIndex.Object);
+        TypeInfo objType = DeclaredTypedArrayReceiver(CheckExpr(setIndex.Object));
         TypeInfo indexType = CheckExpr(setIndex.Index);
         TypeInfo? intersectionWriteContext = null;
         if (objType is TypeInfo.Intersection intersection && TryGetLiteralPropertyKeys(indexType, out var writeKeys))
@@ -1077,6 +1093,21 @@ public partial class TypeChecker
         // Handle Union types - verify assignment is valid for all union members
         if (objType is TypeInfo.Union union)
         {
+            // Typed-array unions expose the union of their numeric element
+            // types, as in TypeScript's number | bigint index signature.
+            if ((IsNumber(indexType) || indexType is TypeInfo.NumberLiteral)
+                && union.FlattenedTypes.Count > 0
+                && union.FlattenedTypes.All(member => member is TypeInfo.TypedArray))
+            {
+                bool acceptsNumber = union.FlattenedTypes.Any(member => !HasBigIntElements((TypeInfo.TypedArray)member));
+                bool acceptsBigInt = union.FlattenedTypes.Any(member => HasBigIntElements((TypeInfo.TypedArray)member));
+                if (!IsTypeOfKind(valueType, type =>
+                    (acceptsNumber && (type is TypeInfo.Primitive { Type: TokenType.TYPE_NUMBER } or TypeInfo.NumberLiteral))
+                    || (acceptsBigInt && (type is TypeInfo.BigInt or TypeInfo.BigIntLiteral))))
+                    throw new TypeCheckException($" Cannot assign '{valueType}' to indexed union '{objType}'.", tsCode: "TS2322");
+                return valueType;
+            }
+
             foreach (var member in union.FlattenedTypes)
             {
                 // Verify the index is valid for each member
@@ -1218,8 +1249,7 @@ public partial class TypeChecker
             // TypedArray index assignment
             if (objType is TypeInfo.TypedArray typedArrayType)
             {
-                // TypedArrays accept number values
-                if (!IsNumber(valueType) && valueType is not TypeInfo.Any)
+                if (!IsTypedArrayElementValue(typedArrayType, valueType))
                 {
                     throw new TypeCheckException($" Cannot assign '{valueType}' to {typedArrayType.ElementType}Array.", tsCode: "TS2322");
                 }
@@ -1598,7 +1628,7 @@ public partial class TypeChecker
     /// </summary>
     private TypeInfo? CheckGetIndexOnType(TypeInfo objType, TypeInfo indexType, Expr.GetIndex getIndex)
     {
-        objType = ResolveMappedTypeForAccess(objType);
+        objType = DeclaredTypedArrayReceiver(ResolveMappedTypeForAccess(objType));
         if (objType is TypeInfo.MappedType mapped &&
             (TypeInfoEqualityComparer.Instance.Equals(indexType, mapped.Constraint) ||
              IsCompatible(mapped.Constraint, indexType)))
@@ -1718,9 +1748,12 @@ public partial class TypeChecker
             }
             if (objType is TypeInfo.Array arrayType)
                 return WithUncheckedUndefined(arrayType.ElementType);
-            // TypedArray index access returns number
-            if (objType is TypeInfo.TypedArray)
-                return WithUncheckedUndefined(new TypeInfo.Primitive(Parsing.TokenType.TYPE_NUMBER));
+            if (objType is TypeInfo.TypedArray typedArray)
+            {
+                _typeMap.MarkUndefinedReachableReturn(getIndex);
+                if (HasBigIntElements(typedArray)) _typeMap.MarkRawNumericResult(getIndex);
+                return WithUncheckedUndefined(TypedArrayElementType(typedArray));
+            }
             // Buffer index access returns number (Buffer is a Uint8Array subclass)
             if (objType is TypeInfo.Buffer)
                 return WithUncheckedUndefined(new TypeInfo.Primitive(Parsing.TokenType.TYPE_NUMBER));
@@ -1803,6 +1836,26 @@ public partial class TypeChecker
             _ => null
         };
         if (name is null) return null;
+        if (receiver is TypeInfo.TypedArray typedArray && index is TypeInfo.StringLiteral)
+        {
+            TypeInfo? declared = _globalDeclarationEnvironment?.GetTypeBinding($"{typedArray.ElementType}Array");
+            // The intrinsic receiver has no concrete buffer type argument.
+            // Preserve the declaration's constrained parameters in its member view.
+            if (declared is TypeInfo.GenericInterface generic)
+                declared = new TypeInfo.InstantiatedGeneric(generic, generic.TypeParams.Cast<TypeInfo>().ToList());
+            if (declared is TypeInfo.InstantiatedGeneric instantiated &&
+                FlattenInstantiatedInterface(instantiated) is { } flattened)
+                declared = flattened;
+            if (declared is TypeInfo.Interface @interface)
+                return ResolveNamedInterfaceMember(@interface, name);
+
+            // Intrinsic numeric properties remain available to the existing
+            // library-free compatibility profile; unknown names stay rejected.
+            if (!Options.RespectLoadedLibraries &&
+                name is "length" or "byteLength" or "byteOffset" or "BYTES_PER_ELEMENT")
+                return TypeInfo.Primitive.Number;
+            return null;
+        }
         if (receiver is TypeInfo.Date)
             return ResolveBuiltInMemberType(TypeCategory.Date, receiver, name);
         if (receiver is not TypeInfo.Instance instance) return null;
@@ -1837,6 +1890,7 @@ public partial class TypeChecker
     /// </summary>
     private TypeInfo? CheckSetIndexOnType(TypeInfo objType, TypeInfo indexType, TypeInfo valueType, Expr.SetIndex setIndex)
     {
+        objType = DeclaredTypedArrayReceiver(objType);
         EnsureWritableClassIndex(objType, indexType, setIndex.Index);
         EnsureWritableInterfaceIndex(objType, indexType, setIndex.Index);
         // Recursive case for nested type parameters
@@ -1916,9 +1970,9 @@ public partial class TypeChecker
                 return null;
             }
             // TypedArray index assignment
-            if (objType is TypeInfo.TypedArray)
+            if (objType is TypeInfo.TypedArray typedArray)
             {
-                if (IsNumber(valueType) || valueType is TypeInfo.Any)
+                if (IsTypedArrayElementValue(typedArray, valueType))
                     return valueType;
                 return null;
             }

@@ -27,7 +27,8 @@ public partial class RuntimeEmitter
         Type UndefinedType,
         FunctionOwnPrototypeInputs OwnPrototype,
         GuestOwnQueryInputs? GuestOwnProperties = null,
-        MethodInfo? NativeStaticMemberPresence = null
+        MethodInfo? NativeStaticMemberPresence = null,
+        EmittedTypedArrayRuntime? TypedArrays = null
     );
 
     private readonly record struct PropertyIsEnumerableHelperInputs(
@@ -153,6 +154,15 @@ public partial class RuntimeEmitter
         il.Emit(OpCodes.Ldarg_1);
         il.Emit(OpCodes.Callvirt, _types.GetMethodNoParams(_types.Object, "ToString"));
         il.Emit(OpCodes.Stloc, nameLocal);
+
+        if (inputs.TypedArrays?.Implementation is { } typedArrays)
+        {
+            var next = il.DefineLabel();
+            var index = il.DeclareLocal(_types.Int32);
+            EmitTypedArrayPhysicalIndexGuard(il, typedArrays, nameLocal, index, next);
+            il.Emit(OpCodes.Br, trueLabel);
+            il.MarkLabel(next);
+        }
 
         // The standard globals are own properties of the global object even
         // though compiled mode resolves them through emitted helpers rather

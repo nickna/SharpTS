@@ -112,6 +112,8 @@ public partial class ILCompiler
     {
         var collected = new HashSet<Stmt.Function>(
             _collectedInnerFunctions.Select(entry => entry.Func), ReferenceEqualityComparer.Instance);
+        var collectedArrows = new HashSet<Expr.ArrowFunction>(
+            _collectedArrows.Select(entry => entry.Arrow), ReferenceEqualityComparer.Instance);
         foreach (var (function, captures, _) in _collectedInnerFunctions)
         {
             if (!TryResolveMethodDCOwner(function, captures, out var owner, out var key)
@@ -125,7 +127,7 @@ public partial class ILCompiler
         // its immediately enclosing declaration reads none of that ancestor's
         // variables itself. Relay the already resolved, typed owner reference;
         // adding a same-named semantic capture would hide the declaration's body var.
-        foreach (var (arrow, key) in _closures.ArrowFunctionDCSource)
+        foreach (var (arrow, key) in _closures.ArrowFunctionDCSource.ToArray())
         {
             if (!_closures.FunctionAstNodes.TryGetValue(key, out var owner)
                 || owner is not Stmt.Function functionOwner
@@ -136,47 +138,66 @@ public partial class ILCompiler
             Relay(function, functionOwner, key);
         }
 
-        void Relay(Stmt.Function function, Stmt.Function owner, string key)
+        void Relay(Stmt.Function function, object owner, string key)
         {
-            var path = new List<Stmt.Function>();
+            var path = new List<object>();
             object? node = function;
             int guard = 0;
             while (!ReferenceEquals(node, owner))
             {
-                // This relay pass admits only ordinary declarations; leave arrow
-                // and state-machine boundaries on their existing paths.
-                if (++guard > 256 || node is not Stmt.Function intermediate
-                    || !collected.Contains(intermediate)
-                    || intermediate.IsAsync || intermediate.IsGenerator
-                    || (_innerFunctionRelayDCSources.TryGetValue(intermediate, out var existing)
-                        && existing != key)
-                    || !TryResolveMethodDCOwner(intermediate,
-                        _closures.Analyzer.GetCaptures(intermediate), out var directOwner, out _)
+                if (++guard > 256 || node is null
+                    || !TryResolveMethodDCOwner(node,
+                        _closures.Analyzer.GetCaptures(node), out var directOwner, out _)
                     || (directOwner != null && !ReferenceEquals(directOwner, owner)))
                     break;
 
-                path.Add(intermediate);
-                _innerFunctionParentCallable.TryGetValue(intermediate, out node);
+                object? parent;
+                if (node is Stmt.Function { IsAsync: false, IsGenerator: false } declaration
+                    && collected.Contains(declaration)
+                    && (!_innerFunctionRelayDCSources.TryGetValue(declaration, out var existing)
+                        || existing == key))
+                    _innerFunctionParentCallable.TryGetValue(declaration, out parent);
+                else if (node is Expr.ArrowFunction { IsAsync: false, IsGenerator: false } arrow
+                    && collectedArrows.Contains(arrow)
+                    && (!_closures.ArrowFunctionDCSource.TryGetValue(arrow, out var arrowSource)
+                        || arrowSource == key))
+                    _arrowEnclosingCallable.TryGetValue(arrow, out parent);
+                else
+                    break;
+                path.Add(node);
+                node = parent;
             }
 
             // Commit only after the whole lexical chain reaches the exact owner.
             // An empty intermediate carries its environment, not invented capture names.
             if (ReferenceEquals(node, owner))
                 foreach (var intermediate in path)
-                    _innerFunctionRelayDCSources[intermediate] = key;
+                    if (intermediate is Stmt.Function declaration)
+                        _innerFunctionRelayDCSources[declaration] = key;
+                    else if (intermediate is Expr.ArrowFunction arrow)
+                    {
+                        _arrowsNeedingFunctionDC.Add(arrow);
+                        _closures.ArrowFunctionDCSource[arrow] = key;
+                    }
         }
     }
 
     private bool TryResolveMethodDCOwner(
-        Stmt.Function function, IEnumerable<string> captures,
-        out Stmt.Function? owner, out string? key)
+        object function, IEnumerable<string> captures,
+        out object? owner, out string? key)
     {
         owner = null;
         key = null;
         foreach (string name in captures)
         {
-            if (_closures.Analyzer.GetCaptureSource(function, name) is not Stmt.Function source
-                || !_syncMethodFunctionDCKeys.TryGetValue(source, out var sourceKey)
+            var source = _closures.Analyzer.GetCaptureSource(function, name);
+            string? sourceKey = source switch
+            {
+                Stmt.Function method when _syncMethodFunctionDCKeys.TryGetValue(method, out var methodKey) => methodKey,
+                Expr.ArrowFunction arrow when _closures.AsyncArrowDCKeys.TryGetValue(arrow, out var arrowKey) => arrowKey,
+                _ => null
+            };
+            if (sourceKey is null
                 || !_closures.FunctionDisplayClassFields.TryGetValue(sourceKey, out var fields)
                 || !fields.ContainsKey(name))
                 continue;
@@ -824,9 +845,15 @@ public partial class ILCompiler
     private bool IsInnerFunctionFunctionDCCapture(
         Stmt.Function function, string name, string sourceName,
         Dictionary<string, FieldBuilder> fields)
-        => fields.ContainsKey(name)
-            && (!_closures.FunctionAstNodes.TryGetValue(sourceName, out var source)
-                || ReferenceEquals(_closures.Analyzer.GetCaptureSource(function, name), source));
+    {
+        if (!fields.ContainsKey(name)) return false;
+        var captureSource = _closures.Analyzer.GetCaptureSource(function, name);
+        if (_closures.FunctionAstNodes.TryGetValue(sourceName, out var source))
+            return ReferenceEquals(captureSource, source);
+        foreach (var (arrow, key) in _closures.AsyncArrowDCKeys)
+            if (key == sourceName) return ReferenceEquals(captureSource, arrow);
+        return true;
+    }
 
     /// <summary>
     /// Emits hoisting code at the start of a function body for inner function declarations.

@@ -22,6 +22,7 @@ internal sealed partial class RawCallStorageAnalysis
 
     private readonly Dictionary<object, SourceCallable> _sourceCallables = new(ReferenceEqualityComparer.Instance);
     private readonly HashSet<Stmt.Parameter> _sourceParameters = new(ReferenceEqualityComparer.Instance);
+    private readonly Dictionary<Stmt.Parameter, TypeInfo> _sourceParameterTypes = new(ReferenceEqualityComparer.Instance);
     private readonly Dictionary<BindingSymbol, PossibleProducers> _possibleProducers = new(ReferenceEqualityComparer.Instance);
     private readonly List<ArgumentSite> _argumentSites = [];
     private readonly List<(Expr Result, Expr Operand)> _numericOperations = [];
@@ -33,7 +34,17 @@ internal sealed partial class RawCallStorageAnalysis
     {
         var callable = new SourceCallable(owner, Array.AsReadOnly(parameters.ToArray()));
         _sourceCallables[owner] = callable;
-        foreach (var parameter in parameters) _sourceParameters.Add(parameter);
+        var implementation = owner is Stmt.Function function
+            ? _map.GetClassMethodImplementation(function) : null;
+        for (int index = 0; index < parameters.Count; index++)
+        {
+            var parameter = parameters[index];
+            _sourceParameters.Add(parameter);
+            // Class parameters do not necessarily have a lexical value-binding snapshot.
+            // Their existing checked implementation owns the semantic destination shape.
+            if (implementation is not null && index < implementation.ParamTypes.Count)
+                _sourceParameterTypes[parameter] = implementation.ParamTypes[index];
+        }
         if (name is not null && _map.GetValueBinding(name) is { } binding)
             ProducerBinding(binding).Values.Add(callable);
     }

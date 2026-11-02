@@ -342,16 +342,9 @@ public class SharpTSEventEmitter : ITypeCategorized, IMemberProvider
     /// decide how to treat an async listener's promise (route via captureRejections,
     /// or report as unhandled) — no built-in rejection observation happens here.
     /// </summary>
-    private static object? InvokeListenerReturning(object listener, Interp? interpreter, List<object?> eventArgs)
-    {
-        if (listener is ISharpTSCallable callable)
-        {
-            return callable.Call(interpreter!, eventArgs);
-        }
-
-        InvokeListenerDirect(listener, eventArgs.ToArray());
-        return null;
-    }
+    private object? InvokeListenerReturning(object listener, Interp? interpreter, List<object?> eventArgs)
+        => SharpTS.Runtime.RuntimeCallableDispatcher.InvokeWithThis(
+            interpreter, listener, this, eventArgs.ToArray());
 
     /// <summary>
     /// Removes all listeners for the specified event, or all events if no event name is provided.
@@ -622,7 +615,7 @@ public class SharpTSEventEmitter : ITypeCategorized, IMemberProvider
                 }
             }
 
-            SharpTS.Runtime.RuntimeCallableDispatcher.Invoke(interpreter, wrapper.Listener, args);
+            SharpTS.Runtime.RuntimeCallableDispatcher.InvokeWithThis(interpreter, wrapper.Listener, this, args);
         }
 
         return true;
@@ -646,9 +639,9 @@ public class SharpTSEventEmitter : ITypeCategorized, IMemberProvider
     /// the previous <see cref="BuiltInMethod"/> branch did, so all interpreter
     /// listeners that don't actually use their interpreter argument now work.
     /// </remarks>
-    private static void InvokeListenerDirect(object listener, object?[] args)
+    private void InvokeListenerDirect(object listener, object?[] args)
     {
-        SharpTS.Runtime.RuntimeCallableDispatcher.Invoke(null, listener, args);
+        SharpTS.Runtime.RuntimeCallableDispatcher.InvokeWithThis(null, listener, this, args);
     }
 
     /// <summary>

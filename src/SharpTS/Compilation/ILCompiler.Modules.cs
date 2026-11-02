@@ -480,6 +480,18 @@ public partial class ILCompiler
     /// the timer processor on this thread until the task completes (or the loop proves
     /// quiescent, matching Node's "a forever-pending top-level promise doesn't block exit").
     /// </remarks>
+    private static bool IsStandaloneReactionResult(Expr expression)
+    {
+        while (true)
+        {
+            expression = ExpressionUnwrapper.Unwrap(expression);
+            if (expression is Expr.Assign assignment) expression = assignment.Value;
+            else if (expression is Expr.Comma comma) expression = comma.Right;
+            else return expression is Expr.Call
+                { Callee: Expr.Get { Name.Lexeme: "then" or "catch" or "finally" } };
+        }
+    }
+
     private void EmitExpressionWithAsyncWait(ILGenerator il, ILEmitter emitter, Stmt.Expression exprStmt)
     {
         // SharpTS historically pumps promise-valued expression statements as a
@@ -488,10 +500,7 @@ public partial class ILCompiler
         // executes the reaction before the next statement in the same script
         // job. Leave then/catch/finally results to the normal microtask
         // checkpoint (#1440). Explicit `await` remains on the path below.
-        if (_features?.UsesPromise == true && exprStmt.Expr is Expr.Call
-            {
-                Callee: Expr.Get { Name.Lexeme: "then" or "catch" or "finally" }
-            })
+        if (_features?.UsesPromise == true && IsStandaloneReactionResult(exprStmt.Expr))
         {
             emitter.MarkStatementStart(exprStmt);
             emitter.EmitExpression(exprStmt.Expr);
@@ -523,7 +532,7 @@ public partial class ILCompiler
             il.MarkLabel(haveTask);
             il.Emit(OpCodes.Ldloc, task);
             il.Emit(OpCodes.Call, _runtime.RequirePromise().TrackTopLevelPromiseReaction);
-            il.Emit(OpCodes.Pop);
+            il.Emit(OpCodes.Call, _runtime.RequirePromise().ObserveDiscardedPromiseResult);
             il.MarkLabel(done);
             return;
         }
@@ -549,6 +558,13 @@ public partial class ILCompiler
             il.Emit(OpCodes.Ldloc, exprResult);
             il.Emit(OpCodes.Call, _runtime.RequirePromise().ShouldAutoAwaitPromiseMethod);
             il.Emit(OpCodes.Brfalse, notTaskLabel);
+            if (exprStmt.Expr is not Expr.Await)
+            {
+                // This owner emits expressions directly rather than through EmitStatement.
+                // Retain the existing discarded-promise rejection observation here too.
+                il.Emit(OpCodes.Ldloc, exprResult);
+                il.Emit(OpCodes.Call, _runtime.RequirePromise().ObserveDiscardedPromiseResult);
+            }
         }
 
         // Check for Task<object> first
@@ -729,8 +745,10 @@ public partial class ILCompiler
         // BuildTopLevelStaticVarsForModule in CreateModuleTopLevelContext.
 
         var emitter = new ILEmitter(ctx);
-        EmitLiveModuleFunctionInitialization(module, emitter);
         bool hasHostedTopLevelAwait = _hosted && TopLevelAwaitDetector.Contains(module.Statements);
+        if (!hasHostedTopLevelAwait && module.Statements.Any(statement => statement is Stmt.Using))
+            emitter.InitializeCapturedLexicalTdzBindings(module.Statements);
+        EmitLiveModuleFunctionInitialization(module, emitter);
         if (hasHostedTopLevelAwait)
         {
             // The internal async module runner executes this module through the
@@ -743,20 +761,20 @@ public partial class ILCompiler
 
         EmitInitializeHoistedVars(il, ctx, GetVarLoopHeadDeclarations(module.Statements));
 
-        foreach (var stmt in module.Statements)
+        emitter.EmitTopLevelStatements(module.Statements, stmt =>
         {
             // Class definitions still execute at their source position. Other
             // declarations are compiled separately in earlier phases.
             if (stmt is Stmt.Function or Stmt.Interface or Stmt.TypeAlias)
             {
-                continue;
+                return;
             }
 
             // Special handling for expression statements to wait for top-level async calls
             if (stmt is Stmt.Expression exprStmt)
             {
                 if (hasHostedTopLevelAwait && exprStmt.Expr is Expr.Await)
-                    continue;
+                    return;
                 if (_hosted)
                     EmitHostedExpression(il, emitter, exprStmt);
                 else
@@ -766,7 +784,7 @@ public partial class ILCompiler
             {
                 emitter.EmitStatement(stmt);
             }
-        }
+        });
 
         il.MarkLabel(skipLabel);
         il.Emit(OpCodes.Ret);
@@ -824,13 +842,13 @@ public partial class ILCompiler
         var emitter = new ILEmitter(ctx);
         EmitInitializeHoistedVars(il, ctx, GetVarLoopHeadDeclarations(script.Statements));
 
-        foreach (var stmt in script.Statements)
+        emitter.EmitTopLevelStatements(script.Statements, stmt =>
         {
             // Class definitions still execute at their source position. Other
             // declarations are compiled separately in earlier phases.
             if (stmt is Stmt.Function or Stmt.Interface or Stmt.TypeAlias)
             {
-                continue;
+                return;
             }
 
             // Special handling for expression statements to wait for top-level async calls
@@ -845,7 +863,7 @@ public partial class ILCompiler
             {
                 emitter.EmitStatement(stmt);
             }
-        }
+        });
 
         il.MarkLabel(skipLabel);
         il.Emit(OpCodes.Ret);

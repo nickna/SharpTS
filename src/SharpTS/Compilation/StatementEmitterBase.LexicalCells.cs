@@ -36,6 +36,34 @@ public abstract partial class StatementEmitterBase
             Ctx.RuntimeClassLexicalShadows.Add(declaration);
             EnterLexicalCellBinding(declaration, declaration.Name, prior);
         }
+        EnterOrdinaryUsingCellScope(statements, prior);
+    }
+
+    private protected void EnterOrdinaryUsingCellScope(IEnumerable<Stmt> statements,
+        List<LoopBodyCellScopeEntry> prior, bool preserveActiveDeclarations = false)
+    {
+        foreach (var binding in DirectOrdinaryUsingBindings(statements))
+        {
+            if (binding.Name is not { } token) continue;
+            string name = GetBindingStorageName(binding, token.Lexeme);
+            if (preserveActiveDeclarations
+                && (ReferenceEquals(Ctx.LoopBodyCellDeclarations.GetValueOrDefault(name), token)
+                    || ReferenceEquals(Ctx.LoopBodyCellShadows.GetValueOrDefault(name), token)))
+                continue;
+            EnterLexicalCellBinding(binding, token, prior,
+                Ctx.ClosureAnalyzer?.IsOrdinaryBlockShadowDeclaration(token) == true);
+        }
+    }
+
+    private static IEnumerable<Stmt.UsingBinding> DirectOrdinaryUsingBindings(IEnumerable<Stmt> statements)
+    {
+        foreach (var statement in statements)
+        {
+            if (statement is Stmt.Using resource)
+                foreach (var binding in resource.Bindings) yield return binding;
+            else if (statement is Stmt.Sequence sequence)
+                foreach (var binding in DirectOrdinaryUsingBindings(sequence.Statements)) yield return binding;
+        }
     }
 
     protected bool NeedsLexicalCellScope(IEnumerable<Stmt> statements, bool ordinaryHandler = false) =>

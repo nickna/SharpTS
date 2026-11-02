@@ -1538,17 +1538,6 @@ public partial class RuntimeEmitter
         il.Emit(OpCodes.Ldsfld, inputs.UndefinedInstance);
         il.Emit(OpCodes.Ret);
         il.MarkLabel(useImplicitObjectPrototype);
-        // ECMA-262: `({}).constructor === Object`. If user hasn't set a custom
-        // constructor and no prototype overrides it, return typeof(object) which
-        // matches what compiled-mode `Object` resolves to via globalThis.
-        var notDictCtorLabel = il.DefineLabel();
-        il.Emit(OpCodes.Ldarg_1);
-        il.Emit(OpCodes.Ldstr, "constructor");
-        il.Emit(OpCodes.Call, _types.GetMethod(_types.String, "op_Equality", _types.String, _types.String));
-        il.Emit(OpCodes.Brfalse, notDictCtorLabel);
-        EmitRuntimeConstructorValue(il, _types.Object);
-        il.Emit(OpCodes.Ret);
-        il.MarkLabel(notDictCtorLabel);
         // ECMA-262 19.1.3: every plain object inherits from Object.prototype.
         // For Dictionary literals (`{}` etc.) without an explicit prototype,
         // fall back to the ObjectPrototypeField singleton — that's where
@@ -1558,14 +1547,15 @@ public partial class RuntimeEmitter
         // the inherited methods on plain dicts. Lazy-populates on first read.
         var protoFallbackMissLabel = il.DefineLabel();
         il.Emit(OpCodes.Call, inputs.ObjectPrototypes.Populate);
-        var objProtoFallbackLocal = il.DeclareLocal(_types.Object);
+        // The intrinsic's immutable parent is null. Stop here on its own miss;
+        // descendants use its live descriptor with the original Receiver.
+        il.Emit(OpCodes.Ldarg_0);
+        il.Emit(OpCodes.Ldsfld, inputs.ObjectPrototypes.Prototype);
+        il.Emit(OpCodes.Beq, protoFallbackMissLabel);
         il.Emit(OpCodes.Ldsfld, inputs.ObjectPrototypes.Prototype);
         il.Emit(OpCodes.Ldarg_1);
-        il.Emit(OpCodes.Ldloca, objProtoFallbackLocal);
-        il.Emit(OpCodes.Callvirt, _types.GetMethod(_types.DictionaryStringObject, "TryGetValue",
-            [_types.String, _types.Object.MakeByRefType()])!);
-        il.Emit(OpCodes.Brfalse, protoFallbackMissLabel);
-        il.Emit(OpCodes.Ldloc, objProtoFallbackLocal);
+        il.Emit(OpCodes.Ldarg_0);
+        il.Emit(OpCodes.Call, inputs.Reflect.Get);
         il.Emit(OpCodes.Ret);
         il.MarkLabel(protoFallbackMissLabel);
         // Return $Undefined.Instance for non-existent properties (JavaScript semantics)

@@ -71,7 +71,8 @@ public partial class RuntimeEmitter
         MethodInfo? NativeProxyRejection,
         EmittedGuestOwnPropertyRuntime? GuestOwnProperties = null,
         NativeSourceOwnerCatalog? SourceOwners = null,
-        EmittedSourceDataDefinitionRuntime? SourceDataDefinition = null
+        EmittedSourceDataDefinitionRuntime? SourceDataDefinition = null,
+        EmittedTypedArrayRuntime? TypedArrays = null
     );
 
     private readonly record struct DefinePropertyArrayLengthCoercionInputs(
@@ -138,7 +139,8 @@ public partial class RuntimeEmitter
         Type UndefinedType,
         FunctionOwnPrototypeInputs OwnPrototype,
         GuestOwnQueryInputs? GuestOwnProperties = null,
-        NativeSourceOwnerCatalog? SourceOwners = null
+        NativeSourceOwnerCatalog? SourceOwners = null,
+        EmittedTypedArrayRuntime? TypedArrays = null
     );
 
     private readonly record struct SymbolKeyDescriptorLookupInputs(
@@ -577,7 +579,8 @@ public partial class RuntimeEmitter
         descriptors.DefineProperty = method;
 
         var il = method.GetILGenerator();
-        if (!NeedsObjectDefinitionBodies)
+        if (!NeedsObjectDefinitionBodies
+            && !(_features.HasAnyTypedArray && _features.UsesPropertyWrites))
         {
             // No source or internal caller can select this entrypoint. Preserve
             // its required metadata handle without the unused descriptor body.
@@ -657,6 +660,9 @@ public partial class RuntimeEmitter
             method,
             descriptorLocal
         );
+
+        EmitDefineTypedArrayPhysicalProperty(il, inputs.TypedArrays,
+            inputs.Booleans, inputs.Errors, propNameLocal, convertedDescriptor, returnsBoolean: false);
 
         var (lenWasCoercedLocal, _, coercedLenLocal) =
             EmitDefinePropertyArrayLengthCoercion(
@@ -841,7 +847,8 @@ public partial class RuntimeEmitter
         EmitDefinePropertyArrayLengthCoercion(
         ILGenerator il,
         DefinePropertyArrayLengthCoercionInputs inputs,
-        LocalBuilder propNameLocal
+        LocalBuilder propNameLocal,
+        LocalBuilder? convertedDescriptor = null
     )
     {
         // ECMA-262 10.4.2.4 ArraySetLength steps 3-4: newLen =
@@ -864,19 +871,24 @@ public partial class RuntimeEmitter
         il.Emit(OpCodes.Ldarg_0);
         il.Emit(OpCodes.Isinst, inputs.ArgumentsType);
         il.Emit(OpCodes.Brtrue, skipArrayLenCheck);
+        var arrayLengthTarget = il.DefineLabel();
+        il.Emit(OpCodes.Ldarg_0);
+        il.Emit(OpCodes.Ldsfld, inputs.ArrayOperations.PrototypeField);
+        il.Emit(OpCodes.Beq, arrayLengthTarget);
         il.Emit(OpCodes.Ldarg_0);
         il.Emit(OpCodes.Isinst, _types.ListOfObject);
         il.Emit(OpCodes.Brfalse, skipArrayLenCheck);
+        il.MarkLabel(arrayLengthTarget);
         il.Emit(OpCodes.Ldloc, propNameLocal);
         il.Emit(OpCodes.Ldstr, "length");
         il.Emit(OpCodes.Call, _types.GetMethod(_types.String, "op_Equality", _types.String, _types.String));
         il.Emit(OpCodes.Brfalse, skipArrayLenCheck);
         var lenValLocal = il.DeclareLocal(_types.Object);
-        il.Emit(OpCodes.Ldarg_2);
+        LoadDescriptor();
         il.Emit(OpCodes.Ldstr, "value");
         il.Emit(OpCodes.Call, inputs.ArrayOperations.HasArrayLikeProperty);
         il.Emit(OpCodes.Brfalse, skipArrayLenCheck);
-        il.Emit(OpCodes.Ldarg_2);
+        LoadDescriptor();
         il.Emit(OpCodes.Ldstr, "value");
         il.Emit(OpCodes.Call, inputs.GetProperty);
         il.Emit(OpCodes.Stloc, lenValLocal);
@@ -941,6 +953,12 @@ public partial class RuntimeEmitter
         il.MarkLabel(skipArrayLenCheck);
 
         return (lenWasCoercedLocal, lenValLocal, coercedLenLocal);
+
+        void LoadDescriptor()
+        {
+            if (convertedDescriptor is null) il.Emit(OpCodes.Ldarg_2);
+            else il.Emit(OpCodes.Ldloc, convertedDescriptor);
+        }
     }
 
     // The input is an already-converted partial record. Copying its data
@@ -1387,6 +1405,7 @@ public partial class RuntimeEmitter
 
         EmitGetOwnDescriptorPrimitiveStringLength(il, propNameLocal, resultDictLocal, endLabel);
         EmitGetOwnDescriptorPrimitiveStringIndex(il, propNameLocal, resultDictLocal, endLabel);
+        EmitGetOwnDescriptorTypedArrayIndex(il, inputs.TypedArrays, propNameLocal, resultDictLocal, endLabel);
 
         EmitGetOwnDescriptorGlobalReceiver(
             il,

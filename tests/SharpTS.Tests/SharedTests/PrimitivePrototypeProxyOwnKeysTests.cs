@@ -1,0 +1,48 @@
+using SharpTS.Tests.Infrastructure;
+using Xunit;
+
+namespace SharpTS.Tests.SharedTests;
+
+public sealed class PrimitivePrototypeProxyOwnKeysTests
+{
+    public static IEnumerable<object[]> Cases()
+    {
+        yield return ["number-trapless-original", "const p:any=Number.prototype;const s=Symbol('key');Object.defineProperty(p,'extra',{value:7,configurable:true});Object.defineProperty(p,s,{value:9,configurable:false});const keys=Reflect.ownKeys(new Proxy(p,{}));console.log(keys.includes('extra'),keys.includes(s));", "true true\n"];
+        yield return ["number-symbol-invariant-original", "const p:any=Number.prototype;const s=Symbol('key');Object.defineProperty(p,s,{value:9,configurable:false});const proxy=new Proxy(p,{ownKeys(){return ['constructor'];}});try{Reflect.ownKeys(proxy);console.log(false);}catch(error){console.log(error instanceof TypeError);}", "true\n"];
+        yield return ["boolean-trapless-original", "const p:any=Boolean.prototype;const s=Symbol('key');Object.defineProperty(p,'extra',{value:7,configurable:true});Object.defineProperty(p,s,{value:9,configurable:false});const keys=Reflect.ownKeys(new Proxy(p,{}));console.log(keys.includes('extra'),keys.includes(s));", "true true\n"];
+        yield return ["boolean-symbol-invariant-original", "const p:any=Boolean.prototype;const s=Symbol('key');Object.defineProperty(p,s,{value:9,configurable:false});const proxy=new Proxy(p,{ownKeys(){return ['constructor'];}});try{Reflect.ownKeys(proxy);console.log(false);}catch(error){console.log(error instanceof TypeError);}", "true\n"];
+        yield return ["number-stored-order-no-getter", "const p:any=Number.prototype;const first=Symbol('first'),second=Symbol('second');let reads=0;Object.defineProperty(p,'10',{value:10,configurable:true});Object.defineProperty(p,'2',{value:2,configurable:true});Object.defineProperty(p,'probe',{get(){reads++;return 1},configurable:true});Object.defineProperty(p,first,{get(){reads++;return 2},configurable:true});Object.defineProperty(p,second,{value:3,configurable:true});const actual=Reflect.ownKeys(new Proxy(p,{})),expected=Reflect.ownKeys(p);let same=actual.length===expected.length;for(let i=0;i<actual.length;i++){same=same&&actual[i]===expected[i];}console.log(same,actual.indexOf('2')<actual.indexOf('10'),actual.indexOf('10')<actual.indexOf('probe'),actual.indexOf('probe')<actual.indexOf(first),actual.indexOf(first)<actual.indexOf(second),reads);", "true true true true true 0\n"];
+        yield return ["number-nonextensible-exact", "const p:any=Number.prototype;const symbol=Symbol('key');Object.defineProperty(p,'extra',{value:1,configurable:true});Object.defineProperty(p,symbol,{value:2,configurable:true});Object.preventExtensions(p);let calls=0;const proxy=new Proxy(p,{ownKeys(target:any){calls++;return Reflect.ownKeys(target);}});const keys=Reflect.ownKeys(proxy);console.log(keys.includes('extra'),keys.includes(symbol),keys.length===Reflect.ownKeys(p).length,calls);", "true true true 1\n"];
+        yield return ["number-nonextensible-omit", "const p:any=Number.prototype;Object.defineProperty(p,'extra',{value:1,configurable:true});Object.preventExtensions(p);try{Reflect.ownKeys(new Proxy(p,{ownKeys(){return []}}));console.log(false)}catch(error){console.log(error instanceof TypeError)}", "true\n"];
+        yield return ["number-configurable-omit-allowed", "const p:any=Number.prototype;const symbol=Symbol('key');Object.defineProperty(p,'extra',{value:1,configurable:true});Object.defineProperty(p,symbol,{value:2,configurable:true});console.log(Reflect.ownKeys(new Proxy(p,{ownKeys(){return []}})).length);", "0\n"];
+        yield return ["number-nonconfigurable-string", "const p:any=Number.prototype;Object.defineProperty(p,'locked',{value:1,configurable:false});try{Reflect.ownKeys(new Proxy(p,{ownKeys(){return []}}));console.log(false)}catch(error){console.log(error instanceof TypeError)}", "true\n"];
+        yield return ["number-distinct-symbol-identity", "const p:any=Number.prototype;const first=Symbol('same'),second=Symbol('same');Object.defineProperty(p,first,{value:1,configurable:false});Object.defineProperty(p,second,{value:2,configurable:false});try{Reflect.ownKeys(new Proxy(p,{ownKeys(){return [first]}}));console.log(false)}catch(error){console.log(error instanceof TypeError)}const keys=Reflect.ownKeys(new Proxy(p,{ownKeys(){return [first,second]}}));console.log(keys.length===2,keys[0]===first,keys[1]===second);", "true\ntrue true true\n"];
+        yield return ["number-valid-trap-return-order", "const p:any=Number.prototype;const first=Symbol('first'),second=Symbol('second');Object.defineProperty(p,first,{value:1,configurable:false});Object.defineProperty(p,second,{value:2,configurable:false});Object.defineProperty(p,'extra',{value:3,configurable:true});const keys=Reflect.ownKeys(new Proxy(p,{ownKeys(){return [second,'extra',first]}}));console.log(keys.length===3,keys[0]===second,keys[1]==='extra',keys[2]===first);", "true true true true\n"];
+        yield return ["boolean-stored-order-no-getter", "const p:any=Boolean.prototype;const first=Symbol('first'),second=Symbol('second');let reads=0;Object.defineProperty(p,'10',{value:10,configurable:true});Object.defineProperty(p,'2',{value:2,configurable:true});Object.defineProperty(p,'probe',{get(){reads++;return 1},configurable:true});Object.defineProperty(p,first,{get(){reads++;return 2},configurable:true});Object.defineProperty(p,second,{value:3,configurable:true});const actual=Reflect.ownKeys(new Proxy(p,{})),expected=Reflect.ownKeys(p);let same=actual.length===expected.length;for(let i=0;i<actual.length;i++){same=same&&actual[i]===expected[i];}console.log(same,actual.indexOf('2')<actual.indexOf('10'),actual.indexOf('10')<actual.indexOf('probe'),actual.indexOf('probe')<actual.indexOf(first),actual.indexOf(first)<actual.indexOf(second),reads);", "true true true true true 0\n"];
+        yield return ["boolean-nonextensible-exact", "const p:any=Boolean.prototype;const symbol=Symbol('key');Object.defineProperty(p,'extra',{value:1,configurable:true});Object.defineProperty(p,symbol,{value:2,configurable:true});Object.preventExtensions(p);let calls=0;const proxy=new Proxy(p,{ownKeys(target:any){calls++;return Reflect.ownKeys(target);}});const keys=Reflect.ownKeys(proxy);console.log(keys.includes('extra'),keys.includes(symbol),keys.length===Reflect.ownKeys(p).length,calls);", "true true true 1\n"];
+        yield return ["boolean-nonextensible-omit", "const p:any=Boolean.prototype;Object.defineProperty(p,'extra',{value:1,configurable:true});Object.preventExtensions(p);try{Reflect.ownKeys(new Proxy(p,{ownKeys(){return []}}));console.log(false)}catch(error){console.log(error instanceof TypeError)}", "true\n"];
+        yield return ["boolean-configurable-omit-allowed", "const p:any=Boolean.prototype;const symbol=Symbol('key');Object.defineProperty(p,'extra',{value:1,configurable:true});Object.defineProperty(p,symbol,{value:2,configurable:true});console.log(Reflect.ownKeys(new Proxy(p,{ownKeys(){return []}})).length);", "0\n"];
+        yield return ["boolean-nonconfigurable-string", "const p:any=Boolean.prototype;Object.defineProperty(p,'locked',{value:1,configurable:false});try{Reflect.ownKeys(new Proxy(p,{ownKeys(){return []}}));console.log(false)}catch(error){console.log(error instanceof TypeError)}", "true\n"];
+        yield return ["boolean-distinct-symbol-identity", "const p:any=Boolean.prototype;const first=Symbol('same'),second=Symbol('same');Object.defineProperty(p,first,{value:1,configurable:false});Object.defineProperty(p,second,{value:2,configurable:false});try{Reflect.ownKeys(new Proxy(p,{ownKeys(){return [first]}}));console.log(false)}catch(error){console.log(error instanceof TypeError)}const keys=Reflect.ownKeys(new Proxy(p,{ownKeys(){return [first,second]}}));console.log(keys.length===2,keys[0]===first,keys[1]===second);", "true\ntrue true true\n"];
+        yield return ["boolean-valid-trap-return-order", "const p:any=Boolean.prototype;const first=Symbol('first'),second=Symbol('second');Object.defineProperty(p,first,{value:1,configurable:false});Object.defineProperty(p,second,{value:2,configurable:false});Object.defineProperty(p,'extra',{value:3,configurable:true});const keys=Reflect.ownKeys(new Proxy(p,{ownKeys(){return [second,'extra',first]}}));console.log(keys.length===3,keys[0]===second,keys[1]==='extra',keys[2]===first);", "true true true true\n"];
+        yield return ["ordinary-transparent-control", "const symbol=Symbol('key');const target:any={a:1};Object.defineProperty(target,symbol,{value:2,configurable:false});const proxy=new Proxy(target,{});const keys=Reflect.ownKeys(proxy);console.log(keys.length===2,keys[0]==='a',keys[1]===symbol);", "true true true\n"];
+        yield return ["ordinary-invalid-duplicate-control", "try{Reflect.ownKeys(new Proxy({},{ownKeys(){return ['a','a']}}));console.log(false)}catch(error){console.log(error instanceof TypeError)}", "true\n"];
+    }
+
+    public static IEnumerable<object[]> Modes() => Cases().SelectMany(row =>
+        new[] { ExecutionMode.Interpreted, ExecutionMode.Compiled }.Select(mode =>
+            new object[] { row[0], row[1], row[2], mode }));
+
+    [Theory, MemberData(nameof(Modes))]
+    public void OwnedPrototypeKeysDriveForwardingAndProxyInvariants(string name, string source, string expected, ExecutionMode mode)
+    {
+        Assert.NotEmpty(name);
+        if (mode == ExecutionMode.Compiled)
+        {
+            var (errors, output) = TestHarness.CompileVerifyAndRun(source);
+            Assert.Empty(errors);
+            Assert.Equal(expected, output);
+        }
+        else Assert.Equal(expected, TestHarness.Run(source, mode));
+    }
+}

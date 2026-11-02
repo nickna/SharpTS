@@ -10,7 +10,7 @@ public sealed class EmittedStructuredCloneRuntime
 
     public bool IsComplete { get; private set; }
 
-    // The exception is declared before $Runtime; Clone is published after its wrapper body.
+    // The exception is declared before $Runtime; Clone is reserved in phase 1 and filled by worker emission.
     private TypeBuilder? _errorType;
     public TypeBuilder ErrorType
     {
@@ -30,6 +30,14 @@ public sealed class EmittedStructuredCloneRuntime
     {
         get => Require(_clone);
         internal set => Set(ref _clone, value);
+    }
+
+    private MethodBuilder? _guestClone;
+    /// <summary>Actual JavaScript-global entry; bridge-compatible Clone keeps its existing protocol.</summary>
+    public MethodBuilder GuestClone
+    {
+        get => Require(_guestClone);
+        internal set => Set(ref _guestClone, value);
     }
 
     private static T Require<T>(T? handle, [CallerMemberName] string name = "") where T : class =>
@@ -54,6 +62,7 @@ public sealed class EmittedStructuredCloneRuntime
         _ = ErrorType;
         _ = ErrorCtor;
         _ = Clone;
+        _ = GuestClone;
         IsComplete = true;
     }
 }

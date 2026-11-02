@@ -8,6 +8,8 @@ internal sealed partial class NativePropertyLookupCatalog
     {
         if (runtime.NativeCallables is { } callables)
             foreach (var carrier in callables.Carriers) RegisterOutputOwner(carrier);
+        // The required Array component owns this exact emitted iterator declaration.
+        RegisterOutputOwner(runtime.ArrayOperations.IteratorCtor.DeclaringType!);
         // Role handles positively identify declarations produced by these selected emitters.
         foreach (var type in new Type?[] {
             runtime.ArrayStorage.Type, runtime.Arguments.Type, runtime.EventEmitter.Type,

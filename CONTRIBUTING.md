@@ -114,12 +114,20 @@ shard indexes breaking ties. Every method stays intact, so all its runtime rows
 run in exactly one shard. Discovered entries estimate workload; opaque theories
 can expand further at execution and equal weights need not take equal time.
 
+Use `SerializableMemberData` for audited, independent theory rows containing
+default-comparer source-file dictionaries. It makes those maps serializable to
+xUnit so discovery counts their actual rows without changing method-level shard
+ownership. The adapter preserves UTF-16 file contents and insertion order;
+unsupported values/comparers remain opaque, and explicit
+`DisableDiscoveryEnumeration` remains honored. Do not enumerate arbitrary
+providers separately or substitute empirical timing weights.
+
 Local results include each standalone plan, its inventory digest, exact filter,
 method weights and shard totals. CI uses six shards on each platform and uploads
 the plan, execution duration and TRX results as `standalone-<os>-<shard>` artifacts
 for seven days, including failed runs. Compare Linux and Windows durations and
 executed case counts alongside the inventory digest when assessing balance.
-The 25-minute CI test step, 30-minute job and 120-second hang guard stay bounded.
+The 35-minute CI test step, 40-minute job and 120-second hang guard stay bounded.
 
 Core tests use xUnit's conservative parallel scheduler with the default CPU-based
 collection limit. It bounds unfinished collections so awaited test continuations

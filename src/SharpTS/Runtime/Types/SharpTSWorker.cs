@@ -231,7 +231,7 @@ public class SharpTSWorker : SharpTSEventEmitter, IDisposable
         {
             try
             {
-                _workerData = StructuredClone.Clone(_workerData, _transferList);
+                _workerData = StructuredClone.CloneWithInterpreter(_workerData, _transferList, _parentInterpreter);
             }
             catch (StructuredClone.DataCloneError e)
             {
@@ -819,7 +819,7 @@ public class SharpTSWorker : SharpTSEventEmitter, IDisposable
             if (args.Length == 0)
                 throw new Exception("postMessage requires at least one argument");
             var transfer = args.Length > 1 ? args[1].ToObject() as SharpTSArray : null;
-            PostMessageToParent(args[0].ToObject(), transfer);
+            PostMessageToParent(args[0].ToObject(), transfer, interpreter);
             return RuntimeValue.Null;
         }));
 
@@ -835,7 +835,7 @@ public class SharpTSWorker : SharpTSEventEmitter, IDisposable
     /// <summary>
     /// Posts a message from the worker to the parent.
     /// </summary>
-    internal void PostMessageToParent(object? message, SharpTSArray? transfer = null)
+    internal void PostMessageToParent(object? message, SharpTSArray? transfer = null, Interpreter? interpreter = null)
     {
         if (_isTerminated)
             return;
@@ -847,7 +847,7 @@ public class SharpTSWorker : SharpTSEventEmitter, IDisposable
             SharpTSMessagePort.ClonedMessage delivery;
             try
             {
-                delivery = new SharpTSMessagePort.ClonedMessage(StructuredClone.Clone(message, transfer), transfer);
+                delivery = new SharpTSMessagePort.ClonedMessage(StructuredClone.CloneWithInterpreter(message, transfer, interpreter), transfer);
             }
             catch (StructuredClone.DataCloneError)
             {
@@ -1055,7 +1055,7 @@ public class SharpTSWorker : SharpTSEventEmitter, IDisposable
             SharpTSMessagePort.ClonedMessage delivery;
             try
             {
-                delivery = new SharpTSMessagePort.ClonedMessage(StructuredClone.Clone(message, transfer), transfer);
+                delivery = new SharpTSMessagePort.ClonedMessage(StructuredClone.CloneWithInterpreter(message, transfer, _parentInterpreter), transfer);
             }
             catch (StructuredClone.DataCloneError)
             {
@@ -1499,10 +1499,13 @@ internal class WorkerParentPort : SharpTSEventEmitter
     }
 
     public void PostMessage(object? message, SharpTSArray? transfer = null)
+        => PostMessageForInterpreter(message, transfer, null);
+
+    private void PostMessageForInterpreter(object? message, SharpTSArray? transfer, Interpreter? interpreter)
     {
         if (_closed)
             return;
-        _worker.PostMessageToParent(message, transfer);
+        _worker.PostMessageToParent(message, transfer, interpreter);
     }
 
     private RuntimeValue InvokePostMessage(
@@ -1513,7 +1516,7 @@ internal class WorkerParentPort : SharpTSEventEmitter
         if (args.Length == 0)
             throw new Exception("postMessage requires at least one argument");
         var transfer = args.Length > 1 ? args[1].ToObject() as SharpTSArray : null;
-        PostMessage(args[0].ToObject(), transfer);
+        PostMessageForInterpreter(args[0].ToObject(), transfer, interpreter);
         return RuntimeValue.Null;
     }
 

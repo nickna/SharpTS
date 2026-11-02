@@ -469,28 +469,13 @@ public partial class ILEmitter
         }
         else
         {
-            var local = _ctx.Locals.GetLocal(className);
-            if (local != null)
-            {
-                IL.Emit(OpCodes.Ldloc, local);
-            }
-            else if (_resolver.TryLoadVariable(className) != null)
-            {
-                // Variable loaded onto stack by the resolver
-            }
-            else
-            {
-                // Last resort: evaluate the bare-Variable callee through the
-                // standard expression emit path, which knows about non-resolver
-                // globals (JSON, Math, Reflect, etc.) — those are non-constructable
-                // singletons that should reach NewOnFunction's "not a constructor"
-                // TypeError throw rather than vanish into a silent Ldnull.
-                EmitExpression(n.Callee);
-            }
+            // Use the ordinary binding-aware load and its actual stack type:
+            // scalar locals/parameters are not necessarily object-backed.
+            EmitExpression(n.Callee);
+            EnsureBoxed();
         }
 
-        // The loaded value is statically typed as `object` (DC fields, top-level static vars,
-        // and captured fields are all object-typed). `EmitReflectionConstructFromType` expects
+        // The function wrapper or normalized callee now has object storage. `EmitReflectionConstructFromType` expects
         // a `System.Type` on the stack — passing an `object` directly trips an ILVerify
         // `StackUnexpected` that the JIT sometimes tolerates and sometimes miscompiles into a
         // 0xC0000005 access violation when the value happens to not be a Type (e.g. a cross-

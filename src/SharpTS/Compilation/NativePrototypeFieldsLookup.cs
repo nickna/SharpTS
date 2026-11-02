@@ -195,7 +195,7 @@ internal sealed class NativePrototypeFieldsLookup
         EmitQuery(runtime.Errors);
         _owner.CreateType();
         _completedUnprovedResults = new(_owner.Module, _unprovedResults.Select(result =>
-            new NativeUnprovedCarrierResultProducer(result.Method, result.Offset, result.Body.ILOffset)));
+            new NativeUnprovedCarrierResultProducer(result.Method, result.Body, result.Offset, result.Body.ILOffset)));
         IsComplete = true;
     }
 
@@ -240,7 +240,7 @@ internal sealed class NativePrototypeFieldsLookup
 }
 
 /// <summary>Actual completed reference-result operations, independent of any consumer's query obligations.</summary>
-internal sealed record NativeUnprovedCarrierResultProducer(MethodInfo Producer, int CallOffset, int CompletedBodyLength);
+internal sealed record NativeUnprovedCarrierResultProducer(MethodInfo Producer, ILGenerator Body, int CallOffset, int CompletedBodyLength);
 
 internal sealed class NativeUnprovedCarrierResultsSnapshot
 {

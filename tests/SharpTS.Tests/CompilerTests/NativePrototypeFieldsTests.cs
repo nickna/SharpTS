@@ -97,14 +97,7 @@ public sealed class NativePrototypeFieldsTests
     public void ActualPrototypeCarriersPreserveThePrivateStoreQuery(string name, string source, string expected, bool native)
     {
         var (compiler, saved) = Build(source, native);
-        if (native && name == "iterator")
-        {
-            // #3121: immutable83e has this separate downstream property-query
-            // refusal after the private-store query succeeds. Keep it explicit.
-            var error = Assert.ThrowsAny<Exception>(() => TestHarness.RunCompiledWithTimeout(() => saved, TimeSpan.FromSeconds(20)));
-            Assert.Contains(NativePropertyLookupCatalog.ForeignOwnerMessage, error.Message);
-        }
-        else Assert.Equal(expected, TestHarness.RunCompiledWithTimeout(() => saved, TimeSpan.FromSeconds(20)));
+        Assert.Equal(expected, TestHarness.RunCompiledWithTimeout(() => saved, TimeSpan.FromSeconds(20)));
         if (!native) { Assert.Null(compiler.NativePrototypeFields); return; }
         Assert.True(compiler.NativePrototypeFields!.IsComplete);
         if (name is "generic-base" or "promise") Assert.True(compiler.NativePrototypeFields.UsesLegacy);

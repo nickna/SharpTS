@@ -601,6 +601,15 @@ public partial class RuntimeEmitter
         il.Emit(OpCodes.Castclass, _types.ListOfObject);
         il.Emit(OpCodes.Callvirt, _types.GetMethod(_types.ListOfObject, "get_Count"));
         il.Emit(OpCodes.Bge, checkDescriptorsLabel);
+
+        // Only canonical index text denotes an existing physical slot. Other
+        // spellings need their own named descriptor even when they parse to it.
+        il.Emit(OpCodes.Ldarg_1);
+        il.Emit(OpCodes.Ldloca, indexLocal);
+        il.Emit(OpCodes.Call, _types.GetProperty(typeof(System.Globalization.CultureInfo), "InvariantCulture").GetGetMethod()!);
+        il.Emit(OpCodes.Call, _types.GetMethod(_types.Int32, "ToString", typeof(IFormatProvider)));
+        il.Emit(OpCodes.Call, _types.StringOpEquality);
+        il.Emit(OpCodes.Brfalse, checkDescriptorsLabel);
         il.Emit(OpCodes.Ldc_I4_1);
         il.Emit(OpCodes.Ret);
 

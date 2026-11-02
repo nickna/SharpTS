@@ -54,6 +54,16 @@ public partial class RuntimeEmitter
         il.Emit(OpCodes.Call, promise.CoerceAwaitableToTaskMethod);
 
         il.MarkLabel(normalizedLabel);
+        // Await consumes the normalized native promise. Fulfilled tasks need
+        // no rejection bookkeeping, preserving their existing allocation path.
+        var alreadyFulfilled = il.DefineLabel();
+        il.Emit(OpCodes.Dup);
+        il.Emit(OpCodes.Callvirt, _types.GetPropertyGetter(_types.TaskOfObject, "IsCompletedSuccessfully"));
+        il.Emit(OpCodes.Brtrue, alreadyFulfilled);
+        il.Emit(OpCodes.Dup);
+        il.Emit(OpCodes.Call, promise.NotifyPromiseRejectionHandler);
+        il.MarkLabel(alreadyFulfilled);
+
         // Every Await resumes in a Promise job, including primitives whose
         // coercion already completed. Use the same reaction facade for pending
         // tasks and immediately available values.

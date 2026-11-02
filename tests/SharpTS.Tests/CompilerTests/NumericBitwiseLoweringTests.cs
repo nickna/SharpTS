@@ -154,6 +154,32 @@ public sealed class NumericBitwiseLoweringTests
         Assert.InRange(samples.Min(), 0, 4_096);
     }
 
+    [Theory]
+    [InlineData("0")]
+    [InlineData("index")]
+    [InlineData("index + 1")]
+    [InlineData("((index as number)!)")]
+    public void PrimitiveNumericCompoundIndex_KeepsUnboxedAccessors(string indexExpression)
+    {
+        Assembly assembly = Compile($$"""
+            function update(index: number): number {
+                const tape = new Uint8Array(8);
+                return tape[{{indexExpression}}] += 7;
+            }
+            """);
+
+        var instructions = ReadInstructions(FindFunction(assembly, "update")).ToArray();
+        int get = Array.FindIndex(instructions, instruction =>
+            instruction.Operand is MethodBase { Name: "GetUnboxed" });
+        int set = Array.FindIndex(instructions, instruction =>
+            instruction.Operand is MethodBase { Name: "SetUnboxed" });
+        Assert.True(get >= 0 && set > get);
+        Assert.DoesNotContain(instructions[(get + 1)..set], instruction =>
+            instruction.OpCode == OpCodes.Box);
+        Assert.DoesNotContain(instructions, instruction =>
+            instruction.Operand is MethodBase { Name: "GetIndex" or "SetIndex" });
+    }
+
     [Fact]
     public void BrainfuckN5000_MeetsAllocationGate()
     {

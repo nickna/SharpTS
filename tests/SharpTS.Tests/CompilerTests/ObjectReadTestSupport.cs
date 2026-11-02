@@ -31,6 +31,7 @@ internal static class ObjectReadTestSupport
         return constructor.Invoke(constructor.GetParameters().Select(parameter =>
         {
             if (overrides is not null && overrides.TryGetValue(parameter.Name!, out var value)) return value;
+            if (parameter.Name == "ToNumber") return runtime.NumericCoercion.ToNumber;
             if (parameter.Name == "TSNamespaceType") return runtime.Namespaces.Type;
             if (parameter.Name == "TSNamespaceGet") return runtime.Namespaces.Get;
             if (parameter.Name == "CommonJs") return runtime.Modules.CommonJs;

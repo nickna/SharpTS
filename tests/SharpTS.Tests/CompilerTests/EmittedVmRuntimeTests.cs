@@ -17,6 +17,8 @@ public class EmittedVmRuntimeTests
     private static readonly IReadOnlyDictionary<string, string> BridgeMethods = new Dictionary<string, string>
     {
         ["NormalizeValue"] = "NormalizeVmValue", ["RestoreValue"] = "RestoreVmValue",
+        ["IsPromiseRejectionHandled"] = "IsVmPromiseRejectionHandled",
+        ["MarkPromiseRejectionHandled"] = "MarkVmPromiseRejectionHandled",
         ["IsErrorValue"] = "IsVmErrorValue", ["ReadErrorProperty"] = "ReadVmErrorProperty",
         ["GetExecutionHost"] = "GetVmExecutionHost", ["DisposeExecutionHost"] = "DisposeVmExecutionHost",
         ["QueueAfterCheckpoint"] = "QueueVmAfterCheckpoint", ["EnterExecutionScope"] = "EnterVmExecutionScope",
@@ -139,8 +141,8 @@ public class EmittedVmRuntimeTests
         {
             var vm = runtime.RequireVm();
             AssertFrozen(vm);
-            Assert.Equal(27, Handles.Count());
-            Assert.Equal(28, Declarations.Count());
+            Assert.Equal(29, Handles.Count());
+            Assert.Equal(30, Declarations.Count());
             Assert.True(runtime.RequirePromise().IsComplete);
             foreach (var (export, handle) in RegisteredExports)
                 Assert.Same(typeof(EmittedVmRuntime).GetProperty(handle)!.GetValue(vm), runtime.BuiltInModules.GetOptional("vm", export));
@@ -222,6 +224,25 @@ public class EmittedVmRuntimeTests
         Assert.True((bool)admits.Invoke(null, [actualOwner])!);
     }
 
+    [Fact]
+    public void PromiseHandlingBridgeHasOnlyNegativeActualMirrorAuthority()
+    {
+        using var bytes = Save(EmitRuntime("import * as vm from 'vm';", false));
+        using var verifier = new ILVerifier(extraProbeDirectories: [AppContext.BaseDirectory]);
+        Assert.Empty(verifier.Verify(bytes));
+        var type = Assembly.Load(bytes.ToArray()).GetType("$Runtime")!;
+        var query = type.GetMethod("IsVmPromiseRejectionHandled", BindingFlags.Static | BindingFlags.NonPublic)!;
+        var mark = type.GetMethod("MarkVmPromiseRejectionHandled", BindingFlags.Static | BindingFlags.NonPublic)!;
+        Assert.True(query.IsAssembly && mark.IsAssembly);
+        Assert.Equal(typeof(bool), query.ReturnType);
+        Assert.Equal(typeof(void), mark.ReturnType);
+        Assert.Equal(typeof(Task<object>), Assert.Single(query.GetParameters()).ParameterType);
+        Assert.Equal(typeof(Task<object>), Assert.Single(mark.GetParameters()).ParameterType);
+        Assert.False(Assert.IsType<bool>(query.Invoke(null, [Task.FromResult<object?>(7d)])));
+        Assert.False(Assert.IsType<bool>(query.Invoke(null, [null])));
+        Assert.Null(mark.Invoke(null, [Task.FromResult<object?>(7d)]));
+    }
+
     private static void DeclareBridgeStubs(TypeBuilder type, EmittedVmRuntime vm)
     {
         // Only export declaration/registration is under test here. Reserve the
@@ -230,10 +251,10 @@ public class EmittedVmRuntimeTests
         {
             Type result = name switch
             {
-                "IsErrorValue" or "IsRelatedValue" or "IsMappedValue" => typeof(bool),
+                "IsErrorValue" or "IsRelatedValue" or "IsMappedValue" or "IsPromiseRejectionHandled" => typeof(bool),
                 "EnterExecutionScope" => typeof(IDisposable),
                 "ConvertException" => typeof(Exception),
-                "DisposeExecutionHost" or "QueueAfterCheckpoint" => typeof(void),
+                "DisposeExecutionHost" or "QueueAfterCheckpoint" or "MarkPromiseRejectionHandled" => typeof(void),
                 _ => typeof(object)
             };
             Type[] parameters = name switch
@@ -241,6 +262,7 @@ public class EmittedVmRuntimeTests
                 "GetExecutionHost" or "DisposeExecutionHost" or "EnterExecutionScope" => Type.EmptyTypes,
                 "ReadErrorProperty" or "ReadMappedProperty" => [typeof(object), typeof(string)],
                 "QueueAfterCheckpoint" => [typeof(Action)],
+                "IsPromiseRejectionHandled" or "MarkPromiseRejectionHandled" => [typeof(Task<object>)],
                 "ConvertException" => [typeof(Exception)],
                 _ => [typeof(object)]
             };

@@ -847,8 +847,8 @@ public class SharpTSObject(Dictionary<string, object?> fields) : ISharpTSPropert
         return ApplyPropertyDefinition(name, descriptor, hasExisting, existingIsAccessor, existingFlags);
     }
 
-    // Only the VM's completed context definition projects a full record into
-    // its internal global mirror. Ordinary definitions keep validation above.
+    // Completed context records and validated virtual intrinsic slots project
+    // a full descriptor into their owned store. Ordinary definitions validate above.
     internal void MirrorCompletedPropertyDefinition(string name, SharpTSPropertyDescriptor descriptor)
     {
         if (!descriptor.HasEnumerable || !descriptor.HasConfigurable

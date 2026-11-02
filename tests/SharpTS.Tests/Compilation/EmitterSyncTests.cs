@@ -70,6 +70,10 @@ public class EmitterSyncTests
             //     resume-label marking, awaiter-field lookup) ---
             "EmitAwait",            // Core: suspend/resume the state machine on await
             "EmitForAwaitOf",       // #2848: both async-function emitters suspend on iterator next()/return()
+            // #3356/#3361: disposal can suspend, so scopes and cleanup use resumable finally routing.
+            "EmitScopedStatements", // Lower using scopes while retaining checked binding identities and TDZ storage
+            "EmitStatementCore",    // Dispatch compiler-owned cleanup receipts and await async disposal results
+            "EmitUsingDeclaration", // Retain the acquired resource and disposer in fields across MoveNext calls
             // A synchronous for-of whose body awaits must retain its enumerator across MoveNext
             // calls; non-suspending loops still use the base implementation's local storage.
             "StoreForOfEnumerator",

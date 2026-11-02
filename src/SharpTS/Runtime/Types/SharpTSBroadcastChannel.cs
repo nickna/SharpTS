@@ -128,7 +128,7 @@ public class SharpTSBroadcastChannel : SharpTSEventEmitter, IDisposable
             object? cloned;
             try
             {
-                cloned = StructuredClone.Clone(message, null);
+                cloned = StructuredClone.CloneWithInterpreter(message, null, _ownerInterpreter);
             }
             catch (StructuredClone.DataCloneError)
             {

@@ -638,6 +638,10 @@ public partial class ILEmitter
             return;
         }
 
+        if (expr is Expr.GetIndex typedArrayRead
+            && TryEmitGuardedTypedArrayRead(typedArrayRead, numericConsumer: true))
+            return;
+
         if (expr is Expr.GetIndex getIndex && TryEmitGuardedArrayIndex(getIndex))
             return;
 

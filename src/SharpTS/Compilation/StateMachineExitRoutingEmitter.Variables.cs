@@ -43,6 +43,15 @@ public abstract partial class StateMachineExitRoutingEmitter
             IL.Emit(OpCodes.Ldloc, temp);
     }
 
+    protected virtual void EmitDefaultParameterMirror(string name, LocalBuilder value)
+    {
+        if (TryGetFunctionDCField(GetFunctionDCField(), name, out var field))
+        {
+            IL.Emit(OpCodes.Ldloc, value);
+            StoreToDCField(GetFunctionDCField()!, field, leaveValueOnStack: false);
+        }
+    }
+
     /// <summary>
     /// Applies parameter defaults at state-machine entry (#646/#737). A defaulted parameter whose
     /// argument was omitted or explicitly <c>undefined</c> arrives in its hoisted state-machine field
@@ -152,11 +161,7 @@ public abstract partial class StateMachineExitRoutingEmitter
             // not the state-machine field the body no longer reads. Mirror the default into the DC
             // field so a nested arrow observes the default rather than the omitted-arg $Undefined
             // sentinel (#792). Non-captured params return false here and keep the SM-field-only path.
-            if (TryGetFunctionDCField(GetFunctionDCField(), param.Name.Lexeme, out var dcField))
-            {
-                IL.Emit(OpCodes.Ldloc, temp);
-                StoreToDCField(GetFunctionDCField()!, dcField, leaveValueOnStack: false);
-            }
+            EmitDefaultParameterMirror(param.Name.Lexeme, temp);
 
             IL.MarkLabel(skipDefault);
         }

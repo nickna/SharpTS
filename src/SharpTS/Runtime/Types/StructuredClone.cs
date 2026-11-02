@@ -1,5 +1,6 @@
 using System.Numerics;
 using System.Runtime.CompilerServices;
+using SharpTS.Parsing;
 
 namespace SharpTS.Runtime.Types;
 
@@ -51,6 +52,19 @@ public static class StructuredClone
     /// </param>
     /// <returns>A deep clone of the value.</returns>
     public static object? Clone(object? value, IEnumerable<object?>? transfer = null)
+        => CloneOperation(value, transfer, null);
+
+    internal static object? CloneWithInterpreter(object? value, IEnumerable<object?>? transfer,
+        Execution.Interpreter? interpreter) => CloneOperation(value, transfer, interpreter);
+
+    private sealed class CloneMemo(Execution.Interpreter? interpreter)
+        : Dictionary<object, object>(ReferenceEqualityComparer.Instance)
+    {
+        internal Execution.Interpreter? Interpreter { get; } = interpreter;
+    }
+
+    private static object? CloneOperation(object? value, IEnumerable<object?>? transfer,
+        Execution.Interpreter? interpreter)
     {
         // Worker control messages are commonly flat compiled object literals
         // containing only strings, numbers, and booleans. With no transfer list
@@ -68,7 +82,7 @@ public static class StructuredClone
             }
         }
 
-        var cloned = new Dictionary<object, object>();
+        var cloned = new CloneMemo(interpreter);
         var transferred = new HashSet<object>();
         // ArrayBuffers in the transfer list are detached on this (sender) side after the
         // clone — Node neuters a transferred ArrayBuffer (byteLength becomes 0). Collected
@@ -120,7 +134,7 @@ public static class StructuredClone
     }
 
     private static bool IsPrimitive(object? value)
-        => value is null or double or string or bool or BigInteger;
+        => value is null or SharpTSUndefined or SharpTSBigInt or double or string or bool or BigInteger;
 
     private static bool TryCloneFlatDictionary(
         Dictionary<string, object?> source,
@@ -166,7 +180,7 @@ public static class StructuredClone
         if (value == null)
             return null;
 
-        if (value is double or string or bool or BigInteger)
+        if (value is SharpTSUndefined or SharpTSBigInt or double or string or bool or BigInteger)
             return value;
 
         // Check for circular reference
@@ -247,8 +261,8 @@ public static class StructuredClone
             // Other callables - cannot be cloned
             ISharpTSCallable => throw new DataCloneError("Function cannot be cloned"),
 
-            // Class instance - cannot be cloned (has methods)
-            SharpTSInstance => throw new DataCloneError("Class instances cannot be cloned"),
+            // Ordinary class instances clone their enumerable own data into a plain object.
+            SharpTSInstance instance => CloneClassInstance(instance, cloned, transferred),
 
             // WeakMap/WeakSet - cannot be cloned (weak references)
             SharpTSWeakMap => throw new DataCloneError("WeakMap cannot be cloned"),
@@ -287,6 +301,9 @@ public static class StructuredClone
 
     private static SharpTSTypedArray CloneTypedArray(SharpTSTypedArray source, Dictionary<object, object> cloned, HashSet<object> transferred)
     {
+        if (source.ArrayBuffer?.IsDetached == true)
+            throw new DataCloneError("Cannot clone a detached typed array");
+
         SharpTSTypedArray result;
 
         if (source.IsShared)
@@ -367,14 +384,23 @@ public static class StructuredClone
         var result = new SharpTSObject(fields);
         cloned[source] = result;
 
-        foreach (var (key, value) in source.Fields)
+        // Select enumerable own names before any getter runs. Every nested clone
+        // shares this invocation's real interpreter and reference memo.
+        var interpreter = (cloned as CloneMemo)?.Interpreter;
+        foreach (var key in source.OwnVisibleStringKeys().Where(source.IsOwnEnumerableProperty).ToList())
         {
-            // Check if value is a function (getters/setters would be caught here)
-            if (value is ISharpTSCallable or SharpTSFunction)
+            object? value;
+            if (interpreter is not null)
+                value = interpreter.GetPropertyValue(source, key);
+            else
             {
-                throw new DataCloneError($"Cannot clone object with function property '{key}'");
+                // CLR bridge callers do not acquire an invented interpreter.
+                var descriptor = source.GetOwnPropertyDescriptor(key);
+                if (descriptor?.Get is not null)
+                    throw new DataCloneError("An object getter requires its owning interpreter");
+                value = descriptor is { HasGet: true } or { HasSet: true }
+                    ? SharpTSUndefined.Instance : source.GetProperty(key);
             }
-
             fields[key] = CloneInternal(value, cloned, transferred);
         }
 
@@ -400,6 +426,27 @@ public static class StructuredClone
             result[key] = CloneInternal(value, cloned, transferred);
         }
 
+        return result;
+    }
+
+    private static SharpTSObject CloneClassInstance(SharpTSInstance source,
+        Dictionary<object, object> cloned, HashSet<object> transferred)
+    {
+        // Only ordinary source-class ancestry is admitted here. Native carriers
+        // retain the dedicated clone/rejection arms above, including facade roots.
+        for (var owner = source.GetClass(); owner is not null; owner = owner.Superclass)
+            if (owner.GetType() != typeof(SharpTSClass) || owner.NativeConstructionTarget is not null)
+                throw new DataCloneError("Class instances with native backing cannot be cloned");
+        var fields = new Dictionary<string, object?>();
+        var result = new SharpTSObject(fields);
+        cloned[source] = result;
+        // Select enumerable own names before getters run, then preserve the
+        // source instance as the receiver for each value read.
+        foreach (var key in source.OwnEnumerableKeys().ToList())
+        {
+            var value = source.Get(new Token(TokenType.IDENTIFIER, key, null, 0));
+            fields[key] = CloneInternal(value, cloned, transferred);
+        }
         return result;
     }
 

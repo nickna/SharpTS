@@ -674,7 +674,7 @@ public class LocalVariableResolver : IVariableResolver
             // `this.x` routes through GlobalThis instead of throwing on null.
             // (Test262 Array filter/some 15.4.4.{20,17}-5-1, call 11.2.3-3_8.)
             if (!(_ctx.ThisBindingIsStrictOverride ?? _ctx.IsStrictMode))
-                EmitCoerceSloppyThisToGlobal();
+                EmitCoerceSloppyThisToGlobal(thisArgIndex);
             return;
         }
 
@@ -751,18 +751,20 @@ public class LocalVariableResolver : IVariableResolver
     }
 
     /// <summary>
-    /// Coerces a nullish <c>this</c> on the evaluation stack to the globalThis
-    /// sentinel per ECMA-262 §10.2.1.2 OrdinaryCallBindThis. A CLR <c>null</c>
+    /// Establishes sloppy <c>this</c> per ECMA-262 §10.2.1.2 OrdinaryCallBindThis.
+    /// Primitives use the existing ToObject operation, with the result retained
+    /// in the current call's receiver transport. A CLR <c>null</c>
     /// (the compiler's sloppy "no receiver" model value) ALWAYS resolves to
     /// globalThis — preserving the long-standing cases 5/6 behavior. The JS
     /// <c>undefined</c> sentinel additionally resolves to globalThis ONLY when the
     /// enclosing function is non-strict; strict functions keep
     /// <c>this === undefined</c> (matching the interpreter's
     /// <c>functionStrict ? SharpTSUndefined.Instance : SharpTSGlobalThis.Instance</c>
-    /// binding). No-op in reference-assembly mode (no emitted runtime).
-    /// Stack: [this] → [this-or-globalThis].
+    /// binding). Nullish transport sentinels remain unchanged so later bare
+    /// strict calls retain their original behavior. No-op without an emitted runtime.
+    /// Stack: [this] → [established-this].
     /// </summary>
-    private void EmitCoerceSloppyThisToGlobal()
+    private void EmitCoerceSloppyThisToGlobal(int? thisArgIndex = null)
     {
         if (_ctx.Runtime?.GlobalObject.HasSingletonField != true) return;
 
@@ -782,6 +784,14 @@ public class LocalVariableResolver : IVariableResolver
             _il.Emit(OpCodes.Brtrue, useGlobal);
         }
 
+        // Establish one wrapper in this invocation's receiver transport. Later
+        // reads, lexical captures, and default-argument forwarding reuse it.
+        _il.Emit(OpCodes.Call, _ctx.Runtime.BoxedPrimitives.ToObject);
+        _il.Emit(OpCodes.Dup);
+        if (thisArgIndex is { } argumentIndex)
+            _il.Emit(OpCodes.Starg, argumentIndex);
+        else
+            _il.Emit(OpCodes.Stsfld, _ctx.Runtime.FunctionValues.CurrentThisField);
         _il.Emit(OpCodes.Br, keep);
 
         _il.MarkLabel(useGlobal);

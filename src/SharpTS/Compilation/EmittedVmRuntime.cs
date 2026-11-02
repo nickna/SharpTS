@@ -108,6 +108,20 @@ public sealed class EmittedVmRuntime
         internal set => Set(ref _restoreValue, value);
     }
 
+    private MethodBuilder? _isPromiseRejectionHandled;
+    internal MethodBuilder IsPromiseRejectionHandled
+    {
+        get => Require(_isPromiseRejectionHandled);
+        set => Set(ref _isPromiseRejectionHandled, value);
+    }
+
+    private MethodBuilder? _markPromiseRejectionHandled;
+    internal MethodBuilder MarkPromiseRejectionHandled
+    {
+        get => Require(_markPromiseRejectionHandled);
+        set => Set(ref _markPromiseRejectionHandled, value);
+    }
+
     private MethodBuilder? _isErrorValue;
     public MethodBuilder IsErrorValue
     {
@@ -239,6 +253,8 @@ public sealed class EmittedVmRuntime
         _ = NewSyntheticModule;
         _ = NormalizeValue;
         _ = RestoreValue;
+        _ = IsPromiseRejectionHandled;
+        _ = MarkPromiseRejectionHandled;
         _ = IsErrorValue;
         _ = ReadErrorProperty;
         _ = GetExecutionHost;

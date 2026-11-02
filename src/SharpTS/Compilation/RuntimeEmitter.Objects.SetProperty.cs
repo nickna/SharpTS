@@ -65,6 +65,7 @@ public partial class RuntimeEmitter
         FieldBuilder ArgumentsLengthField,
         TypeBuilder ArgumentsType,
         EmittedArrayStorageRuntime ArrayStorage,
+        EmittedTypedArrayRuntime TypedArrays,
         TypeBuilder BoundAnyFunctionType,
         TypeBuilder BoundTSFunctionType,
         EmittedCommonJsRuntime? CommonJs,
@@ -99,6 +100,7 @@ public partial class RuntimeEmitter
         EmittedClassDefinitionRuntime ClassDefinitions,
         EmittedArrayOperationsRuntime ArrayOperations,
         EmittedArrayStorageRuntime ArrayStorage,
+        EmittedTypedArrayRuntime TypedArrays,
         TypeBuilder BoundAnyFunctionType,
         TypeBuilder BoundTSFunctionType,
         EmittedCommonJsRuntime? CommonJs,
@@ -142,6 +144,8 @@ public partial class RuntimeEmitter
         EmittedReflectAssignment? ReflectAssignment,
         EmittedStringCoercionRuntime StringCoercion,
         EmittedSymbolRuntime Symbols,
+        EmittedTypedArrayRuntime TypedArrays,
+        MethodInfo ToNumber,
         MethodInfo ToPropertyKey,
         Type UndefinedType,
         MethodInfo? NativeProxyRejection
@@ -812,6 +816,33 @@ public partial class RuntimeEmitter
             [_types.Object, _types.String, _types.Object, _types.Boolean]);
     }
 
+    private void EmitTypedArrayPropertySet(ILGenerator il, EmittedTypedArrayRuntime typedArrays,
+        EmittedReflectAssignment? assignment, EmittedErrorRuntime errors, bool forwardStrict)
+    {
+        if (typedArrays.Implementation is not { } arrays || assignment is null) return;
+        var notTypedArray = il.DefineLabel();
+        il.Emit(OpCodes.Ldarg_0);
+        il.Emit(OpCodes.Isinst, arrays.BaseType);
+        il.Emit(OpCodes.Brfalse, notTypedArray);
+        il.Emit(OpCodes.Ldarg_0);
+        il.Emit(OpCodes.Ldarg_1);
+        il.Emit(OpCodes.Ldarg_2);
+        il.Emit(OpCodes.Ldarg_0);
+        il.Emit(OpCodes.Call, assignment.Set);
+        if (forwardStrict)
+        {
+            var accepted = il.DefineLabel();
+            il.Emit(OpCodes.Brtrue, accepted);
+            il.Emit(OpCodes.Ldarg_3);
+            il.Emit(OpCodes.Brfalse, accepted);
+            EmitThrowTypeErrorWithName(il, errors, "Cannot assign to property '", "'");
+            il.MarkLabel(accepted);
+        }
+        else il.Emit(OpCodes.Pop);
+        il.Emit(OpCodes.Ret);
+        il.MarkLabel(notTypedArray);
+    }
+
     private void EmitSetProperty(EmittedObjectWriteRuntime objectWrite, SetPropertyInputs inputs)
     {
         // Signature forward-declared by DefineRuntimeClassPhase1.
@@ -873,6 +904,8 @@ public partial class RuntimeEmitter
             );
             il.MarkLabel(notProxyLabel);
         }
+
+        EmitTypedArrayPropertySet(il, inputs.TypedArrays, inputs.ReflectAssignment, inputs.Errors, forwardStrict: false);
 
         // OrdinarySetWithOwnDescriptor consults an inherited descriptor before
         // creating a new own property. This shared check covers intrinsic CLR
@@ -2985,6 +3018,8 @@ public partial class RuntimeEmitter
             il.MarkLabel(strictSetNotProxyLabel);
         }
 
+        EmitTypedArrayPropertySet(il, inputs.TypedArrays, inputs.ReflectAssignment, inputs.Errors, forwardStrict: true);
+
         // Constructor metadata descriptors are synthesized rather than stored
         // in PDS. Strict writes must consult that same guest descriptor.
         EmitNativeMetadataSetStrict(il, inputs);
@@ -3241,20 +3276,41 @@ public partial class RuntimeEmitter
             // Callable setters run even on frozen receivers. Missing setters
             // reject before the ordinary data/integrity checks.
             var arrayCheckFrozenLabel = il.DefineLabel();
+            var arrayCheckInheritedLabel = il.DefineLabel();
             var arrayDescLocal = il.DeclareLocal(inputs.DescriptorStorage.DescriptorType);
             il.Emit(OpCodes.Ldarg_0);
             il.Emit(OpCodes.Ldarg_1);
             il.Emit(OpCodes.Call, inputs.DescriptorStorage.GetPropertyDescriptor);
             il.Emit(OpCodes.Stloc, arrayDescLocal);
             il.Emit(OpCodes.Ldloc, arrayDescLocal);
-            il.Emit(OpCodes.Brfalse, arrayCheckFrozenLabel);
+            il.Emit(OpCodes.Brfalse, arrayCheckInheritedLabel);
             EmitArrayDescriptorSetPolicy(
                 il, inputs.DescriptorStorage, inputs.UndefinedType, inputs.InvokeMethodValue,
                 arrayDescLocal, arrayCheckFrozenLabel, arrayRejectLabel);
+            il.MarkLabel(arrayCheckInheritedLabel);
+            // Array length is an intrinsic own slot even without a PDS entry.
+            il.Emit(OpCodes.Ldarg_1);
+            il.Emit(OpCodes.Ldstr, "length");
+            il.Emit(OpCodes.Call, _types.StringOpEquality);
+            il.Emit(OpCodes.Brtrue, arrayCheckFrozenLabel);
+            EmitArrayIndexPrototypeSetPolicy(il,
+                new ArrayIndexPrototypeSetInputs(inputs.DescriptorStorage, inputs.InvokeMethodUnwrapped,
+                    inputs.InvokeMethodValue, inputs.ObjectDescriptors, inputs.ObjectPrototypes,
+                    inputs.ObjectRead, inputs.ProxySelected, inputs.ReflectAssignment,
+                    inputs.UndefinedType, inputs.NativeProxyRejection),
+                () => il.Emit(OpCodes.Ldarg_1), arrayCheckFrozenLabel, arrayRejectLabel);
             il.MarkLabel(arrayCheckFrozenLabel);
             il.Emit(OpCodes.Ldarg_0);
             il.Emit(OpCodes.Call, inputs.DescriptorStorage.IsFrozen);
-            il.Emit(OpCodes.Brfalse, arrayDoStoreLabel);
+            il.Emit(OpCodes.Brtrue, arrayRejectLabel);
+            il.Emit(OpCodes.Ldarg_1);
+            il.Emit(OpCodes.Ldstr, "length");
+            il.Emit(OpCodes.Call, _types.StringOpEquality);
+            il.Emit(OpCodes.Brtrue, arrayDoStoreLabel);
+            il.Emit(OpCodes.Ldarg_0);
+            il.Emit(OpCodes.Ldarg_1);
+            il.Emit(OpCodes.Call, inputs.DescriptorStorage.CanAddProperty);
+            il.Emit(OpCodes.Brtrue, arrayDoStoreLabel);
             il.MarkLabel(arrayRejectLabel);
             il.Emit(OpCodes.Ldarg_3);
             var arraySloppyReturnLabel = il.DefineLabel();
@@ -3617,6 +3673,9 @@ public partial class RuntimeEmitter
         il.Emit(OpCodes.Ret);
         il.MarkLabel(notSymbolKeyLabel);
 
+        EmitTypedArrayCanonicalIndexStrictSet(il, inputs.TypedArrays, inputs.ToNumber,
+            inputs.StringCoercion.ToJsString, objectWrite.Index);
+
         // Check if $Array (for strict mode support)
         il.Emit(OpCodes.Ldarg_0);
         il.Emit(OpCodes.Isinst, inputs.ArrayStorage.Type);
@@ -3665,19 +3724,16 @@ public partial class RuntimeEmitter
         il.Emit(OpCodes.Call, inputs.StringCoercion.ToJsString);
         il.Emit(OpCodes.Stloc, strictArrayKeyLocal);
 
-        // Negative integer keys are ordinary named properties. Match the
-        // non-strict SetIndex route without sending them to SetStrictLong,
-        // whose bounds/length policy applies only to array storage indices.
+        // Only canonical uint32 strings below 2^32-1 address array storage.
+        // Other strings retain ordinary named-property descriptor/strict policy.
         var strictArrayParsedIndexLocal = il.DeclareLocal(_types.Int64);
+        var strictArrayParsedUInt32 = il.DeclareLocal(_types.UInt32);
         var strictArrayIndexedKeyLabel = il.DefineLabel();
-        il.Emit(OpCodes.Ldloc, strictArrayKeyLocal);
-        il.Emit(OpCodes.Ldloca, strictArrayParsedIndexLocal);
-        il.Emit(OpCodes.Call, _types.GetMethod(
-            _types.Int64, "TryParse", _types.String, _types.Int64.MakeByRefType()));
-        il.Emit(OpCodes.Brfalse, strictArrayIndexedKeyLabel);
-        il.Emit(OpCodes.Ldloc, strictArrayParsedIndexLocal);
-        il.Emit(OpCodes.Ldc_I8, 0L);
-        il.Emit(OpCodes.Bge, strictArrayIndexedKeyLabel);
+        var strictArrayNamedKeyLabel = il.DefineLabel();
+        EmitCanonicalArrayStringIndex(il, strictArrayKeyLocal, strictArrayParsedUInt32,
+            strictArrayParsedIndexLocal, strictArrayNamedKeyLabel);
+        il.Emit(OpCodes.Br, strictArrayIndexedKeyLabel);
+        il.MarkLabel(strictArrayNamedKeyLabel);
         il.Emit(OpCodes.Ldarg_0);
         il.Emit(OpCodes.Ldloc, strictArrayKeyLocal);
         il.Emit(OpCodes.Ldarg_2);

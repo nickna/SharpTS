@@ -87,6 +87,13 @@ public class TypeMap
         return _rawNumericResults.Add(expression);
     }
     internal bool IsRawNumericResult(Expr expression) => _rawNumericResults.Contains(expression);
+    private readonly HashSet<Expr.GetIndex> _declaredTypedArrayValueReads = new(ReferenceEqualityComparer.Instance);
+    internal void MarkDeclaredTypedArrayValueRead(Expr.GetIndex expression)
+    {
+        _declaredTypedArrayValueReads.Add(expression);
+        MarkRawNumericResult(expression);
+    }
+    internal bool IsDeclaredTypedArrayValueRead(Expr.GetIndex expression) => _declaredTypedArrayValueReads.Contains(expression);
     internal void MarkRawNumericStorage(Token token)
     {
         _rawNumericStorage.Add(token);
@@ -124,6 +131,7 @@ public class TypeMap
     private readonly HashSet<Expr> _stablePrimitivePromiseAllSeedValues = new(ReferenceEqualityComparer.Instance);
     private readonly HashSet<Expr.Variable> _stablePrimitivePromiseAllResultUses = new(ReferenceEqualityComparer.Instance);
     private readonly HashSet<Expr.Variable> _stableTypedArrayBackingReceivers = new(ReferenceEqualityComparer.Instance);
+    private readonly HashSet<Expr.GetIndex> _presentTypedArrayReads = new(ReferenceEqualityComparer.Instance);
 
     /// <summary>
     /// Associates an expression with its resolved type.
@@ -298,6 +306,16 @@ public class TypeMap
 
     public bool IsStableTypedArrayBackingReceiver(Expr.Variable receiver) =>
         _stableTypedArrayBackingReceivers.Contains(receiver);
+
+    // The existing fresh, non-escaping backing proof plus literal length/index
+    // proves this exact read is present. Other reads and slot taints stay raw.
+    internal void MarkPresentTypedArrayRead(Expr.GetIndex read)
+    {
+        _presentTypedArrayReads.Add(read);
+        if (!_rawNumericResults.Contains(read)) _undefinedReachableReturns.Remove(read);
+    }
+
+    internal bool IsPresentTypedArrayRead(Expr.GetIndex read) => _presentTypedArrayReads.Contains(read);
 
     /// <summary>
     /// Marks a fresh, exact, non-escaping <c>Map&lt;number, number&gt;</c> function local

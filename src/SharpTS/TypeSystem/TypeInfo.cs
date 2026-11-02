@@ -1285,7 +1285,13 @@ public abstract record TypeInfo
     /// <param name="IsShared">Whether the view is backed by a SharedArrayBuffer.</param>
     public record TypedArray(string ElementType, bool IsShared = false) : TypeInfo
     {
+        // Only the captured library constructor attaches these semantic facets.
+        // They do not turn declared interface receivers into packed CLR carriers.
+        internal TypeInfo? DeclaredDefinition { get; init; }
+        internal TypeInfo? BufferType { get; init; }
         public override string ToString() => $"{ElementType}Array";
+        internal override string CacheKey() => BufferType is null ? ToString()
+            : $"{ElementType}Array<{BufferType.CacheKey()}>";
     }
 
     /// <summary>

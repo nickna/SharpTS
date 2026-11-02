@@ -708,16 +708,8 @@ public abstract partial class ExpressionEmitterBase
         if (!IsNullPlaceholderGlobal(csi.Object))
             EmitThrowIfUndefinedIndexReceiver(objTemp, indexTemp, isWrite: false);
 
-        // The property key belongs to the reference: convert it once before GetValue,
-        // then retain that same string/Symbol through RHS evaluation and PutValue.
-        if (Ctx.TypeMap?.Get(csi.Object) is not { } receiverType ||
-            !TypeSystem.DotNetTypeSynthesizer.TryGetClrType(receiverType, out _))
-        {
-            IL.Emit(OpCodes.Ldloc, indexTemp);
-            IL.Emit(OpCodes.Call, Ctx.Runtime!.Reflect.ToPropertyKey);
-            IL.Emit(OpCodes.Stloc, indexTemp);
-        }
-
+        // Preserve the raw key across suspension. The existing GetIndex and
+        // SetIndex endpoints independently convert it at GetValue and PutValue.
         IL.Emit(OpCodes.Ldloc, objTemp);
         IL.Emit(OpCodes.Ldloc, indexTemp);
         IL.Emit(OpCodes.Call, Ctx.Runtime!.ObjectRead.Index);

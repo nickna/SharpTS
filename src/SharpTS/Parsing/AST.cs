@@ -380,6 +380,10 @@ public abstract record Stmt
         /// <summary>Source const binding preserved by destructuring lowering; implementation temporaries remain unmarked.</summary>
         public bool IsSourceConst { get; init; }
 
+        /// <summary>Annotation transported from a nested source scope by VarHoister;
+        /// new declaration-site name diagnostics must not resolve it in the hoisted scope.</summary>
+        public bool HasHoistedTypeAnnotation { get; init; }
+
         /// <summary>Actual ambient var keyword, retained separately from legacy ambient merge behavior.</summary>
         public bool IsAmbientVar { get; init; }
 

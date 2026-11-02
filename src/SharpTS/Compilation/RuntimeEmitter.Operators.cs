@@ -21,6 +21,7 @@ public partial class RuntimeEmitter
         EmittedMapRuntime? Map,
         EmittedPromiseRuntime? Promise,
         EmittedSetRuntime? Set,
+        EmittedTypedArrayRuntime TypedArrays,
         EmittedSymbolRuntime Symbols,
         TypeBuilder TSFunctionType,
         Type UndefinedType,
@@ -572,6 +573,13 @@ public partial class RuntimeEmitter
         {
             il.Emit(OpCodes.Ldarg_0);
             il.Emit(OpCodes.Isinst, inputs.Set!.BoundMethodType);
+            il.Emit(OpCodes.Brtrue, functionLabel);
+        }
+
+        if (inputs.TypedArrays.Implementation is { } typedArrays)
+        {
+            il.Emit(OpCodes.Ldarg_0);
+            il.Emit(OpCodes.Isinst, typedArrays.BoundMethodType);
             il.Emit(OpCodes.Brtrue, functionLabel);
         }
 

@@ -129,17 +129,30 @@ public sealed class SharpTSArrayPrototype : ISharpTSMutableBuiltIn, ISharpTSSymb
     public SharpTSArrayPrototype()
     {
         _overlay = new(IsBuiltIn);
+        _overlay.DefineProperty("length", new SharpTSPropertyDescriptor(
+            0d, writable: true, enumerable: false, configurable: false));
     }
 
     public bool HasExtra(string name) => _overlay.HasExtra(name);
     internal bool HasIndexedExtra(long exclusiveLength)
         => _overlay.HasIndexedOwnProperty(exclusiveLength);
     public object? TryGetExtra(string name) => _overlay.GetProperty(name);
-    public void SetExtra(string name, object? value) => _overlay.SetProperty(name, value);
+    public void SetExtra(string name, object? value)
+    {
+        if (!_overlay.IsExtensible && !_overlay.HasExtra(name))
+        {
+            DefineExtraProperty(name, new SharpTSPropertyDescriptor { Value = value, HasValue = true });
+            return;
+        }
+        _overlay.SetProperty(name, value);
+    }
     public bool DefineExtraProperty(string name, SharpTSPropertyDescriptor descriptor)
-        => _overlay.DefineProperty(name, descriptor);
+        => _overlay.DefinePropertyPreservingVirtualData(name, descriptor, GetMember, configurable: name != "length");
+    internal void PreventExtensionsOwnProperties() => _overlay.PreventExtensions();
+    internal void FreezeOwnProperties() => _overlay.Freeze();
+    internal void SealOwnProperties() => _overlay.Seal();
     public SharpTSPropertyDescriptor? GetOwnPropertyDescriptor(string name)
-        => _overlay.GetOwnPropertyDescriptor(name);
+        => _overlay.GetOwnPropertyDescriptor(name, GetMember, configurable: name != "length");
     public ISharpTSCallable? GetExtraGetter(string name) => _overlay.GetGetter(name);
     public ISharpTSCallable? GetExtraSetter(string name) => _overlay.GetSetter(name);
     bool ISharpTSSymbolPropertyBag.HasSymbolProperty(SharpTSSymbol symbol)
@@ -174,6 +187,8 @@ public sealed class SharpTSArrayPrototype : ISharpTSMutableBuiltIn, ISharpTSSymb
     public bool DeleteProperty(string name) => _overlay.DeleteProperty(name);
 
     public IEnumerable<string> OwnEnumerableKeys() => _overlay.OwnEnumerableKeys();
+    internal IEnumerable<string> OwnStringKeys() => _overlay.OwnVisibleStringKeys();
+    internal IEnumerable<SharpTSSymbol> GetSymbolPropertyNames() => _overlay.GetSymbolPropertyNames();
 
     // All Array.prototype methods now route through ArrayBuiltIns so instance
     // dispatch and generic call/apply share the same receiver semantics.

@@ -39,6 +39,7 @@ public partial class ILEmitter : StatementEmitterBase, IEmitterContext
     private readonly Stack<AbruptCompletionScope> _abruptCompletionScopes = [];
     private readonly Stack<IteratorLoopCompletionScope> _iteratorLoopCompletionScopes = [];
     private readonly Stack<LocalThrowScope> _localThrowScopes = [];
+    private int _usingCompletionDepth;
 
     private sealed class AbruptCompletionScope
     {
@@ -68,7 +69,8 @@ public partial class ILEmitter : StatementEmitterBase, IEmitterContext
         LocalBuilder Value,
         Label CatchBody,
         int AbruptCompletionDepth,
-        int IteratorCompletionDepth);
+        int IteratorCompletionDepth,
+        int UsingCompletionDepth);
 
     // Abstract property implementations for ExpressionEmitterBase
     protected override ILGenerator IL => _ctx.IL;
@@ -211,6 +213,7 @@ public partial class ILEmitter : StatementEmitterBase, IEmitterContext
                 if (!TryEmitDiscardedExpression(e.Expr))
                 {
                     EmitExpression(e.Expr);
+                    if (e.Expr is Expr.Assign) EmitObservePublishedPromiseValue();
                     // Ordinary expressions leave a value on the stack. A
                     // discarded-expression intrinsic reports success only
                     // after emitting a stack-neutral replacement.

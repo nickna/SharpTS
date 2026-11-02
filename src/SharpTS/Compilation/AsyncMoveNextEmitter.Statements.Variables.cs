@@ -58,6 +58,7 @@ public partial class AsyncMoveNextEmitter
             {
                 EmitExpression(v.Initializer);
                 EnsureBoxed();
+                EmitObservePublishedPromiseValue();
             }
             else
             {

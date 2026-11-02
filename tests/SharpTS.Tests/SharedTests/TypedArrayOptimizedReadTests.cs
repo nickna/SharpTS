@@ -1,0 +1,49 @@
+using SharpTS.Tests.Infrastructure;
+using Xunit;
+
+namespace SharpTS.Tests.SharedTests;
+
+public sealed class TypedArrayOptimizedReadTests
+{
+    public static IEnumerable<object[]> Cases()
+    {
+        yield return ["exact-legacy-stencil-original", "function faults(action: () => number): boolean {\r\n    try {\r\n        action();\r\n        return false;\r\n    } catch {\r\n        return true;\r\n    }\r\n}\r\n\r\nfunction reduction(length: number, initial: number, bound: number): number {\r\n    const data = new Int32Array(length);\r\n    let sum: number = initial;\r\n    for (let i: number = 1; i < bound - 1; i++) {\r\n        sum = sum + (data[i - 1] - 2 * data[i] + data[i + 1]);\r\n    }\r\n    return sum;\r\n}\r\n\r\nfunction leftEdge(): number {\r\n    const data = new Int32Array(3);\r\n    let sum: number = 0;\r\n    for (let i: number = 0; i < 1; i++) {\r\n        sum = sum + (data[i - 1] - 2 * data[i] + data[i + 1]);\r\n    }\r\n    return sum;\r\n}\r\n\r\nfunction rightEdge(): number {\r\n    const data = new Int32Array(3);\r\n    let sum: number = 0;\r\n    for (let i: number = 2; i < 3; i++) {\r\n        sum = sum + (data[i - 1] - 2 * data[i] + data[i + 1]);\r\n    }\r\n    return sum;\r\n}\r\n\r\nfunction valid(): number {\r\n    const data = new Int32Array(3);\r\n    data[0] = 1;\r\n    data[1] = 4;\r\n    data[2] = 9;\r\n    let sum: number = 0;\r\n    for (let i: number = 1; i < 2; i++) {\r\n        sum = sum + (data[i - 1] - 2 * data[i] + data[i + 1]);\r\n    }\r\n    return sum;\r\n}\r\n\r\nconsole.log(faults(() => reduction(0, 0, 3)));\r\nconsole.log(faults(() => reduction(1, 0, 3)));\r\nconsole.log(faults(() => reduction(2, 0, 3)));\r\nconsole.log(faults(() => reduction(0, 0.5, 3)));\r\nconsole.log(faults(() => reduction(1, 0.5, 3)));\r\nconsole.log(faults(() => reduction(2, 0.5, 3)));\r\nconsole.log(faults(leftEdge));\r\nconsole.log(faults(rightEdge));\r\nconsole.log(valid());", "false\nfalse\nfalse\nfalse\nfalse\nfalse\nfalse\nfalse\n2\n"];
+        yield return ["exact-legacy-short-backing-functions", "function hot(length: number, initial: number, bound: number): number {\r\n    const data = new Int32Array(length);\r\n    let sum: number = initial;\r\n    for (let i: number = 1; i < bound - 1; i++) {\r\n        sum = sum + (data[i - 1] - 2 * data[i] + data[i + 1]);\r\n    }\r\n    return sum;\r\n}\nfor(const length of [0,1,2])for(const initial of [0,0.5])console.log(Number.isNaN(hot(length,initial,3)));", "true\ntrue\ntrue\ntrue\ntrue\ntrue\n"];
+        yield return ["exact-legacy-edge-0", "function hot(n: number): number {\r\n    const data = new Int32Array(n);\r\n    let sum: number = 0;\r\n    for (let i: number = 0; i < 1; i++) {\r\n        sum = sum + (data[i - 1] - 2 * data[i] + data[i + 1]);\r\n    }\r\n    return sum;\r\n}\nconsole.log(Number.isNaN(hot(3)));", "true\n"];
+        yield return ["exact-legacy-edge-2", "function hot(n: number): number {\r\n    const data = new Int32Array(n);\r\n    let sum: number = 0;\r\n    for (let i: number = 2; i < 3; i++) {\r\n        sum = sum + (data[i - 1] - 2 * data[i] + data[i + 1]);\r\n    }\r\n    return sum;\r\n}\nconsole.log(Number.isNaN(hot(3)));", "true\n"];
+        yield return ["direct-invalid-value-observations", "const a=new Int32Array([9]);console.log(typeof a[1],a[1]===undefined,Number.isNaN(a[1]),Number.isNaN(a[1]+1));", "undefined true false true\n"];
+        yield return ["fractional-negative-and-nonfinite-values", "const a=new Int32Array([9]);console.log(a[0.5]===undefined,a[-1]===undefined,a[NaN]===undefined,a[Infinity]===undefined,a[-Infinity]===undefined,a[4294967296]===undefined,a[0]);", "true true true true true true 9\n"];
+        yield return ["negative-zero-is-valid-index", "const a=new Int32Array([9]);console.log(a[-0],a[0],a[-0]===undefined,Number.isNaN(a[-0]+1));", "9 9 false false\n"];
+        yield return ["all-unboxed-numeric-kinds", "const a0=new Int8Array([9]);console.log(a0[1]===undefined,Number.isNaN(a0[0.5]+1),a0[0]);const a1=new Uint8Array([9]);console.log(a1[1]===undefined,Number.isNaN(a1[0.5]+1),a1[0]);const a2=new Int16Array([9]);console.log(a2[1]===undefined,Number.isNaN(a2[0.5]+1),a2[0]);const a3=new Uint16Array([9]);console.log(a3[1]===undefined,Number.isNaN(a3[0.5]+1),a3[0]);const a4=new Int32Array([9]);console.log(a4[1]===undefined,Number.isNaN(a4[0.5]+1),a4[0]);const a5=new Uint32Array([9]);console.log(a5[1]===undefined,Number.isNaN(a5[0.5]+1),a5[0]);const a6=new Float32Array([9]);console.log(a6[1]===undefined,Number.isNaN(a6[0.5]+1),a6[0]);const a7=new Float64Array([9]);console.log(a7[1]===undefined,Number.isNaN(a7[0.5]+1),a7[0]);", "true true 9\ntrue true 9\ntrue true 9\ntrue true 9\ntrue true 9\ntrue true 9\ntrue true 9\ntrue true 9\n"];
+        yield return ["view-offset-and-physical-length", "const buffer=new ArrayBuffer(16),a=new Int32Array(buffer,4,1),b=new Int32Array(buffer);a[0]=7;b[2]=9;console.log(a[1]===undefined,Number.isNaN(a[1]+1),a[0],b[2]);", "true true 7 9\n"];
+        yield return ["own-length-getter-is-not-read", "const a=new Int32Array([9]);Object.defineProperty(a,'length',{get(){throw 7}});console.log(a[1]===undefined,a[0]);", "true 9\n"];
+        yield return ["returned-read-any-retains-undefined", "function read():any{const a=new Int32Array(1);return a[1]}const value=read();console.log(typeof value,value===undefined,Number.isNaN(value));", "undefined true false\n"];
+        yield return ["returned-read-number-retains-undefined", "function read():number{const a=new Int32Array(1);return a[1]}const value=read();console.log(typeof value,value===undefined,Number.isNaN(value));", "undefined true false\n"];
+        yield return ["numeric-local-retains-undefined", "const a=new Int32Array(1);let value:number=a[1];console.log(typeof value,value===undefined,Number.isNaN(value));", "undefined true false\n"];
+        yield return ["numeric-argument-retains-undefined", "function observe(value:number){console.log(typeof value,value===undefined,Number.isNaN(value))}const a=new Int32Array(1);observe(a[1]);", "undefined true false\n"];
+        yield return ["numeric-argument-after-native-call", "function observe(value:number){console.log(typeof value,value===undefined,Number.isNaN(value))}const a=new Int32Array(1);observe(7);observe(a[1]);", "number false false\nundefined true false\n"];
+        yield return ["returned-read-forwarding", "function read():number{const a=new Int32Array(1);return a[1]}function forward():number{return read()}console.log(typeof forward(),forward()===undefined);", "undefined true\n"];
+        yield return ["hoisted-read-retains-value", "function run(){const a=new Int32Array(1);for(let i=0;i<2;i++)console.log(a[i],typeof a[i],Number.isNaN(a[i]+1))}run();", "0 number false\nundefined undefined true\n"];
+        yield return ["hoisted-stencil-valid-then-invalid", "function run(){const a=new Int32Array(4);a[0]=1;a[1]=4;a[2]=9;a[3]=16;for(let i=1;i<4;i++)console.log(a[i-1]-2*a[i]+a[i+1])}run();", "2\n2\nNaN\n"];
+        yield return ["fractional-accumulator-cold-path", "function run(n:number){const a=new Int32Array(n);let sum=0.5;for(let i=1;i<3;i++){sum=sum+(a[i-1]-2*a[i]+a[i+1])}return sum}console.log(Number.isNaN(run(2)),run(4));", "true 0.5\n"];
+        yield return ["negative-zero-empty-reduction", "function run(n:number,initial:number){const a=new Int32Array(n);let sum=initial;for(let i=1;i<n-1;i++){sum=sum+(a[i-1]-2*a[i]+a[i+1])}return sum}console.log(Object.is(run(0,-0),-0),run(4,3));", "true 3\n"];
+        yield return ["index-expression-once-and-abrupt", "const a=new Int32Array([9]),marker={};let calls=0;function index():number{calls++;return 1}console.log(a[index()]===undefined,calls);function fail():number{throw marker}try{console.log(a[fail()])}catch(e){console.log(e===marker)}console.log(calls,a[0]);", "true 1\ntrue\n1 9\n"];
+        yield return ["captured-index-raw-fallback", "const a=new Int32Array([9]);let index:number=0;const change=()=>{index=0.5};change();console.log(a[index]===undefined,a[0]);", "true 9\n"];
+        yield return ["valid-numeric-abi-and-stencil", "function sum(n:number):number{const a=new Int32Array(n);for(let i=0;i<n;i++)a[i]=i+1;let value=0;for(let i=0;i<n;i++)value=value+a[i];return value}console.log(sum(4));", "10\n"];
+        yield return ["boxed-fallback-brand-control", "const a:any=new Int32Array([9]);console.log(a[1]===undefined,a[0.5]===undefined,a[0]);", "true true 9\n"];
+        yield return ["bigint-read-return-and-abrupt", "function read():bigint{const a=new BigInt64Array([9n]);return a[1]}const a=new BigInt64Array([9n]);console.log(String(a[0]),typeof a[1],a[1]===undefined,typeof read(),read()===undefined);try{console.log(a[1]+1n)}catch(e){console.log(e instanceof TypeError)}", "9 undefined true undefined true\ntrue\n"];
+        yield return ["biguint-read-argument-and-abrupt", "function observe(value:bigint){console.log(typeof value,value===undefined)}const a=new BigUint64Array([9n]);console.log(String(a[0]),a[1]===undefined);observe(a[1]);try{console.log(a[1]*1n)}catch(e){console.log(e instanceof TypeError)}", "9 true\nundefined true\ntrue\n"];
+        yield return ["wide-counter-stencil", "function run(){const a=new Int32Array(3);a[0]=1;a[1]=4;a[2]=9;for(let i:number=4294967297;i<4294967298;i++){console.log(a[i-1]-2*a[i]+a[i+1])}}run();", "NaN\n"];
+    }
+
+    public static IEnumerable<object[]> Modes() => Cases().SelectMany(row =>
+        new[] { ExecutionMode.Interpreted, ExecutionMode.Compiled }.Select(mode =>
+            new object[] { row[0], row[1], row[2], mode }));
+
+    [Theory, MemberData(nameof(Modes))]
+    public void GuardedReadsPreserveJavaScriptValues(string name, string source, string expected, ExecutionMode mode)
+    {
+        Assert.NotEmpty(name);
+        Assert.Equal(expected, TestHarness.Run(source, mode));
+    }
+}

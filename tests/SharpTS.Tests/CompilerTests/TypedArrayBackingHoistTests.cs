@@ -231,7 +231,7 @@ public sealed class TypedArrayBackingHoistTests
     }
 
     [Fact]
-    public void ExactInt32Stencil_ShortBackingFaultsOnSpecializedAndFallbackPaths()
+    public void ExactInt32Stencil_ShortBackingProducesNaNOnSpecializedAndFallbackPaths()
     {
         MethodInfo hot = CompileFunction("""
             function hot(length: number, initial: number, bound: number): number {
@@ -251,11 +251,9 @@ public sealed class TypedArrayBackingHoistTests
         {
             foreach (double initial in new[] { 0d, 0.5d })
             {
-                var exception = Assert.Throws<TargetInvocationException>(() =>
-                    hot.Invoke(null, [length, initial, 3d]));
-                Assert.True(
-                    exception.InnerException is IndexOutOfRangeException,
-                    $"length={length}, initial={initial}: {exception.InnerException}");
+                // Invalid neighboring reads are undefined; Number arithmetic yields NaN.
+                Assert.True(double.IsNaN((double)hot.Invoke(null, [length, initial, 3d])!),
+                    $"length={length}, initial={initial}");
             }
         }
     }
@@ -263,7 +261,7 @@ public sealed class TypedArrayBackingHoistTests
     [Theory]
     [InlineData(0)]
     [InlineData(2)]
-    public void ExactInt32Stencil_InvalidNeighborStillFaults(int center)
+    public void ExactInt32Stencil_InvalidNeighborProducesNaN(int center)
     {
         MethodInfo hot = CompileFunction($$"""
             function hot(n: number): number {
@@ -276,8 +274,7 @@ public sealed class TypedArrayBackingHoistTests
             }
             """, "hot");
 
-        var exception = Assert.Throws<TargetInvocationException>(() => hot.Invoke(null, [3d]));
-        Assert.IsType<IndexOutOfRangeException>(exception.InnerException);
+        Assert.True(double.IsNaN((double)hot.Invoke(null, [3d])!));
     }
 
     [Fact]

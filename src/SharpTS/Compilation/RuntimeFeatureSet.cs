@@ -113,6 +113,7 @@ public sealed class RuntimeFeatureSet
     // ── Worker / multi-process ────────────────────────────────────────────
     public bool UsesCluster { get; set; } = true;       // 'cluster'
     public bool UsesBroadcastChannel { get; set; } = true;
+    public bool UsesStructuredClone { get; set; } = true;
     public bool UsesAsyncLocalStorage { get; set; } = true;
 
     // ── Misc emitted-runtime types ────────────────────────────────────────

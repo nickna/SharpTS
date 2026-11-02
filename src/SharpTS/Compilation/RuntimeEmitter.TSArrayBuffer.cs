@@ -31,7 +31,7 @@ public partial class RuntimeEmitter
         arrayBuffer.DetachedField = typeBuilder.DefineField(
             "_detached",
             typeof(bool),
-            FieldAttributes.Private
+            FieldAttributes.Assembly
         );
 
         // Constructor: public $ArrayBuffer(int byteLength)

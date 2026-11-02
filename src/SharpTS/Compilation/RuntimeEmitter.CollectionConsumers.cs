@@ -33,7 +33,7 @@ public partial class RuntimeEmitter
     /// </summary>
     private void EmitCollectionConsumerLoop(ILGenerator il, CollectionConsumerInputs inputs,
         Action emitSource, Action<LocalBuilder, LocalBuilder> emitConsumer,
-        Label? arrayLikeFallback = null)
+        Label? arrayLikeFallback = null, Action<LocalBuilder>? convertValue = null)
     {
         var source = il.DeclareLocal(_types.Object);
         var iteratorMethod = il.DeclareLocal(_types.Object);
@@ -239,6 +239,7 @@ public partial class RuntimeEmitter
         il.Emit(OpCodes.Stloc, value);
 
         il.MarkLabel(consume);
+        convertValue?.Invoke(value);
         il.BeginExceptionBlock();
         emitConsumer(value, index);
         il.BeginCatchBlock(_types.Exception);

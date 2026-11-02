@@ -7,6 +7,36 @@ public partial class AsyncStateAnalyzer
 {
     #region Statement Visitor Overrides
 
+    private void AnalyzeStatementList(List<Stmt> statements)
+    {
+        for (int index = 0; index < statements.Count; index++)
+        {
+            var statement = statements[index];
+            Visit(statement);
+            if (statement is not Stmt.Using { IsAsync: true } resource) continue;
+            // Cleanup encloses the remaining list. Its implicit awaits follow
+            // those statements, in reverse acquisition order, just like finally.
+            AnalyzeStatementList(statements.Skip(index + 1).ToList());
+            foreach (var _ in resource.Bindings) RecordAwaitPoint(null);
+            return;
+        }
+    }
+
+    protected override void VisitBlock(Stmt.Block stmt) => AnalyzeStatementList(stmt.Statements);
+
+    protected override void VisitUsing(Stmt.Using stmt)
+    {
+        _hasTryCatch = true;
+        foreach (var binding in stmt.Bindings)
+            if (binding.Name is { } token)
+            {
+                string name = StorageName(binding, token.Lexeme);
+                _declaredVariables.Add(name);
+                _variablesUsedAfterAwait.Add(name);
+            }
+        base.VisitUsing(stmt);
+    }
+
     protected override void VisitVar(Stmt.Var stmt)
     {
         // Track variable declaration under its (possibly disambiguated) storage name (#766).
@@ -230,8 +260,7 @@ public partial class AsyncStateAnalyzer
         // Analyze try block
         var previousRegion = _currentTryRegion;
         _currentTryRegion = TryRegion.Try;
-        foreach (var ts in t.TryBlock)
-            Visit(ts);
+        AnalyzeStatementList(t.TryBlock);
 
         // Analyze catch block
         if (t.CatchBlock != null)
@@ -241,16 +270,14 @@ public partial class AsyncStateAnalyzer
             {
                 _declaredVariables.Add(StorageName(t, t.CatchParam.Lexeme));
             }
-            foreach (var cs in t.CatchBlock)
-                Visit(cs);
+            AnalyzeStatementList(t.CatchBlock);
         }
 
         // Analyze finally block
         if (t.FinallyBlock != null)
         {
             _currentTryRegion = TryRegion.Finally;
-            foreach (var fs in t.FinallyBlock)
-                Visit(fs);
+            AnalyzeStatementList(t.FinallyBlock);
         }
 
         // Restore context

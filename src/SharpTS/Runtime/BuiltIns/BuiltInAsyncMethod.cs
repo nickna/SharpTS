@@ -217,7 +217,10 @@ public class BuiltInAsyncMethod : ISharpTSCallable, ISharpTSAsyncCallable, IBuil
         // convention would drain the just-queued job before the following
         // synchronous statement, reversing ECMAScript ordering (#1440).
         if (_name is "then" or "catch" or "finally" && result is SharpTSPromise promise)
+        {
             promise.SuppressImplicitTopLevelWait = true;
+            promise.IsNativeReactionResult = true;
+        }
         return result;
     }
 

@@ -18,6 +18,7 @@ internal sealed partial class RawCallStorageAnalysis
     private readonly List<Flow> _flows = [];
     private readonly List<Expr.Call> _dateStaticCalls = [];
     private readonly List<Expr> _erasedGenericFieldReads = [];
+    private readonly List<Expr.GetIndex> _typedArrayValueReads = [];
     private readonly HashSet<BindingSymbol> _rawBindings = new(ReferenceEqualityComparer.Instance);
     private readonly HashSet<BindingSymbol> _rawCallBindings = new(ReferenceEqualityComparer.Instance);
     private readonly HashSet<object> _rawSlots = new(ReferenceEqualityComparer.Instance);
@@ -34,6 +35,7 @@ internal sealed partial class RawCallStorageAnalysis
     internal HashSet<Expr.Call> Calls { get; } = new(ReferenceEqualityComparer.Instance);
     internal bool HasMutableDateStaticProducer { get; private set; }
     internal bool HasErasedGenericFieldProducer => _erasedGenericFieldReads.Count != 0;
+    internal bool HasTypedArrayValueReadProducer => _typedArrayValueReads.Count != 0;
     internal HashSet<Stmt.Function> Functions { get; } = new(ReferenceEqualityComparer.Instance);
 
     private RawCallStorageAnalysis(IEnumerable<Stmt> statements, TypeMap map,
@@ -57,6 +59,7 @@ internal sealed partial class RawCallStorageAnalysis
             if (map.GetValueBinding(slot.Name) is { } binding) _rawBindings.Add(binding);
         }
         _ = SeedNumericOperations();
+        _ = SeedUnsafeStringReceivers();
     }
 
     internal static RawCallStorageAnalysis Capture(IEnumerable<Stmt> statements, TypeMap map,
@@ -81,6 +84,15 @@ internal sealed partial class RawCallStorageAnalysis
         {
             _hasNumericProducer = true;
             foreach (var read in _erasedGenericFieldReads)
+                foreach (var expression in EquivalentExpressions(read))
+                    _map.MarkRawNumericResult(expression);
+        }
+        // Missing BigInt elements and declared interface elements retain object storage.
+        // Only the checker's actual read veto and its owned lifted equivalents flow onward.
+        if (HasTypedArrayValueReadProducer)
+        {
+            _hasNumericProducer = true;
+            foreach (var read in _typedArrayValueReads)
                 foreach (var expression in EquivalentExpressions(read))
                     _map.MarkRawNumericResult(expression);
         }
@@ -135,6 +147,10 @@ internal sealed partial class RawCallStorageAnalysis
             changed |= MarkRawFlow(flow.Target, flow.Declaration,
                 passesRawValue(flow.Value, Evidence.Any), passesRawValue(flow.Value, Evidence.Call),
                 passesRawValue(flow.Value, Evidence.Numeric));
+        // Flow facts from this epoch can invalidate a formerly numeric argument.
+        changed |= SeedDynamicNumericArguments();
+        changed |= SeedDynamicStringArguments();
+        changed |= SeedUnsafeStringReceivers(passesRawValue);
         return PropagateArguments(passesRawValue) | changed;
     }
 
@@ -266,8 +282,19 @@ internal sealed partial class RawCallStorageAnalysis
         {
             if (collect && _emittedSourceBody && PrimitiveFieldValueAnalysis.IsErasedGenericField(expression, Analysis._map))
                 Analysis._erasedGenericFieldReads.Add(expression);
+            if (collect && _emittedSourceBody && Analysis._map.IsRawNumericResult(expression)
+                && (Analysis._map.IsDeclaredTypedArrayValueRead(expression)
+                    || HasBigIntTypedArrayReceiver(Analysis._map.Get(expression.Object))))
+                Analysis._typedArrayValueReads.Add(expression);
             base.VisitGetIndex(expression);
         }
+        private static bool HasBigIntTypedArrayReceiver(TypeInfo? receiver) =>
+            receiver is TypeInfo.TypedArray { ElementType: "BigInt64" or "BigUint64" }
+            || receiver is TypeInfo.Union union
+                && union.FlattenedTypes.All(member => member is TypeInfo.TypedArray)
+                && union.FlattenedTypes.Any(member =>
+                    member is TypeInfo.TypedArray { ElementType: "BigInt64" or "BigUint64" });
+
         protected override void VisitCall(Expr.Call call)
         {
             if (collect && _emittedSourceBody) Analysis.Calls.Add(call);

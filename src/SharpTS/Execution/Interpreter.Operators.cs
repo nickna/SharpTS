@@ -156,62 +156,75 @@ public partial class Interpreter
             obj = inputView.Original;
             inputView = null;
         }
-        bool arrayObjectKey = HasArrayObjectKey(obj, index);
+        bool arrayReferenceKey = UsesArrayRawIndexReference(obj, index);
         var globalTarget = ResolveGlobalIndexTarget(obj, index);
-        if (arrayObjectKey || inputView is not null || globalTarget is not null || HasCanonicalIndexProperties(obj) || obj is BuiltInMethod or SharpTSObject or SharpTSInstance)
+        var typedArrayStringTarget = index is string ? obj as SharpTSTypedArray : null;
+        if (arrayReferenceKey || inputView is not null || globalTarget is not null || HasCanonicalIndexProperties(obj)
+            || (obj is SharpTSArray && index is string arrayName
+                && !PropertySemantics.TryGetArrayIndex(arrayName, out _))
+            || typedArrayStringTarget is not null
+            || UsesPrimitivePrototypePropertyReads(obj)
+            || UsesNonextensibleBuiltInPrototypeStringIndex(obj, index)
+            || UsesTypedArrayOrdinaryIndex(obj, index)
+            || obj is BuiltInMethod or SharpTSObject or SharpTSInstance)
         {
             object key = globalTarget is null ? ToPropertyKey(index) : globalTarget.Key;
             RuntimeValue current = RuntimeValue.FromBoxed(inputView is not null
                 ? key is string name ? inputView.Read(name) : throw new InterpreterException("Compound index assignment not supported on this type.")
-                : GetOwnPropertyObjectValue(obj, key));
+                : typedArrayStringTarget is not null
+                    ? ReadTypedArrayReferenceValue(typedArrayStringTarget, key)
+                    : GetOwnPropertyObjectValue(obj, key));
             RuntimeValue addValue = await ctx.EvaluateExprAsync(compound.Value);
             RuntimeValue newValue = ApplyCompoundOperatorRV(compound.Operator.Type, current, addValue);
             // GetValue and PutValue each convert the retained raw key. Guest
             // coercion may select a different property after the RHS runs.
-            if (arrayObjectKey || globalTarget is not null || inputView is not null) PerformIndexSet(obj, index, newValue.ToObject());
-            else SetOwnPropertyObjectValue(obj, key, newValue.ToObject(), _environment.IsStrictMode);
+            if (typedArrayStringTarget is not null)
+                WriteTypedArrayReferenceValue(typedArrayStringTarget, ToPropertyKey(index),
+                    newValue.ToObject(), _environment.IsStrictMode);
+            else if (arrayReferenceKey || globalTarget is not null || inputView is not null || obj is SharpTSObjectPrototype)
+                PerformIndexSet(obj, index, newValue.ToObject());
+            else SetOwnPropertyObjectValue(obj, ToPropertyKey(index), newValue.ToObject(), _environment.IsStrictMode);
             return newValue;
         }
 
-        if (obj is SharpTSArray array)
+        if (obj is SharpTSArray array && index is string arrayKey
+            && PropertySemantics.TryGetArrayIndex(arrayKey, out uint arrayIndex))
         {
-            // Keep the established numeric normalization while canonical
-            // string keys retain the full uint32 array-index range.
-            long arrayIndex = index switch
-            {
-                double idx => (int)idx,
-                string indexKey when PropertySemantics.TryGetArrayIndex(indexKey, out uint parsedIndex) => parsedIndex,
-                _ => throw new InterpreterException("Compound index assignment not supported on this type.")
-            };
             bool strictMode = _environment.IsStrictMode;
-            string key = arrayIndex.ToString(System.Globalization.CultureInfo.InvariantCulture);
-            RuntimeValue current = arrayIndex >= 0
-                ? GetArrayIndexValue(array, arrayIndex)
-                : RuntimeValue.FromBoxed(GetPropertyValue(array, key));
+            RuntimeValue current = GetArrayIndexValue(array, arrayIndex);
             RuntimeValue addValue = await ctx.EvaluateExprAsync(compound.Value);
             RuntimeValue newValue = ApplyCompoundOperatorRV(compound.Operator.Type, current, addValue);
-            // Negative integer keys are ordinary named properties, not array
-            // storage indices. Re-read descriptors after the RHS and retain the
-            // original array as the receiver for both kinds of property.
-            if (!SharpTSProxy.OrdinarySet(this, array, key, newValue.ToObject(), array)
+            // Re-read descriptors after the RHS and retain the original receiver.
+            if (!SharpTSProxy.OrdinarySet(this, array, arrayKey, newValue.ToObject(), array)
                 && strictMode)
                 throw new ThrowException(new SharpTSTypeError(
-                    $"Cannot assign to array index '{key}'"));
+                    $"Cannot assign to array index '{arrayKey}'"));
             return newValue;
         }
 
-        // Typed-array element compound assignment (e.g. `a[i] += 1` on an Int32Array). Read the
-        // element (a boxed double, or BigInteger for BigInt arrays), apply the op, narrow back via
-        // the typed-array setter. The compiled side has a dedicated unboxed fast path; this keeps the
-        // interpreter consistent (previously it threw "not supported on this type").
-        if (obj is SharpTSTypedArray typedArray && index is double typedIdx)
+        if (obj is SharpTSTypedArray keyedTypedArray && RuntimeValue.FromBoxed(index).IsObject)
         {
-            int ti = (int)typedIdx;
-            RuntimeValue current = RuntimeValue.FromBoxed(typedArray[ti]);
+            RuntimeValue current = RuntimeValue.FromBoxed(
+                ReadTypedArrayReferenceValue(keyedTypedArray, ToPropertyKey(index)));
+            RuntimeValue addValue = await ctx.EvaluateExprAsync(compound.Value);
+            RuntimeValue newValue = ApplyCompoundOperatorRV(compound.Operator.Type, current, addValue);
+            WriteTypedArrayReferenceValue(keyedTypedArray, ToPropertyKey(index),
+                newValue.ToObject(), _environment.IsStrictMode);
+            return newValue;
+        }
+
+        // Normalize numeric keys before checking physical storage. Fractional
+        // and non-finite values must not alias an integer element after a cast.
+        if (obj is SharpTSTypedArray typedArray && index is double)
+        {
+            object key = ToPropertyKey(index);
+            RuntimeValue current = RuntimeValue.FromBoxed(
+                ReadTypedArrayReferenceValue(typedArray, key));
             RuntimeValue addValue = await ctx.EvaluateExprAsync(compound.Value);
             RuntimeValue newValue = ApplyCompoundOperatorRV(
                 compound.Operator.Type, current, addValue);
-            typedArray[ti] = newValue.ToObject();
+            WriteTypedArrayReferenceValue(typedArray, key,
+                newValue.ToObject(), _environment.IsStrictMode);
             return newValue;
         }
 
@@ -226,6 +239,58 @@ public partial class Interpreter
         }
 
         throw new InterpreterException("Compound index assignment not supported on this type.");
+    }
+
+    private int ResolveTypedArrayCompoundIndex(SharpTSTypedArray target, object key)
+    {
+        if (key is not string name)
+            throw new InterpreterException("Compound index assignment not supported on this type.");
+        if (name == "-0") return -1;
+        double numeric = ToNumber(name);
+        if (Stringify(numeric) != name)
+            throw new InterpreterException("Compound index assignment not supported on this type.");
+        return double.IsFinite(numeric) && numeric >= 0 && numeric < target.Length && Math.Truncate(numeric) == numeric
+            ? (int)numeric : -1;
+    }
+
+    private static bool IsTypedArrayOrdinaryReferenceKey(object key)
+        => key is SharpTSSymbol
+            || key is string name && SharpTSTypedArray.IsOrdinaryNamedPropertyKey(name);
+
+    // The caller has already performed this reference phase's ToPropertyKey.
+    private object? ReadTypedArrayReferenceValue(SharpTSTypedArray target, object key)
+    {
+        if (IsTypedArrayOrdinaryReferenceKey(key))
+            return GetOwnPropertyObjectValue(target, key);
+        int index = ResolveTypedArrayCompoundIndex(target, key);
+        return index >= 0 ? target[index] : SharpTSUndefined.Instance;
+    }
+
+    internal void WriteTypedArrayReferenceValue(
+        SharpTSTypedArray target, object key, object? value, bool strictMode)
+    {
+        if (IsTypedArrayOrdinaryReferenceKey(key))
+        {
+            SetOwnPropertyObjectValue(target, key, value, strictMode);
+            return;
+        }
+
+        // Integer-indexed writes convert even for invalid numeric indices.
+        // Ordinary named/Symbol slots retain their values without narrowing.
+        object? stored = ConvertTypedArrayElementValue(target, value);
+        int index = ResolveTypedArrayCompoundIndex(target, key);
+        if (index >= 0) target[index] = stored;
+    }
+
+    internal object? ConvertTypedArrayElementValue(SharpTSTypedArray target, object? value)
+    {
+        if (target is SharpTSBigInt64Array or SharpTSBigUint64Array)
+        {
+            object? primitive = ToPrimitive(value, PrimitiveHint.Number);
+            _ = SharpTSTypedArray.ToBigInt64Bits(primitive);
+            return primitive;
+        }
+        return ToNumberWithPrimitive(value);
     }
 
     /// <summary>
@@ -342,14 +407,23 @@ public partial class Interpreter
             obj = inputView.Original;
             inputView = null;
         }
-        bool arrayObjectKey = HasArrayObjectKey(obj, index);
+        bool arrayReferenceKey = UsesArrayRawIndexReference(obj, index);
         var globalTarget = ResolveGlobalIndexTarget(obj, index);
-        if (arrayObjectKey || inputView is not null || globalTarget is not null || obj is ISharpTSOwnPropertyObject or BuiltInMethod or SharpTSObjectNamespace)
+        var typedArrayStringTarget = index is string or double || RuntimeValue.FromBoxed(index).IsObject
+            ? obj as SharpTSTypedArray : null;
+        if (arrayReferenceKey || inputView is not null || globalTarget is not null
+            || typedArrayStringTarget is not null
+            || UsesPrimitivePrototypePropertyReads(obj)
+            || UsesNonextensibleBuiltInPrototypeStringIndex(obj, index)
+            || UsesTypedArrayOrdinaryIndex(obj, index)
+            || obj is ISharpTSOwnPropertyObject or BuiltInMethod or SharpTSObjectNamespace or SharpTSObjectPrototype)
         {
             object key = globalTarget is null ? ToPropertyKey(index) : globalTarget.Key;
             RuntimeValue currentRV = RuntimeValue.FromBoxed(inputView is not null
                 ? key is string name ? inputView.Read(name) : throw new InterpreterException("Logical index assignment not supported on this type.")
-                : GetOwnPropertyObjectValue(obj, key));
+                : typedArrayStringTarget is not null
+                    ? ReadTypedArrayReferenceValue(typedArrayStringTarget, key)
+                    : GetOwnPropertyObjectValue(obj, key));
             switch (logical.Operator.Type)
             {
                 case TokenType.AND_AND_EQUAL:
@@ -364,31 +438,12 @@ public partial class Interpreter
             }
 
             RuntimeValue newValue = await ctx.EvaluateExprAsync(logical.Value);
-            if (arrayObjectKey || globalTarget is not null || inputView is not null) PerformIndexSet(obj, index, newValue.ToObject());
-            else SetOwnPropertyObjectValue(obj, key, newValue.ToObject(), _environment.IsStrictMode);
-            return newValue;
-        }
-
-        if (obj is SharpTSArray array && index is double idx)
-        {
-            RuntimeValue currentRV = array.GetRV((int)idx);
-
-            switch (logical.Operator.Type)
-            {
-                case TokenType.AND_AND_EQUAL:
-                    if (!currentRV.IsTruthy()) return currentRV;
-                    break;
-                case TokenType.OR_OR_EQUAL:
-                    if (currentRV.IsTruthy()) return currentRV;
-                    break;
-                case TokenType.QUESTION_QUESTION_EQUAL:
-                    if (!currentRV.IsNullish) return currentRV;
-                    break;
-            }
-
-            // Short-circuit condition not met, evaluate and assign
-            RuntimeValue newValue = await ctx.EvaluateExprAsync(logical.Value);
-            array.Set((int)idx, newValue.ToObject());
+            if (typedArrayStringTarget is not null)
+                WriteTypedArrayReferenceValue(typedArrayStringTarget, ToPropertyKey(index),
+                    newValue.ToObject(), _environment.IsStrictMode);
+            else if (arrayReferenceKey || globalTarget is not null || inputView is not null || obj is SharpTSObjectPrototype)
+                PerformIndexSet(obj, index, newValue.ToObject());
+            else SetOwnPropertyObjectValue(obj, ToPropertyKey(index), newValue.ToObject(), _environment.IsStrictMode);
             return newValue;
         }
 
@@ -1206,6 +1261,12 @@ public partial class Interpreter
             ISharpTSOwnPropertyObject ownPropertyObject => ownPropertyObject.OwnProperties.GetOwnPropertyDescriptor(name) is null
                 || ownPropertyObject.OwnProperties.DeletePropertyStrict(name, strictMode),
             SharpTSArray array => array.DeletePropertyStrict(name, strictMode),
+            SharpTSTypedArray typedArray when PropertySemantics.TryGetArrayIndex(name, out uint typedIndex)
+                && typedIndex < typedArray.Length => strictMode
+                    ? throw StrictModeErrors.TypeError($"Cannot delete typed-array element '{name}'")
+                    : false,
+            SharpTSTypedArray typedArray when SharpTSTypedArray.IsOrdinaryNamedPropertyKey(name)
+                => typedArray.DeleteNamedProperty(name, strictMode),
             SharpTSObject tsObj => tsObj.DeletePropertyStrict(name, strictMode),
             ISharpTSFunctionObject function => FunctionObjectProperties.GetProperties(function, this)
                 .GetOwnPropertyDescriptor(name) is null || FunctionObjectProperties.GetProperties(function, this)
@@ -1320,10 +1381,13 @@ public partial class Interpreter
             SharpTSClass klass => klass.DeleteStaticSymbolProperty(symbol, strictMode),
             SharpTSClassPrototype prototype => prototype.DeleteBySymbolStrict(symbol, strictMode),
             SharpTSArray array => array.DeleteBySymbolStrict(symbol, strictMode),
+            SharpTSTypedArray typedArray => typedArray.DeleteBySymbolStrict(symbol, strictMode),
             SharpTSDate date => date.DeleteBySymbolStrict(symbol, strictMode),
             SharpTSMath math => math.DeleteBySymbolStrict(symbol, strictMode),
             ISharpTSPrimitiveConstructor constructor => constructor.DeleteBySymbolStrict(symbol, strictMode),
             SharpTSStringPrototype prototype => prototype.DeleteBySymbolStrict(symbol, strictMode),
+            SharpTSNumberPrototype prototype => prototype.DeleteBySymbolStrict(symbol, strictMode),
+            SharpTSBooleanPrototype prototype => prototype.DeleteBySymbolStrict(symbol, strictMode),
             SharpTSJSON json => json.DeleteBySymbolStrict(symbol, strictMode),
             SharpTSBigIntPrototype prototype => prototype.DeleteBySymbolStrict(symbol, strictMode),
             SharpTSFunctionPrototype prototype => prototype.DeleteBySymbolStrict(symbol, strictMode),

@@ -12,7 +12,7 @@ public partial class RuntimeEmitter
     {
         var arrays = runtime.TypedArrays.RequireImplementation();
         // First emit the base class
-        EmitTypedArrayBaseType(module, arrays);
+        EmitTypedArrayBaseType(module, arrays, runtime.RequireArrayBuffer(), runtime.Errors, runtime.Sentinels.UndefinedType);
 
         // Then emit concrete types
         EmitConcreteTypedArrayType(module, runtime, "Int8Array", 1, true, false);
@@ -34,7 +34,8 @@ public partial class RuntimeEmitter
     /// <summary>
     /// Emits the abstract $TypedArray base class.
     /// </summary>
-    private void EmitTypedArrayBaseType(ModuleBuilder module, EmittedTypedArrayImplementation arrays)
+    private void EmitTypedArrayBaseType(ModuleBuilder module, EmittedTypedArrayImplementation arrays,
+        EmittedArrayBufferRuntime buffers, EmittedErrorRuntime errors, Type undefinedType)
     {
         arrays.BaseType = EmitTypeDefinitions.DefineType(module,
             "$TypedArray",
@@ -47,6 +48,8 @@ public partial class RuntimeEmitter
         arrays.ByteOffsetField = arrays.BaseType.DefineField("_byteOffset", _types.Int32, FieldAttributes.Family);
         arrays.LengthField = arrays.BaseType.DefineField("_length", _types.Int32, FieldAttributes.Family);
         arrays.ArrayBufferField = arrays.BaseType.DefineField("_arrayBuffer", _types.Object, FieldAttributes.Family);
+
+        var validateAttached = EmitTypedArrayAttachmentMethods(arrays, buffers, errors);
 
         // Abstract properties
         arrays.BytesPerElementGetter = EmitTypedArrayAbstractProperty(arrays.BaseType, "BytesPerElement", _types.Int32);
@@ -93,6 +96,8 @@ public partial class RuntimeEmitter
         il.Emit(OpCodes.Ldarg_0);
         il.Emit(OpCodes.Ldarg, 4);
         il.Emit(OpCodes.Stfld, arrays.ArrayBufferField);
+        il.Emit(OpCodes.Ldarg_0);
+        il.Emit(OpCodes.Call, validateAttached);
         il.Emit(OpCodes.Ret);
 
         // GetBuffer method for internal access
@@ -104,6 +109,8 @@ public partial class RuntimeEmitter
         );
         arrays.GetBuffer = getBufferMethod;
         var getBufferIl = getBufferMethod.GetILGenerator();
+        getBufferIl.Emit(OpCodes.Ldarg_0);
+        getBufferIl.Emit(OpCodes.Call, validateAttached);
         getBufferIl.Emit(OpCodes.Ldarg_0);
         getBufferIl.Emit(OpCodes.Ldfld, arrays.BufferField);
         getBufferIl.Emit(OpCodes.Ret);
@@ -127,7 +134,54 @@ public partial class RuntimeEmitter
         // Bulk instance methods (fill/copyWithin/reverse/set/slice/subarray/indexOf/…) mirroring
         // the interpreter's GetMember surface. Emitted here, before CreateType, so they live on
         // the base type. BCL-only — standalone-safe.
-        EmitTypedArrayBulkMethods(arrays.BaseType, arrays);
+        EmitTypedArrayBulkMethods(arrays.BaseType, arrays, undefinedType);
+    }
+
+    private MethodBuilder EmitTypedArrayAttachmentMethods(EmittedTypedArrayImplementation arrays,
+        EmittedArrayBufferRuntime buffers, EmittedErrorRuntime errors)
+    {
+        var predicate = arrays.BaseType.DefineMethod("IsDetached", MethodAttributes.Assembly | MethodAttributes.HideBySig,
+            _types.Boolean, Type.EmptyTypes);
+        arrays.IsDetached = predicate;
+        var il = predicate.GetILGenerator();
+        var owner = il.DeclareLocal(buffers.Type);
+        var actualOwner = il.DefineLabel();
+        il.Emit(OpCodes.Ldarg_0);
+        il.Emit(OpCodes.Ldfld, arrays.ArrayBufferField);
+        il.Emit(OpCodes.Isinst, buffers.Type);
+        il.Emit(OpCodes.Stloc, owner);
+        il.Emit(OpCodes.Ldloc, owner);
+        il.Emit(OpCodes.Brtrue, actualOwner);
+        il.Emit(OpCodes.Ldc_I4_0);
+        il.Emit(OpCodes.Ret);
+        il.MarkLabel(actualOwner);
+        il.Emit(OpCodes.Ldloc, owner);
+        il.Emit(OpCodes.Ldfld, buffers.DetachedField);
+        il.Emit(OpCodes.Ret);
+
+        var validate = arrays.BaseType.DefineMethod("ValidateAttached", MethodAttributes.Family | MethodAttributes.HideBySig,
+            _types.Void, Type.EmptyTypes);
+        il = validate.GetILGenerator();
+        var attached = il.DefineLabel();
+        il.Emit(OpCodes.Ldarg_0);
+        il.Emit(OpCodes.Call, predicate);
+        il.Emit(OpCodes.Brfalse, attached);
+        GuestErrorEmitter.ThrowError(il, errors.CreateException, errors.TypeErrorConstructor,
+            "Cannot operate on a detached ArrayBuffer");
+        il.MarkLabel(attached);
+        il.Emit(OpCodes.Ret);
+        return validate;
+    }
+
+    private void EmitTypedArrayDetachedZeroPrefix(ILGenerator il, EmittedTypedArrayImplementation arrays)
+    {
+        var attached = il.DefineLabel();
+        il.Emit(OpCodes.Ldarg_0);
+        il.Emit(OpCodes.Call, arrays.IsDetached);
+        il.Emit(OpCodes.Brfalse, attached);
+        il.Emit(OpCodes.Ldc_I4_0);
+        il.Emit(OpCodes.Ret);
+        il.MarkLabel(attached);
     }
 
     private MethodBuilder EmitTypedArrayAbstractProperty(TypeBuilder typeBuilder, string name, Type returnType)
@@ -154,6 +208,7 @@ public partial class RuntimeEmitter
         );
         arrays.LengthGetter = getter;
         var il = getter.GetILGenerator();
+        EmitTypedArrayDetachedZeroPrefix(il, arrays);
         il.Emit(OpCodes.Ldarg_0);
         il.Emit(OpCodes.Ldfld, arrays.LengthField);
         il.Emit(OpCodes.Ret);
@@ -171,6 +226,7 @@ public partial class RuntimeEmitter
         );
         arrays.ByteOffsetGetter = getter;
         var il = getter.GetILGenerator();
+        EmitTypedArrayDetachedZeroPrefix(il, arrays);
         il.Emit(OpCodes.Ldarg_0);
         il.Emit(OpCodes.Ldfld, arrays.ByteOffsetField);
         il.Emit(OpCodes.Ret);
@@ -188,9 +244,9 @@ public partial class RuntimeEmitter
         );
         arrays.ByteLengthGetter = getter;
         var il = getter.GetILGenerator();
-        // return _length * BytesPerElement
+        // Intrinsic length reads the current owner state without consulting own shadows.
         il.Emit(OpCodes.Ldarg_0);
-        il.Emit(OpCodes.Ldfld, arrays.LengthField);
+        il.Emit(OpCodes.Call, arrays.LengthGetter);
         il.Emit(OpCodes.Ldarg_0);
         il.Emit(OpCodes.Callvirt, arrays.BytesPerElementGetter);
         il.Emit(OpCodes.Mul);
@@ -246,7 +302,7 @@ public partial class RuntimeEmitter
         EmitTypeNameProperty(typeBuilder, name);
 
         // Constructor: public $Uint8Array(int length)
-        var lengthCtor = EmitTypedArrayLengthConstructor(typeBuilder, arrays, bytesPerElement);
+        var lengthCtor = EmitTypedArrayLengthConstructor(typeBuilder, arrays, runtime.RequireArrayBuffer(), bytesPerElement);
         StoreTypedArrayLengthCtor(arrays, name, lengthCtor);
 
         // Constructor: public $Uint8Array(object buffer, int byteOffset, int? length)
@@ -255,7 +311,7 @@ public partial class RuntimeEmitter
 
         // Indexer: public object this[int index] { get; set; }
         EmitTypedArrayIndexer(typeBuilder, arrays, bytesPerElement, signed, clamped, isFloat, isBigInt,
-            isBigInt ? runtime.BigInt.Implementation?.ToBigInt : null);
+            runtime.NumericCoercion.ToNumber, isBigInt ? runtime.BigInt.Implementation?.ToBigInt : null);
 
         // Unboxed numeric element accessors (#3): GetUnboxed/SetUnboxed return/accept a native
         // double, for the compiled fast path (ILEmitter binds them at statically-typed sites).
@@ -340,7 +396,8 @@ public partial class RuntimeEmitter
         prop.SetGetMethod(getter);
     }
 
-    private ConstructorBuilder EmitTypedArrayLengthConstructor(TypeBuilder typeBuilder, EmittedTypedArrayImplementation arrays, int bytesPerElement)
+    private ConstructorBuilder EmitTypedArrayLengthConstructor(TypeBuilder typeBuilder,
+        EmittedTypedArrayImplementation arrays, EmittedArrayBufferRuntime buffers, int bytesPerElement)
     {
         // Constructor: public $XArray(int length)
         var ctor = typeBuilder.DefineConstructor(
@@ -351,20 +408,21 @@ public partial class RuntimeEmitter
 
         var il = ctor.GetILGenerator();
 
-        // Create new byte array: new byte[length * bytesPerElement]
-        var bufferLocal = il.DeclareLocal(typeof(byte[]));
+        // Allocate the backing bytes through their actual, stable ArrayBuffer owner.
+        var bufferLocal = il.DeclareLocal(buffers.Type);
         il.Emit(OpCodes.Ldarg_1);
         il.Emit(OpCodes.Ldc_I4, bytesPerElement);
         il.Emit(OpCodes.Mul);
-        il.Emit(OpCodes.Newarr, typeof(byte));
+        il.Emit(OpCodes.Newobj, buffers.Ctor);
         il.Emit(OpCodes.Stloc, bufferLocal);
 
-        // Call base(buffer, 0, length, null)
+        // Call base(owner.GetBuffer(), 0, length, owner).
         il.Emit(OpCodes.Ldarg_0);
         il.Emit(OpCodes.Ldloc, bufferLocal);
+        il.Emit(OpCodes.Callvirt, buffers.GetBuffer);
         il.Emit(OpCodes.Ldc_I4_0);
         il.Emit(OpCodes.Ldarg_1);
-        il.Emit(OpCodes.Ldnull);
+        il.Emit(OpCodes.Ldloc, bufferLocal);
         il.Emit(OpCodes.Call, arrays.BaseCtor);
         il.Emit(OpCodes.Ret);
 
@@ -525,6 +583,8 @@ public partial class RuntimeEmitter
 
         il.MarkLabel(afterLengthLabel);
 
+        EmitTypedArrayViewValidation(il, bytesPerElement, bufByteLengthLocal, actualLengthLocal, runtime.Errors);
+
         // Call base(buffer, byteOffset, actualLength, buffer)
         il.Emit(OpCodes.Ldarg_0);
         il.Emit(OpCodes.Ldloc, byteArrayLocal);
@@ -545,6 +605,7 @@ public partial class RuntimeEmitter
         bool clamped,
         bool isFloat,
         bool isBigInt,
+        MethodInfo toNumber,
         MethodInfo? toBigInt)
     {
         // Getter: public object Get(int index)
@@ -676,7 +737,7 @@ public partial class RuntimeEmitter
             setIl.Emit(OpCodes.Ldfld, arrays.BufferField);
             setIl.Emit(OpCodes.Ldloc, setIndexLocal);
             setIl.Emit(OpCodes.Ldarg_2);
-            setIl.Emit(OpCodes.Call, typeof(Convert).GetMethod("ToDouble", [typeof(object)])!);
+            setIl.Emit(OpCodes.Call, toNumber);
             if (clamped)
             {
                 // ToUint8Clamp compares the original double before narrowing.
@@ -713,13 +774,13 @@ public partial class RuntimeEmitter
         }
         else if (bytesPerElement == 2)
         {
-            // Unsafe.WriteUnaligned(ref _buffer[byteIdx], (short|ushort)(int)Convert.ToDouble(value));
+            // Unsafe.WriteUnaligned(ref _buffer[byteIdx], (short|ushort)(int)ToNumber(value));
             setIl.Emit(OpCodes.Ldarg_0);
             setIl.Emit(OpCodes.Ldfld, arrays.BufferField);
             setIl.Emit(OpCodes.Ldloc, setIndexLocal);
             setIl.Emit(OpCodes.Ldelema, typeof(byte));
             setIl.Emit(OpCodes.Ldarg_2);
-            setIl.Emit(OpCodes.Call, typeof(Convert).GetMethod("ToDouble", [typeof(object)])!);
+            setIl.Emit(OpCodes.Call, toNumber);
             setIl.Emit(OpCodes.Conv_I4);
             if (signed)
             {
@@ -740,15 +801,16 @@ public partial class RuntimeEmitter
             setIl.Emit(OpCodes.Ldelema, typeof(byte));
             if (isFloat)
             {
-                // Unsafe.WriteUnaligned(ref _buffer[byteIdx], Convert.ToSingle(value));
+                // Unsafe.WriteUnaligned(ref _buffer[byteIdx], (float)ToNumber(value));
                 setIl.Emit(OpCodes.Ldarg_2);
-                setIl.Emit(OpCodes.Call, typeof(Convert).GetMethod("ToSingle", [typeof(object)])!);
+                setIl.Emit(OpCodes.Call, toNumber);
+                setIl.Emit(OpCodes.Conv_R4);
                 setIl.Emit(OpCodes.Call, UnsafeWriteUnaligned(typeof(float)));
             }
             else
             {
                 setIl.Emit(OpCodes.Ldarg_2);
-                setIl.Emit(OpCodes.Call, typeof(Convert).GetMethod("ToDouble", [typeof(object)])!);
+                setIl.Emit(OpCodes.Call, toNumber);
                 if (signed)
                 {
                     setIl.Emit(OpCodes.Conv_I4);
@@ -769,9 +831,9 @@ public partial class RuntimeEmitter
             setIl.Emit(OpCodes.Ldelema, typeof(byte));
             if (isFloat)
             {
-                // Unsafe.WriteUnaligned(ref _buffer[byteIdx], Convert.ToDouble(value));
+                // Unsafe.WriteUnaligned(ref _buffer[byteIdx], ToNumber(value));
                 setIl.Emit(OpCodes.Ldarg_2);
-                setIl.Emit(OpCodes.Call, typeof(Convert).GetMethod("ToDouble", [typeof(object)])!);
+                setIl.Emit(OpCodes.Call, toNumber);
                 setIl.Emit(OpCodes.Call, UnsafeWriteUnaligned(typeof(double)));
             }
             else if (isBigInt)
@@ -795,7 +857,7 @@ public partial class RuntimeEmitter
             else
             {
                 setIl.Emit(OpCodes.Ldarg_2);
-                setIl.Emit(OpCodes.Call, typeof(Convert).GetMethod("ToDouble", [typeof(object)])!);
+                setIl.Emit(OpCodes.Call, toNumber);
                 setIl.Emit(OpCodes.Conv_I8);
                 setIl.Emit(OpCodes.Call, UnsafeWriteUnaligned(typeof(long)));
             }

@@ -17,21 +17,23 @@ public sealed class StringEmitter : ITypeEmitterStrategy
         var ctx = emitter.Context;
         var il = ctx.IL;
 
-        if (methodName is "indexOf" or "includes" or "slice" or "substring")
+        // Keep observable prototype lookup ahead of type-directed shortcuts.
+        if (methodName is "indexOf" or "includes" or "slice" or "substring"
+            && ctx.RuntimeFeatures?.UsesStringPrototypeMutation != false)
         {
-            // A live String prototype/constructor makes the method binding
-            // observable. Resolve it before evaluating arguments, exactly like
-            // an ordinary JavaScript method call.
-            if (ctx.RuntimeFeatures?.UsesStringPrototypeMutation != false)
-            {
-                EmitDynamicMethodCall(emitter, receiver, methodName, arguments);
-                return true;
-            }
-
-            if (TryEmitPrimitiveStringIntrinsic(
-                    emitter, receiver, methodName, arguments))
-                return true;
+            EmitDynamicMethodCall(emitter, receiver, methodName, arguments);
+            return true;
         }
+
+        if (RequiresRuntimeStringReceiver(ctx.TypeMap, receiver))
+        {
+            emitter.EmitRuntimeStringReceiverCall(receiver, methodName, arguments);
+            return true;
+        }
+
+        if (methodName is "indexOf" or "includes" or "slice" or "substring"
+            && TryEmitPrimitiveStringIntrinsic(emitter, receiver, methodName, arguments))
+            return true;
 
         // String protocol hooks receive the original receiver before ToString.
         // Preserve boxed String identity on the direct typed path too.
@@ -462,6 +464,7 @@ public sealed class StringEmitter : ITypeEmitterStrategy
 
     private static bool IsSideEffectFreePrimitiveString(Expr expression, TypeSystem.TypeMap? typeMap)
     {
+        if (RequiresRuntimeStringReceiver(typeMap, expression)) return false;
         while (true)
         {
             switch (expression)
@@ -490,9 +493,20 @@ public sealed class StringEmitter : ITypeEmitterStrategy
             or TypeSystem.TypeInfo.StringLiteral;
     }
 
+    internal static bool RequiresRuntimeStringReceiver(TypeSystem.TypeMap? map, Expr receiver)
+    {
+        var actual = ExpressionUnwrapper.Unwrap(receiver);
+        return map is null || map.IsRawNumericResult(receiver) || map.IsUndefinedReachableReturn(receiver)
+            || map.IsRawNumericResult(actual) || actual is Expr.New
+            || map.Get(actual) is not (TypeSystem.TypeInfo.String or TypeSystem.TypeInfo.StringLiteral)
+            || actual is Expr.Variable variable && (map.IsRawNumericStorage(variable.Name)
+                || map.IsRawCallStorage(variable.Name) || map.IsAssertedAssignmentStorage(variable.Name));
+    }
+
     internal static bool EmitsUnboxedCharCodeAt(
         TypeSystem.TypeMap? typeMap, Expr receiver, IReadOnlyList<Expr> arguments)
         => typeMap?.Get(receiver) is TypeSystem.TypeInfo.String
+            && !RequiresRuntimeStringReceiver(typeMap, receiver)
             && arguments.Count <= 1
             && (arguments.Count == 0 || arguments[0] is not Expr.Spread);
 

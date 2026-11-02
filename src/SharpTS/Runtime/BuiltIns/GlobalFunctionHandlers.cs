@@ -237,7 +237,7 @@ internal static class GlobalFunctionHandlers
                 transfer = transferValue as SharpTSArray;
             }
         }
-        return RuntimeValue.FromBoxed(StructuredClone.Clone(value, transfer));
+        return RuntimeValue.FromBoxed(StructuredClone.CloneWithInterpreter(value, transfer, interpreter));
     }
 
     private static async ValueTask<RuntimeValue> HandleEncodeURIComponent(

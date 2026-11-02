@@ -23,6 +23,9 @@ public interface IEmitterContext
     /// </summary>
     bool HasVariable(string name);
 
+    /// <summary>Resolve a string-shaped receiver through runtime method lookup without coercing the receiver.</summary>
+    void EmitRuntimeStringReceiverCall(Expr receiver, string methodName, List<Expr> arguments);
+
     /// <summary>
     /// Gets the current ILGenerator for emitting IL instructions.
     /// </summary>

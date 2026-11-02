@@ -297,7 +297,7 @@ public sealed class NativeSourceInvocationPlanTests
             byte first = bytes[offset++];
             short value = first == 0xfe ? unchecked((short)(0xfe00 | bytes[offset++])) : first;
             OpCode code = Codes[value];
-            MemberInfo? member = code.OperandType is OperandType.InlineMethod or OperandType.InlineTok
+            MemberInfo? member = code.OperandType is OperandType.InlineMethod or OperandType.InlineTok or OperandType.InlineType
                 ? method.Module.ResolveMember(BitConverter.ToInt32(bytes, offset), method.DeclaringType?.GetGenericArguments(), method.IsGenericMethod ? method.GetGenericArguments() : null) : null;
             yield return (code, member);
             offset += code.OperandType switch

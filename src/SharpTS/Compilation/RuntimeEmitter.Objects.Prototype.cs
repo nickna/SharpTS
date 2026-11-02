@@ -76,7 +76,8 @@ public partial class RuntimeEmitter
         EmittedRecordStorageRuntime Records,
         EmittedSymbolRuntime Symbols,
         Type UndefinedType,
-        MethodInfo? NativeProxyRejection
+        MethodInfo? NativeProxyRejection,
+        EmittedTypedArrayRuntime? TypedArrays = null
     );
 
     private readonly record struct ObjectPreventExtensionsInputs(EmittedArrayStorageRuntime ArrayStorage, MethodBuilder CreateException, EmittedDescriptorStorageRuntime DescriptorStorage, MethodBuilder GetProperty, MethodBuilder InvokeMethodUnwrapped, EmittedObjectStorageRuntime ObjectStorage, ConstructorBuilder TSTypeErrorCtor, MethodInfo? NativeProxyRejection, MethodBuilder GetOwnPropertyNames, MethodBuilder MaterializeOwnDescriptor);
@@ -1378,6 +1379,19 @@ public partial class RuntimeEmitter
         il.Emit(OpCodes.Ldloc, currentPrototypeLocal);
         il.Emit(OpCodes.Ldarg_1);
         il.Emit(OpCodes.Bne_Un, prototypeDiffers);
+        if (inputs.TypedArrays?.Implementation is { } typedArrays)
+        {
+            // A conceptual Object.prototype fallback is not the view's actual
+            // intrinsic prototype. Only an explicit equal link is a no-op.
+            var actualPrototypeMatch = il.DefineLabel();
+            il.Emit(OpCodes.Ldarg_0);
+            il.Emit(OpCodes.Isinst, typedArrays.BaseType);
+            il.Emit(OpCodes.Brfalse, actualPrototypeMatch);
+            il.Emit(OpCodes.Ldarg_0);
+            il.Emit(OpCodes.Call, inputs.DescriptorStorage.HasPrototypeEntry);
+            il.Emit(OpCodes.Brfalse, prototypeDiffers);
+            il.MarkLabel(actualPrototypeMatch);
+        }
         il.Emit(OpCodes.Ldarg_0);
         il.Emit(OpCodes.Ret);
         il.MarkLabel(prototypeDiffers);

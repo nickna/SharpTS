@@ -24,14 +24,23 @@ public partial class RuntimeEmitter
         EmittedArrayBufferRuntime ArrayBuffer, EmittedSharedArrayBufferRuntime SharedArrayBuffer,
         EmittedTypedArrayImplementation TypedArrays);
 
+    private readonly record struct StructuredCloneClassInputs(
+        Type InstanceFields, FieldInfo RegisteredPrototypes, NativeSourceOwnerCatalog? SourceOwners);
+
+    private readonly record struct StructuredCloneOwnInputs(
+        Type? CompactRecord, MethodInfo OwnNames, MethodInfo IsEnumerable, MethodInfo ReadProperty);
+
+    private readonly record struct StructuredCloneTransferInputs(
+        MethodInfo Property, MethodInfo TypeOf, CollectionConsumerInputs Consumer, bool Enabled);
+
     /// <summary>
-    /// Emits StructuredClone helper.
-    /// Preserves the compiled wrapper signature; its second argument is currently ignored.
+    /// Emits StructuredClone and its receiver-side transfer-list processing.
     /// </summary>
     private void EmitStructuredCloneHelper(
         TypeBuilder runtimeType, EmittedStructuredCloneRuntime clone, EmittedArrayStorageRuntime arrays, Type undefinedType,
         StructuredCloneObjectInputs objects, StructuredCloneErrorInputs errors, StructuredCloneBinaryInputs? binary,
-        StructuredCloneDateInputs? date, StructuredCloneRegExpInputs? regExp, EmittedBufferRuntime? buffer)
+        StructuredCloneDateInputs? date, StructuredCloneRegExpInputs? regExp, EmittedBufferRuntime? buffer,
+        StructuredCloneTransferInputs transfer, StructuredCloneClassInputs? classes, StructuredCloneOwnInputs own)
     {
         var cloneCore = runtimeType.DefineMethod(
             "StructuredCloneCore",
@@ -40,7 +49,67 @@ public partial class RuntimeEmitter
             [_types.Object]
         );
 
-        var coreIl = cloneCore.GetILGenerator();
+        // A source without a clone consumer cannot reach the added graph machinery.
+        // Hosted and worker/channel consumers keep it even without the global spelling.
+        bool guestEntry = _emitHosted || _features.UsesStructuredClone;
+        bool memoEnabled = guestEntry || _features.UsesBroadcastChannel;
+        var cloneRecursive = memoEnabled ? runtimeType.DefineMethod(
+            "StructuredCloneValue", MethodAttributes.Private | MethodAttributes.Static,
+            _types.Object, [_types.Object, _types.DictionaryObjectObject, _types.Boolean]) : cloneCore;
+        MethodBuilder? guestCore = null;
+        if (memoEnabled)
+        {
+            void EmitEntry(MethodBuilder entry, bool guest)
+            {
+                var entryIl = entry.GetILGenerator();
+                entryIl.Emit(OpCodes.Ldarg_0);
+                entryIl.Emit(OpCodes.Call, _types.GetPropertyGetter(typeof(ReferenceEqualityComparer), "Instance"));
+                entryIl.Emit(OpCodes.Newobj, _types.GetConstructor(_types.DictionaryObjectObject,
+                    [_types.MakeGenericType(typeof(IEqualityComparer<>), _types.Object)])!);
+                entryIl.Emit(guest ? OpCodes.Ldc_I4_1 : OpCodes.Ldc_I4_0);
+                entryIl.Emit(OpCodes.Call, cloneRecursive);
+                entryIl.Emit(OpCodes.Ret);
+            }
+            EmitEntry(cloneCore, false);
+            if (guestEntry)
+            {
+                guestCore = runtimeType.DefineMethod("StructuredCloneGuestCore",
+                    MethodAttributes.Private | MethodAttributes.Static, _types.Object, [_types.Object]);
+                EmitEntry(guestCore, true);
+            }
+        }
+        var coreIl = cloneRecursive.GetILGenerator();
+        var memoValue = memoEnabled ? coreIl.DeclareLocal(_types.Object) : null;
+        var stringResult = coreIl.DeclareLocal(_types.Object);
+        bool ownedProperties = memoEnabled || classes.HasValue || own.CompactRecord is not null;
+        var cloneOwnProperties = coreIl.DefineLabel();
+        var memoSet = _types.DictionaryObjectObjectSetItem;
+        void CloneValue()
+        {
+            if (memoEnabled)
+            {
+                coreIl.Emit(OpCodes.Ldarg_1);
+                coreIl.Emit(OpCodes.Ldarg_2);
+            }
+            coreIl.Emit(OpCodes.Call, cloneRecursive);
+        }
+        void Remember(LocalBuilder result)
+        {
+            if (!memoEnabled) return;
+            coreIl.Emit(OpCodes.Ldarg_1);
+            coreIl.Emit(OpCodes.Ldarg_0);
+            coreIl.Emit(OpCodes.Ldloc, result);
+            coreIl.Emit(OpCodes.Callvirt, memoSet);
+        }
+        void RememberAndReturn()
+        {
+            if (!memoEnabled) { coreIl.Emit(OpCodes.Ret); return; }
+            var result = coreIl.DeclareLocal(_types.Object);
+            coreIl.Emit(OpCodes.Stloc, result);
+            Remember(result);
+            coreIl.Emit(OpCodes.Ldloc, result);
+            coreIl.Emit(OpCodes.Ret);
+        }
         var sourceListLocal = coreIl.DeclareLocal(_types.ListOfObject);
         var clonedListLocal = coreIl.DeclareLocal(_types.ListOfObject);
         var sourceDictStringLocal = coreIl.DeclareLocal(_types.DictionaryStringObject);
@@ -59,7 +128,6 @@ public partial class RuntimeEmitter
         // $Object (plain object literal, possibly with getters/setters) — clone via its
         // Fields dictionary (#1255).
         var objLiteralSourceLocal = coreIl.DeclareLocal(objects.Type);
-        var objLiteralClonedFieldsLocal = coreIl.DeclareLocal(_types.DictionaryStringObject);
 
         // $Error hierarchy — clone via name-based reconstruction + Stack preservation (#1255).
         var errSourceLocal = coreIl.DeclareLocal(errors.Type);
@@ -80,6 +148,7 @@ public partial class RuntimeEmitter
         var checkRegExp = coreIl.DefineLabel();
         var checkBuffer = coreIl.DefineLabel();
         var checkError = coreIl.DefineLabel();
+        var checkClassInstance = coreIl.DefineLabel();
         var fallbackReturn = coreIl.DefineLabel();
         var returnClonedList = coreIl.DefineLabel();
         var returnClonedStringDict = coreIl.DefineLabel();
@@ -148,6 +217,34 @@ public partial class RuntimeEmitter
         // SharedArrayBuffer is transferred by reference. Skip when typed
         // arrays aren't emitted — no SharedArrayBuffer values can exist.
         coreIl.MarkLabel(checkSharedArrayBuffer);
+        if (guestEntry)
+        {
+            // Only the actual guest-global operation rejects raw CLR task carriers.
+            // Bridge callers retain their existing explicit foreign-value protocol.
+            var notGuestTask = coreIl.DefineLabel();
+            coreIl.Emit(OpCodes.Ldarg_2);
+            coreIl.Emit(OpCodes.Brfalse, notGuestTask);
+            coreIl.Emit(OpCodes.Ldarg_0);
+            coreIl.Emit(OpCodes.Isinst, _types.Task);
+            coreIl.Emit(OpCodes.Brfalse, notGuestTask);
+            coreIl.Emit(OpCodes.Ldstr, "Promise cannot be cloned");
+            coreIl.Emit(OpCodes.Newobj, clone.ErrorCtor);
+            coreIl.Emit(OpCodes.Throw);
+            coreIl.MarkLabel(notGuestTask);
+        }
+        if (memoEnabled)
+        {
+            var unseen = coreIl.DefineLabel();
+            coreIl.Emit(OpCodes.Ldarg_1);
+            coreIl.Emit(OpCodes.Ldarg_0);
+            coreIl.Emit(OpCodes.Ldloca, memoValue!);
+            coreIl.Emit(OpCodes.Callvirt, _types.GetMethod(_types.DictionaryObjectObject,
+                "TryGetValue", _types.Object, _types.Object.MakeByRefType()));
+            coreIl.Emit(OpCodes.Brfalse, unseen);
+            coreIl.Emit(OpCodes.Ldloc, memoValue!);
+            coreIl.Emit(OpCodes.Ret);
+            coreIl.MarkLabel(unseen);
+        }
         if (binary.HasValue)
         {
             coreIl.Emit(OpCodes.Ldarg_0);
@@ -182,7 +279,7 @@ public partial class RuntimeEmitter
             coreIl.Emit(OpCodes.Ldloc, abLocal);
             coreIl.Emit(OpCodes.Callvirt, binary.Value.ArrayBuffer.ByteLengthGetter);
             coreIl.Emit(OpCodes.Callvirt, binary.Value.ArrayBuffer.Slice);
-            coreIl.Emit(OpCodes.Ret);
+            RememberAndReturn();
 
             coreIl.MarkLabel(checkTypedArray);
             var taLocal = coreIl.DeclareLocal(binary.Value.TypedArrays.BaseType);
@@ -192,6 +289,15 @@ public partial class RuntimeEmitter
             coreIl.Emit(OpCodes.Stloc, taLocal);
             coreIl.Emit(OpCodes.Ldloc, taLocal);
             coreIl.Emit(OpCodes.Brfalse, checkList);
+
+            var attachedView = coreIl.DefineLabel();
+            coreIl.Emit(OpCodes.Ldloc, taLocal);
+            coreIl.Emit(OpCodes.Call, binary.Value.TypedArrays.IsDetached);
+            coreIl.Emit(OpCodes.Brfalse, attachedView);
+            coreIl.Emit(OpCodes.Ldstr, "Cannot clone a detached typed array");
+            coreIl.Emit(OpCodes.Newobj, clone.ErrorCtor);
+            coreIl.Emit(OpCodes.Throw);
+            coreIl.MarkLabel(attachedView);
 
             coreIl.Emit(OpCodes.Ldloc, taLocal);
             coreIl.Emit(OpCodes.Callvirt, binary.Value.TypedArrays.BufferGetter);
@@ -204,7 +310,7 @@ public partial class RuntimeEmitter
             coreIl.Emit(OpCodes.Ldloc, taLocal);
             coreIl.Emit(OpCodes.Callvirt, binary.Value.TypedArrays.LengthGetter);
             coreIl.Emit(OpCodes.Callvirt, binary.Value.TypedArrays.Slice);
-            coreIl.Emit(OpCodes.Ret);
+            RememberAndReturn();
 
             // return source.Subarray(0, source.Length) — shares the SharedArrayBuffer
             coreIl.MarkLabel(taSharedLabel);
@@ -213,7 +319,7 @@ public partial class RuntimeEmitter
             coreIl.Emit(OpCodes.Ldloc, taLocal);
             coreIl.Emit(OpCodes.Callvirt, binary.Value.TypedArrays.LengthGetter);
             coreIl.Emit(OpCodes.Callvirt, binary.Value.TypedArrays.Subarray);
-            coreIl.Emit(OpCodes.Ret);
+            RememberAndReturn();
         }
         else
         {
@@ -232,6 +338,7 @@ public partial class RuntimeEmitter
 
         coreIl.Emit(OpCodes.Newobj, _types.GetDefaultConstructor(_types.ListOfObject));
         coreIl.Emit(OpCodes.Stloc, clonedListLocal);
+        Remember(clonedListLocal);
         coreIl.Emit(OpCodes.Ldc_I4_0);
         coreIl.Emit(OpCodes.Stloc, indexLocal);
         coreIl.Emit(OpCodes.Br, listLoopCheck);
@@ -240,7 +347,7 @@ public partial class RuntimeEmitter
         coreIl.Emit(OpCodes.Ldloc, sourceListLocal);
         coreIl.Emit(OpCodes.Ldloc, indexLocal);
         coreIl.Emit(OpCodes.Callvirt, _types.GetMethod(_types.ListOfObject, "get_Item", _types.Int32));
-        coreIl.Emit(OpCodes.Call, cloneCore);
+        CloneValue();
         coreIl.Emit(OpCodes.Stloc, valueLocal);
         coreIl.Emit(OpCodes.Ldloc, clonedListLocal);
         coreIl.Emit(OpCodes.Ldloc, valueLocal);
@@ -267,38 +374,45 @@ public partial class RuntimeEmitter
 
         coreIl.Emit(OpCodes.Newobj, _types.DictionaryStringObjectCtor);
         coreIl.Emit(OpCodes.Stloc, clonedDictStringLocal);
-        coreIl.Emit(OpCodes.Ldloc, sourceDictStringLocal);
-        coreIl.Emit(OpCodes.Castclass, _types.IDictionary);
-        coreIl.Emit(OpCodes.Callvirt, _types.GetMethod(_types.IDictionary, "GetEnumerator"));
-        coreIl.Emit(OpCodes.Stloc, dictEnumLocal);
-        coreIl.Emit(OpCodes.Br, stringDictLoopCheck);
-
-        coreIl.MarkLabel(stringDictLoopBody);
-        coreIl.Emit(OpCodes.Ldloc, dictEnumLocal);
-        coreIl.Emit(OpCodes.Callvirt, _types.GetMethod(_types.IDictionaryEnumerator, "get_Key"));
-        coreIl.Emit(OpCodes.Stloc, keyLocal);
-        coreIl.Emit(OpCodes.Ldloc, dictEnumLocal);
-        coreIl.Emit(OpCodes.Callvirt, _types.GetMethod(_types.IDictionaryEnumerator, "get_Value"));
-        coreIl.Emit(OpCodes.Call, cloneCore);
-        coreIl.Emit(OpCodes.Stloc, valueLocal);
-
         coreIl.Emit(OpCodes.Ldloc, clonedDictStringLocal);
-        coreIl.Emit(OpCodes.Ldloc, keyLocal);
-        coreIl.Emit(OpCodes.Castclass, _types.String);
-        coreIl.Emit(OpCodes.Ldloc, valueLocal);
-        coreIl.Emit(OpCodes.Callvirt, _types.DictionaryStringObjectSetItem);
+        coreIl.Emit(OpCodes.Stloc, stringResult);
+        Remember(stringResult);
+        var cloneStringFields = coreIl.DefineLabel();
+        if (ownedProperties)
+            coreIl.Emit(OpCodes.Br, cloneOwnProperties);
+        else
+        {
+            coreIl.MarkLabel(cloneStringFields);
+            coreIl.Emit(OpCodes.Ldloc, sourceDictStringLocal);
+            coreIl.Emit(OpCodes.Castclass, _types.IDictionary);
+            coreIl.Emit(OpCodes.Callvirt, _types.GetMethod(_types.IDictionary, "GetEnumerator"));
+            coreIl.Emit(OpCodes.Stloc, dictEnumLocal);
+            coreIl.Emit(OpCodes.Br, stringDictLoopCheck);
 
-        coreIl.MarkLabel(stringDictLoopCheck);
-        coreIl.Emit(OpCodes.Ldloc, dictEnumLocal);
-        coreIl.Emit(OpCodes.Callvirt, _types.GetMethod(_types.IEnumerator, "MoveNext"));
-        coreIl.Emit(OpCodes.Brtrue, stringDictLoopBody);
-        coreIl.Emit(OpCodes.Br, returnClonedStringDict);
+            coreIl.MarkLabel(stringDictLoopBody);
+            coreIl.Emit(OpCodes.Ldloc, dictEnumLocal);
+            coreIl.Emit(OpCodes.Callvirt, _types.GetMethod(_types.IDictionaryEnumerator, "get_Key"));
+            coreIl.Emit(OpCodes.Stloc, keyLocal);
+            coreIl.Emit(OpCodes.Ldloc, dictEnumLocal);
+            coreIl.Emit(OpCodes.Callvirt, _types.GetMethod(_types.IDictionaryEnumerator, "get_Value"));
+            CloneValue();
+            coreIl.Emit(OpCodes.Stloc, valueLocal);
 
-        // $Object (object literal, possibly with getters/setters not present on a plain
-        // Dictionary<string,object?>) — clone its Fields dict via a recursive cloneCore
-        // call (reuses the Dictionary<string,object?> branch above), then rebuild (#1255).
-        // Getters/setters are not preserved — matches the interpreter's CloneObject, which
-        // only copies data fields.
+            coreIl.Emit(OpCodes.Ldloc, clonedDictStringLocal);
+            coreIl.Emit(OpCodes.Ldloc, keyLocal);
+            coreIl.Emit(OpCodes.Castclass, _types.String);
+            coreIl.Emit(OpCodes.Ldloc, valueLocal);
+            coreIl.Emit(OpCodes.Callvirt, _types.DictionaryStringObjectSetItem);
+
+            coreIl.MarkLabel(stringDictLoopCheck);
+            coreIl.Emit(OpCodes.Ldloc, dictEnumLocal);
+            coreIl.Emit(OpCodes.Callvirt, _types.GetMethod(_types.IEnumerator, "MoveNext"));
+            coreIl.Emit(OpCodes.Brtrue, stringDictLoopBody);
+            coreIl.Emit(OpCodes.Br, returnClonedStringDict);
+        }
+
+        // Plain objects retain their allocated wrapper identity before reading
+        // enumerable own values, including getters with the original receiver.
         coreIl.MarkLabel(checkObjectLiteral);
         coreIl.Emit(OpCodes.Ldarg_0);
         coreIl.Emit(OpCodes.Isinst, objects.Type);
@@ -306,14 +420,22 @@ public partial class RuntimeEmitter
         coreIl.Emit(OpCodes.Ldloc, objLiteralSourceLocal);
         coreIl.Emit(OpCodes.Brfalse, checkObjectDict);
 
-        coreIl.Emit(OpCodes.Ldloc, objLiteralSourceLocal);
-        coreIl.Emit(OpCodes.Callvirt, objects.FieldsGetter);
-        coreIl.Emit(OpCodes.Call, cloneCore);
-        coreIl.Emit(OpCodes.Castclass, _types.DictionaryStringObject);
-        coreIl.Emit(OpCodes.Stloc, objLiteralClonedFieldsLocal);
-        coreIl.Emit(OpCodes.Ldloc, objLiteralClonedFieldsLocal);
+        // Allocate/register the wrapper before any child can point back to it.
+        coreIl.Emit(OpCodes.Newobj, _types.DictionaryStringObjectCtor);
+        coreIl.Emit(OpCodes.Stloc, clonedDictStringLocal);
+        coreIl.Emit(OpCodes.Ldloc, clonedDictStringLocal);
         coreIl.Emit(OpCodes.Newobj, objects.Ctor);
-        coreIl.Emit(OpCodes.Ret);
+        coreIl.Emit(OpCodes.Stloc, stringResult);
+        Remember(stringResult);
+        if (ownedProperties)
+            coreIl.Emit(OpCodes.Br, cloneOwnProperties);
+        else
+        {
+            coreIl.Emit(OpCodes.Ldloc, objLiteralSourceLocal);
+            coreIl.Emit(OpCodes.Callvirt, objects.FieldsGetter);
+            coreIl.Emit(OpCodes.Stloc, sourceDictStringLocal);
+            coreIl.Emit(OpCodes.Br, cloneStringFields);
+        }
 
         // Dictionary<object, object> deep clone (Map backing store).
         coreIl.MarkLabel(checkObjectDict);
@@ -325,6 +447,7 @@ public partial class RuntimeEmitter
 
         coreIl.Emit(OpCodes.Newobj, _types.GetDefaultConstructor(_types.DictionaryObjectObject));
         coreIl.Emit(OpCodes.Stloc, clonedDictObjectLocal);
+        Remember(clonedDictObjectLocal);
         coreIl.Emit(OpCodes.Ldloc, sourceDictObjectLocal);
         coreIl.Emit(OpCodes.Castclass, _types.IDictionary);
         coreIl.Emit(OpCodes.Callvirt, _types.GetMethod(_types.IDictionary, "GetEnumerator"));
@@ -334,11 +457,11 @@ public partial class RuntimeEmitter
         coreIl.MarkLabel(objectDictLoopBody);
         coreIl.Emit(OpCodes.Ldloc, dictEnumLocal);
         coreIl.Emit(OpCodes.Callvirt, _types.GetMethod(_types.IDictionaryEnumerator, "get_Key"));
-        coreIl.Emit(OpCodes.Call, cloneCore);
+        CloneValue();
         coreIl.Emit(OpCodes.Stloc, keyLocal);
         coreIl.Emit(OpCodes.Ldloc, dictEnumLocal);
         coreIl.Emit(OpCodes.Callvirt, _types.GetMethod(_types.IDictionaryEnumerator, "get_Value"));
-        coreIl.Emit(OpCodes.Call, cloneCore);
+        CloneValue();
         coreIl.Emit(OpCodes.Stloc, valueLocal);
 
         coreIl.Emit(OpCodes.Ldloc, clonedDictObjectLocal);
@@ -362,6 +485,7 @@ public partial class RuntimeEmitter
 
         coreIl.Emit(OpCodes.Newobj, _types.GetDefaultConstructor(_types.HashSetOfObject));
         coreIl.Emit(OpCodes.Stloc, clonedSetLocal);
+        Remember(clonedSetLocal);
         coreIl.Emit(OpCodes.Ldloc, sourceSetLocal);
         coreIl.Emit(OpCodes.Castclass, _types.IEnumerable);
         coreIl.Emit(OpCodes.Callvirt, _types.GetMethod(_types.IEnumerable, "GetEnumerator"));
@@ -371,7 +495,7 @@ public partial class RuntimeEmitter
         coreIl.MarkLabel(setLoopBody);
         coreIl.Emit(OpCodes.Ldloc, setEnumLocal);
         coreIl.Emit(OpCodes.Callvirt, _types.GetMethod(_types.IEnumerator, "get_Current"));
-        coreIl.Emit(OpCodes.Call, cloneCore);
+        CloneValue();
         coreIl.Emit(OpCodes.Stloc, currentLocal);
         coreIl.Emit(OpCodes.Ldloc, clonedSetLocal);
         coreIl.Emit(OpCodes.Ldloc, currentLocal);
@@ -398,7 +522,7 @@ public partial class RuntimeEmitter
             coreIl.Emit(OpCodes.Ldloc, dateLocal);
             coreIl.Emit(OpCodes.Call, date.Value.GetTime);
             coreIl.Emit(OpCodes.Newobj, date.Value.Ctor);
-            coreIl.Emit(OpCodes.Ret);
+            RememberAndReturn();
         }
         else
         {
@@ -422,7 +546,7 @@ public partial class RuntimeEmitter
             coreIl.Emit(OpCodes.Ldloc, regexpLocal);
             coreIl.Emit(OpCodes.Callvirt, regExp.Value.FlagsGetter);
             coreIl.Emit(OpCodes.Newobj, regExp.Value.Ctor);
-            coreIl.Emit(OpCodes.Ret);
+            RememberAndReturn();
         }
         else
         {
@@ -442,7 +566,7 @@ public partial class RuntimeEmitter
 
             coreIl.Emit(OpCodes.Ldloc, bufferLocal);
             coreIl.Emit(OpCodes.Call, buffer.FromBuffer);
-            coreIl.Emit(OpCodes.Ret);
+            RememberAndReturn();
         }
         else
         {
@@ -463,7 +587,7 @@ public partial class RuntimeEmitter
         coreIl.Emit(OpCodes.Isinst, errors.Type);
         coreIl.Emit(OpCodes.Stloc, errSourceLocal);
         coreIl.Emit(OpCodes.Ldloc, errSourceLocal);
-        coreIl.Emit(OpCodes.Brfalse, fallbackReturn);
+        coreIl.Emit(OpCodes.Brfalse, checkClassInstance);
 
         coreIl.Emit(OpCodes.Ldloc, errSourceLocal);
         coreIl.Emit(OpCodes.Isinst, errors.InstanceFieldsInterface);
@@ -559,13 +683,196 @@ public partial class RuntimeEmitter
         coreIl.Emit(OpCodes.Callvirt, errors.StackGetter);
         coreIl.Emit(OpCodes.Callvirt, errors.StackSetter);
         coreIl.Emit(OpCodes.Ldloc, clonedErrLocal);
-        coreIl.Emit(OpCodes.Ret);
+        RememberAndReturn();
 
-        // Everything else — functions/closures, Symbols, class instances, Promises,
+        // Only registered ordinary source-class families enter the own-property path.
+        // The cache lookup does not run class initialization or guest constructors.
+        coreIl.MarkLabel(checkClassInstance);
+        if (classes.HasValue || own.CompactRecord is not null)
+        {
+            var ordinaryClass = coreIl.DefineLabel();
+            if (own.CompactRecord is { } compactRecord)
+            {
+                coreIl.Emit(OpCodes.Ldarg_0);
+                coreIl.Emit(OpCodes.Isinst, compactRecord);
+                coreIl.Emit(OpCodes.Brtrue, ordinaryClass);
+            }
+            if (classes is { } classInputs)
+            {
+                var owner = coreIl.DeclareLocal(_types.Type);
+                var ownerLoop = coreIl.DefineLabel();
+                coreIl.Emit(OpCodes.Ldarg_0);
+                coreIl.Emit(OpCodes.Isinst, classInputs.InstanceFields);
+                coreIl.Emit(OpCodes.Brfalse, fallbackReturn);
+                coreIl.Emit(OpCodes.Ldarg_0);
+                coreIl.Emit(OpCodes.Callvirt, _types.GetMethodNoParams(_types.Object, "GetType"));
+                coreIl.Emit(OpCodes.Stloc, owner);
+                coreIl.MarkLabel(ownerLoop);
+                coreIl.Emit(OpCodes.Ldloc, owner);
+                coreIl.Emit(OpCodes.Ldtoken, _types.Object);
+                coreIl.Emit(OpCodes.Call, _types.TypeGetTypeFromHandle);
+                coreIl.Emit(OpCodes.Beq, ordinaryClass);
+                coreIl.Emit(OpCodes.Ldloc, owner);
+                coreIl.Emit(OpCodes.Brfalse, fallbackReturn);
+
+                // Erased generic source families use the same canonical owner as
+                // class prototype registration. The actual CLR parent is kept separately.
+                var lookup = coreIl.DeclareLocal(_types.Type);
+                var notGeneric = coreIl.DefineLabel();
+                coreIl.Emit(OpCodes.Ldloc, owner);
+                coreIl.Emit(OpCodes.Stloc, lookup);
+                coreIl.Emit(OpCodes.Ldloc, lookup);
+                coreIl.Emit(OpCodes.Callvirt, _types.GetPropertyGetter(_types.Type, "IsGenericType"));
+                coreIl.Emit(OpCodes.Brfalse, notGeneric);
+                coreIl.Emit(OpCodes.Ldloc, lookup);
+                coreIl.Emit(OpCodes.Callvirt, _types.GetMethodNoParams(_types.Type, "GetGenericTypeDefinition"));
+                coreIl.Emit(OpCodes.Stloc, lookup);
+                coreIl.MarkLabel(notGeneric);
+                var canonical = EmitStaticMemberLookupOwner(coreIl, lookup, classInputs.InstanceFields,
+                    classInputs.SourceOwners);
+                coreIl.Emit(OpCodes.Ldsfld, classInputs.RegisteredPrototypes);
+                coreIl.Emit(OpCodes.Ldloc, canonical);
+                coreIl.Emit(OpCodes.Callvirt, _types.GetMethod(classInputs.RegisteredPrototypes.FieldType,
+                    "ContainsKey", _types.Type));
+                coreIl.Emit(OpCodes.Brfalse, fallbackReturn);
+                coreIl.Emit(OpCodes.Ldloc, owner);
+                coreIl.Emit(OpCodes.Callvirt, _types.GetPropertyGetter(_types.Type, "BaseType"));
+                coreIl.Emit(OpCodes.Stloc, owner);
+                coreIl.Emit(OpCodes.Br, ownerLoop);
+            }
+            else coreIl.Emit(OpCodes.Br, fallbackReturn);
+
+            coreIl.MarkLabel(ordinaryClass);
+            coreIl.Emit(OpCodes.Newobj, _types.DictionaryStringObjectCtor);
+            coreIl.Emit(OpCodes.Stloc, clonedDictStringLocal);
+            coreIl.Emit(OpCodes.Ldloc, clonedDictStringLocal);
+            coreIl.Emit(OpCodes.Stloc, stringResult);
+            Remember(stringResult);
+            coreIl.Emit(OpCodes.Br, cloneOwnProperties);
+        }
+        coreIl.Emit(OpCodes.Br, fallbackReturn);
+
+        if (ownedProperties)
+        {
+            coreIl.MarkLabel(cloneOwnProperties);
+            var names = coreIl.DeclareLocal(_types.ListOfObject);
+            var selectedNames = coreIl.DeclareLocal(_types.ListOfObject);
+            coreIl.Emit(OpCodes.Newobj, _types.GetDefaultConstructor(_types.ListOfObject));
+            coreIl.Emit(OpCodes.Stloc, selectedNames);
+            var nextName = coreIl.DefineLabel();
+            var namesCheck = coreIl.DefineLabel();
+            coreIl.Emit(OpCodes.Ldarg_0);
+            coreIl.Emit(OpCodes.Call, own.OwnNames);
+            coreIl.Emit(OpCodes.Stloc, names);
+            coreIl.Emit(OpCodes.Ldc_I4_0);
+            coreIl.Emit(OpCodes.Stloc, indexLocal);
+            coreIl.Emit(OpCodes.Br, namesCheck);
+            coreIl.MarkLabel(nextName);
+            coreIl.Emit(OpCodes.Ldloc, names);
+            coreIl.Emit(OpCodes.Ldloc, indexLocal);
+            coreIl.Emit(OpCodes.Callvirt, _types.GetMethod(_types.ListOfObject, "get_Item", _types.Int32));
+            coreIl.Emit(OpCodes.Stloc, keyLocal);
+            var skipName = coreIl.DefineLabel();
+            coreIl.Emit(OpCodes.Ldarg_0);
+            coreIl.Emit(OpCodes.Ldloc, keyLocal);
+            coreIl.Emit(OpCodes.Call, own.IsEnumerable);
+            coreIl.Emit(OpCodes.Brfalse, skipName);
+            coreIl.Emit(OpCodes.Ldloc, selectedNames);
+            coreIl.Emit(OpCodes.Ldloc, keyLocal);
+            coreIl.Emit(OpCodes.Callvirt, _types.GetMethod(_types.ListOfObject, "Add", _types.Object));
+            coreIl.MarkLabel(skipName);
+            coreIl.Emit(OpCodes.Ldloc, indexLocal);
+            coreIl.Emit(OpCodes.Ldc_I4_1);
+            coreIl.Emit(OpCodes.Add);
+            coreIl.Emit(OpCodes.Stloc, indexLocal);
+            coreIl.MarkLabel(namesCheck);
+            coreIl.Emit(OpCodes.Ldloc, indexLocal);
+            coreIl.Emit(OpCodes.Ldloc, names);
+            coreIl.Emit(OpCodes.Callvirt, _types.GetMethodNoParams(_types.ListOfObject, "get_Count"));
+            coreIl.Emit(OpCodes.Blt, nextName);
+
+            // Enumerable names are selected before invoking the first getter.
+            coreIl.Emit(OpCodes.Ldc_I4_0);
+            coreIl.Emit(OpCodes.Stloc, indexLocal);
+            var readNext = coreIl.DefineLabel();
+            var readCheck = coreIl.DefineLabel();
+            coreIl.Emit(OpCodes.Br, readCheck);
+            coreIl.MarkLabel(readNext);
+            coreIl.Emit(OpCodes.Ldloc, selectedNames);
+            coreIl.Emit(OpCodes.Ldloc, indexLocal);
+            coreIl.Emit(OpCodes.Callvirt, _types.GetMethod(_types.ListOfObject, "get_Item", _types.Int32));
+            coreIl.Emit(OpCodes.Stloc, keyLocal);
+            coreIl.Emit(OpCodes.Ldarg_0);
+            coreIl.Emit(OpCodes.Ldloc, keyLocal);
+            coreIl.Emit(OpCodes.Castclass, _types.String);
+            coreIl.Emit(OpCodes.Call, own.ReadProperty);
+            CloneValue();
+            coreIl.Emit(OpCodes.Stloc, valueLocal);
+            coreIl.Emit(OpCodes.Ldloc, clonedDictStringLocal);
+            coreIl.Emit(OpCodes.Ldloc, keyLocal);
+            coreIl.Emit(OpCodes.Castclass, _types.String);
+            coreIl.Emit(OpCodes.Ldloc, valueLocal);
+            coreIl.Emit(OpCodes.Callvirt, _types.DictionaryStringObjectSetItem);
+            coreIl.Emit(OpCodes.Ldloc, indexLocal);
+            coreIl.Emit(OpCodes.Ldc_I4_1);
+            coreIl.Emit(OpCodes.Add);
+            coreIl.Emit(OpCodes.Stloc, indexLocal);
+            coreIl.MarkLabel(readCheck);
+            coreIl.Emit(OpCodes.Ldloc, indexLocal);
+            coreIl.Emit(OpCodes.Ldloc, selectedNames);
+            coreIl.Emit(OpCodes.Callvirt, _types.GetMethodNoParams(_types.ListOfObject, "get_Count"));
+            coreIl.Emit(OpCodes.Blt, readNext);
+            coreIl.Emit(OpCodes.Ldloc, stringResult);
+            coreIl.Emit(OpCodes.Ret);
+        }
+
+        // Everything else — functions/closures, Symbols, unsupported branded instances, Promises,
         // WeakMap/WeakSet, iterators/generators, EventEmitters, etc. — cannot be
         // structured-cloned (#1255). Throw rather than alias by reference, matching the
         // interpreter's exhaustive switch (default arm: "Cannot clone value of type X").
         coreIl.MarkLabel(fallbackReturn);
+        if (classes is { } constructorInputs)
+        {
+            var notConstructor = coreIl.DefineLabel();
+            var constructor = coreIl.DeclareLocal(_types.Type);
+            coreIl.Emit(OpCodes.Ldarg_0);
+            coreIl.Emit(OpCodes.Isinst, _types.Type);
+            coreIl.Emit(OpCodes.Stloc, constructor);
+            coreIl.Emit(OpCodes.Ldloc, constructor);
+            coreIl.Emit(OpCodes.Brfalse, notConstructor);
+            NativeTypeIdentityEmitter.EmitRuntimeTypeFence(coreIl, _types,
+                () => coreIl.Emit(OpCodes.Ldloc, constructor), notConstructor);
+            coreIl.Emit(OpCodes.Ldloc, constructor);
+            coreIl.Emit(OpCodes.Callvirt, _types.GetPropertyGetter(_types.Type, "Module"));
+            coreIl.Emit(OpCodes.Ldtoken, constructorInputs.InstanceFields);
+            coreIl.Emit(OpCodes.Call, _types.TypeGetTypeFromHandle);
+            coreIl.Emit(OpCodes.Callvirt, _types.GetPropertyGetter(_types.Type, "Module"));
+            coreIl.Emit(OpCodes.Bne_Un, notConstructor);
+            coreIl.Emit(OpCodes.Ldtoken, constructorInputs.InstanceFields);
+            coreIl.Emit(OpCodes.Call, _types.TypeGetTypeFromHandle);
+            coreIl.Emit(OpCodes.Ldloc, constructor);
+            coreIl.Emit(OpCodes.Callvirt, _types.GetMethod(_types.Type, "IsAssignableFrom", _types.Type));
+            coreIl.Emit(OpCodes.Brfalse, notConstructor);
+            var ready = coreIl.DefineLabel();
+            coreIl.Emit(OpCodes.Ldloc, constructor);
+            coreIl.Emit(OpCodes.Callvirt, _types.GetPropertyGetter(_types.Type, "IsGenericType"));
+            coreIl.Emit(OpCodes.Brfalse, ready);
+            coreIl.Emit(OpCodes.Ldloc, constructor);
+            coreIl.Emit(OpCodes.Callvirt, _types.GetMethodNoParams(_types.Type, "GetGenericTypeDefinition"));
+            coreIl.Emit(OpCodes.Stloc, constructor);
+            coreIl.MarkLabel(ready);
+            var canonical = EmitStaticMemberLookupOwner(coreIl, constructor,
+                constructorInputs.InstanceFields, constructorInputs.SourceOwners);
+            coreIl.Emit(OpCodes.Ldsfld, constructorInputs.RegisteredPrototypes);
+            coreIl.Emit(OpCodes.Ldloc, canonical);
+            coreIl.Emit(OpCodes.Callvirt, _types.GetMethod(constructorInputs.RegisteredPrototypes.FieldType,
+                "ContainsKey", _types.Type));
+            coreIl.Emit(OpCodes.Brfalse, notConstructor);
+            coreIl.Emit(OpCodes.Ldstr, "Class constructors cannot be cloned");
+            coreIl.Emit(OpCodes.Newobj, clone.ErrorCtor);
+            coreIl.Emit(OpCodes.Throw);
+            coreIl.MarkLabel(notConstructor);
+        }
 
         // A value whose CLR type is NOT defined in this dynamically-emitted assembly is
         // foreign — most commonly a SharpTS.dll interpreter runtime value (SharpTSObject/
@@ -601,7 +908,7 @@ public partial class RuntimeEmitter
         coreIl.Emit(OpCodes.Ret);
 
         coreIl.MarkLabel(returnClonedStringDict);
-        coreIl.Emit(OpCodes.Ldloc, clonedDictStringLocal);
+        coreIl.Emit(OpCodes.Ldloc, stringResult);
         coreIl.Emit(OpCodes.Ret);
 
         coreIl.MarkLabel(returnClonedObjectDict);
@@ -612,18 +919,177 @@ public partial class RuntimeEmitter
         coreIl.Emit(OpCodes.Ldloc, clonedSetLocal);
         coreIl.Emit(OpCodes.Ret);
 
-        var method = runtimeType.DefineMethod(
-            "StructuredClone",
-            MethodAttributes.Public | MethodAttributes.Static,
-            _types.Object,
-            [_types.Object, _types.Object]
-        );
+        // Both phase-1 entries share the same transfer processing and graph algorithm.
+        void EmitWrapper(MethodBuilder method, MethodBuilder core)
+        {
+            var il = method.GetILGenerator();
+            if (transfer.Enabled)
+                EmitStructuredCloneTransferWrapper(il, core, clone, binary, undefinedType, transfer);
+            else
+            {
+                il.Emit(OpCodes.Ldarg_0);
+                il.Emit(OpCodes.Call, core);
+                il.Emit(OpCodes.Ret);
+            }
+        }
+        EmitWrapper(clone.Clone, cloneCore);
+        if (guestCore is not null) EmitWrapper(clone.GuestClone, guestCore);
+    }
 
-        var il = method.GetILGenerator();
+    private void EmitStructuredCloneTransferWrapper(ILGenerator il, MethodInfo cloneCore,
+        EmittedStructuredCloneRuntime clone, StructuredCloneBinaryInputs? binary, Type undefinedType,
+        StructuredCloneTransferInputs inputs)
+    {
+        var transferValue = il.DeclareLocal(_types.Object);
+        var transfers = il.DeclareLocal(_types.ListOfObject);
+        var seen = il.DeclareLocal(_types.ListOfObject);
+        var result = il.DeclareLocal(_types.Object);
+        var index = il.DeclareLocal(_types.Int32);
+        var item = il.DeclareLocal(_types.Object);
+        var withoutTransfer = il.DefineLabel();
+        var validate = il.DefineLabel();
+        var validateItem = il.DefineLabel();
+        var detach = il.DefineLabel();
+        var detachItem = il.DefineLabel();
+
+        // WebIDL dictionaries accept null/undefined as an empty options value.
+        il.Emit(OpCodes.Ldarg_1);
+        il.Emit(OpCodes.Brfalse, withoutTransfer);
+        il.Emit(OpCodes.Ldarg_1);
+        il.Emit(OpCodes.Isinst, undefinedType);
+        il.Emit(OpCodes.Brtrue, withoutTransfer);
+        EmitRequireObject(() => il.Emit(OpCodes.Ldarg_1), "Options cannot be converted to a dictionary");
+        il.Emit(OpCodes.Ldarg_1);
+        il.Emit(OpCodes.Ldstr, "transfer");
+        il.Emit(OpCodes.Call, inputs.Property);
+        il.Emit(OpCodes.Stloc, transferValue);
+        il.Emit(OpCodes.Ldloc, transferValue);
+        il.Emit(OpCodes.Isinst, undefinedType);
+        il.Emit(OpCodes.Brtrue, withoutTransfer);
+        il.Emit(OpCodes.Newobj, _types.GetDefaultConstructor(_types.ListOfObject));
+        il.Emit(OpCodes.Stloc, transfers);
+
+        // Complete sequence conversion before validating transferability. A later
+        // iterator/getter abrupt completion precedes duplicate/invalid-buffer checks.
+        EmitCollectionConsumerLoop(il, inputs.Consumer,
+            () => il.Emit(OpCodes.Ldloc, transferValue), (value, _) =>
+            {
+                il.Emit(OpCodes.Ldloc, transfers);
+                il.Emit(OpCodes.Ldloc, value);
+                il.Emit(OpCodes.Callvirt, _types.GetMethod(_types.ListOfObject, "Add", _types.Object));
+            }, convertValue: value =>
+                EmitRequireObject(() => il.Emit(OpCodes.Ldloc, value), "Transfer value is not an object"));
+
+        il.Emit(OpCodes.Newobj, _types.GetDefaultConstructor(_types.ListOfObject));
+        il.Emit(OpCodes.Stloc, seen);
+        il.Emit(OpCodes.Ldc_I4_0);
+        il.Emit(OpCodes.Stloc, index);
+        il.Emit(OpCodes.Br, validate);
+        il.MarkLabel(validateItem);
+        il.Emit(OpCodes.Ldloc, transfers);
+        il.Emit(OpCodes.Ldloc, index);
+        il.Emit(OpCodes.Callvirt, _types.GetMethod(_types.ListOfObject, "get_Item", _types.Int32));
+        il.Emit(OpCodes.Stloc, item);
+        if (binary is { } types)
+        {
+            var actualBuffer = il.DefineLabel();
+            var attached = il.DefineLabel();
+            var unique = il.DefineLabel();
+            il.Emit(OpCodes.Ldloc, item);
+            il.Emit(OpCodes.Isinst, types.ArrayBuffer.Type);
+            il.Emit(OpCodes.Brtrue, actualBuffer);
+            EmitDataCloneError("Found invalid value in transferList");
+            il.MarkLabel(actualBuffer);
+            il.Emit(OpCodes.Ldloc, item);
+            il.Emit(OpCodes.Castclass, types.ArrayBuffer.Type);
+            il.Emit(OpCodes.Ldfld, types.ArrayBuffer.DetachedField);
+            il.Emit(OpCodes.Brfalse, attached);
+            EmitDataCloneError("ArrayBuffer is already detached");
+            il.MarkLabel(attached);
+            il.Emit(OpCodes.Ldloc, seen);
+            il.Emit(OpCodes.Ldloc, item);
+            il.Emit(OpCodes.Callvirt, _types.GetMethod(_types.ListOfObject, "Contains", _types.Object));
+            il.Emit(OpCodes.Brfalse, unique);
+            EmitDataCloneError("Transfer list contains duplicate ArrayBuffer");
+            il.MarkLabel(unique);
+            il.Emit(OpCodes.Ldloc, seen);
+            il.Emit(OpCodes.Ldloc, item);
+            il.Emit(OpCodes.Callvirt, _types.GetMethod(_types.ListOfObject, "Add", _types.Object));
+        }
+        else
+            EmitDataCloneError("Found invalid value in transferList");
+        il.Emit(OpCodes.Ldloc, index);
+        il.Emit(OpCodes.Ldc_I4_1);
+        il.Emit(OpCodes.Add);
+        il.Emit(OpCodes.Stloc, index);
+        il.MarkLabel(validate);
+        il.Emit(OpCodes.Ldloc, index);
+        il.Emit(OpCodes.Ldloc, transfers);
+        il.Emit(OpCodes.Callvirt, _types.GetMethodNoParams(_types.ListOfObject, "get_Count"));
+        il.Emit(OpCodes.Blt, validateItem);
+
+        il.Emit(OpCodes.Ldarg_0);
+        il.Emit(OpCodes.Call, cloneCore);
+        il.Emit(OpCodes.Stloc, result);
+        if (binary is { } buffers)
+        {
+            il.Emit(OpCodes.Ldc_I4_0);
+            il.Emit(OpCodes.Stloc, index);
+            il.Emit(OpCodes.Br, detach);
+            il.MarkLabel(detachItem);
+            il.Emit(OpCodes.Ldloc, transfers);
+            il.Emit(OpCodes.Ldloc, index);
+            il.Emit(OpCodes.Callvirt, _types.GetMethod(_types.ListOfObject, "get_Item", _types.Int32));
+            il.Emit(OpCodes.Castclass, buffers.ArrayBuffer.Type);
+            il.Emit(OpCodes.Callvirt, buffers.ArrayBuffer.Detach);
+            il.Emit(OpCodes.Ldloc, index);
+            il.Emit(OpCodes.Ldc_I4_1);
+            il.Emit(OpCodes.Add);
+            il.Emit(OpCodes.Stloc, index);
+            il.MarkLabel(detach);
+            il.Emit(OpCodes.Ldloc, index);
+            il.Emit(OpCodes.Ldloc, transfers);
+            il.Emit(OpCodes.Callvirt, _types.GetMethodNoParams(_types.ListOfObject, "get_Count"));
+            il.Emit(OpCodes.Blt, detachItem);
+        }
+        il.Emit(OpCodes.Ldloc, result);
+        il.Emit(OpCodes.Ret);
+
+        il.MarkLabel(withoutTransfer);
         il.Emit(OpCodes.Ldarg_0);
         il.Emit(OpCodes.Call, cloneCore);
         il.Emit(OpCodes.Ret);
 
-        clone.Clone = method;
+        void EmitRequireObject(Action emitValue, string message)
+        {
+            var nonNull = il.DefineLabel();
+            var isObject = il.DefineLabel();
+            var kind = il.DeclareLocal(_types.String);
+            emitValue();
+            il.Emit(OpCodes.Brtrue, nonNull);
+            GuestErrorEmitter.ThrowError(il, inputs.Consumer.Errors.CreateException,
+                inputs.Consumer.Errors.TypeErrorConstructor, message);
+            il.MarkLabel(nonNull);
+            emitValue();
+            il.Emit(OpCodes.Call, inputs.TypeOf);
+            il.Emit(OpCodes.Stloc, kind);
+            foreach (var allowed in new[] { "object", "function" })
+            {
+                il.Emit(OpCodes.Ldloc, kind);
+                il.Emit(OpCodes.Ldstr, allowed);
+                il.Emit(OpCodes.Call, _types.GetMethod(_types.String, "op_Equality", _types.String, _types.String));
+                il.Emit(OpCodes.Brtrue, isObject);
+            }
+            GuestErrorEmitter.ThrowError(il, inputs.Consumer.Errors.CreateException,
+                inputs.Consumer.Errors.TypeErrorConstructor, message);
+            il.MarkLabel(isObject);
+        }
+
+        void EmitDataCloneError(string message)
+        {
+            il.Emit(OpCodes.Ldstr, message);
+            il.Emit(OpCodes.Newobj, clone.ErrorCtor);
+            il.Emit(OpCodes.Throw);
+        }
     }
 }

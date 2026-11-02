@@ -149,32 +149,16 @@ public partial class RuntimeEmitter
         // time. This is deliberately done before starting the reaction state
         // machine: Node emits rejectionHandled for a previously reported
         // rejection even when the catch callback has not run yet.
-        var attachDone = il.DefineLabel();
-        var attachHandler = il.DefineLabel();
-        il.Emit(OpCodes.Ldarg_2);
-        il.Emit(OpCodes.Brfalse, attachDone);
-        il.Emit(OpCodes.Ldarg_2);
-        il.Emit(OpCodes.Isinst, runtime.FunctionPrototypes.Type);
-        il.Emit(OpCodes.Brtrue, attachHandler);
-        il.Emit(OpCodes.Ldarg_2);
-        il.Emit(OpCodes.Isinst, runtime.FunctionValues.Type);
-        il.Emit(OpCodes.Brtrue, attachHandler);
-        il.Emit(OpCodes.Ldarg_2);
-        il.Emit(OpCodes.Isinst, runtime.FunctionBindings.BoundType);
-        il.Emit(OpCodes.Brtrue, attachHandler);
-        il.Emit(OpCodes.Ldarg_2);
-        il.Emit(OpCodes.Isinst, runtime.ArrayOperations.BoundMethodType);
-        il.Emit(OpCodes.Brtrue, attachHandler);
-        il.Emit(OpCodes.Ldarg_2);
-        il.Emit(OpCodes.Isinst, runtime.RequirePromise().ResolveCallbackType);
-        il.Emit(OpCodes.Brtrue, attachHandler);
-        il.Emit(OpCodes.Ldarg_2);
-        il.Emit(OpCodes.Isinst, runtime.RequirePromise().RejectCallbackType);
-        il.Emit(OpCodes.Brfalse, attachDone);
-        il.MarkLabel(attachHandler);
+        // PerformPromiseThen consumes the source rejection even without a
+        // callable rejection callback; a missing callback forwards it to the result.
+        // An already fulfilled task cannot reject and needs no tracker allocation.
+        var sourceFulfilled = il.DefineLabel();
+        il.Emit(OpCodes.Ldarg_0);
+        il.Emit(OpCodes.Callvirt, _types.GetPropertyGetter(_types.TaskOfObject, "IsCompletedSuccessfully"));
+        il.Emit(OpCodes.Brtrue, sourceFulfilled);
         il.Emit(OpCodes.Ldarg_0);
         il.Emit(OpCodes.Call, runtime.RequirePromise().NotifyPromiseRejectionHandler);
-        il.MarkLabel(attachDone);
+        il.MarkLabel(sourceFulfilled);
 
         // Initialize state machine: var sm = default($PromiseThen_SM);
         il.Emit(OpCodes.Ldloca, smLocal);

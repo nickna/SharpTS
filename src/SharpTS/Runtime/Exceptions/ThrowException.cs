@@ -46,9 +46,12 @@ public class ThrowException : Exception
     public static Exception FromResult(object? value) => FromResult(value, fromGuestThrow: false);
 
     /// <inheritdoc cref="FromResult(object?)"/>
-    public static Exception FromResult(object? value, bool fromGuestThrow) => value is string s && !fromGuestThrow
-        ? new Exception(s)
-        : new ThrowException(value);
+    public static Exception FromResult(object? value, bool fromGuestThrow) =>
+        value is HostDataCloneErrorValue cloneError && !fromGuestThrow
+            ? cloneError.Exception
+            : value is string s && !fromGuestThrow
+                ? new Exception(s)
+                : new ThrowException(value);
 
     /// <summary>
     /// Produces a textual form of <paramref name="value"/> suitable for

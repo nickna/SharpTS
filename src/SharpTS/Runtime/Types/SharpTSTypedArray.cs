@@ -1,5 +1,6 @@
 using System.Runtime.CompilerServices;
 using System.Runtime.InteropServices;
+using SharpTS.Execution;
 using SharpTS.Runtime.BuiltIns;
 using SharpTS.Runtime.Exceptions;
 using SharpTS.TypeSystem;
@@ -16,6 +17,108 @@ namespace SharpTS.Runtime.Types;
 /// </remarks>
 public abstract class SharpTSTypedArray : ITypeCategorized
 {
+    // Ordinary named properties are separate from integer-indexed storage.
+    // Keep this lazy so intrinsic reads and element operations allocate no bag.
+    private SharpTSObject? _ordinaryProperties;
+
+    internal bool HasExplicitPrototype => _ordinaryProperties is { } properties
+        && (properties.Prototype is not null || properties.IsNullPrototype);
+    internal object? ExplicitPrototype => _ordinaryProperties?.Prototype;
+
+    internal void SetExplicitPrototype(object? prototype)
+    {
+        var properties = GetOrdinaryProperties();
+        properties.Prototype = prototype;
+        properties.IsNullPrototype = prototype is null;
+    }
+
+    internal SharpTSPropertyDescriptor? GetNamedOwnPropertyDescriptor(string name)
+    {
+        if (_ordinaryProperties is not { } properties) return null;
+        SynchronizeOrdinaryIntegrity(properties);
+        return properties.GetOwnPropertyDescriptor(name);
+    }
+
+    internal SharpTSPropertyDescriptor? GetOwnPropertyDescriptor(string name)
+    {
+        if (GetNamedOwnPropertyDescriptor(name) is { } named) return named;
+        return PropertySemantics.TryGetArrayIndex(name, out uint index) && index < Length
+            ? new SharpTSPropertyDescriptor(this[(int)index], writable: true, enumerable: true, configurable: true)
+                { HasValue = true }
+            : null;
+    }
+
+    internal bool DefineNamedProperty(string name, SharpTSPropertyDescriptor descriptor)
+        => IsOrdinaryNamedPropertyKey(name) && GetOrdinaryProperties().DefineProperty(name, descriptor);
+
+    internal bool DefineProperty(SharpTSSymbol symbol, SharpTSPropertyDescriptor descriptor)
+        => GetOrdinaryProperties().DefineProperty(symbol, descriptor);
+
+    internal SharpTSPropertyDescriptor? GetOwnPropertyDescriptor(SharpTSSymbol symbol)
+    {
+        if (_ordinaryProperties is not { } properties) return null;
+        SynchronizeOrdinaryIntegrity(properties);
+        return properties.GetOwnPropertyDescriptor(symbol);
+    }
+
+    internal IEnumerable<SharpTSSymbol> GetSymbolPropertyNames()
+        => _ordinaryProperties?.GetSymbolPropertyNames() ?? [];
+
+    internal bool DeleteBySymbolStrict(SharpTSSymbol symbol, bool strictMode)
+    {
+        if (_ordinaryProperties is not { } properties) return true;
+        SynchronizeOrdinaryIntegrity(properties);
+        return properties.DeleteBySymbolStrict(symbol, strictMode);
+    }
+
+    internal bool DeleteNamedProperty(string name, bool strictMode)
+    {
+        if (_ordinaryProperties is not { } properties) return true;
+        SynchronizeOrdinaryIntegrity(properties);
+        return properties.DeletePropertyStrict(name, strictMode);
+    }
+
+    internal bool UsesOrdinaryNamedPropertyLookup(string name)
+        => name == "length" || GetNamedOwnPropertyDescriptor(name) is not null
+            || HasExplicitPrototype && IsOrdinaryNamedPropertyKey(name);
+
+    internal IEnumerable<string> OwnStringKeys()
+    {
+        for (int index = 0; index < Length; index++)
+            yield return index.ToString(System.Globalization.CultureInfo.InvariantCulture);
+        if (_ordinaryProperties is not { } properties) yield break;
+        SynchronizeOrdinaryIntegrity(properties);
+        foreach (var name in properties.OwnVisibleStringKeys()) yield return name;
+    }
+
+    internal IEnumerable<string> OwnEnumerableKeys()
+    {
+        for (int index = 0; index < Length; index++)
+            yield return index.ToString(System.Globalization.CultureInfo.InvariantCulture);
+        if (_ordinaryProperties is not { } properties) yield break;
+        SynchronizeOrdinaryIntegrity(properties);
+        foreach (var name in properties.OwnEnumerableKeys()) yield return name;
+    }
+
+    internal static bool IsOrdinaryNamedPropertyKey(string name)
+        => name != "-0" && (!double.TryParse(name, System.Globalization.NumberStyles.Float,
+            System.Globalization.CultureInfo.InvariantCulture, out double number)
+            || Compilation.RuntimeTypes.FormatNumber(number) != name);
+
+    private SharpTSObject GetOrdinaryProperties()
+    {
+        var properties = _ordinaryProperties ??= new SharpTSObject([]);
+        SynchronizeOrdinaryIntegrity(properties);
+        return properties;
+    }
+
+    private void SynchronizeOrdinaryIntegrity(SharpTSObject properties)
+    {
+        if (Compilation.PropertyDescriptorStore.IsFrozen(this)) properties.Freeze();
+        else if (Compilation.PropertyDescriptorStore.IsSealed(this)) properties.Seal();
+        else if (!Compilation.PropertyDescriptorStore.IsExtensible(this)) properties.PreventExtensions();
+    }
+
     protected readonly byte[] _buffer;
     protected readonly int _byteOffset;
     protected readonly int _length;  // In elements, not bytes
@@ -38,17 +141,17 @@ public abstract class SharpTSTypedArray : ITypeCategorized
     /// <summary>
     /// Gets the number of elements in this typed array.
     /// </summary>
-    public int Length => _length;
+    public int Length => IsArrayBufferDetached ? 0 : _length;
 
     /// <summary>
     /// Gets the byte offset within the underlying buffer.
     /// </summary>
-    public int ByteOffset => _byteOffset;
+    public int ByteOffset => IsArrayBufferDetached ? 0 : _byteOffset;
 
     /// <summary>
     /// Gets the length in bytes of this typed array.
     /// </summary>
-    public int ByteLength => _length * BytesPerElement;
+    public int ByteLength => Length * BytesPerElement;
 
     /// <summary>
     /// Gets whether this typed array is backed by a SharedArrayBuffer.
@@ -105,7 +208,7 @@ public abstract class SharpTSTypedArray : ITypeCategorized
         _byteOffset = byteOffset;
         _length = length;
         _sharedBuffer = null;
-        _arrayBuffer = null;
+        _arrayBuffer = new SharpTSArrayBuffer(buffer);
         ValidateBounds();
     }
 
@@ -118,17 +221,25 @@ public abstract class SharpTSTypedArray : ITypeCategorized
         _byteOffset = 0;
         _buffer = new byte[length * BytesPerElement];
         _sharedBuffer = null;
-        _arrayBuffer = null;
+        _arrayBuffer = new SharpTSArrayBuffer(_buffer);
     }
 
     private void ValidateBounds()
     {
-        if (_byteOffset < 0)
-            throw new Exception("RangeError: byteOffset cannot be negative");
-        if (_byteOffset % BytesPerElement != 0)
-            throw new Exception($"RangeError: byteOffset must be a multiple of {BytesPerElement}");
-        if (_byteOffset + _length * BytesPerElement > _buffer.Length)
-            throw new Exception("RangeError: buffer too small for specified view");
+        GetViewLength(_buffer.Length, _byteOffset, _length, BytesPerElement);
+    }
+
+    protected static int GetViewLength(int bufferByteLength, int byteOffset, int? length, int bytesPerElement)
+    {
+        if (byteOffset < 0 || byteOffset > bufferByteLength || byteOffset % bytesPerElement != 0)
+            throw new Exception("RangeError: Invalid typed array buffer offset");
+        int remainingBytes = bufferByteLength - byteOffset;
+        if (length is null && remainingBytes % bytesPerElement != 0)
+            throw new Exception("RangeError: Invalid typed array buffer length");
+        int actualLength = length ?? remainingBytes / bytesPerElement;
+        if (actualLength < 0 || actualLength > remainingBytes / bytesPerElement)
+            throw new Exception("RangeError: Invalid typed array buffer length");
+        return actualLength;
     }
 
     /// <summary>
@@ -159,11 +270,20 @@ public abstract class SharpTSTypedArray : ITypeCategorized
     /// </summary>
     public abstract void SetVolatile(int index, object? value);
 
+    private bool IsArrayBufferDetached => _arrayBuffer?.IsDetached == true;
+
+    private void ValidateAttachedBuffer()
+    {
+        if (IsArrayBufferDetached)
+            throw new ThrowException(new SharpTSTypeError("Cannot operate on a detached ArrayBuffer"));
+    }
+
     /// <summary>
     /// Gets the byte offset for an element index.
     /// </summary>
     protected int GetByteIndex(int index)
     {
+        ValidateAttachedBuffer();
         if (index < 0 || index >= _length)
             throw new Exception("RangeError: Index out of bounds");
         return _byteOffset + index * BytesPerElement;
@@ -204,6 +324,7 @@ public abstract class SharpTSTypedArray : ITypeCategorized
     /// </summary>
     private (int start, int count) ClampRange(int begin, int? end)
     {
+        ValidateAttachedBuffer();
         begin = begin < 0 ? Math.Max(_length + begin, 0) : Math.Min(begin, _length);
         int actualEnd = end.HasValue
             ? (end.Value < 0 ? Math.Max(_length + end.Value, 0) : Math.Min(end.Value, _length))
@@ -242,8 +363,10 @@ public abstract class SharpTSTypedArray : ITypeCategorized
     /// </summary>
     public void Set(object source, int offset = 0)
     {
+        ValidateAttachedBuffer();
         if (source is SharpTSTypedArray typedSource)
         {
+            typedSource.ValidateAttachedBuffer();
             if (offset + typedSource.Length > _length)
                 throw new Exception("RangeError: Source too large for target");
 
@@ -287,6 +410,7 @@ public abstract class SharpTSTypedArray : ITypeCategorized
     /// </summary>
     public SharpTSTypedArray Fill(object? value, int start = 0, int? end = null)
     {
+        ValidateAttachedBuffer();
         int actualEnd = end ?? _length;
         start = Math.Max(0, Math.Min(start, _length));
         actualEnd = Math.Max(start, Math.Min(actualEnd, _length));
@@ -316,6 +440,7 @@ public abstract class SharpTSTypedArray : ITypeCategorized
     /// </summary>
     public SharpTSTypedArray CopyWithin(int target, int start, int? end = null)
     {
+        ValidateAttachedBuffer();
         int actualEnd = end ?? _length;
         target = Math.Max(0, Math.Min(target, _length));
         start = Math.Max(0, Math.Min(start, _length));
@@ -340,6 +465,7 @@ public abstract class SharpTSTypedArray : ITypeCategorized
     /// </summary>
     public SharpTSTypedArray Reverse()
     {
+        ValidateAttachedBuffer();
         int bpe = BytesPerElement;
         var buf = _buffer.AsSpan();
         Span<byte> temp = stackalloc byte[8]; // max BytesPerElement (Float64/BigInt64) is 8
@@ -383,6 +509,7 @@ public abstract class SharpTSTypedArray : ITypeCategorized
     /// </summary>
     public double IndexOf(object? value, int fromIndex = 0)
     {
+        ValidateAttachedBuffer();
         fromIndex = Math.Max(0, fromIndex);
 
         for (int i = fromIndex; i < _length; i++)
@@ -399,6 +526,7 @@ public abstract class SharpTSTypedArray : ITypeCategorized
     /// </summary>
     public double LastIndexOf(object? value, int? fromIndex = null)
     {
+        ValidateAttachedBuffer();
         int start = fromIndex ?? _length - 1;
         start = Math.Min(start, _length - 1);
 
@@ -424,6 +552,7 @@ public abstract class SharpTSTypedArray : ITypeCategorized
     /// </summary>
     public SharpTSArray ToArray()
     {
+        ValidateAttachedBuffer();
         var elements = new List<object?>(_length);
         for (int i = 0; i < _length; i++)
         {
@@ -450,102 +579,113 @@ public abstract class SharpTSTypedArray : ITypeCategorized
             "byteLength" => (double)ByteLength,
             "byteOffset" => (double)ByteOffset,
             "BYTES_PER_ELEMENT" => (double)BytesPerElement,
-            "buffer" => _sharedBuffer ?? _arrayBuffer ?? (object?)new SharpTSBuffer(_buffer),
+            "buffer" => _sharedBuffer ?? (object?)_arrayBuffer,
 
-            "set" => BuiltInMethod.CreateV2("set", 1, 2, (_, _, args) =>
+            "set" => BuiltInMethod.CreateV2("set", 1, 2, (interpreter, _, args) =>
             {
                 if (args.Length == 0)
                     throw new Exception("TypedArray.set requires a source argument");
-                int offset = args.Length > 1 && args[1].IsNumber ? (int)args[1].AsNumberUnsafe() : 0;
+                int offset = args.Length > 1 ? ConvertMethodIndex(interpreter, args[1]) : 0;
+                if (offset < 0)
+                    throw new ThrowException(new SharpTSRangeError("Offset is outside the target"));
+                ValidateAttachedBuffer();
+                if (offset > _length)
+                    throw new ThrowException(new SharpTSRangeError("Offset is outside the target"));
                 Set(args[0].ToObject()!, offset);
                 return RuntimeValue.Null;
             }),
 
-            "slice" => BuiltInMethod.CreateV2("slice", 0, 2, (_, _, args) =>
+            "slice" => BuiltInMethod.CreateV2("slice", 0, 2, (interpreter, _, args) =>
             {
-                int begin = args.Length > 0 && args[0].IsNumber ? (int)args[0].AsNumberUnsafe() : 0;
-                int? end = args.Length > 1 && args[1].IsNumber ? (int)args[1].AsNumberUnsafe() : null;
+                ValidateAttachedBuffer();
+                int begin = args.Length > 0 ? ConvertMethodIndex(interpreter, args[0]) : 0;
+                int? end = args.Length > 1 && !args[1].IsUndefined ? ConvertMethodIndex(interpreter, args[1]) : null;
+                // A zero-copy slice may finish after argument conversion detaches its owner.
+                if (IsArrayBufferDetached && RelativeMethodIndex(end ?? _length, _length) <= RelativeMethodIndex(begin, _length))
+                    return RuntimeValue.FromObject(Allocate(0));
                 return RuntimeValue.FromObject(Slice(begin, end));
             }),
 
-            "subarray" => BuiltInMethod.CreateV2("subarray", 0, 2, (_, _, args) =>
+            "subarray" => BuiltInMethod.CreateV2("subarray", 0, 2, (interpreter, _, args) =>
             {
-                int begin = args.Length > 0 && args[0].IsNumber ? (int)args[0].AsNumberUnsafe() : 0;
-                int? end = args.Length > 1 && args[1].IsNumber ? (int)args[1].AsNumberUnsafe() : null;
+                int begin = args.Length > 0 ? ConvertMethodIndex(interpreter, args[0]) : 0;
+                int? end = args.Length > 1 && !args[1].IsUndefined ? ConvertMethodIndex(interpreter, args[1]) : null;
                 return RuntimeValue.FromObject(Subarray(begin, end));
             }),
 
-            "fill" => BuiltInMethod.CreateV2("fill", 1, 3, (_, receiver, args) =>
+            "fill" => BuiltInMethod.CreateV2("fill", 1, 3, (interpreter, receiver, args) =>
             {
                 if (receiver.ToObject() is not SharpTSTypedArray target)
-                    throw new ThrowException(new SharpTSTypeError(
-                        "TypedArray.fill called on incompatible receiver"));
-                if (args.Length == 0)
-                    throw new Exception("TypedArray.fill requires a value argument");
-                int start = args.Length > 1 && args[1].IsNumber ? (int)args[1].AsNumberUnsafe() : 0;
-                int? end = args.Length > 2 && args[2].IsNumber ? (int)args[2].AsNumberUnsafe() : null;
-                return RuntimeValue.FromObject(target.Fill(args[0].ToObject(), start, end));
+                    throw new ThrowException(new SharpTSTypeError("TypedArray.fill called on incompatible receiver"));
+                target.ValidateAttachedBuffer();
+                object? value = interpreter.ConvertTypedArrayElementValue(target,
+                    args.Length > 0 ? args[0].ToObject() : SharpTSUndefined.Instance);
+                int start = args.Length > 1 ? RelativeMethodIndex(ConvertMethodIndex(interpreter, args[1]), target._length) : 0;
+                int end = args.Length > 2 && !args[2].IsUndefined
+                    ? RelativeMethodIndex(ConvertMethodIndex(interpreter, args[2]), target._length) : target._length;
+                return RuntimeValue.FromObject(target.Fill(value, start, end));
             }),
 
-            "copyWithin" => BuiltInMethod.CreateV2("copyWithin", 2, 3, (_, _, args) =>
+            "copyWithin" => BuiltInMethod.CreateV2("copyWithin", 2, 3, (interpreter, _, args) =>
             {
-                if (args.Length < 2)
-                    throw new Exception("TypedArray.copyWithin requires target and start arguments");
-                int target = args[0].IsNumber ? (int)args[0].AsNumberUnsafe() : 0;
-                int start = args[1].IsNumber ? (int)args[1].AsNumberUnsafe() : 0;
-                int? end = args.Length > 2 && args[2].IsNumber ? (int)args[2].AsNumberUnsafe() : null;
+                ValidateAttachedBuffer();
+                int target = args.Length > 0 ? RelativeMethodIndex(ConvertMethodIndex(interpreter, args[0]), _length) : 0;
+                int start = args.Length > 1 ? RelativeMethodIndex(ConvertMethodIndex(interpreter, args[1]), _length) : 0;
+                int end = args.Length > 2 && !args[2].IsUndefined
+                    ? RelativeMethodIndex(ConvertMethodIndex(interpreter, args[2]), _length) : _length;
+                if (end <= start || target >= _length)
+                    return RuntimeValue.FromObject(this);
                 return RuntimeValue.FromObject(CopyWithin(target, start, end));
             }),
 
             "reverse" => BuiltInMethod.CreateV2("reverse", 0, (_, _, _) => RuntimeValue.FromObject(Reverse())),
-
-            "indexOf" => BuiltInMethod.CreateV2("indexOf", 1, 2, (_, _, args) =>
-            {
-                if (args.Length == 0)
-                    throw new Exception("TypedArray.indexOf requires a search element");
-                int fromIndex = args.Length > 1 && args[1].IsNumber ? (int)args[1].AsNumberUnsafe() : 0;
-                return RuntimeValue.FromNumber(IndexOf(args[0].ToObject(), fromIndex));
-            }),
-
-            "lastIndexOf" => BuiltInMethod.CreateV2("lastIndexOf", 1, 2, (_, _, args) =>
-            {
-                if (args.Length == 0)
-                    throw new Exception("TypedArray.lastIndexOf requires a search element");
-                int? fromIndex = args.Length > 1 && args[1].IsNumber ? (int)args[1].AsNumberUnsafe() : null;
-                return RuntimeValue.FromNumber(LastIndexOf(args[0].ToObject(), fromIndex));
-            }),
-
-            "includes" => BuiltInMethod.CreateV2("includes", 1, 2, (_, _, args) =>
-            {
-                if (args.Length == 0)
-                    throw new Exception("TypedArray.includes requires a search element");
-                int fromIndex = args.Length > 1 && args[1].IsNumber ? (int)args[1].AsNumberUnsafe() : 0;
-                return RuntimeValue.FromBoolean(Includes(args[0].ToObject(), fromIndex));
-            }),
-
-            "join" => BuiltInMethod.CreateV2("join", 0, 1, (_, _, args) =>
-            {
-                string separator = args.Length > 0 ? args[0].ToObject()?.ToString() ?? "," : ",";
-                var parts = new string[_length];
-                for (int i = 0; i < _length; i++)
-                {
-                    parts[i] = this[i]?.ToString() ?? "";
-                }
-                return RuntimeValue.FromString(string.Join(separator, parts));
-            }),
-
-            "toString" => BuiltInMethod.CreateV2("toString", 0, (_, _, _) =>
-            {
-                var parts = new string[_length];
-                for (int i = 0; i < _length; i++)
-                {
-                    parts[i] = this[i]?.ToString() ?? "";
-                }
-                return RuntimeValue.FromString(string.Join(",", parts));
-            }),
+            "indexOf" => BuiltInMethod.CreateV2("indexOf", 1, 2, (interpreter, _, args) =>
+                SearchMethod(interpreter, args, backwards: false, includes: false)),
+            "lastIndexOf" => BuiltInMethod.CreateV2("lastIndexOf", 1, 2, (interpreter, _, args) =>
+                SearchMethod(interpreter, args, backwards: true, includes: false)),
+            "includes" => BuiltInMethod.CreateV2("includes", 1, 2, (interpreter, _, args) =>
+                SearchMethod(interpreter, args, backwards: false, includes: true)),
+            "join" => BuiltInMethod.CreateV2("join", 0, 1, (interpreter, _, args) => JoinMethod(interpreter, args)),
+            "toString" => BuiltInMethod.CreateV2("toString", 0, (interpreter, _, _) => JoinMethod(interpreter, [])),
 
             _ => null
         };
+    }
+
+    private static int ConvertMethodIndex(Interpreter interpreter, RuntimeValue value)
+    {
+        double number = interpreter.ToNumberWithPrimitive(value.ToObject());
+        if (double.IsNaN(number)) return 0;
+        if (number >= int.MaxValue) return int.MaxValue;
+        if (number <= int.MinValue) return int.MinValue;
+        return (int)number;
+    }
+
+    private static int RelativeMethodIndex(int index, int length)
+        => index < 0 ? Math.Max(length + index, 0) : Math.Min(index, length);
+
+    private RuntimeValue SearchMethod(Interpreter interpreter, ReadOnlySpan<RuntimeValue> args, bool backwards, bool includes)
+    {
+        ValidateAttachedBuffer();
+        if (_length == 0) return includes ? RuntimeValue.False : RuntimeValue.FromNumber(-1);
+        object? value = args.Length > 0 ? args[0].ToObject() : SharpTSUndefined.Instance;
+        int index = args.Length > 1 ? ConvertMethodIndex(interpreter, args[1]) : backwards ? _length - 1 : 0;
+        if (index < 0) index = backwards ? _length + index : Math.Max(_length + index, 0);
+        if (IsArrayBufferDetached)
+            return includes ? RuntimeValue.FromBoolean(value is SharpTSUndefined && index < _length) : RuntimeValue.FromNumber(-1);
+        return includes ? RuntimeValue.FromBoolean(Includes(value, index))
+            : RuntimeValue.FromNumber(backwards ? LastIndexOf(value, index) : IndexOf(value, index));
+    }
+
+    private RuntimeValue JoinMethod(Interpreter interpreter, ReadOnlySpan<RuntimeValue> args)
+    {
+        ValidateAttachedBuffer();
+        string separator = args.Length == 0 || args[0].IsUndefined ? ","
+            : interpreter.ToStringForBuiltInArgument(args[0].ToObject());
+        var parts = new string[_length];
+        for (int i = 0; i < parts.Length; i++)
+            parts[i] = IsArrayBufferDetached ? "" : interpreter.Stringify(this[i]);
+        return RuntimeValue.FromString(string.Join(separator, parts));
     }
 
     public override string ToString()
@@ -570,11 +710,11 @@ public class SharpTSInt8Array : SharpTSTypedArray
 
     public SharpTSInt8Array(int length) : base(length) { }
     public SharpTSInt8Array(SharpTSSharedArrayBuffer buffer, int byteOffset = 0, int? length = null)
-        : base(buffer, byteOffset, length ?? (buffer.ByteLength - byteOffset)) { }
+        : base(buffer, byteOffset, GetViewLength(buffer.ByteLength, byteOffset, length, 1)) { }
     public SharpTSInt8Array(SharpTSArrayBuffer buffer, int byteOffset = 0, int? length = null)
-        : base(buffer, byteOffset, length ?? (buffer.ByteLength - byteOffset)) { }
+        : base(buffer, byteOffset, GetViewLength(buffer.ByteLength, byteOffset, length, 1)) { }
     public SharpTSInt8Array(byte[] buffer, int byteOffset = 0, int? length = null)
-        : base(buffer, byteOffset, length ?? (buffer.Length - byteOffset)) { }
+        : base(buffer, byteOffset, GetViewLength(buffer.Length, byteOffset, length, 1)) { }
 
     public override object? this[int index]
     {
@@ -611,11 +751,11 @@ public class SharpTSUint8Array : SharpTSTypedArray
 
     public SharpTSUint8Array(int length) : base(length) { }
     public SharpTSUint8Array(SharpTSSharedArrayBuffer buffer, int byteOffset = 0, int? length = null)
-        : base(buffer, byteOffset, length ?? (buffer.ByteLength - byteOffset)) { }
+        : base(buffer, byteOffset, GetViewLength(buffer.ByteLength, byteOffset, length, 1)) { }
     public SharpTSUint8Array(SharpTSArrayBuffer buffer, int byteOffset = 0, int? length = null)
-        : base(buffer, byteOffset, length ?? (buffer.ByteLength - byteOffset)) { }
+        : base(buffer, byteOffset, GetViewLength(buffer.ByteLength, byteOffset, length, 1)) { }
     public SharpTSUint8Array(byte[] buffer, int byteOffset = 0, int? length = null)
-        : base(buffer, byteOffset, length ?? (buffer.Length - byteOffset)) { }
+        : base(buffer, byteOffset, GetViewLength(buffer.Length, byteOffset, length, 1)) { }
 
     public override object? this[int index]
     {
@@ -652,11 +792,11 @@ public class SharpTSUint8ClampedArray : SharpTSTypedArray
 
     public SharpTSUint8ClampedArray(int length) : base(length) { }
     public SharpTSUint8ClampedArray(SharpTSSharedArrayBuffer buffer, int byteOffset = 0, int? length = null)
-        : base(buffer, byteOffset, length ?? (buffer.ByteLength - byteOffset)) { }
+        : base(buffer, byteOffset, GetViewLength(buffer.ByteLength, byteOffset, length, 1)) { }
     public SharpTSUint8ClampedArray(SharpTSArrayBuffer buffer, int byteOffset = 0, int? length = null)
-        : base(buffer, byteOffset, length ?? (buffer.ByteLength - byteOffset)) { }
+        : base(buffer, byteOffset, GetViewLength(buffer.ByteLength, byteOffset, length, 1)) { }
     public SharpTSUint8ClampedArray(byte[] buffer, int byteOffset = 0, int? length = null)
-        : base(buffer, byteOffset, length ?? (buffer.Length - byteOffset)) { }
+        : base(buffer, byteOffset, GetViewLength(buffer.Length, byteOffset, length, 1)) { }
 
     public override object? this[int index]
     {
@@ -700,11 +840,11 @@ public class SharpTSInt16Array : SharpTSTypedArray
 
     public SharpTSInt16Array(int length) : base(length) { }
     public SharpTSInt16Array(SharpTSSharedArrayBuffer buffer, int byteOffset = 0, int? length = null)
-        : base(buffer, byteOffset, length ?? (buffer.ByteLength - byteOffset) / 2) { }
+        : base(buffer, byteOffset, GetViewLength(buffer.ByteLength, byteOffset, length, 2)) { }
     public SharpTSInt16Array(SharpTSArrayBuffer buffer, int byteOffset = 0, int? length = null)
-        : base(buffer, byteOffset, length ?? (buffer.ByteLength - byteOffset) / 2) { }
+        : base(buffer, byteOffset, GetViewLength(buffer.ByteLength, byteOffset, length, 2)) { }
     public SharpTSInt16Array(byte[] buffer, int byteOffset = 0, int? length = null)
-        : base(buffer, byteOffset, length ?? (buffer.Length - byteOffset) / 2) { }
+        : base(buffer, byteOffset, GetViewLength(buffer.Length, byteOffset, length, 2)) { }
 
     public override object? this[int index]
     {
@@ -757,11 +897,11 @@ public class SharpTSUint16Array : SharpTSTypedArray
 
     public SharpTSUint16Array(int length) : base(length) { }
     public SharpTSUint16Array(SharpTSSharedArrayBuffer buffer, int byteOffset = 0, int? length = null)
-        : base(buffer, byteOffset, length ?? (buffer.ByteLength - byteOffset) / 2) { }
+        : base(buffer, byteOffset, GetViewLength(buffer.ByteLength, byteOffset, length, 2)) { }
     public SharpTSUint16Array(SharpTSArrayBuffer buffer, int byteOffset = 0, int? length = null)
-        : base(buffer, byteOffset, length ?? (buffer.ByteLength - byteOffset) / 2) { }
+        : base(buffer, byteOffset, GetViewLength(buffer.ByteLength, byteOffset, length, 2)) { }
     public SharpTSUint16Array(byte[] buffer, int byteOffset = 0, int? length = null)
-        : base(buffer, byteOffset, length ?? (buffer.Length - byteOffset) / 2) { }
+        : base(buffer, byteOffset, GetViewLength(buffer.Length, byteOffset, length, 2)) { }
 
     public override object? this[int index]
     {
@@ -814,11 +954,11 @@ public class SharpTSInt32Array : SharpTSTypedArray
 
     public SharpTSInt32Array(int length) : base(length) { }
     public SharpTSInt32Array(SharpTSSharedArrayBuffer buffer, int byteOffset = 0, int? length = null)
-        : base(buffer, byteOffset, length ?? (buffer.ByteLength - byteOffset) / 4) { }
+        : base(buffer, byteOffset, GetViewLength(buffer.ByteLength, byteOffset, length, 4)) { }
     public SharpTSInt32Array(SharpTSArrayBuffer buffer, int byteOffset = 0, int? length = null)
-        : base(buffer, byteOffset, length ?? (buffer.ByteLength - byteOffset) / 4) { }
+        : base(buffer, byteOffset, GetViewLength(buffer.ByteLength, byteOffset, length, 4)) { }
     public SharpTSInt32Array(byte[] buffer, int byteOffset = 0, int? length = null)
-        : base(buffer, byteOffset, length ?? (buffer.Length - byteOffset) / 4) { }
+        : base(buffer, byteOffset, GetViewLength(buffer.Length, byteOffset, length, 4)) { }
 
     public override object? this[int index]
     {
@@ -880,11 +1020,11 @@ public class SharpTSUint32Array : SharpTSTypedArray
 
     public SharpTSUint32Array(int length) : base(length) { }
     public SharpTSUint32Array(SharpTSSharedArrayBuffer buffer, int byteOffset = 0, int? length = null)
-        : base(buffer, byteOffset, length ?? (buffer.ByteLength - byteOffset) / 4) { }
+        : base(buffer, byteOffset, GetViewLength(buffer.ByteLength, byteOffset, length, 4)) { }
     public SharpTSUint32Array(SharpTSArrayBuffer buffer, int byteOffset = 0, int? length = null)
-        : base(buffer, byteOffset, length ?? (buffer.ByteLength - byteOffset) / 4) { }
+        : base(buffer, byteOffset, GetViewLength(buffer.ByteLength, byteOffset, length, 4)) { }
     public SharpTSUint32Array(byte[] buffer, int byteOffset = 0, int? length = null)
-        : base(buffer, byteOffset, length ?? (buffer.Length - byteOffset) / 4) { }
+        : base(buffer, byteOffset, GetViewLength(buffer.Length, byteOffset, length, 4)) { }
 
     public override object? this[int index]
     {
@@ -937,11 +1077,11 @@ public class SharpTSFloat32Array : SharpTSTypedArray
 
     public SharpTSFloat32Array(int length) : base(length) { }
     public SharpTSFloat32Array(SharpTSSharedArrayBuffer buffer, int byteOffset = 0, int? length = null)
-        : base(buffer, byteOffset, length ?? (buffer.ByteLength - byteOffset) / 4) { }
+        : base(buffer, byteOffset, GetViewLength(buffer.ByteLength, byteOffset, length, 4)) { }
     public SharpTSFloat32Array(SharpTSArrayBuffer buffer, int byteOffset = 0, int? length = null)
-        : base(buffer, byteOffset, length ?? (buffer.ByteLength - byteOffset) / 4) { }
+        : base(buffer, byteOffset, GetViewLength(buffer.ByteLength, byteOffset, length, 4)) { }
     public SharpTSFloat32Array(byte[] buffer, int byteOffset = 0, int? length = null)
-        : base(buffer, byteOffset, length ?? (buffer.Length - byteOffset) / 4) { }
+        : base(buffer, byteOffset, GetViewLength(buffer.Length, byteOffset, length, 4)) { }
 
     public override object? this[int index]
     {
@@ -994,11 +1134,11 @@ public class SharpTSFloat64Array : SharpTSTypedArray
 
     public SharpTSFloat64Array(int length) : base(length) { }
     public SharpTSFloat64Array(SharpTSSharedArrayBuffer buffer, int byteOffset = 0, int? length = null)
-        : base(buffer, byteOffset, length ?? (buffer.ByteLength - byteOffset) / 8) { }
+        : base(buffer, byteOffset, GetViewLength(buffer.ByteLength, byteOffset, length, 8)) { }
     public SharpTSFloat64Array(SharpTSArrayBuffer buffer, int byteOffset = 0, int? length = null)
-        : base(buffer, byteOffset, length ?? (buffer.ByteLength - byteOffset) / 8) { }
+        : base(buffer, byteOffset, GetViewLength(buffer.ByteLength, byteOffset, length, 8)) { }
     public SharpTSFloat64Array(byte[] buffer, int byteOffset = 0, int? length = null)
-        : base(buffer, byteOffset, length ?? (buffer.Length - byteOffset) / 8) { }
+        : base(buffer, byteOffset, GetViewLength(buffer.Length, byteOffset, length, 8)) { }
 
     public override object? this[int index]
     {
@@ -1051,11 +1191,11 @@ public class SharpTSBigInt64Array : SharpTSTypedArray
 
     public SharpTSBigInt64Array(int length) : base(length) { }
     public SharpTSBigInt64Array(SharpTSSharedArrayBuffer buffer, int byteOffset = 0, int? length = null)
-        : base(buffer, byteOffset, length ?? (buffer.ByteLength - byteOffset) / 8) { }
+        : base(buffer, byteOffset, GetViewLength(buffer.ByteLength, byteOffset, length, 8)) { }
     public SharpTSBigInt64Array(SharpTSArrayBuffer buffer, int byteOffset = 0, int? length = null)
-        : base(buffer, byteOffset, length ?? (buffer.ByteLength - byteOffset) / 8) { }
+        : base(buffer, byteOffset, GetViewLength(buffer.ByteLength, byteOffset, length, 8)) { }
     public SharpTSBigInt64Array(byte[] buffer, int byteOffset = 0, int? length = null)
-        : base(buffer, byteOffset, length ?? (buffer.Length - byteOffset) / 8) { }
+        : base(buffer, byteOffset, GetViewLength(buffer.Length, byteOffset, length, 8)) { }
 
     public override object? this[int index]
     {
@@ -1124,11 +1264,11 @@ public class SharpTSBigUint64Array : SharpTSTypedArray
 
     public SharpTSBigUint64Array(int length) : base(length) { }
     public SharpTSBigUint64Array(SharpTSSharedArrayBuffer buffer, int byteOffset = 0, int? length = null)
-        : base(buffer, byteOffset, length ?? (buffer.ByteLength - byteOffset) / 8) { }
+        : base(buffer, byteOffset, GetViewLength(buffer.ByteLength, byteOffset, length, 8)) { }
     public SharpTSBigUint64Array(SharpTSArrayBuffer buffer, int byteOffset = 0, int? length = null)
-        : base(buffer, byteOffset, length ?? (buffer.ByteLength - byteOffset) / 8) { }
+        : base(buffer, byteOffset, GetViewLength(buffer.ByteLength, byteOffset, length, 8)) { }
     public SharpTSBigUint64Array(byte[] buffer, int byteOffset = 0, int? length = null)
-        : base(buffer, byteOffset, length ?? (buffer.Length - byteOffset) / 8) { }
+        : base(buffer, byteOffset, GetViewLength(buffer.Length, byteOffset, length, 8)) { }
 
     public override object? this[int index]
     {

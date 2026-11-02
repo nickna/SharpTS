@@ -1,5 +1,6 @@
 using System.Reflection;
 using System.Reflection.Emit;
+using System.Reflection.Metadata;
 
 namespace SharpTS.Compilation;
 
@@ -14,6 +15,7 @@ internal sealed class NativeTypedArrayBufferLookup
     private readonly List<(MethodBuilder Factory, ILGenerator Body, int Offset, ConstructorBuilder Constructor)> _factories = [];
     private readonly List<(ConstructorBuilder Constructor, ILGenerator Body, int Offset)> _queries = [];
     private (TypeBuilder Owner, ConstructorBuilder Constructor, MethodBuilder Getter, ILGenerator Body)? _declaration;
+    private NativeTaskSourceBufferProof? _taskSourceProof;
 
     internal NativeTypedArrayBufferLookup(ModuleBuilder module, TypeProvider types)
     {
@@ -29,6 +31,21 @@ internal sealed class NativeTypedArrayBufferLookup
     internal bool UsesLegacy => _blockers.Count != 0;
     internal IReadOnlyList<string> Blockers => _blockers.AsReadOnly();
     internal IReadOnlyList<Type> Owners { get; private set; } = [];
+
+    internal NativeTaskSourceBufferProof BeginTaskSourceProof(MethodBuilder method)
+    {
+        EnsureMutable();
+        if (_taskSourceProof is not null) throw new InvalidOperationException("The actual task-source body may be recorded only once.");
+        return _taskSourceProof = new(_owner.Module as ModuleBuilder ?? throw new InvalidOperationException(), _types, method);
+    }
+
+    internal void ValidateImage(byte[] image)
+    {
+        if (!IsComplete) throw new InvalidOperationException("Typed-array buffer lookup emission is incomplete.");
+        if (_taskSourceProof is null) return;
+        using var pe = new System.Reflection.PortableExecutable.PEReader(new MemoryStream(image, writable: false));
+        _taskSourceProof.ValidateImage(pe, pe.GetMetadataReader());
+    }
 
     internal void ValidateForEmitter(ModuleBuilder module, bool native)
     {
@@ -79,6 +96,7 @@ internal sealed class NativeTypedArrayBufferLookup
         _blockers.AddRange(sources.Blockers);
         if (runtime.Deployment.Requirements != SharpTSRuntimeRequirements.None)
             _blockers.Add("The output still requires a foreign managed runtime bridge");
+        _taskSourceProof?.Complete(runtime);
         var owners = new HashSet<Type>();
         if (runtime.NativePrototypeFields is not { IsComplete: true } allocations)
             _blockers.Add("Actual allocation/activation producers have not completed");
@@ -90,7 +108,10 @@ internal sealed class NativeTypedArrayBufferLookup
             if (!ReferenceEquals(unproved.Module, _owner.Module))
                 throw new InvalidOperationException("Unproved result evidence must belong to this exact output.");
             foreach (var result in unproved.Producers)
+            {
+                if (_taskSourceProof?.Claims(result) == true) continue;
                 _blockers.Add($"Unproved actual carrier result: {result.Producer.DeclaringType?.FullName}.{result.Producer.Name}");
+            }
             foreach (var type in allocations.Owners)
             {
                 // The unchanged caller rejects every other exact CLR Name before

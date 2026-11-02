@@ -28,8 +28,12 @@ public partial class TypeChecker
     /// <param name="baseName">The generic type name (e.g., "Promise", "Box").</param>
     /// <param name="typeArgs">The type arguments as TypeInfo objects.</param>
     /// <returns>The resolved type.</returns>
-    private TypeInfo ResolveGenericType(string baseName, List<TypeInfo> typeArgs)
+    private TypeInfo ResolveGenericType(string baseName, List<TypeInfo> typeArgs) =>
+        ResolveGenericType(baseName, typeArgs, out _);
+
+    private TypeInfo ResolveGenericType(string baseName, List<TypeInfo> typeArgs, out bool intrinsic)
     {
+        intrinsic = true;
         TypeInfo result;
 
         // Handle built-in generic types
@@ -298,6 +302,7 @@ public partial class TypeChecker
         }
         else
         {
+            intrinsic = false;
             // Check for generic type alias first
             var genericAlias = _environment.GetGenericTypeAlias(baseName);
             if (genericAlias != null)

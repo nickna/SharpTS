@@ -297,6 +297,8 @@ public partial class Interpreter
         return RuntimeValue.FromBoxed(await AwaitPreservingEnvironment(completion.Task));
     }
 
+    private InterpreterSynchronizationContext? _nativeAwaitRegistrationContext;
+
     private Task<object?> QueueNativeAwait(Task<object?> task)
     {
         // A native Await reaction becomes eligible only when its input settles.
@@ -306,12 +308,31 @@ public partial class Interpreter
         if (task.IsCompleted)
             EnqueuePromiseJob(() => TransferCompletion(task, completion));
         else
-            _ = task.ContinueWith(
-                settled => EnqueuePromiseJob(() => TransferCompletion(settled, completion)),
-                CancellationToken.None,
-                TaskContinuationOptions.ExecuteSynchronously,
-                TaskScheduler.Default);
+        {
+            RegisterNativeTaskContinuation(task, () => TransferCompletion(task, completion));
+        }
         return completion.Task;
+    }
+
+    private void RegisterNativeTaskContinuation(Task<object?> task, Action continuation)
+    {
+        // A task with RunContinuationsAsynchronously can delay a default-
+        // scheduler continuation until after the loop observes quiescence.
+        // A separate registration context targets the same owner queue but
+        // is never current while jobs run. This also forces Post when an
+        // ordinary task settles inside an owner job, preserving one queued
+        // Await reaction instead of resuming inside its producer.
+        var previousContext = InstallEventLoopSyncContext();
+        try
+        {
+            _nativeAwaitRegistrationContext ??= new InterpreterSynchronizationContext(EnqueuePromiseJob);
+            SynchronizationContext.SetSynchronizationContext(_nativeAwaitRegistrationContext);
+            task.GetAwaiter().OnCompleted(continuation);
+        }
+        finally
+        {
+            SynchronizationContext.SetSynchronizationContext(previousContext);
+        }
     }
 
     /// <summary>
@@ -1029,9 +1050,7 @@ public partial class Interpreter
             if (index is SharpTSSymbol symbol)
                 return new IndexTarget.ArraySymbol(array, symbol);
             string key = ToPropertyKeyString(index);
-            if (long.TryParse(key, System.Globalization.NumberStyles.None,
-                    System.Globalization.CultureInfo.InvariantCulture, out long parsed)
-                && parsed >= 0 && parsed <= SharpTSArray.MaxWriteIndex)
+            if (PropertySemantics.TryGetArrayIndex(key, out uint parsed))
             {
                 return new IndexTarget.Array(array, parsed);
             }
@@ -1235,6 +1254,13 @@ public partial class Interpreter
 
         if (HasArrayObjectKey(obj, index))
             index = ToPropertyKey(index);
+        if (obj is SharpTSTypedArray numericTypedArray
+            && (index is double || RuntimeValue.FromBoxed(index).IsObject
+                || index is string && !IsTypedArrayOrdinaryReferenceKey(index)))
+            return RuntimeValue.FromBoxed(
+                ReadTypedArrayReferenceValue(numericTypedArray, ToPropertyKey(index)));
+        if (obj is SharpTSTypedArray && index is SharpTSSymbol typedArraySymbol)
+            return RuntimeValue.FromBoxed(GetSymbolPropertyValue(obj, typedArraySymbol));
         // Proxy: intercept index access via get trap
         if (obj is SharpTSProxy proxy)
         {
@@ -1263,7 +1289,8 @@ public partial class Interpreter
             }
         }
 
-        if (obj is ISharpTSOwnPropertyObject or SharpTSObjectNamespace or SharpTSPromise { HasExplicitPrototype: true })
+        if (obj is ISharpTSOwnPropertyObject or SharpTSObjectNamespace or SharpTSObjectPrototype
+            or SharpTSPromise { HasExplicitPrototype: true } || UsesPrimitivePrototypePropertyReads(obj))
         {
             object key = ToPropertyKey(index);
             return RuntimeValue.FromBoxed(key is SharpTSSymbol symbol
@@ -1682,7 +1709,31 @@ public partial class Interpreter
             return RuntimeValue.FromBoxed(value);
         }
 
-        if (obj is ISharpTSOwnPropertyObject or SharpTSPromise { HasExplicitPrototype: true })
+        if (UsesExplicitPrimitivePrototypeLink(obj) && index is string or SharpTSSymbol)
+        {
+            SetOwnPropertyObjectValue(obj!, index, value, strictMode);
+            return RuntimeValue.FromBoxed(value);
+        }
+
+        if (obj is SharpTSTypedArray numericTypedArray
+            && (index is double || RuntimeValue.FromBoxed(index).IsObject
+                || index is string && !IsTypedArrayOrdinaryReferenceKey(index)))
+        {
+            WriteTypedArrayReferenceValue(
+                numericTypedArray, ToPropertyKey(index), value, strictMode);
+            return RuntimeValue.FromBoxed(value);
+        }
+
+        if (obj is SharpTSTypedArray typedArray && (index is SharpTSSymbol
+            || index is string namedKey && (typedArray.UsesOrdinaryNamedPropertyLookup(namedKey)
+                || SharpTSTypedArray.IsOrdinaryNamedPropertyKey(namedKey))))
+        {
+            SetOwnPropertyObjectValue(typedArray, index, value, strictMode);
+            return RuntimeValue.FromBoxed(value);
+        }
+
+        if (obj is ISharpTSOwnPropertyObject or SharpTSObjectPrototype
+            or SharpTSPromise { HasExplicitPrototype: true })
         {
             SetOwnPropertyObjectValue(obj, ToPropertyKey(index), value, strictMode);
             return RuntimeValue.FromBoxed(value);
@@ -1749,6 +1800,8 @@ public partial class Interpreter
                 ISharpTSPrimitiveConstructor symbolConstructor => symbolConstructor.GetOwnPropertyDescriptor(bagSymbol)
                     ?? FindInheritedSymbolDescriptor(symbolConstructor, bagSymbol),
                 SharpTSFunctionPrototype functionPrototype => functionPrototype.GetOwnPropertyDescriptor(bagSymbol),
+                SharpTSNumberPrototype numberPrototype => numberPrototype.GetOwnSymbolPropertyDescriptor(bagSymbol),
+                SharpTSBooleanPrototype booleanPrototype => booleanPrototype.GetOwnSymbolPropertyDescriptor(bagSymbol),
                 _ => null
             };
             if (!TryAssignThroughDescriptor(descriptor, obj, bagSymbol.ToString(), value, strictMode))
@@ -1818,6 +1871,12 @@ public partial class Interpreter
             return RuntimeValue.FromBoxed(value);
         }
 
+        if (index is not SharpTSSymbol && UsesNonextensibleBuiltInPrototypeWrite(obj))
+        {
+            SetOwnPropertyObjectValue(obj!, PropertyKeyConverter.ToPropertyKeyString(index), value, strictMode);
+            return RuntimeValue.FromBoxed(value);
+        }
+
         // Number/Boolean/String.prototype are mutable ordinary objects — allow
         // bracket assignment (`Number.prototype[0] = 1`, `Number.prototype.length = 1`).
         if (obj is SharpTSNumberPrototype numProto)
@@ -1835,7 +1894,11 @@ public partial class Interpreter
             if (index is SharpTSSymbol stringSymbol)
                 strProto.SetBySymbolStrict(stringSymbol, value, strictMode);
             else
-                strProto.SetExtra(PropertyKeyConverter.ToPropertyKeyString(index), value);
+            {
+                string key = PropertyKeyConverter.ToPropertyKeyString(index);
+                if (!TryAssignThroughDescriptor(strProto.GetOwnPropertyDescriptor(key), strProto, key, value, strictMode))
+                    strProto.SetExtra(key, value);
+            }
             return RuntimeValue.FromBoxed(value);
         }
         if (obj is SharpTSArrayPrototype arrayProto)
@@ -2130,7 +2193,9 @@ public partial class Interpreter
                 break;
 
             case IndexTarget.BuiltInPrototypeString t:
-                if (t.Target is SharpTSClassPrototype classPrototype)
+                if (UsesNonextensibleBuiltInPrototypeWrite(t.Target))
+                    SetOwnPropertyObjectValue(t.Target, t.Key, value, strictMode);
+                else if (t.Target is SharpTSClassPrototype classPrototype)
                     SetClassPrototypeProperty(classPrototype, t.Key, value, strictMode);
                 else if (t.Target is not ISharpTSPrimitiveConstructor indexedConstructor
                     || !TryAssignThroughDescriptor(indexedConstructor.GetOwnPropertyDescriptor(t.Key),

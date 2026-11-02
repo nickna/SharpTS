@@ -156,7 +156,8 @@ public partial class RuntimeEmitter
             runtime.BeginSetEmission();
         if (features.UsesJSON)
             runtime.Json.BeginImplementationEmission();
-        if (features.UsesReflect || features.UsesProxy || features.UsesVm)
+        if (features.UsesReflect || features.UsesProxy || features.UsesVm
+            || features.HasAnyTypedArray && features.UsesPropertyWrites)
             runtime.Reflect.BeginAssignmentEmission();
         if (features.UsesReflect)
             runtime.Reflect.BeginNamespaceEmission();

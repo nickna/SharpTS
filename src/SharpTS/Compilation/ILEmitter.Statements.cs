@@ -154,6 +154,7 @@ public partial class ILEmitter
             {
                 EmitExpression(v.Initializer);
                 EmitBoxIfNeeded(v.Initializer);
+                EmitObservePublishedPromiseValue();
                 EmitStoreAssignmentLoopVariable(v.Name.Lexeme);
             }
             return;
@@ -208,6 +209,7 @@ public partial class ILEmitter
                 {
                     EmitExpression(v.Initializer);
                     EmitBoxIfNeeded(v.Initializer);
+                    EmitObservePublishedPromiseValue();
                 }
                 else if (v.TypeAnnotation == "number")
                 {
@@ -243,6 +245,7 @@ public partial class ILEmitter
                     {
                         EmitExpression(v.Initializer);
                         EmitBoxIfNeeded(v.Initializer);
+                        EmitObservePublishedPromiseValue();
                     }
                     IL.Emit(OpCodes.Stsfld, staticField);
                 }
@@ -280,6 +283,7 @@ public partial class ILEmitter
                 {
                     EmitExpression(v.Initializer);
                     EmitBoxIfNeeded(v.Initializer);
+                    EmitObservePublishedPromiseValue();
                 }
             }
             else if (v.TypeAnnotation == "number")
@@ -309,6 +313,7 @@ public partial class ILEmitter
             {
                 EmitExpression(v.Initializer);
                 EmitBoxIfNeeded(v.Initializer);
+                EmitObservePublishedPromiseValue();
             }
             else if (v.TypeAnnotation == "number")
             {
@@ -336,6 +341,7 @@ public partial class ILEmitter
             {
                 EmitExpression(v.Initializer);
                 EmitBoxIfNeeded(v.Initializer);
+                EmitObservePublishedPromiseValue();
             }
             else
             {
@@ -652,6 +658,7 @@ public partial class ILEmitter
                 {
                     // Ensure we have a boxed object on stack
                     EmitBoxIfNeeded(v.Initializer);
+                    EmitObservePublishedPromiseValue();
                 }
             }
             IL.Emit(OpCodes.Stloc, local);
@@ -1264,8 +1271,11 @@ public partial class ILEmitter
 
         var inRange = EmitInt32StencilRangeTest(backing, centerIndex);
         EmitInt64AccumulatorStore(accumulatorDouble, accumulatorInteger);
-        IL.Emit(OpCodes.Newobj, _ctx.Types.GetDefaultConstructor(typeof(IndexOutOfRangeException)));
-        IL.Emit(OpCodes.Throw);
+        // Resume the same iteration in the semantic Number body. Invalid reads
+        // produce NaN there; the stale integer accumulator must never overwrite it.
+        IL.Emit(OpCodes.Ldc_I4_0);
+        IL.Emit(OpCodes.Stloc, fastActive);
+        IL.Emit(OpCodes.Br, slowStart);
         IL.MarkLabel(inRange);
 
         IL.Emit(OpCodes.Ldloc, backing.BufferLocal);
@@ -2116,11 +2126,11 @@ public partial class ILEmitter
             var arrLocal = _ctx.Locals.GetLocal(varName);
             if (arrLocal == null) continue; // captured / not a plain local — leave to the per-access path
 
-            // castclass (not isinst) mirrors the per-access fast path exactly: the static type is
-            // TypedArray, so a correctly-typed value never throws; null casts to null as before.
+            // An annotation does not prove the runtime carrier. Only the fresh backing proof
+            // may assume the cast succeeds; other hoisted references retain a null brand miss.
             var typedLocal = IL.DeclareLocal(xArrayType);
             IL.Emit(OpCodes.Ldloc, arrLocal);
-            IL.Emit(OpCodes.Castclass, xArrayType);
+            IL.Emit(candidate.CanHoistBacking ? OpCodes.Castclass : OpCodes.Isinst, xArrayType);
             IL.Emit(OpCodes.Stloc, typedLocal);
 
             HoistedTypedArrayBacking? backing = null;
@@ -3367,6 +3377,10 @@ public partial class ILEmitter
     /// </summary>
     internal void InitializeCapturedLexicalTdzBindings(IEnumerable<Stmt> statements)
     {
+        // Ordinary callable bodies are raw lists, rather than EmitBlock scopes.
+        // Their resource cells must exist before hoisted closures are created;
+        // block scopes have already entered these bindings with restoration data.
+        EnterOrdinaryUsingCellScope(statements, [], preserveActiveDeclarations: true);
         RegisterRuntimeClassBindingScopes(statements);
         var names = new HashSet<string>(StringComparer.Ordinal);
         foreach (var statement in statements)
@@ -3500,22 +3514,36 @@ public partial class ILEmitter
     /// <summary>
     /// Emits a block that contains using declarations with proper try/finally disposal.
     /// </summary>
-    private void EmitBlockWithUsing(List<Stmt> statements, List<UsingResourceLocals> usingResources)
+    private void EmitBlockWithUsing(List<Stmt> statements, List<UsingResourceLocals> usingResources,
+        Action<Stmt>? emitStatement = null)
     {
+        emitStatement ??= EmitStatement;
         // Find the first using declaration index
         int firstUsingIndex = statements.FindIndex(s => s is Stmt.Using);
 
         // Emit statements before the first using
         for (int i = 0; i < firstUsingIndex; i++)
         {
-            EmitStatement(statements[i]);
+            emitStatement(statements[i]);
         }
 
         // Now emit using declarations and remaining statements in a try/finally
         var builder = _ctx.ILBuilder;
+        var pending = IL.DeclareLocal(_ctx.Types.Object);
+        var hasPending = IL.DeclareLocal(_ctx.Types.Boolean);
+        var cleanupFailed = IL.DeclareLocal(_ctx.Types.Boolean);
+        IL.Emit(OpCodes.Ldnull);
+        IL.Emit(OpCodes.Stloc, pending);
+        IL.Emit(OpCodes.Ldc_I4_0);
+        IL.Emit(OpCodes.Stloc, hasPending);
+        IL.Emit(OpCodes.Ldc_I4_0);
+        IL.Emit(OpCodes.Stloc, cleanupFailed);
+        _ctx.ExceptionBlockDepth++;
+        builder.BeginExceptionBlock();
         _ctx.ExceptionBlockDepth++;
         builder.BeginExceptionBlock();
 
+        _usingCompletionDepth++;
         for (int i = firstUsingIndex; i < statements.Count; i++)
         {
             var stmt = statements[i];
@@ -3528,15 +3556,45 @@ public partial class ILEmitter
             }
             else
             {
-                EmitStatement(stmt);
+                emitStatement(stmt);
             }
         }
+        _usingCompletionDepth--;
+
+        // Keep the original carrier when cleanup succeeds. Its actual guest
+        // value is needed only if a later disposer also fails.
+        builder.BeginCatchBlock(_ctx.Types.Exception);
+        IL.Emit(OpCodes.Call, _ctx.Runtime!.Errors.WrapException);
+        IL.Emit(OpCodes.Stloc, pending);
+        IL.Emit(OpCodes.Ldc_I4_1);
+        IL.Emit(OpCodes.Stloc, hasPending);
+        IL.Emit(OpCodes.Rethrow);
+        builder.EndExceptionBlock();
+        _ctx.ExceptionBlockDepth--;
 
         // Finally block - dispose resources in reverse order
         builder.BeginFinallyBlock();
-        EmitUsingDisposal(usingResources);
+        EmitUsingDisposal(usingResources, pending, hasPending, cleanupFailed);
+        var noCleanupFailure = IL.DefineLabel();
+        IL.Emit(OpCodes.Ldloc, cleanupFailed);
+        IL.Emit(OpCodes.Brfalse, noCleanupFailure);
+        IL.Emit(OpCodes.Ldloc, pending);
+        IL.Emit(OpCodes.Call, _ctx.Runtime!.Errors.CreateException);
+        IL.Emit(OpCodes.Throw);
+        IL.MarkLabel(noCleanupFailure);
         builder.EndExceptionBlock();
         _ctx.ExceptionBlockDepth--;
+    }
+
+    internal void EmitTopLevelStatements(List<Stmt> statements, Action<Stmt> emitStatement)
+    {
+        if (statements.Any(statement => statement is Stmt.Using))
+        {
+            InitializeCapturedLexicalTdzBindings(statements);
+            EmitBlockWithUsing(statements, [], emitStatement);
+        }
+        else
+            foreach (var statement in statements) emitStatement(statement);
     }
 
     private readonly record struct UsingResourceLocals(LocalBuilder Resource, LocalBuilder Method, LocalBuilder Registered);
@@ -3544,9 +3602,7 @@ public partial class ILEmitter
     private UsingResourceLocals EmitUsingRegistration(Stmt.UsingBinding binding)
     {
         var runtime = _ctx.Runtime!;
-        var resource = binding.Name is not null
-            ? _ctx.Locals.DeclareLocal(binding.Name.Lexeme, _ctx.Types.Object)
-            : IL.DeclareLocal(_ctx.Types.Object);
+        var resource = IL.DeclareLocal(_ctx.Types.Object);
         var method = IL.DeclareLocal(_ctx.Types.Object);
         var registered = IL.DeclareLocal(_ctx.Types.Boolean);
 
@@ -3563,13 +3619,57 @@ public partial class ILEmitter
             () => IL.Emit(OpCodes.Ldloc, resource),
             () => IL.Emit(OpCodes.Ldloc, method),
             () => IL.Emit(OpCodes.Stloc, method));
+        // Acquisition can invoke a guest getter. Keep the lexical binding in
+        // TDZ until it succeeds, while cleanup retains the exact resource temp.
+        if (binding.Name is { } token && !TryInitializeLexicalShadow(token, resource))
+        {
+            if (_ctx.LexicalCellStorageNames.TryGetValue(token, out var storage)
+                && ReferenceEquals(_ctx.LoopBodyCellDeclarations.GetValueOrDefault(storage), token))
+            {
+                IL.Emit(OpCodes.Ldloc, resource);
+                TryInitializeLexicalCell(token);
+            }
+            else
+            {
+                var local = _ctx.Locals.GetCurrentScopeLocal(token.Lexeme)
+                    ?? _ctx.Locals.DeclareLocal(token.Lexeme, _ctx.Types.Object, token);
+                IL.Emit(OpCodes.Ldloc, resource);
+                IL.Emit(OpCodes.Stloc, local);
+                RefreshLexicalCaptureSnapshots(token.Lexeme, local);
+            }
+        }
+        if (binding.Name is { } topLevelName && _ctx.IsModuleTopLevel && !_ctx.Locals.IsInNestedScope)
+            PublishTopLevelUsingResource(topLevelName, resource);
         IL.Emit(OpCodes.Ldc_I4_1);
         IL.Emit(OpCodes.Stloc, registered);
         return new(resource, method, registered);
     }
 
+    private void PublishTopLevelUsingResource(Token token, LocalBuilder resource)
+    {
+        if (_ctx.CapturedTopLevelVars?.Contains(token.Lexeme) == true
+            && _ctx.EntryPointDisplayClassFields?.TryGetValue(token.Lexeme, out var displayField) == true
+            && (_ctx.EntryPointDisplayClassLocal is not null || _ctx.EntryPointDisplayClassStaticField is not null))
+        {
+            if (_ctx.EntryPointDisplayClassLocal is { } display)
+                IL.Emit(OpCodes.Ldloc, display);
+            else
+                IL.Emit(OpCodes.Ldsfld, _ctx.EntryPointDisplayClassStaticField!);
+            IL.Emit(OpCodes.Ldloc, resource);
+            IL.Emit(OpCodes.Stfld, displayField);
+        }
+        else if (_ctx.TopLevelStaticVars?.TryGetValue(token.Lexeme, out var staticField) == true)
+        {
+            IL.Emit(OpCodes.Ldloc, resource);
+            IL.Emit(OpCodes.Stsfld, staticField);
+        }
+        else return;
+        _ctx.EmitMarkTopLevelLexicalInitialized(IL, token.Lexeme);
+    }
+
     /// <summary>Invokes registered disposers in reverse order without another lookup.</summary>
-    private void EmitUsingDisposal(List<UsingResourceLocals> resources)
+    private void EmitUsingDisposal(List<UsingResourceLocals> resources,
+        LocalBuilder pending, LocalBuilder hasPending, LocalBuilder cleanupFailed)
     {
         // Retiring the whole scope before invoking user code prevents unreached
         // declarations on a later loop iteration from disposing stale resources.
@@ -3592,9 +3692,30 @@ public partial class ILEmitter
             var done = IL.DefineLabel();
             IL.Emit(OpCodes.Ldloc, registrations[i]);
             IL.Emit(OpCodes.Brfalse, done);
+            IL.BeginExceptionBlock();
             UsingResourceEmitter.Dispose(IL, _ctx.Types, _ctx.Runtime!,
                 () => IL.Emit(OpCodes.Ldloc, resource.Resource),
                 () => IL.Emit(OpCodes.Ldloc, resource.Method));
+            IL.BeginCatchBlock(_ctx.Types.Exception);
+            IL.Emit(OpCodes.Call, _ctx.Runtime!.Errors.WrapException);
+            var failure = IL.DeclareLocal(_ctx.Types.Object);
+            IL.Emit(OpCodes.Stloc, failure);
+            var firstFailure = IL.DefineLabel();
+            var storeFailure = IL.DefineLabel();
+            IL.Emit(OpCodes.Ldloc, hasPending);
+            IL.Emit(OpCodes.Brfalse, firstFailure);
+            UsingResourceEmitter.CombineFailure(IL, _ctx.Types, _ctx.Runtime!,
+                () => IL.Emit(OpCodes.Ldloc, failure), () => IL.Emit(OpCodes.Ldloc, pending));
+            IL.Emit(OpCodes.Br, storeFailure);
+            IL.MarkLabel(firstFailure);
+            IL.Emit(OpCodes.Ldloc, failure);
+            IL.MarkLabel(storeFailure);
+            IL.Emit(OpCodes.Stloc, pending);
+            IL.Emit(OpCodes.Ldc_I4_1);
+            IL.Emit(OpCodes.Stloc, hasPending);
+            IL.Emit(OpCodes.Ldc_I4_1);
+            IL.Emit(OpCodes.Stloc, cleanupFailed);
+            IL.EndExceptionBlock();
             IL.MarkLabel(done);
         }
     }
@@ -4543,6 +4664,15 @@ public partial class ILEmitter
     protected override bool IsSwitchDefaultUnreachable(Stmt.Switch statement)
         => _ctx.DeadCode?.GetSwitchResult(statement)?.DefaultIsUnreachable == true;
 
+    private void EmitOrdinaryHandlerStatements(List<Stmt> statements) =>
+        WithGeneratorLexicalScope(statements, () => EmitOrdinaryHandlerBody(statements), ordinaryHandler: true);
+
+    private void EmitOrdinaryHandlerBody(List<Stmt> statements)
+    {
+        if (statements.Any(statement => statement is Stmt.Using)) EmitStatements(statements);
+        else foreach (var statement in statements) EmitStatement(statement);
+    }
+
     protected override void EmitTryCatch(Stmt.TryCatch t)
     {
         if (t.FinallyBlock != null)
@@ -4571,10 +4701,11 @@ public partial class ILEmitter
             catchValue,
             catchBody,
             _abruptCompletionScopes.Count,
-            _iteratorLoopCompletionScopes.Count));
+            _iteratorLoopCompletionScopes.Count,
+            _usingCompletionDepth));
         try
         {
-            EmitGeneratorScopedStatements(t.TryBlock, ordinaryHandler: true);
+            EmitOrdinaryHandlerStatements(t.TryBlock);
         }
         finally
         {
@@ -4606,7 +4737,7 @@ public partial class ILEmitter
             {
                 if (t.CatchParam != null && !TryInitializeGeneratorCatchBinding(t.CatchParam, catchValue, ordinaryHandler: true))
                     _ctx.Locals.RegisterLocal(t.CatchParam.Lexeme, catchValue);
-                foreach (var stmt in t.CatchBlock) EmitStatement(stmt);
+                EmitOrdinaryHandlerBody(t.CatchBlock);
             }, t, t.CatchParam, ordinaryHandler: true);
         }
         finally
@@ -4660,7 +4791,7 @@ public partial class ILEmitter
         {
             _ctx.ExceptionBlockDepth++;
             builder.BeginExceptionBlock();
-            EmitGeneratorScopedStatements(t.TryBlock, ordinaryHandler: true);
+            EmitOrdinaryHandlerStatements(t.TryBlock);
 
             builder.BeginCatchBlock(_ctx.Types.Exception);
             _ctx.Locals.EnterScope();
@@ -4681,7 +4812,7 @@ public partial class ILEmitter
                 {
                     if (t.CatchParam != null && !TryInitializeGeneratorCatchBinding(t.CatchParam, caught!, ordinaryHandler: true))
                         _ctx.Locals.RegisterLocal(t.CatchParam.Lexeme, caught!);
-                    foreach (var stmt in t.CatchBlock) EmitStatement(stmt);
+                    EmitOrdinaryHandlerBody(t.CatchBlock);
                 }, t, t.CatchParam, ordinaryHandler: true);
             }
             finally
@@ -4693,7 +4824,7 @@ public partial class ILEmitter
         }
         else
         {
-            EmitGeneratorScopedStatements(t.TryBlock, ordinaryHandler: true);
+            EmitOrdinaryHandlerStatements(t.TryBlock);
         }
 
         builder.Emit_Leave(runFinally);
@@ -4707,7 +4838,7 @@ public partial class ILEmitter
 
         _abruptCompletionScopes.Pop();
         builder.MarkLabel(runFinally);
-        EmitGeneratorScopedStatements(t.FinallyBlock!, ordinaryHandler: true);
+        EmitOrdinaryHandlerStatements(t.FinallyBlock!);
 
         // A normal finally preserves and resumes the pending completion.
         IL.Emit(OpCodes.Ldloc, kind);
@@ -4763,7 +4894,8 @@ public partial class ILEmitter
     {
         if (_localThrowScopes.TryPeek(out var localThrow) &&
             localThrow.AbruptCompletionDepth == _abruptCompletionScopes.Count &&
-            localThrow.IteratorCompletionDepth == _iteratorLoopCompletionScopes.Count)
+            localThrow.IteratorCompletionDepth == _iteratorLoopCompletionScopes.Count &&
+            localThrow.UsingCompletionDepth == _usingCompletionDepth)
         {
             EmitExpression(t.Value);
             EmitBoxIfNeeded(t.Value);

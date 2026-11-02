@@ -84,6 +84,9 @@ public partial class Interpreter
 
     internal async Task<ExecutionResult> ExecuteBlockAsync(List<Stmt> statements, RuntimeEnvironment environment)
     {
+        if (statements.Any(statement => statement is Stmt.Using))
+            return await ExecuteUsingHandlerBlockCore(new AsyncEvaluationContext(this), statements, environment);
+
         using (PushScope(environment))
         {
             ReserveLexicalDeclarations(statements);
@@ -718,6 +721,7 @@ public partial class Interpreter
         if (varStmt.IsVar && varStmt.Initializer is null && target.IsDefinedLocally(varStmt.Name.Lexeme))
             return ExecutionResult.Success();
         target.Define(varStmt.Name.Lexeme, value);
+        ObserveDiscardedReactionResult(value);
         return ExecutionResult.Success();
     }
 
@@ -725,6 +729,7 @@ public partial class Interpreter
     {
         object? constValue = (await EvaluateVariableInitializerCore(_asyncContext, constStmt.Initializer, constStmt.Name)).ToObject();
         _environment.Define(constStmt.Name.Lexeme, constValue);
+        ObserveDiscardedReactionResult(constValue);
         return ExecutionResult.Success();
     }
 
@@ -827,6 +832,7 @@ public partial class Interpreter
             AssignVariableValue(assign.Name, rv);
         }
 
+        ObserveDiscardedReactionResult(value);
         return rv;
     }
 

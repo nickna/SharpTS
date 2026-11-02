@@ -640,6 +640,15 @@ public abstract partial class ExpressionEmitterBase
         SetStackUnknown();
     }
 
+    public virtual void EmitRuntimeStringReceiverCall(Expr receiver, string methodName, List<Expr> arguments)
+    {
+        EmitExpression(receiver);
+        EnsureBoxed();
+        var local = _helpers.SpillStoreObject();
+        EmitGetPropertyAndInvoke(local, methodName, arguments);
+        SetStackUnknown();
+    }
+
     protected void EmitGetPropertyAndInvoke(LocalBuilder objLocal, string methodName, List<Expr> arguments, LocalBuilder[]? argLocals = null)
     {
         // ECMA-262 §13.3.2.1: evaluating the member-access callee `recv.method`
@@ -925,7 +934,10 @@ public abstract partial class ExpressionEmitterBase
 
     private void EmitRestParameterCall(List<Expr> arguments, int regularCount, ParameterInfo[] targetParams, bool allowNumericStorage = false)
     {
-        allowNumericStorage &= !arguments.Any(argument => Ctx.TypeMap?.IsUndefinedReachableReturn(argument) == true);
+        // Spread elements enter the adaptive builder individually. A raw spread
+        // wrapper does not require boxed storage when its actual elements are numeric.
+        allowNumericStorage &= !arguments.Any(argument => argument is not Expr.Spread
+            && Ctx.TypeMap?.IsUndefinedReachableReturn(argument) == true);
         bool hasSpreads = arguments.Any(a => a is Expr.Spread);
         if (hasSpreads)
         {
@@ -2406,7 +2418,7 @@ public abstract partial class ExpressionEmitterBase
     {
         EmitBoxedArgOrNull(arguments, 0);
         EmitBoxedArgOrNull(arguments, 1);
-        IL.Emit(OpCodes.Call, Ctx.Runtime!.StructuredClone.Clone);
+        IL.Emit(OpCodes.Call, Ctx.Runtime!.StructuredClone.GuestClone);
     }
 
     protected void EmitFetchCall(List<Expr> arguments)
@@ -2783,7 +2795,7 @@ public abstract partial class ExpressionEmitterBase
                     IL.Emit(OpCodes.Ldnull);
                 // ArrayIncludes already returns a boxed bool — do not re-box
                 // (double-boxing reinterprets the object reference as a bool).
-                IL.Emit(OpCodes.Call, Ctx.Runtime!.ArrayOperations.Includes);
+                IL.Emit(OpCodes.Call, Ctx.Runtime!.ArrayOperations.WithReceiverScope(Ctx.Runtime.ArrayOperations.Includes));
                 break;
             case "indexOf":
             case "lastIndexOf":

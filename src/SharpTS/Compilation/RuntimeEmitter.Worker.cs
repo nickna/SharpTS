@@ -13,7 +13,7 @@ public partial class RuntimeEmitter
     /// <summary>
     /// Emits all Worker-related helper methods into the $Runtime class.
     /// </summary>
-    private void EmitWorkerHelpers(TypeBuilder runtimeType, EmittedRuntime runtime)
+    private void EmitWorkerHelpers(TypeBuilder runtimeType, EmittedRuntime runtime, FieldInfo registeredClassPrototypes)
     {
         // ArrayBuffer / SharedArrayBuffer / DataView / TypedArray constructor
         // helpers + Atomics — gated together on HasAnyTypedArray. Without any
@@ -50,7 +50,13 @@ public partial class RuntimeEmitter
             runtime.Dates.Implementation is not null ? new StructuredCloneDateInputs(runtime.Dates.RequireImplementation().Type, runtime.Dates.RequireImplementation().MillisecondsConstructor, runtime.Dates.RequireImplementation().GetInstanceMethod("GetTime")) : null,
             runtime.RegExps.Implementation is not null ? new StructuredCloneRegExpInputs(runtime.RegExps.RequireImplementation().Type, runtime.RegExps.RequireImplementation().PatternFlagsConstructor,
                 runtime.RegExps.RequireImplementation().SourceGetter, runtime.RegExps.RequireImplementation().FlagsGetter) : null,
-            _features.UsesBuffer ? runtime.RequireBuffer() : null);
+            _features.UsesBuffer ? runtime.RequireBuffer() : null,
+            new StructuredCloneTransferInputs(runtime.ObjectRead.Property, runtime.Operators.TypeOf,
+                GetCollectionConsumerInputs(runtime), _features.UsesStructuredClone || _features.HasAnyTypedArray),
+            _features.UsesUserClasses ? new StructuredCloneClassInputs(runtime.ObjectFields.Interface,
+                registeredClassPrototypes, runtime.ClassInitialization.SourceOwners) : null,
+            new StructuredCloneOwnInputs(runtime.Records.CompactTypes.Count > 0 ? runtime.Records.MarkerInterface : null,
+                runtime.ObjectKeys.Names, runtime.ObjectOwnProperties.IsEnumerable, runtime.ObjectRead.Property));
 
         // worker_threads module helpers
         EmitWorkerThreadsModuleHelpers(runtimeType, runtime.Workers);
@@ -1088,6 +1094,10 @@ public partial class RuntimeEmitter
             il.Emit(OpCodes.Ldarg_0);
             il.Emit(OpCodes.Castclass, arrays.BaseType);
             il.Emit(OpCodes.Stloc, srcTALocal);
+            il.Emit(OpCodes.Ldloc, srcTALocal);
+            il.Emit(OpCodes.Castclass, arrays.BaseType);
+            il.Emit(OpCodes.Call, arrays.GetBuffer);
+            il.Emit(OpCodes.Pop);
             il.Emit(OpCodes.Ldloc, srcTALocal);
             il.Emit(OpCodes.Castclass, arrays.BaseType);
             il.Emit(OpCodes.Callvirt, arrays.LengthGetter);

@@ -1,3 +1,4 @@
+using SharpTS.Tests.Infrastructure;
 using SharpTS.Tests.SharedTests;
 using Xunit;
 
@@ -5,7 +6,7 @@ namespace SharpTS.Tests.CompilerTests;
 
 public partial class StandaloneDllTests
 {
-    [Theory, MemberData(nameof(AsyncLoopBodyCellCaptureTests.Cases), MemberType = typeof(AsyncLoopBodyCellCaptureTests))]
+    [Theory, SerializableMemberData(nameof(AsyncLoopBodyCellCaptureTests.Cases), MemberType = typeof(AsyncLoopBodyCellCaptureTests))]
     public void Isolated_Issue2404AsyncLoopBodyCells_VerifyBeforeExecution(
         string name, Dictionary<string, string> files, string expected)
         => AssertStandaloneAsyncLoopBodyCells(name, files, expected, debug: false);

@@ -405,8 +405,8 @@ public sealed class StableNumericHotPathTests
             console.log(n("10", 1, 2), s(7, 1, 2));
             console.log(n.call(null, "20", 1, 2), s.apply(null, [8, 1]));
             """;
-        // Foreign values crossing typed CLR slots retain the existing compiled ABI.
-        Assert.Equal("13 7:2\n23 8:1\n", TestHarness.Run(source, ExecutionMode.Compiled));
+        // Source calls through any preserve the actual JavaScript argument values.
+        Assert.Equal("1012 7:2\n2012 8:1\n", TestHarness.Run(source, ExecutionMode.Compiled));
     }
 
     internal static MethodInfo FindFunction(Assembly assembly, string name) =>

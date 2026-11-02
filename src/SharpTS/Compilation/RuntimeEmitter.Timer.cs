@@ -834,21 +834,15 @@ public partial class RuntimeEmitter
             queueType, runtime.Vm);
         if (runtime.Vm is not null)
             EmitVmAfterCheckpointQueue(runtimeType, runtime.RequireVm(), microtasks, queueType);
-        EmitHasMicrotasksMethod(runtimeType, microtasks, microtaskQueueField, queueType);
+        EmitHasMicrotasksMethod(microtasks, microtaskQueueField, queueType);
     }
 
     private void EmitHasMicrotasksMethod(
-        TypeBuilder runtimeType,
         EmittedMicrotaskRuntime microtasks,
         FieldBuilder microtaskQueueField,
         Type queueType)
     {
-        var method = runtimeType.DefineMethod(
-            "HasMicrotasks",
-            MethodAttributes.Public | MethodAttributes.Static,
-            _types.Boolean,
-            Type.EmptyTypes);
-        microtasks.HasMicrotasks = method;
+        var method = microtasks.HasMicrotasks;
 
         var il = method.GetILGenerator();
         var none = il.DefineLabel();
