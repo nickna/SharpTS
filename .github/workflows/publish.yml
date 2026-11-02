@@ -195,7 +195,7 @@ jobs:
           -PackageVersion "${{ steps.version.outputs.VERSION }}"
 
       - name: Upload package artifacts
-        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7
         with:
           name: nupkg
           path: ./nupkg/*.nupkg
@@ -229,7 +229,7 @@ jobs:
         timeout-minutes: 35
       - name: Upload standalone shard evidence
         if: always()
-        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7
         with:
           name: release-standalone-${{ matrix.shard }}
           path: artifacts/release-standalone/
@@ -390,7 +390,7 @@ jobs:
             -RequireSigned:($env:REQUIRE_SIGNED -eq 'true') -ResultsDirectory ./archive-smoke-managed
 
       - name: Upload archive artifact
-        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7
         with:
           name: managed-${{ matrix.rid }}
           path: sharpts-${{ needs.build.outputs.version }}-${{ matrix.rid }}.*
@@ -644,7 +644,7 @@ jobs:
             -RequireSigned:($env:REQUIRE_SIGNED -eq 'true') -ResultsDirectory ./archive-smoke-native
 
       - name: Upload archive artifact
-        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7
         with:
           name: native-${{ matrix.rid }}
           path: sharpts-native-${{ needs.build.outputs.version }}-${{ matrix.rid }}.*
@@ -653,7 +653,7 @@ jobs:
 
       - name: Upload publish diagnostics
         if: always()
-        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7
         with:
           # Not "native-<rid>": the release job downloads '{managed,native}-*'
           # as release assets, and diagnostics must not ship in the release.
@@ -686,7 +686,7 @@ jobs:
         with:
           global-json-file: global.json
       - name: Download package artifacts
-        uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8
+        uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333 # v8
         with:
           name: nupkg
           path: ./nupkg
@@ -730,7 +730,7 @@ jobs:
       - name: Restore pinned NuGet availability tool
         run: dotnet tool restore
       - name: Download package artifacts
-        uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8
+        uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333 # v8
         with:
           name: nupkg
           path: ./nupkg
@@ -754,20 +754,20 @@ jobs:
 
     steps:
       - name: Download package artifacts
-        uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8
+        uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333 # v8
         with:
           name: nupkg
           path: ./nupkg
 
       - name: Download managed archive artifacts
-        uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8
+        uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333 # v8
         with:
           pattern: 'managed-*'
           path: ./assets
           merge-multiple: true
 
       - name: Download native archive artifacts
-        uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8
+        uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333 # v8
         with:
           pattern: 'native-*'
           path: ./assets
