@@ -287,6 +287,9 @@ public static class StructuredClone
 
     private static SharpTSTypedArray CloneTypedArray(SharpTSTypedArray source, Dictionary<object, object> cloned, HashSet<object> transferred)
     {
+        if (source.ArrayBuffer?.IsDetached == true)
+            throw new DataCloneError("Cannot clone a detached typed array");
+
         SharpTSTypedArray result;
 
         if (source.IsShared)
