@@ -627,8 +627,9 @@ public partial class RuntimeEmitter
             il.Emit(OpCodes.Brtrue, isBound);
             il.Emit(OpCodes.Ldloc, listenerLocal);
             il.Emit(OpCodes.Castclass, runtime.FunctionValues.Type);
+            il.Emit(OpCodes.Ldarg_0);
             il.Emit(OpCodes.Ldarg_2);
-            il.Emit(OpCodes.Callvirt, runtime.FunctionValues.Invoke);
+            il.Emit(OpCodes.Callvirt, runtime.FunctionValues.InvokeWithThis);
             il.Emit(OpCodes.Br, invokeEnd);
             il.MarkLabel(isBound);
             il.Emit(OpCodes.Ldloc, listenerLocal);
