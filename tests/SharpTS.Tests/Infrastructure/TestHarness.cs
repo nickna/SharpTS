@@ -108,6 +108,48 @@ public static class TestHarness
         };
     }
 
+    /// <summary>Runs a source against an explicitly selected standard declaration surface.</summary>
+    internal static string RunWithLibraries(string source, ExecutionMode mode, TypeScriptProgramOptions options)
+    {
+        (List<ParsedModule> Modules, ModuleResolver Resolver, TypeMap Types) CheckProgram()
+        {
+            var (files, path) = BuildVirtualModuleFs(new() { ["main.ts"] = source }, "main.ts");
+            var resolver = new ModuleResolver(path, files, options);
+            var entry = resolver.LoadProgram(path);
+            var modules = resolver.GetModulesInOrder(entry);
+            return (modules, resolver, CheckModulesOrThrow(new TypeChecker(), modules, resolver));
+        }
+
+        return mode switch
+        {
+            ExecutionMode.Interpreted => RunInterpreterWithTimeout(DefaultTimeout,
+                $"Interpreter execution exceeded {DefaultTimeout.TotalSeconds}s timeout.", interpreter =>
+                {
+                    var program = CheckProgram();
+                    interpreter.EmitProcessLifecycleEvents = true;
+                    interpreter.InterpretModules(program.Modules, program.Resolver, program.Types);
+                }),
+            ExecutionMode.Compiled => RunCompiledWithTimeout(() =>
+            {
+                var program = CheckProgram();
+                var statements = program.Modules.SelectMany(module => module.Statements).ToList();
+                var deadCode = new DeadCodeAnalyzer(program.Types).Analyze(statements);
+                var compiler = new ILCompiler($"library_test_{Guid.NewGuid():N}");
+                compiler.CompileModules(program.Modules, program.Resolver, program.Types, deadCode);
+                var bytes = compiler.SaveToBytes();
+                if (Environment.GetEnvironmentVariable("SHARPTS_VERIFY_COMPILED") == "1")
+                {
+                    var errors = VerifyILBytes(bytes)
+                        .Where(error => !error.Contains("Failed to load assembly")).ToList();
+                    if (errors.Count != 0)
+                        throw new InvalidOperationException("IL verification failed:\n" + string.Join("\n", errors));
+                }
+                return Assembly.Load(bytes);
+            }, DefaultTimeout),
+            _ => throw new ArgumentOutOfRangeException(nameof(mode))
+        };
+    }
+
     /// <summary>
     /// Runs runtime JavaScript regressions without the TypeScript checker. Compiled
     /// programs must pass complete saved-IL verification before they can execute.

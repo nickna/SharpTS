@@ -1,4 +1,5 @@
 using SharpTS.Tests.Infrastructure;
+using SharpTS.Modules;
 using Xunit;
 
 namespace SharpTS.Tests.SharedTests;
@@ -45,6 +46,12 @@ public sealed class TypedArrayDeclaredAnnotationTests
     public void DeclaredAnnotationsPreserveActualValues(string name, string source, string expected, ExecutionMode mode)
     {
         Assert.NotEmpty(name);
-        Assert.Equal(expected, TestHarness.Run(source, mode));
+        // These originals use the generic buffer declarations from their es2022,dom oracle.
+        string output = name is "explicit-buffer-argument" or "buffer-subview-facet"
+            or "shared-buffer-facet" or "copy-allocates-arraybuffer"
+            ? TestHarness.RunWithLibraries(source, mode, TypeScriptProgramOptions.Default with
+                { Lib = ["lib.es2022.d.ts", "lib.dom.d.ts"] })
+            : TestHarness.Run(source, mode);
+        Assert.Equal(expected, output);
     }
 }
