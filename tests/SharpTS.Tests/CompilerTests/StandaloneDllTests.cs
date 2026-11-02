@@ -3742,9 +3742,9 @@ public partial class StandaloneDllTests
         {
             new Dictionary<string, string>
             {
-                ["main.ts"] = "class Value{value=1;}const map=new Map<any,any>();map.set('key',()=>{});const set=new Set<any>([()=>{}]);const values:any[]=[()=>{},Symbol('x'),new Value(),{nested:[()=>{}]},map,set];for(const value of values){try{structuredClone(value);console.log('unexpected');}catch(error:any){console.log(typeof error,error.includes('DataCloneError'));}}"
+                ["main.ts"] = "class Value{value=1;}const map=new Map<any,any>();map.set('key',()=>{});const set=new Set<any>([()=>{}]);const values:any[]=[()=>{},Symbol('x'),new Value(),{nested:[()=>{}]},map,set];for(const value of values){try{const copy:any=structuredClone(value);console.log('cloned',copy.value,Object.getPrototypeOf(copy)===Object.prototype);}catch(error:any){console.log(typeof error,error.name,String(error).includes('DataCloneError'));}}"
             },
-            "string true\nstring true\nstring true\nstring true\nstring true\nstring true\n", "main.ts", true
+            "object DataCloneError true\nobject DataCloneError true\ncloned 1 true\nobject DataCloneError true\nobject DataCloneError true\nobject DataCloneError true\n", "main.ts", true
         },
         new object[]
         {
