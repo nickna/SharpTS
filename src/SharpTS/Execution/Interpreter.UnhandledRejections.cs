@@ -103,6 +103,20 @@ public partial class Interpreter
         }
     }
 
+    private void ObserveDiscardedReactionResult(object? result)
+    {
+        if (result is not SharpTSPromise { IsNativeReactionResult: true } promise) return;
+        var task = promise.Task;
+        void ObserveSettlement()
+        {
+            if (task.IsFaulted) QueueDiscardedRejectionReport(promise);
+        }
+        // Observation does not consume the guest result or keep a pending promise alive.
+        // Existing actual consumers decide handled state at the owner checkpoint.
+        if (task.IsCompleted) ObserveSettlement();
+        else RegisterNativeTaskContinuation(task, ObserveSettlement);
+    }
+
     private void QueueDiscardedRejectionReport(SharpTSPromise promise)
     {
         var exception = promise.Task.Exception!.InnerException ?? promise.Task.Exception!;
@@ -110,7 +124,9 @@ public partial class Interpreter
         {
             // The whole script job can attach a consumer before this checkpoint.
             // Repeated discarded references must not deliver the same rejection twice.
-            if (promise.IsRejectionHandled || _reportedRejections.TryGetValue(promise, out _)) return;
+            if (promise.IsRejectionHandled || promise.HasReportedDiscardedRejection
+                || _reportedRejections.TryGetValue(promise, out _)) return;
+            promise.HasReportedDiscardedRejection = true;
             ReportUnhandledRejection(exception, promise, deliverOnCurrentCheckpoint: true);
         });
     }

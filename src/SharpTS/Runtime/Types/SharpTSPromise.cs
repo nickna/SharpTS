@@ -44,6 +44,12 @@ public class SharpTSPromise : ITypeCategorized, ISharpTSOwnPropertyObject
     // This is a negative report guard, independent of the legacy implicit wait.
     internal bool IsRejectionHandled { get; set; }
 
+    // The owner checkpoint reports a discarded rejection once, with or without listeners.
+    internal bool HasReportedDiscardedRejection { get; set; }
+
+    // Set only by the actual native then/catch/finally result producer.
+    internal bool IsNativeReactionResult { get; set; }
+
     // Own properties installed on a promise instance via Object.defineProperty
     // (and, for subclass instances, declared fields). Base promises have none
     // until user code adds one — a poisoned `constructor` getter

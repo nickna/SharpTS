@@ -309,25 +309,30 @@ public partial class Interpreter
             EnqueuePromiseJob(() => TransferCompletion(task, completion));
         else
         {
-            // A task with RunContinuationsAsynchronously can delay a default-
-            // scheduler continuation until after the loop observes quiescence.
-            // A separate registration context targets the same owner queue but
-            // is never current while jobs run. This also forces Post when an
-            // ordinary task settles inside an owner job, preserving one queued
-            // Await reaction instead of resuming inside its producer.
-            var previousContext = InstallEventLoopSyncContext();
-            try
-            {
-                _nativeAwaitRegistrationContext ??= new InterpreterSynchronizationContext(EnqueuePromiseJob);
-                SynchronizationContext.SetSynchronizationContext(_nativeAwaitRegistrationContext);
-                task.GetAwaiter().OnCompleted(() => TransferCompletion(task, completion));
-            }
-            finally
-            {
-                SynchronizationContext.SetSynchronizationContext(previousContext);
-            }
+            RegisterNativeTaskContinuation(task, () => TransferCompletion(task, completion));
         }
         return completion.Task;
+    }
+
+    private void RegisterNativeTaskContinuation(Task<object?> task, Action continuation)
+    {
+        // A task with RunContinuationsAsynchronously can delay a default-
+        // scheduler continuation until after the loop observes quiescence.
+        // A separate registration context targets the same owner queue but
+        // is never current while jobs run. This also forces Post when an
+        // ordinary task settles inside an owner job, preserving one queued
+        // Await reaction instead of resuming inside its producer.
+        var previousContext = InstallEventLoopSyncContext();
+        try
+        {
+            _nativeAwaitRegistrationContext ??= new InterpreterSynchronizationContext(EnqueuePromiseJob);
+            SynchronizationContext.SetSynchronizationContext(_nativeAwaitRegistrationContext);
+            task.GetAwaiter().OnCompleted(continuation);
+        }
+        finally
+        {
+            SynchronizationContext.SetSynchronizationContext(previousContext);
+        }
     }
 
     /// <summary>

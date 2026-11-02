@@ -1448,6 +1448,7 @@ public partial class Interpreter : IDisposable
                     {
                         DebugController?.OnSafePoint(this, statement, _environment, _currentModule);
                         object? result = Evaluate(exprStmt.Expr);
+                        if (exprStmt.Expr is not Expr.Await) ObserveDiscardedReactionResult(result);
                         // Wait for top-level Promises to complete before continuing
                         if (_waitForTopLevelPromises
                             && result is SharpTSPromise promise
@@ -1739,6 +1740,7 @@ public partial class Interpreter : IDisposable
                 {
                     DebugController?.OnSafePoint(this, stmt, _environment, _currentModule);
                     object? result = Evaluate(exprStmt.Expr);
+                    if (exprStmt.Expr is not Expr.Await) ObserveDiscardedReactionResult(result);
                     if (_waitForTopLevelPromises && result is SharpTSPromise promise
                         && !promise.SuppressImplicitTopLevelWait)
                     {
@@ -1947,6 +1949,7 @@ public partial class Interpreter : IDisposable
                 {
                     DebugController?.OnSafePoint(this, stmt, _environment, _currentModule);
                     object? result = Evaluate(exprStmt.Expr);
+                    if (exprStmt.Expr is not Expr.Await) ObserveDiscardedReactionResult(result);
                     // Wait for top-level Promises to complete before continuing
                     if (_waitForTopLevelPromises && result is SharpTSPromise promise
                         && !promise.SuppressImplicitTopLevelWait)
