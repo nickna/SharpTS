@@ -38,6 +38,8 @@ public partial class TypeChecker
     {
         _preRegisteredInterfaces.Clear();
         _completedInterfaces.Clear();
+        _completedTypeDeclarationScopes.Clear();
+        _resolvedAnnotationTypeNames.Clear();
         _completedInterfaceBindings.Clear();
         _defaultLibraryDataViewType = null;
         ResetTypedArrayDeclarations();

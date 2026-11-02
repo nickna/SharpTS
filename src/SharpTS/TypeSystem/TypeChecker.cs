@@ -1769,6 +1769,7 @@ public partial class TypeChecker
                 // CheckNamespace pre-registers its members inside the namespace scope instead.
             }
         }
+        _completedTypeDeclarationScopes.Add(_environment);
     }
 
     /// <summary>

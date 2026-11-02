@@ -284,6 +284,8 @@ public partial class TypeChecker
             }
         }
 
+        ReportUnknownTypeArgument(stmt.TypeAnnotationNode);
+
         // TS2304: a bare annotation name that resolves to nothing (e.g. `var a: A;` where the
         // only `A` lives in a nested module, invisible here). The preparatory module pass runs in
         // source order, so preserve that result before later namespace declarations populate the
@@ -763,6 +765,7 @@ public partial class TypeChecker
         else if (stmt.TypeAnnotation != null)
         {
             constDeclaredType = ResolveAnnotation(stmt.TypeAnnotation, stmt.TypeAnnotationNode, stmt)!;
+            ReportUnknownTypeArgument(stmt.TypeAnnotationNode);
             if (constDeclaredType is TypeInfo.Any)
                 ReportUnknownTypeName(stmt.TypeAnnotation, stmt.TypeAnnotationNode, stmt.Name.Line);
             _environment.Define(stmt.Name.Lexeme, constDeclaredType);
