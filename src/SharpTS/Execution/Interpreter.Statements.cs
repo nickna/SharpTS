@@ -31,40 +31,66 @@ public partial class Interpreter
     private class UsingTracker
     {
         private readonly Interpreter _interpreter;
-        private readonly List<(object? Resource, bool IsAsync)> _resources = new();
+        private readonly List<(object? Resource, ISharpTSCallable? Method, bool IsAsync, bool AwaitResult)> _resources = new();
 
-        public UsingTracker(Interpreter interpreter) => _interpreter = interpreter;
+        public RuntimeEnvironment OwnerScope { get; }
 
-        public void Add(object? resource, bool isAsync) =>
-            _resources.Add((resource, isAsync));
+        public UsingTracker(Interpreter interpreter, RuntimeEnvironment ownerScope)
+        {
+            _interpreter = interpreter;
+            OwnerScope = ownerScope;
+        }
+
+        public void Add(object? resource, bool isAsync)
+        {
+            var (method, awaitResult) = _interpreter.AcquireUsingDisposeMethod(resource, isAsync);
+            _resources.Add((resource, method, isAsync, awaitResult));
+        }
 
         public bool HasResources => _resources.Count > 0;
 
         /// <summary>
         /// Disposes all resources in reverse order, aggregating errors via SuppressedError.
         /// </summary>
-        /// <param name="pendingError">Any error that occurred in the block before disposal.</param>
-        /// <returns>The final error to throw (original, SuppressedError, or null if no errors).</returns>
-        public object? DisposeAll(object? pendingError)
+        /// <returns>The pending completion, updated only when cleanup fails.</returns>
+        public ExecutionResult DisposeAll(ExecutionResult completion)
         {
-            object? currentError = pendingError;
-
-            // Dispose in reverse order (LIFO)
-            for (int i = _resources.Count - 1; i >= 0; i--)
+            var resources = _resources.ToArray();
+            _resources.Clear();
+            for (int i = resources.Length - 1; i >= 0; i--)
             {
-                var (resource, isAsync) = _resources[i];
+                var (resource, method, isAsync, awaitResult) = resources[i];
                 try
                 {
-                    _interpreter.DisposeResource(resource, isAsync);
+                    _interpreter.DisposeResource(resource, method, isAsync, awaitResult);
                 }
+                catch (Runtime.Exceptions.WorkerTerminatedException) { throw; }
                 catch (Exception disposalError)
                 {
-                    // Wrap in SuppressedError: original error becomes 'error', disposal becomes 'suppressed'
-                    currentError = new SharpTSSuppressedError(currentError, disposalError);
+                    completion = _interpreter.CombineUsingDisposalFailure(completion, disposalError);
                 }
             }
+            return completion;
+        }
 
-            return currentError;
+        public async ValueTask<ExecutionResult> DisposeAllAsync(ExecutionResult completion)
+        {
+            var resources = _resources.ToArray();
+            _resources.Clear();
+            for (int index = resources.Length - 1; index >= 0; index--)
+            {
+                var (resource, method, isAsync, awaitResult) = resources[index];
+                try
+                {
+                    await _interpreter.DisposeResourceAsync(resource, method, isAsync, awaitResult);
+                }
+                catch (Runtime.Exceptions.WorkerTerminatedException) { throw; }
+                catch (Exception exception)
+                {
+                    completion = _interpreter.CombineUsingDisposalFailure(completion, exception);
+                }
+            }
+            return completion;
         }
     }
 
@@ -173,10 +199,9 @@ public partial class Interpreter
     public ExecutionResult ExecuteBlock(List<Stmt> statements, RuntimeEnvironment environment)
     {
         // Create a tracker for using declarations in this scope
-        var tracker = new UsingTracker(this);
+        var tracker = new UsingTracker(this, environment);
         _usingTrackerStack.Push(tracker);
 
-        object? pendingError = null;
         ExecutionResult blockResult = ExecutionResult.Success();
 
         try
@@ -198,11 +223,6 @@ public partial class Interpreter
                     blockResult = result;
                     if (result.IsAbrupt)
                     {
-                        // Capture the result but continue to finally for disposal
-                        if (result.Type == ExecutionResult.ResultType.Throw)
-                        {
-                            pendingError = result.Value.ToObject();
-                        }
                         blockResult = result;
                         break;
                     }
@@ -229,8 +249,7 @@ public partial class Interpreter
             // throw crossing back through this frame — preserve its guest origin so a downstream
             // catch still binds it verbatim rather than re-typing it (cross-boundary #694).
             bool isGuestThrow = ex is ThrowException;
-            pendingError = TranslateException(ex);
-            blockResult = ExecutionResult.Throw(pendingError, fromGuestThrow: isGuestThrow);
+            blockResult = ExecutionResult.Throw(TranslateException(ex), fromGuestThrow: isGuestThrow);
         }
         finally
         {
@@ -239,13 +258,7 @@ public partial class Interpreter
 
             if (tracker.HasResources)
             {
-                var finalError = tracker.DisposeAll(pendingError);
-
-                // If disposal added errors (SuppressedError), update the result
-                if (finalError != null && finalError != pendingError)
-                {
-                    blockResult = ExecutionResult.Throw(finalError);
-                }
+                blockResult = tracker.DisposeAll(blockResult);
             }
         }
 
@@ -450,7 +463,7 @@ public partial class Interpreter
             if (pendingResult.Type == ExecutionResult.ResultType.Throw)
             {
                 (exceptionHandled, pendingResult) = await HandleCatchBlockCore(
-                    ctx, tryCatch, pendingResult.Value, fromHostException: false);
+                    ctx, tryCatch, pendingResult.Value, fromHostException: !pendingResult.FromGuestThrow);
             }
         }
         catch (GeneratorReturnException grex)
@@ -512,6 +525,9 @@ public partial class Interpreter
             RuntimeEnvironment catchEnv = CreateCatchEnvironment(
                 tryCatch, errorValue, fromHostException);
 
+            if (tryCatch.CatchBlock.Any(statement => statement is Stmt.Using))
+                return (true, await ExecuteUsingHandlerBlockCore(ctx, tryCatch.CatchBlock, catchEnv));
+
             using (PushScope(catchEnv))
             {
                 ReserveLexicalDeclarations(tryCatch.CatchBlock);
@@ -542,7 +558,9 @@ public partial class Interpreter
                 }
                 catch (Exception ex)
                 {
-                    object? catchError = ex is ThrowException tex ? tex.Value : ex.Message;
+                    object? catchError = ex is StructuredClone.DataCloneError
+                        ? TranslateException(ex)
+                        : ex is ThrowException tex ? tex.Value : ex.Message;
                     return (true, ExecutionResult.Throw(catchError, fromGuestThrow: ex is ThrowException));
                 }
             }
@@ -555,6 +573,9 @@ public partial class Interpreter
     /// </summary>
     private async ValueTask<ExecutionResult> ExecuteHandlerBlockCore(IEvaluationContext ctx, List<Stmt> statements)
     {
+        if (statements.Any(statement => statement is Stmt.Using))
+            return await ExecuteUsingHandlerBlockCore(ctx, statements, CreateHandlerEnvironment());
+
         using var scope = PushScope(CreateHandlerEnvironment());
         ReserveLexicalDeclarations(statements);
         var completion = ExecutionResult.Success();
@@ -589,7 +610,7 @@ public partial class Interpreter
             if (pendingResult.Type == ExecutionResult.ResultType.Throw)
             {
                 (exceptionHandled, pendingResult) = HandleCatchBlock(
-                    tryCatch, pendingResult.Value, fromHostException: false);
+                    tryCatch, pendingResult.Value, fromHostException: !pendingResult.FromGuestThrow);
             }
         }
         catch (GeneratorReturnException grex)
@@ -652,6 +673,9 @@ public partial class Interpreter
             RuntimeEnvironment catchEnv = CreateCatchEnvironment(
                 tryCatch, errorValue, fromHostException);
 
+            if (tryCatch.CatchBlock.Any(statement => statement is Stmt.Using))
+                return (true, ExecuteBlock(tryCatch.CatchBlock, catchEnv));
+
             using (PushScope(catchEnv))
             {
                 ReserveLexicalDeclarations(tryCatch.CatchBlock);
@@ -684,7 +708,9 @@ public partial class Interpreter
                 }
                 catch (Exception ex)
                 {
-                    object? catchError = ex is ThrowException tex ? tex.Value : ex.Message;
+                    object? catchError = ex is StructuredClone.DataCloneError
+                        ? TranslateException(ex)
+                        : ex is ThrowException tex ? tex.Value : ex.Message;
                     return (true, ExecutionResult.Throw(catchError, fromGuestThrow: ex is ThrowException));
                 }
             }
@@ -724,6 +750,9 @@ public partial class Interpreter
 
     private ExecutionResult ExecuteHandlerBlock(List<Stmt> statements)
     {
+        if (statements.Any(statement => statement is Stmt.Using))
+            return ExecuteBlock(statements, CreateHandlerEnvironment());
+
         using var scope = PushScope(CreateHandlerEnvironment());
         ReserveLexicalDeclarations(statements);
         var completion = ExecutionResult.Success();
@@ -1574,6 +1603,11 @@ public partial class Interpreter
         if (ex is AggregateException agg && agg.InnerException is SharpTSPromiseRejectedException innerRex)
             return innerRex.Reason;
 
+        // Preserve nominal provenance across function results without turning an
+        // uncaught host failure into a guest throw. Catch/rejection binding unwraps it.
+        if (ex is StructuredClone.DataCloneError cloneError)
+            return new HostDataCloneErrorValue(cloneError);
+
         if (ex is NodeError nodeError)
             return new SharpTSObject(new Dictionary<string, object?>
             {
@@ -1638,9 +1672,11 @@ public partial class Interpreter
     /// re-coerced.
     /// </remarks>
     internal object? CoerceCaughtValueForBinding(object? value)
-        => value is string s && TryCreateGuestErrorFromMessage(s) is { } typedError
-            ? typedError
-            : value;
+        => value is HostDataCloneErrorValue cloneError
+            ? cloneError.CreateGuestError()
+            : value is string s && TryCreateGuestErrorFromMessage(s) is { } typedError
+                ? typedError
+                : value;
 
     /// <summary>
     /// If <paramref name="message"/> begins with a known JS error-name prefix
@@ -1682,54 +1718,79 @@ public partial class Interpreter
 
     /// <summary>
     /// Executes a 'using' or 'await using' declaration.
-    /// Evaluates the initializer, defines the variable, and registers the resource for disposal.
+    /// Acquires the disposer before initializing the binding and retains it until scope exit.
     /// </summary>
-    private ExecutionResult ExecuteUsingDeclaration(Stmt.Using usingStmt)
+    private ExecutionResult ExecuteUsingDeclaration(Stmt.Using usingStmt) =>
+        ExecuteUsingDeclarationCore(_syncContext, usingStmt).GetAwaiter().GetResult();
+
+    private async ValueTask<ExecutionResult> ExecuteUsingDeclarationCore(IEvaluationContext context, Stmt.Using usingStmt)
     {
         // Get or create the tracker for the current scope
         UsingTracker tracker;
-        if (_usingTrackerStack.Count > 0)
+        if (FindUsingTracker() is { } activeTracker)
         {
-            tracker = _usingTrackerStack.Peek();
+            tracker = activeTracker;
         }
         else
         {
             // If no tracker exists, create one for the current scope
             // This handles using declarations at module/script level
-            tracker = new UsingTracker(this);
+            tracker = new UsingTracker(this, _environment);
             _usingTrackerStack.Push(tracker);
         }
 
         foreach (var binding in usingStmt.Bindings)
         {
-            object? resource = Evaluate(binding.Initializer);
+            object? resource = (await context.EvaluateExprAsync(binding.Initializer)).ToObject();
+
+            // Acquisition can invoke a getter or throw. Keep the lexical binding
+            // uninitialized until that operation has completed successfully.
+            tracker.Add(resource, usingStmt.IsAsync);
 
             // Define variable in the current scope
             if (binding.Name != null)
             {
                 _environment.Define(binding.Name.Lexeme, resource);
             }
-
-            // Register for disposal at scope exit
-            tracker.Add(resource, usingStmt.IsAsync);
         }
 
         return ExecutionResult.Success();
     }
 
     /// <summary>
-    /// Disposes a single resource using Symbol.dispose or Symbol.asyncDispose.
+    /// Captures and validates the actual disposal method without invoking it.
     /// </summary>
     /// <param name="resource">The resource to dispose.</param>
     /// <param name="isAsync">True for Symbol.asyncDispose, false for Symbol.dispose.</param>
-    private void DisposeResource(object? resource, bool isAsync)
+    private (ISharpTSCallable? Method, bool AwaitResult) AcquireUsingDisposeMethod(object? resource, bool isAsync)
     {
-        // Null/undefined resources are skipped
         if (resource == null || resource is SharpTSUndefined)
-            return;
+            return (null, false);
 
         var symbol = isAsync ? SharpTSSymbol.AsyncDispose : SharpTSSymbol.Dispose;
-        object? disposeMethod = GetSymbolProperty(resource, symbol);
+        object? disposeMethod = GetSymbolPropertyValue(resource, symbol);
+        bool awaitResult = isAsync;
+        if (isAsync && disposeMethod is null or SharpTSUndefined)
+        {
+            disposeMethod = GetSymbolPropertyValue(resource, SharpTSSymbol.Dispose);
+            // Async-from-sync disposal does not await a synchronous method's result.
+            awaitResult = false;
+        }
+
+        if (disposeMethod is ISharpTSCallable callable &&
+            disposeMethod is not SharpTSProxy { IsCallable: false })
+            return (callable, awaitResult);
+        if (disposeMethod is null or SharpTSUndefined &&
+            (resource is IDisposable || isAsync && resource is IAsyncDisposable))
+            return (null, false);
+        throw new ThrowException(new SharpTSTypeError("Resource disposal method must be callable"));
+    }
+
+    /// <summary>Invokes the acquired method with its original resource receiver.</summary>
+    private void DisposeResource(object? resource, ISharpTSCallable? disposeMethod, bool isAsync, bool awaitResult)
+    {
+        if (resource == null || resource is SharpTSUndefined)
+            return;
 
         if (disposeMethod == null)
         {
@@ -1744,59 +1805,14 @@ public partial class Interpreter
                 asyncDisposable.DisposeAsync().AsTask().GetAwaiter().GetResult();
                 return;
             }
-            // No disposal method - silently skip (TypeScript allows this)
+            // Registration admitted only these actual CLR fallback interfaces.
             return;
         }
 
-        // Call the dispose method with the resource as 'this' context
-        object? result = null;
-
-        if (disposeMethod is SharpTSFunction func)
-        {
-            // Bind the function to the resource and call it
-            // For SharpTSInstance resources, use the instance bind
-            if (resource is SharpTSInstance instance)
-            {
-                var boundFunc = func.Bind(instance);
-                result = boundFunc.Call(this, []);
-            }
-            else
-            {
-                // For other objects (SharpTSObject), create a temporary scope with 'this'
-                var prevEnv = _environment;
-                _environment = new RuntimeEnvironment(_environment);
-                _environment.Define("this", resource);
-                try
-                {
-                    result = func.Call(this, []);
-                }
-                finally
-                {
-                    _environment = prevEnv;
-                }
-            }
-        }
-        else if (disposeMethod is SharpTSArrowFunction arrowFunc)
-        {
-            // Arrow functions with HasOwnThis need 'this' bound
-            if (arrowFunc.HasOwnThis)
-            {
-                var boundFunc = arrowFunc.Bind(resource!);
-                result = boundFunc.Call(this, []);
-            }
-            else
-            {
-                // Arrow functions without own 'this' use lexical scope
-                result = arrowFunc.Call(this, []);
-            }
-        }
-        else if (disposeMethod is ISharpTSCallable callable)
-        {
-            result = callable.Call(this, []);
-        }
+        object? result = FunctionBuiltIns.CallWithThis(this, disposeMethod, resource, []);
 
         // Wait for async disposal to complete
-        if (isAsync)
+        if (awaitResult)
         {
             if (result is SharpTSPromise promise)
             {
@@ -1807,23 +1823,6 @@ public partial class Interpreter
                 task.GetAwaiter().GetResult();
             }
         }
-    }
-
-    /// <summary>
-    /// Gets a property from an object using a symbol key.
-    /// </summary>
-    private object? GetSymbolProperty(object? obj, SharpTSSymbol symbol)
-    {
-        if (obj is SharpTSObject tsObject)
-        {
-            return tsObject.GetBySymbol(symbol);
-        }
-        if (obj is SharpTSInstance instance)
-        {
-            return instance.GetBySymbol(symbol);
-        }
-        // For other types, return null (no symbol property access)
-        return null;
     }
 
     /// <summary>
@@ -2117,6 +2116,7 @@ public partial class Interpreter
         // bindings were registered at instantiation and already wrote through.
         if (varStmt.IsVar && target.Enclosing is null && !target.HasObjectBinding(varStmt.Name.Lexeme))
             GlobalThis.SetProperty(varStmt.Name.Lexeme, value);
+        ObserveDiscardedReactionResult(value);
         return ExecutionResult.Success();
     }
 
@@ -2126,6 +2126,7 @@ public partial class Interpreter
         object? constValue = EvaluateVariableInitializerCore(_syncContext, constStmt.Initializer, constStmt.Name)
             .GetAwaiter().GetResult().ToObject();
         _environment.Define(constStmt.Name.Lexeme, constValue);
+        ObserveDiscardedReactionResult(constValue);
         return ExecutionResult.Success();
     }
 

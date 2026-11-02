@@ -405,6 +405,11 @@ public partial class RuntimeEmitter
         il.Emit(OpCodes.Stloc, resolvedElementLocal);
 
         il.MarkLabel(fastTaskScanStoreLabel);
+        // The intrinsic then path consumes each input, including those after
+        // an earlier fulfillment/rejection. Do not report its binding as unhandled.
+        il.Emit(OpCodes.Ldloc, resolvedElementLocal);
+        il.Emit(OpCodes.Castclass, _types.TaskOfObject);
+        il.Emit(OpCodes.Call, runtime.RequirePromise().NotifyPromiseRejectionHandler);
         il.Emit(OpCodes.Ldloc, taskArrayLocal);
         il.Emit(OpCodes.Ldloc, indexLocal);
         il.Emit(OpCodes.Ldloc, resolvedElementLocal);
@@ -805,6 +810,22 @@ public partial class RuntimeEmitter
             targetIl.Emit(OpCodes.Ldnull);
             targetIl.Emit(OpCodes.Call, invokeThenMethod);
             targetIl.MarkLabel(normalizedLabel);
+
+            // Every normalized element is registered with the combinator before
+            // its result can short-circuit. Mark only the actual Task returned
+            // by that registration; observable own then overrides keep their
+            // existing invocation and original-Promise handled-state semantics.
+            var notTask = targetIl.DefineLabel();
+            var registered = targetIl.DefineLabel();
+            targetIl.Emit(OpCodes.Dup);
+            targetIl.Emit(OpCodes.Isinst, _types.TaskOfObject);
+            targetIl.Emit(OpCodes.Dup);
+            targetIl.Emit(OpCodes.Brfalse, notTask);
+            targetIl.Emit(OpCodes.Call, runtime.RequirePromise().NotifyPromiseRejectionHandler);
+            targetIl.Emit(OpCodes.Br, registered);
+            targetIl.MarkLabel(notTask);
+            targetIl.Emit(OpCodes.Pop);
+            targetIl.MarkLabel(registered);
         }
 
     }

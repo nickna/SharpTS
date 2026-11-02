@@ -692,6 +692,12 @@ public class SharpTSProxy : ISharpTSCallable
 
         SharpTSPropertyDescriptor? ownDescriptor =
             GetOwnPropertyDescriptorForSet(interpreter, target, prop);
+        // Implicit TypedArray metadata is inherited and read-only. Own
+        // descriptors and explicit prototype chains retain their own behavior.
+        if (ownDescriptor is null
+            && prop is "length" or "byteLength" or "byteOffset" or "buffer" or "BYTES_PER_ELEMENT"
+            && target is SharpTSTypedArray { HasExplicitPrototype: false })
+            return false;
         if (ownDescriptor == null)
         {
             object? parent = ObjectBuiltIns.PrototypeOf(interpreter, target);
@@ -791,6 +797,16 @@ public class SharpTSProxy : ISharpTSCallable
             return prop is SharpTSSymbol symbol
                 ? ownPropertyObject.OwnProperties.GetOwnPropertyDescriptor(symbol)
                 : ownPropertyObject.OwnProperties.GetOwnPropertyDescriptor((string)prop);
+        }
+        else if (prop is SharpTSSymbol numberSymbol
+            && target is SharpTSNumberPrototype numberPrototype)
+        {
+            return numberPrototype.GetOwnSymbolPropertyDescriptor(numberSymbol);
+        }
+        else if (prop is SharpTSSymbol booleanSymbol
+            && target is SharpTSBooleanPrototype booleanPrototype)
+        {
+            return booleanPrototype.GetOwnSymbolPropertyDescriptor(booleanSymbol);
         }
         else if (prop is string name)
         {
@@ -1715,8 +1731,9 @@ public class SharpTSProxy : ISharpTSCallable
             {
                 string name when _target is SharpTSProxy proxy
                     => proxy.TrapGetOwnPropertyDescriptor(name, interpreter),
-                string name when _target is SharpTSClass klass && interpreter != null
-                    => ObjectBuiltIns.OwnPropertyDescriptorOf(interpreter, klass, name)?.ToObject(),
+                string name when interpreter != null && _target is
+                    (SharpTSClass or SharpTSNumberPrototype or SharpTSBooleanPrototype)
+                    => ObjectBuiltIns.OwnPropertyDescriptorOf(interpreter, _target, name)?.ToObject(),
                 string name
                     => ObjectBuiltIns.RuntimeGetOwnPropertyDescriptor(_target, name),
                 SharpTSSymbol symbol when _target is SharpTSProxy proxy
@@ -1784,6 +1801,18 @@ public class SharpTSProxy : ISharpTSCallable
                     keys.Add(i.ToString(System.Globalization.CultureInfo.InvariantCulture));
                 keys.Add("length");
                 keys.AddRange(arr.GetSymbolPropertyNames());
+                break;
+            case SharpTSTypedArray typedArray:
+                keys.AddRange(typedArray.OwnStringKeys());
+                keys.AddRange(typedArray.GetSymbolPropertyNames());
+                break;
+            case SharpTSNumberPrototype numberPrototype:
+                keys.AddRange(numberPrototype.OwnStringKeys());
+                keys.AddRange(numberPrototype.GetSymbolPropertyNames());
+                break;
+            case SharpTSBooleanPrototype booleanPrototype:
+                keys.AddRange(booleanPrototype.OwnStringKeys());
+                keys.AddRange(booleanPrototype.GetSymbolPropertyNames());
                 break;
             case Dictionary<string, object?> dict:
                 keys.AddRange(dict.Keys);

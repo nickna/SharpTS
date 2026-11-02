@@ -14,6 +14,13 @@ namespace SharpTS.TypeSystem;
 /// </remarks>
 public partial class TypeChecker
 {
+    private readonly Dictionary<string, BindingSymbol> _defaultLibraryTypedArrayBindings = new(StringComparer.Ordinal);
+
+    private bool IsIntrinsicTypedArrayConstructorBinding(string name) =>
+        _environment.GetValueBinding(name) is not { } binding
+        || _defaultLibraryTypedArrayBindings.TryGetValue(name, out var intrinsic)
+            && ReferenceEquals(binding, intrinsic);
+
     /// <summary>
     /// Finds the nearest constructor while composing every instantiated ancestor.
     /// Keeps the original signature identity for editor candidate selection.
@@ -474,6 +481,12 @@ public partial class TypeChecker
         // Handle new DataView(buffer, byteOffset?, byteLength?) constructor
         if (isSimpleName && simpleClassName == "DataView")
         {
+            // Selected library and local constructors own their parameter and
+            // result types, just like ArrayBuffer above.
+            if (_environment.GetValueBinding(simpleClassName) is not null ||
+                (_hasDefaultLibraries && _environment.Get(simpleClassName) is not null))
+                goto CheckDeclaredConstructor;
+
             // DataView requires at least 1 argument (buffer) and up to 3
             if (newExpr.Arguments.Count < 1 || newExpr.Arguments.Count > 3)
             {
@@ -512,7 +525,9 @@ public partial class TypeChecker
         }
 
         // Handle TypedArray constructors (Int8Array, Uint8Array, etc.)
-        if (isSimpleName && simpleClassName != null && IsTypedArrayName(simpleClassName))
+        if (isSimpleName && simpleClassName != null && IsTypedArrayName(simpleClassName)
+            && !IsShadowedDeclaredTypedArrayConstructor(simpleClassName)
+            && IsIntrinsicTypedArrayConstructorBinding(simpleClassName))
         {
             // TypedArray constructors accept:
             // - new TypedArray(length)
@@ -524,11 +539,8 @@ public partial class TypeChecker
                 throw new TypeCheckException($" {simpleClassName} constructor accepts at most 3 arguments.", tsCode: "TS2554");
             }
 
-            // Validate first argument if present
-            if (newExpr.Arguments.Count >= 1)
-            {
-                CheckExpr(newExpr.Arguments[0]);
-            }
+            // Retain the actual buffer argument for the captured declaration's facet.
+            TypeInfo? input = newExpr.Arguments.Count == 0 ? null : CheckExpr(newExpr.Arguments[0]);
 
             // Validate optional byteOffset and length
             for (int i = 1; i < newExpr.Arguments.Count; i++)
@@ -540,11 +552,7 @@ public partial class TypeChecker
                 }
             }
 
-            // Extract element type prefix (e.g., "Int32" from "Int32Array")
-            var elementType = simpleClassName.EndsWith("Array")
-                ? simpleClassName[..^5]  // Remove "Array" suffix
-                : simpleClassName;
-            return new TypeInfo.TypedArray(elementType);
+            return TypedArrayConstructorType(simpleClassName, input);
         }
 
         // Handle new Worker(filename, options?) constructor
@@ -1360,10 +1368,17 @@ public partial class TypeChecker
             if (!inferred.ContainsKey(tp.Name))
             {
                 if (tp.Default != null)
-                    inferred[tp.Name] = tp.Default;
+                    inferred[tp.Name] = Substitute(tp.Default, inferred);
                 else
                     return null; // Cannot infer
             }
+        }
+
+        foreach (var parameter in ctorSig.TypeParams)
+        {
+            if (parameter.Constraint is { } constraint &&
+                !IsCompatible(Substitute(constraint, inferred), inferred[parameter.Name]))
+                return null;
         }
 
         // Substitute and check argument compatibility

@@ -96,9 +96,9 @@ public abstract partial class AsyncFunctionMoveNextEmitter
     protected override void EmitTryCatch(Stmt.TryCatch t)
     {
         // Check if this try block contains any await points
-        bool hasAwaitsInTry = AnyStmtContainsSuspension(t.TryBlock);
-        bool hasAwaitsInCatch = t.CatchBlock != null && AnyStmtContainsSuspension(t.CatchBlock);
-        bool hasAwaitsInFinally = t.FinallyBlock != null && AnyStmtContainsSuspension(t.FinallyBlock);
+        bool hasAwaitsInTry = AnyStmtContainsSuspension(LowerAsyncUsingScopes(t.TryBlock));
+        bool hasAwaitsInCatch = t.CatchBlock != null && AnyStmtContainsSuspension(LowerAsyncUsingScopes(t.CatchBlock));
+        bool hasAwaitsInFinally = t.FinallyBlock != null && AnyStmtContainsSuspension(LowerAsyncUsingScopes(t.FinallyBlock));
 
         // Even a wholly synchronous finally needs the flag-based exit routing in
         // an async state machine.  Completing the Task from a return inside a
@@ -147,7 +147,7 @@ public abstract partial class AsyncFunctionMoveNextEmitter
             WithGeneratorLexicalScope(t.CatchBlock, () =>
             {
                 EmitGeneratorCatchBinding(t, caught);
-                foreach (var statement in t.CatchBlock) EmitStatement(statement);
+                EmitAsyncUsingStatements(t.CatchBlock);
             }, t, t.CatchParam);
         }
 
@@ -300,7 +300,15 @@ public abstract partial class AsyncFunctionMoveNextEmitter
         // Finally block - must always execute
         if (t.FinallyBlock != null)
         {
-            if (hasAwaitsInFinally)
+            bool usingCleanup = IsAsyncUsingFinally(t);
+            if (usingCleanup)
+            {
+                EmitAsyncUsingFinally(t.FinallyBlock, caughtExceptionLocal, exceptionPresentLocal);
+                // A failed cleanup replaces a pending return/break before it
+                // can dispatch, while an ordinary source finally stays unchanged.
+                EmitRethrowPending(caughtExceptionLocal, exceptionPresentLocal);
+            }
+            else if (hasAwaitsInFinally)
             {
                 // Finally with awaits - need special handling
                 // The finally must run regardless of exception, so we emit it
@@ -322,6 +330,13 @@ public abstract partial class AsyncFunctionMoveNextEmitter
 
         // Entering a catch clears presence. An unhandled try failure or a new catch-body failure
         // must propagate even when its exact value is null.
+        EmitRethrowPending(caughtExceptionLocal, exceptionPresentLocal);
+
+        IL.MarkLabel(afterTryCatchLabel);
+    }
+
+    private void EmitRethrowPending(LocalBuilder caughtExceptionLocal, LocalBuilder exceptionPresentLocal)
+    {
         var noExceptionLabel = IL.DefineLabel();
         IL.Emit(OpCodes.Ldloc, exceptionPresentLocal);
         IL.Emit(OpCodes.Brfalse, noExceptionLabel);
@@ -330,7 +345,6 @@ public abstract partial class AsyncFunctionMoveNextEmitter
         IL.Emit(OpCodes.Throw);
         IL.MarkLabel(noExceptionLabel);
 
-        IL.MarkLabel(afterTryCatchLabel);
     }
 
     private void EmitFinallyBodyWithAwaits(List<Stmt> finallyBody, LocalBuilder caughtExceptionLocal, LocalBuilder exceptionPresentLocal)
@@ -363,8 +377,7 @@ public abstract partial class AsyncFunctionMoveNextEmitter
     private void EmitTryBodyWithAwaitsCore(List<Stmt> tryBody, LocalBuilder caughtExceptionLocal, LocalBuilder exceptionPresentLocal)
         => EmitTryBodyWithAwaitsCore(() =>
         {
-            foreach (var stmt in tryBody)
-                EmitStatement(stmt);
+            EmitAsyncUsingStatements(tryBody);
         }, caughtExceptionLocal, exceptionPresentLocal);
 
     // The same resumable protected region can guard a generated iterator-close span.

@@ -58,7 +58,6 @@ public partial class RuntimeEmitter
         var il = arrays.BoundMethodInvoke.GetILGenerator();
 
         var stringEquals = _types.GetMethod(_types.String, "op_Equality", _types.String, _types.String);
-        var objToString = _types.GetMethodNoParams(_types.Object, "ToString");
         var exCtor = _types.GetConstructor(_types.Exception, _types.String);
 
         // Locals reused across the set arm.
@@ -67,33 +66,58 @@ public partial class RuntimeEmitter
         var lenLoc = il.DeclareLocal(_types.Int32);
         var iLoc = il.DeclareLocal(_types.Int32);
         var vLoc = il.DeclareLocal(_types.Object);
+        var capturedLengthLoc = il.DeclareLocal(_types.Int32);
 
         void LoadArray()
         {
             il.Emit(OpCodes.Ldarg_0);
             il.Emit(OpCodes.Ldfld, arrayField);
         }
-        void LoadLength()
-        {
-            LoadArray();
-            il.Emit(OpCodes.Callvirt, arrays.LengthGetter);
-        }
-        // args[index] coerced to int (truncate toward zero), or loadDefault() when absent/non-number.
-        void EmitArgAsInt(int index, Action loadDefault)
+        void LoadLength() => il.Emit(OpCodes.Ldloc, capturedLengthLoc);
+        // ToIntegerOrInfinity represented by a saturating int; relative bounds are clamped by the method.
+        void EmitArgAsInt(int index, Action loadDefault, bool undefinedUsesDefault = true)
         {
             var useDefault = il.DefineLabel();
             var done = il.DefineLabel();
+            var number = il.DeclareLocal(_types.Double);
             il.Emit(OpCodes.Ldarg_1); il.Emit(OpCodes.Ldlen); il.Emit(OpCodes.Conv_I4);
             il.Emit(OpCodes.Ldc_I4, index); il.Emit(OpCodes.Ble, useDefault);
+            if (undefinedUsesDefault)
+            {
+                il.Emit(OpCodes.Ldarg_1); il.Emit(OpCodes.Ldc_I4, index); il.Emit(OpCodes.Ldelem_Ref);
+                il.Emit(OpCodes.Isinst, runtime.Sentinels.UndefinedType); il.Emit(OpCodes.Brtrue, useDefault);
+            }
             il.Emit(OpCodes.Ldarg_1); il.Emit(OpCodes.Ldc_I4, index); il.Emit(OpCodes.Ldelem_Ref);
-            il.Emit(OpCodes.Isinst, _types.Double); il.Emit(OpCodes.Brfalse, useDefault);
-            il.Emit(OpCodes.Ldarg_1); il.Emit(OpCodes.Ldc_I4, index); il.Emit(OpCodes.Ldelem_Ref);
-            il.Emit(OpCodes.Unbox_Any, _types.Double); il.Emit(OpCodes.Conv_I4);
-            il.Emit(OpCodes.Br, done);
+            il.Emit(OpCodes.Call, runtime.NumericCoercion.ToNumber); il.Emit(OpCodes.Stloc, number);
+            var notNaN = il.DefineLabel();
+            il.Emit(OpCodes.Ldloc, number);
+            il.Emit(OpCodes.Call, _types.GetMethod(_types.Double, "IsNaN", _types.Double));
+            il.Emit(OpCodes.Brfalse, notNaN); il.Emit(OpCodes.Ldc_I4_0); il.Emit(OpCodes.Br, done);
+            il.MarkLabel(notNaN);
+            var belowMax = il.DefineLabel();
+            il.Emit(OpCodes.Ldloc, number); il.Emit(OpCodes.Ldc_R8, (double)int.MaxValue);
+            il.Emit(OpCodes.Blt, belowMax); il.Emit(OpCodes.Ldc_I4, int.MaxValue); il.Emit(OpCodes.Br, done);
+            il.MarkLabel(belowMax);
+            var aboveMin = il.DefineLabel();
+            il.Emit(OpCodes.Ldloc, number); il.Emit(OpCodes.Ldc_R8, (double)int.MinValue);
+            il.Emit(OpCodes.Bgt, aboveMin); il.Emit(OpCodes.Ldc_I4, int.MinValue); il.Emit(OpCodes.Br, done);
+            il.MarkLabel(aboveMin);
+            il.Emit(OpCodes.Ldloc, number); il.Emit(OpCodes.Conv_I4); il.Emit(OpCodes.Br, done);
             il.MarkLabel(useDefault); loadDefault();
             il.MarkLabel(done);
         }
-        void EmitArgZeroOrNull(int index)
+        void EmitRelativeArgAsInt(int index, Action loadDefault)
+        {
+            EmitArgAsInt(index, loadDefault);
+            il.Emit(OpCodes.Stloc, offsetLoc);
+            var nonnegative = il.DefineLabel();
+            il.Emit(OpCodes.Ldloc, offsetLoc); il.Emit(OpCodes.Ldc_I4_0); il.Emit(OpCodes.Bge, nonnegative);
+            LoadLength(); il.Emit(OpCodes.Ldloc, offsetLoc); il.Emit(OpCodes.Add); il.Emit(OpCodes.Ldc_I4_0);
+            il.Emit(OpCodes.Call, _types.MathMaxInt32);
+            il.Emit(OpCodes.Stloc, offsetLoc); il.MarkLabel(nonnegative);
+            il.Emit(OpCodes.Ldloc, offsetLoc);
+        }
+        void EmitArgOrUndefined(int index)
         {
             var useNull = il.DefineLabel();
             var done = il.DefineLabel();
@@ -101,9 +125,13 @@ public partial class RuntimeEmitter
             il.Emit(OpCodes.Ldc_I4, index); il.Emit(OpCodes.Ble, useNull);
             il.Emit(OpCodes.Ldarg_1); il.Emit(OpCodes.Ldc_I4, index); il.Emit(OpCodes.Ldelem_Ref);
             il.Emit(OpCodes.Br, done);
-            il.MarkLabel(useNull); il.Emit(OpCodes.Ldnull);
+            il.MarkLabel(useNull); il.Emit(OpCodes.Ldsfld, runtime.Sentinels.UndefinedInstance);
             il.MarkLabel(done);
         }
+
+        LoadArray();
+        il.Emit(OpCodes.Callvirt, arrays.LengthGetter);
+        il.Emit(OpCodes.Stloc, capturedLengthLoc);
 
         // Dispatch chain on _methodName.
         var lFill = il.DefineLabel();
@@ -125,6 +153,22 @@ public partial class RuntimeEmitter
             il.Emit(OpCodes.Call, stringEquals);
             il.Emit(OpCodes.Brtrue, target);
         }
+        // Set converts its offset first; subarray validates the retained owner when constructing its view.
+        var validateAfterOffset = il.DefineLabel();
+        il.Emit(OpCodes.Ldarg_0);
+        il.Emit(OpCodes.Ldfld, nameField);
+        il.Emit(OpCodes.Ldstr, "set");
+        il.Emit(OpCodes.Call, stringEquals);
+        il.Emit(OpCodes.Brtrue, validateAfterOffset);
+        il.Emit(OpCodes.Ldarg_0);
+        il.Emit(OpCodes.Ldfld, nameField);
+        il.Emit(OpCodes.Ldstr, "subarray");
+        il.Emit(OpCodes.Call, stringEquals);
+        il.Emit(OpCodes.Brtrue, validateAfterOffset);
+        LoadArray();
+        il.Emit(OpCodes.Call, arrays.GetBuffer);
+        il.Emit(OpCodes.Pop);
+        il.MarkLabel(validateAfterOffset);
         Dispatch("fill", lFill);
         Dispatch("copyWithin", lCopyWithin);
         Dispatch("reverse", lReverse);
@@ -142,19 +186,35 @@ public partial class RuntimeEmitter
 
         // fill(value, start=0, end=length)
         il.MarkLabel(lFill);
+        EmitArgOrUndefined(0); il.Emit(OpCodes.Stloc, vLoc);
+        var numericFill = il.DefineLabel();
+        var fillValueReady = il.DefineLabel();
+        if (runtime.BigInt.Implementation is { } bigInt)
+        {
+            var bigintFill = il.DefineLabel();
+            LoadArray(); il.Emit(OpCodes.Isinst, arrays.BigInt64ArrayType); il.Emit(OpCodes.Brtrue, bigintFill);
+            LoadArray(); il.Emit(OpCodes.Isinst, arrays.BigUint64ArrayType); il.Emit(OpCodes.Brfalse, numericFill);
+            il.MarkLabel(bigintFill);
+            il.Emit(OpCodes.Ldloc, vLoc); il.Emit(OpCodes.Call, bigInt.ToBigInt); il.Emit(OpCodes.Stloc, vLoc);
+            il.Emit(OpCodes.Br, fillValueReady);
+        }
+        il.MarkLabel(numericFill);
+        il.Emit(OpCodes.Ldloc, vLoc); il.Emit(OpCodes.Call, runtime.NumericCoercion.ToNumber);
+        il.Emit(OpCodes.Box, _types.Double); il.Emit(OpCodes.Stloc, vLoc);
+        il.MarkLabel(fillValueReady);
         LoadArray();
-        EmitArgZeroOrNull(0);
-        EmitArgAsInt(1, () => il.Emit(OpCodes.Ldc_I4_0));
-        EmitArgAsInt(2, LoadLength);
+        il.Emit(OpCodes.Ldloc, vLoc);
+        EmitRelativeArgAsInt(1, () => il.Emit(OpCodes.Ldc_I4_0));
+        EmitRelativeArgAsInt(2, LoadLength);
         il.Emit(OpCodes.Callvirt, arrays.Fill);
         il.Emit(OpCodes.Ret);
 
         // copyWithin(target=0, start=0, end=length)
         il.MarkLabel(lCopyWithin);
         LoadArray();
-        EmitArgAsInt(0, () => il.Emit(OpCodes.Ldc_I4_0));
-        EmitArgAsInt(1, () => il.Emit(OpCodes.Ldc_I4_0));
-        EmitArgAsInt(2, LoadLength);
+        EmitRelativeArgAsInt(0, () => il.Emit(OpCodes.Ldc_I4_0));
+        EmitRelativeArgAsInt(1, () => il.Emit(OpCodes.Ldc_I4_0));
+        EmitRelativeArgAsInt(2, LoadLength);
         il.Emit(OpCodes.Callvirt, arrays.CopyWithin);
         il.Emit(OpCodes.Ret);
 
@@ -166,8 +226,20 @@ public partial class RuntimeEmitter
 
         // set(source, offset=0)
         il.MarkLabel(lSet);
-        EmitArgZeroOrNull(0); il.Emit(OpCodes.Stloc, sourceLoc);
+        EmitArgOrUndefined(0); il.Emit(OpCodes.Stloc, sourceLoc);
         EmitArgAsInt(1, () => il.Emit(OpCodes.Ldc_I4_0)); il.Emit(OpCodes.Stloc, offsetLoc);
+        var nonnegativeOffset = il.DefineLabel();
+        il.Emit(OpCodes.Ldloc, offsetLoc); il.Emit(OpCodes.Ldc_I4_0); il.Emit(OpCodes.Bge, nonnegativeOffset);
+        GuestErrorEmitter.ThrowError(il, runtime.Errors.CreateException, runtime.Errors.RangeErrorConstructor,
+            "Offset is outside the target");
+        il.MarkLabel(nonnegativeOffset);
+        LoadArray(); il.Emit(OpCodes.Call, arrays.GetBuffer); il.Emit(OpCodes.Pop);
+        LoadArray(); il.Emit(OpCodes.Callvirt, arrays.LengthGetter); il.Emit(OpCodes.Stloc, capturedLengthLoc);
+        var offsetInBounds = il.DefineLabel();
+        il.Emit(OpCodes.Ldloc, offsetLoc); LoadLength(); il.Emit(OpCodes.Ble, offsetInBounds);
+        GuestErrorEmitter.ThrowError(il, runtime.Errors.CreateException, runtime.Errors.RangeErrorConstructor,
+            "Offset is outside the target");
+        il.MarkLabel(offsetInBounds);
         // if (source is $TypedArray) -> base SetFrom handles range-check + fast/element-wise copy
         var notTyped = il.DefineLabel();
         il.Emit(OpCodes.Ldloc, sourceLoc); il.Emit(OpCodes.Isinst, arrays.BaseType); il.Emit(OpCodes.Brfalse, notTyped);
@@ -184,8 +256,8 @@ public partial class RuntimeEmitter
         il.Emit(OpCodes.Callvirt, runtime.ArrayStorage.LengthGetter); il.Emit(OpCodes.Stloc, lenLoc);
         // if (offset + len > _array.Length) throw RangeError
         var okRange = il.DefineLabel();
-        il.Emit(OpCodes.Ldloc, offsetLoc); il.Emit(OpCodes.Ldloc, lenLoc); il.Emit(OpCodes.Add);
-        LoadLength();
+        il.Emit(OpCodes.Ldloc, lenLoc); LoadLength();
+        il.Emit(OpCodes.Ldloc, offsetLoc); il.Emit(OpCodes.Sub);
         il.Emit(OpCodes.Ble, okRange);
         il.Emit(OpCodes.Ldstr, "RangeError: Source too large for target");
         il.Emit(OpCodes.Newobj, exCtor); il.Emit(OpCodes.Throw);
@@ -224,32 +296,36 @@ public partial class RuntimeEmitter
         il.Emit(OpCodes.Callvirt, arrays.Subarray);
         il.Emit(OpCodes.Ret);
 
-        // indexOf(value, fromIndex=0) -> double
-        il.MarkLabel(lIndexOf);
-        LoadArray();
-        EmitArgZeroOrNull(0);
-        EmitArgAsInt(1, () => il.Emit(OpCodes.Ldc_I4_0));
-        il.Emit(OpCodes.Callvirt, arrays.IndexOf);
-        il.Emit(OpCodes.Box, _types.Double);
-        il.Emit(OpCodes.Ret);
-
-        // lastIndexOf(value, fromIndex=length-1) -> double
-        il.MarkLabel(lLastIndexOf);
-        LoadArray();
-        EmitArgZeroOrNull(0);
-        EmitArgAsInt(1, () => { LoadLength(); il.Emit(OpCodes.Ldc_I4_1); il.Emit(OpCodes.Sub); });
-        il.Emit(OpCodes.Callvirt, arrays.LastIndexOf);
-        il.Emit(OpCodes.Box, _types.Double);
-        il.Emit(OpCodes.Ret);
-
-        // includes(value, fromIndex=0) -> bool
-        il.MarkLabel(lIncludes);
-        LoadArray();
-        EmitArgZeroOrNull(0);
-        EmitArgAsInt(1, () => il.Emit(OpCodes.Ldc_I4_0));
-        il.Emit(OpCodes.Callvirt, arrays.Includes);
-        il.Emit(OpCodes.Box, _types.Boolean);
-        il.Emit(OpCodes.Ret);
+        void EmitSearch(Label label, MethodBuilder method, bool backwards, bool includes)
+        {
+            il.MarkLabel(label);
+            var nonempty = il.DefineLabel();
+            LoadLength(); il.Emit(OpCodes.Brtrue, nonempty);
+            if (includes) { il.Emit(OpCodes.Ldc_I4_0); il.Emit(OpCodes.Box, _types.Boolean); }
+            else { il.Emit(OpCodes.Ldc_R8, -1.0); il.Emit(OpCodes.Box, _types.Double); }
+            il.Emit(OpCodes.Ret); il.MarkLabel(nonempty);
+            LoadArray(); EmitArgOrUndefined(0);
+            EmitArgAsInt(1, () =>
+            {
+                if (backwards) { LoadLength(); il.Emit(OpCodes.Ldc_I4_1); il.Emit(OpCodes.Sub); }
+                else il.Emit(OpCodes.Ldc_I4_0);
+            }, undefinedUsesDefault: false);
+            il.Emit(OpCodes.Stloc, offsetLoc);
+            var nonnegative = il.DefineLabel();
+            il.Emit(OpCodes.Ldloc, offsetLoc); il.Emit(OpCodes.Ldc_I4_0); il.Emit(OpCodes.Bge, nonnegative);
+            LoadLength(); il.Emit(OpCodes.Ldloc, offsetLoc); il.Emit(OpCodes.Add);
+            if (!backwards)
+            {
+                il.Emit(OpCodes.Ldc_I4_0);
+                il.Emit(OpCodes.Call, _types.GetMethod(_types.Math, "Max", _types.Int32, _types.Int32));
+            }
+            il.Emit(OpCodes.Stloc, offsetLoc); il.MarkLabel(nonnegative);
+            il.Emit(OpCodes.Ldloc, offsetLoc); il.Emit(OpCodes.Callvirt, method);
+            il.Emit(OpCodes.Box, includes ? _types.Boolean : _types.Double); il.Emit(OpCodes.Ret);
+        }
+        EmitSearch(lIndexOf, arrays.IndexOf, backwards: false, includes: false);
+        EmitSearch(lLastIndexOf, arrays.LastIndexOf, backwards: true, includes: false);
+        EmitSearch(lIncludes, arrays.Includes, backwards: false, includes: true);
 
         // join(separator=",")
         il.MarkLabel(lJoin);
@@ -260,9 +336,8 @@ public partial class RuntimeEmitter
             il.Emit(OpCodes.Ldarg_1); il.Emit(OpCodes.Ldlen); il.Emit(OpCodes.Conv_I4);
             il.Emit(OpCodes.Ldc_I4_0); il.Emit(OpCodes.Ble, useDefault);
             il.Emit(OpCodes.Ldarg_1); il.Emit(OpCodes.Ldc_I4_0); il.Emit(OpCodes.Ldelem_Ref); il.Emit(OpCodes.Stloc, vLoc);
-            il.Emit(OpCodes.Ldloc, vLoc); il.Emit(OpCodes.Brfalse, useDefault);
             il.Emit(OpCodes.Ldloc, vLoc); il.Emit(OpCodes.Isinst, runtime.Sentinels.UndefinedType); il.Emit(OpCodes.Brtrue, useDefault);
-            il.Emit(OpCodes.Ldloc, vLoc); il.Emit(OpCodes.Callvirt, objToString); il.Emit(OpCodes.Br, doneSep);
+            il.Emit(OpCodes.Ldloc, vLoc); il.Emit(OpCodes.Call, runtime.StringCoercion.ToJsString); il.Emit(OpCodes.Br, doneSep);
             il.MarkLabel(useDefault); il.Emit(OpCodes.Ldstr, ",");
             il.MarkLabel(doneSep);
         }

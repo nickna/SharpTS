@@ -1,4 +1,5 @@
 using System.Runtime.CompilerServices;
+using SharpTS.Compilation;
 using SharpTS.Parsing;
 using SharpTS.Runtime;
 using SharpTS.Runtime.BuiltIns;
@@ -501,6 +502,28 @@ public partial class Interpreter
                 continue;
             }
 
+            if (current is SharpTSTypedArray physicalArray
+                && PropertySemantics.TryGetArrayIndex(name, out uint physicalIndex)
+                && physicalIndex < physicalArray.Length)
+                return physicalArray[(int)physicalIndex];
+
+            if (current is SharpTSTypedArray typedArray && typedArray.UsesOrdinaryNamedPropertyLookup(name))
+            {
+                if (TryReadDescriptor(typedArray.GetNamedOwnPropertyDescriptor(name), receiver, out var ownValue))
+                    return ownValue;
+                if (typedArray.HasExplicitPrototype)
+                {
+                    current = typedArray.ExplicitPrototype;
+                    continue;
+                }
+                if (name == "length")
+                {
+                    if (receiver is not SharpTSTypedArray typedReceiver)
+                        throw new ThrowException(new SharpTSTypeError("TypedArray length called on incompatible receiver"));
+                    return typedReceiver.GetMember(name);
+                }
+            }
+
             if (current is string text)
             {
                 if (name == "length") return (double)text.Length;
@@ -518,6 +541,26 @@ public partial class Interpreter
                 if (stringPrototype.HasOwnProperty(name))
                     return stringPrototype.GetMember(name);
                 current = ObjectBuiltIns.PrototypeOf(this, stringPrototype);
+                continue;
+            }
+
+            if (current is SharpTSNumberPrototype numberPrototype)
+            {
+                if (TryReadDescriptor(numberPrototype.GetOwnPropertyDescriptor(name), receiver, out var prototypeValue))
+                    return prototypeValue;
+                if (numberPrototype.HasOwnProperty(name))
+                    return numberPrototype.GetMember(name);
+                current = ObjectBuiltIns.PrototypeOf(this, numberPrototype);
+                continue;
+            }
+
+            if (current is SharpTSBooleanPrototype booleanPrototype)
+            {
+                if (TryReadDescriptor(booleanPrototype.GetOwnPropertyDescriptor(name), receiver, out var prototypeValue))
+                    return prototypeValue;
+                if (booleanPrototype.HasOwnProperty(name))
+                    return booleanPrototype.GetMember(name);
+                current = ObjectBuiltIns.PrototypeOf(this, booleanPrototype);
                 continue;
             }
 
@@ -776,6 +819,13 @@ public partial class Interpreter
         object? current = obj;
         for (int depth = 0; depth < 64 && current is not (null or SharpTSUndefined); depth++)
         {
+            if (current is SharpTSTypedArray typedArray)
+            {
+                if (TryReadDescriptor(typedArray.GetOwnPropertyDescriptor(symbol), receiver, out var value))
+                    return value;
+                current = ObjectBuiltIns.PrototypeOf(this, typedArray);
+                continue;
+            }
             if (current is VmInputPropertyView inputView && ReferenceEquals(symbol, SharpTSSymbol.ToStringTag))
                 return inputView.ReadToStringTag(receiver);
             if (current is SharpTSProxy proxy)
@@ -940,9 +990,14 @@ public partial class Interpreter
                     return getter is null
                         ? SharpTSUndefined.Instance
                         : BindAccessorToObject(getter, receiver).CallBoxed(this, []);
-                return symbolBag.HasSymbolProperty(symbol)
-                    ? symbolBag.GetBySymbol(symbol)
-                    : SharpTSUndefined.Instance;
+                if (symbolBag.HasSymbolProperty(symbol))
+                    return symbolBag.GetBySymbol(symbol);
+                if (UsesExplicitPrimitivePrototypeLink(current))
+                {
+                    current = ObjectBuiltIns.PrototypeOf(this, current);
+                    continue;
+                }
+                return SharpTSUndefined.Instance;
             }
 
             if (current is SharpTSClass klass)
@@ -969,6 +1024,8 @@ public partial class Interpreter
                 current = GetFunctionPrototype();
                 continue;
             }
+            if (current is SharpTSObjectPrototype)
+                return SharpTSUndefined.Instance;
             if (current is ISharpTSMutableBuiltIn)
                 return PerformIndexGet(null!, current, symbol).ToObject();
             return SharpTSUndefined.Instance;
@@ -1006,6 +1063,17 @@ public partial class Interpreter
                     return true;
                 obj = ObjectBuiltIns.PrototypeOf(this, obj);
                 continue;
+            }
+
+            if (obj is SharpTSTypedArray typedArray)
+            {
+                if (typedArray.GetOwnPropertyDescriptor(name) is not null) return true;
+                if (!SharpTSTypedArray.IsOrdinaryNamedPropertyKey(name)) return false;
+                if (typedArray.HasExplicitPrototype)
+                {
+                    obj = ObjectBuiltIns.PrototypeOf(this, typedArray);
+                    continue;
+                }
             }
 
             if (obj is SharpTSArray array)
@@ -1122,6 +1190,12 @@ public partial class Interpreter
         {
             if (current is SharpTSProxy prototypeProxy)
                 return prototypeProxy.TrapHas(symbol, this);
+            if (current is SharpTSTypedArray typedArray)
+            {
+                if (typedArray.GetOwnPropertyDescriptor(symbol) is not null) return true;
+                current = ObjectBuiltIns.PrototypeOf(this, typedArray);
+                continue;
+            }
             if (TryGetPromiseConstructorSymbolProperties(current, out var intrinsicProperties))
             {
                 if (intrinsicProperties.GetOwnPropertyDescriptor(symbol) is not null) return true;
@@ -1220,6 +1294,11 @@ public partial class Interpreter
             }
             if (current is ISharpTSSymbolPropertyBag symbolBag
                 && symbolBag.HasSymbolProperty(symbol)) return true;
+            if (UsesExplicitPrimitivePrototypeLink(current))
+            {
+                current = ObjectBuiltIns.PrototypeOf(this, current);
+                continue;
+            }
 
             return GetSymbolPropertyValue(current, symbol) is not SharpTSUndefined;
         }
@@ -1383,11 +1462,14 @@ public partial class Interpreter
             return RuntimeValue.FromBoxed(GetPropertyValue(objectNamespace, get.Name.Lexeme));
         }
 
+        if (obj is SharpTSObjectPrototype || UsesPrimitivePrototypePropertyReads(obj))
+            return RuntimeValue.FromBoxed(GetPropertyValue(obj, get.Name.Lexeme));
+
         if (obj is ISharpTSPrimitiveConstructor primitiveConstructor)
             return RuntimeValue.FromBoxed(GetPropertyValue(primitiveConstructor, get.Name.Lexeme));
 
         if (obj is ISharpTSGeneratorFunctionValue or SharpTSGenerator or SharpTSAsyncGenerator
-            or SharpTSMap or SharpTSSet)
+            or SharpTSMap or SharpTSSet or SharpTSSuppressedError)
             return RuntimeValue.FromBoxed(GetPropertyValue(obj, get.Name.Lexeme));
 
         if (NeedsLiveFunctionPrototypeRead(obj, get.Name.Lexeme))
@@ -1766,6 +1848,10 @@ public partial class Interpreter
         // ISharpTSPropertyAccessor check (handles SharpTSTemplateStringsArray.raw)
         if (obj is ISharpTSPropertyAccessor accessor && accessor.HasProperty(memberName))
             return RuntimeValue.FromBoxed(accessor.GetProperty(memberName));
+
+        // Resolve the view's intrinsic length before shared Array-category extras.
+        if (obj is SharpTSTypedArray typedArray && typedArray.UsesOrdinaryNamedPropertyLookup(memberName))
+            return RuntimeValue.FromBoxed(GetPropertyValue(typedArray, memberName));
 
         // Named properties from Object.defineProperty
         if (obj is SharpTSArray array && array.HasNamedProperty(memberName))
@@ -2465,6 +2551,11 @@ public partial class Interpreter
             target.SetPropertyStrict(name, value, strictMode);
     }
 
+    private static bool UsesNonextensibleBuiltInPrototypeWrite(object? target)
+        => target is (SharpTSStringPrototype or SharpTSNumberPrototype
+            or SharpTSBooleanPrototype or SharpTSArrayPrototype)
+            && !PropertyDescriptorStore.IsExtensible(target);
+
     private void SetOwnPropertyObjectValue(object target, object key, object? value, bool strictMode)
     {
         if (!SharpTSProxy.OrdinarySet(this, target, key, value, target) && strictMode)
@@ -2525,7 +2616,7 @@ public partial class Interpreter
     /// </summary>
     private object? EvaluateGetOnFallback(object? obj, string memberName)
     {
-        if (obj is SharpTSObjectNamespace)
+        if (obj is SharpTSObjectNamespace or SharpTSObjectPrototype || UsesPrimitivePrototypePropertyReads(obj))
             return GetPropertyValue(obj, memberName);
         if (obj is ArrayBufferConstructorImpl)
             return GetPropertyValue(obj, memberName);
@@ -2924,9 +3015,18 @@ public partial class Interpreter
             return value;
         }
 
-        if (obj is ISharpTSOwnPropertyObject or SharpTSPromise { HasExplicitPrototype: true })
+        if (obj is ISharpTSOwnPropertyObject or SharpTSObjectPrototype
+            or SharpTSPromise { HasExplicitPrototype: true })
         {
             SetOwnPropertyObjectValue(obj, set.Name.Lexeme, value, strictMode);
+            return value;
+        }
+
+        if (obj is SharpTSTypedArray typedArray
+            && (typedArray.UsesOrdinaryNamedPropertyLookup(set.Name.Lexeme)
+                || SharpTSTypedArray.IsOrdinaryNamedPropertyKey(set.Name.Lexeme)))
+        {
+            SetOwnPropertyObjectValue(typedArray, set.Name.Lexeme, value, strictMode);
             return value;
         }
 
@@ -3049,6 +3149,15 @@ public partial class Interpreter
         if (obj is SharpTSClassPrototype classPrototype)
         {
             SetClassPrototypeProperty(classPrototype, set.Name.Lexeme, value, strictMode);
+            return value;
+        }
+        if (obj is SharpTSStringPrototype stringPrototype
+            && TryAssignThroughDescriptor(stringPrototype.GetOwnPropertyDescriptor(set.Name.Lexeme),
+                stringPrototype, set.Name.Lexeme, value, strictMode))
+            return value;
+        if (UsesNonextensibleBuiltInPrototypeWrite(obj) || UsesExplicitPrimitivePrototypeLink(obj))
+        {
+            SetOwnPropertyObjectValue(obj!, set.Name.Lexeme, value, strictMode);
             return value;
         }
         if (obj is ISharpTSMutableBuiltIn builtInProto)
@@ -3561,6 +3670,7 @@ public partial class Interpreter
             AssignVariableValue(assign.Name, value);
         }
 
+        if (value.IsObject) ObserveDiscardedReactionResult(value.ToObject());
         return value;
     }
 

@@ -156,7 +156,7 @@ public partial class Interpreter
                 globals[name] = new SharpTSGlobalFunction(
                     name, name switch
                     {
-                        BuiltInNames.ParseInt => 2,
+                        BuiltInNames.ParseInt or BuiltInNames.StructuredClone => 2,
                         BuiltInNames.ParseFloat or BuiltInNames.BigInt or BuiltInNames.Eval
                             or BuiltInNames.EncodeURIComponent or BuiltInNames.DecodeURIComponent or BuiltInNames.QueueMicrotask => 1,
                         _ => 0
@@ -773,6 +773,7 @@ public partial class Interpreter
             : _globalConstants.TryGetValue(name, out var global)
                 && (global is SharpTSBuiltInConstructor or IBuiltInTypeConstructor || name is
                     BuiltInNames.ParseInt or BuiltInNames.ParseFloat or BuiltInNames.Eval or BuiltInNames.IsNaN
+                    or BuiltInNames.StructuredClone
                     or BuiltInNames.Undefined or BuiltInNames.NaN or BuiltInNames.Infinity) ? global : null;
 
     private SharpTSGlobalThis CreateRealmGlobalThis()

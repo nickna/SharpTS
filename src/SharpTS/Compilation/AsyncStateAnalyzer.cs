@@ -151,10 +151,7 @@ public partial class AsyncStateAnalyzer : AstVisitorBase
         // Analyze the function body using visitor pattern
         if (func.Body != null)
         {
-            foreach (var stmt in func.Body)
-            {
-                Visit(stmt);
-            }
+            AnalyzeStatementList(func.Body);
         }
 
         // Variables that need hoisting: declared AND used after any await

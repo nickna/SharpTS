@@ -52,7 +52,7 @@ public partial class RuntimeEmitter
         il.Emit(OpCodes.Ldc_I4_1);
         il.Emit(OpCodes.Ldelem_Ref);
         il.MarkLabel(afterFromIndex);
-        il.Emit(OpCodes.Call, runtime.ArrayOperations.Includes);
+        il.Emit(OpCodes.Call, runtime.ArrayOperations.WithReceiverScope(runtime.ArrayOperations.Includes));
         il.Emit(OpCodes.Ret);
     }
 
@@ -1481,6 +1481,8 @@ public partial class RuntimeEmitter
         runtime.ArrayOperations.Join = method;
 
         var il = method.GetILGenerator();
+        if (_features.UsesVm || _features.UsesArrayMethodValues || _features.UsesReflect)
+            EmitDeoptIfNumericArray(il, runtime, () => il.Emit(OpCodes.Ldarg_0));
 
         // separator = (arg1 is $Undefined) ? "," : ToString(arg1).
         // Explicit null therefore becomes "null", while all dispatch paths

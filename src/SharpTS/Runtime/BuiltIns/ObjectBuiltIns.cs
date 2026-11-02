@@ -166,6 +166,15 @@ public static partial class ObjectBuiltIns
                 foreach (var key in date.OwnEnumerableKeys())
                     yield return new(key, includeValues ? date.TryGetExtra(key) : null);
                 yield break;
+            case SharpTSTypedArray typedArray:
+                foreach (var key in typedArray.OwnEnumerableKeys().ToList())
+                {
+                    if (PropertySemantics.TryGetArrayIndex(key, out uint index) && index < typedArray.Length)
+                        yield return new(key, includeValues ? typedArray[(int)index] : null);
+                    else if (typedArray.GetNamedOwnPropertyDescriptor(key)?.Enumerable == true)
+                        yield return new(key, includeValues ? interpreter.GetPropertyValue(typedArray, key) : null);
+                }
+                yield break;
             case SharpTSRegExp regex:
                 foreach (var key in regex.OwnEnumerableKeys())
                     yield return new(key,
@@ -517,6 +526,26 @@ public static partial class ObjectBuiltIns
                 continue;
             }
 
+            if (args[i] is SharpTSTypedArray typedArraySource)
+            {
+                var keys = typedArraySource.OwnStringKeys().Cast<object>()
+                    .Concat(typedArraySource.GetSymbolPropertyNames()).ToList();
+                foreach (var key in keys)
+                {
+                    var descriptor = key is SharpTSSymbol symbol
+                        ? typedArraySource.GetOwnPropertyDescriptor(symbol)
+                        : typedArraySource.GetOwnPropertyDescriptor((string)key);
+                    if (descriptor?.Enumerable != true) continue;
+                    if (key is SharpTSSymbol symbolKey)
+                        SetAssignedSymbol(interpreter, target, symbolKey,
+                            interpreter.GetSymbolPropertyValue(typedArraySource, symbolKey));
+                    else
+                        SetAssignedProperty(interpreter, target, (string)key,
+                            interpreter.GetPropertyValue(typedArraySource, (string)key));
+                }
+                continue;
+            }
+
             foreach (var entry in EnumerateOwnEnumerable(interpreter, args[i], "Object.assign"))
                 SetAssignedProperty(interpreter, target, entry.Key, entry.Value);
             switch (args[i])
@@ -567,6 +596,7 @@ public static partial class ObjectBuiltIns
         {
             case SharpTSObjectNamespace:
             case ISharpTSOwnPropertyObject:
+            case SharpTSTypedArray:
                 if (!SharpTSProxy.OrdinarySet(interpreter, target, symbol, value, target))
                     throw new ThrowException(new SharpTSTypeError($"Cannot assign to symbol property '{symbol}'"));
                 break;
@@ -633,6 +663,26 @@ public static partial class ObjectBuiltIns
                 functionPrototype.FreezeOwnProperties();
                 PropertyDescriptorStore.Freeze(functionPrototype);
                 return RuntimeValue.FromObject(functionPrototype);
+            case SharpTSObjectPrototype objectPrototype:
+                objectPrototype.FreezeOwnProperties();
+                PropertyDescriptorStore.Freeze(objectPrototype);
+                return RuntimeValue.FromObject(objectPrototype);
+            case SharpTSStringPrototype stringPrototype:
+                stringPrototype.FreezeOwnProperties();
+                PropertyDescriptorStore.Freeze(stringPrototype);
+                return RuntimeValue.FromObject(stringPrototype);
+            case SharpTSNumberPrototype numberPrototype:
+                numberPrototype.FreezeOwnProperties();
+                PropertyDescriptorStore.Freeze(numberPrototype);
+                return RuntimeValue.FromObject(numberPrototype);
+            case SharpTSBooleanPrototype booleanPrototype:
+                booleanPrototype.FreezeOwnProperties();
+                PropertyDescriptorStore.Freeze(booleanPrototype);
+                return RuntimeValue.FromObject(booleanPrototype);
+            case SharpTSArrayPrototype arrayPrototype:
+                arrayPrototype.FreezeOwnProperties();
+                PropertyDescriptorStore.Freeze(arrayPrototype);
+                return RuntimeValue.FromObject(arrayPrototype);
             case SharpTSObject obj:
                 obj.Freeze();
                 return RuntimeValue.FromObject(obj);
@@ -706,6 +756,26 @@ public static partial class ObjectBuiltIns
                 functionPrototype.SealOwnProperties();
                 PropertyDescriptorStore.Seal(functionPrototype);
                 return RuntimeValue.FromObject(functionPrototype);
+            case SharpTSObjectPrototype objectPrototype:
+                objectPrototype.SealOwnProperties();
+                PropertyDescriptorStore.Seal(objectPrototype);
+                return RuntimeValue.FromObject(objectPrototype);
+            case SharpTSStringPrototype stringPrototype:
+                stringPrototype.SealOwnProperties();
+                PropertyDescriptorStore.Seal(stringPrototype);
+                return RuntimeValue.FromObject(stringPrototype);
+            case SharpTSNumberPrototype numberPrototype:
+                numberPrototype.SealOwnProperties();
+                PropertyDescriptorStore.Seal(numberPrototype);
+                return RuntimeValue.FromObject(numberPrototype);
+            case SharpTSBooleanPrototype booleanPrototype:
+                booleanPrototype.SealOwnProperties();
+                PropertyDescriptorStore.Seal(booleanPrototype);
+                return RuntimeValue.FromObject(booleanPrototype);
+            case SharpTSArrayPrototype arrayPrototype:
+                arrayPrototype.SealOwnProperties();
+                PropertyDescriptorStore.Seal(arrayPrototype);
+                return RuntimeValue.FromObject(arrayPrototype);
             case SharpTSObject obj:
                 obj.Seal();
                 return RuntimeValue.FromObject(obj);
@@ -868,6 +938,10 @@ public static partial class ObjectBuiltIns
                             "Cannot redefine symbol property"));
                     }
                     return target;
+                case SharpTSTypedArray typedArray:
+                    if (!typedArray.DefineProperty(symKey, descriptor))
+                        throw new ThrowException(new SharpTSTypeError("Cannot redefine symbol property"));
+                    return target;
                 case SharpTSDate symDate:
                     if (!symDate.DefineProperty(symKey, descriptor))
                         throw new ThrowException(new SharpTSTypeError("Cannot redefine symbol property"));
@@ -889,6 +963,14 @@ public static partial class ObjectBuiltIns
                         throw new ThrowException(new SharpTSTypeError(
                             "Cannot redefine symbol property"));
                     }
+                    return target;
+                case SharpTSNumberPrototype numberPrototype:
+                    if (!numberPrototype.DefineOwnSymbolProperty(symKey, descriptor))
+                        throw new ThrowException(new SharpTSTypeError("Cannot redefine symbol property"));
+                    return target;
+                case SharpTSBooleanPrototype booleanPrototype:
+                    if (!booleanPrototype.DefineOwnSymbolProperty(symKey, descriptor))
+                        throw new ThrowException(new SharpTSTypeError("Cannot redefine symbol property"));
                     return target;
                 case SharpTSFunctionPrototype functionPrototype:
                     if (!functionPrototype.DefineProperty(symKey, descriptor))
@@ -969,10 +1051,16 @@ public static partial class ObjectBuiltIns
                         interpreter, descriptor.Value);
                 success = arr.DefineProperty(propertyKey, descriptor);
                 break;
+            case SharpTSTypedArray typedArray:
+                success = DefineTypedArrayProperty(interpreter, typedArray, propertyKey, descriptor);
+                break;
             case SharpTSArrayGlobal arrayGlobal:
                 success = arrayGlobal.DefineExtraProperty(propertyKey, descriptor);
                 break;
             case SharpTSArrayPrototype arrayPrototype:
+                if (propertyKey == "length" && descriptor.HasValue)
+                    descriptor.Value = ArrayBuiltIns.CoerceArrayLength(
+                        interpreter, descriptor.Value);
                 success = arrayPrototype.DefineExtraProperty(propertyKey, descriptor);
                 break;
             case SharpTSMath math:
@@ -1003,7 +1091,7 @@ public static partial class ObjectBuiltIns
                 success = functionPrototype.DefineExtraProperty(propertyKey, descriptor);
                 break;
             case SharpTSObjectPrototype objectPrototype:
-                success = objectPrototype.DefineExtraProperty(propertyKey, descriptor);
+                success = DefineObjectPrototypeProperty(interpreter, objectPrototype, propertyKey, descriptor);
                 break;
             case SharpTSClassPrototype classPrototype:
                 success = classPrototype.DefineExtraProperty(propertyKey, descriptor);
@@ -1092,11 +1180,59 @@ public static partial class ObjectBuiltIns
         return descriptor;
     }
 
+    private static bool DefineObjectPrototypeProperty(
+        Interpreter interpreter, SharpTSObjectPrototype target, string name,
+        SharpTSPropertyDescriptor change)
+    {
+        var current = OwnPropertyDescriptorOf(interpreter, target, name);
+        if (current is null && !PropertyDescriptorStore.IsExtensible(target))
+            return false;
+        return target.GetOwnPropertyDescriptor(name) is null && current is { HasValue: true }
+            ? target.DefineExistingDataProperty(name, current, change)
+            : target.DefineExtraProperty(name, change);
+    }
+
+    internal static bool DefineTypedArrayProperty(
+        Interpreter interpreter, SharpTSTypedArray target, string name, SharpTSPropertyDescriptor descriptor)
+    {
+        if (SharpTSTypedArray.IsOrdinaryNamedPropertyKey(name))
+            return target.DefineNamedProperty(name, descriptor);
+
+        // IntegerIndexed [[DefineOwnProperty]] validates the existing element
+        // and descriptor before an optional value conversion. Unlike [[Set]],
+        // an invalid numeric index refuses the definition without conversion.
+        if (!PropertySemantics.TryGetArrayIndex(name, out uint index) || index >= target.Length
+            || descriptor.HasGet || descriptor.HasSet
+            || descriptor.HasWritable && !descriptor.Writable
+            || descriptor.HasEnumerable && !descriptor.Enumerable
+            || descriptor.HasConfigurable && !descriptor.Configurable)
+            return false;
+
+        if (descriptor.HasValue)
+            interpreter.WriteTypedArrayReferenceValue(target, name, descriptor.Value, strictMode: false);
+        return true;
+    }
+
     internal static bool DefinePropertyOnProxyTarget(
         Interpreter interpreter, object target, object propertyKey, object descriptor)
     {
         // OrdinarySet consumes a boolean refusal. The public Object entry point
         // below translates the same refusal into TypeError for its own callers.
+        if (target is SharpTSTypedArray typedArray && propertyKey is string typedName
+            && !SharpTSTypedArray.IsOrdinaryNamedPropertyKey(typedName))
+            return DefineTypedArrayProperty(
+                interpreter, typedArray, typedName, ToPropertyDescriptor(interpreter, descriptor));
+        if (target is SharpTSObjectPrototype objectPrototype && propertyKey is string prototypeName)
+            return DefineObjectPrototypeProperty(
+                interpreter, objectPrototype, prototypeName, ToPropertyDescriptor(interpreter, descriptor));
+        if (target is SharpTSNumberPrototype numberPrototype
+            && propertyKey is SharpTSSymbol numberSymbol)
+            return numberPrototype.DefineOwnSymbolProperty(
+                numberSymbol, ToPropertyDescriptor(interpreter, descriptor));
+        if (target is SharpTSBooleanPrototype booleanPrototype
+            && propertyKey is SharpTSSymbol booleanSymbol)
+            return booleanPrototype.DefineOwnSymbolProperty(
+                booleanSymbol, ToPropertyDescriptor(interpreter, descriptor));
         if (target is SharpTSObjectNamespace objectNamespace)
         {
             if (propertyKey is string name)
@@ -1200,6 +1336,7 @@ public static partial class ObjectBuiltIns
                     ?? GetBuiltInOwnPropertyDescriptor(interpreter, target, propertyKey),
             SharpTSInstance inst => inst.GetOwnPropertyDescriptor(propertyKey),
             SharpTSArray arr => arr.GetOwnPropertyDescriptor(propertyKey),
+            SharpTSTypedArray typedArray => typedArray.GetOwnPropertyDescriptor(propertyKey),
             SharpTSArrayPrototype arrayPrototype when !arrayPrototype.HasOwnProperty(propertyKey) => null,
             SharpTSArrayPrototype arrayPrototype => arrayPrototype.GetOwnPropertyDescriptor(propertyKey)
                 ?? GetBuiltInOwnPropertyDescriptor(interpreter, target, propertyKey),
@@ -1212,10 +1349,13 @@ public static partial class ObjectBuiltIns
                 ?? GetBuiltInOwnPropertyDescriptor(interpreter, target, propertyKey),
             SharpTSDate date => date.GetOwnPropertyDescriptor(propertyKey)
                 ?? GetBuiltInOwnPropertyDescriptor(interpreter, target, propertyKey),
+            SharpTSStringPrototype stringPrototype when !stringPrototype.HasOwnProperty(propertyKey) => null,
             SharpTSStringPrototype stringPrototype => stringPrototype.GetOwnPropertyDescriptor(propertyKey)
                 ?? GetBuiltInOwnPropertyDescriptor(interpreter, target, propertyKey),
+            SharpTSNumberPrototype numberPrototype when !numberPrototype.HasOwnProperty(propertyKey) => null,
             SharpTSNumberPrototype numberPrototype => numberPrototype.GetOwnPropertyDescriptor(propertyKey)
                 ?? GetBuiltInOwnPropertyDescriptor(interpreter, target, propertyKey),
+            SharpTSBooleanPrototype booleanPrototype when !booleanPrototype.HasOwnProperty(propertyKey) => null,
             SharpTSBooleanPrototype booleanPrototype => booleanPrototype.GetOwnPropertyDescriptor(propertyKey)
                 ?? GetBuiltInOwnPropertyDescriptor(interpreter, target, propertyKey),
             SharpTSBigIntPrototype bigIntPrototype => bigIntPrototype.GetOwnPropertyDescriptor(propertyKey)
@@ -1539,12 +1679,20 @@ public static partial class ObjectBuiltIns
                 return descriptor.ToObject();
             case SharpTSArray array when array.GetOwnPropertyDescriptor(key) is { } descriptor:
                 return descriptor.ToObject();
+            case SharpTSTypedArray typedArray when typedArray.GetOwnPropertyDescriptor(key) is { } descriptor:
+                return descriptor.ToObject();
             case SharpTSDate date when date.GetOwnPropertyDescriptor(key) is { } descriptor:
                 return descriptor.ToObject();
             case SharpTSMath math when math.GetOwnPropertyDescriptor(key) is { } descriptor:
                 return descriptor.ToObject();
             case SharpTSStringPrototype stringPrototype
                 when stringPrototype.GetOwnPropertyDescriptor(key) is { } descriptor:
+                return descriptor.ToObject();
+            case SharpTSNumberPrototype numberPrototype
+                when numberPrototype.GetOwnSymbolPropertyDescriptor(key) is { } descriptor:
+                return descriptor.ToObject();
+            case SharpTSBooleanPrototype booleanPrototype
+                when booleanPrototype.GetOwnSymbolPropertyDescriptor(key) is { } descriptor:
                 return descriptor.ToObject();
             case SharpTSJSON json when json.GetOwnPropertyDescriptor(key) is { } descriptor:
                 return descriptor.ToObject();
@@ -1846,6 +1994,8 @@ public static partial class ObjectBuiltIns
             SharpTSClass klass => klass.OwnStaticStringKeys().Cast<object?>()
                 .Concat(klass.OwnStaticSymbolKeys()).ToList(),
             SharpTSInstance inst => inst.GetFieldNames().Cast<object?>().ToList(),
+            SharpTSTypedArray typedArray => typedArray.OwnStringKeys().Cast<object?>()
+                .Concat(typedArray.GetSymbolPropertyNames()).ToList(),
             SharpTSArray arr => GetOwnPropertyNamesFromArray(arr),
             SharpTSMath math => math.OwnStringKeys().Cast<object?>()
                 .Concat(math.GetSymbolPropertyNames().Cast<object?>()).ToList(),
@@ -1855,6 +2005,10 @@ public static partial class ObjectBuiltIns
                 .Concat(json.GetSymbolPropertyNames().Cast<object?>()).ToList(),
             SharpTSRegExp regex => regex.OwnStringKeys().Cast<object?>().ToList(),
             SharpTSProxy proxy => proxy.TrapOwnPropertyKeys(interpreter),
+            SharpTSNumberPrototype numberPrototype => numberPrototype.OwnStringKeys().Cast<object?>()
+                .Concat(numberPrototype.GetSymbolPropertyNames().Cast<object?>()).ToList(),
+            SharpTSBooleanPrototype booleanPrototype => booleanPrototype.OwnStringKeys().Cast<object?>()
+                .Concat(booleanPrototype.GetSymbolPropertyNames().Cast<object?>()).ToList(),
             Dictionary<string, object?> dict => dict.Keys.Cast<object?>().ToList(),
             _ => []
         };
@@ -1912,11 +2066,15 @@ public static partial class ObjectBuiltIns
             SharpTSGlobalThis globalObject => globalObject.OwnStringKeys().Cast<object?>().ToList(),
             ISharpTSPrimitiveConstructor primitiveConstructor => primitiveConstructor.OwnStringKeys().Cast<object?>().ToList(),
             SharpTSFunctionPrototype functionPrototype => functionPrototype.OwnStringKeys().Cast<object?>().ToList(),
+            SharpTSStringPrototype stringPrototype => stringPrototype.OwnStringKeys().Cast<object?>().ToList(),
+            SharpTSNumberPrototype numberPrototype => numberPrototype.OwnStringKeys().Cast<object?>().ToList(),
+            SharpTSBooleanPrototype booleanPrototype => booleanPrototype.OwnStringKeys().Cast<object?>().ToList(),
             SharpTSClassPrototype prototype => prototype.OwnStringKeys().Cast<object?>().ToList(),
             SharpTSClass klass => klass.OwnStaticStringKeys().Cast<object?>().ToList(),
             SharpTSProxy proxy => proxy.TrapOwnPropertyKeys(interpreter)
                 .OfType<string>().Cast<object?>().ToList(),
             SharpTSInstance inst => inst.GetFieldNames().Select(k => (object?)k).ToList(),
+            SharpTSTypedArray typedArray => typedArray.OwnStringKeys().Cast<object?>().ToList(),
             SharpTSArray arr => GetOwnPropertyNamesFromArray(arr),
             SharpTSMath math => math.OwnStringKeys().Cast<object?>().ToList(),
             SharpTSJSON json => json.OwnStringKeys().Cast<object?>().ToList(),
@@ -2258,6 +2416,7 @@ public static partial class ObjectBuiltIns
     /// </summary>
     private static object? PreventExtensions(Interpreter interpreter, List<object?> args)
     {
+        if (TryPreventExtensionsOwnedPrototype(args[0])) return args[0];
         if (interpreter.TryGetPromiseConstructorSymbolProperties(args[0], out var intrinsicProperties))
             intrinsicProperties.PreventExtensions();
         if (args[0] is SharpTSProxy proxy)
@@ -2306,6 +2465,9 @@ public static partial class ObjectBuiltIns
             case SharpTSFunctionPrototype functionPrototype:
                 functionPrototype.PreventExtensionsOwnProperties();
                 return functionPrototype;
+            case SharpTSObjectPrototype objectPrototype:
+                objectPrototype.PreventExtensionsOwnProperties();
+                return objectPrototype;
             case ISharpTSCallable callable:
                 PropertyDescriptorStore.PreventExtensions(callable);
                 return callable;
@@ -2321,8 +2483,32 @@ public static partial class ObjectBuiltIns
         }
     }
 
+    internal static bool TryPreventExtensionsOwnedPrototype(object? target)
+    {
+        switch (target)
+        {
+            case SharpTSStringPrototype prototype:
+                prototype.PreventExtensionsOwnProperties();
+                break;
+            case SharpTSNumberPrototype prototype:
+                prototype.PreventExtensionsOwnProperties();
+                break;
+            case SharpTSBooleanPrototype prototype:
+                prototype.PreventExtensionsOwnProperties();
+                break;
+            case SharpTSArrayPrototype prototype:
+                prototype.PreventExtensionsOwnProperties();
+                break;
+            default:
+                return false;
+        }
+        PropertyDescriptorStore.PreventExtensions(target);
+        return true;
+    }
+
     internal static bool PreventExtensionsTarget(Interpreter interpreter, object target)
     {
+        if (TryPreventExtensionsOwnedPrototype(target)) return true;
         if (interpreter.TryGetPromiseConstructorSymbolProperties(target, out var intrinsicProperties))
             intrinsicProperties.PreventExtensions();
         switch (target)
@@ -2360,6 +2546,10 @@ public static partial class ObjectBuiltIns
             case SharpTSFunctionPrototype functionPrototype:
                 functionPrototype.PreventExtensionsOwnProperties();
                 PropertyDescriptorStore.PreventExtensions(functionPrototype);
+                return true;
+            case SharpTSObjectPrototype objectPrototype:
+                objectPrototype.PreventExtensionsOwnProperties();
+                PropertyDescriptorStore.PreventExtensions(objectPrototype);
                 return true;
             case ISharpTSCallable callable:
                 PropertyDescriptorStore.PreventExtensions(callable);
@@ -2428,10 +2618,13 @@ public static partial class ObjectBuiltIns
                 .OfType<SharpTSSymbol>().Cast<object?>().ToList(),
             SharpTSInstance inst => inst.GetSymbolPropertyNames().Select(s => (object?)s).ToList(),
             SharpTSArray array => array.GetSymbolPropertyNames().Select(s => (object?)s).ToList(),
+            SharpTSTypedArray typedArray => typedArray.GetSymbolPropertyNames().Cast<object?>().ToList(),
             SharpTSDate date => date.GetSymbolPropertyNames().Cast<object?>().ToList(),
             SharpTSMath math => math.GetSymbolPropertyNames().Select(s => (object?)s).ToList(),
             SharpTSStringPrototype stringPrototype
                 => stringPrototype.GetSymbolPropertyNames().Select(s => (object?)s).ToList(),
+            SharpTSNumberPrototype numberPrototype => numberPrototype.GetSymbolPropertyNames().Cast<object?>().ToList(),
+            SharpTSBooleanPrototype booleanPrototype => booleanPrototype.GetSymbolPropertyNames().Cast<object?>().ToList(),
             SharpTSFunctionPrototype functionPrototype
                 => functionPrototype.GetSymbolPropertyNames().Cast<object?>().ToList(),
             SharpTSClassPrototype prototype => prototype.GetSymbolPropertyNames().Cast<object?>().ToList(),
@@ -2522,6 +2715,8 @@ public static partial class ObjectBuiltIns
             => (object?)classPrototype.Class.Superclass?.Prototype ?? interp?.GetObjectPrototype(),
         // The Number prototype object is ordinary and inherits from this realm's
         // Object.prototype.
+        SharpTSNumberPrototype { HasExplicitPrototype: true } numberPrototype => numberPrototype.ExplicitPrototype,
+        SharpTSBooleanPrototype { HasExplicitPrototype: true } booleanPrototype => booleanPrototype.ExplicitPrototype,
         SharpTSNumberPrototype => interp?.GetObjectPrototype(),
         SharpTSBooleanPrototype => interp?.GetObjectPrototype(),
         SharpTSBigIntPrototype => interp?.GetObjectPrototype(),
@@ -2530,6 +2725,7 @@ public static partial class ObjectBuiltIns
         // prototype objects. Their conceptual chains still reach Object.prototype.
         // Keep this fallback limited to native types without an explicit prototype
         // carrier: ordinary null roots and Proxy trap results remain authoritative.
+        SharpTSTypedArray { HasExplicitPrototype: true } typedArray => typedArray.ExplicitPrototype,
         SharpTSMap or SharpTSSet or SharpTSWeakMap or SharpTSWeakSet
             or SharpTSWeakRef or SharpTSFinalizationRegistry
             or SharpTSArrayBuffer or SharpTSSharedArrayBuffer or SharpTSDataView
@@ -2623,11 +2819,28 @@ public static partial class ObjectBuiltIns
             case SharpTSObjectPrototype:
                 return proto is null;
 
+            case SharpTSNumberPrototype or SharpTSBooleanPrototype:
+                if (ReferenceEquals(PrototypeOf(interpreter, target), proto)) return true;
+                if (!PropertyDescriptorStore.IsExtensible(target)) return false;
+                if (WouldCreatePrototypeCycle(interpreter, target, proto)) return false;
+                if (target is SharpTSNumberPrototype numberPrototype)
+                    numberPrototype.SetExplicitPrototype(proto);
+                else
+                    ((SharpTSBooleanPrototype)target).SetExplicitPrototype(proto);
+                return true;
+
             case SharpTSArray array:
                 if (ReferenceEquals(PrototypeOf(interpreter, array), proto)) return true;
                 if (!array.IsExtensible) return false;
                 if (WouldCreatePrototypeCycle(interpreter, array, proto)) return false;
                 array.SetExplicitPrototype(proto);
+                return true;
+
+            case SharpTSTypedArray typedArray:
+                if (typedArray.HasExplicitPrototype && ReferenceEquals(typedArray.ExplicitPrototype, proto)) return true;
+                if (!PropertyDescriptorStore.IsExtensible(typedArray)) return false;
+                if (WouldCreatePrototypeCycle(interpreter, typedArray, proto)) return false;
+                typedArray.SetExplicitPrototype(proto);
                 return true;
 
             case SharpTSObject obj:
@@ -2719,8 +2932,8 @@ public static partial class ObjectBuiltIns
             // this preflight rather than having their traps invoked here.
             candidate = candidate switch
             {
-                SharpTSObject or SharpTSArray or SharpTSClassPrototype or SharpTSInstance or SharpTSArrayGlobal or SharpTSClass or SharpTSPromise
-                    or SharpTSFunctionPrototype
+                SharpTSObject or SharpTSArray or SharpTSTypedArray or SharpTSClassPrototype or SharpTSInstance or SharpTSArrayGlobal or SharpTSClass or SharpTSPromise
+                    or SharpTSFunctionPrototype or SharpTSNumberPrototype or SharpTSBooleanPrototype
                     or Dictionary<string, object?>
                     => PrototypeOf(interpreter, candidate),
                 ISharpTSCallable function when function is not SharpTSProxy

@@ -19,13 +19,26 @@ public sealed class ReflectArrayLikeArgumentListTests
             console.log((Reflect.construct(target, [7, 9]) as any).value,
                 construct(target, [11, 13]).value);
             const receiver: any = { tag: "bound" };
-            function readThis(this: any) { return this; }
+            function readThis(this: any) { "use strict"; return this; }
             const bind: any = Function.prototype.bind;
-            console.log(Reflect.apply(bind, readThis, [7])() === 7,
-                Reflect.apply(bind, readThis, [false])() === false);
+            const numberBound: any = Reflect.apply(bind, readThis, [7]);
+            const booleanBound: any = Reflect.apply(bind, readThis, [false]);
+            console.log(numberBound() === 7, booleanBound() === false);
             const Bound: any = target.bind(receiver, 2);
             console.log(construct(Bound, [3]).value, receiver.tag);
             """, "16 24\n16 24\ntrue true\n5 bound\n"];
+        yield return ["bind-callee-strictness", """
+            function strictRead(this: any) { "use strict"; return this; }
+            function sloppyRead(this: any) { return this; }
+            const bind: any = Function.prototype.bind;
+            for (const value of [7, false, "text"]) {
+                const strictBound: any = Reflect.apply(bind, strictRead, [value]);
+                const sloppyBound: any = Reflect.apply(bind, sloppyRead, [value]);
+                const boxed: any = sloppyBound();
+                console.log(strictBound() === value, typeof boxed, boxed.valueOf() === value,
+                    boxed !== sloppyBound());
+            }
+            """, "true object true true\ntrue object true true\ntrue object true true\n"];
         yield return ["representations-holes-and-inherited-indices", """
             function format(...values: any[]) {
                 return values.map(v => v === undefined ? "U" : String(v)).join("|") + ":" + values.length;

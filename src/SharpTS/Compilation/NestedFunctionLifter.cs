@@ -690,6 +690,13 @@ internal sealed class NestedFunctionLifter
                 foreach (var child in sequence.Statements) AddDeclaration(child);
                 return;
             }
+            if (statement is Stmt.Using resource)
+            {
+                foreach (var binding in resource.Bindings)
+                    if (binding.Name is { } token && !current.Contains(token.Lexeme))
+                        (added ??= new HashSet<string>(current)).Add(token.Lexeme);
+                return;
+            }
             var name = DeclaredName(statement);
             if (name != null && !current.Contains(name))
                 (added ??= new HashSet<string>(current)).Add(name);

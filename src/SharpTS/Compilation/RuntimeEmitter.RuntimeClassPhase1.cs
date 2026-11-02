@@ -79,6 +79,11 @@ public partial class RuntimeEmitter
             MethodAttributes.Public | MethodAttributes.Static,
             _types.Void,
             [typeof(Action)]);
+        // Rejection reports are filled before the shared FIFO queue body.
+        // Reserve the existing required queue-state query for that earlier caller.
+        runtime.Microtasks.HasMicrotasks = typeBuilder.DefineMethod(
+            "HasMicrotasks", MethodAttributes.Public | MethodAttributes.Static,
+            _types.Boolean, Type.EmptyTypes);
 
         if (runtime.Vm is not null)
             DefineVmValueBridge(typeBuilder, runtime.RequireVm());
@@ -318,5 +323,18 @@ public partial class RuntimeEmitter
             _types.Object,
             FieldAttributes.Public | FieldAttributes.Static);
         runtime.GlobalObject.CompleteDeclarations();
+
+        // Global callable values need the clone wrapper before its worker-runtime
+        // body is emitted. Preserve its existing signature and scoped owner.
+        runtime.StructuredClone.Clone = typeBuilder.DefineMethod(
+            "StructuredClone",
+            MethodAttributes.Public | MethodAttributes.Static,
+            _types.Object,
+            [_types.Object, _types.Object]);
+        // No additional body or metadata is retained when the guest API cannot be reached.
+        runtime.StructuredClone.GuestClone = _emitHosted || _features.UsesStructuredClone
+            ? typeBuilder.DefineMethod("StructuredCloneGuest", MethodAttributes.Assembly | MethodAttributes.Static,
+                _types.Object, [_types.Object, _types.Object])
+            : runtime.StructuredClone.Clone;
     }
 }

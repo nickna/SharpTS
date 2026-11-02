@@ -371,12 +371,12 @@ public partial class TypeChecker
     }
 
     /// <summary>
-    /// Pre-registers top-level <c>let</c>/<c>const</c> declarations by defining their names as
+    /// Pre-registers current-list <c>let</c>/<c>const</c>/<c>using</c> declarations by defining their names as
     /// <c>any</c> in the type environment, so a function/closure body that textually PRECEDES the
     /// declaration can still forward-reference it (#533). TypeScript collects every lexical binding
     /// in a scope before checking any function body, so such forward references are legal there; the
     /// body only executes once the binding is initialized. The real type is installed when
-    /// VisitVar/VisitConst runs during the sequential pass, overwriting the <c>any</c> placeholder,
+    /// VisitVar/VisitConst/CheckUsingDeclaration runs during the sequential pass, overwriting the <c>any</c> placeholder,
     /// so a reference appearing AFTER the declaration keeps its precise type.
     ///
     /// Mirrors <see cref="HoistVarDeclarations"/> (var) and <see cref="HoistClassDeclarations"/>
@@ -414,6 +414,22 @@ public partial class TypeChecker
                     {
                         _environment.Define(c.Name.Lexeme, TypeInfo.Any.Shared);
                         MarkPendingLexicalValueFlow(constSymbol);
+                    }
+                    break;
+                case Stmt.Using resource:
+                    foreach (var binding in resource.Bindings)
+                    {
+                        if (binding.Name is not { } name) continue;
+                        BindingSymbol resourceSymbol = RegisterValueDeclaration(name);
+                        if (!_environment.IsDefinedLocally(name.Lexeme))
+                        {
+                            _environment.Define(name.Lexeme, TypeInfo.Any.Shared);
+                            MarkPendingLexicalValueFlow(resourceSymbol);
+                        }
+                        // Module preparation may have reserved the name in a
+                        // different flow frame before this authoritative pass.
+                        if (_definiteAssignmentStack.TryPeek(out var resourceAssignments))
+                            resourceAssignments.TryAdd(resourceSymbol, false);
                     }
                     break;
                 case Stmt.Export { Declaration: Stmt.Var v } when !v.IsVar:

@@ -177,6 +177,7 @@ public partial class TypeChecker
 
     private TypeInfo CheckGet(Expr.Get get)
     {
+        if (get.Optional) _optionalChainMemberTargets.Remove(get);
         using var memberLookup = BeginSourceMemberLookup(get, get.Name, MemberOperation.Read);
         TypeInfo result = CheckGetCore(get);
         memberLookup?.Succeed();
@@ -266,7 +267,7 @@ public partial class TypeChecker
             return windowGlobalMember;
 
         TypeInfo objType = RefreshCompletedInterfaceBinding(CheckExpr(get.Object));
-        objType = WidenFreshArrayReceiver(get.Object, objType);
+        objType = DeclaredTypedArrayReceiver(WidenFreshArrayReceiver(get.Object, objType));
         ExpectSourceMemberReceiver(objType);
 
         if (objType is TypeInfo.Any && get.Name.Lexeme == "prototype"
@@ -483,7 +484,7 @@ public partial class TypeChecker
             TypeCategory.Namespace when objType is TypeInfo.Namespace nsType =>
                 CheckGetOnNamespace(nsType, get.Name),
             TypeCategory.Union when objType is TypeInfo.Union union =>
-                CheckGetOnUnion(union, get.Name, get.Optional, get.Object),
+                CheckGetOnUnion(union, get),
             TypeCategory.Intersection when objType is TypeInfo.Intersection intersection =>
                 CheckGetOnIntersection(intersection, get.Name),
             _ => TypeInfo.Any.Shared
@@ -530,8 +531,11 @@ public partial class TypeChecker
     /// If a property doesn't exist on some non-null/undefined members, the result
     /// includes undefined for those members (mimicking TypeScript's permissive behavior).
     /// </summary>
-    private TypeInfo CheckGetOnUnion(TypeInfo.Union union, Token memberName, bool isOptional = false, Expr? receiver = null)
+    private TypeInfo CheckGetOnUnion(TypeInfo.Union union, Expr.Get get)
     {
+        Token memberName = get.Name;
+        bool isOptional = get.Optional;
+        Expr receiver = get.Object;
         List<TypeInfo> memberTypes = [];
         bool hasNullOrUndefined = false;
         bool hasMissingProperty = false;
@@ -575,6 +579,15 @@ public partial class TypeChecker
                 $"Property '{memberName.Lexeme}' does not exist on type '{union}'.",
                 memberName.Line,
                 tsCode: "TS2339");
+        }
+
+        // Retain only this actual member resolution before the chain contributes undefined.
+        // An optional method's own nullable type remains in this invocation target.
+        if (isOptional && hasNullOrUndefined && memberTypes.Count > 0)
+        {
+            var presentMembers = memberTypes.Distinct(TypeInfoEqualityComparer.Instance).ToList();
+            _optionalChainMemberTargets[get] = presentMembers.Count == 1
+                ? presentMembers[0] : new TypeInfo.Union(presentMembers);
         }
 
         // For optional chaining with null/undefined in the union, add undefined to result
@@ -808,7 +821,7 @@ public partial class TypeChecker
                 tsCode: "TS7017");
         }
 
-        TypeInfo objType = RefreshCompletedInterfaceBinding(CheckExpr(set.Object));
+        TypeInfo objType = DeclaredTypedArrayReceiver(RefreshCompletedInterfaceBinding(CheckExpr(set.Object)));
         EnsureWritableClassIndex(objType, new TypeInfo.StringLiteral(set.Name.Lexeme),
             new Expr.Literal(set.Name.Lexeme));
         EnsureWritableInterfaceIndex(objType, new TypeInfo.StringLiteral(set.Name.Lexeme),

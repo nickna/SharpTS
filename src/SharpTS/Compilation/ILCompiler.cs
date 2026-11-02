@@ -678,6 +678,8 @@ public partial class ILCompiler
         Phase2_AnalyzeClosures(statements, modules);
         _closures.ConstArrowBindings = ConstArrowBindingAnalyzer.Collect(statements);
         StableExactClassMethodCallAnalyzer.Analyze(statements, _typeMap, _features, _typeMapper);
+        // Presence must be decided before return/storage summaries define CLR signatures.
+        TypedArrayHoistAnalyzer.Analyze(statements, _typeMap, _closures.Analyzer);
         if (_rawCallStorage is not null) _rawCallStorage.Analyze(statements, _features);
         else ForwardedReturnValueAnalyzer.Analyze(statements, _typeMap, _features, modules);
         StableMapIterationAnalyzer.Analyze(statements, _typeMap, _closures.Analyzer);
@@ -699,7 +701,6 @@ public partial class ILCompiler
             statements, _typeMap, _closures.Analyzer, _features, _typeMapper);
         _classes.CompactStorageClasses.UnionWith(
             CompactClassStorageAnalyzer.Analyze(statements, _typeMap, _features, _typeMapper));
-        TypedArrayHoistAnalyzer.Analyze(statements, _typeMap, _closures.Analyzer);
         ArrayLocalPromotionAnalyzer.Analyze(statements, _typeMap, _closures.Analyzer, _features);
         StringAccumulatorPromotionAnalyzer.Analyze(statements, _typeMap, _closures.Analyzer);
         // Callee identity proofs stay inside their module. The combined object-local pass
@@ -2137,6 +2138,7 @@ public partial class ILCompiler
         if (!EmitDebugSymbols)
         {
             _nativeReceiverBinding?.ValidateImage(image);
+            _nativeTypedArrayBuffers?.ValidateImage(image);
             return new CompilationArtifacts(image, null, null);
         }
 
@@ -2160,6 +2162,7 @@ public partial class ILCompiler
             image, pdb.ContentId, pdb.FormatVersion, pdbPath, pdb.Checksum, PdbEmitter.ChecksumAlgorithmName);
 
         _nativeReceiverBinding?.ValidateImage(image);
+        _nativeTypedArrayBuffers?.ValidateImage(image);
 
         return new CompilationArtifacts(image, pdb.Bytes, Path.GetFileName(pdbPath));
     }
@@ -2367,6 +2370,13 @@ public partial class ILCompiler
             }
 
             if (path != null && _liveModuleDeclarations.Contains(stmt)) return;
+
+            if (stmt is Stmt.Using resource)
+            {
+                foreach (var variable in GetTopLevelUsingDeclarations(resource))
+                    RegisterCapturedStmt(variable, captureKey, path, ref mv, ref mf);
+                return;
+            }
 
             string? varName = stmt switch
             {
@@ -2608,6 +2618,12 @@ public partial class ILCompiler
 
         protected override void VisitVar(Stmt.Var stmt) { Add(stmt.Name.Lexeme); base.VisitVar(stmt); }
         protected override void VisitConst(Stmt.Const stmt) { Add(stmt.Name.Lexeme); base.VisitConst(stmt); }
+        protected override void VisitUsing(Stmt.Using stmt)
+        {
+            foreach (var binding in stmt.Bindings)
+                if (binding.Name is { } token) Add(token.Lexeme);
+            base.VisitUsing(stmt);
+        }
         protected override void VisitFunction(Stmt.Function stmt)
         {
             Add(stmt.Name.Lexeme);
@@ -2731,6 +2747,12 @@ public partial class ILCompiler
     private void DefineModuleScopedTopLevelStaticField(Stmt stmt, string? modulePath, Dictionary<string, FieldBuilder>? moduleDict)
     {
         if (modulePath != null && _liveModuleDeclarations.Contains(stmt)) return;
+        if (stmt is Stmt.Using resource)
+        {
+            foreach (var variable in GetTopLevelUsingDeclarations(resource))
+                DefineModuleScopedTopLevelStaticField(variable, modulePath, moduleDict);
+            return;
+        }
         if (stmt is Stmt.Sequence seq)
         {
             foreach (var inner in seq.Statements)
@@ -2800,6 +2822,12 @@ public partial class ILCompiler
             moduleDict[varName] = field;
         }
     }
+
+    // Storage metadata only: retain the actual resource declaration token,
+    // without inserting another initializer or declaration into the source AST.
+    private static IEnumerable<Stmt.Var> GetTopLevelUsingDeclarations(Stmt.Using resource) =>
+        resource.Bindings.Where(binding => binding.Name is not null)
+            .Select(binding => new Stmt.Var(binding.Name!, null, null, IsVar: false));
 
     /// <summary>
     /// Produces a field-name-safe fragment from a module path. Used to

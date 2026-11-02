@@ -139,7 +139,7 @@ public class SharpTSMessagePort : SharpTSEventEmitter
         ClonedMessage delivery;
         try
         {
-            delivery = new ClonedMessage(StructuredClone.Clone(message, transfer), transfer);
+            delivery = new ClonedMessage(StructuredClone.CloneWithInterpreter(message, transfer, OwnerInterpreter), transfer);
         }
         catch (StructuredClone.DataCloneError)
         {

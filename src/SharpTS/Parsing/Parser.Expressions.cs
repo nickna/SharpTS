@@ -1169,7 +1169,7 @@ public partial class Parser
                         Expr keyExpr = Expression();
                         Consume(TokenType.RIGHT_BRACKET, "Expect ']' after computed property key.");
 
-                        if (Check(TokenType.LEFT_PAREN))
+                        if (Check(TokenType.LEFT_PAREN) || Check(TokenType.LESS))
                         {
                             var methodExpr = ParseObjectMethodShorthand(isMethodAsync, isMethodGenerator, propertyStart);
                             properties.Add(new Expr.Property(new Expr.ComputedKey(keyExpr), methodExpr));
@@ -1189,7 +1189,7 @@ public partial class Parser
                         Token stringKey = Previous();
                         var key = new Expr.LiteralKey(stringKey);
 
-                        if (Check(TokenType.LEFT_PAREN))
+                        if (Check(TokenType.LEFT_PAREN) || Check(TokenType.LESS))
                         {
                             var methodExpr = ParseObjectMethodShorthand(isMethodAsync, isMethodGenerator, propertyStart);
                             properties.Add(new Expr.Property(key, methodExpr));
@@ -1209,7 +1209,7 @@ public partial class Parser
                         Token numberKey = Previous();
                         var key = new Expr.LiteralKey(numberKey);
 
-                        if (Check(TokenType.LEFT_PAREN))
+                        if (Check(TokenType.LEFT_PAREN) || Check(TokenType.LESS))
                         {
                             var methodExpr = ParseObjectMethodShorthand(isMethodAsync, isMethodGenerator, propertyStart);
                             properties.Add(new Expr.Property(key, methodExpr));
@@ -1228,7 +1228,7 @@ public partial class Parser
                     bool isShorthandDefault = false;
                     bool isPrototypeSetter = false;
 
-                    if (Check(TokenType.LEFT_PAREN))
+                    if (Check(TokenType.LEFT_PAREN) || Check(TokenType.LESS))
                     {
                         // Method shorthand: { fn() {} }
                         value = ParseObjectMethodShorthand(isMethodAsync, isMethodGenerator, propertyStart);
@@ -1381,6 +1381,7 @@ public partial class Parser
         int sourceStart = -1)
     {
         int start = sourceStart >= 0 ? sourceStart : CurrentSourceStart();
+        List<TypeParam>? typeParams = ParseTypeParameters();
         int parameterStart = CurrentSourceStart();
         Consume(TokenType.LEFT_PAREN, "Expect '(' in method shorthand.");
 
@@ -1447,7 +1448,7 @@ public partial class Parser
 
         var arrow = new Expr.ArrowFunction(
             Name: null,
-            TypeParams: null,
+            TypeParams: typeParams,
             ThisType: thisType,
             Parameters: parameters,
             ExpressionBody: null,

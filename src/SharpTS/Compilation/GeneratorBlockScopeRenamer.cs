@@ -303,7 +303,7 @@ internal sealed class GeneratorBlockScopeRenamer : AstVisitorBase
 
     protected override void VisitConst(Stmt.Const stmt)
     {
-        base.VisitConst(stmt);   // initializer is evaluated before the binding enters scope
+        base.VisitConst(stmt);   // enclosing lexical blocks already declared their bindings
         if (_arrowDepth > 0)
         {
             CurrentScope.TryAdd(stmt.Name.Lexeme, stmt.Name.Lexeme);   // arrow-local: resolution only, never renamed
@@ -385,8 +385,42 @@ internal sealed class GeneratorBlockScopeRenamer : AstVisitorBase
     protected override void VisitBlock(Stmt.Block stmt)
     {
         PushScope();
+        foreach (var declaration in stmt.Statements) PredeclareBlockBinding(declaration);
         base.VisitBlock(stmt);
         PopScope();
+    }
+
+    private void PredeclareBlockBinding(Stmt declaration)
+    {
+        if (declaration is Stmt.Sequence sequence)
+        {
+            foreach (var child in sequence.Statements) PredeclareBlockBinding(child);
+            return;
+        }
+        if (declaration is Stmt.Using usingDeclaration)
+        {
+            foreach (var binding in usingDeclaration.Bindings)
+            {
+                if (binding.Name is null) continue;
+                if (_arrowDepth > 0)
+                    CurrentScope.TryAdd(binding.Name.Lexeme, binding.Name.Lexeme);
+                else
+                    DeclareBlockScoped(binding, binding.Name.Lexeme);
+            }
+            return;
+        }
+        string? name = declaration switch
+        {
+            Stmt.Var { IsVar: false } variable => variable.Name.Lexeme,
+            Stmt.Const constant => constant.Name.Lexeme,
+            Stmt.Class @class => @class.Name.Lexeme,
+            Stmt.Function function => function.Name.Lexeme,
+            _ => null
+        };
+        if (name is null) return;
+        if (_arrowDepth > 0 || declaration is Stmt.Function)
+            CurrentScope.TryAdd(name, name);
+        else DeclareBlockScoped(declaration, name);
     }
 
     protected override void VisitFor(Stmt.For stmt)
@@ -484,39 +518,19 @@ internal sealed class GeneratorBlockScopeRenamer : AstVisitorBase
     {
         Visit(stmt.Subject);
         PushScope();   // all cases share one block scope (ECMA-262 14.12)
-        foreach (var declaration in stmt.Clauses.SelectMany(clause => clause.Body)) Predeclare(declaration);
+        foreach (var declaration in stmt.Clauses.SelectMany(clause => clause.Body)) PredeclareBlockBinding(declaration);
         foreach (var clause in stmt.Clauses)
         {
             if (clause.Value is { } value) Visit(value);
             foreach (var s in clause.Body) Visit(s);
         }
         PopScope();
-
-        void Predeclare(Stmt declaration)
-        {
-            if (declaration is Stmt.Sequence sequence)
-            {
-                foreach (var child in sequence.Statements) Predeclare(child);
-                return;
-            }
-            string? name = declaration switch
-            {
-                Stmt.Var { IsVar: false } variable => variable.Name.Lexeme,
-                Stmt.Const constant => constant.Name.Lexeme,
-                Stmt.Class @class => @class.Name.Lexeme,
-                Stmt.Function function => function.Name.Lexeme,
-                _ => null
-            };
-            if (name is null) return;
-            if (_arrowDepth > 0 || declaration is Stmt.Function)
-                CurrentScope.TryAdd(name, name);
-            else DeclareBlockScoped(declaration, name);
-        }
     }
 
     protected override void VisitTryCatch(Stmt.TryCatch stmt)
     {
         PushScope();
+        foreach (var declaration in stmt.TryBlock) PredeclareBlockBinding(declaration);
         foreach (var s in stmt.TryBlock) Visit(s);
         PopScope();
 
@@ -530,6 +544,7 @@ internal sealed class GeneratorBlockScopeRenamer : AstVisitorBase
                 else
                     CurrentScope[stmt.CatchParam.Lexeme] = stmt.CatchParam.Lexeme;
             }
+            foreach (var declaration in stmt.CatchBlock) PredeclareBlockBinding(declaration);
             foreach (var s in stmt.CatchBlock) Visit(s);
             PopScope();
         }
@@ -537,6 +552,7 @@ internal sealed class GeneratorBlockScopeRenamer : AstVisitorBase
         if (stmt.FinallyBlock != null)
         {
             PushScope();
+            foreach (var declaration in stmt.FinallyBlock) PredeclareBlockBinding(declaration);
             foreach (var s in stmt.FinallyBlock) Visit(s);
             PopScope();
         }

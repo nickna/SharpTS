@@ -20,7 +20,8 @@ public partial class RuntimeEmitter
         MethodInfo ObjectGetOwnPropertyDescriptor, MethodInfo HasOwnPropertyHelperMethod,
         MethodInfo GetFunctionMethod, MethodInfo InvokeMethodValue, FieldInfo UndefinedInstance, Type UndefinedType,
         MethodInfo GetProperty, MethodInfo GetPrototypeOf, MethodInfo GetIndex, MethodInfo IsSymbol,
-        MethodInfo FindOwnSymbolMethod, MethodInfo? NativeProxyRejection, EmittedErrorRuntime Errors);
+        MethodInfo FindOwnSymbolMethod, MethodInfo? NativeProxyRejection, EmittedErrorRuntime Errors,
+        EmittedTypedArrayRuntime TypedArrays, MethodInfo HasPrototypeEntry);
 
     private readonly record struct ReflectToPropertyKeyInputs(Type SymbolType, FieldInfo SymbolToPrimitive,
         Type UndefinedType, MethodInfo ToJsString, MethodInfo GetProperty, MethodInfo InvokeMethodValue,
@@ -39,7 +40,8 @@ public partial class RuntimeEmitter
     private readonly record struct ReflectSetInputs(ProxySetCallInputs ProxySet,
         MethodInfo ObjectGetOwnPropertyDescriptor, MethodInfo IsFrozen, MethodInfo HasOwnPropertyHelperMethod,
         MethodInfo ToPropertyKey, MethodInfo ObjectGetPrototypeOf, MethodInfo IsTruthy, MethodInfo InvokeMethodValue,
-        Type UndefinedType, MethodInfo GetProperty, MethodInfo SetProperty, MethodInfo IsSymbol);
+        Type UndefinedType, MethodInfo GetProperty, MethodInfo SetProperty, MethodInfo IsSymbol,
+        EmittedTypedArrayRuntime TypedArrays, MethodInfo HasPrototypeEntry);
 
     private readonly record struct ReflectSetPrototypeOfInputs(MethodInfo CreateException,
         ConstructorInfo TypeErrorConstructor, MethodInfo InvokeMethodUnwrapped, MethodInfo ObjectGetPrototypeOf,
@@ -49,7 +51,9 @@ public partial class RuntimeEmitter
     private readonly record struct ReflectDefinePropertyInputs(MethodInfo InvokeMethodUnwrapped,
         MethodInfo ObjectGetOwnPropertyDescriptor, MethodInfo HasOwnPropertyHelperMethod, MethodInfo ToPropertyKey,
         MethodInfo ObjectDefineProperty, MethodInfo ObjectIsExtensible, MethodInfo GetProperty,
-        PropertyDescriptorConversionInputs DescriptorConversion, MethodInfo? NativeProxyRejection);
+        PropertyDescriptorConversionInputs DescriptorConversion,
+        DefinePropertyArrayLengthCoercionInputs ArrayLengthCoercion, MethodInfo? NativeProxyRejection,
+        EmittedTypedArrayRuntime? TypedArrays = null);
 
     private readonly record struct ReflectOwnKeysInputs(MethodInfo CreateException,
         ConstructorInfo TypeErrorConstructor, ProxyOwnKeysCallInputs ProxyOwnKeys,
@@ -232,6 +236,29 @@ public partial class RuntimeEmitter
         il.Emit(OpCodes.Ret);
 
         il.MarkLabel(noGetterFieldLabel);
+        if (inputs.TypedArrays.Implementation is { } ownTypedArrays)
+        {
+            var ownTypedValue = il.DefineLabel();
+            var physicalOwnData = il.DefineLabel();
+            var otherOwnData = il.DefineLabel();
+            EmitTypedArrayLengthTargetGuard(ownTypedArrays, physicalOwnData);
+            il.Emit(OpCodes.Br, ownTypedValue);
+            il.MarkLabel(physicalOwnData);
+            var physicalKey = il.DeclareLocal(_types.String);
+            var physicalIndex = il.DeclareLocal(_types.Int32);
+            il.Emit(OpCodes.Ldloc, key);
+            il.Emit(OpCodes.Isinst, _types.String);
+            il.Emit(OpCodes.Stloc, physicalKey);
+            il.Emit(OpCodes.Ldloc, physicalKey);
+            il.Emit(OpCodes.Brfalse, otherOwnData);
+            EmitTypedArrayPhysicalIndexGuard(il, ownTypedArrays, physicalKey, physicalIndex, otherOwnData);
+            il.MarkLabel(ownTypedValue);
+            il.Emit(OpCodes.Ldloc, descriptorLocal);
+            il.Emit(OpCodes.Ldstr, "value");
+            il.Emit(OpCodes.Call, inputs.GetProperty);
+            il.Emit(OpCodes.Ret);
+            il.MarkLabel(otherOwnData);
+        }
         var readTargetLabel = il.DefineLabel();
         il.Emit(OpCodes.Ldloc, key);
         il.Emit(OpCodes.Call, inputs.IsSymbol);
@@ -241,6 +268,38 @@ public partial class RuntimeEmitter
         il.Emit(OpCodes.Call, inputs.GetProperty);
         il.Emit(OpCodes.Ret);
         il.MarkLabel(ordinaryGetLabel);
+        if (inputs.TypedArrays.Implementation is { } typedArrays)
+        {
+            var ordinaryPrototype = il.DefineLabel();
+            EmitTypedArrayLengthTargetGuard(typedArrays, ordinaryPrototype);
+            var intrinsicPrototype = il.DefineLabel();
+            il.Emit(OpCodes.Ldarg_0);
+            il.Emit(OpCodes.Call, inputs.HasPrototypeEntry);
+            il.Emit(OpCodes.Brfalse, intrinsicPrototype);
+            il.Emit(OpCodes.Ldarg_0);
+            il.Emit(OpCodes.Call, inputs.GetPrototypeOf);
+            il.Emit(OpCodes.Brtrue, ordinaryPrototype);
+            il.Emit(OpCodes.Ldsfld, inputs.UndefinedInstance);
+            il.Emit(OpCodes.Ret);
+            il.MarkLabel(intrinsicPrototype);
+
+            // The unmodified intrinsic getter reads Receiver's view slots.
+            // Own descriptors and explicit prototype chains retain their paths.
+            var compatibleReceiver = il.DefineLabel();
+            il.Emit(OpCodes.Ldarg_2);
+            il.Emit(OpCodes.Isinst, typedArrays.BaseType);
+            il.Emit(OpCodes.Dup);
+            il.Emit(OpCodes.Brtrue, compatibleReceiver);
+            il.Emit(OpCodes.Pop);
+            GuestErrorEmitter.ThrowError(il, inputs.Errors.CreateException, inputs.Errors.TypeErrorConstructor,
+                "TypedArray length getter called on incompatible receiver");
+            il.MarkLabel(compatibleReceiver);
+            il.Emit(OpCodes.Callvirt, typedArrays.LengthGetter);
+            il.Emit(OpCodes.Conv_R8);
+            il.Emit(OpCodes.Box, _types.Double);
+            il.Emit(OpCodes.Ret);
+            il.MarkLabel(ordinaryPrototype);
+        }
         // Declared static Symbol methods use the class registry rather than
         // symbol descriptor storage. They are own data properties and must win
         // over any inherited descriptor before traversing the prototype.
@@ -287,6 +346,18 @@ public partial class RuntimeEmitter
         il.Emit(OpCodes.Castclass, _types.String);
         il.Emit(OpCodes.Call, inputs.GetProperty);
         il.Emit(OpCodes.Ret);
+
+        void EmitTypedArrayLengthTargetGuard(EmittedTypedArrayImplementation arrays, Label fallback)
+        {
+            il.Emit(OpCodes.Ldarg_0);
+            il.Emit(OpCodes.Isinst, arrays.BaseType);
+            il.Emit(OpCodes.Brfalse, fallback);
+            il.Emit(OpCodes.Ldloc, key);
+            il.Emit(OpCodes.Isinst, _types.String);
+            il.Emit(OpCodes.Ldstr, "length");
+            il.Emit(OpCodes.Call, _types.StringOpEquality);
+            il.Emit(OpCodes.Brfalse, fallback);
+        }
     }
 
     private void EmitReflectDeleteProperty(TypeBuilder typeBuilder, EmittedReflectNamespace reflectNamespace,
@@ -582,6 +653,30 @@ public partial class RuntimeEmitter
         // retaining the original Receiver. This is how inherited read-only
         // accessors such as RegExp.prototype.global reject assignment.
         il.MarkLabel(targetDescriptorMissingLabel);
+        if (inputs.TypedArrays.Implementation is { } typedArrays)
+        {
+            var ordinaryPrototype = il.DefineLabel();
+            il.Emit(OpCodes.Ldarg_0);
+            il.Emit(OpCodes.Isinst, typedArrays.BaseType);
+            il.Emit(OpCodes.Brfalse, ordinaryPrototype);
+            il.Emit(OpCodes.Ldarg_0);
+            il.Emit(OpCodes.Call, inputs.HasPrototypeEntry);
+            il.Emit(OpCodes.Brtrue, ordinaryPrototype);
+            var readOnlyMetadata = il.DefineLabel();
+            foreach (string name in new[] { "length", "byteLength", "byteOffset", "buffer", "BYTES_PER_ELEMENT" })
+            {
+                il.Emit(OpCodes.Ldloc, keyLocal);
+                il.Emit(OpCodes.Isinst, _types.String);
+                il.Emit(OpCodes.Ldstr, name);
+                il.Emit(OpCodes.Call, _types.StringOpEquality);
+                il.Emit(OpCodes.Brtrue, readOnlyMetadata);
+            }
+            il.Emit(OpCodes.Br, ordinaryPrototype);
+            il.MarkLabel(readOnlyMetadata);
+            il.Emit(OpCodes.Ldc_I4_0);
+            il.Emit(OpCodes.Ret);
+            il.MarkLabel(ordinaryPrototype);
+        }
         var targetPrototypeLocal = il.DeclareLocal(_types.Object);
         il.Emit(OpCodes.Ldarg_0);
         il.Emit(OpCodes.Call, inputs.ObjectGetPrototypeOf);
@@ -919,6 +1014,28 @@ public partial class RuntimeEmitter
         il.Emit(OpCodes.Unbox_Any, _types.Boolean);
         il.Emit(OpCodes.Ret);
         il.MarkLabel(ordinaryDefineLabel);
+
+        // ArraySetLength must propagate its conversions' abrupt completions.
+        // Use the already-converted private record, outside the refusal catch;
+        // only its normalized numeric value reaches ObjectDefineProperty.
+        var stringKey = il.DeclareLocal(_types.String);
+        il.Emit(OpCodes.Ldloc, reflectDefineKeyLocal);
+        il.Emit(OpCodes.Isinst, _types.String);
+        il.Emit(OpCodes.Stloc, stringKey);
+        EmitDefineTypedArrayPhysicalProperty(il, inputs.TypedArrays,
+            inputs.DescriptorConversion.Booleans, inputs.DescriptorConversion.Errors,
+            stringKey, convertedDescriptor, returnsBoolean: true);
+        var (lengthWasCoerced, _, coercedLength) = EmitDefinePropertyArrayLengthCoercion(
+            il, inputs.ArrayLengthCoercion, stringKey, convertedDescriptor);
+        var lengthReady = il.DefineLabel();
+        il.Emit(OpCodes.Ldloc, lengthWasCoerced);
+        il.Emit(OpCodes.Brfalse, lengthReady);
+        il.Emit(OpCodes.Ldloc, convertedDescriptor);
+        il.Emit(OpCodes.Ldstr, "value");
+        il.Emit(OpCodes.Ldloc, coercedLength);
+        il.Emit(OpCodes.Callvirt, _types.GetMethod(_types.DictionaryStringObject,
+            "set_Item", _types.String, _types.Object));
+        il.MarkLabel(lengthReady);
 
         // try { ObjectDefineProperty(target, key, convertedDescriptor); return true; }
         // catch { return false; }

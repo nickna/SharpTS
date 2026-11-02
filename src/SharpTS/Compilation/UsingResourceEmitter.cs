@@ -5,21 +5,90 @@ namespace SharpTS.Compilation;
 /// <summary>Emits acquisition and invocation for a captured synchronous disposer.</summary>
 internal static class UsingResourceEmitter
 {
+    // Leaves the actual suppression value on the stack. Its two completion
+    // values remain ordinary writable, nonenumerable, configurable own data.
+    public static void CombineFailure(ILGenerator il, TypeProvider types, EmittedRuntime runtime,
+        Action loadError, Action loadSuppressed)
+    {
+        var error = il.DeclareLocal(runtime.Errors.Type);
+        il.Emit(OpCodes.Ldstr, "An error was suppressed during disposal");
+        il.Emit(OpCodes.Newobj, runtime.Errors.MessageConstructor);
+        il.Emit(OpCodes.Stloc, error);
+        il.Emit(OpCodes.Ldloc, error);
+        il.Emit(OpCodes.Ldstr, "SuppressedError");
+        il.Emit(OpCodes.Callvirt, runtime.Errors.NameSetter);
+        DefineValue("error", loadError);
+        DefineValue("suppressed", loadSuppressed);
+        il.Emit(OpCodes.Ldloc, error);
+
+        void DefineValue(string name, Action loadValue)
+        {
+            var storage = runtime.DescriptorStorage;
+            var descriptor = il.DeclareLocal(storage.DescriptorType);
+            il.Emit(OpCodes.Newobj, storage.DescriptorConstructor);
+            il.Emit(OpCodes.Stloc, descriptor);
+            il.Emit(OpCodes.Ldloc, descriptor);
+            loadValue();
+            il.Emit(OpCodes.Callvirt, storage.DescriptorValue.GetSetMethod()!);
+            il.Emit(OpCodes.Ldloc, descriptor);
+            il.Emit(OpCodes.Ldc_I4_1);
+            il.Emit(OpCodes.Callvirt, storage.DescriptorWritable.GetSetMethod()!);
+            il.Emit(OpCodes.Ldloc, descriptor);
+            il.Emit(OpCodes.Ldc_I4_0);
+            il.Emit(OpCodes.Callvirt, storage.DescriptorEnumerable.GetSetMethod()!);
+            il.Emit(OpCodes.Ldloc, descriptor);
+            il.Emit(OpCodes.Ldc_I4_1);
+            il.Emit(OpCodes.Callvirt, storage.DescriptorConfigurable.GetSetMethod()!);
+            il.Emit(OpCodes.Ldloc, error);
+            il.Emit(OpCodes.Ldstr, name);
+            il.Emit(OpCodes.Ldloc, descriptor);
+            il.Emit(OpCodes.Call, storage.DefineProperty);
+            il.Emit(OpCodes.Pop);
+        }
+    }
+
     public static void Acquire(ILGenerator il, TypeProvider types, EmittedRuntime runtime,
-        Action loadResource, Action loadMethod, Action storeMethod)
+        Action loadResource, Action loadMethod, Action storeMethod) =>
+        AcquireCore(il, types, runtime, loadResource, loadMethod, storeMethod, null);
+
+    public static void AcquireAsync(ILGenerator il, TypeProvider types, EmittedRuntime runtime,
+        Action loadResource, Action loadMethod, Action storeMethod, Action<bool> storeAwaitResult) =>
+        AcquireCore(il, types, runtime, loadResource, loadMethod, storeMethod, storeAwaitResult);
+
+    private static void AcquireCore(ILGenerator il, TypeProvider types, EmittedRuntime runtime,
+        Action loadResource, Action loadMethod, Action storeMethod, Action<bool>? storeAwaitResult)
     {
         var acquired = il.DefineLabel();
         var missingMethod = il.DefineLabel();
         var invalidMethod = il.DefineLabel();
+        storeAwaitResult?.Invoke(false);
         loadResource();
         il.Emit(OpCodes.Brfalse, acquired);
         loadResource();
         il.Emit(OpCodes.Isinst, runtime.Sentinels.UndefinedType);
         il.Emit(OpCodes.Brtrue, acquired);
         loadResource();
-        il.Emit(OpCodes.Ldsfld, runtime.Symbols.Dispose);
+        il.Emit(OpCodes.Ldsfld, storeAwaitResult is null ? runtime.Symbols.Dispose : runtime.Symbols.AsyncDispose);
         il.Emit(OpCodes.Call, runtime.ObjectRead.Index);
         storeMethod();
+        if (storeAwaitResult is not null)
+        {
+            var fallback = il.DefineLabel();
+            var validate = il.DefineLabel();
+            loadMethod();
+            il.Emit(OpCodes.Brfalse, fallback);
+            loadMethod();
+            il.Emit(OpCodes.Isinst, runtime.Sentinels.UndefinedType);
+            il.Emit(OpCodes.Brtrue, fallback);
+            storeAwaitResult(true);
+            il.Emit(OpCodes.Br, validate);
+            il.MarkLabel(fallback);
+            loadResource();
+            il.Emit(OpCodes.Ldsfld, runtime.Symbols.Dispose);
+            il.Emit(OpCodes.Call, runtime.ObjectRead.Index);
+            storeMethod();
+            il.MarkLabel(validate);
+        }
         loadMethod();
         il.Emit(OpCodes.Brfalse, missingMethod);
         loadMethod();
@@ -40,6 +109,31 @@ internal static class UsingResourceEmitter
         il.MarkLabel(invalidMethod);
         GuestErrorEmitter.ThrowTypeError(il, runtime, "Resource Symbol.dispose must be callable");
         il.MarkLabel(acquired);
+    }
+
+    // Leaves the disposal result, or undefined for null/synchronous fallback.
+    // The caller performs the ordinary async suspension even for undefined.
+    public static void DisposeAsync(ILGenerator il, TypeProvider types, EmittedRuntime runtime,
+        Action loadResource, Action loadMethod, Action loadAwaitResult)
+    {
+        var managed = il.DefineLabel();
+        var done = il.DefineLabel();
+        loadMethod();
+        il.Emit(OpCodes.Brfalse, managed);
+        loadResource();
+        loadMethod();
+        il.Emit(OpCodes.Ldc_I4_0);
+        il.Emit(OpCodes.Newarr, types.Object);
+        il.Emit(OpCodes.Call, runtime.Invocation.Method);
+        loadAwaitResult();
+        il.Emit(OpCodes.Brtrue, done);
+        il.Emit(OpCodes.Pop);
+        il.Emit(OpCodes.Ldsfld, runtime.Sentinels.UndefinedInstance);
+        il.Emit(OpCodes.Br, done);
+        il.MarkLabel(managed);
+        Dispose(il, types, runtime, loadResource, loadMethod);
+        il.Emit(OpCodes.Ldsfld, runtime.Sentinels.UndefinedInstance);
+        il.MarkLabel(done);
     }
 
     public static void Dispose(ILGenerator il, TypeProvider types, EmittedRuntime runtime,

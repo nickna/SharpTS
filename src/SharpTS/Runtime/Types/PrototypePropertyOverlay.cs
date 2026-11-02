@@ -66,14 +66,51 @@ internal sealed class PrototypePropertyOverlay(
 
     public bool DefineProperty(string name, SharpTSPropertyDescriptor descriptor)
     {
-        _deletedBuiltIns.Remove(name);
         bool defined = _extras.DefineProperty(name, descriptor);
-        if (defined) TrackOwnStringKey(name);
+        if (defined)
+        {
+            _deletedBuiltIns.Remove(name);
+            TrackOwnStringKey(name);
+        }
         return defined;
+    }
+
+    internal bool DefinePropertyPreservingVirtualData(
+        string name, SharpTSPropertyDescriptor descriptor, Func<string, object?> getMember,
+        bool configurable = true)
+    {
+        if (!HasExtra(name) && HasOwnProperty(name))
+        {
+            // A virtual own data slot already exists even before its overlay is
+            // materialized. Preserve its value and omitted attributes on update.
+            var current = GetVirtualDataDescriptor(name, getMember, configurable);
+            return DefineExistingBuiltInDataProperty(name, current, descriptor);
+        }
+        return DefineProperty(name, descriptor);
+    }
+
+    internal bool DefineExistingBuiltInDataProperty(
+        string name, SharpTSPropertyDescriptor current, SharpTSPropertyDescriptor change)
+    {
+        if (!current.HasValue || current.HasGet || current.HasSet || HasExtra(name)
+            || _deletedBuiltIns.Contains(name) || !isBuiltIn(name))
+            return false;
+
+        // Validate against the actual existing descriptor before materializing
+        // its virtual slot. Nonextensibility forbids new own properties, not
+        // changes to an already present built-in data property.
+        var validation = new SharpTSObject(new Dictionary<string, object?>());
+        if (!validation.DefineProperty(name, current)
+            || !validation.DefineProperty(name, change))
+            return false;
+        _extras.MirrorCompletedPropertyDefinition(name, validation.GetOwnPropertyDescriptor(name)!);
+        TrackOwnStringKey(name);
+        return true;
     }
 
     public bool DeleteProperty(string name)
     {
+        if (!HasExtra(name) && HasOwnProperty(name) && _extras.IsSealed) return false;
         if (HasExtra(name) && !_extras.DeleteProperty(name)) return false;
         if (isBuiltIn(name)) _deletedBuiltIns.Add(name);
         _stringKeyOrder?.Remove(name);
@@ -85,6 +122,16 @@ internal sealed class PrototypePropertyOverlay(
 
     public SharpTSPropertyDescriptor? GetOwnPropertyDescriptor(string name)
         => _extras.GetOwnPropertyDescriptor(name);
+
+    internal SharpTSPropertyDescriptor? GetOwnPropertyDescriptor(
+        string name, Func<string, object?> getMember, bool configurable = true)
+        => _extras.GetOwnPropertyDescriptor(name)
+            ?? (HasOwnProperty(name) ? GetVirtualDataDescriptor(name, getMember, configurable) : null);
+
+    private SharpTSPropertyDescriptor GetVirtualDataDescriptor(
+        string name, Func<string, object?> getMember, bool configurable)
+        => new(getMember(name), writable: !_extras.IsFrozen, enumerable: false,
+            configurable: configurable && !_extras.IsSealed);
     public ISharpTSCallable? GetGetter(string name) => _extras.GetGetter(name);
     public ISharpTSCallable? GetSetter(string name) => _extras.GetSetter(name);
     public IEnumerable<string> OwnEnumerableKeys() => _extras.OwnEnumerableKeys();

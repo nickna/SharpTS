@@ -580,21 +580,21 @@ public class BoundFunction : ISharpTSCallable
         if (!_ignoreThisArg && _target is CompiledCallableAdapter compiled)
             return RuntimeValue.FromBoxed(compiled.CallWithThis(_thisArg, CallableInterop.ToBoxedList(combined)));
 
-        // Delegate to target's V2 path if available
+        if (!_ignoreThisArg && _target is SharpTSFunction fn)
+        {
+            var boundFn = CreateBoundSharpTSFunction(fn, _thisArg, interpreter);
+            return boundFn.CallV2(interpreter, combined);
+        }
+
+        if (!_ignoreThisArg && _target is SharpTSArrowFunction arrow && arrow.HasOwnThis)
+        {
+            var boundArrow = arrow.Bind(NormalizeBoundThis(arrow.IsStrict, _thisArg, interpreter)!);
+            return boundArrow.CallV2(interpreter, combined);
+        }
+
+        // Other callable kinds retain their existing receiver protocol.
         if (!_ignoreThisArg && _thisArg != null)
         {
-            if (_target is SharpTSFunction fn)
-            {
-                var boundFn = CreateBoundSharpTSFunction(fn, _thisArg);
-                return boundFn.CallV2(interpreter, combined);
-            }
-
-            if (_target is SharpTSArrowFunction arrow && arrow.HasOwnThis)
-            {
-                var boundArrow = arrow.Bind(_thisArg);
-                return boundArrow.CallV2(interpreter, combined);
-            }
-
             // Async function expressions (HasOwnThis) and async function
             // declarations rebind 'this'; true async arrows capture lexically
             // and fall through to the unbound target call below.
@@ -645,24 +645,20 @@ public class BoundFunction : ISharpTSCallable
         if (!_ignoreThisArg && _target is CompiledCallableAdapter compiled)
             return compiled.CallWithThis(_thisArg, combinedArgs);
 
-        // Handle binding 'this' for the target function
+        if (!_ignoreThisArg && _target is SharpTSFunction fn)
+        {
+            var boundFn = CreateBoundSharpTSFunction(fn, _thisArg, interpreter);
+            return boundFn.Call(interpreter, combinedArgs);
+        }
+
+        if (!_ignoreThisArg && _target is SharpTSArrowFunction arrow && arrow.HasOwnThis)
+        {
+            var boundArrow = arrow.Bind(NormalizeBoundThis(arrow.IsStrict, _thisArg, interpreter)!);
+            return boundArrow.Call(interpreter, combinedArgs);
+        }
+
         if (!_ignoreThisArg && _thisArg != null)
         {
-            if (_target is SharpTSFunction fn)
-            {
-                // For regular functions, we need to invoke with proper 'this' binding
-                // Since SharpTSFunction.Bind requires SharpTSInstance, we need a workaround
-                // We'll create a special environment handling in the BoundFunction call
-                var boundFn = CreateBoundSharpTSFunction(fn, _thisArg);
-                return boundFn.Call(interpreter, combinedArgs);
-            }
-
-            if (_target is SharpTSArrowFunction arrow && arrow.HasOwnThis)
-            {
-                var boundArrow = arrow.Bind(_thisArg);
-                return boundArrow.Call(interpreter, combinedArgs);
-            }
-
             // Async function expressions (HasOwnThis) and async function
             // declarations rebind 'this'; true async arrows capture lexically
             // and fall through to the unbound target call below.
@@ -694,10 +690,16 @@ public class BoundFunction : ISharpTSCallable
     /// <summary>
     /// Creates a SharpTSFunction-like callable that binds 'this' to any object.
     /// </summary>
-    private static ISharpTSCallable CreateBoundSharpTSFunction(SharpTSFunction fn, object thisArg)
+    private static ISharpTSCallable CreateBoundSharpTSFunction(SharpTSFunction fn, object? thisArg, Interpreter interpreter)
     {
-        // We wrap the function in a BoundSharpTSFunctionWrapper
-        return new BoundSharpTSFunctionWrapper(fn, thisArg);
+        return fn.BindThis(NormalizeBoundThis(fn.IsStrict, thisArg, interpreter));
+    }
+
+    private static object? NormalizeBoundThis(bool strict, object? receiver, Interpreter interpreter)
+    {
+        if (strict) return receiver;
+        if (receiver is null or SharpTSUndefined) return interpreter.GlobalThis;
+        return BuiltInConstructorFactory.ToObject(receiver, interpreter);
     }
 
     private static ISharpTSCallable BindNativeReceiver(
@@ -719,123 +721,4 @@ public class BoundFunction : ISharpTSCallable
     };
 
     public override string ToString() => $"<fn {Name}>";
-}
-
-/// <summary>
-/// Internal wrapper to call a SharpTSFunction with an arbitrary 'this' value.
-/// </summary>
-internal class BoundSharpTSFunctionWrapper : ISharpTSCallable
-{
-    private readonly SharpTSFunction _fn;
-    private readonly object _thisArg;
-
-    public BoundSharpTSFunctionWrapper(SharpTSFunction fn, object thisArg)
-    {
-        _fn = fn;
-        _thisArg = thisArg;
-    }
-
-    public int Arity() => _fn.Arity();
-
-    public object? Call(Interpreter interpreter, List<object?> arguments)
-    {
-        // Create a wrapper instance if needed
-        if (_thisArg is SharpTSInstance instance)
-        {
-            var boundFn = _fn.Bind(instance);
-            return boundFn.Call(interpreter, arguments);
-        }
-
-        // For non-instance 'this' values, we need to set up the environment manually
-        // Create a synthetic instance that wraps the actual object
-        var syntheticInstance = new SyntheticThisInstance(_thisArg);
-        var boundFn2 = _fn.Bind(syntheticInstance);
-        var result = boundFn2.Call(interpreter, arguments);
-        FlushSyntheticBack(syntheticInstance, _thisArg);
-        return result;
-    }
-
-    public RuntimeValue CallV2(Interpreter interpreter, ReadOnlySpan<RuntimeValue> arguments)
-    {
-        if (_thisArg is SharpTSInstance instance)
-        {
-            var boundFn = _fn.Bind(instance);
-            return boundFn.CallV2(interpreter, arguments);
-        }
-
-        var syntheticInstance = new SyntheticThisInstance(_thisArg);
-        var boundFn2 = _fn.Bind(syntheticInstance);
-        var result = boundFn2.CallV2(interpreter, arguments);
-        FlushSyntheticBack(syntheticInstance, _thisArg);
-        return result;
-    }
-
-    /// <summary>
-    /// Copy fields written into the synthetic-this wrapper back to the original
-    /// target object. <c>Fn.call(target, ...)</c> is supposed to mutate
-    /// <c>target</c>; without this flush, writes inside the body land on the
-    /// synthetic and disappear when the call returns. Covers <see cref="SharpTSObject"/>
-    /// and plain <see cref="Dictionary{TKey,TValue}"/> targets — the only shapes
-    /// the constructor accepts as actualThis.
-    /// </summary>
-    private static void FlushSyntheticBack(SyntheticThisInstance synthetic, object actualThis)
-    {
-        if (actualThis is SharpTSObject obj)
-        {
-            foreach (var name in synthetic.GetFieldNames())
-            {
-                obj.SetProperty(name, synthetic.GetRawField(name));
-            }
-        }
-        else if (actualThis is Dictionary<string, object?> dict)
-        {
-            foreach (var name in synthetic.GetFieldNames())
-            {
-                dict[name] = synthetic.GetRawField(name);
-            }
-        }
-    }
-}
-
-/// <summary>
-/// Synthetic instance wrapper for binding 'this' to non-instance values.
-/// This allows binding functions to plain objects like { name: "foo" }.
-/// </summary>
-internal class SyntheticThisInstance : SharpTSInstance
-{
-    private static readonly SharpTSClass _dummyClass = CreateDummyClass();
-
-    public SyntheticThisInstance(object actualThis)
-        : base(_dummyClass)
-    {
-        // Copy fields from the actual 'this' object into this instance
-        if (actualThis is SharpTSObject obj)
-        {
-            foreach (var kvp in obj.Fields)
-            {
-                SetRawField(kvp.Key, kvp.Value);
-            }
-        }
-        else if (actualThis is Dictionary<string, object?> dict)
-        {
-            foreach (var kvp in dict)
-            {
-                SetRawField(kvp.Key, kvp.Value);
-            }
-        }
-    }
-
-    private static SharpTSClass CreateDummyClass()
-    {
-        // Create a minimal dummy class for the base constructor
-        return new SharpTSClass(
-            name: "SyntheticThis",
-            superclass: null,
-            methods: new Dictionary<string, ISharpTSCallable>(),
-            staticMethods: new Dictionary<string, ISharpTSCallable>(),
-            staticProperties: new Dictionary<string, object?>(),
-            getters: null,
-            setters: null,
-            isAbstract: false);
-    }
 }

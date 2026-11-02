@@ -7,6 +7,9 @@ public sealed class UsingAcquisitionTests
 {
     public static IEnumerable<object[]> Cases()
     {
+        yield return new object[] { "getter-only-literal", """
+            let gets=0,calls=0;const resource:any={get[Symbol.dispose](){gets++;return()=>calls++}};{using held=resource;console.log(gets,calls)}console.log(gets,calls);
+            """, "1 0\n1 1\n" };
         yield return new object[] { "accessor_capture", """
             const r:any={value:5};Object.defineProperty(r,Symbol.dispose,{get:function(){console.log("get");return function(){console.log(this.value);};}});{using x=r;console.log("body");}
             """, "get\nbody\n5\n" };
@@ -48,9 +51,16 @@ public sealed class UsingAcquisitionTests
     public static IEnumerable<object[]> SourceCases() => Cases().Select(row => row[1..]);
     public static IEnumerable<object[]> HostedCases() => Cases().Select(row => row[..2]);
 
-    [Theory, MemberData(nameof(SourceCases))]
-    public void CompiledUsingCapturesDisposerAtRegistration(string source, string expected)
+    public static IEnumerable<object[]> DualCases()
     {
-        Assert.Equal(expected, TestHarness.Run(source, ExecutionMode.Compiled));
+        foreach (var row in SourceCases())
+        foreach (var mode in new[] { ExecutionMode.Interpreted, ExecutionMode.Compiled })
+            yield return [.. row, mode];
+    }
+
+    [Theory, MemberData(nameof(DualCases))]
+    public void UsingCapturesDisposerAtRegistration(string source, string expected, ExecutionMode mode)
+    {
+        Assert.Equal(expected, TestHarness.Run(source, mode));
     }
 }

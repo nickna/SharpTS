@@ -1364,7 +1364,7 @@ public partial class ILCompiler
 
     /// <summary>
     /// Registers a function display class for an async arrow's own locals shared by nested SYNC
-    /// writes (#838) or hoisted async declarations. Both need the same live reference storage.
+    /// writes (#838) or hoisted ordinary/async declarations. These need live reference storage.
     /// Runs in Phase 5 before <see cref="PropagateFunctionDCRequirements"/>, which resolves the nested sync
     /// arrow's DC source to this DC via <see cref="ClosureCompilationState.AsyncArrowDCKeys"/>.
     /// </summary>
@@ -1377,6 +1377,7 @@ public partial class ILCompiler
             var members = ComputeAsyncArrowSyncWriteCaptures(arrow);
             var declarationLocals = GetAsyncDeclarationLiveLocals(
                 arrow, _collectedArrows.Select(entry => entry.Arrow));
+            declarationLocals.UnionWith(GetAsyncArrowFunctionClosureLiveLocals(arrow));
             members.UnionWith(declarationLocals);
             if (members.Count == 0) continue;
 
@@ -1396,6 +1397,38 @@ public partial class ILCompiler
             if (_closures.FunctionDisplayClasses.ContainsKey(key))
                 _closures.AsyncArrowDCKeys[arrow] = key;
         }
+    }
+
+    private HashSet<string> GetAsyncArrowFunctionClosureLiveLocals(Expr.ArrowFunction owner)
+    {
+        var owned = _closures.Analyzer.GetCapturedLocals(owner);
+        HashSet<string> result = [];
+        // NestedFunctionLifter hoists ordinary function declarations as own-this
+        // closures. They must read the owner's initialized binding at call time,
+        // rather than snapshot its value before the body declarations run.
+        foreach (var (closure, captures) in _collectedArrows)
+        {
+            if (!closure.HasOwnThis || closure.IsAsync || closure.IsGenerator) continue;
+            foreach (var name in captures)
+                if (owned.Contains(name)
+                    && ReferenceEquals(_closures.Analyzer.GetCaptureSource(closure, name), owner)
+                    && !_closures.Analyzer.TryGetLoopBodyCellCapture(closure, name, out _))
+                    result.Add(name);
+        }
+        // An ordinary descendant can require this environment even when its
+        // immediate parent only creates that descendant and reads no binding.
+        foreach (var (function, captures, _) in _collectedInnerFunctions)
+        {
+            if (function.IsAsync || function.IsGenerator) continue;
+            foreach (var name in captures)
+                if (owned.Contains(name)
+                    && ReferenceEquals(_closures.Analyzer.GetCaptureSource(function, name), owner)
+                    && !_closures.Analyzer.TryGetLoopBodyCellCapture(function, name, out _))
+                    result.Add(name);
+        }
+        result.ExceptWith(_closures.Analyzer.GetPerIterationLoopBindings(owner));
+        result.ExceptWith(_closures.Analyzer.GetCellOnlyCapturedLocalNames(owner));
+        return result;
     }
 
     /// <summary>
@@ -1498,7 +1531,8 @@ public partial class ILCompiler
             if (_arrowEnclosingAsyncArrow.TryGetValue(arrow, out var enclAsyncArrow) &&
                 _closures.AsyncArrowDCKeys.TryGetValue(enclAsyncArrow, out var asyncKey) &&
                 _closures.FunctionDisplayClassFields.TryGetValue(asyncKey, out var asyncDCFields) &&
-                captures.Any(asyncDCFields.ContainsKey))
+                captures.Any(name => asyncDCFields.ContainsKey(name)
+                    && ReferenceEquals(_closures.Analyzer.GetCaptureSource(arrow, name), enclAsyncArrow)))
             {
                 _arrowsNeedingFunctionDC.Add(arrow);
                 _closures.ArrowFunctionDCSource[arrow] = asyncKey;

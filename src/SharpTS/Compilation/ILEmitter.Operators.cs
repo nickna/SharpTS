@@ -380,6 +380,38 @@ public partial class ILEmitter
             return;
         }
 
+        // An actual Number literal cannot equal a missing element (undefined).
+        // The numeric guard's NaN arm preserves that result without boxing each
+        // valid element. Other value comparisons keep the undefined sentinel.
+        bool guardedNumberComparison = false;
+        if (b.Left is Expr.GetIndex leftRead && b.Right is Expr.Literal { Value: double rightLiteral }
+            && TryEmitGuardedTypedArrayRead(leftRead, numericConsumer: true))
+        {
+            EmitDoubleConstant(rightLiteral);
+            guardedNumberComparison = true;
+        }
+        else if (b.Left is Expr.Literal { Value: double leftLiteral } && b.Right is Expr.GetIndex rightRead)
+        {
+            // The literal has no observable evaluation; emit it after the read
+            // so a refused fast path leaves the evaluation stack untouched.
+            if (TryEmitGuardedTypedArrayRead(rightRead, numericConsumer: true))
+            {
+                EmitDoubleConstant(leftLiteral);
+                guardedNumberComparison = true;
+            }
+        }
+        if (guardedNumberComparison)
+        {
+            IL.Emit(OpCodes.Ceq);
+            if (isNegated)
+            {
+                IL.Emit(OpCodes.Ldc_I4_0);
+                IL.Emit(OpCodes.Ceq);
+            }
+            SetStackType(StackType.Boolean);
+            return;
+        }
+
         // A number annotation can still have an object-backed value, such as a
         // default parameter supplied with null through an any alias. Capture the
         // actual emitted representation without converting either operand. Both
@@ -1270,8 +1302,8 @@ public partial class ILEmitter
     /// Emits the common three-point Int32 stencil with one element-range guard and unchecked
     /// neighboring reads. The ordinary lowering independently checks <c>i - 1</c>, <c>i</c>, and
     /// <c>i + 1</c> against the byte array. For an exact non-escaping backing all three indexes and
-    /// reads are pure, so one unsigned center/range check preserves the same first-fault behavior
-    /// while letting RyuJIT use a single base-plus-scaled-index address in the hot body.
+    /// reads are pure, so one unsigned center/range check selects NaN for invalid neighbors
+    /// while letting RyuJIT use a single base-plus-scaled-index address in the valid hot body.
     /// <summary>
     /// Emits a direct Int32 typed-array stencil calculation for a supported expression.
     /// </summary>
@@ -1289,14 +1321,25 @@ public partial class ILEmitter
             return false;
         }
 
+        var invalidIndex = IL.DefineLabel();
+        var done = IL.DefineLabel();
+        // The native counter may exceed Int32. Reject a lossy round-trip
+        // before its narrowed value can pass the neighboring-element guard.
+        IL.Emit(OpCodes.Ldloc, _ctx.Locals.GetLocal(counterName)!);
+        IL.Emit(OpCodes.Ldloc, _ctx.Locals.GetLocal(counterName)!);
+        IL.Emit(OpCodes.Conv_I4);
+        IL.Emit(OpCodes.Conv_I8);
+        IL.Emit(OpCodes.Bne_Un, invalidIndex);
         IL.Emit(OpCodes.Ldloc, _ctx.Locals.GetLocal(counterName)!);
         IL.Emit(OpCodes.Conv_I4);
         var centerIndex = IL.DeclareLocal(_ctx.Types.Int32);
         IL.Emit(OpCodes.Stloc, centerIndex);
 
         var inRange = EmitInt32StencilRangeTest(backing, centerIndex);
-        IL.Emit(OpCodes.Newobj, _ctx.Types.GetDefaultConstructor(typeof(IndexOutOfRangeException)));
-        IL.Emit(OpCodes.Throw);
+        IL.MarkLabel(invalidIndex);
+        // An invalid neighbor reads undefined; the pure numeric stencil is NaN.
+        IL.Emit(OpCodes.Ldc_R8, double.NaN);
+        IL.Emit(OpCodes.Br, done);
         IL.MarkLabel(inRange);
 
         var centerReference = IL.DeclareLocal(_ctx.Types.Byte.MakeByRefType());
@@ -1317,6 +1360,7 @@ public partial class ILEmitter
         EmitDirectInt32ReadAsInt64(centerReference, 4);
         IL.Emit(OpCodes.Add);
         IL.Emit(OpCodes.Conv_R8);
+        IL.MarkLabel(done);
         SetStackType(StackType.Double);
         return true;
     }
@@ -3035,7 +3079,9 @@ public partial class ILEmitter
             && _ctx.Runtime!.TypedArrays.Implementation?.GetNumericType(cta.ElementType) is { } ctaType
             && _ctx.Runtime!.TypedArrays.RequireImplementation().GetUnboxedByElement.TryGetValue(cta.ElementType, out var ctaGet)
             && _ctx.Runtime!.TypedArrays.RequireImplementation().SetUnboxedByElement.TryGetValue(cta.ElementType, out var ctaSet)
+            && IsPrimitiveNumericCompoundIndex(csi.Index)
             && _ctx.TypeMap?.Get(csi.Value) is TypeInfo.Primitive { Type: TokenType.TYPE_NUMBER } or TypeInfo.NumberLiteral
+            && !HasRawNumericValue(csi.Value)
             && IsArithmeticOrBitwiseCompound(csi.Operator.Type))
         {
             HoistedTypedArrayBacking? directBacking =
@@ -3043,11 +3089,21 @@ public partial class ILEmitter
                     ? backing
                     : null;
 
-            // The concrete receiver remains the fallback when the whole-program backing proof
-            // does not hold. Keep its existing cast-only hoist intact.
+            // Keep the actual reference for an ordinary receiver admitted through any.
+            // The nullable concrete carrier selects the accessor arm after the index is read.
             LocalBuilder? recvLocal = null;
-            if (directBacking == null)
+            LocalBuilder? originalReceiver = null;
+            bool provenCarrier = csi.Object is Expr.Variable known
+                && _ctx.TypeMap!.IsStableTypedArrayBackingReceiver(known);
+            if (directBacking == null && provenCarrier)
             {
+                EmitTypedArrayReceiver(csi.Object, ctaType);
+                recvLocal = IL.DeclareLocal(ctaType);
+                IL.Emit(OpCodes.Stloc, recvLocal);
+            }
+            else if (directBacking == null)
+            {
+                originalReceiver = SpillBoxed(csi.Object);
                 if (csi.Object is Expr.Variable cv
                     && _ctx.TryGetHoistedTypedArray(cv.Name.Lexeme) is { } choist)
                 {
@@ -3055,18 +3111,38 @@ public partial class ILEmitter
                 }
                 else
                 {
-                    EmitExpression(csi.Object);
-                    EnsureBoxed();
-                    IL.Emit(OpCodes.Castclass, ctaType);
+                    IL.Emit(OpCodes.Ldloc, originalReceiver);
+                    IL.Emit(OpCodes.Isinst, ctaType);
                     recvLocal = IL.DeclareLocal(ctaType);
                     IL.Emit(OpCodes.Stloc, recvLocal);
                 }
             }
 
-            // idx = (int)i  (native-int fast path when the index is an integer loop counter, #928)
-            EmitIndexAsInt32(csi.Index);
+            // Preserve the original primitive Number once. Only a valid
+            // physical index can reach the existing unboxed accessors.
+            EmitExpressionAsDouble(csi.Index);
+            var numericIndex = IL.DeclareLocal(_ctx.Types.Double);
             var idxLocal = IL.DeclareLocal(_ctx.Types.Int32);
-            IL.Emit(OpCodes.Stloc, idxLocal);
+            IL.Emit(OpCodes.Stloc, numericIndex);
+            void LoadPhysicalLength()
+            {
+                if (directBacking is { } lengthBacking) IL.Emit(OpCodes.Ldloc, lengthBacking.LengthLocal);
+                else
+                {
+                    IL.Emit(OpCodes.Ldloc, recvLocal!);
+                    IL.Emit(OpCodes.Callvirt, _ctx.Runtime.TypedArrays.RequireImplementation().LengthGetter);
+                }
+            }
+            var missingRead = IL.DefineLabel();
+            var currentReady = IL.DefineLabel();
+            var ordinary = IL.DefineLabel();
+            var done = IL.DefineLabel();
+            if (originalReceiver is not null)
+            {
+                IL.Emit(OpCodes.Ldloc, recvLocal!);
+                IL.Emit(OpCodes.Brfalse, ordinary);
+            }
+            EmitTypedArrayNumericIndexGuard(numericIndex, idxLocal, missingRead, LoadPhysicalLength);
 
             // cur = direct backing read, or recv.GetUnboxed(idx) on the fallback path.
             if (directBacking is { } directRead)
@@ -3080,10 +3156,20 @@ public partial class ILEmitter
                 IL.Emit(OpCodes.Call, ctaGet);
             }
 
-            // result = cur OP v  (double)
-            EmitCompoundArithmeticDoubleOnStack(csi.Operator.Type, csi.Value);
+            IL.Emit(OpCodes.Br, currentReady);
+            IL.MarkLabel(missingRead);
+            // Numeric compound consumption converts the missing value to NaN.
+            IL.Emit(OpCodes.Ldc_R8, double.NaN);
+            IL.MarkLabel(currentReady);
+            SetStackType(StackType.Double);
+
+            // The RHS is still evaluated exactly once, after the element read.
+            EmitCompoundArithmeticDoubleOnStack(csi.Operator.Type, csi.Value,
+                bitwiseToInt32: _ctx.Runtime.NumericCoercion.JsNumberToInt32);
             var resLocal = IL.DeclareLocal(_ctx.Types.Double);
             IL.Emit(OpCodes.Stloc, resLocal);
+            var skipStore = IL.DefineLabel();
+            EmitTypedArrayNumericIndexGuard(numericIndex, idxLocal, skipStore, LoadPhysicalLength);
 
             if (directBacking is { } directWrite)
             {
@@ -3097,9 +3183,37 @@ public partial class ILEmitter
                 IL.Emit(OpCodes.Call, ctaSet);
             }
 
-            // The compound-assignment expression evaluates to the stored numeric result.
+            IL.MarkLabel(skipStore);
+            // Return the computed Number before element narrowing, including
+            // the result of an ignored invalid-index write.
             IL.Emit(OpCodes.Ldloc, resLocal);
-            SetStackType(StackType.Double);
+            if (originalReceiver is not null)
+            {
+                // A brand miss can produce a nonnumeric value, including string concatenation.
+                IL.Emit(OpCodes.Box, _ctx.Types.Double);
+                IL.Emit(OpCodes.Br, done);
+                IL.MarkLabel(ordinary);
+                var boxedIndex = IL.DeclareLocal(_ctx.Types.Object);
+                IL.Emit(OpCodes.Ldloc, numericIndex);
+                IL.Emit(OpCodes.Box, _ctx.Types.Double);
+                IL.Emit(OpCodes.Stloc, boxedIndex);
+                EmitThrowIfUndefinedIndexReceiver(originalReceiver, boxedIndex, isWrite: false);
+                IL.Emit(OpCodes.Ldloc, originalReceiver);
+                IL.Emit(OpCodes.Ldloc, boxedIndex);
+                IL.Emit(OpCodes.Call, _ctx.Runtime.ObjectRead.Index);
+                SetStackUnknown();
+                EmitCompoundOperation(csi.Operator.Type, csi.Value);
+                var ordinaryResult = IL.DeclareLocal(_ctx.Types.Object);
+                IL.Emit(OpCodes.Stloc, ordinaryResult);
+                IL.Emit(OpCodes.Ldloc, originalReceiver);
+                IL.Emit(OpCodes.Ldloc, boxedIndex);
+                IL.Emit(OpCodes.Ldloc, ordinaryResult);
+                EmitPropertyWrite(indexed: true);
+                IL.Emit(OpCodes.Ldloc, ordinaryResult);
+                IL.MarkLabel(done);
+                SetStackUnknown();
+            }
+            else SetStackType(StackType.Double);
             return;
         }
 
@@ -3120,16 +3234,8 @@ public partial class ILEmitter
         if (!IsNullPlaceholderGlobal(csi.Object))
             EmitThrowIfUndefinedIndexReceiver(objLocal, indexLocal, isWrite: false);
 
-        // Normalize the computed property key once, before the read and RHS.
-        if (_ctx.TypeMap?.Get(csi.Object) is not { } receiverType ||
-            !DotNetTypeSynthesizer.TryGetClrType(receiverType, out _))
-        {
-            IL.Emit(OpCodes.Ldloc, indexLocal);
-            IL.Emit(OpCodes.Call, _ctx.Runtime!.Reflect.ToPropertyKey);
-            IL.Emit(OpCodes.Stloc, indexLocal);
-        }
-
-        // Get current value: GetIndex(obj, index)
+        // Retain the raw referenced name. GetIndex and SetIndex each convert
+        // their own key, so PutValue observes coercion after the RHS.
         IL.Emit(OpCodes.Ldloc, objLocal);
         IL.Emit(OpCodes.Ldloc, indexLocal);
         IL.Emit(OpCodes.Call, _ctx.Runtime!.ObjectRead.Index);
@@ -3149,6 +3255,49 @@ public partial class ILEmitter
         // Leave result on stack
         IL.Emit(OpCodes.Ldloc, resultLocal);
         SetStackUnknown();
+    }
+
+    private bool IsPrimitiveNumericCompoundIndex(Expr expression)
+    {
+        // The unboxed path reuses one integer index. Only a primitive numeric
+        // expression can do so without discarding observable Get/Put key coercion.
+        // Erased assertions do not establish the representation of their operand.
+        return expression switch
+        {
+            Expr.Literal { Value: double } => true,
+            Expr.Grouping grouping => IsPrimitiveNumericCompoundIndex(grouping.Expression),
+            Expr.TypeAssertion assertion => IsPrimitiveNumericCompoundIndex(assertion.Expression),
+            Expr.NonNullAssertion assertion => IsPrimitiveNumericCompoundIndex(assertion.Expression),
+            Expr.Satisfies satisfies => IsPrimitiveNumericCompoundIndex(satisfies.Expression),
+            Expr.Variable variable => IsPrimitiveNumericStorage(variable.Name.Lexeme),
+            Expr.Unary { Operator.Type: TokenType.PLUS or TokenType.MINUS or TokenType.TILDE } unary
+                => IsPrimitiveNumericCompoundIndex(unary.Right),
+            Expr.Binary binary when binary.Operator.Type is
+                TokenType.PLUS or TokenType.MINUS or TokenType.STAR or TokenType.SLASH or
+                TokenType.PERCENT or TokenType.AMPERSAND or TokenType.PIPE or TokenType.CARET or
+                TokenType.LESS_LESS or TokenType.GREATER_GREATER
+                => IsPrimitiveNumericCompoundIndex(binary.Left) && IsPrimitiveNumericCompoundIndex(binary.Right),
+            _ => false
+        };
+    }
+
+    private bool IsPrimitiveNumericStorage(string name)
+    {
+        // Shared binding storage takes precedence over the original numeric
+        // local/argument slot and may contain a value written through any.
+        if (_ctx.HasLoopBodyBindingAccess(name)
+            || _ctx.CellBindingLocals.ContainsKey(name) || _ctx.ParameterCaptureCells.ContainsKey(name)
+            || _ctx.CapturedFunctionLocals?.Contains(name) == true
+            || _ctx.CapturedArrowLocals?.Contains(name) == true
+            || _ctx.ParentArrowCapturedLocals?.Contains(name) == true
+            || _ctx.CapturedTopLevelVars?.Contains(name) == true
+            || _ctx.ExtraArrowScopeBindings?.ContainsKey(name) == true
+            || _ctx.CurrentArrowFunctionDCFieldRenames?.ContainsKey(name) == true)
+            return false;
+        var storage = _ctx.Locals.GetLocal(name)?.LocalType;
+        if (storage == null && _ctx.TryGetParameterType(name, out var parameter))
+            storage = parameter;
+        return storage == _ctx.Types.Double || storage == _ctx.Types.Int64;
     }
 
     private void EmitCompoundOperation(TokenType opType, Expr value)
@@ -3181,16 +3330,20 @@ public partial class ILEmitter
     // Stack in: [cur (double)]. Applies `cur OP value` in native double space (JS bitwise ops route
     // through int32) and leaves the numeric result as a double. Shared by the boxed compound path
     // and the typed-array compound fast path so the two always agree on semantics.
-    private void EmitCompoundArithmeticDoubleOnStack(TokenType opType, Expr value)
+    private void EmitCompoundArithmeticDoubleOnStack(TokenType opType, Expr value, MethodInfo? bitwiseToInt32 = null)
     {
         bool isBitwise = opType is TokenType.AMPERSAND_EQUAL or TokenType.PIPE_EQUAL
             or TokenType.CARET_EQUAL or TokenType.LESS_LESS_EQUAL or TokenType.GREATER_GREATER_EQUAL;
 
         if (isBitwise)
         {
-            IL.Emit(OpCodes.Conv_I4);
+            // Typed-array missing reads introduce NaN; use the existing JS
+            // modulo conversion there. Other callers retain their prior path.
+            if (bitwiseToInt32 is not null) IL.Emit(OpCodes.Call, bitwiseToInt32);
+            else IL.Emit(OpCodes.Conv_I4);
             EmitExpressionAsDouble(value);
-            IL.Emit(OpCodes.Conv_I4);
+            if (bitwiseToInt32 is not null) IL.Emit(OpCodes.Call, bitwiseToInt32);
+            else IL.Emit(OpCodes.Conv_I4);
         }
         else
         {

@@ -92,6 +92,7 @@ public partial class TypeChecker
     // Parent record/function keys may display nested classes by name alone.
     // A constructor comparison makes every enclosing result unsuitable for those caches.
     private ulong _ordinaryConstructorComparisonEpoch;
+    private ulong _typedArrayDeclarationComparisonEpoch;
 
     /// <summary>
     /// Argument/parameter assignability that additionally honors parameter optionality.
@@ -135,6 +136,8 @@ public partial class TypeChecker
         // type parameter that is in scope during real checking but not during speculation relates
         // differently (naked vs its constraint). Its verdicts are therefore non-authoritative and
         // must neither be written to nor served from the shared cache, or they poison the real pass.
+        bool typedArrayDeclarationPair = IsTypedArrayDeclarationPair(expected, actual);
+        if (typedArrayDeclarationPair) unchecked { _typedArrayDeclarationComparisonEpoch++; }
         bool ordinaryConstructorPair = IsOrdinaryConstructorPair(expected, actual);
         // Count identity comparisons too: their early success must not seed a
         // parent cache entry that could later match a different same-named class.
@@ -147,7 +150,7 @@ public partial class TypeChecker
         // authoritative for another constructor comparison.
         bool uncacheable = (_strictFunctionTypes && _methodBivarianceDepth > 0)
             || _varianceMeasurementDepth > 0 || _suppressDiagnostics > 0
-            || ordinaryConstructorContext;
+            || ordinaryConstructorContext || typedArrayDeclarationPair;
 
         // Level 1: Fast identity-based cache (reference equality)
         _identityCompatibilityCache ??= new(IdentityCacheKeyComparer.Instance);
@@ -194,12 +197,14 @@ public partial class TypeChecker
         try
         {
             ulong constructorEpoch = _ordinaryConstructorComparisonEpoch;
+            ulong typedArrayEpoch = _typedArrayDeclarationComparisonEpoch;
             // Cache miss - compute result
             var result = IsCompatibleCore(expected, actual);
 
             // A nested constructor relation also invalidates the enclosing comparison's
             // name-based cache key, even after the constructor depth has unwound.
-            if (!uncacheable && constructorEpoch == _ordinaryConstructorComparisonEpoch)
+            if (!uncacheable && constructorEpoch == _ordinaryConstructorComparisonEpoch
+                && typedArrayEpoch == _typedArrayDeclarationComparisonEpoch)
             {
                 _compatibilityCache[structuralKey] = result;
                 _identityCompatibilityCache[identityKey] = result;
@@ -483,6 +488,9 @@ public partial class TypeChecker
 
         if (IsOrdinaryConstructorPair(expected, actual))
             return OrdinaryConstructorsRelated(expected, actual);
+
+        if (TryRelateTypedArrayDeclaration(expected, actual, out bool declaredTypedArrayRelated))
+            return declaredTypedArrayRelated;
 
         // Namespace/module types (typeof someNamespace / typeof import(...)) have no dedicated
         // relation anywhere below, so two structurally-identical namespaces — even the exact same
@@ -884,7 +892,9 @@ public partial class TypeChecker
         // resolving to `any`). Each typed array is its own nominal type: assignable only from the
         // same element kind (Int32Array ← Int32Array, not ← Float64Array), matching tsc.
         if (expected is TypeInfo.TypedArray expTa && actual is TypeInfo.TypedArray actTa)
-            return expTa.ElementType == actTa.ElementType;
+            return expTa.ElementType == actTa.ElementType
+                && (expTa.BufferType is null || actTa.BufferType is { } actualBuffer
+                    && IsCompatible(expTa.BufferType, actualBuffer));
 
         // Error-family compatibility (reachable since Error/TypeError/… stopped resolving to `any`,
         // #528). Every built-in error shares the same structural shape (name/message/stack/cause), so

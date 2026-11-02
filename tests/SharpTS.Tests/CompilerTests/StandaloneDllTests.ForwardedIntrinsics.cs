@@ -1,3 +1,4 @@
+using SharpTS.Tests.Infrastructure;
 using SharpTS.Tests.SharedTests;
 using Xunit;
 
@@ -5,7 +6,7 @@ namespace SharpTS.Tests.CompilerTests;
 
 public partial class StandaloneDllTests
 {
-    [Theory, MemberData(nameof(ForwardedIntrinsicReturnTests.SavedCases),
+    [Theory, SerializableMemberData(nameof(ForwardedIntrinsicReturnTests.SavedCases),
         MemberType = typeof(ForwardedIntrinsicReturnTests))]
     public void Isolated_ForwardedIntrinsics_VerifyBeforeExecution(string name, Dictionary<string, string> files)
     {

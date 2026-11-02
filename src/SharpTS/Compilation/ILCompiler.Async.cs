@@ -474,8 +474,8 @@ public partial class ILCompiler
             // rather than the owner's now-stale hoisted-field copy.
             if (!loweredDeclaration
                 && (source is not Expr.ArrowFunction { IsAsync: true, IsGenerator: false } asyncOwner
-                    || !GetAsyncDeclarationLiveLocals(asyncOwner,
-                        _collectedArrows.Select(entry => entry.Arrow)).Contains(name)))
+                    || !_closures.AsyncArrowDCKeys.TryGetValue(asyncOwner, out var ownerKey)
+                    || !_closures.FunctionDisplayClassFields[ownerKey].ContainsKey(name)))
                 continue;
             if (source != null && ResolveLiveStorage(builder, source, name) is { } storage)
                 builder.CapturedLiveStorage[name] = storage;
@@ -801,6 +801,26 @@ public partial class ILCompiler
                 AnalyzeArrowExprForAwaits(c.Initializer, ref awaitCount, ref seenAwait, declaredVariables, usedAfterAwait, declaredBeforeAwait);
                 break;
             }
+            case Stmt.Using resource:
+                foreach (var binding in resource.Bindings)
+                {
+                    if (binding.Name is { } token)
+                    {
+                        var name = ArrowStorageName(binding, token.Lexeme);
+                        declaredVariables.Add(name);
+                        if (!seenAwait) declaredBeforeAwait.Add(name);
+                    }
+                    AnalyzeArrowExprForAwaits(binding.Initializer, ref awaitCount, ref seenAwait,
+                        declaredVariables, usedAfterAwait, declaredBeforeAwait);
+                }
+                // This walker reserves a count, not numbered source await points.
+                // Each async resource adds one cleanup await after its scope body.
+                if (resource.IsAsync)
+                {
+                    awaitCount += resource.Bindings.Count;
+                    seenAwait = true;
+                }
+                break;
             case Stmt.Expression e:
                 AnalyzeArrowExprForAwaits(e.Expr, ref awaitCount, ref seenAwait, declaredVariables, usedAfterAwait, declaredBeforeAwait);
                 break;

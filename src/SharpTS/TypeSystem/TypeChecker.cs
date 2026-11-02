@@ -3,6 +3,7 @@ using SharpTS.Diagnostics;
 using SharpTS.Modules;
 using SharpTS.Parsing;
 using SharpTS.Parsing.Visitors;
+using SharpTS.Runtime.BuiltIns;
 using SharpTS.TypeSystem.Exceptions;
 
 namespace SharpTS.TypeSystem;
@@ -1417,6 +1418,7 @@ public partial class TypeChecker
         _globalDeclarationEnvironment = _environment;
         Bindings.Clear();
         _typeMap.ClearDeclaredValueTypes();
+        _optionalChainMemberTargets.Clear();
         _members?.Clear();
         _sourceClassNesting = null;
         ResetEditorMetadata();
@@ -1511,6 +1513,7 @@ public partial class TypeChecker
         _globalDeclarationEnvironment = _environment;
         Bindings.Clear();
         _typeMap.ClearDeclaredValueTypes();
+        _optionalChainMemberTargets.Clear();
         _members?.Clear();
         _sourceClassNesting = null;
         ResetEditorMetadata();
@@ -1768,6 +1771,7 @@ public partial class TypeChecker
                 // CheckNamespace pre-registers its members inside the namespace scope instead.
             }
         }
+        _completedTypeDeclarationScopes.Add(_environment);
     }
 
     /// <summary>
@@ -1836,6 +1840,7 @@ public partial class TypeChecker
         IndexNewTargetContexts(modules.SelectMany(module => module.Statements));
         Bindings.Clear();
         _typeMap.ClearDeclaredValueTypes();
+        _optionalChainMemberTargets.Clear();
         _members?.Clear();
         _sourceClassNesting = null;
         ResetEditorMetadata();
@@ -1942,6 +1947,10 @@ public partial class TypeChecker
             _defaultLibraryObjectType = scriptEnv.GetTypeBinding("Object") as TypeInfo.Interface;
             _defaultLibraryPromiseBinding = scriptEnv.GetValueBinding("Promise");
             CaptureDefaultLibraryErrorBindings(scriptEnv);
+            CaptureTypedArrayDeclarations(scriptEnv);
+            foreach (string name in BuiltInNames.TypedArrayNames)
+                if (scriptEnv.GetValueBinding(name) is { } typedArrayBinding)
+                    _defaultLibraryTypedArrayBindings[name] = typedArrayBinding;
             foreach (var module in modules.Where(module => !module.IsDefaultLibrary && module.IsScript))
                 PrepareModule(module);
             foreach (var module in modules.Where(module => !module.IsDefaultLibrary && !module.IsScript))

@@ -34,6 +34,9 @@ public sealed class SharpTSObjectPrototype : ISharpTSMutableBuiltIn
     public void SetExtra(string name, object? value) => _overlay.SetProperty(name, value);
     public bool DefineExtraProperty(string name, SharpTSPropertyDescriptor descriptor)
         => _overlay.DefineProperty(name, descriptor);
+    internal bool DefineExistingDataProperty(
+        string name, SharpTSPropertyDescriptor current, SharpTSPropertyDescriptor change)
+        => _overlay.DefineExistingBuiltInDataProperty(name, current, change);
     public SharpTSPropertyDescriptor? GetOwnPropertyDescriptor(string name)
         => _overlay.GetOwnPropertyDescriptor(name);
     public ISharpTSCallable? GetExtraGetter(string name) => _overlay.GetGetter(name);
@@ -57,6 +60,33 @@ public sealed class SharpTSObjectPrototype : ISharpTSMutableBuiltIn
     /// <summary>Own enumerable string keys — the for-in / Object.keys surface.</summary>
     public IEnumerable<string> OwnEnumerableKeys() => _overlay.OwnEnumerableKeys();
     public IEnumerable<string> OwnStringKeys() => _overlay.OwnVisibleStringKeys();
+
+    internal void FreezeOwnProperties()
+    {
+        MaterializeOwnVirtualPropertiesForIntegrity();
+        _overlay.Freeze();
+    }
+
+    internal void SealOwnProperties()
+    {
+        MaterializeOwnVirtualPropertiesForIntegrity();
+        _overlay.Seal();
+    }
+
+    internal void PreventExtensionsOwnProperties()
+    {
+        MaterializeOwnVirtualPropertiesForIntegrity();
+        _overlay.PreventExtensions();
+    }
+
+    private void MaterializeOwnVirtualPropertiesForIntegrity()
+    {
+        // Only live virtual data slots need storage. Existing descriptors retain
+        // their attributes and accessors; enumerating them never invokes getters.
+        foreach (var name in OwnStringKeys().Where(name => _overlay.GetOwnPropertyDescriptor(name) is null).ToArray())
+            if (GetMember(name) is ISharpTSCallable member)
+                _overlay.DefineProperty(name, SharpTSPropertyDescriptor.ForMethod(member));
+    }
 
     public object? GetMember(string name)
     {
@@ -232,6 +262,7 @@ public sealed class SharpTSObjectUnboundMethod : ISharpTSCallable, IBuiltInFunct
                         is not (null or SharpTSUndefined),
                 SharpTSObject obj => obj.HasSymbolProperty(sym),
                 SharpTSArray array => array.HasSymbolProperty(sym),
+                SharpTSTypedArray typedArray => typedArray.GetOwnPropertyDescriptor(sym) is not null,
                 SharpTSInstance inst => inst.HasSymbolProperty(sym),
                 SharpTSClass klass => klass.GetOwnStaticSymbolPropertyDescriptor(sym) is not null,
                 SharpTSClassPrototype prototype => prototype.GetOwnPropertyDescriptor(sym) is not null,
@@ -274,8 +305,10 @@ public sealed class SharpTSObjectUnboundMethod : ISharpTSCallable, IBuiltInFunct
             SharpTSBooleanNamespace booleanNamespace => booleanNamespace.HasOwnProperty(key),
             SharpTSFunctionPrototype functionPrototype => functionPrototype.HasOwnProperty(key),
             SharpTSArrayPrototype arrayPrototype => arrayPrototype.HasOwnProperty(key),
+            SharpTSTypedArray typedArray => typedArray.GetOwnPropertyDescriptor(key) is not null,
             SharpTSStringPrototype stringPrototype => stringPrototype.HasOwnProperty(key),
-            SharpTSNumberPrototype numberPrototype => numberPrototype.GetMember(key) != null,
+            SharpTSNumberPrototype numberPrototype => numberPrototype.HasOwnProperty(key),
+            SharpTSBooleanPrototype booleanPrototype => booleanPrototype.HasOwnProperty(key),
             SharpTSBigIntPrototype bigIntPrototype => bigIntPrototype.HasOwnProperty(key),
             SharpTSSymbolPrototype symbolPrototype => symbolPrototype.HasOwnProperty(key),
             SharpTSObjectPrototype objectPrototype => objectPrototype.HasOwnProperty(key),

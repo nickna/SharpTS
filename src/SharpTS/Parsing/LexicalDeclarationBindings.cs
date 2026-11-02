@@ -1,6 +1,6 @@
 namespace SharpTS.Parsing;
 
-/// <summary>Finds let/const bindings owned by one statement-list scope.</summary>
+/// <summary>Finds lexical bindings owned by one statement-list scope.</summary>
 internal static class LexicalDeclarationBindings
 {
     internal static IEnumerable<Token> Collect(IEnumerable<Stmt> statements)
@@ -19,6 +19,10 @@ internal static class LexicalDeclarationBindings
                 break;
             case Stmt.Const constant:
                 yield return constant.Name;
+                break;
+            case Stmt.Using resource:
+                foreach (var binding in resource.Bindings)
+                    if (binding.Name is { } name) yield return name;
                 break;
             case Stmt.Sequence sequence:
                 foreach (var name in Collect(sequence.Statements))

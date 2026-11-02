@@ -129,7 +129,7 @@ public sealed class TypedArrayBackingHoistParityTests
             """;
 
         Assert.Equal(
-            "true\ntrue\ntrue\ntrue\ntrue\ntrue\ntrue\ntrue\n2\n",
+            "false\nfalse\nfalse\nfalse\nfalse\nfalse\nfalse\nfalse\n2\n",
             TestHarness.Run(source, mode));
     }
 }

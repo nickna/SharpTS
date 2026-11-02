@@ -609,13 +609,10 @@ public partial class RuntimeEmitter
         il.Emit(OpCodes.Callvirt, typeof(ConcurrentQueue<Action>).GetMethod("TryDequeue", [typeof(Action).MakeByRefType()])!);
         il.Emit(OpCodes.Brfalse, drainEnd);
 
-        // try { action.Invoke(); } catch (Exception) { /* swallow */ }
-        il.BeginExceptionBlock();
+        // Match the other event-loop pumps: an uncaught callback failure
+        // must reach the entry point's normal exception and cleanup boundary.
         il.Emit(OpCodes.Ldloc, actionLocal);
         il.Emit(OpCodes.Callvirt, typeof(Action).GetMethod("Invoke")!);
-        il.BeginCatchBlock(_types.Exception);
-        il.Emit(OpCodes.Pop); // discard exception
-        il.EndExceptionBlock();
 
         il.Emit(OpCodes.Br, drainTop);
         il.MarkLabel(drainEnd);

@@ -1633,6 +1633,7 @@ public partial class TypeChecker
         "number" => type is TypeInfo.Primitive { Type: TokenType.TYPE_NUMBER } or TypeInfo.NumberLiteral or TypeInfo.Enum { Kind: EnumKind.Numeric },
         "boolean" => type is TypeInfo.Primitive { Type: TokenType.TYPE_BOOLEAN } or TypeInfo.BooleanLiteral,
         "bigint" => type is TypeInfo.BigInt or TypeInfo.BigIntLiteral,
+        "symbol" => type is TypeInfo.Symbol or TypeInfo.UniqueSymbol,
         "object" => IsTypeofObjectDomain(type),
         "function" => HasTypeofCallableFacet(type),
         _ => false

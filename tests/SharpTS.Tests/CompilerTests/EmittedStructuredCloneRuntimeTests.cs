@@ -195,6 +195,58 @@ public class EmittedStructuredCloneRuntimeTests
     }
 
     [Fact]
+    public void GuestTaskRefusalKeepsTheForeignBridgeAndPublicSignature()
+    {
+        var runtime = EmitRuntime("structuredClone({value:1});", false);
+        using var bytes = Save(runtime);
+        Verify(bytes);
+        var assembly = Assembly.Load(bytes.ToArray());
+        var type = assembly.GetType("$Runtime")!;
+        var bridge = type.GetMethod("StructuredClone", BindingFlags.Public | BindingFlags.Static)!;
+        var guest = type.GetMethod("StructuredCloneGuest", BindingFlags.NonPublic | BindingFlags.Static)!;
+        Assert.True(guest.IsAssembly);
+        Assert.Equal(typeof(object), guest.ReturnType);
+        Assert.Equal(new[] { typeof(object), typeof(object) }, guest.GetParameters().Select(p => p.ParameterType));
+        var task = Task.FromResult<object?>(7d);
+        Assert.Same(task, bridge.Invoke(null, [task, null]));
+        var guestError = Assert.Throws<TargetInvocationException>(() => guest.Invoke(null, [task, null]));
+        Assert.Equal(assembly.GetType("$DataCloneError"), guestError.InnerException!.GetType());
+        foreach (var container in new object[]
+            { new List<object?> { task }, new Dictionary<string, object?> { ["value"] = task },
+                new Dictionary<object, object?> { ["value"] = task }, new HashSet<object?> { task } })
+        {
+            var error = Assert.Throws<TargetInvocationException>(() => guest.Invoke(null, [container, null]));
+            Assert.Equal(assembly.GetType("$DataCloneError"), error.InnerException!.GetType());
+        }
+        foreach (var value in new object[] { new object(), typeof(string), new TypeDelegator(typeof(string)) })
+        {
+            Assert.Same(value, bridge.Invoke(null, [value, null]));
+            Assert.Same(value, guest.Invoke(null, [value, null]));
+        }
+    }
+
+    [Theory]
+    [InlineData("console.log(1);", false, false)]
+    [InlineData("structuredClone({value:1});", false, true)]
+    [InlineData("new MessageChannel();", false, true)]
+    [InlineData("MessagePort;", false, true)]
+    [InlineData("import { Worker } from 'worker_threads';", false, true)]
+    [InlineData("new BroadcastChannel('x');", false, true)]
+    [InlineData("globalThis['structuredClone'];", false, true)]
+    [InlineData("console.log(1);", true, true)]
+    public void ActualCloneConsumersRetainGraphMemoAndAbsentConsumersDoNot(string source, bool hosted, bool expectedMemo)
+    {
+        var runtime = EmitRuntime(source, hosted);
+        using var bytes = Save(runtime);
+        Verify(bytes);
+        var type = Assembly.Load(bytes.ToArray()).GetType("$Runtime")!;
+        Assert.Equal(expectedMemo,
+            type.GetMethod("StructuredCloneValue", BindingFlags.NonPublic | BindingFlags.Static) is not null);
+        var core = type.GetMethod("StructuredCloneCore", BindingFlags.NonPublic | BindingFlags.Static)!;
+        Assert.Equal(typeof(object), Assert.Single(core.GetParameters()).ParameterType);
+    }
+
+    [Fact]
     public void ReusingEmitterAcrossFeatureSetsKeepsCloneDeclarationsIndependent()
     {
         var emitter = new RuntimeEmitter(TypeProvider.Runtime);

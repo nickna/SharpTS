@@ -221,6 +221,7 @@ public partial class Interpreter
         Stmt.Throw s => ExecuteThrowAsyncVT(s),
         Stmt.Var s => ExecuteVarAsyncVT(s),
         Stmt.Const s => ExecuteConstAsyncVT(s),
+        Stmt.Using s => ExecuteUsingDeclarationCore(_asyncContext, s),
         Stmt.Return s => ExecuteReturnAsyncVT(s),
         _ => new ValueTask<ExecutionResult>(DispatchStmt(stmt)),
     };

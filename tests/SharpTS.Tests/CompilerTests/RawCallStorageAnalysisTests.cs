@@ -14,6 +14,14 @@ public sealed class RawCallStorageAnalysisTests
     [Fact]
     public void CharCodeAtNativeProofDoesNotAdmitDynamicOrUserDefinedReceivers()
     {
+        // A String-only program has no dynamic source destination and retains native storage.
+        var cleanStatements = Parse("function readString(input: string, index: number): number {\n    let code: number = input.charCodeAt(index);\n    return code;\n}");
+        var cleanMap = new TypeChecker().Check(cleanStatements);
+        var cleanNative = Variable(Function(cleanStatements, "readString").Body!, "code");
+        RawCallStorageAnalysis.Capture(cleanStatements, cleanMap)
+            .Analyze(cleanStatements, new RuntimeFeatureDetector().Detect(cleanStatements, cleanMap));
+        AssertLocal(cleanMap, cleanNative, expectedRaw: false);
+
         var statements = Parse("""
             function readString(input: string, index: number): number {
                 let code: number = input.charCodeAt(index);
@@ -39,7 +47,10 @@ public sealed class RawCallStorageAnalysisTests
         RawCallStorageAnalysis.Capture(statements, map)
             .Analyze(statements, new RuntimeFeatureDetector().Detect(statements, map));
 
-        AssertLocal(map, native, expectedRaw: false);
+        // The neighboring Any call may reach a source String parameter. Its existing
+        // negative slot fact must veto the otherwise type-directed charCodeAt proof.
+        Assert.True(map.IsRawNumericStorage(Function(statements, "readString").Parameters[0].Name));
+        AssertLocal(map, native, expectedRaw: true);
         Assert.True(map.IsUndefinedReachableNumericLocal(dynamic));
         Assert.True(map.IsUndefinedReachableNumericLocal(dynamic.Initializer!));
         AssertLocal(map, user, expectedRaw: true);

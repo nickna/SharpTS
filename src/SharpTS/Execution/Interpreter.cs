@@ -781,7 +781,7 @@ public partial class Interpreter : IDisposable
     /// (matches Node). Also honors the VM timeout token so a runaway wait is
     /// cancellable mid-loop, not just between statements.
     /// </summary>
-    private void WaitForPromise(SharpTSPromise promise)
+    private void WaitForPromise(SharpTSPromise promise, bool reportDiscardedRejection = false)
     {
         // Continuous quiescent time before concluding the promise can never
         // settle. Time-based, not iteration-based: a loaded thread pool can
@@ -811,6 +811,15 @@ public partial class Interpreter : IDisposable
             }
 
             Thread.Sleep(1);
+        }
+        // A discarded result with an installed process listener is a rejection
+        // event, not a synchronous throw from SharpTS's implicit top-level wait.
+        // Keep the wait/pump and no-listener/explicit-await behavior unchanged.
+        if (reportDiscardedRejection && promise.Task.IsFaulted &&
+            SharpTSProcess.Instance.HasListenersInternal("unhandledRejection"))
+        {
+            QueueDiscardedRejectionReport(promise);
+            return;
         }
         // Rethrow if the promise was rejected
         promise.Task.GetAwaiter().GetResult();
@@ -1439,12 +1448,13 @@ public partial class Interpreter : IDisposable
                     {
                         DebugController?.OnSafePoint(this, statement, _environment, _currentModule);
                         object? result = Evaluate(exprStmt.Expr);
+                        if (exprStmt.Expr is not Expr.Await) ObserveDiscardedReactionResult(result);
                         // Wait for top-level Promises to complete before continuing
                         if (_waitForTopLevelPromises
                             && result is SharpTSPromise promise
                             && !promise.SuppressImplicitTopLevelWait)
                         {
-                            WaitForPromise(promise);
+                            WaitForPromise(promise, reportDiscardedRejection: exprStmt.Expr is not Expr.Await);
                         }
                     }
                     catch (ThrowException tex)
@@ -1730,10 +1740,11 @@ public partial class Interpreter : IDisposable
                 {
                     DebugController?.OnSafePoint(this, stmt, _environment, _currentModule);
                     object? result = Evaluate(exprStmt.Expr);
+                    if (exprStmt.Expr is not Expr.Await) ObserveDiscardedReactionResult(result);
                     if (_waitForTopLevelPromises && result is SharpTSPromise promise
                         && !promise.SuppressImplicitTopLevelWait)
                     {
-                        WaitForPromise(promise);
+                        WaitForPromise(promise, reportDiscardedRejection: exprStmt.Expr is not Expr.Await);
                     }
                 }
                 else
@@ -1938,11 +1949,12 @@ public partial class Interpreter : IDisposable
                 {
                     DebugController?.OnSafePoint(this, stmt, _environment, _currentModule);
                     object? result = Evaluate(exprStmt.Expr);
+                    if (exprStmt.Expr is not Expr.Await) ObserveDiscardedReactionResult(result);
                     // Wait for top-level Promises to complete before continuing
                     if (_waitForTopLevelPromises && result is SharpTSPromise promise
                         && !promise.SuppressImplicitTopLevelWait)
                     {
-                        WaitForPromise(promise);
+                        WaitForPromise(promise, reportDiscardedRejection: exprStmt.Expr is not Expr.Await);
                     }
                 }
                 else

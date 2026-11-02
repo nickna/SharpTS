@@ -117,10 +117,33 @@ public sealed class NativeTypedArrayBufferLookupTests
         Assert.Equal(0, hostile.Callbacks);
     }
     [Fact]
-    public void UnprovedTaskResultsKeepWholeLegacy()
+    public void ActualTaskSourceResultsDischargeOnlyTheBufferQueryObligation()
     {
         var (compiler, _) = Build("Promise.resolve(1); console.log(new Uint8Array([1]).length);", true);
-        Assert.True(compiler.NativeTypedArrayBuffers!.UsesLegacy); Assert.Contains(compiler.NativeTypedArrayBuffers.Blockers, row => row.Contains("Unproved actual carrier result:"));
+        Assert.False(compiler.NativeTypedArrayBuffers!.UsesLegacy);
+        Assert.Equal(3, compiler.NativePrototypeFields!.CompletedUnprovedResults.Producers.Count);
+        Assert.True(compiler.NativePrototypeFields.UsesLegacy);
+        Assert.Contains(compiler.NativePrototypeFields.Blockers, row => row.Contains("Unproved actual carrier result:"));
+        Assert.DoesNotContain(compiler.NativeTypedArrayBuffers.Owners, type => typeof(Task).IsAssignableFrom(type));
+    }
+    [Theory]
+    [InlineData(false)]
+    [InlineData(true)]
+    public void OpaqueTaskResultsAndMatchingTaskSubclassesKeepTheWholeLegacyBinder(bool matchingSubclass)
+    {
+        var fixture = new Fixture(); fixture.OpaqueTaskResult(matchingSubclass);
+        var saved = fixture.Complete();
+        Assert.True(fixture.Lookup.UsesLegacy);
+        Assert.Contains(fixture.Lookup.Blockers, row => row.Contains("Unproved actual carrier result: OpaqueTaskSource.get_Task"));
+        var hostile = new HostileType();
+        Assert.Equal("original query", Assert.Throws<TargetInvocationException>(() => Query(saved).Invoke(null, [hostile])).InnerException!.Message);
+        Assert.Equal(1, hostile.Callbacks);
+        if (matchingSubclass)
+        {
+            var actual = saved.GetType("OpaqueTask.$SharedArrayBuffer")!;
+            Assert.True(typeof(Task<object>).IsAssignableFrom(actual));
+            Assert.NotNull(BufferConstructor(saved).Invoke([Activator.CreateInstance(actual), 0, null]));
+        }
     }
     [Fact]
     public void EveryFactoryOverloadIsTrackedAndLateMatchingDefinitionsAreRejected()
@@ -186,6 +209,34 @@ public sealed class NativeTypedArrayBufferLookupTests
             var producer = EmitTypeDefinitions.DefineType(Module, "Producer" + _producer++, TypeAttributes.Abstract | TypeAttributes.Sealed);
             var method = producer.DefineMethod("Create", MethodAttributes.Public | MethodAttributes.Static, typeof(object), Type.EmptyTypes);
             NativePrototypeFieldsLookup.EmitCarrierCreate(_allocations, method.GetILGenerator(), owner.GetConstructor(Type.EmptyTypes)!); method.GetILGenerator().Emit(OpCodes.Ret); producer.CreateType();
+        }
+        internal void OpaqueTaskResult(bool matchingSubclass)
+        {
+            ConstructorBuilder? taskConstructor = null;
+            if (matchingSubclass)
+            {
+                var task = EmitTypeDefinitions.DefineType(Module, "OpaqueTask.$SharedArrayBuffer", TypeAttributes.Public, typeof(Task<object>));
+                var work = task.DefineMethod("Work", MethodAttributes.Private | MethodAttributes.Static, typeof(object), Type.EmptyTypes);
+                work.GetILGenerator().Emit(OpCodes.Ldnull); work.GetILGenerator().Emit(OpCodes.Ret);
+                taskConstructor = task.DefineConstructor(MethodAttributes.Public, CallingConventions.Standard, Type.EmptyTypes);
+                var il = taskConstructor.GetILGenerator(); il.Emit(OpCodes.Ldarg_0); il.Emit(OpCodes.Ldnull); il.Emit(OpCodes.Ldftn, work);
+                il.Emit(OpCodes.Newobj, typeof(Func<object>).GetConstructor([typeof(object), typeof(IntPtr)])!);
+                il.Emit(OpCodes.Call, typeof(Task<object>).GetConstructor([typeof(Func<object>)])!); il.Emit(OpCodes.Ret);
+                var buffer = task.DefineMethod("GetBuffer", MethodAttributes.Public, typeof(byte[]), Type.EmptyTypes);
+                buffer.GetILGenerator().Emit(OpCodes.Ldc_I4_2); buffer.GetILGenerator().Emit(OpCodes.Newarr, typeof(byte)); buffer.GetILGenerator().Emit(OpCodes.Ret);
+                task.CreateType();
+            }
+            var owner = Owner("OpaqueTaskSource");
+            var getter = owner.DefineMethod("get_Task", MethodAttributes.Public, typeof(Task<object>), Type.EmptyTypes);
+            var body = getter.GetILGenerator();
+            if (taskConstructor is null) body.Emit(OpCodes.Ldnull);
+            else NativePrototypeFieldsLookup.EmitCarrierCreate(_allocations, body, taskConstructor);
+            body.Emit(OpCodes.Ret); owner.CreateType();
+            var producer = EmitTypeDefinitions.DefineType(Module, "OpaqueTaskConsumer", TypeAttributes.Abstract | TypeAttributes.Sealed);
+            var consume = producer.DefineMethod("Consume", MethodAttributes.Static | MethodAttributes.Public, typeof(void), Type.EmptyTypes);
+            var call = consume.GetILGenerator(); NativePrototypeFieldsLookup.EmitCarrierCreate(_allocations, call, owner.GetConstructor(Type.EmptyTypes)!);
+            NativePrototypeFieldsLookup.EmitUnprovedCarrierResult(_allocations, call, getter);
+            call.Emit(OpCodes.Pop); call.Emit(OpCodes.Ret); producer.CreateType();
         }
         internal void EmitNativeProbe()
         {

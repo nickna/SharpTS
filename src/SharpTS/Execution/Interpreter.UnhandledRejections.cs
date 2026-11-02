@@ -88,6 +88,7 @@ public partial class Interpreter
     /// </summary>
     internal void NotifyRejectionHandlerAttached(SharpTSPromise promise)
     {
+        promise.IsRejectionHandled = true;
         if (!_reportedRejections.TryGetValue(promise, out _)) return;
         _reportedRejections.Remove(promise);
 
@@ -102,12 +103,42 @@ public partial class Interpreter
         }
     }
 
-    private void ReportUnhandledRejection(Exception exception, SharpTSPromise? promise = null)
+    private void ObserveDiscardedReactionResult(object? result)
+    {
+        if (result is not SharpTSPromise { IsNativeReactionResult: true } promise) return;
+        var task = promise.Task;
+        void ObserveSettlement()
+        {
+            if (task.IsFaulted) QueueDiscardedRejectionReport(promise);
+        }
+        // Observation does not consume the guest result or keep a pending promise alive.
+        // Existing actual consumers decide handled state at the owner checkpoint.
+        if (task.IsCompleted) ObserveSettlement();
+        else RegisterNativeTaskContinuation(task, ObserveSettlement);
+    }
+
+    private void QueueDiscardedRejectionReport(SharpTSPromise promise)
+    {
+        var exception = promise.Task.Exception!.InnerException ?? promise.Task.Exception!;
+        EnqueueCallback(() =>
+        {
+            // The whole script job can attach a consumer before this checkpoint.
+            // Repeated discarded references must not deliver the same rejection twice.
+            if (promise.IsRejectionHandled || promise.HasReportedDiscardedRejection
+                || _reportedRejections.TryGetValue(promise, out _)) return;
+            promise.HasReportedDiscardedRejection = true;
+            ReportUnhandledRejection(exception, promise, deliverOnCurrentCheckpoint: true);
+        });
+    }
+
+    private void ReportUnhandledRejection(Exception exception, SharpTSPromise? promise = null,
+        bool deliverOnCurrentCheckpoint = false)
     {
         object? debuggerReason = exception switch
         {
             SharpTSPromiseRejectedException rejected => rejected.Reason,
             ThrowException thrown => thrown.Value,
+            StructuredClone.DataCloneError cloneError => new HostDataCloneErrorValue(cloneError).CreateGuestError(),
             _ => exception.Message,
         };
         if (DebugController?.BreakOnUnhandledRejection == true)
@@ -130,6 +161,12 @@ public partial class Interpreter
             if (promise != null)
                 _reportedRejections.AddOrUpdate(promise, new object());
 
+            if (deliverOnCurrentCheckpoint)
+            {
+                SharpTSProcess.Instance.EmitWith(this, "unhandledRejection", reason,
+                    promise ?? (object?)SharpTSUndefined.Instance);
+                return;
+            }
             try
             {
                 EnqueueCallback(() =>

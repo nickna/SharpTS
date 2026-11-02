@@ -284,6 +284,9 @@ public partial class TypeChecker
             }
         }
 
+        if (!stmt.HasHoistedTypeAnnotation)
+            ReportUnknownTypeArgument(stmt.TypeAnnotationNode);
+
         // TS2304: a bare annotation name that resolves to nothing (e.g. `var a: A;` where the
         // only `A` lives in a nested module, invisible here). The preparatory module pass runs in
         // source order, so preserve that result before later namespace declarations populate the
@@ -763,6 +766,7 @@ public partial class TypeChecker
         else if (stmt.TypeAnnotation != null)
         {
             constDeclaredType = ResolveAnnotation(stmt.TypeAnnotation, stmt.TypeAnnotationNode, stmt)!;
+            ReportUnknownTypeArgument(stmt.TypeAnnotationNode);
             if (constDeclaredType is TypeInfo.Any)
                 ReportUnknownTypeName(stmt.TypeAnnotation, stmt.TypeAnnotationNode, stmt.Name.Line);
             _environment.Define(stmt.Name.Lexeme, constDeclaredType);
@@ -937,6 +941,11 @@ public partial class TypeChecker
                                  || ValueMayBeUndefinedSentinel(n.Right, taintedLocals),
         Expr.Assign a => ValueMayBeUndefinedSentinel(a.Value, taintedLocals),
         Expr.Variable v when taintedLocals != null && taintedLocals.Contains(v.Name.Lexeme) => true,
+        // Declared interfaces likewise cannot prove a packed carrier or a present value.
+        Expr.GetIndex get when _typeMap.IsDeclaredTypedArrayValueRead(get) => true,
+        // Numeric element annotations do not prove that a runtime index is present.
+        Expr.GetIndex get when IsTypedArrayReadReceiver(_typeMap.Get(get.Object))
+            && _typeMap.IsUndefinedReachableReturn(get) => true,
         Expr.Get get when ClassAccessorReadMayBeUndefined(_typeMap.Get(get.Object), get.Name.Lexeme) => true,
         Expr.GetIndex get when _typeMap.Get(get.Index) is TypeInfo.StringLiteral key &&
             ClassAccessorReadMayBeUndefined(_typeMap.Get(get.Object), key.Value) => true,
@@ -1002,6 +1011,10 @@ public partial class TypeChecker
         }
         return false;
     }
+
+    private static bool IsTypedArrayReadReceiver(TypeInfo? type) =>
+        type is TypeInfo.TypedArray || type is TypeInfo.Union union
+            && union.FlattenedTypes.All(member => member is TypeInfo.TypedArray);
 
     private static bool TypeAdmitsUndefinedSentinel(TypeInfo? type) => type switch
     {
@@ -2213,7 +2226,10 @@ public partial class TypeChecker
 
             // Validate that the type is object-like (can have Symbol.dispose method)
             // Primitive types cannot have dispose methods
-            if (resourceType is TypeInfo.Primitive prim && !IsNullablePrimitive(prim))
+            if ((IsPrimitiveType(resourceType) &&
+                 resourceType is not TypeInfo.Primitive { Type: TokenType.NULL or TokenType.UNDEFINED }) ||
+                (IsPrimitiveType(initType) &&
+                 initType is not TypeInfo.Primitive { Type: TokenType.NULL or TokenType.UNDEFINED }))
             {
                 throw new TypeCheckException(
                     $"Type '{resourceType}' cannot be used with 'using' - it cannot have a disposal method.",
@@ -2224,16 +2240,10 @@ public partial class TypeChecker
             if (binding.Name != null)
             {
                 DeclareValue(binding.Name, resourceType);
+                ReachLexicalValueFlow(Bindings.GetSymbol(binding.Name)!);
+                MarkDefinitelyAssigned(binding.Name);
             }
         }
-    }
-
-    /// <summary>
-    /// Checks if a primitive type is nullable (null or undefined).
-    /// </summary>
-    private static bool IsNullablePrimitive(TypeInfo.Primitive prim)
-    {
-        return prim.Type == TokenType.NULL || prim.Type == TokenType.UNDEFINED;
     }
 
     /// <summary>

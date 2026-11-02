@@ -25,7 +25,8 @@ public partial class RuntimeEmitter
         var tcsType = _types.TaskCompletionSourceOfObject;
         var resultLocal = il.DeclareLocal(_types.TaskOfObject);
         var thenLocal = il.DeclareLocal(_types.Object);
-        var tcsLocal = il.DeclareLocal(tcsType);
+        var taskSourceProof = _nativeTypedArrayBuffers?.BeginTaskSourceProof(promise.ResolveValueWithRootMethod);
+        var tcsLocal = taskSourceProof?.Local ?? il.DeclareLocal(tcsType);
         var rootLocal = il.DeclareLocal(_types.Object);
         var jobLocal = il.DeclareLocal(jobType.Type);
         var exceptionLocal = il.DeclareLocal(_types.Exception);
@@ -51,14 +52,12 @@ public partial class RuntimeEmitter
         // return a cached completed Task (notably for null/undefined), which
         // would make distinct Promise.resolve calls share own properties.
         il.Emit(OpCodes.Ldc_I4, (int)TaskCreationOptions.RunContinuationsAsynchronously);
-        il.Emit(OpCodes.Newobj, _types.GetConstructor(tcsType, typeof(TaskCreationOptions)));
-        il.Emit(OpCodes.Stloc, tcsLocal);
-        il.Emit(OpCodes.Ldloc, tcsLocal);
+        CreateTaskSource(_types.GetConstructor(tcsType, typeof(TaskCreationOptions)), (int)TaskCreationOptions.RunContinuationsAsynchronously);
+        LoadTaskSource();
         il.Emit(OpCodes.Ldarg_0);
         il.Emit(OpCodes.Callvirt, _types.GetMethod(tcsType, "TrySetResult", _types.Object));
         il.Emit(OpCodes.Pop);
-        il.Emit(OpCodes.Ldloc, tcsLocal);
-        NativePrototypeFieldsLookup.EmitUnprovedCarrierResult(_nativePrototypeFields, il, _types.GetProperty(tcsType, "Task").GetGetMethod()!);
+        LoadTaskResult();
         il.Emit(OpCodes.Stloc, resultLocal);
         il.Emit(OpCodes.Leave, doneLabel);
 
@@ -66,8 +65,7 @@ public partial class RuntimeEmitter
         // Internal adoption transfers must settle within this Promise checkpoint.
         // Thenable invocation and guest reactions still have their own queued jobs;
         // AwaitValueToTask also gives a pending guest await a reaction-job facade.
-        il.Emit(OpCodes.Newobj, _types.GetDefaultConstructor(tcsType));
-        il.Emit(OpCodes.Stloc, tcsLocal);
+        CreateTaskSource(_types.GetDefaultConstructor(tcsType), null);
 
         // Recursive jobs retain the public Promise.resolve task. A fresh entry
         // owns its newly created task; each job still has a separate resolving pair.
@@ -82,14 +80,13 @@ public partial class RuntimeEmitter
         il.Emit(OpCodes.Stloc, rootLocal);
         il.Emit(OpCodes.Ldloc, rootLocal);
         il.Emit(OpCodes.Brtrue, haveRootLabel);
-        il.Emit(OpCodes.Ldloc, tcsLocal);
-        NativePrototypeFieldsLookup.EmitUnprovedCarrierResult(_nativePrototypeFields, il, _types.GetProperty(tcsType, "Task").GetGetMethod()!);
+        LoadTaskResult();
         il.Emit(OpCodes.Stloc, rootLocal);
         il.MarkLabel(haveRootLabel);
 
         il.Emit(OpCodes.Ldarg_0);
         il.Emit(OpCodes.Ldloc, thenLocal);
-        il.Emit(OpCodes.Ldloc, tcsLocal);
+        LoadTaskSource();
         il.Emit(OpCodes.Ldloc, rootLocal);
         il.Emit(OpCodes.Newobj, jobType.Constructor);
         il.Emit(OpCodes.Stloc, jobLocal);
@@ -103,8 +100,7 @@ public partial class RuntimeEmitter
             .GetConstructor([_types.Object, _types.IntPtr])!);
         il.Emit(OpCodes.Call, runtime.Microtasks.QueuePromiseJob);
 
-        il.Emit(OpCodes.Ldloc, tcsLocal);
-        NativePrototypeFieldsLookup.EmitUnprovedCarrierResult(_nativePrototypeFields, il, _types.GetProperty(tcsType, "Task").GetGetMethod()!);
+        LoadTaskResult();
         il.Emit(OpCodes.Stloc, resultLocal);
         il.Emit(OpCodes.Leave, doneLabel);
 
@@ -120,6 +116,30 @@ public partial class RuntimeEmitter
         il.MarkLabel(doneLabel);
         il.Emit(OpCodes.Ldloc, resultLocal);
         il.Emit(OpCodes.Ret);
+
+        void CreateTaskSource(ConstructorInfo constructor, int? options)
+        {
+            int allocation = il.ILOffset;
+            il.Emit(OpCodes.Newobj, constructor);
+            int store = il.ILOffset;
+            il.Emit(OpCodes.Stloc, tcsLocal);
+            taskSourceProof?.RecordAllocation(constructor, allocation, store, options);
+        }
+
+        void LoadTaskSource()
+        {
+            int load = il.ILOffset;
+            il.Emit(OpCodes.Ldloc, tcsLocal);
+            taskSourceProof?.RecordLoad(load);
+        }
+
+        void LoadTaskResult()
+        {
+            LoadTaskSource();
+            int call = il.ILOffset;
+            NativePrototypeFieldsLookup.EmitUnprovedCarrierResult(_nativePrototypeFields, il, _types.GetProperty(tcsType, "Task").GetGetMethod()!);
+            taskSourceProof?.RecordResult(call);
+        }
     }
 
     private (TypeBuilder Type, ConstructorBuilder Constructor, MethodBuilder Run)

@@ -32,7 +32,8 @@ public partial class RuntimeEmitter
         Type UndefinedType,
         FunctionOwnPrototypeInputs OwnPrototype,
         MethodInfo IsBuiltinDeleted,
-        EmittedGuestOwnPropertyRuntime? GuestOwnProperties = null
+        EmittedGuestOwnPropertyRuntime? GuestOwnProperties = null,
+        EmittedTypedArrayRuntime? TypedArrays = null
     );
 
     private readonly record struct GetOwnPropertyNamesInputs(
@@ -54,7 +55,8 @@ public partial class RuntimeEmitter
         FunctionOwnPrototypeInputs OwnPrototype,
         MethodInfo IsBuiltinDeleted,
         EmittedGuestOwnPropertyRuntime? GuestOwnProperties = null,
-        Type? DateConstructor = null
+        Type? DateConstructor = null,
+        EmittedTypedArrayRuntime? TypedArrays = null
     );
 
     /// <summary>
@@ -698,6 +700,7 @@ public partial class RuntimeEmitter
 
         il.Emit(OpCodes.Newobj, _types.GetConstructor(listType, Type.EmptyTypes)!);
         il.Emit(OpCodes.Stloc, resultLocal);
+        EmitAppendTypedArrayPhysicalKeys(il, inputs.TypedArrays, resultLocal);
         // if (!(obj is $IHasFields)) return empty list
         il.Emit(OpCodes.Ldarg_0);
         il.Emit(OpCodes.Isinst, inputs.IHasFieldsInterface);
@@ -1336,6 +1339,7 @@ public partial class RuntimeEmitter
         il.MarkLabel(objectLabel);
         il.Emit(OpCodes.Newobj, _types.GetConstructor(_types.ListOfObject, Type.EmptyTypes));
         il.Emit(OpCodes.Stloc, namesLocal);
+        EmitAppendTypedArrayPhysicalKeys(il, inputs.TypedArrays, namesLocal);
 
         var addToList = _types.GetMethod(_types.ListOfObject, "Add", [_types.Object])!;
         void AddName(string name)

@@ -615,7 +615,7 @@ public class WorkerThreadsTests
     }
 
     /// <summary>
-    /// #1255: uncloneable values — functions, symbols, and class instances — must throw
+    /// #1255: uncloneable values — functions and symbols — must throw
     /// (spec: DataCloneError), both at the top level and nested inside a plain object.
     /// Before the fix, compiled mode's shallow fallback aliased these by reference instead
     /// of throwing.
@@ -623,20 +623,19 @@ public class WorkerThreadsTests
     [Theory, ModeData]
     public void StructuredClone_ThrowsForFunction(ExecutionMode mode)
     {
-        // Dual-mode parity check: a non-guest-throw exception's catch value is the raw
-        // message string in both modes (interpreter: `ex.Message` for a non-ThrowException;
-        // compiled: WrapException's $DataCloneError branch), not an Error instance.
+        // DataCloneError is an error value. Convert explicitly before observing
+        // its printable message rather than treating the catch binding as a string.
         var source = @"
             try {
                 structuredClone(() => {});
                 console.log('no-throw');
             } catch (e) {
                 console.log('threw:' + typeof e);
-                console.log((e as string).includes('DataCloneError'));
+                console.log(String(e).includes('DataCloneError'));
             }
         ";
         var output = TestHarness.Run(source, mode);
-        Assert.Equal("threw:string\ntrue\n", output);
+        Assert.Equal("threw:object\ntrue\n", output);
     }
 
     [Theory, ModeData]
@@ -670,7 +669,7 @@ public class WorkerThreadsTests
     }
 
     [Theory, ModeData]
-    public void StructuredClone_ThrowsForClassInstance(ExecutionMode mode)
+    public void StructuredClone_ClonesClassInstance(ExecutionMode mode)
     {
         var source = @"
             class Foo { x = 1; }
@@ -682,7 +681,7 @@ public class WorkerThreadsTests
             }
         ";
         var output = TestHarness.Run(source, mode);
-        Assert.Equal("threw\n", output);
+        Assert.Equal("no-throw\n", output);
     }
 
     #endregion

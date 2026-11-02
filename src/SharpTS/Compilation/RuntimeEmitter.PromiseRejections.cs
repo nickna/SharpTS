@@ -83,7 +83,7 @@ public partial class RuntimeEmitter
             typeof(ConditionalWeakTable<,>).GetMethod("Add")!);
 
         EmitPromiseRejectionReport(
-            report.GetILGenerator(), runtime, taskField, identityField,
+            report.GetILGenerator(), runtime, report, taskField, identityField,
             handledField, reportedField);
         EmitPromiseRejectionHandled(
             emitHandled.GetILGenerator(), runtime, identityField);
@@ -104,6 +104,7 @@ public partial class RuntimeEmitter
     private void EmitPromiseRejectionReport(
         ILGenerator il,
         EmittedRuntime runtime,
+        MethodBuilder report,
         FieldBuilder taskField,
         FieldBuilder identityField,
         FieldBuilder handledField,
@@ -119,9 +120,41 @@ public partial class RuntimeEmitter
         il.Emit(OpCodes.Callvirt,
             _types.GetProperty(taskType, "IsFaulted").GetGetMethod()!);
         il.Emit(OpCodes.Brfalse, unref);
+        if (runtime.Vm is { } vm)
+        {
+            // Only a recorded Core-promise mirror can contribute this negative
+            // handled fact. Unknown Tasks leave the ordinary tracker unchanged.
+            var notVmHandled = il.DefineLabel();
+            il.Emit(OpCodes.Ldarg_0);
+            il.Emit(OpCodes.Ldfld, taskField);
+            il.Emit(OpCodes.Call, vm.IsPromiseRejectionHandled);
+            il.Emit(OpCodes.Brfalse, notVmHandled);
+            il.Emit(OpCodes.Ldarg_0);
+            il.Emit(OpCodes.Ldc_I4_1);
+            il.Emit(OpCodes.Stfld, handledField);
+            il.Emit(OpCodes.Br, unref);
+            il.MarkLabel(notVmHandled);
+        }
         il.Emit(OpCodes.Ldarg_0);
         il.Emit(OpCodes.Ldfld, handledField);
         il.Emit(OpCodes.Brtrue, unref);
+
+        // A binding can expose an already-faulted task before a later guest
+        // queueMicrotask attaches its catch. Let the existing FIFO checkpoint
+        // drain every queued Promise job before deciding it is unhandled.
+        // Reposting retains this report's one existing ref; only its final
+        // handled/unhandled decision releases it.
+        var checkpointComplete = il.DefineLabel();
+        il.Emit(OpCodes.Call, runtime.Microtasks.HasMicrotasks);
+        il.Emit(OpCodes.Brfalse, checkpointComplete);
+        il.Emit(OpCodes.Call, runtime.EventLoop.GetInstance);
+        il.Emit(OpCodes.Ldarg_0);
+        il.Emit(OpCodes.Ldftn, report);
+        il.Emit(OpCodes.Newobj,
+            _types.GetConstructor(typeof(Action), [_types.Object, _types.IntPtr])!);
+        il.Emit(OpCodes.Callvirt, runtime.EventLoop.Schedule);
+        il.Emit(OpCodes.Ret);
+        il.MarkLabel(checkpointComplete);
 
         il.Emit(OpCodes.Ldarg_0);
         il.Emit(OpCodes.Ldc_I4_1);
@@ -154,7 +187,15 @@ public partial class RuntimeEmitter
         il.Emit(OpCodes.Ldfld, identityField);
         il.Emit(OpCodes.Stelem_Ref);
         il.Emit(OpCodes.Callvirt, runtime.EventEmitter.Emit);
-        il.Emit(OpCodes.Pop);
+        il.Emit(OpCodes.Brtrue, unref);
+
+        // With no listener, an unhandled rejection is a fatal guest error.
+        // Balance this report's event-loop reference before propagating it.
+        il.Emit(OpCodes.Call, runtime.EventLoop.GetInstance);
+        il.Emit(OpCodes.Callvirt, runtime.EventLoop.Unref);
+        il.Emit(OpCodes.Ldloc, reason);
+        il.Emit(OpCodes.Call, runtime.Errors.CreateException);
+        il.Emit(OpCodes.Throw);
 
         il.MarkLabel(unref);
         il.Emit(OpCodes.Call, runtime.EventLoop.GetInstance);
@@ -364,6 +405,13 @@ public partial class RuntimeEmitter
         il.Emit(OpCodes.Ldarg_0);
         il.Emit(OpCodes.Ldloc, tracker);
         il.Emit(OpCodes.Callvirt, cwtAdd);
+        if (runtime.Vm is { } earlyVm)
+        {
+            // Publish the handled tracker before calling Core: its monotonic
+            // notification may reenter this method for the same mirror Task.
+            il.Emit(OpCodes.Ldarg_0);
+            il.Emit(OpCodes.Call, earlyVm.MarkPromiseRejectionHandled);
+        }
         il.Emit(OpCodes.Br, ret);
 
         il.MarkLabel(haveTracker);
@@ -373,6 +421,12 @@ public partial class RuntimeEmitter
         il.Emit(OpCodes.Ldloc, tracker);
         il.Emit(OpCodes.Ldc_I4_1);
         il.Emit(OpCodes.Stfld, handledField);
+        if (runtime.Vm is { } vm)
+        {
+            // The handled bit makes a Core-to-mirror callback idempotent.
+            il.Emit(OpCodes.Ldarg_0);
+            il.Emit(OpCodes.Call, vm.MarkPromiseRejectionHandled);
+        }
         il.Emit(OpCodes.Ldloc, tracker);
         il.Emit(OpCodes.Ldfld, reportedField);
         il.Emit(OpCodes.Brfalse, ret);

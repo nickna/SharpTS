@@ -35,6 +35,14 @@ internal sealed class LexicalBindingNameCollector : AstVisitorBase
         base.VisitConst(stmt);
     }
 
+    protected override void VisitUsing(Stmt.Using stmt)
+    {
+        foreach (var binding in stmt.Bindings)
+            if (binding.Name is { } token)
+                _names.Add(token.Lexeme);
+        base.VisitUsing(stmt);
+    }
+
     protected override void VisitClass(Stmt.Class stmt)
     {
         _names.Add(stmt.Name.Lexeme);

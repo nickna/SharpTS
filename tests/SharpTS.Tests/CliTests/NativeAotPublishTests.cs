@@ -333,7 +333,9 @@ public sealed class NativeAotPublishTests
             {
                 Assert.False(preparation.CanReuse);
                 Assert.Empty(preparation.Key);
-                Assert.Contains("Acquiring the matching native cache lock", output.ToString());
+                // The optional deadline can expire before the worker reaches
+                // the lock phase; either path must report the timeout fallback.
+                Assert.Contains("Native cache preparation timed out; publishing without artifact reuse.", output.ToString());
                 Assert.Equal("preserve", File.ReadAllText(prior));
             }
             using var available = await NativePublishCache.LockAsync(root, key, CancellationToken.None);
@@ -347,19 +349,33 @@ public sealed class NativeAotPublishTests
         string root = NativePublishWorkspace.CreateOwned(Path.GetTempPath(), "native-cache-late-probe");
         try
         {
-            var started = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
+            var cancelled = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
             var release = new TaskCompletionSource<(string, bool)>(TaskCreationOptions.RunContinuationsAsynchronously);
             int keys = 0;
-            var pending = NativePublishCachePreparation.PrepareAsync(_ => { started.SetResult(); return release.Task; },
+            async Task<(string, bool)> Fingerprint(CancellationToken token)
+            {
+                using var registration = token.Register(() => cancelled.TrySetResult());
+                return await release.Task.ConfigureAwait(false);
+            }
+            var pending = NativePublishCachePreparation.PrepareAsync(Fingerprint,
                 _ => { keys++; return new string('a', 64); }, root, TextWriter.Null, true,
                 CancellationToken.None, TimeSpan.FromMilliseconds(100));
-            await started.Task.WaitAsync(TimeSpan.FromSeconds(5));
-            await Task.Delay(200);
-            release.SetResult(("late", true));
-            using var preparation = await pending;
-            Assert.False(preparation.CanReuse);
-            Assert.Empty(preparation.Key);
-            Assert.Equal(0, keys);
+            try
+            {
+                // The deadline starts before Task.Run. A queued worker can expire
+                // without ever invoking the fingerprint; both states disable reuse.
+                await Task.WhenAny(cancelled.Task, pending);
+                release.TrySetResult(("late", true));
+                using var preparation = await pending;
+                Assert.False(preparation.CanReuse);
+                Assert.Empty(preparation.Key);
+                Assert.Equal(0, keys);
+            }
+            finally
+            {
+                release.TrySetResult(("late", true));
+                using var cleanup = await pending;
+            }
         }
         finally { NativePublishWorkspace.DeleteOwned(root); }
     }

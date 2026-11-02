@@ -717,6 +717,11 @@ public static class PromiseBuiltIns
         {
             throw new SharpTSPromiseRejectedException(tex.Value);
         }
+        catch (StructuredClone.DataCloneError cloneError)
+        {
+            throw new SharpTSPromiseRejectedException(
+                new Exceptions.HostDataCloneErrorValue(cloneError).CreateGuestError());
+        }
     }
 
     /// <summary>
