@@ -39,7 +39,12 @@ public partial class ILEmitter
         IL.Emit(OpCodes.Ldloc, objLocal);
         IL.Emit(OpCodes.Ldstr, "String");
         IL.Emit(OpCodes.Call, _ctx.Runtime!.BoxedPrimitives.IsOfType);
-        builder.Emit_Brtrue(isStringLabel);
+        builder.Emit_Brfalse(fallbackLabel);
+        // Own data/accessor presence is queried without invoking a getter.
+        IL.Emit(OpCodes.Ldloc, objLocal);
+        IL.Emit(OpCodes.Ldstr, methodName);
+        IL.Emit(OpCodes.Call, _ctx.Runtime.ObjectOwnProperties.HasOwnProperty);
+        builder.Emit_Brfalse(isStringLabel);
 
         // Fall through to dynamic dispatch (objects with user-defined methods,
         // null/undefined, etc.).

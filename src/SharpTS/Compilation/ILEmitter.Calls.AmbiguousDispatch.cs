@@ -22,6 +22,8 @@ public partial class ILEmitter
         var isStringLabel = builder.DefineLabel("ambiguous_string");
         var isListLabel = builder.DefineLabel("ambiguous_list");
         var doneLabel = builder.DefineLabel("ambiguous_done");
+        var dynamicDispatchLabel = builder.DefineLabel("ambiguous_dynamic");
+        var notBoxedStringLabel = builder.DefineLabel("ambiguous_not_boxed_string");
 
         // Take the string-fast-path if the receiver is either a CLR string
         // OR a `new String(...)` wrapper ($Object with __primitiveType="String").
@@ -35,14 +37,20 @@ public partial class ILEmitter
         IL.Emit(OpCodes.Ldloc, objLocal);
         IL.Emit(OpCodes.Ldstr, "String");
         IL.Emit(OpCodes.Call, _ctx.Runtime!.BoxedPrimitives.IsOfType);
-        builder.Emit_Brtrue(isStringLabel);
+        builder.Emit_Brfalse(notBoxedStringLabel);
+        // A wrapper's own method is resolved before argument evaluation.
+        IL.Emit(OpCodes.Ldloc, objLocal);
+        IL.Emit(OpCodes.Ldstr, methodName);
+        IL.Emit(OpCodes.Call, _ctx.Runtime.ObjectOwnProperties.HasOwnProperty);
+        builder.Emit_Brtrue(dynamicDispatchLabel);
+        builder.Emit_Br(isStringLabel);
+        builder.MarkLabel(notBoxedStringLabel);
 
         // List<object> → list path. Otherwise (Dictionary, $Object, etc.)
         // fall back to dynamic property dispatch via $Runtime.GetProperty +
         // InvokeMethodValue. Without this fallback, borrowed-prototype
         // patterns like `obj.charAt = String.prototype.charAt; obj.charAt(0)`
         // cast obj to List<object> and crash with InvalidCastException.
-        var dynamicDispatchLabel = builder.DefineLabel("ambiguous_dynamic");
         IL.Emit(OpCodes.Ldloc, objLocal);
         IL.Emit(OpCodes.Isinst, _ctx.Types.ListOfObject);
         builder.Emit_Brtrue(isListLabel);
