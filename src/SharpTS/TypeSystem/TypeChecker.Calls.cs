@@ -22,6 +22,11 @@ public partial class TypeChecker
         ForgetSourceMemberCall(call);
         TypeInfo result = CheckCallCore(call, contextualResultType);
         result = ApplyImmediateArrowValueFlow(call, result);
+        if (OptionalCallCanShortCircuit(call))
+        {
+            result = CreateUnion(result, TypeInfo.Undefined.Shared);
+            _typeMap.MarkUndefinedReachableReturn(call);
+        }
         RecordSourceMemberCall(call);
         invocationAttempt?.Succeed(result);
         return result;
@@ -44,6 +49,8 @@ public partial class TypeChecker
             CheckClassOrderCallTarget(originalGenerator);
         using var immediateArguments = BeginImmediateArrowArguments(call);
         TypeInfo sourceCalleeType = CheckClassOrderCallTarget(call.Callee);
+        if (TryGetOptionalMemberCallType(call.Callee, out var presentMemberType))
+            sourceCalleeType = presentMemberType;
         TypeInfo calleeType = IndexedCallableConstraint(sourceCalleeType);
         if (call.Callee is Expr.Get extensionGet &&
             calleeType is not (TypeInfo.Function or TypeInfo.OverloadedFunction or

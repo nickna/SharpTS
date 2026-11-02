@@ -1418,6 +1418,7 @@ public partial class TypeChecker
         _globalDeclarationEnvironment = _environment;
         Bindings.Clear();
         _typeMap.ClearDeclaredValueTypes();
+        _optionalChainMemberTargets.Clear();
         _members?.Clear();
         _sourceClassNesting = null;
         ResetEditorMetadata();
@@ -1512,6 +1513,7 @@ public partial class TypeChecker
         _globalDeclarationEnvironment = _environment;
         Bindings.Clear();
         _typeMap.ClearDeclaredValueTypes();
+        _optionalChainMemberTargets.Clear();
         _members?.Clear();
         _sourceClassNesting = null;
         ResetEditorMetadata();
@@ -1838,6 +1840,7 @@ public partial class TypeChecker
         IndexNewTargetContexts(modules.SelectMany(module => module.Statements));
         Bindings.Clear();
         _typeMap.ClearDeclaredValueTypes();
+        _optionalChainMemberTargets.Clear();
         _members?.Clear();
         _sourceClassNesting = null;
         ResetEditorMetadata();
