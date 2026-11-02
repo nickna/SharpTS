@@ -13,7 +13,7 @@ public partial class RuntimeEmitter
     /// <summary>
     /// Emits all Worker-related helper methods into the $Runtime class.
     /// </summary>
-    private void EmitWorkerHelpers(TypeBuilder runtimeType, EmittedRuntime runtime)
+    private void EmitWorkerHelpers(TypeBuilder runtimeType, EmittedRuntime runtime, FieldInfo registeredClassPrototypes)
     {
         // ArrayBuffer / SharedArrayBuffer / DataView / TypedArray constructor
         // helpers + Atomics — gated together on HasAnyTypedArray. Without any
@@ -52,7 +52,10 @@ public partial class RuntimeEmitter
                 runtime.RegExps.RequireImplementation().SourceGetter, runtime.RegExps.RequireImplementation().FlagsGetter) : null,
             _features.UsesBuffer ? runtime.RequireBuffer() : null,
             new StructuredCloneTransferInputs(runtime.ObjectRead.Property, runtime.Operators.TypeOf,
-                GetCollectionConsumerInputs(runtime), _features.UsesStructuredClone || _features.HasAnyTypedArray));
+                GetCollectionConsumerInputs(runtime), _features.UsesStructuredClone || _features.HasAnyTypedArray),
+            _features.UsesUserClasses ? new StructuredCloneClassInputs(runtime.ObjectFields.Interface,
+                registeredClassPrototypes, runtime.ClassInitialization.SourceOwners,
+                runtime.ObjectKeys.Names, runtime.ObjectOwnProperties.IsEnumerable, runtime.ObjectRead.Property) : null);
 
         // worker_threads module helpers
         EmitWorkerThreadsModuleHelpers(runtimeType, runtime.Workers);

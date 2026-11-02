@@ -3519,7 +3519,7 @@ public partial class RuntimeEmitter
         //  no late-bind helpers, so a --compile'd tls program is genuinely standalone.)
 
         // Worker Threads support (SharedArrayBuffer, TypedArrays, Atomics, MessagePort, Worker)
-        EmitWorkerHelpers(typeBuilder, runtime);
+        EmitWorkerHelpers(typeBuilder, runtime, classPrototypeCacheField);
 
         // Cluster module support
         if (_features.UsesCluster)

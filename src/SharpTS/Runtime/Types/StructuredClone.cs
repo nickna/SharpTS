@@ -1,5 +1,6 @@
 using System.Numerics;
 using System.Runtime.CompilerServices;
+using SharpTS.Parsing;
 
 namespace SharpTS.Runtime.Types;
 
@@ -247,8 +248,8 @@ public static class StructuredClone
             // Other callables - cannot be cloned
             ISharpTSCallable => throw new DataCloneError("Function cannot be cloned"),
 
-            // Class instance - cannot be cloned (has methods)
-            SharpTSInstance => throw new DataCloneError("Class instances cannot be cloned"),
+            // Ordinary class instances clone their enumerable own data into a plain object.
+            SharpTSInstance instance => CloneClassInstance(instance, cloned, transferred),
 
             // WeakMap/WeakSet - cannot be cloned (weak references)
             SharpTSWeakMap => throw new DataCloneError("WeakMap cannot be cloned"),
@@ -403,6 +404,27 @@ public static class StructuredClone
             result[key] = CloneInternal(value, cloned, transferred);
         }
 
+        return result;
+    }
+
+    private static SharpTSObject CloneClassInstance(SharpTSInstance source,
+        Dictionary<object, object> cloned, HashSet<object> transferred)
+    {
+        // Only ordinary source-class ancestry is admitted here. Native carriers
+        // retain the dedicated clone/rejection arms above, including facade roots.
+        for (var owner = source.GetClass(); owner is not null; owner = owner.Superclass)
+            if (owner.GetType() != typeof(SharpTSClass) || owner.NativeConstructionTarget is not null)
+                throw new DataCloneError("Class instances with native backing cannot be cloned");
+        var fields = new Dictionary<string, object?>();
+        var result = new SharpTSObject(fields);
+        cloned[source] = result;
+        // Select enumerable own names before getters run, then preserve the
+        // source instance as the receiver for each value read.
+        foreach (var key in source.OwnEnumerableKeys().ToList())
+        {
+            var value = source.Get(new Token(TokenType.IDENTIFIER, key, null, 0));
+            fields[key] = CloneInternal(value, cloned, transferred);
+        }
         return result;
     }
 
