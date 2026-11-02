@@ -423,7 +423,11 @@ public sealed partial class RuntimeFeatureDetector
             case "crypto":
                 _set.UsesCrypto = true; break;
 
-            // Workers / channels
+            // Worker/channel values can reach the clone graph without naming the global clone.
+            case "MessageChannel":
+            case "MessagePort":
+            case "Worker":
+                _set.UsesStructuredClone = true; break;
             case "BroadcastChannel":
                 _set.UsesBroadcastChannel = true; break;
             case "AsyncLocalStorage":

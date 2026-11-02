@@ -43,7 +43,55 @@ public partial class RuntimeEmitter
             [_types.Object]
         );
 
-        var coreIl = cloneCore.GetILGenerator();
+        // A source without a clone consumer cannot reach the added graph machinery.
+        // Hosted and worker/channel consumers keep it even without the global spelling.
+        bool memoEnabled = _emitHosted || _features.UsesStructuredClone || _features.UsesBroadcastChannel;
+        var cloneRecursive = memoEnabled ? runtimeType.DefineMethod(
+            "StructuredCloneValue", MethodAttributes.Private | MethodAttributes.Static,
+            _types.Object, [_types.Object, _types.DictionaryObjectObject]) : cloneCore;
+        if (memoEnabled)
+        {
+            void EmitEntry(MethodBuilder entry)
+            {
+                var entryIl = entry.GetILGenerator();
+                entryIl.Emit(OpCodes.Ldarg_0);
+                entryIl.Emit(OpCodes.Call, _types.GetPropertyGetter(typeof(ReferenceEqualityComparer), "Instance"));
+                entryIl.Emit(OpCodes.Newobj, _types.GetConstructor(_types.DictionaryObjectObject,
+                    [_types.MakeGenericType(typeof(IEqualityComparer<>), _types.Object)])!);
+                entryIl.Emit(OpCodes.Call, cloneRecursive);
+                entryIl.Emit(OpCodes.Ret);
+            }
+            EmitEntry(cloneCore);
+        }
+        var coreIl = cloneRecursive.GetILGenerator();
+        var memoValue = memoEnabled ? coreIl.DeclareLocal(_types.Object) : null;
+        var stringResult = coreIl.DeclareLocal(_types.Object);
+        var memoSet = _types.DictionaryObjectObjectSetItem;
+        void CloneValue()
+        {
+            if (memoEnabled)
+            {
+                coreIl.Emit(OpCodes.Ldarg_1);
+            }
+            coreIl.Emit(OpCodes.Call, cloneRecursive);
+        }
+        void Remember(LocalBuilder result)
+        {
+            if (!memoEnabled) return;
+            coreIl.Emit(OpCodes.Ldarg_1);
+            coreIl.Emit(OpCodes.Ldarg_0);
+            coreIl.Emit(OpCodes.Ldloc, result);
+            coreIl.Emit(OpCodes.Callvirt, memoSet);
+        }
+        void RememberAndReturn()
+        {
+            if (!memoEnabled) { coreIl.Emit(OpCodes.Ret); return; }
+            var result = coreIl.DeclareLocal(_types.Object);
+            coreIl.Emit(OpCodes.Stloc, result);
+            Remember(result);
+            coreIl.Emit(OpCodes.Ldloc, result);
+            coreIl.Emit(OpCodes.Ret);
+        }
         var sourceListLocal = coreIl.DeclareLocal(_types.ListOfObject);
         var clonedListLocal = coreIl.DeclareLocal(_types.ListOfObject);
         var sourceDictStringLocal = coreIl.DeclareLocal(_types.DictionaryStringObject);
@@ -62,7 +110,6 @@ public partial class RuntimeEmitter
         // $Object (plain object literal, possibly with getters/setters) — clone via its
         // Fields dictionary (#1255).
         var objLiteralSourceLocal = coreIl.DeclareLocal(objects.Type);
-        var objLiteralClonedFieldsLocal = coreIl.DeclareLocal(_types.DictionaryStringObject);
 
         // $Error hierarchy — clone via name-based reconstruction + Stack preservation (#1255).
         var errSourceLocal = coreIl.DeclareLocal(errors.Type);
@@ -151,6 +198,19 @@ public partial class RuntimeEmitter
         // SharedArrayBuffer is transferred by reference. Skip when typed
         // arrays aren't emitted — no SharedArrayBuffer values can exist.
         coreIl.MarkLabel(checkSharedArrayBuffer);
+        if (memoEnabled)
+        {
+            var unseen = coreIl.DefineLabel();
+            coreIl.Emit(OpCodes.Ldarg_1);
+            coreIl.Emit(OpCodes.Ldarg_0);
+            coreIl.Emit(OpCodes.Ldloca, memoValue!);
+            coreIl.Emit(OpCodes.Callvirt, _types.GetMethod(_types.DictionaryObjectObject,
+                "TryGetValue", _types.Object, _types.Object.MakeByRefType()));
+            coreIl.Emit(OpCodes.Brfalse, unseen);
+            coreIl.Emit(OpCodes.Ldloc, memoValue!);
+            coreIl.Emit(OpCodes.Ret);
+            coreIl.MarkLabel(unseen);
+        }
         if (binary.HasValue)
         {
             coreIl.Emit(OpCodes.Ldarg_0);
@@ -185,7 +245,7 @@ public partial class RuntimeEmitter
             coreIl.Emit(OpCodes.Ldloc, abLocal);
             coreIl.Emit(OpCodes.Callvirt, binary.Value.ArrayBuffer.ByteLengthGetter);
             coreIl.Emit(OpCodes.Callvirt, binary.Value.ArrayBuffer.Slice);
-            coreIl.Emit(OpCodes.Ret);
+            RememberAndReturn();
 
             coreIl.MarkLabel(checkTypedArray);
             var taLocal = coreIl.DeclareLocal(binary.Value.TypedArrays.BaseType);
@@ -216,7 +276,7 @@ public partial class RuntimeEmitter
             coreIl.Emit(OpCodes.Ldloc, taLocal);
             coreIl.Emit(OpCodes.Callvirt, binary.Value.TypedArrays.LengthGetter);
             coreIl.Emit(OpCodes.Callvirt, binary.Value.TypedArrays.Slice);
-            coreIl.Emit(OpCodes.Ret);
+            RememberAndReturn();
 
             // return source.Subarray(0, source.Length) — shares the SharedArrayBuffer
             coreIl.MarkLabel(taSharedLabel);
@@ -225,7 +285,7 @@ public partial class RuntimeEmitter
             coreIl.Emit(OpCodes.Ldloc, taLocal);
             coreIl.Emit(OpCodes.Callvirt, binary.Value.TypedArrays.LengthGetter);
             coreIl.Emit(OpCodes.Callvirt, binary.Value.TypedArrays.Subarray);
-            coreIl.Emit(OpCodes.Ret);
+            RememberAndReturn();
         }
         else
         {
@@ -244,6 +304,7 @@ public partial class RuntimeEmitter
 
         coreIl.Emit(OpCodes.Newobj, _types.GetDefaultConstructor(_types.ListOfObject));
         coreIl.Emit(OpCodes.Stloc, clonedListLocal);
+        Remember(clonedListLocal);
         coreIl.Emit(OpCodes.Ldc_I4_0);
         coreIl.Emit(OpCodes.Stloc, indexLocal);
         coreIl.Emit(OpCodes.Br, listLoopCheck);
@@ -252,7 +313,7 @@ public partial class RuntimeEmitter
         coreIl.Emit(OpCodes.Ldloc, sourceListLocal);
         coreIl.Emit(OpCodes.Ldloc, indexLocal);
         coreIl.Emit(OpCodes.Callvirt, _types.GetMethod(_types.ListOfObject, "get_Item", _types.Int32));
-        coreIl.Emit(OpCodes.Call, cloneCore);
+        CloneValue();
         coreIl.Emit(OpCodes.Stloc, valueLocal);
         coreIl.Emit(OpCodes.Ldloc, clonedListLocal);
         coreIl.Emit(OpCodes.Ldloc, valueLocal);
@@ -279,6 +340,11 @@ public partial class RuntimeEmitter
 
         coreIl.Emit(OpCodes.Newobj, _types.DictionaryStringObjectCtor);
         coreIl.Emit(OpCodes.Stloc, clonedDictStringLocal);
+        coreIl.Emit(OpCodes.Ldloc, clonedDictStringLocal);
+        coreIl.Emit(OpCodes.Stloc, stringResult);
+        Remember(stringResult);
+        var cloneStringFields = coreIl.DefineLabel();
+        coreIl.MarkLabel(cloneStringFields);
         coreIl.Emit(OpCodes.Ldloc, sourceDictStringLocal);
         coreIl.Emit(OpCodes.Castclass, _types.IDictionary);
         coreIl.Emit(OpCodes.Callvirt, _types.GetMethod(_types.IDictionary, "GetEnumerator"));
@@ -291,7 +357,7 @@ public partial class RuntimeEmitter
         coreIl.Emit(OpCodes.Stloc, keyLocal);
         coreIl.Emit(OpCodes.Ldloc, dictEnumLocal);
         coreIl.Emit(OpCodes.Callvirt, _types.GetMethod(_types.IDictionaryEnumerator, "get_Value"));
-        coreIl.Emit(OpCodes.Call, cloneCore);
+        CloneValue();
         coreIl.Emit(OpCodes.Stloc, valueLocal);
 
         coreIl.Emit(OpCodes.Ldloc, clonedDictStringLocal);
@@ -306,9 +372,8 @@ public partial class RuntimeEmitter
         coreIl.Emit(OpCodes.Brtrue, stringDictLoopBody);
         coreIl.Emit(OpCodes.Br, returnClonedStringDict);
 
-        // $Object (object literal, possibly with getters/setters not present on a plain
-        // Dictionary<string,object?>) — clone its Fields dict via a recursive cloneCore
-        // call (reuses the Dictionary<string,object?> branch above), then rebuild (#1255).
+        // $Object uses the same field loop as a dictionary, while retaining its
+        // allocated wrapper identity before visiting children.
         // Getters/setters are not preserved — matches the interpreter's CloneObject, which
         // only copies data fields.
         coreIl.MarkLabel(checkObjectLiteral);
@@ -318,14 +383,17 @@ public partial class RuntimeEmitter
         coreIl.Emit(OpCodes.Ldloc, objLiteralSourceLocal);
         coreIl.Emit(OpCodes.Brfalse, checkObjectDict);
 
+        // Allocate/register the wrapper before any child can point back to it.
+        coreIl.Emit(OpCodes.Newobj, _types.DictionaryStringObjectCtor);
+        coreIl.Emit(OpCodes.Stloc, clonedDictStringLocal);
+        coreIl.Emit(OpCodes.Ldloc, clonedDictStringLocal);
+        coreIl.Emit(OpCodes.Newobj, objects.Ctor);
+        coreIl.Emit(OpCodes.Stloc, stringResult);
+        Remember(stringResult);
         coreIl.Emit(OpCodes.Ldloc, objLiteralSourceLocal);
         coreIl.Emit(OpCodes.Callvirt, objects.FieldsGetter);
-        coreIl.Emit(OpCodes.Call, cloneCore);
-        coreIl.Emit(OpCodes.Castclass, _types.DictionaryStringObject);
-        coreIl.Emit(OpCodes.Stloc, objLiteralClonedFieldsLocal);
-        coreIl.Emit(OpCodes.Ldloc, objLiteralClonedFieldsLocal);
-        coreIl.Emit(OpCodes.Newobj, objects.Ctor);
-        coreIl.Emit(OpCodes.Ret);
+        coreIl.Emit(OpCodes.Stloc, sourceDictStringLocal);
+        coreIl.Emit(OpCodes.Br, cloneStringFields);
 
         // Dictionary<object, object> deep clone (Map backing store).
         coreIl.MarkLabel(checkObjectDict);
@@ -337,6 +405,7 @@ public partial class RuntimeEmitter
 
         coreIl.Emit(OpCodes.Newobj, _types.GetDefaultConstructor(_types.DictionaryObjectObject));
         coreIl.Emit(OpCodes.Stloc, clonedDictObjectLocal);
+        Remember(clonedDictObjectLocal);
         coreIl.Emit(OpCodes.Ldloc, sourceDictObjectLocal);
         coreIl.Emit(OpCodes.Castclass, _types.IDictionary);
         coreIl.Emit(OpCodes.Callvirt, _types.GetMethod(_types.IDictionary, "GetEnumerator"));
@@ -346,11 +415,11 @@ public partial class RuntimeEmitter
         coreIl.MarkLabel(objectDictLoopBody);
         coreIl.Emit(OpCodes.Ldloc, dictEnumLocal);
         coreIl.Emit(OpCodes.Callvirt, _types.GetMethod(_types.IDictionaryEnumerator, "get_Key"));
-        coreIl.Emit(OpCodes.Call, cloneCore);
+        CloneValue();
         coreIl.Emit(OpCodes.Stloc, keyLocal);
         coreIl.Emit(OpCodes.Ldloc, dictEnumLocal);
         coreIl.Emit(OpCodes.Callvirt, _types.GetMethod(_types.IDictionaryEnumerator, "get_Value"));
-        coreIl.Emit(OpCodes.Call, cloneCore);
+        CloneValue();
         coreIl.Emit(OpCodes.Stloc, valueLocal);
 
         coreIl.Emit(OpCodes.Ldloc, clonedDictObjectLocal);
@@ -374,6 +443,7 @@ public partial class RuntimeEmitter
 
         coreIl.Emit(OpCodes.Newobj, _types.GetDefaultConstructor(_types.HashSetOfObject));
         coreIl.Emit(OpCodes.Stloc, clonedSetLocal);
+        Remember(clonedSetLocal);
         coreIl.Emit(OpCodes.Ldloc, sourceSetLocal);
         coreIl.Emit(OpCodes.Castclass, _types.IEnumerable);
         coreIl.Emit(OpCodes.Callvirt, _types.GetMethod(_types.IEnumerable, "GetEnumerator"));
@@ -383,7 +453,7 @@ public partial class RuntimeEmitter
         coreIl.MarkLabel(setLoopBody);
         coreIl.Emit(OpCodes.Ldloc, setEnumLocal);
         coreIl.Emit(OpCodes.Callvirt, _types.GetMethod(_types.IEnumerator, "get_Current"));
-        coreIl.Emit(OpCodes.Call, cloneCore);
+        CloneValue();
         coreIl.Emit(OpCodes.Stloc, currentLocal);
         coreIl.Emit(OpCodes.Ldloc, clonedSetLocal);
         coreIl.Emit(OpCodes.Ldloc, currentLocal);
@@ -410,7 +480,7 @@ public partial class RuntimeEmitter
             coreIl.Emit(OpCodes.Ldloc, dateLocal);
             coreIl.Emit(OpCodes.Call, date.Value.GetTime);
             coreIl.Emit(OpCodes.Newobj, date.Value.Ctor);
-            coreIl.Emit(OpCodes.Ret);
+            RememberAndReturn();
         }
         else
         {
@@ -434,7 +504,7 @@ public partial class RuntimeEmitter
             coreIl.Emit(OpCodes.Ldloc, regexpLocal);
             coreIl.Emit(OpCodes.Callvirt, regExp.Value.FlagsGetter);
             coreIl.Emit(OpCodes.Newobj, regExp.Value.Ctor);
-            coreIl.Emit(OpCodes.Ret);
+            RememberAndReturn();
         }
         else
         {
@@ -454,7 +524,7 @@ public partial class RuntimeEmitter
 
             coreIl.Emit(OpCodes.Ldloc, bufferLocal);
             coreIl.Emit(OpCodes.Call, buffer.FromBuffer);
-            coreIl.Emit(OpCodes.Ret);
+            RememberAndReturn();
         }
         else
         {
@@ -571,7 +641,7 @@ public partial class RuntimeEmitter
         coreIl.Emit(OpCodes.Callvirt, errors.StackGetter);
         coreIl.Emit(OpCodes.Callvirt, errors.StackSetter);
         coreIl.Emit(OpCodes.Ldloc, clonedErrLocal);
-        coreIl.Emit(OpCodes.Ret);
+        RememberAndReturn();
 
         // Everything else — functions/closures, Symbols, class instances, Promises,
         // WeakMap/WeakSet, iterators/generators, EventEmitters, etc. — cannot be
@@ -613,7 +683,7 @@ public partial class RuntimeEmitter
         coreIl.Emit(OpCodes.Ret);
 
         coreIl.MarkLabel(returnClonedStringDict);
-        coreIl.Emit(OpCodes.Ldloc, clonedDictStringLocal);
+        coreIl.Emit(OpCodes.Ldloc, stringResult);
         coreIl.Emit(OpCodes.Ret);
 
         coreIl.MarkLabel(returnClonedObjectDict);
