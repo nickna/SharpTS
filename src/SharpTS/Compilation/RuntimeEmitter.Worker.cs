@@ -54,8 +54,9 @@ public partial class RuntimeEmitter
             new StructuredCloneTransferInputs(runtime.ObjectRead.Property, runtime.Operators.TypeOf,
                 GetCollectionConsumerInputs(runtime), _features.UsesStructuredClone || _features.HasAnyTypedArray),
             _features.UsesUserClasses ? new StructuredCloneClassInputs(runtime.ObjectFields.Interface,
-                registeredClassPrototypes, runtime.ClassInitialization.SourceOwners,
-                runtime.ObjectKeys.Names, runtime.ObjectOwnProperties.IsEnumerable, runtime.ObjectRead.Property) : null);
+                registeredClassPrototypes, runtime.ClassInitialization.SourceOwners) : null,
+            new StructuredCloneOwnInputs(runtime.Records.CompactTypes.Count > 0 ? runtime.Records.MarkerInterface : null,
+                runtime.ObjectKeys.Names, runtime.ObjectOwnProperties.IsEnumerable, runtime.ObjectRead.Property));
 
         // worker_threads module helpers
         EmitWorkerThreadsModuleHelpers(runtimeType, runtime.Workers);
