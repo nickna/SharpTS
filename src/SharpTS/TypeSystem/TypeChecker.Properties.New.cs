@@ -14,6 +14,13 @@ namespace SharpTS.TypeSystem;
 /// </remarks>
 public partial class TypeChecker
 {
+    private readonly Dictionary<string, BindingSymbol> _defaultLibraryTypedArrayBindings = new(StringComparer.Ordinal);
+
+    private bool IsIntrinsicTypedArrayConstructorBinding(string name) =>
+        _environment.GetValueBinding(name) is not { } binding
+        || _defaultLibraryTypedArrayBindings.TryGetValue(name, out var intrinsic)
+            && ReferenceEquals(binding, intrinsic);
+
     /// <summary>
     /// Finds the nearest constructor while composing every instantiated ancestor.
     /// Keeps the original signature identity for editor candidate selection.
@@ -519,7 +526,8 @@ public partial class TypeChecker
 
         // Handle TypedArray constructors (Int8Array, Uint8Array, etc.)
         if (isSimpleName && simpleClassName != null && IsTypedArrayName(simpleClassName)
-            && !IsShadowedDeclaredTypedArrayConstructor(simpleClassName))
+            && !IsShadowedDeclaredTypedArrayConstructor(simpleClassName)
+            && IsIntrinsicTypedArrayConstructorBinding(simpleClassName))
         {
             // TypedArray constructors accept:
             // - new TypedArray(length)

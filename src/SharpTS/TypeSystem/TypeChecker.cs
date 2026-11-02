@@ -3,6 +3,7 @@ using SharpTS.Diagnostics;
 using SharpTS.Modules;
 using SharpTS.Parsing;
 using SharpTS.Parsing.Visitors;
+using SharpTS.Runtime.BuiltIns;
 using SharpTS.TypeSystem.Exceptions;
 
 namespace SharpTS.TypeSystem;
@@ -1943,6 +1944,9 @@ public partial class TypeChecker
             _defaultLibraryPromiseBinding = scriptEnv.GetValueBinding("Promise");
             CaptureDefaultLibraryErrorBindings(scriptEnv);
             CaptureTypedArrayDeclarations(scriptEnv);
+            foreach (string name in BuiltInNames.TypedArrayNames)
+                if (scriptEnv.GetValueBinding(name) is { } typedArrayBinding)
+                    _defaultLibraryTypedArrayBindings[name] = typedArrayBinding;
             foreach (var module in modules.Where(module => !module.IsDefaultLibrary && module.IsScript))
                 PrepareModule(module);
             foreach (var module in modules.Where(module => !module.IsDefaultLibrary && !module.IsScript))
