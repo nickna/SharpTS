@@ -16,6 +16,7 @@ public partial class ILEmitter
 
         var objLocal = IL.DeclareLocal(_ctx.Types.Object);
         IL.Emit(OpCodes.Stloc, objLocal);
+        EmitThrowIfReceiverUndefined(objLocal, methodName);
 
         // Check if it's a string
         var builder = _ctx.ILBuilder;

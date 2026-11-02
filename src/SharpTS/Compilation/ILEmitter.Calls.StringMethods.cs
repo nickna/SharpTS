@@ -8,6 +8,22 @@ namespace SharpTS.Compilation;
 /// </summary>
 public partial class ILEmitter
 {
+    public override void EmitRuntimeStringReceiverCall(Expr receiver, string methodName, List<Expr> arguments)
+    {
+        if (methodName is "slice" or "concat" or "includes" or "indexOf" or "startsWith" or "endsWith"
+            or "substring" or "charAt")
+            EmitAmbiguousMethodCall(receiver, methodName, arguments);
+        else if (methodName is "padEnd" or "padStart" or "trim" or "trimStart" or "trimEnd"
+            or "toUpperCase" or "toLowerCase" or "replace" or "replaceAll" or "split"
+            or "match" or "search" or "repeat" or "charCodeAt" or "at" or "lastIndexOf"
+            or "normalize" or "localeCompare")
+            EmitStringOnlyMethodCall(receiver, methodName, arguments);
+        else
+            base.EmitRuntimeStringReceiverCall(receiver, methodName, arguments);
+        SetStackUnknown();
+    }
+
+
     /// <summary>
     /// Emits a string-only method call with runtime type checking for any/unknown types.
     /// Checks if the receiver is a string at runtime and dispatches accordingly.
@@ -21,6 +37,7 @@ public partial class ILEmitter
 
         var objLocal = IL.DeclareLocal(_ctx.Types.Object);
         IL.Emit(OpCodes.Stloc, objLocal);
+        EmitThrowIfReceiverUndefined(objLocal, methodName);
 
         var builder = _ctx.ILBuilder;
         var isStringLabel = builder.DefineLabel("string_method_string");

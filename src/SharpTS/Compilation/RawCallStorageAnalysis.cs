@@ -59,6 +59,7 @@ internal sealed partial class RawCallStorageAnalysis
             if (map.GetValueBinding(slot.Name) is { } binding) _rawBindings.Add(binding);
         }
         _ = SeedNumericOperations();
+        _ = SeedUnsafeStringReceivers();
     }
 
     internal static RawCallStorageAnalysis Capture(IEnumerable<Stmt> statements, TypeMap map,
@@ -149,6 +150,7 @@ internal sealed partial class RawCallStorageAnalysis
         // Flow facts from this epoch can invalidate a formerly numeric argument.
         changed |= SeedDynamicNumericArguments();
         changed |= SeedDynamicStringArguments();
+        changed |= SeedUnsafeStringReceivers(passesRawValue);
         return PropagateArguments(passesRawValue) | changed;
     }
 

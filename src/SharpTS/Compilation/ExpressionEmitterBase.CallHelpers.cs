@@ -640,6 +640,15 @@ public abstract partial class ExpressionEmitterBase
         SetStackUnknown();
     }
 
+    public virtual void EmitRuntimeStringReceiverCall(Expr receiver, string methodName, List<Expr> arguments)
+    {
+        EmitExpression(receiver);
+        EnsureBoxed();
+        var local = _helpers.SpillStoreObject();
+        EmitGetPropertyAndInvoke(local, methodName, arguments);
+        SetStackUnknown();
+    }
+
     protected void EmitGetPropertyAndInvoke(LocalBuilder objLocal, string methodName, List<Expr> arguments, LocalBuilder[]? argLocals = null)
     {
         // ECMA-262 §13.3.2.1: evaluating the member-access callee `recv.method`

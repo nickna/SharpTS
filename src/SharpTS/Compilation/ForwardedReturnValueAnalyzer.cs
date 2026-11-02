@@ -49,7 +49,8 @@ internal sealed partial class ForwardedReturnValueAnalyzer(TypeMap map, RuntimeF
             int expressions = analysis._rawExpressions.Count;
             changed = storage?.Propagate(analysis.PassesRawCall) == true;
             if (storage?.HasMutableDateStaticProducer == true || storage?.HasErasedGenericFieldProducer == true
-                || storage?.HasDynamicNumericArgumentProducer == true || storage?.HasTypedArrayValueReadProducer == true)
+                || storage?.HasDynamicNumericArgumentProducer == true || storage?.HasTypedArrayValueReadProducer == true
+                || storage?.HasUnsafeStringReceiverProducer == true)
                 foreach (var call in storage.Calls)
                     foreach (var expression in storage.EquivalentExpressions(call))
                         _ = analysis.PassesRawCall(expression, RawCallStorageAnalysis.Evidence.Numeric);
@@ -168,7 +169,9 @@ internal sealed partial class ForwardedReturnValueAnalyzer(TypeMap map, RuntimeF
         {
             var returns = new Returns();
             foreach (var statement in function.Body ?? []) returns.Visit(statement);
-            return returns.Values.Any(value => PassesRawCall(value, evidence));
+            return returns.Values.Any(value => PassesRawCall(value, evidence)
+                || evidence == RawCallStorageAnalysis.Evidence.Any
+                    && Emitters.StringEmitter.RequiresRuntimeStringReceiver(map, value));
         }
         finally { visiting.Remove(function); }
     }
@@ -193,7 +196,13 @@ internal sealed partial class ForwardedReturnValueAnalyzer(TypeMap map, RuntimeF
     private bool CallReturnsNative(Expr.Call call)
     {
         if (call.Optional || !IsPrimitive(map.Get(call))) return false;
-        if (_nativeIntrinsics.TryGetValue(call, out var kind)) return kind == PrimitiveKind(map.Get(call));
+        if (_nativeIntrinsics.TryGetValue(call, out var kind))
+        {
+            // A later raw binding epoch can invalidate an earlier string-intrinsic candidate.
+            if (call.Callee is Expr.Get { Name.Lexeme: "includes" or "indexOf" or "charCodeAt" } stringMethod
+                && Emitters.StringEmitter.RequiresRuntimeStringReceiver(map, stringMethod.Object)) return false;
+            return kind == PrimitiveKind(map.Get(call));
+        }
         if (_targets.TryGetValue(call, out var function)) return !FunctionReturnsRaw(function) &&
             _returnKinds[function] == PrimitiveKind(map.Get(call));
         if (call.Callee is not Expr.Get { Optional: false } method || !EquivalentMethods(method).Any(map.IsStableExactPrimitiveMethodCall) ||
