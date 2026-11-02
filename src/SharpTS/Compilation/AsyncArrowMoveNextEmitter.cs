@@ -315,6 +315,7 @@ public partial class AsyncArrowMoveNextEmitter : AsyncFunctionMoveNextEmitter, I
         {
             EmitExpression(v.Initializer);
             EnsureBoxed();
+            EmitObservePublishedPromiseValue();
             StoreVariable(v.Name.Lexeme);
         }
         else

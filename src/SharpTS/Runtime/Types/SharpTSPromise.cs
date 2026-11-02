@@ -42,7 +42,37 @@ public class SharpTSPromise : ITypeCategorized, ISharpTSOwnPropertyObject
 
     // A native reaction/await consumer has taken responsibility for this input.
     // This is a negative report guard, independent of the legacy implicit wait.
-    internal bool IsRejectionHandled { get; set; }
+    private bool _isRejectionHandled;
+    private Action? _rejectionHandledObservers;
+    internal bool IsRejectionHandled
+    {
+        get => Volatile.Read(ref _isRejectionHandled);
+        set
+        {
+            if (!value) return;
+            Volatile.Write(ref _isRejectionHandled, true);
+            Interlocked.Exchange(ref _rejectionHandledObservers, null)?.Invoke();
+        }
+    }
+
+    // Only the nominal VM bridge registers these negative notifications. They
+    // observe actual consumption, never settlement, and hold no event-loop ref.
+    internal void RegisterRejectionHandledObserver(Action observer)
+    {
+        ArgumentNullException.ThrowIfNull(observer);
+        if (IsRejectionHandled) { observer(); return; }
+        Action? previous;
+        Action? combined;
+        do
+        {
+            previous = Volatile.Read(ref _rejectionHandledObservers);
+            combined = previous + observer;
+        } while (!ReferenceEquals(Interlocked.CompareExchange(
+            ref _rejectionHandledObservers, combined, previous), previous));
+        // A concurrent real consumer may have won before publication above.
+        if (IsRejectionHandled)
+            Interlocked.Exchange(ref _rejectionHandledObservers, null)?.Invoke();
+    }
 
     // The owner checkpoint reports a discarded rejection once, with or without listeners.
     internal bool HasReportedDiscardedRejection { get; set; }

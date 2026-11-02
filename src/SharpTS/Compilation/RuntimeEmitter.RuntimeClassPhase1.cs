@@ -79,6 +79,11 @@ public partial class RuntimeEmitter
             MethodAttributes.Public | MethodAttributes.Static,
             _types.Void,
             [typeof(Action)]);
+        // Rejection reports are filled before the shared FIFO queue body.
+        // Reserve the existing required queue-state query for that earlier caller.
+        runtime.Microtasks.HasMicrotasks = typeBuilder.DefineMethod(
+            "HasMicrotasks", MethodAttributes.Public | MethodAttributes.Static,
+            _types.Boolean, Type.EmptyTypes);
 
         if (runtime.Vm is not null)
             DefineVmValueBridge(typeBuilder, runtime.RequireVm());

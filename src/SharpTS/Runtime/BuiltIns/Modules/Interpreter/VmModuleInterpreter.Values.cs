@@ -187,6 +187,34 @@ public static partial class VmModuleInterpreter
         value is SharpTSPromise promise && IsVmPromiseValue(promise) ? promise.Task
             : throw new ArgumentException("Expected an owned VM Promise value.", nameof(value));
 
+    /// <summary>Reads negative handling state only for an actually recorded VM Promise.</summary>
+    public static bool IsVmPromiseRejectionHandled(object? value)
+        => value is SharpTSPromise promise && IsVmPromiseValue(promise) && promise.IsRejectionHandled;
+
+    /// <summary>Connects only an actual VM Promise to its emitted mirror's handling receipt.</summary>
+    public static void RegisterVmPromiseRejectionHandler(object value, Action observer)
+    {
+        if (value is not SharpTSPromise promise || !IsVmPromiseValue(promise))
+            throw new ArgumentException("Expected an owned VM Promise value.", nameof(value));
+        promise.RegisterRejectionHandledObserver(observer);
+    }
+
+    /// <summary>Transfers real mirror consumption back through the recorded original owner.</summary>
+    public static void MarkVmPromiseRejectionHandled(object? value)
+    {
+        if (value is not SharpTSPromise promise || !IsVmPromiseValue(promise)) return;
+        if (_vmValues?.TryGetValue(promise, out var receipt) == true
+            && !receipt.Owner.IsDisposed && receipt.Lease is not { IsDisposed: true })
+        {
+            RunVmValueOperation(receipt, () =>
+            {
+                receipt.Owner.NotifyRejectionHandlerAttached(promise);
+                return null;
+            }, adaptResult: false);
+        }
+        else promise.IsRejectionHandled = true;
+    }
+
     /// <summary>Recognizes only the actual typed Core thrown/rejected-value carriers.</summary>
     public static bool IsVmExceptionValue(Exception exception) =>
         exception is Exceptions.ThrowException or SharpTSPromiseRejectedException;

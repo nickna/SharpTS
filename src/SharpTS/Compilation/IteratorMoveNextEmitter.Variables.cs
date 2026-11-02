@@ -75,6 +75,7 @@ public partial class IteratorMoveNextEmitter
             {
                 EmitExpression(v.Initializer);
                 EnsureBoxed();
+                EmitObservePublishedPromiseValue();
             }
             else
             {

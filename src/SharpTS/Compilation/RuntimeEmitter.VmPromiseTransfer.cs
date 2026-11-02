@@ -5,7 +5,7 @@ namespace SharpTS.Compilation;
 
 public partial class RuntimeEmitter
 {
-    private (TypeBuilder Type, ConstructorBuilder Constructor, MethodBuilder Complete, MethodBuilder Observe)
+    private (TypeBuilder Type, ConstructorBuilder Constructor, MethodBuilder Complete, MethodBuilder Observe, MethodBuilder NotifyHandled)
         EmitVmPromiseTransfer(TypeBuilder owner, EmittedRuntime runtime,
             VmHostEmission host)
     {
@@ -99,7 +99,52 @@ public partial class RuntimeEmitter
         il.Emit(OpCodes.Newobj, typeof(Action).GetConstructor([_types.Object, _types.IntPtr])!);
         il.Emit(OpCodes.Callvirt, runtime.EventLoop.Schedule);
         il.Emit(OpCodes.Ret);
+        var applyHandled = transfer.DefineMethod("ApplyHandled", MethodAttributes.Public, _types.Void, Type.EmptyTypes);
+        il = applyHandled.GetILGenerator();
+        var apply = il.DefineLabel();
+        il.Emit(OpCodes.Ldarg_0);
+        il.Emit(OpCodes.Ldfld, callbacks);
+        il.Emit(OpCodes.Volatile);
+        il.Emit(OpCodes.Ldfld, host.Enabled);
+        il.Emit(OpCodes.Brtrue, apply);
+        il.Emit(OpCodes.Ret);
+        il.MarkLabel(apply);
+        il.Emit(OpCodes.Ldarg_0);
+        il.Emit(OpCodes.Ldfld, result);
+        il.Emit(OpCodes.Callvirt, _types.GetProperty(_types.TaskCompletionSourceOfObject, "Task").GetGetMethod()!);
+        il.Emit(OpCodes.Call, runtime.RequirePromise().NotifyPromiseRejectionHandler);
+        il.Emit(OpCodes.Ret);
+
+        var notifyHandled = transfer.DefineMethod("NotifyHandled", MethodAttributes.Public, _types.Void, Type.EmptyTypes);
+        il = notifyHandled.GetILGenerator();
+        var enabled = il.DefineLabel();
+        var postHandled = il.DefineLabel();
+        il.Emit(OpCodes.Ldarg_0);
+        il.Emit(OpCodes.Ldfld, callbacks);
+        il.Emit(OpCodes.Volatile);
+        il.Emit(OpCodes.Ldfld, host.Enabled);
+        il.Emit(OpCodes.Brtrue, enabled);
+        il.Emit(OpCodes.Ret);
+        il.MarkLabel(enabled);
+        il.Emit(OpCodes.Ldarg_0);
+        il.Emit(OpCodes.Ldfld, callbacks);
+        il.Emit(OpCodes.Ldfld, host.Thread);
+        il.Emit(OpCodes.Call, typeof(Environment).GetProperty(nameof(Environment.CurrentManagedThreadId))!.GetGetMethod()!);
+        il.Emit(OpCodes.Bne_Un, postHandled);
+        il.Emit(OpCodes.Ldarg_0);
+        il.Emit(OpCodes.Call, applyHandled);
+        il.Emit(OpCodes.Ret);
+        il.MarkLabel(postHandled);
+        // Same captured owner queue as settlement transfer; no new keepalive.
+        il.Emit(OpCodes.Ldarg_0);
+        il.Emit(OpCodes.Ldfld, callbacks);
+        il.Emit(OpCodes.Ldfld, host.Loop);
+        il.Emit(OpCodes.Ldarg_0);
+        il.Emit(OpCodes.Ldftn, applyHandled);
+        il.Emit(OpCodes.Newobj, typeof(Action).GetConstructor([_types.Object, _types.IntPtr])!);
+        il.Emit(OpCodes.Callvirt, runtime.EventLoop.Schedule);
+        il.Emit(OpCodes.Ret);
         transfer.CreateType();
-        return (transfer, ctor, complete, observe);
+        return (transfer, ctor, complete, observe, notifyHandled);
     }
 }

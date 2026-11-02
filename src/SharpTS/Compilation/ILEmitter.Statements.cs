@@ -154,6 +154,7 @@ public partial class ILEmitter
             {
                 EmitExpression(v.Initializer);
                 EmitBoxIfNeeded(v.Initializer);
+                EmitObservePublishedPromiseValue();
                 EmitStoreAssignmentLoopVariable(v.Name.Lexeme);
             }
             return;
@@ -208,6 +209,7 @@ public partial class ILEmitter
                 {
                     EmitExpression(v.Initializer);
                     EmitBoxIfNeeded(v.Initializer);
+                    EmitObservePublishedPromiseValue();
                 }
                 else if (v.TypeAnnotation == "number")
                 {
@@ -243,6 +245,7 @@ public partial class ILEmitter
                     {
                         EmitExpression(v.Initializer);
                         EmitBoxIfNeeded(v.Initializer);
+                        EmitObservePublishedPromiseValue();
                     }
                     IL.Emit(OpCodes.Stsfld, staticField);
                 }
@@ -280,6 +283,7 @@ public partial class ILEmitter
                 {
                     EmitExpression(v.Initializer);
                     EmitBoxIfNeeded(v.Initializer);
+                    EmitObservePublishedPromiseValue();
                 }
             }
             else if (v.TypeAnnotation == "number")
@@ -309,6 +313,7 @@ public partial class ILEmitter
             {
                 EmitExpression(v.Initializer);
                 EmitBoxIfNeeded(v.Initializer);
+                EmitObservePublishedPromiseValue();
             }
             else if (v.TypeAnnotation == "number")
             {
@@ -336,6 +341,7 @@ public partial class ILEmitter
             {
                 EmitExpression(v.Initializer);
                 EmitBoxIfNeeded(v.Initializer);
+                EmitObservePublishedPromiseValue();
             }
             else
             {
@@ -652,6 +658,7 @@ public partial class ILEmitter
                 {
                     // Ensure we have a boxed object on stack
                     EmitBoxIfNeeded(v.Initializer);
+                    EmitObservePublishedPromiseValue();
                 }
             }
             IL.Emit(OpCodes.Stloc, local);

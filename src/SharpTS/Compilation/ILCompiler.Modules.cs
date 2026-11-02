@@ -480,6 +480,18 @@ public partial class ILCompiler
     /// the timer processor on this thread until the task completes (or the loop proves
     /// quiescent, matching Node's "a forever-pending top-level promise doesn't block exit").
     /// </remarks>
+    private static bool IsStandaloneReactionResult(Expr expression)
+    {
+        while (true)
+        {
+            expression = ExpressionUnwrapper.Unwrap(expression);
+            if (expression is Expr.Assign assignment) expression = assignment.Value;
+            else if (expression is Expr.Comma comma) expression = comma.Right;
+            else return expression is Expr.Call
+                { Callee: Expr.Get { Name.Lexeme: "then" or "catch" or "finally" } };
+        }
+    }
+
     private void EmitExpressionWithAsyncWait(ILGenerator il, ILEmitter emitter, Stmt.Expression exprStmt)
     {
         // SharpTS historically pumps promise-valued expression statements as a
@@ -488,10 +500,7 @@ public partial class ILCompiler
         // executes the reaction before the next statement in the same script
         // job. Leave then/catch/finally results to the normal microtask
         // checkpoint (#1440). Explicit `await` remains on the path below.
-        if (_features?.UsesPromise == true && exprStmt.Expr is Expr.Call
-            {
-                Callee: Expr.Get { Name.Lexeme: "then" or "catch" or "finally" }
-            })
+        if (_features?.UsesPromise == true && IsStandaloneReactionResult(exprStmt.Expr))
         {
             emitter.MarkStatementStart(exprStmt);
             emitter.EmitExpression(exprStmt.Expr);

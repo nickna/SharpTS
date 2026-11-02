@@ -213,6 +213,7 @@ public partial class ILEmitter : StatementEmitterBase, IEmitterContext
                 if (!TryEmitDiscardedExpression(e.Expr))
                 {
                     EmitExpression(e.Expr);
+                    if (e.Expr is Expr.Assign) EmitObservePublishedPromiseValue();
                     // Ordinary expressions leave a value on the stack. A
                     // discarded-expression intrinsic reports success only
                     // after emitting a stack-neutral replacement.

@@ -78,6 +78,7 @@ public abstract partial class StatementEmitterBase : ExpressionEmitterBase
                 {
                     EmitExpression(v.Initializer);
                     EnsureBoxed();
+                    EmitObservePublishedPromiseValue();
                 }
                 var temp = IL.DeclareLocal(field.FieldType);
                 IL.Emit(OpCodes.Stloc, temp);
@@ -107,6 +108,7 @@ public abstract partial class StatementEmitterBase : ExpressionEmitterBase
                 {
                     EmitExpression(v.Initializer);
                     EnsureBoxed();
+                    EmitObservePublishedPromiseValue();
                 }
                 IL.Emit(OpCodes.Stloc, local);
             }
@@ -279,6 +281,7 @@ public abstract partial class StatementEmitterBase : ExpressionEmitterBase
                 if (!TryEmitDiscardedExpression(e.Expr))
                 {
                     EmitExpression(e.Expr);
+                    if (e.Expr is Expr.Assign) EmitObservePublishedPromiseValue();
                     IL.Emit(OpCodes.Pop);
                 }
                 break;
