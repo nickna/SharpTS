@@ -201,7 +201,9 @@ public class SharpTSPromiseClass : SharpTSClass
                     settled = true;
                     object? reason = ex is Runtime.Exceptions.ThrowException thrown
                         ? thrown.Value
-                        : ex.Message;
+                        : ex is StructuredClone.DataCloneError cloneError
+                            ? new Runtime.Exceptions.HostDataCloneErrorValue(cloneError).CreateGuestError()
+                            : ex.Message;
                     tcs.TrySetException(new SharpTSPromiseRejectedException(reason));
                 }
             }

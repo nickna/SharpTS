@@ -109,17 +109,32 @@ public partial class RuntimeEmitter
             il.Emit(OpCodes.Ret);
         }
 
-        // Check for $DataCloneError (thrown by StructuredCloneCore, #1255) — return its
-        // Message directly (a raw string, not wrapped in $Error), matching the
-        // interpreter's catch binding for a non-guest-throw exception (Interpreter.
-        // Statements.cs: `ex is ThrowException tex ? tex.Value : ex.Message`).
+        // Preserve the nominal clone failure as an Error value with its guest name.
+        // Guest-thrown values and unrelated host exceptions keep their own paths.
         il.MarkLabel(checkDataCloneErrorLabel);
         il.Emit(OpCodes.Ldloc, exLocal);
         il.Emit(OpCodes.Isinst, inputs.StructuredClone.ErrorType);
         il.Emit(OpCodes.Brfalse, checkNodeErrorLabel);
 
+        var cloneMessage = il.DeclareLocal(_types.String);
+        var cloneMessageReady = il.DefineLabel();
         il.Emit(OpCodes.Ldloc, exLocal);
         il.Emit(OpCodes.Callvirt, _types.GetProperty(_types.Exception, "Message").GetGetMethod()!);
+        il.Emit(OpCodes.Stloc, cloneMessage);
+        il.Emit(OpCodes.Ldloc, cloneMessage);
+        il.Emit(OpCodes.Ldstr, "DataCloneError: ");
+        il.Emit(OpCodes.Callvirt, _types.GetMethod(_types.String, "StartsWith", _types.String));
+        il.Emit(OpCodes.Brfalse, cloneMessageReady);
+        il.Emit(OpCodes.Ldloc, cloneMessage);
+        il.Emit(OpCodes.Ldc_I4, "DataCloneError: ".Length);
+        il.Emit(OpCodes.Callvirt, _types.GetMethod(_types.String, "Substring", _types.Int32));
+        il.Emit(OpCodes.Stloc, cloneMessage);
+        il.MarkLabel(cloneMessageReady);
+        il.Emit(OpCodes.Ldloc, cloneMessage);
+        il.Emit(OpCodes.Newobj, errors.MessageConstructor);
+        il.Emit(OpCodes.Dup);
+        il.Emit(OpCodes.Ldstr, "DataCloneError");
+        il.Emit(OpCodes.Callvirt, errors.NameSetter);
         il.Emit(OpCodes.Ret);
 
         // Check for __nodeError marker in Data (Node.js-style fs errors)

@@ -558,7 +558,9 @@ public partial class Interpreter
                 }
                 catch (Exception ex)
                 {
-                    object? catchError = ex is ThrowException tex ? tex.Value : ex.Message;
+                    object? catchError = ex is StructuredClone.DataCloneError
+                        ? TranslateException(ex)
+                        : ex is ThrowException tex ? tex.Value : ex.Message;
                     return (true, ExecutionResult.Throw(catchError, fromGuestThrow: ex is ThrowException));
                 }
             }
@@ -706,7 +708,9 @@ public partial class Interpreter
                 }
                 catch (Exception ex)
                 {
-                    object? catchError = ex is ThrowException tex ? tex.Value : ex.Message;
+                    object? catchError = ex is StructuredClone.DataCloneError
+                        ? TranslateException(ex)
+                        : ex is ThrowException tex ? tex.Value : ex.Message;
                     return (true, ExecutionResult.Throw(catchError, fromGuestThrow: ex is ThrowException));
                 }
             }
@@ -1599,6 +1603,11 @@ public partial class Interpreter
         if (ex is AggregateException agg && agg.InnerException is SharpTSPromiseRejectedException innerRex)
             return innerRex.Reason;
 
+        // Preserve nominal provenance across function results without turning an
+        // uncaught host failure into a guest throw. Catch/rejection binding unwraps it.
+        if (ex is StructuredClone.DataCloneError cloneError)
+            return new HostDataCloneErrorValue(cloneError);
+
         if (ex is NodeError nodeError)
             return new SharpTSObject(new Dictionary<string, object?>
             {
@@ -1663,9 +1672,11 @@ public partial class Interpreter
     /// re-coerced.
     /// </remarks>
     internal object? CoerceCaughtValueForBinding(object? value)
-        => value is string s && TryCreateGuestErrorFromMessage(s) is { } typedError
-            ? typedError
-            : value;
+        => value is HostDataCloneErrorValue cloneError
+            ? cloneError.CreateGuestError()
+            : value is string s && TryCreateGuestErrorFromMessage(s) is { } typedError
+                ? typedError
+                : value;
 
     /// <summary>
     /// If <paramref name="message"/> begins with a known JS error-name prefix
