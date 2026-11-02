@@ -1942,6 +1942,7 @@ public partial class TypeChecker
             _defaultLibraryObjectType = scriptEnv.GetTypeBinding("Object") as TypeInfo.Interface;
             _defaultLibraryPromiseBinding = scriptEnv.GetValueBinding("Promise");
             CaptureDefaultLibraryErrorBindings(scriptEnv);
+            CaptureTypedArrayDeclarations(scriptEnv);
             foreach (var module in modules.Where(module => !module.IsDefaultLibrary && module.IsScript))
                 PrepareModule(module);
             foreach (var module in modules.Where(module => !module.IsDefaultLibrary && !module.IsScript))

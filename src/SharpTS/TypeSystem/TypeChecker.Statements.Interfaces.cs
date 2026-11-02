@@ -40,6 +40,7 @@ public partial class TypeChecker
         _completedInterfaces.Clear();
         _completedInterfaceBindings.Clear();
         _defaultLibraryDataViewType = null;
+        ResetTypedArrayDeclarations();
         _ambientClassMerges.Clear();
     }
 

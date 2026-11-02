@@ -63,6 +63,7 @@ public partial class TypeChecker
     {
         // Validate the ordinary indexed read before applying a stable path refinement.
         TypeInfo result = CheckGetIndexCore(getIndex);
+        ObserveDeclaredTypedArrayRead(getIndex, _typeMap.Get(getIndex.Object), result);
         var path = ExtractNarrowingPath(getIndex);
         return path is not null && Narrowing.NarrowingPathExtractor.IsWithinDepthLimit(path)
             ? GetNarrowing(path) ?? result
@@ -74,7 +75,7 @@ public partial class TypeChecker
         if (getIndex.Object is Expr.Super { Method: null } super)
             return CheckComputedSuperIndex(super, getIndex.Index);
 
-        TypeInfo objType = WidenFreshArrayReceiver(getIndex.Object, CheckExpr(getIndex.Object));
+        TypeInfo objType = DeclaredTypedArrayReceiver(WidenFreshArrayReceiver(getIndex.Object, CheckExpr(getIndex.Object)));
         TypeInfo indexType = CheckExpr(getIndex.Index);
         if (_fieldGetterScope is not null)
         {
@@ -745,6 +746,7 @@ public partial class TypeChecker
 
     private void EnsureWritableInterfaceIndex(TypeInfo receiver, TypeInfo index, Expr syntax)
     {
+        receiver = DeclaredTypedArrayReceiver(receiver);
         if (receiver is TypeInfo.InstantiatedGeneric generic && FlattenInstantiatedInterface(generic) is { } flattened)
             receiver = flattened;
         if (receiver is TypeInfo.Union union)
@@ -868,7 +870,7 @@ public partial class TypeChecker
 
     private TypeInfo CheckSetIndex(Expr.SetIndex setIndex)
     {
-        TypeInfo objType = CheckExpr(setIndex.Object);
+        TypeInfo objType = DeclaredTypedArrayReceiver(CheckExpr(setIndex.Object));
         TypeInfo indexType = CheckExpr(setIndex.Index);
         TypeInfo? intersectionWriteContext = null;
         if (objType is TypeInfo.Intersection intersection && TryGetLiteralPropertyKeys(indexType, out var writeKeys))
@@ -1626,7 +1628,7 @@ public partial class TypeChecker
     /// </summary>
     private TypeInfo? CheckGetIndexOnType(TypeInfo objType, TypeInfo indexType, Expr.GetIndex getIndex)
     {
-        objType = ResolveMappedTypeForAccess(objType);
+        objType = DeclaredTypedArrayReceiver(ResolveMappedTypeForAccess(objType));
         if (objType is TypeInfo.MappedType mapped &&
             (TypeInfoEqualityComparer.Instance.Equals(indexType, mapped.Constraint) ||
              IsCompatible(mapped.Constraint, indexType)))
@@ -1888,6 +1890,7 @@ public partial class TypeChecker
     /// </summary>
     private TypeInfo? CheckSetIndexOnType(TypeInfo objType, TypeInfo indexType, TypeInfo valueType, Expr.SetIndex setIndex)
     {
+        objType = DeclaredTypedArrayReceiver(objType);
         EnsureWritableClassIndex(objType, indexType, setIndex.Index);
         EnsureWritableInterfaceIndex(objType, indexType, setIndex.Index);
         // Recursive case for nested type parameters

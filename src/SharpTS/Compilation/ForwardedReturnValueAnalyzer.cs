@@ -17,6 +17,7 @@ internal sealed partial class ForwardedReturnValueAnalyzer(TypeMap map, RuntimeF
     private readonly Dictionary<Stmt.Function, TokenType?> _returnKinds = new(ReferenceEqualityComparer.Instance);
     private readonly HashSet<Stmt.Function> _visiting = new(ReferenceEqualityComparer.Instance);
     private readonly HashSet<Stmt.Function> _nativeVisiting = new(ReferenceEqualityComparer.Instance);
+    private readonly HashSet<Stmt.Function> _numericReturnVisiting = new(ReferenceEqualityComparer.Instance);
     private readonly HashSet<Expr> _rawExpressions = new(ReferenceEqualityComparer.Instance);
     private readonly Dictionary<int, Stmt.Class> _classes = [];
 
@@ -48,7 +49,7 @@ internal sealed partial class ForwardedReturnValueAnalyzer(TypeMap map, RuntimeF
             int expressions = analysis._rawExpressions.Count;
             changed = storage?.Propagate(analysis.PassesRawCall) == true;
             if (storage?.HasMutableDateStaticProducer == true || storage?.HasErasedGenericFieldProducer == true
-                || storage?.HasDynamicNumericArgumentProducer == true || storage?.HasBigIntTypedArrayReadProducer == true)
+                || storage?.HasDynamicNumericArgumentProducer == true || storage?.HasTypedArrayValueReadProducer == true)
                 foreach (var call in storage.Calls)
                     foreach (var expression in storage.EquivalentExpressions(call))
                         _ = analysis.PassesRawCall(expression, RawCallStorageAnalysis.Evidence.Numeric);
@@ -84,6 +85,9 @@ internal sealed partial class ForwardedReturnValueAnalyzer(TypeMap map, RuntimeF
             Expr.Call call => (evidence != RawCallStorageAnalysis.Evidence.Numeric || storage?.HasNumericProducer == true)
                 && (IsPrimitive(map.Get(call)) && !CallReturnsNative(call)
                     || map.Get(call) is TypeInfo.Any or TypeInfo.Unknown or TypeInfo.Inferred
+                    || evidence == RawCallStorageAnalysis.Evidence.Numeric
+                        && map.Get(call) is TypeInfo.BigInt or TypeInfo.BigIntLiteral
+                        && _targets.TryGetValue(call, out var target) && FunctionReturnsRawNumeric(target)
                     || call.Arguments.Any(argument => PassesRawCall(argument, evidence))),
             Expr.Variable variable => storage?.IsRawBinding(variable.Name, evidence) == true,
             Expr.Grouping group => PassesRawCall(group.Expression, evidence),
@@ -144,6 +148,21 @@ internal sealed partial class ForwardedReturnValueAnalyzer(TypeMap map, RuntimeF
         TokenType.PLUS or TokenType.MINUS or TokenType.STAR or TokenType.SLASH or TokenType.PERCENT or TokenType.STAR_STAR or
         TokenType.AMPERSAND or TokenType.PIPE or TokenType.CARET or TokenType.LESS_LESS or TokenType.GREATER_GREATER or
         TokenType.GREATER_GREATER_GREATER;
+
+    private bool FunctionReturnsRawNumeric(Stmt.Function function)
+    {
+        // This is negative evidence from an actual stable target body, not a
+        // native-return classification. Cycles alone establish no producer;
+        // the surrounding fixed point revisits callers after real evidence grows.
+        if (!_numericReturnVisiting.Add(function)) return false;
+        try
+        {
+            var returns = new Returns();
+            foreach (var statement in function.Body ?? []) returns.Visit(statement);
+            return returns.Values.Any(value => PassesRawCall(value, RawCallStorageAnalysis.Evidence.Numeric));
+        }
+        finally { _numericReturnVisiting.Remove(function); }
+    }
 
     private bool FunctionReturnsRaw(Stmt.Function function)
     {

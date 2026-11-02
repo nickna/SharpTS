@@ -87,6 +87,13 @@ public class TypeMap
         return _rawNumericResults.Add(expression);
     }
     internal bool IsRawNumericResult(Expr expression) => _rawNumericResults.Contains(expression);
+    private readonly HashSet<Expr.GetIndex> _declaredTypedArrayValueReads = new(ReferenceEqualityComparer.Instance);
+    internal void MarkDeclaredTypedArrayValueRead(Expr.GetIndex expression)
+    {
+        _declaredTypedArrayValueReads.Add(expression);
+        MarkRawNumericResult(expression);
+    }
+    internal bool IsDeclaredTypedArrayValueRead(Expr.GetIndex expression) => _declaredTypedArrayValueReads.Contains(expression);
     internal void MarkRawNumericStorage(Token token)
     {
         _rawNumericStorage.Add(token);

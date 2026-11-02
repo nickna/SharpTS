@@ -937,6 +937,8 @@ public partial class TypeChecker
                                  || ValueMayBeUndefinedSentinel(n.Right, taintedLocals),
         Expr.Assign a => ValueMayBeUndefinedSentinel(a.Value, taintedLocals),
         Expr.Variable v when taintedLocals != null && taintedLocals.Contains(v.Name.Lexeme) => true,
+        // Declared interfaces likewise cannot prove a packed carrier or a present value.
+        Expr.GetIndex get when _typeMap.IsDeclaredTypedArrayValueRead(get) => true,
         // Numeric element annotations do not prove that a runtime index is present.
         Expr.GetIndex get when IsTypedArrayReadReceiver(_typeMap.Get(get.Object))
             && _typeMap.IsUndefinedReachableReturn(get) => true,

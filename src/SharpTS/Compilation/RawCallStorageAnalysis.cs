@@ -18,7 +18,7 @@ internal sealed partial class RawCallStorageAnalysis
     private readonly List<Flow> _flows = [];
     private readonly List<Expr.Call> _dateStaticCalls = [];
     private readonly List<Expr> _erasedGenericFieldReads = [];
-    private readonly List<Expr.GetIndex> _bigIntTypedArrayReads = [];
+    private readonly List<Expr.GetIndex> _typedArrayValueReads = [];
     private readonly HashSet<BindingSymbol> _rawBindings = new(ReferenceEqualityComparer.Instance);
     private readonly HashSet<BindingSymbol> _rawCallBindings = new(ReferenceEqualityComparer.Instance);
     private readonly HashSet<object> _rawSlots = new(ReferenceEqualityComparer.Instance);
@@ -35,7 +35,7 @@ internal sealed partial class RawCallStorageAnalysis
     internal HashSet<Expr.Call> Calls { get; } = new(ReferenceEqualityComparer.Instance);
     internal bool HasMutableDateStaticProducer { get; private set; }
     internal bool HasErasedGenericFieldProducer => _erasedGenericFieldReads.Count != 0;
-    internal bool HasBigIntTypedArrayReadProducer => _bigIntTypedArrayReads.Count != 0;
+    internal bool HasTypedArrayValueReadProducer => _typedArrayValueReads.Count != 0;
     internal HashSet<Stmt.Function> Functions { get; } = new(ReferenceEqualityComparer.Instance);
 
     private RawCallStorageAnalysis(IEnumerable<Stmt> statements, TypeMap map,
@@ -86,12 +86,12 @@ internal sealed partial class RawCallStorageAnalysis
                 foreach (var expression in EquivalentExpressions(read))
                     _map.MarkRawNumericResult(expression);
         }
-        // Missing BigInt elements retain object storage despite their checked element type.
+        // Missing BigInt elements and declared interface elements retain object storage.
         // Only the checker's actual read veto and its owned lifted equivalents flow onward.
-        if (HasBigIntTypedArrayReadProducer)
+        if (HasTypedArrayValueReadProducer)
         {
             _hasNumericProducer = true;
-            foreach (var read in _bigIntTypedArrayReads)
+            foreach (var read in _typedArrayValueReads)
                 foreach (var expression in EquivalentExpressions(read))
                     _map.MarkRawNumericResult(expression);
         }
@@ -280,8 +280,9 @@ internal sealed partial class RawCallStorageAnalysis
             if (collect && _emittedSourceBody && PrimitiveFieldValueAnalysis.IsErasedGenericField(expression, Analysis._map))
                 Analysis._erasedGenericFieldReads.Add(expression);
             if (collect && _emittedSourceBody && Analysis._map.IsRawNumericResult(expression)
-                && HasBigIntTypedArrayReceiver(Analysis._map.Get(expression.Object)))
-                Analysis._bigIntTypedArrayReads.Add(expression);
+                && (Analysis._map.IsDeclaredTypedArrayValueRead(expression)
+                    || HasBigIntTypedArrayReceiver(Analysis._map.Get(expression.Object))))
+                Analysis._typedArrayValueReads.Add(expression);
             base.VisitGetIndex(expression);
         }
         private static bool HasBigIntTypedArrayReceiver(TypeInfo? receiver) =>

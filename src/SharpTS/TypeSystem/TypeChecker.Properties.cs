@@ -266,7 +266,7 @@ public partial class TypeChecker
             return windowGlobalMember;
 
         TypeInfo objType = RefreshCompletedInterfaceBinding(CheckExpr(get.Object));
-        objType = WidenFreshArrayReceiver(get.Object, objType);
+        objType = DeclaredTypedArrayReceiver(WidenFreshArrayReceiver(get.Object, objType));
         ExpectSourceMemberReceiver(objType);
 
         if (objType is TypeInfo.Any && get.Name.Lexeme == "prototype"
@@ -808,7 +808,7 @@ public partial class TypeChecker
                 tsCode: "TS7017");
         }
 
-        TypeInfo objType = RefreshCompletedInterfaceBinding(CheckExpr(set.Object));
+        TypeInfo objType = DeclaredTypedArrayReceiver(RefreshCompletedInterfaceBinding(CheckExpr(set.Object)));
         EnsureWritableClassIndex(objType, new TypeInfo.StringLiteral(set.Name.Lexeme),
             new Expr.Literal(set.Name.Lexeme));
         EnsureWritableInterfaceIndex(objType, new TypeInfo.StringLiteral(set.Name.Lexeme),

@@ -518,7 +518,8 @@ public partial class TypeChecker
         }
 
         // Handle TypedArray constructors (Int8Array, Uint8Array, etc.)
-        if (isSimpleName && simpleClassName != null && IsTypedArrayName(simpleClassName))
+        if (isSimpleName && simpleClassName != null && IsTypedArrayName(simpleClassName)
+            && !IsShadowedDeclaredTypedArrayConstructor(simpleClassName))
         {
             // TypedArray constructors accept:
             // - new TypedArray(length)
@@ -530,11 +531,8 @@ public partial class TypeChecker
                 throw new TypeCheckException($" {simpleClassName} constructor accepts at most 3 arguments.", tsCode: "TS2554");
             }
 
-            // Validate first argument if present
-            if (newExpr.Arguments.Count >= 1)
-            {
-                CheckExpr(newExpr.Arguments[0]);
-            }
+            // Retain the actual buffer argument for the captured declaration's facet.
+            TypeInfo? input = newExpr.Arguments.Count == 0 ? null : CheckExpr(newExpr.Arguments[0]);
 
             // Validate optional byteOffset and length
             for (int i = 1; i < newExpr.Arguments.Count; i++)
@@ -546,11 +544,7 @@ public partial class TypeChecker
                 }
             }
 
-            // Extract element type prefix (e.g., "Int32" from "Int32Array")
-            var elementType = simpleClassName.EndsWith("Array")
-                ? simpleClassName[..^5]  // Remove "Array" suffix
-                : simpleClassName;
-            return new TypeInfo.TypedArray(elementType);
+            return TypedArrayConstructorType(simpleClassName, input);
         }
 
         // Handle new Worker(filename, options?) constructor
