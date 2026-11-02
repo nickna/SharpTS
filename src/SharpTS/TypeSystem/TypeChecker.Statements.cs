@@ -284,7 +284,8 @@ public partial class TypeChecker
             }
         }
 
-        ReportUnknownTypeArgument(stmt.TypeAnnotationNode);
+        if (!stmt.HasHoistedTypeAnnotation)
+            ReportUnknownTypeArgument(stmt.TypeAnnotationNode);
 
         // TS2304: a bare annotation name that resolves to nothing (e.g. `var a: A;` where the
         // only `A` lives in a nested module, invisible here). The preparatory module pass runs in

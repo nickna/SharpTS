@@ -38,6 +38,11 @@ public sealed class NestedTypeArgumentDiagnosticTests
         yield return ["qualified-type", "namespace N{export interface Item{n:number}}interface Box<T>{value:T}const x:Box<N.Item>={value:{n:7}};", true, true, ""];
         yield return ["conditional-infer", "interface Box<T>{value:T}const x:Box<string extends infer U?U:never>=null as any;", true, true, ""];
         yield return ["library-array", "const x:Array<number>=[1,2];", true, true, ""];
+        yield return ["hoisted-block-alias", "interface Box<T>{value:T}{type Local=any;var x:Box<Local>={value:7};}", true, true, ""];
+        yield return ["hoisted-if-alias", "interface Box<T>{value:T}if(true){type Local=any;var x:Box<Local>={value:7};}", true, true, ""];
+        yield return ["hoisted-loop-alias", "interface Box<T>{value:T}for(let i=0;i<1;i++){type Local=any;var x:Box<Local>={value:7};}", true, true, ""];
+        yield return ["hoisted-function-alias", "interface Box<T>{value:T}function f(){type Local=any;{var x:Box<Local>={value:7};}}", true, true, ""];
+        yield return ["top-var-no-initializer-still-rejects", "interface Box<T>{value:T}var x:Box<MissingType>;", false, false, "MissingType"];
     }
 
     [Theory]

@@ -78,7 +78,10 @@ public static class VarHoister
         var result = new List<Stmt>(collected.Count + rewritten.Count);
         foreach (var (nameToken, typeAnnotation, typeAnnotationNode, initializerForInference) in collected)
         {
-            var hoisted = new Stmt.Var(nameToken, TypeAnnotation: typeAnnotation, TypeAnnotationNode: typeAnnotationNode, Initializer: null, HasDefiniteAssignmentAssertion: false, IsVar: true, HoistTypeInferenceInitializer: initializerForInference);
+            var hoisted = new Stmt.Var(nameToken, TypeAnnotation: typeAnnotation, TypeAnnotationNode: typeAnnotationNode, Initializer: null, HasDefiniteAssignmentAssertion: false, IsVar: true, HoistTypeInferenceInitializer: initializerForInference)
+            {
+                HasHoistedTypeAnnotation = typeAnnotation is not null || typeAnnotationNode is not null,
+            };
             // The binding is declared at the top of the body, not where the user wrote `var`.
             // Pointing it back at the original text would make stepping jump backwards.
             spans?.MarkHidden(hoisted);
