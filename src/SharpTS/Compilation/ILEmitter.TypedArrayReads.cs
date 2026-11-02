@@ -24,10 +24,26 @@ public partial class ILEmitter
             TryGetDirectTypedArrayBacking(read.Object, arrayType.ElementType, out var backing)
                 ? backing : null;
         LocalBuilder? receiver = null;
-        if (direct is null)
+        LocalBuilder? originalReceiver = null;
+        bool provenCarrier = read.Object is Expr.Variable known
+            && _ctx.TypeMap.IsStableTypedArrayBackingReceiver(known);
+        if (direct is null && provenCarrier)
         {
             EmitTypedArrayReceiver(read.Object, concreteType);
             receiver = IL.DeclareLocal(concreteType);
+            IL.Emit(OpCodes.Stloc, receiver);
+        }
+        else if (direct is null)
+        {
+            originalReceiver = SpillBoxed(read.Object);
+            receiver = IL.DeclareLocal(concreteType);
+            if (read.Object is Expr.Variable variable && _ctx.TryGetHoistedTypedArray(variable.Name.Lexeme) is { } hoisted)
+                IL.Emit(OpCodes.Ldloc, hoisted.TypedLocal);
+            else
+            {
+                IL.Emit(OpCodes.Ldloc, originalReceiver);
+                IL.Emit(OpCodes.Isinst, concreteType);
+            }
             IL.Emit(OpCodes.Stloc, receiver);
         }
 
@@ -37,6 +53,12 @@ public partial class ILEmitter
         IL.Emit(OpCodes.Stloc, numericIndex);
         var invalid = IL.DefineLabel();
         var done = IL.DefineLabel();
+        var ordinary = IL.DefineLabel();
+        if (originalReceiver is not null)
+        {
+            IL.Emit(OpCodes.Ldloc, receiver!);
+            IL.Emit(OpCodes.Brfalse, ordinary);
+        }
         EmitTypedArrayNumericIndexGuard(numericIndex, physicalIndex, invalid, () =>
         {
             if (direct is { } lengthBacking) IL.Emit(OpCodes.Ldloc, lengthBacking.LengthLocal);
@@ -61,6 +83,20 @@ public partial class ILEmitter
         IL.MarkLabel(invalid);
         if (numericConsumer) IL.Emit(OpCodes.Ldc_R8, double.NaN);
         else IL.Emit(OpCodes.Ldsfld, _ctx.Runtime!.Sentinels.UndefinedInstance);
+        if (originalReceiver is not null)
+        {
+            IL.Emit(OpCodes.Br, done);
+            IL.MarkLabel(ordinary);
+            IL.Emit(OpCodes.Ldloc, numericIndex);
+            IL.Emit(OpCodes.Box, _ctx.Types.Double);
+            var boxedIndex = IL.DeclareLocal(_ctx.Types.Object);
+            IL.Emit(OpCodes.Stloc, boxedIndex);
+            EmitThrowIfUndefinedIndexReceiver(originalReceiver, boxedIndex, isWrite: false);
+            IL.Emit(OpCodes.Ldloc, originalReceiver);
+            IL.Emit(OpCodes.Ldloc, boxedIndex);
+            IL.Emit(OpCodes.Call, _ctx.Runtime!.ObjectRead.Index);
+            if (numericConsumer) IL.Emit(OpCodes.Call, _ctx.Runtime.NumericCoercion.ToNumber);
+        }
         IL.MarkLabel(done);
         SetStackType(numericConsumer ? StackType.Double : StackType.Unknown);
         return true;

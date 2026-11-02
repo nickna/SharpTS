@@ -3081,6 +3081,7 @@ public partial class ILEmitter
             && _ctx.Runtime!.TypedArrays.RequireImplementation().SetUnboxedByElement.TryGetValue(cta.ElementType, out var ctaSet)
             && IsPrimitiveNumericCompoundIndex(csi.Index)
             && _ctx.TypeMap?.Get(csi.Value) is TypeInfo.Primitive { Type: TokenType.TYPE_NUMBER } or TypeInfo.NumberLiteral
+            && !HasRawNumericValue(csi.Value)
             && IsArithmeticOrBitwiseCompound(csi.Operator.Type))
         {
             HoistedTypedArrayBacking? directBacking =
@@ -3088,11 +3089,21 @@ public partial class ILEmitter
                     ? backing
                     : null;
 
-            // The concrete receiver remains the fallback when the whole-program backing proof
-            // does not hold. Keep its existing cast-only hoist intact.
+            // Keep the actual reference for an ordinary receiver admitted through any.
+            // The nullable concrete carrier selects the accessor arm after the index is read.
             LocalBuilder? recvLocal = null;
-            if (directBacking == null)
+            LocalBuilder? originalReceiver = null;
+            bool provenCarrier = csi.Object is Expr.Variable known
+                && _ctx.TypeMap!.IsStableTypedArrayBackingReceiver(known);
+            if (directBacking == null && provenCarrier)
             {
+                EmitTypedArrayReceiver(csi.Object, ctaType);
+                recvLocal = IL.DeclareLocal(ctaType);
+                IL.Emit(OpCodes.Stloc, recvLocal);
+            }
+            else if (directBacking == null)
+            {
+                originalReceiver = SpillBoxed(csi.Object);
                 if (csi.Object is Expr.Variable cv
                     && _ctx.TryGetHoistedTypedArray(cv.Name.Lexeme) is { } choist)
                 {
@@ -3100,9 +3111,8 @@ public partial class ILEmitter
                 }
                 else
                 {
-                    EmitExpression(csi.Object);
-                    EnsureBoxed();
-                    IL.Emit(OpCodes.Castclass, ctaType);
+                    IL.Emit(OpCodes.Ldloc, originalReceiver);
+                    IL.Emit(OpCodes.Isinst, ctaType);
                     recvLocal = IL.DeclareLocal(ctaType);
                     IL.Emit(OpCodes.Stloc, recvLocal);
                 }
@@ -3125,6 +3135,13 @@ public partial class ILEmitter
             }
             var missingRead = IL.DefineLabel();
             var currentReady = IL.DefineLabel();
+            var ordinary = IL.DefineLabel();
+            var done = IL.DefineLabel();
+            if (originalReceiver is not null)
+            {
+                IL.Emit(OpCodes.Ldloc, recvLocal!);
+                IL.Emit(OpCodes.Brfalse, ordinary);
+            }
             EmitTypedArrayNumericIndexGuard(numericIndex, idxLocal, missingRead, LoadPhysicalLength);
 
             // cur = direct backing read, or recv.GetUnboxed(idx) on the fallback path.
@@ -3170,7 +3187,33 @@ public partial class ILEmitter
             // Return the computed Number before element narrowing, including
             // the result of an ignored invalid-index write.
             IL.Emit(OpCodes.Ldloc, resLocal);
-            SetStackType(StackType.Double);
+            if (originalReceiver is not null)
+            {
+                // A brand miss can produce a nonnumeric value, including string concatenation.
+                IL.Emit(OpCodes.Box, _ctx.Types.Double);
+                IL.Emit(OpCodes.Br, done);
+                IL.MarkLabel(ordinary);
+                var boxedIndex = IL.DeclareLocal(_ctx.Types.Object);
+                IL.Emit(OpCodes.Ldloc, numericIndex);
+                IL.Emit(OpCodes.Box, _ctx.Types.Double);
+                IL.Emit(OpCodes.Stloc, boxedIndex);
+                EmitThrowIfUndefinedIndexReceiver(originalReceiver, boxedIndex, isWrite: false);
+                IL.Emit(OpCodes.Ldloc, originalReceiver);
+                IL.Emit(OpCodes.Ldloc, boxedIndex);
+                IL.Emit(OpCodes.Call, _ctx.Runtime.ObjectRead.Index);
+                SetStackUnknown();
+                EmitCompoundOperation(csi.Operator.Type, csi.Value);
+                var ordinaryResult = IL.DeclareLocal(_ctx.Types.Object);
+                IL.Emit(OpCodes.Stloc, ordinaryResult);
+                IL.Emit(OpCodes.Ldloc, originalReceiver);
+                IL.Emit(OpCodes.Ldloc, boxedIndex);
+                IL.Emit(OpCodes.Ldloc, ordinaryResult);
+                EmitPropertyWrite(indexed: true);
+                IL.Emit(OpCodes.Ldloc, ordinaryResult);
+                IL.MarkLabel(done);
+                SetStackUnknown();
+            }
+            else SetStackType(StackType.Double);
             return;
         }
 

@@ -1937,8 +1937,80 @@ public partial class ILEmitter
             && _ctx.TypeMap?.Get(si.Object) is TypeInfo.TypedArray sta
             && _ctx.Runtime!.TypedArrays.Implementation?.GetNumericType(sta.ElementType) is { } staType
             && _ctx.Runtime!.TypedArrays.RequireImplementation().SetUnboxedByElement.TryGetValue(sta.ElementType, out var taSetU)
-            && _ctx.TypeMap?.Get(si.Value) is TypeInfo.Primitive { Type: TokenType.TYPE_NUMBER } or TypeInfo.NumberLiteral)
+            && _ctx.TypeMap?.Get(si.Value) is TypeInfo.Primitive { Type: TokenType.TYPE_NUMBER } or TypeInfo.NumberLiteral
+            && !HasRawNumericValue(si.Value))
         {
+            bool provenCarrier = TryGetDirectTypedArrayBacking(si.Object, sta.ElementType, out _)
+                || si.Object is Expr.Variable known
+                    && _ctx.TypeMap!.IsStableTypedArrayBackingReceiver(known);
+            if (!provenCarrier)
+            {
+                // Preserve the actual reference before either index or RHS effects. A source
+                // annotation permits the fast branch only after the concrete carrier matches.
+                var originalReceiver = SpillBoxed(si.Object);
+                LocalBuilder? originalIndex = null;
+                var numericIndex = IL.DeclareLocal(_ctx.Types.Double);
+                if (IsPrimitiveNumericCompoundIndex(si.Index))
+                {
+                    EmitExpressionAsDouble(si.Index);
+                    IL.Emit(OpCodes.Stloc, numericIndex);
+                }
+                else originalIndex = SpillBoxed(si.Index);
+                EmitExpression(si.Value);
+                EnsureDouble();
+                var assignedValue = IL.DeclareLocal(_ctx.Types.Double);
+                IL.Emit(OpCodes.Stloc, assignedValue);
+                var typedReceiver = IL.DeclareLocal(staType);
+                IL.Emit(OpCodes.Ldloc, originalReceiver);
+                IL.Emit(OpCodes.Isinst, staType);
+                IL.Emit(OpCodes.Stloc, typedReceiver);
+                var ordinary = IL.DefineLabel();
+                var done = IL.DefineLabel();
+                IL.Emit(OpCodes.Ldloc, typedReceiver);
+                IL.Emit(OpCodes.Brfalse, ordinary);
+                if (originalIndex is not null)
+                {
+                    IL.Emit(OpCodes.Ldloc, originalIndex);
+                    IL.Emit(OpCodes.Isinst, _ctx.Types.Double);
+                    IL.Emit(OpCodes.Brfalse, ordinary);
+                    IL.Emit(OpCodes.Ldloc, originalIndex);
+                    IL.Emit(OpCodes.Unbox_Any, _ctx.Types.Double);
+                    IL.Emit(OpCodes.Stloc, numericIndex);
+                }
+                IL.Emit(OpCodes.Ldloc, typedReceiver);
+                IL.Emit(OpCodes.Ldloc, numericIndex);
+                IL.Emit(OpCodes.Conv_I4);
+                IL.Emit(OpCodes.Ldloc, assignedValue);
+                IL.Emit(OpCodes.Call, taSetU);
+                IL.Emit(OpCodes.Br, done);
+                IL.MarkLabel(ordinary);
+                var boxedIndex = originalIndex ?? IL.DeclareLocal(_ctx.Types.Object);
+                if (originalIndex is null)
+                {
+                    IL.Emit(OpCodes.Ldloc, numericIndex);
+                    IL.Emit(OpCodes.Box, _ctx.Types.Double);
+                    IL.Emit(OpCodes.Stloc, boxedIndex);
+                }
+                EmitPropertyWriteOperation(() =>
+                {
+                    EmitThrowIfUndefinedIndexReceiver(originalReceiver, boxedIndex, isWrite: true);
+                    IL.Emit(OpCodes.Ldloc, originalReceiver);
+                    IL.Emit(OpCodes.Ldloc, boxedIndex);
+                    IL.Emit(OpCodes.Ldloc, assignedValue);
+                    IL.Emit(OpCodes.Box, _ctx.Types.Double);
+                    if (_ctx.IsStrictMode)
+                    {
+                        IL.Emit(OpCodes.Ldc_I4_1);
+                        IL.Emit(OpCodes.Call, _ctx.Runtime.ObjectWrite.IndexStrict);
+                    }
+                    else IL.Emit(OpCodes.Call, _ctx.Runtime.ObjectWrite.Index);
+                });
+                IL.MarkLabel(done);
+                IL.Emit(OpCodes.Ldloc, assignedValue);
+                SetStackType(StackType.Double);
+                return;
+            }
+
             // Native-int fast path when the index is an integer loop counter (#928).
             EmitIndexAsInt32(si.Index);
             var idxLocal = IL.DeclareLocal(_ctx.Types.Int32);

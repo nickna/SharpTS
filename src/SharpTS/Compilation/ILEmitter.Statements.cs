@@ -2119,11 +2119,11 @@ public partial class ILEmitter
             var arrLocal = _ctx.Locals.GetLocal(varName);
             if (arrLocal == null) continue; // captured / not a plain local — leave to the per-access path
 
-            // castclass (not isinst) mirrors the per-access fast path exactly: the static type is
-            // TypedArray, so a correctly-typed value never throws; null casts to null as before.
+            // An annotation does not prove the runtime carrier. Only the fresh backing proof
+            // may assume the cast succeeds; other hoisted references retain a null brand miss.
             var typedLocal = IL.DeclareLocal(xArrayType);
             IL.Emit(OpCodes.Ldloc, arrLocal);
-            IL.Emit(OpCodes.Castclass, xArrayType);
+            IL.Emit(candidate.CanHoistBacking ? OpCodes.Castclass : OpCodes.Isinst, xArrayType);
             IL.Emit(OpCodes.Stloc, typedLocal);
 
             HoistedTypedArrayBacking? backing = null;
