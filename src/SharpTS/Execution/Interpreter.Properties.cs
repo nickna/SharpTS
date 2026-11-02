@@ -3670,6 +3670,7 @@ public partial class Interpreter
             AssignVariableValue(assign.Name, value);
         }
 
+        if (value.IsObject) ObserveDiscardedReactionResult(value.ToObject());
         return value;
     }
 

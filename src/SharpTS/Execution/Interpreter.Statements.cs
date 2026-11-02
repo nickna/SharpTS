@@ -2116,6 +2116,7 @@ public partial class Interpreter
         // bindings were registered at instantiation and already wrote through.
         if (varStmt.IsVar && target.Enclosing is null && !target.HasObjectBinding(varStmt.Name.Lexeme))
             GlobalThis.SetProperty(varStmt.Name.Lexeme, value);
+        ObserveDiscardedReactionResult(value);
         return ExecutionResult.Success();
     }
 
@@ -2125,6 +2126,7 @@ public partial class Interpreter
         object? constValue = EvaluateVariableInitializerCore(_syncContext, constStmt.Initializer, constStmt.Name)
             .GetAwaiter().GetResult().ToObject();
         _environment.Define(constStmt.Name.Lexeme, constValue);
+        ObserveDiscardedReactionResult(constValue);
         return ExecutionResult.Success();
     }
 
