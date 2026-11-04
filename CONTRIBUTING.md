@@ -98,7 +98,9 @@ pwsh ./scripts/test-local.ps1
 ```
 
 This builds Release, runs core and GUI tests separately, then runs all standalone
-deployment cases in three concurrent shards. Each stage writes progress, a full
+deployment cases in at least three concurrent shards. The default adds shards
+until every exact method filter fits the portable command-line limit; an explicit
+`-ShardCount` stays fixed and fails if its filters exceed the limit. Each stage writes progress, a full
 log and TRX results under `artifacts/tests/`; inactivity produces a hang dump,
 and a 30-minute stage budget bounds continued but excessive work. All categories
 are included by default. `-Hermetic` applies CI's network/npm/load exclusions.

@@ -220,4 +220,14 @@ foreach ($invalidCount in @(0, 33)) {
 Assert-Throws { New-StandaloneShardPlan -MethodEntries @(($methodPrefix + 'A'), ($methodPrefix + 'A'), ($methodPrefix + 'B')) -ShardCount 3 -BaseFilter $hermeticFilter } 'Duplicate rows cannot fill empty shards.' '(?i)(fewer|empty|methods|shards)'
 Assert-Throws { New-StandaloneShardPlan -MethodEntries $entries -ShardCount 3 -BaseFilter '' } 'Empty base filter.' '(?i)(filter|empty)'
 
-Write-Host 'Standalone shard planner tests passed (8 groups).'
+# 9. Default local plans grow deterministically without dropping long identities.
+$largeEntries = [string[]]@(0..699 | ForEach-Object { $methodPrefix + ('LongMethodName' * 6) + $_ })
+Assert-Throws { New-StandaloneShardPlan -MethodEntries $largeEntries -ShardCount 3 -BaseFilter $hermeticFilter } 'Fixed shard count still fails closed.' '(?i)(filter|command line)'
+$fitting = New-StandaloneShardPlan -MethodEntries $largeEntries -ShardCount 3 -BaseFilter $hermeticFilter -ExpandToFit
+Assert-True ($fitting.ShardCount -gt 3) 'Automatic mode must add enough shards.'
+Test-PlanIntegrity $fitting $largeEntries $fitting.ShardCount $hermeticFilter
+$fittingReversed = New-StandaloneShardPlan -MethodEntries ([string[]]$largeEntries[699..0]) -ShardCount 3 -BaseFilter $hermeticFilter -ExpandToFit
+Assert-Equal ($fitting | ConvertTo-Json -Depth 8 -Compress) ($fittingReversed | ConvertTo-Json -Depth 8 -Compress) 'Automatic planning is independent of discovery order.'
+Assert-Throws { New-StandaloneShardPlan -MethodEntries @($boundaryMethod + 'x') -ShardCount 1 -BaseFilter $externalFilter -ExpandToFit } 'An individually oversized method remains an error.' '(?i)(filter|command line)'
+
+Write-Host 'Standalone shard planner tests passed (9 groups).'

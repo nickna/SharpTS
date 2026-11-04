@@ -2,7 +2,8 @@ function New-StandaloneShardPlan {
     param(
         [Parameter(Mandatory)][AllowNull()][AllowEmptyCollection()][string[]]$MethodEntries,
         [Parameter(Mandatory)][ValidateRange(1, 32)][int]$ShardCount,
-        [Parameter(Mandatory)][AllowEmptyString()][string]$BaseFilter
+        [Parameter(Mandatory)][AllowEmptyString()][string]$BaseFilter,
+        [switch]$ExpandToFit
     )
 
     Set-StrictMode -Version Latest
@@ -86,6 +87,9 @@ function New-StandaloneShardPlan {
         $methodFilter = ($selected | ForEach-Object { "FullyQualifiedName=$_" }) -join '|'
         $filter = "$BaseFilter&($methodFilter)"
         if ($filter.Length -gt 24000) {
+            if ($ExpandToFit -and $ShardCount -lt [Math]::Min(32, $methods.Count)) {
+                return New-StandaloneShardPlan -MethodEntries $MethodEntries -ShardCount ($ShardCount + 1) -BaseFilter $BaseFilter -ExpandToFit
+            }
             throw 'The standalone shard filter is too long for a portable command line.'
         }
         $shards.Add([pscustomobject][ordered]@{
