@@ -4,6 +4,7 @@ namespace SharpTS.TypeSystem;
 
 public partial class TypeChecker
 {
+    private int _constrainedCallbackReturnWideningDepth;
     private TypeInfo WidenFreshArrayTuple(Expr.ArrayLiteral literal, TypeInfo.Tuple tuple)
     {
         if (tuple.IsReadonly || literal.Elements.Any(element => element is Expr.Spread) ||
@@ -104,6 +105,10 @@ public partial class TypeChecker
             _ => TypeInfo.Inferred.Shared,
         };
         if (arrow.IsAsync) { result = ResolveAwaitedType(result); if (context is not null) context = ResolveAwaitedType(context); }
+        // A boolean return context accepts both values; it does not freeze a fresh
+        // callback's inferred result to its first returned boolean literal.
+        if (_constrainedCallbackReturnWideningDepth > 0 &&
+            context is TypeInfo.Primitive { Type: TokenType.TYPE_BOOLEAN }) context = null;
         // A union of literal alternatives remains an inferred literal union. The existing
         // source-owned freshness helper distinguishes a single fresh literal from an assertion.
         if (result is not (TypeInfo.NumberLiteral or TypeInfo.StringLiteral or TypeInfo.BooleanLiteral or TypeInfo.BigIntLiteral) ||
