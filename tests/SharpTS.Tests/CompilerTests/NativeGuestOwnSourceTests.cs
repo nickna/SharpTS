@@ -158,8 +158,11 @@ public sealed class NativeGuestOwnSourceTests
             [derivedInstance, "extra", new Dictionary<string, object> { ["value"] = 9d, ["enumerable"] = true, ["configurable"] = true, ["writable"] = true }]);
         var ownState = assembly.GetType("$GuestOwnPropertyState")!;
         var hasOwn = ownState.GetMethod("HasOwn", BindingFlags.NonPublic | BindingFlags.Static)!;
-        Assert.False((bool)hasOwn.Invoke(null, [derivedInstance, "value"])!);
-        Assert.False((bool)hasOwn.Invoke(null, [derivedInstance, "extra"])!);
+        Assert.True((bool)hasOwn.Invoke(null, [derivedInstance, "value"])!);
+        Assert.True((bool)hasOwn.Invoke(null, [derivedInstance, "extra"])!);
+        Assert.False((bool)predicate.Invoke(derivedInstance, null)!);
+        Assert.Null(derivedInstance.GetType().GetMethod("$ReadOwnDescriptor",
+            BindingFlags.Instance | BindingFlags.NonPublic | BindingFlags.DeclaredOnly));
         var generic = assembly.GetTypes().Single(type => type.Name == "Generic" && type.IsGenericTypeDefinition).MakeGenericType(typeof(double));
         var derived = assembly.GetTypes().Single(type => type.Name == "GenericDerived" && type.IsGenericTypeDefinition).MakeGenericType(typeof(double));
         Assert.True((bool)predicate.Invoke(Activator.CreateInstance(generic), null)!);
@@ -217,12 +220,27 @@ public sealed class NativeGuestOwnSourceTests
     }
 
     [Fact]
-    public void NormalCompiledClassesKeepTheirExistingOutputWithoutTheOptionalContract()
+    public void NoncompactManagedClassesTrackDefinitionsWithoutNativeReceiverAdmission()
     {
         var assembly = Compile("class Value { value = 1; } console.log(new Value().value);", false);
-        Assert.Null(assembly.GetType("$IGuestOwnProperties"));
+        var contract = assembly.GetType("$IGuestOwnProperties")!;
+        Assert.NotNull(contract);
+        Assert.NotNull(assembly.GetType("$GuestOwnPropertyState"));
+        var owner = assembly.GetType("Value", throwOnError: true)!;
+        Assert.False(contract.IsAssignableFrom(owner));
+        Assert.Null(owner.GetMethod("$ReadOwnDescriptor",
+            BindingFlags.Instance | BindingFlags.NonPublic | BindingFlags.DeclaredOnly));
         Assert.DoesNotContain(assembly.GetTypes().SelectMany(type => type.GetFields(BindingFlags.Public | BindingFlags.NonPublic | BindingFlags.Instance | BindingFlags.Static)),
             field => field.Name == "$InitialOwnPrototypeValue");
+        Assert.Equal("1\n", TestHarness.RunCompiledWithTimeout(() => assembly, TimeSpan.FromSeconds(20)));
+    }
+
+    [Fact]
+    public void CompactManagedClassesOmitTheOwnPropertyFamily()
+    {
+        var assembly = Compile("class Value { value = 1; } const value = new Value(); console.log(value.value);", false);
+        foreach (string name in new[] { "$IGuestOwnProperties", "$GuestOwnState", "$GuestOwnPropertyState" })
+            Assert.Null(assembly.GetType(name));
         Assert.Equal("1\n", TestHarness.RunCompiledWithTimeout(() => assembly, TimeSpan.FromSeconds(20)));
     }
 
