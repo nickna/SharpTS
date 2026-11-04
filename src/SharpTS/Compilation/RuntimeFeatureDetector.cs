@@ -247,8 +247,10 @@ public sealed partial class RuntimeFeatureDetector
         // Promise is a shared dependency of async syntax and of emitted module
         // families that expose Promise-returning APIs. Keep these implications
         // coarse and conservative: over-emission is preferable to leaving a
-        // metadata reference to an omitted $Promise helper.
-        if (_set.UsesPromisePrototypeMutation || _set.UsesDynamicImport ||
+        // metadata reference to an omitted $Promise helper. A possible prototype
+        // mutation alone does not produce a Promise: ordinary Object/Reflect
+        // operations must not add unrelated Task producers to a native guest.
+        if (_set.UsesDynamicImport ||
             _set.UsesAsyncGenerator || _set.UsesForAwaitOf || _set.UsesFetch ||
             _set.UsesHttp || _set.UsesDns || _set.UsesFs || _set.UsesCrypto ||
             _set.UsesNodeStreams || _set.UsesWebStreams || _set.UsesReadline ||
