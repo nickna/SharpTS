@@ -4,6 +4,8 @@ using PEPacker;
 using System.ComponentModel;
 using System.Diagnostics;
 using System.Reflection.PortableExecutable;
+using System.Security.Cryptography;
+using System.Security.Cryptography.X509Certificates;
 
 namespace SharpTS.Cli;
 
@@ -23,7 +25,27 @@ internal static class AuthenticodeSigner
         CancellationToken cancellationToken = default)
     {
         ArgumentNullException.ThrowIfNull(options);
+        // Reject malformed input before discovering or starting an external tool.
+        // The CLI reaches this entry point only after writing its completed PE.
+        Validate(Path.GetFullPath(executablePath), options,
+            OperatingSystem.IsWindows() ? ToolKind.SignTool : ToolKind.OsslSignCode);
+        ValidateCertificateContent(options);
         return SignCoreAsync(executablePath, options, ResolveTool(options), RunToolAsync, cancellationToken);
+    }
+
+    private static void ValidateCertificateContent(AuthenticodeSigningOptions options)
+    {
+        if (options.Certificate.StartsWith("sha1:", StringComparison.OrdinalIgnoreCase)) return;
+        try
+        {
+            // Inspect the format without importing certificates or private keys.
+            // Password, key, and trust decisions remain with the signing tool.
+            if (X509Certificate2.GetCertContentType(options.Certificate) == X509ContentType.Pkcs12)
+                return;
+        }
+        catch (CryptographicException) { }
+        catch (ArgumentException) { }
+        throw new PEPackerException("Authenticode signing requires a valid PKCS#12 (.pfx/.p12) certificate file.");
     }
 
     internal static async Task SignCoreAsync(string executablePath, AuthenticodeSigningOptions options, Tool tool,
