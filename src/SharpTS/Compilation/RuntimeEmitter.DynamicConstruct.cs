@@ -163,18 +163,44 @@ public partial class RuntimeEmitter
             il.Emit(OpCodes.Ldc_I4_0);
             il.Emit(OpCodes.Ldelem_Ref);
             il.MarkLabel(executorReady);
-            il.Emit(OpCodes.Call, promise.FromExecutor);
+            var executor = il.DeclareLocal(_types.Object);
             var promiseValue = il.DeclareLocal(_types.Object);
             var promisePrototype = il.DeclareLocal(_types.Object);
-            var nativePrototype = il.DefineLabel();
-            il.Emit(OpCodes.Stloc, promiseValue);
+            var prototypeReady = il.DefineLabel();
+            var installPromisePrototype = il.DefineLabel();
+            il.Emit(OpCodes.Stloc, executor);
+            il.Emit(OpCodes.Ldloc, executor);
+            il.Emit(OpCodes.Call, inputs.Operators.TypeOf);
+            il.Emit(OpCodes.Ldstr, "function");
+            il.Emit(OpCodes.Call, _types.StringOpEquality);
+            var callableExecutor = il.DefineLabel();
+            il.Emit(OpCodes.Brtrue, callableExecutor);
+            EmitThrowTypeError(il, inputs.Errors, "Promise executor is not callable");
+            il.MarkLabel(callableExecutor);
+            // GetPrototypeFromConstructor follows executor validation, but
+            // precedes invoking that executor during Promise initialization.
             il.Emit(OpCodes.Ldarg_2); il.Emit(OpCodes.Ldarg_0);
-            il.Emit(OpCodes.Beq, nativePrototype);
+            il.Emit(OpCodes.Beq, prototypeReady);
             il.Emit(OpCodes.Ldarg_2); il.Emit(OpCodes.Ldstr, "prototype");
             il.Emit(OpCodes.Call, inputs.ObjectRead.Property); il.Emit(OpCodes.Stloc, promisePrototype);
+            il.Emit(OpCodes.Ldloc, promisePrototype); il.Emit(OpCodes.Brfalse, prototypeReady);
+            il.Emit(OpCodes.Ldloc, promisePrototype); il.Emit(OpCodes.Call, inputs.Operators.TypeOf);
+            var promisePrototypeKind = il.DeclareLocal(_types.String);
+            il.Emit(OpCodes.Stloc, promisePrototypeKind);
+            foreach (var kind in new[] { "object", "function" })
+            {
+                il.Emit(OpCodes.Ldloc, promisePrototypeKind); il.Emit(OpCodes.Ldstr, kind);
+                il.Emit(OpCodes.Call, _types.StringOpEquality); il.Emit(OpCodes.Brtrue, installPromisePrototype);
+            }
+            il.Emit(OpCodes.Ldnull); il.Emit(OpCodes.Stloc, promisePrototype);
+            il.Emit(OpCodes.Br, prototypeReady);
+            il.MarkLabel(installPromisePrototype);
+            il.MarkLabel(prototypeReady);
+            il.Emit(OpCodes.Ldloc, executor);
+            il.Emit(OpCodes.Call, promise.FromExecutor);
+            il.Emit(OpCodes.Stloc, promiseValue);
+            var nativePrototype = il.DefineLabel();
             il.Emit(OpCodes.Ldloc, promisePrototype); il.Emit(OpCodes.Brfalse, nativePrototype);
-            il.Emit(OpCodes.Ldloc, promisePrototype); il.Emit(OpCodes.Isinst, inputs.UndefinedType);
-            il.Emit(OpCodes.Brtrue, nativePrototype);
             il.Emit(OpCodes.Ldloc, promiseValue); il.Emit(OpCodes.Ldloc, promisePrototype);
             il.Emit(OpCodes.Call, inputs.DescriptorStorage.SetPrototype);
             il.MarkLabel(nativePrototype);

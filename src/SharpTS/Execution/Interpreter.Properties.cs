@@ -177,7 +177,15 @@ public partial class Interpreter
         if (callable is SharpTSFileConstructor)
             return BuiltInConstructorFactory.TryCreate(BuiltInNames.File, [.. args], this);
         if (callable is SharpTSBuiltInConstructor { Name: BuiltInNames.Promise } promiseConstructor)
-            return CreatePromiseFromExecutor(args.Count > 0 ? args[0] : SharpTSUndefined.Instance, promiseConstructor);
+        {
+            var executor = args.Count > 0 ? args[0] : SharpTSUndefined.Instance;
+            if (executor is not ISharpTSCallable)
+                throw new ThrowException(new SharpTSTypeError("Promise executor must be callable."));
+            var prototype = ReferenceEquals(newTarget, callable) ? null : GetPropertyValue(newTarget, "prototype");
+            var promise = CreatePromiseFromExecutor(executor, promiseConstructor);
+            if (IsConstructorReturnObject(prototype)) promise.SetExplicitPrototype(prototype);
+            return promise;
+        }
         if (callable is SharpTSArrayGlobal or SharpTSBuiltInConstructor { Name: BuiltInNames.Array })
         {
             var prototype = GetPropertyValue(newTarget, "prototype");
