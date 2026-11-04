@@ -71,12 +71,7 @@ public sealed class GeneratedControlContractTests
     public void CheckedInGeneratedOutputsPassStandaloneVerifyMode()
     {
         string root = FindRoot();
-#if DEBUG
-        const string configuration = "Debug";
-#else
-        const string configuration = "Release";
-#endif
-        string generator = Path.Combine(root, "src", "SharpTS.Gui.Generator", "bin", configuration, "net10.0", "SharpTS.Gui.Generator.dll");
+string generator = GuiConformanceBuildPaths.Generator;
         var start = new ProcessStartInfo("dotnet") { WorkingDirectory = root, RedirectStandardOutput = true, RedirectStandardError = true };
         start.ArgumentList.Add(generator);
         start.ArgumentList.Add("verify");

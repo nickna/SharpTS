@@ -167,16 +167,7 @@ public sealed class RetainedRendererIntegrationTests
     private static async Task<TraceEvent[]> RunHostAsync(string mode)
     {
         string repositoryRoot = FindRepositoryRoot();
-#if DEBUG
-        const string configuration = "Debug";
-#else
-        const string configuration = "Release";
-#endif
-        string hostDirectory = Path.Combine(
-            repositoryRoot, "tests", "gui-conformance", "SharpTS.Gui.ConformanceHost",
-            "bin",
-            configuration,
-            "net10.0");
+string hostDirectory = GuiConformanceBuildPaths.HostDirectory;
         string hostAssembly = Path.Combine(hostDirectory, "SharpTS.Gui.ConformanceHost.dll");
         string tracePath = Path.Combine(Path.GetTempPath(), $"sharpts-gui-renderer-{mode}-{Guid.NewGuid():N}.json");
         Assert.True(File.Exists(hostAssembly), $"GUI host was not built: {hostAssembly}");

@@ -2,14 +2,9 @@ namespace SharpTS.Gui.Conformance.Tests;
 
 internal static class GuiInterpretedTestAssets
 {
-    public static void Stage(string repositoryRoot, string configuration, string destinationRoot)
+    public static void Stage(string repositoryRoot, string destinationRoot)
     {
-        string conformanceRoot = Path.Combine(
-            repositoryRoot, "tests", "gui-conformance", "SharpTS.Gui.Conformance.Tests",
-            "obj",
-            configuration,
-            "net10.0",
-            ".sharpts-gui-conformance");
+        string conformanceRoot = GuiConformanceBuildPaths.Assets;
         string configDirectory = Path.Combine(destinationRoot, ".sharpts");
         Directory.CreateDirectory(configDirectory);
         File.Copy(

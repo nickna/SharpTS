@@ -45,13 +45,8 @@ public sealed class GuiJsxDeclarationTests
     private static async Task<ProcessResult> CheckAsync(string fixture)
     {
         string root = FindRepositoryRoot();
-#if DEBUG
-        const string configuration = "Debug";
-#else
-        const string configuration = "Release";
-#endif
-        string compiler = Path.Combine(root, "src", "SharpTS", "bin", configuration, "net10.0", "SharpTS.dll");
-        string bridge = Path.Combine(root, "src", "SharpTS.Gui", "bin", configuration, "net10.0", "SharpTS.Gui.dll");
+string compiler = GuiConformanceBuildPaths.Compiler;
+        string bridge = GuiConformanceBuildPaths.Bridge;
         string config = Path.Combine(root, "tests", "gui-conformance", "SharpTS.Gui.Conformance.Tests", "Fixtures", "GuiTyping", fixture, "tsconfig.json");
         var start = new ProcessStartInfo("dotnet")
         {
