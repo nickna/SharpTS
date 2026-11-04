@@ -1761,6 +1761,7 @@ public partial class RuntimeEmitter
                 runtime.Reflect.ToPropertyKey,
                 new ProxyDeleteCheckInputs(runtime.ObjectRead.Property, runtime.ReflectedMethods.InvokeUnwrapped,
                     runtime.ObjectDescriptors, runtime.ObjectState, NativeProxyRejection: runtime.ReflectedMethods.NativeProxyRejection),
+                runtime.Sentinels.UndefinedType,
                 GuestOwnProperties: runtime.GuestOwnProperties
             )
         );
@@ -1779,6 +1780,7 @@ public partial class RuntimeEmitter
                 runtime.Reflect.ToPropertyKey,
                 new ProxyDeleteCheckInputs(runtime.ObjectRead.Property, runtime.ReflectedMethods.InvokeUnwrapped,
                     runtime.ObjectDescriptors, runtime.ObjectState, NativeProxyRejection: runtime.ReflectedMethods.NativeProxyRejection),
+                runtime.Sentinels.UndefinedType,
                 GuestOwnProperties: runtime.GuestOwnProperties
             )
         );

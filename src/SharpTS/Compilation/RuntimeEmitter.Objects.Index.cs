@@ -99,6 +99,7 @@ public partial class RuntimeEmitter
         TypeBuilder TSFunctionType,
         MethodInfo ToPropertyKey,
         ProxyDeleteCheckInputs ProxyDelete,
+        Type UndefinedType,
         EmittedGuestOwnPropertyRuntime? GuestOwnProperties = null
     );
 
@@ -113,6 +114,7 @@ public partial class RuntimeEmitter
         TypeBuilder TSFunctionType,
         MethodInfo ToPropertyKey,
         ProxyDeleteCheckInputs ProxyDelete,
+        Type UndefinedType,
         EmittedGuestOwnPropertyRuntime? GuestOwnProperties = null
     );
 
@@ -127,6 +129,7 @@ public partial class RuntimeEmitter
         TypeBuilder TSFunctionType,
         MethodInfo ToPropertyKey,
         ProxyDeleteCheckInputs ProxyDelete,
+        Type UndefinedType,
         EmittedGuestOwnPropertyRuntime? GuestOwnProperties = null
     );
 
@@ -2344,6 +2347,7 @@ public partial class RuntimeEmitter
                 inputs.TSFunctionType,
                 inputs.ToPropertyKey,
                 inputs.ProxyDelete,
+                inputs.UndefinedType,
                 inputs.GuestOwnProperties
             ),
             strict: false
@@ -2396,9 +2400,18 @@ public partial class RuntimeEmitter
         var symbolKeyLabel = il.DefineLabel();
         var trueLabel = il.DefineLabel();
 
-        // null check on obj - return true (deleting from null is allowed in JS)
+        // A delete reference requires an object-coercible base before evaluating
+        // ToPropertyKey. In particular, a key conversion must not run for nullish bases.
+        var nullish = il.DefineLabel();
+        var validReceiver = il.DefineLabel();
         il.Emit(OpCodes.Ldarg_0);
-        il.Emit(OpCodes.Brfalse, trueLabel);
+        il.Emit(OpCodes.Brfalse, nullish);
+        il.Emit(OpCodes.Ldarg_0);
+        il.Emit(OpCodes.Isinst, inputs.UndefinedType);
+        il.Emit(OpCodes.Brfalse, validReceiver);
+        il.MarkLabel(nullish);
+        EmitThrowTypeError(il, inputs.Errors, "Cannot delete property of null or undefined");
+        il.MarkLabel(validReceiver);
 
         il.Emit(OpCodes.Ldarg_1);
         il.Emit(OpCodes.Call, inputs.ToPropertyKey);
@@ -2834,6 +2847,7 @@ public partial class RuntimeEmitter
                 inputs.TSFunctionType,
                 inputs.ToPropertyKey,
                 inputs.ProxyDelete,
+                inputs.UndefinedType,
                 inputs.GuestOwnProperties
             ),
             strict: true
