@@ -28,4 +28,18 @@ public class P3FunctionValueEnumerationTests
             + "name 0\n[9] 1\n[[\"name\",9]] 2\n{\"name\":9} 3\n";
         Assert.Equal(expected + expected, TestHarness.Run(source, mode));
     }
+
+    [Theory, ModeData]
+    public void FunctionValueEnumerationSnapshotsKeysAndChecksLaterDescriptors(ExecutionMode mode)
+    {
+        const string source = """
+            for(const operation of [Object.values, Object.entries, (value:any)=>Object.assign({},value)]) {
+                const fn:any=function(){};
+                Object.defineProperty(fn,'first',{get(){delete fn.second;fn.later=7;return 9},enumerable:true});
+                fn.second=2;
+                console.log(JSON.stringify(operation(fn)));
+            }
+            """;
+        Assert.Equal("[9]\n[[\"first\",9]]\n{\"first\":9}\n", TestHarness.Run(source, mode));
+    }
 }
