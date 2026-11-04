@@ -2121,7 +2121,8 @@ public partial class TypeChecker
                 break; // No more parameters to check
             }
 
-            if (!IsCompatible(expectedType, argTypes[i]))
+            bool optional = i < regularParamCount && i >= signature.MinArity;
+            if (!IsArgumentCompatible(expectedType, argTypes[i], optional))
             {
                 return false;
             }
