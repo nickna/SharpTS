@@ -1282,8 +1282,13 @@ public sealed partial class RuntimeFeatureDetector
                 break;
 
             case Expr.Call c:
+                if (c.Arguments.Count > 0 && IsGlobalObject(c.Arguments[0]) && c.Callee is Expr.Get
+                    { Object: Expr.Variable { Name.Lexeme: "Object" or "Reflect" },
+                      Name.Lexeme: "defineProperty" or "defineProperties" or "set" or "deleteProperty" or "assign" })
+                    _set.UsesArrayConstructorMutation = true;
                 if (c.Callee is Expr.Variable { Name.Lexeme: "eval" })
                 {
+                    _set.UsesArrayConstructorMutation = true;
                     _set.UsesDatePrototypeMutation = true;
                     _set.UsesPromisePrototypeMutation = true;
                     _set.UsesNumberPrototypeMutation = true;
@@ -1418,6 +1423,8 @@ public sealed partial class RuntimeFeatureDetector
                 break;
 
             case Expr.Assign asg:
+                if (asg.Name.Lexeme == "Array")
+                    _set.UsesArrayConstructorMutation = true;
                 if (asg.Name.Lexeme == "Date")
                     _set.UsesDateConstructorMutation = true;
                 TrackGlobalObjectAlias(asg.Name.Lexeme, asg.Value);
@@ -2081,6 +2088,7 @@ public sealed partial class RuntimeFeatureDetector
 
     private void MarkOpaqueEvaluatorMutation()
     {
+        _set.UsesArrayConstructorMutation = true;
         _set.UsesObjectIntegrityMutation = true;
         _set.UsesClassPrototypeMutation = true;
         _set.UsesDatePrototypeMutation = true;
@@ -2103,6 +2111,9 @@ public sealed partial class RuntimeFeatureDetector
 
         switch (propertyName)
         {
+            case "Array":
+                _set.UsesArrayConstructorMutation = true;
+                break;
             case "Date":
                 _set.UsesDatePrototypeMutation = true;
                 _set.UsesDateConstructorMutation = true;

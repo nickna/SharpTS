@@ -99,6 +99,13 @@ public sealed class GlobalThisStaticEmitter : IStaticTypeEmitterStrategy
         var il = ctx.IL;
 
         // Self-reference: globalThis.globalThis (and the Node alias global).
+        if (propertyName == "Array" && ctx.RuntimeFeatures?.UsesArrayConstructorMutation == true)
+        {
+            il.Emit(OpCodes.Ldstr, propertyName);
+            il.Emit(OpCodes.Call, ctx.Runtime!.GlobalObject.GetProperty);
+            return true;
+        }
+
         // Emit the runtime sentinel so the leaf access matches bare `globalThis`
         // in value position — `globalThis.globalThis === globalThis` (#271).
         // Deeper chains (globalThis.globalThis.Math.PI) are intercepted earlier by

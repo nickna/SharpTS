@@ -3062,6 +3062,8 @@ public partial class ILEmitter
 
         string namespaceName = innerGet.Name.Lexeme;
         string propertyName = g.Name.Lexeme;
+        if (namespaceName == "Array" && _ctx.RuntimeFeatures?.UsesArrayConstructorMutation == true)
+            return false;
 
         // Handle globalThis.globalThis.X case (self-reference chain)
         if (namespaceName == "globalThis")

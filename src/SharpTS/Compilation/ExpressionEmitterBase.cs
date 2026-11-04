@@ -926,6 +926,7 @@ public abstract partial class ExpressionEmitterBase : IEmitterContext
     /// </summary>
     protected virtual void EmitAssign(Expr.Assign a)
     {
+        if (TryEmitArrayGlobalAssignment(a)) return;
         // CommonJS: `exports = X` → stsfld $exports (mirrors TryEmitCjsSet for module.exports).
         if (TryEmitCjsAssign(a)) return;
 
@@ -1805,6 +1806,7 @@ public abstract partial class ExpressionEmitterBase : IEmitterContext
     /// </summary>
     protected virtual void EmitNew(Expr.New n)
     {
+        if (TryEmitLiveArrayConstruction(n)) return;
         if (TryEmitNativeModuleConstructor(n)) return;
         if (Ctx.RuntimeFeatures?.UsesClassPrototypeMutation == true
             && Ctx.TypeMapper.IsDynamicClassInstance(Ctx.TypeMap?.Get(n)))
@@ -2468,7 +2470,8 @@ public abstract partial class ExpressionEmitterBase : IEmitterContext
     protected bool TryEmitMutableGlobalFunctionTypeOf(Expr operand)
     {
         if (ExpressionUnwrapper.Unwrap(operand) is not Expr.Variable variable
-            || variable.Name.Lexeme is not ("parseInt" or "queueMicrotask")
+            || variable.Name.Lexeme is not ("parseInt" or "queueMicrotask") &&
+                !(variable.Name.Lexeme == "Array" && Ctx.RuntimeFeatures?.UsesArrayConstructorMutation == true)
             || Resolver.HasVariable(variable.Name.Lexeme) || Ctx.HasVisibleValueBinding(variable.Name.Lexeme))
             return false;
 
@@ -2621,6 +2624,13 @@ public abstract partial class ExpressionEmitterBase : IEmitterContext
     /// </summary>
     protected bool TryEmitBuiltInClassType(string name)
     {
+        if (name == "Array" && Ctx.RuntimeFeatures?.UsesArrayConstructorMutation == true)
+        {
+            IL.Emit(OpCodes.Ldstr, name);
+            IL.Emit(OpCodes.Call, Ctx.Runtime!.GlobalObject.GetBinding);
+            SetStackUnknown();
+            return true;
+        }
         Type? t = name switch
         {
             "Date" => Ctx.Runtime!.Dates.Implementation?.Type,
@@ -3350,6 +3360,9 @@ public abstract partial class ExpressionEmitterBase : IEmitterContext
     /// </summary>
     protected bool CanUseStaticTypeStrategy(string name)
     {
+        if (name == "Array")
+            return Ctx.RuntimeFeatures?.UsesArrayConstructorMutation != true &&
+                !Resolver.HasVariable(name) && !Ctx.HasVisibleValueBinding(name);
         if (name is "Number" or "Math" or "ArrayBuffer" or "globalThis" or "Reflect")
             return !Resolver.HasVariable(name) && !Ctx.HasVisibleValueBinding(name);
 

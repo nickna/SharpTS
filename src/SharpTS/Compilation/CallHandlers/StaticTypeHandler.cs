@@ -23,6 +23,9 @@ public class StaticTypeHandler : ICallHandler
         var ctx = emitter.Context;
         if (ctx.TypeEmitterRegistry == null)
             return false;
+        if (staticVar.Name.Lexeme == "Array" && (ctx.RuntimeFeatures?.UsesArrayConstructorMutation == true ||
+            emitter.HasVariable("Array") || ctx.HasVisibleValueBinding("Array")))
+            return false;
 
         if (staticVar.Name.Lexeme == "Number"
             && (emitter.HasVariable("Number")

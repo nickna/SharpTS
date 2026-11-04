@@ -258,7 +258,7 @@ public partial class ILEmitter
         // new-FuncDecl all working correctly), test262 harness asserts fire
         // properly so any false positives surfaced by this pattern matcher
         // reclassify as real Fails — making Test262 numbers meaningful.
-        if (TryEmitArrayPrototypeCall(c)) return;
+        if (_ctx.RuntimeFeatures?.UsesArrayConstructorMutation != true && TryEmitArrayPrototypeCall(c)) return;
 
         // ECMA-262 Object.prototype.toString.call(x) — return the proper
         // "[object X]" tag for built-in types. Intercepted at the syntactic
