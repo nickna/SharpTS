@@ -56,7 +56,7 @@ internal sealed class TestProcess : IAsyncDisposable
         while (!StandardOutput.Contains(text, StringComparison.Ordinal))
         {
             if (_clock.Elapsed >= _timeout)
-                throw await CreateTimeoutAsync($"waiting for '{text}'").ConfigureAwait(false);
+                throw await CreateTimeoutAsync($"waiting for '{text}'", _timeout).ConfigureAwait(false);
             if (_output.IsCompleted)
             {
                 // The owned drain is already complete; no foreign context can block it.
@@ -79,11 +79,18 @@ internal sealed class TestProcess : IAsyncDisposable
             // Output EOF has its own cleanup budget: descendants can inherit pipes
             // even when the process whose handle we own has already exited.
             await _process.WaitForExitAsync().WaitAsync(remaining).ConfigureAwait(false);
+        }
+        catch (TimeoutException)
+        {
+            throw await CreateTimeoutAsync("waiting for process exit", _timeout).ConfigureAwait(false);
+        }
+        try
+        {
             await Task.WhenAll(_output, _error).WaitAsync(_cleanupTimeout).ConfigureAwait(false);
         }
         catch (TimeoutException)
         {
-            throw await CreateTimeoutAsync("waiting for exit/output").ConfigureAwait(false);
+            throw await CreateTimeoutAsync("draining stdout/stderr after process exit", _cleanupTimeout).ConfigureAwait(false);
         }
         return new(_process.ExitCode, StandardOutput, StandardError, Timeline);
     }
@@ -100,10 +107,10 @@ internal sealed class TestProcess : IAsyncDisposable
         }
     }
 
-    private async Task<TimeoutException> CreateTimeoutAsync(string stage)
+    private async Task<TimeoutException> CreateTimeoutAsync(string stage, TimeSpan budget)
     {
         string cleanup = await CleanupAsync().ConfigureAwait(false);
-        return new TimeoutException($"{_description} exceeded {_timeout.TotalSeconds:F0} seconds. {stage}; " +
+        return new TimeoutException($"{_description} exceeded {budget.TotalSeconds:0.###} seconds {stage}; " +
             $"{Diagnostics()}; {cleanup}; timeline: {Tail(Timeline)}");
     }
 
