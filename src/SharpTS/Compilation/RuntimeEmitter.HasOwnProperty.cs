@@ -629,6 +629,22 @@ public partial class RuntimeEmitter
         il.Emit(OpCodes.Call, inputs.LookupBuiltInStaticMember);
         il.Emit(OpCodes.Brtrue, trueLabel);
 
+        // Intrinsic constructors expose the JavaScript inventory above, not
+        // fields or properties of the CLR type used to represent the token.
+        foreach (var intrinsic in new Type[]
+        {
+            _types.Double, _types.String, _types.Boolean, _types.Object,
+            _types.IListOfObject, _types.TaskOfObject, _types.BigInteger,
+            _types.DictionaryObjectObject, _types.HashSetOfObject,
+            inputs.TSFunctionType, inputs.Errors.Type
+        })
+        {
+            il.Emit(OpCodes.Ldarg_0);
+            il.Emit(OpCodes.Ldtoken, intrinsic);
+            il.Emit(OpCodes.Call, _types.TypeGetTypeFromHandle);
+            il.Emit(OpCodes.Beq, falseLabel);
+        }
+
         // Constructor inheritance belongs to value lookup, never own-property lookup.
         const BindingFlags staticPub = BindingFlags.Public | BindingFlags.Static | BindingFlags.DeclaredOnly;
         var typeLocal2 = il.DeclareLocal(_types.Type);
