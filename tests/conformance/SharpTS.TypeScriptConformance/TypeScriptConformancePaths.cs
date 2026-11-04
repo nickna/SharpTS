@@ -65,6 +65,12 @@ public static class TypeScriptConformancePaths
             var candidate = Path.Combine(dir.FullName, "SharpTS.TypeScriptConformance");
             if (File.Exists(Path.Combine(candidate, "SharpTS.TypeScriptConformance.csproj")))
                 return candidate;
+            if (File.Exists(Path.Combine(dir.FullName, "SharpTS.sln")))
+            {
+                candidate = Path.Combine(dir.FullName, "tests", "conformance", "SharpTS.TypeScriptConformance");
+                if (File.Exists(Path.Combine(candidate, "SharpTS.TypeScriptConformance.csproj")))
+                    return candidate;
+            }
             dir = dir.Parent;
         }
         return null;
