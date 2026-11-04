@@ -65,6 +65,7 @@ jobs:
         run: |
           ./scripts/test-ci-change-scope.ps1
           ./scripts/test-standalone-shard-plan.ps1
+          ./scripts/test-core-test-partitions.ps1
           ./scripts/test-github-workflows.ps1
 
       - name: Install and run actionlint 1.7.12
@@ -81,8 +82,8 @@ jobs:
     needs: workflow-policy
     if: needs.workflow-policy.outputs.mode == 'full'
     runs-on: ${{ matrix.os }}
-    # The Windows core suite can still be passing tests at the old 20-minute
-    # limit. Allow 30 minutes for it, plus build, GUI, and final packaging gates.
+    # Process-heavy integration/package tests have a complementary runner below.
+    # Keep the existing core, build, GUI and packaging budgets.
     timeout-minutes: 50
     strategy:
       # Don't let one platform's failure cancel the others — we want to see each
@@ -189,13 +190,26 @@ jobs:
           if (-not $verifier) { throw 'The independent signature verifier path is missing.' }
           "executable=$verifier" >> $env:GITHUB_OUTPUT
 
+      - name: Verify complete core test partition
+        shell: pwsh
+        run: ./scripts/verify-core-test-partitions.ps1
+        timeout-minutes: 3
+
       - name: Test core
         env:
           SHARPTS_TEST_OSSLSIGNCODE: ${{ steps.signature-verifier.outputs.executable }}
-        run: dotnet test tests/SharpTS.Tests/SharpTS.Tests.csproj --no-build --configuration Release --verbosity normal --filter "Category!=LiveNetwork&Category!=LoadSensitive&Category!=npm&FullyQualifiedName!~SharpTS.Tests.CompilerTests.StandaloneDllTests."
+        run: dotnet test tests/SharpTS.Tests/SharpTS.Tests.csproj --no-build --configuration Release --verbosity normal --filter "Category!=LiveNetwork&Category!=LoadSensitive&Category!=npm&FullyQualifiedName!~SharpTS.Tests.CompilerTests.StandaloneDllTests.&FullyQualifiedName!~SharpTS.Tests.IntegrationTests.&FullyQualifiedName!~SharpTS.Tests.PackagingTests."
         # The standalone job runs the complementary class on its own runner;
         # its sequential child-process cases otherwise dominate this step.
         timeout-minutes: 30
+
+      - name: Upload core partition proof
+        if: always()
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7
+        with:
+          name: core-partitions-${{ matrix.os }}
+          path: artifacts/core-partitions/
+          retention-days: 7
 
       - name: Test GUI conformance
         run: dotnet test tests/gui-conformance/SharpTS.Gui.Conformance.Tests/SharpTS.Gui.Conformance.Tests.csproj --no-build --configuration Release --verbosity normal --filter "Category!=LiveNetwork&Category!=LoadSensitive&Category!=npm"
@@ -219,6 +233,58 @@ jobs:
       - name: Packaged SDK smoke test
         shell: pwsh
         run: ./scripts/test-packaged-sdk.ps1
+
+  process-tests:
+    needs: workflow-policy
+    if: needs.workflow-policy.outputs.mode == 'full'
+    runs-on: ${{ matrix.os }}
+    timeout-minutes: 50
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-24.04, windows-2025]
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - name: Setup .NET
+        uses: actions/setup-dotnet@a98b56852c35b8e3190ac28c8c2271da59106c68 # v6.0.0
+        with:
+          global-json-file: global.json
+      - name: Setup pinned Node
+        if: matrix.os == 'ubuntu-24.04'
+        uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
+        with:
+          node-version-file: .node-version
+      - name: Build process test assembly
+        run: dotnet build tests/SharpTS.Tests/SharpTS.Tests.csproj --configuration Release
+      - name: Acquire pinned independent Authenticode verifier
+        id: signature-verifier
+        if: runner.os == 'Windows'
+        shell: pwsh
+        timeout-minutes: 3
+        run: |
+          $verifier = ./scripts/get-osslsigncode.ps1
+          if (-not $verifier) { throw 'The independent signature verifier path is missing.' }
+          "executable=$verifier" >> $env:GITHUB_OUTPUT
+      - name: Verify complete core test partition
+        shell: pwsh
+        run: ./scripts/verify-core-test-partitions.ps1
+        timeout-minutes: 3
+      - name: Test process integration and packaging
+        env:
+          SHARPTS_TEST_OSSLSIGNCODE: ${{ steps.signature-verifier.outputs.executable }}
+        run: dotnet test tests/SharpTS.Tests/SharpTS.Tests.csproj --no-build --configuration Release --verbosity normal --filter "Category!=LiveNetwork&Category!=LoadSensitive&Category!=npm&FullyQualifiedName!~SharpTS.Tests.CompilerTests.StandaloneDllTests.&(FullyQualifiedName~SharpTS.Tests.IntegrationTests.|FullyQualifiedName~SharpTS.Tests.PackagingTests.)" --logger "trx;LogFileName=process-tests.trx" --results-directory artifacts/process-tests
+        timeout-minutes: 30
+      - name: Upload process test results and core partition proof
+        if: always()
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7
+        with:
+          name: process-tests-${{ matrix.os }}
+          path: |
+            artifacts/process-tests/
+            artifacts/core-partitions/
+          retention-days: 7
 
   editor-contract:
     needs: workflow-policy
@@ -670,7 +736,7 @@ jobs:
   gate:
     name: Gate
     if: always()
-    needs: [workflow-policy, build, typescript-conformance, editor-contract, standalone, dap-macos-smoke, aot-ratchet, native-aot-compile-smoke, native-aot-custom-host-smoke, lightweight-validation]
+    needs: [workflow-policy, build, typescript-conformance, editor-contract, standalone, process-tests, dap-macos-smoke, aot-ratchet, native-aot-compile-smoke, native-aot-custom-host-smoke, lightweight-validation]
     runs-on: ubuntu-24.04
     timeout-minutes: 5
     steps:
@@ -685,7 +751,7 @@ jobs:
             throw "CI change classification or workflow policy did not pass."
           }
 
-          $heavy = @('build', 'typescript-conformance', 'editor-contract', 'standalone', 'dap-macos-smoke', 'aot-ratchet', 'native-aot-compile-smoke', 'native-aot-custom-host-smoke')
+          $heavy = @('build', 'typescript-conformance', 'editor-contract', 'standalone', 'process-tests', 'dap-macos-smoke', 'aot-ratchet', 'native-aot-compile-smoke', 'native-aot-custom-host-smoke')
           if ($env:CHANGE_MODE -eq 'full') {
             $bad = @($heavy | Where-Object { $needs.PSObject.Properties[$_].Value.result -ne 'success' })
             if ($needs.'lightweight-validation'.result -ne 'skipped') {

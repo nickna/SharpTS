@@ -131,6 +131,14 @@ for seven days, including failed runs. Compare Linux and Windows durations and
 executed case counts alongside the inventory digest when assessing balance.
 The 35-minute CI test step, 40-minute job and 120-second hang guard stay bounded.
 
+CI runs core integration and packaging tests on a separate Windows/Linux job from
+the remaining core tests. Both jobs retain the existing 30-minute test budget and
+the same category exclusions. Three fresh discoveries prove that their disjoint
+filters reproduce the complete original core inventory, including every discovered
+theory row; each job uploads that inventory proof. Process tests acquire their own
+independent Windows signature verifier, and the required gate waits for both jobs.
+The six standalone shards on each platform keep their existing coverage and budgets.
+
 Core tests use xUnit's conservative parallel scheduler with the default CPU-based
 collection limit. It bounds unfinished collections so awaited test continuations
 can release synchronization gates promptly. The aggressive scheduler lets later
