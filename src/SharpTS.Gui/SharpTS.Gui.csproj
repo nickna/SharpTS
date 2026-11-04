@@ -18,6 +18,13 @@
   </ItemGroup>
 
   <Target Name="VerifyGeneratedGuiControlContract" BeforeTargets="CoreCompile">
-    <Exec Command="dotnet &quot;$([MSBuild]::NormalizePath('$(MSBuildThisFileDirectory)', '..', 'SharpTS.Gui.Generator', 'bin', '$(Configuration)', 'net10.0', 'SharpTS.Gui.Generator.dll'))&quot; verify" />
+    <MSBuild Projects="..\SharpTS.Gui.Generator\SharpTS.Gui.Generator.csproj" Targets="GetTargetPath">
+      <Output TaskParameter="TargetOutputs" PropertyName="GuiControlGenerator" />
+    </MSBuild>
+    <PropertyGroup>
+      <GuiControlDotNetHost Condition="'$(DOTNET_HOST_PATH)' != ''">$(DOTNET_HOST_PATH)</GuiControlDotNetHost>
+      <GuiControlDotNetHost Condition="'$(GuiControlDotNetHost)' == ''">dotnet</GuiControlDotNetHost>
+    </PropertyGroup>
+    <Exec Command="&quot;$(GuiControlDotNetHost)&quot; &quot;$(GuiControlGenerator)&quot; verify" />
   </Target>
 </Project>
