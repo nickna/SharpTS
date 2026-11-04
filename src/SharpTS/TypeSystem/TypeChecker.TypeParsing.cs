@@ -174,6 +174,9 @@ public partial class TypeChecker
                         $"Type alias '{typeName}' circularly references itself.", tsCode: "TS2456");
                 }
 
+                expanded = DeferredTypeAliasPresentation.RetainSourceAlias(expanded, typeName,
+                    (object?)aliasEntry.DefinitionNode ?? aliasEntry.Definition);
+
                 // Cache the expanded type for future use
                 _expandedTypeAliasCache[aliasCacheKey] = expanded;
                 if (EditorFacts.IsEnabled)

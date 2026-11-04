@@ -29,7 +29,8 @@ internal sealed class CheckedTypeRenderer(bool conformance)
     private string RenderCore(TypeInfo type, int parentPrecedence)
     {
         if (DeferredTypeAliasPresentation.Get(type) is { } alias)
-            return $"{alias.Name}<{string.Join(", ", alias.Arguments.Select(argument => Render(argument)))}>";
+            return alias.Arguments.Count == 0 ? alias.Name
+                : $"{alias.Name}<{string.Join(", ", alias.Arguments.Select(argument => Render(argument)))}>";
         const int conditionalPrecedence = 1;
         const int unionPrecedence = 2;
         const int intersectionPrecedence = 3;
