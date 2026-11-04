@@ -723,14 +723,20 @@ export function appReducer(state: AppState, action: AppAction): AppState {
                     first: action.first === undefined ? state.effectDialog.first : action.first,
                     second: action.second === undefined ? state.effectDialog.second : action.second
                 },
-                effectPreview: null
+                effectPreview: null,
+                status: "Effect preview pending"
             };
         }
         case "effectPreview": {
             const preview = action.preview;
-            return preview.revision === state.revision
-                ? { ...state, effectPreview: preview, busy: null, status: "Effect preview ready" }
-                : { ...state, busy: null, status: "Discarded a stale effect preview" };
+            if (
+                state.effectDialog === null ||
+                preview.revision !== state.revision ||
+                preview.layerId !== state.selectedLayerId ||
+                preview.signature !== JSON.stringify(effectForDialog(state.effectDialog))
+            )
+                return state;
+            return { ...state, effectPreview: preview, busy: null, status: "Effect preview ready" };
         }
         case "cancelEffect":
             return {
