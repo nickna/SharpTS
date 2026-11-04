@@ -28,6 +28,9 @@ public sealed class EmittedSourceFieldLifecycleRuntimeTests
             {
                 var contract = Assert.IsType<EmittedSourceDataDefinitionRuntime>(runtime.ObjectFields.SourceDataDefinition);
                 Assert.Same(module, contract.Contract.Module);
+                Assert.IsAssignableFrom<MethodBuilder>(contract.DefineValue);
+                Assert.Same(contract.Contract, contract.DefineValue.DeclaringType);
+                Assert.Same(module, contract.DefineValue.Module);
                 Assert.True(contracts.Add(contract.Contract));
             }
             else Assert.Null(runtime.ObjectFields.SourceDataDefinition);

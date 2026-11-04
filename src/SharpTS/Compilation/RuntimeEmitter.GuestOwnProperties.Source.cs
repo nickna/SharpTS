@@ -5,7 +5,7 @@ namespace SharpTS.Compilation;
 
 public partial class RuntimeEmitter
 {
-    private Type? _sourceDataDefinitionContract;
+    private EmittedSourceDataDefinitionRuntime? _sourceDataDefinition;
     private readonly record struct GuestOwnQueryInputs(EmittedGuestOwnPropertyRuntime Runtime, MethodInfo ToPropertyKey);
 
     private void EmitGuestOwnNamedIndex(ILGenerator il, EmittedGuestOwnPropertyRuntime? own, MethodInfo? property, bool write)
@@ -38,9 +38,9 @@ public partial class RuntimeEmitter
         il.Emit(OpCodes.Ldc_I4_1); il.Emit(OpCodes.Call, deleting ? own.CommitDelete : own.CommitDefinition);
         il.Emit(OpCodes.Br, done);
         il.MarkLabel(legacy);
-        if (_sourceDataDefinitionContract is { } source)
+        if (_sourceDataDefinition is { } source)
         {
-            loadReceiver(); il.Emit(OpCodes.Isinst, source); il.Emit(OpCodes.Brfalse, done);
+            loadReceiver(); il.Emit(OpCodes.Isinst, source.Contract); il.Emit(OpCodes.Brfalse, done);
             if (!deleting)
             {
                 loadReceiver(); loadKey(); il.Emit(OpCodes.Call, own.HasOwn); il.Emit(OpCodes.Brtrue, done);

@@ -150,11 +150,13 @@ public partial class RuntimeEmitter
     {
         var builder = EmitTypeDefinitions.DefineType(module, "<>SourceDataDefinition",
             TypeAttributes.NotPublic | TypeAttributes.Interface | TypeAttributes.Abstract);
-        builder.DefineMethod("DefineValue", MethodAttributes.Public | MethodAttributes.Abstract
+        var defineValue = builder.DefineMethod("DefineValue", MethodAttributes.Public | MethodAttributes.Abstract
             | MethodAttributes.Virtual | MethodAttributes.HideBySig | MethodAttributes.NewSlot,
             _types.Void, [_types.String, _types.Object]);
-        var contract = builder.CreateType()!;
-        _sourceDataDefinitionContract = contract;
+        builder.CreateType();
+        // Retain the exact declarations together; later wiring must not rediscover
+        // the method by reflecting over a stored Type in the native compiler.
+        _sourceDataDefinition = new(builder, defineValue);
     }
 
     /// <summary>

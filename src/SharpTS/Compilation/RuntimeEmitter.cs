@@ -88,7 +88,7 @@ public partial class RuntimeEmitter
         EmittedNativeMethodLookupRuntime? nativeMethodLookup = null,
         EmittedNativeConstructorMetadataRuntime? nativeConstructorMetadata = null)
     {
-        _sourceDataDefinitionContract = null;
+        _sourceDataDefinition = null;
         _nativeUnionParameters = functionPolicy.NativeUnionParameters;
         _nativeDeletionLookup?.ValidateForEmitter(moduleBuilder, _emitNativeCallables);
         _nativeConstructorFactories?.ValidateForEmitter(moduleBuilder, _emitNativeCallables);
@@ -434,8 +434,8 @@ public partial class RuntimeEmitter
         // Emit $IHasFields interface for unified property access
         // Must come before $Object which implements it
         EmitHasFieldsInterface(moduleBuilder, runtime.ObjectFields);
-        if (_sourceDataDefinitionContract is { } sourceDataDefinition)
-            runtime.ObjectFields.DeclareSourceDataDefinition(sourceDataDefinition, sourceDataDefinition.GetMethod("DefineValue")!);
+        if (_sourceDataDefinition is { } sourceDataDefinition)
+            runtime.ObjectFields.DeclareSourceDataDefinition(sourceDataDefinition.Contract, sourceDataDefinition.DefineValue);
         sourceOwners?.DeclareContract(runtime.ObjectFields.Interface);
         runtime.ObjectFields.CompleteEmission();
         EmitCompactObjectRecordInterface(moduleBuilder, runtime.Records);
