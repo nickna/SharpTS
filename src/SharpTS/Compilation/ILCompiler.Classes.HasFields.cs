@@ -600,7 +600,7 @@ public partial class ILCompiler
                 // access when type checking is disabled.
                 var jsName = classStmt.Fields
                     .FirstOrDefault(f => !f.IsStatic && !f.IsPrivate && !f.IsDeclare
-                        && NamingConventions.ToPascalCase(f.Name.Lexeme) == propName)
+                        && FieldClrNames.Instance(classStmt.Fields, f.Name.Lexeme) == propName)
                     ?.Name.Lexeme ?? NamingConventions.ToCamelCase(propName);
                 var nextLabel = il.DefineLabel();
 
@@ -797,7 +797,7 @@ public partial class ILCompiler
             {
                 // Convert PascalCase property name to camelCase for JS-style access
                 var camelName = classStmt.Fields.FirstOrDefault(field => !field.IsStatic && !field.IsPrivate
-                    && NamingConventions.ToPascalCase(field.Name.Lexeme) == propName)?.Name.Lexeme
+                    && FieldClrNames.Instance(classStmt.Fields, field.Name.Lexeme) == propName)?.Name.Lexeme
                     ?? NamingConventions.ToCamelCase(propName);
                 var nextLabel = il.DefineLabel();
 
@@ -1219,7 +1219,7 @@ public partial class ILCompiler
             foreach (var field in fields ?? [])
             {
                 if (field.IsStatic || field.IsPrivate || field.IsDeclare || field.ComputedKey != null
-                    || backingFields?.ContainsKey(NamingConventions.ToPascalCase(field.Name.Lexeme)) != true
+                    || backingFields?.ContainsKey(FieldClrNames.Instance(fields ?? [], field.Name.Lexeme)) != true
                     || !seenNames.Add(field.Name.Lexeme)) continue;
                 var next = il.DefineLabel();
                 il.Emit(OpCodes.Ldarg_1);
@@ -1239,7 +1239,7 @@ public partial class ILCompiler
 
     private static string GetClassExpressionFieldGuestName(Expr.ClassExpr expression, string propertyName) =>
         expression.Fields.FirstOrDefault(field => !field.IsStatic && !field.IsPrivate && !field.IsDeclare
-            && field.ComputedKey == null && NamingConventions.ToPascalCase(field.Name.Lexeme) == propertyName)
+            && field.ComputedKey == null && FieldClrNames.Instance(expression.Fields, field.Name.Lexeme) == propertyName)
             ?.Name.Lexeme ?? NamingConventions.ToCamelCase(propertyName);
 
     private void EmitComputedMethodOwnerCheck(ILGenerator il, LocalBuilder method, TypeBuilder owner, Label notOwn)

@@ -458,7 +458,7 @@ public partial class ILCompiler
                     }
 
                     string fieldName = field.Name.Lexeme;
-                    string pascalName = NamingConventions.ToPascalCase(fieldName);
+                    string pascalName = FieldClrNames.Instance(classStmt.Fields, fieldName);
 
                     // Check if this is a declared property with a backing field (using PascalCase key)
                     if (_typedInterop.PropertyBackingFields.TryGetValue(className, out var backingFields) &&

@@ -46,7 +46,7 @@ public partial class ILCompiler
             else il.Emit(OpCodes.Ldsfld, _runtime.Sentinels.UndefinedInstance);
             il.Emit(OpCodes.Stloc, value);
             var done = il.DefineLabel();
-            string property = NamingConventions.ToPascalCase(field.Name.Lexeme);
+            string property = FieldClrNames.Instance(fields, field.Name.Lexeme);
             bool nativeOwn = context.CurrentClassBuilder is TypeBuilder nativeOwnOwner && _nativeOwnAdapters.ContainsKey(nativeOwnOwner);
             if (field.ComputedKey == null && (field.Initializer != null || nativeOwn)
                 && backingFields?.TryGetValue(property, out var backing) == true)

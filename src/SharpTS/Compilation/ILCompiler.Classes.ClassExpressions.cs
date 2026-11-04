@@ -264,7 +264,7 @@ public partial class ILCompiler
         GenericTypeParameterBuilder[]? classGenericParams)
     {
         string fieldName = field.Name.Lexeme;
-        string pascalName = NamingConventions.ToPascalCase(fieldName);
+        string pascalName = FieldClrNames.Instance(classExpr.Fields, fieldName);
         Type propertyType = GetClassExprFieldType(classExpr, field, classGenericParams);
 
         // Track as declared property

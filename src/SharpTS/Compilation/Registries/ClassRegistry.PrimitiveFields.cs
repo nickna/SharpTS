@@ -31,6 +31,20 @@ public sealed partial class ClassRegistry
         return field != null;
     }
 
+    internal string ResolveGuestFieldPropertyName(string className, string sourceName)
+    {
+        if (!_builders.TryGetValue(className, out var owner))
+            _guestFieldOwners.TryGetValue(className, out owner);
+        for (Type? current = owner; current != null; current = current.BaseType)
+        {
+            var definition = current.IsConstructedGenericType ? current.GetGenericTypeDefinition() : current;
+            if (definition is not TypeBuilder builder) break;
+            if (TryGetOwnGuestDataField(builder, sourceName, out var field) && field.NativeGetter is { } getter)
+                return getter.Name["get_".Length..];
+        }
+        return NamingConventions.ToPascalCase(sourceName);
+    }
+
     public bool TryGetPrimitiveGuestField(string className, string sourceName,
         [NotNullWhen(true)] out PrimitiveGuestField? field)
     {
