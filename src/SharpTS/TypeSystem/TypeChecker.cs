@@ -1154,8 +1154,7 @@ public partial class TypeChecker
     /// This enables identity-based caching in IsCompatible to work correctly with recursive types.
     /// Key: alias name (or "name&lt;arg1,arg2&gt;" for generic), Value: expanded TypeInfo
     /// </summary>
-    [ThreadStatic]
-    private static Dictionary<string, TypeInfo>? _expandedTypeAliasCache;
+    private Dictionary<string, TypeInfo>? _expandedTypeAliasCache;
 
     /// <summary>
     /// RAII-style helper for safely managing TypeEnvironment scope changes.
@@ -1863,6 +1862,7 @@ public partial class TypeChecker
 
         // Clear compatibility cache for fresh check
         _compatibilityCache = null;
+        _expandedTypeAliasCache = null;
 
         _moduleResolver = resolver;
         _hasDefaultLibraries = modules.Any(module => module.IsDefaultLibrary);
