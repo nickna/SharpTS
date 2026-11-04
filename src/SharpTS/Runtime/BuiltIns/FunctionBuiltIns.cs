@@ -118,6 +118,7 @@ public static class FunctionBuiltIns
             ISharpTSFunctionObject function =>
                 function.OwnProperties.GetOwnPropertyDescriptor("name")?.Value as string ?? "",
             IBuiltInFunctionMetadata builtIn => builtIn.FunctionName,
+            SharpTSFunctionGlobal => "Function",
             SharpTSBuiltInConstructor constructor => constructor.Name,
             SharpTSFunction fn => fn.TryGetProperty("name", out var name) ? name as string ?? "" : "",
             SharpTSArrowFunction arrow => arrow.ToString().Contains("<fn ")

@@ -786,7 +786,7 @@ public partial class Interpreter
                 // Built-in callable metadata is an own property even when it
                 // is stored outside the ordinary function property bag.
                 if (((callable is IBuiltInFunctionMetadata && name is "name" or "length")
-                        || (callable is SharpTSFunctionGlobal && name == "length"))
+                        || (callable is SharpTSFunctionGlobal && name is "name" or "length"))
                     && FunctionBuiltIns.GetMember(callable, name, this) is { } metadataValue)
                     return metadataValue;
 
@@ -2728,7 +2728,7 @@ public partial class Interpreter
         if (obj is SharpTSFunctionGlobal fnGlobal)
         {
             return fnGlobal.GetMember(memberName)
-                ?? (memberName == "length" ? FunctionBuiltIns.GetMember(fnGlobal, memberName, this) : null)
+                ?? (memberName is "name" or "length" ? FunctionBuiltIns.GetMember(fnGlobal, memberName, this) : null)
                 ?? InheritedObjectPrototypeMember(fnGlobal, memberName)
                 ?? SharpTSUndefined.Instance;
         }
