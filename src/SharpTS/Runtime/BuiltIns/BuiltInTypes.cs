@@ -676,19 +676,19 @@ public static class BuiltInTypes
             "length" => NumberType,
             "name" => StringType,
             "bind" => new TypeInfo.Function(
-                [AnyType],               // thisArg, followed by optional bound args
+                [AnyType, new TypeInfo.Array(AnyType)],
                 boundFunctionType,       // Returns a permissive function type
-                RequiredParams: 0,
-                HasRestParam: true),
+                RequiredParams: 1,
+                HasRestParam: true) { HasExplicitArity = true },
             "call" => new TypeInfo.Function(
-                [AnyType],               // thisArg, followed by spread args
+                [AnyType, new TypeInfo.Array(AnyType)],
                 returnType,              // Returns the function's return type
-                RequiredParams: 0,
-                HasRestParam: true),
+                RequiredParams: 1,
+                HasRestParam: true) { HasExplicitArity = true },
             "apply" => new TypeInfo.Function(
                 [AnyType, new TypeInfo.Union([new TypeInfo.Array(AnyType), TypeInfo.Null.Shared])],
                 returnType,              // Returns the function's return type
-                RequiredParams: 0),
+                RequiredParams: 1) { HasExplicitArity = true },
             // JS functions are objects — any arbitrary property is legal at
             // runtime (common in CommonJS: `fn.DNS = "..."`). Fall back to
             // Any for unknown names rather than erroring.
