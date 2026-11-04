@@ -636,6 +636,8 @@ public partial class TypeChecker
             {
                 return builtInMember;
             }
+            if (current is TypeInfo.MutableClass { IsDynamicSuperclass: true })
+                return TypeInfo.Any.Shared;
 
             if (!promiseHeritage)
                 fieldSubstitutions = ComposeInheritedFieldReadSubstitutions(current, fieldSubstitutions);
