@@ -762,8 +762,16 @@ Native constructor own-property queries can use a completed exact-owner presence
 table. Created output builders contribute their declared public static field,
 property and method names; literal known framework owners retain their actual
 field/property queries with the original binding flags. The compiler never treats
-a name as owner identity. Generic, ambiguous or unresolved output metadata keeps
+a name as owner identity. Unproved generic, ambiguous or unresolved output metadata keeps
 the complete legacy operation. Unknown owners receive an explicit guest TypeError.
+
+A source constructor definition token can use its existing canonical static-storage
+context only when that exact mapping and closed context occur in the completed
+initializer inventory. Already-closed owner operands retain their own contexts.
+The selected built-in own-descriptor read does not construct a source family;
+argument expressions, key conversion callbacks and nested calls retain their
+independent invocation obligations. This admits generic constructor aliases and
+their static descriptors without opening arbitrary CLR owner reflection.
 
 Descriptor/deletion checks, declared-only inheritance and computed-method lookup
 retain their ordering, including the latter's initializer effects. Literal field

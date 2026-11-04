@@ -60,6 +60,18 @@ internal sealed class NativeStaticMemberPresence
         if (UsesLegacy) EmitLegacy(il, runtime);
         else
         {
+            foreach (var mapping in catalog.CanonicalMappings.Where(mapping =>
+                initializers.Owners.Any(owner => NativeClosedSourceFamilies.SameOperand(owner, mapping.Canonical))))
+            {
+                var next = MatchOwner(il, mapping.Definition);
+                // A source constructor value carries its definition token;
+                // its existing static-storage owner is the proved canonical
+                // context. Preserve distinct already-closed owner operands.
+                il.Emit(OpCodes.Ldtoken, mapping.Canonical);
+                il.Emit(OpCodes.Call, _types.TypeGetTypeFromHandle);
+                il.Emit(OpCodes.Starg_S, (byte)0);
+                il.MarkLabel(next);
+            }
             var validName = il.DefineLabel();
             il.Emit(OpCodes.Ldarg_1); il.Emit(OpCodes.Brtrue, validName);
             il.Emit(OpCodes.Ldstr, "name");
