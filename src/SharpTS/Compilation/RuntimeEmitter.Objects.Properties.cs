@@ -2628,6 +2628,18 @@ public partial class RuntimeEmitter
                 il.MarkLabel(notArrayBufferPrototype);
             }
 
+            if (inputs.TypedArrays.Implementation is { } arrayPrototypes)
+            {
+                var notTypedArrayConstructor = il.DefineLabel();
+                il.Emit(OpCodes.Ldarg_0);
+                il.Emit(OpCodes.Call, arrayPrototypes.IntrinsicPrototype);
+                il.Emit(OpCodes.Dup);
+                il.Emit(OpCodes.Brfalse, notTypedArrayConstructor);
+                il.Emit(OpCodes.Ret);
+                il.MarkLabel(notTypedArrayConstructor);
+                il.Emit(OpCodes.Pop);
+            }
+
             // Emitted user classes implement $IHasFields. Their prototype is
             // a stable constructor-free instance whose normal GetProperty
             // implementation exposes declared methods/accessors.

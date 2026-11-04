@@ -735,6 +735,8 @@ public partial class RuntimeEmitter
                 MethodAttributes.Private | MethodAttributes.Static, _types.Void, Type.EmptyTypes);
             cctorIL.Emit(OpCodes.Call, globalTimerInitializer);
         }
+        EmitTypedArrayPrototypes(typeBuilder, new TypedArrayPrototypesInputs(runtime.TypedArrays,
+            runtime.ObjectPrototypes, runtime.DescriptorStorage), cctorIL);
         cctorIL.Emit(OpCodes.Ret);
 
         // Emit all methods - these are now in partial class files
@@ -2361,7 +2363,8 @@ public partial class RuntimeEmitter
                 runtime.Sentinels.UndefinedType,
                 NativeProxyRejection: runtime.ReflectedMethods.NativeProxyRejection,
                 GuestOwnProperties: runtime.GuestOwnProperties,
-                Vm: runtime.Vm
+                Vm: runtime.Vm,
+                TypedArrays: runtime.TypedArrays
             ),
             prototypeStoreField
         );
