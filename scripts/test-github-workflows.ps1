@@ -170,6 +170,19 @@ foreach ($requiredText in @('build, typescript-conformance,', "'typescript-confo
     }
 }
 $typeScriptJob = Get-WorkflowJob $ci 'typescript-conformance' 'ci.yml'
+$nativeHostJob = Get-WorkflowJob $ci 'native-aot-custom-host-smoke' 'ci.yml'
+foreach ($requiredText in @('timeout-minutes: 15', 'samples/NativeInteropHost/NativeInteropHost.csproj',
+    'samples/NativeInteropHost/custom-interop.ts', "grep -qx 'changed'", "grep -qx '42 42 counter'",
+    "grep -qx '3'", 'NativeInteropExample.dll', 'System.Runtime.dll',
+    'diff -u "$scratch/interpreted.txt" "$scratch/compiled.txt"')) {
+    if (-not $nativeHostJob.Contains($requiredText, [StringComparison]::Ordinal)) {
+        $errors.Add("The independent native host job must retain its complete workload and deadline: $requiredText")
+    }
+}
+if ($ciGateJob -notmatch '(?m)^    needs: \[[^\r\n]*\bnative-aot-custom-host-smoke\b' -or
+    -not $ciGateJob.Contains("'native-aot-custom-host-smoke'", [StringComparison]::Ordinal)) {
+    $errors.Add('CI Gate must require the independent native host smoke in the full route.')
+}
 foreach ($requiredText in @('./scripts/test-typescript-conformance.ps1', 'if: always()',
     'path: artifacts/typescript-conformance/', 'if-no-files-found: error', 'timeout-minutes: 10')) {
     if (-not $typeScriptJob.Contains($requiredText, [StringComparison]::Ordinal)) {
