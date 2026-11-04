@@ -2132,6 +2132,25 @@ public static partial class ObjectBuiltIns
     internal static SharpTSObject ObjectRest(
         Interpreter interpreter, object? source, IEnumerable<object?> excludeKeys)
     {
+        if (source is SharpTSProxy proxy)
+        {
+            var excludedProxyKeys = excludeKeys.Select(interpreter.ToPropertyKey).ToHashSet();
+            var proxyRest = new SharpTSObject([]);
+            foreach (var key in proxy.TrapOwnPropertyKeys(interpreter))
+            {
+                if (key is null || excludedProxyKeys.Contains(key)) continue;
+                var descriptor = key is SharpTSSymbol symbolKey
+                    ? proxy.TrapGetOwnPropertyDescriptor(symbolKey, interpreter)
+                    : proxy.TrapGetOwnPropertyDescriptor((string)key, interpreter);
+                if (descriptor is null or SharpTSUndefined || !Compilation.RuntimeTypes.IsTruthy(
+                        interpreter.GetProperty(descriptor, "enumerable"))) continue;
+                if (key is SharpTSSymbol symbol)
+                    proxyRest.SetBySymbol(symbol, interpreter.GetSymbolPropertyValue(proxy, symbol));
+                else
+                    proxyRest.SetProperty((string)key, proxy.TrapGet((string)key, interpreter));
+            }
+            return proxyRest;
+        }
         if (source is SharpTSObjectNamespace objectNamespace)
         {
             var excludedNamespaceKeys = excludeKeys.Select(interpreter.ToPropertyKey).ToHashSet();
