@@ -46,7 +46,7 @@ public partial class ILCompiler
             else il.Emit(OpCodes.Ldsfld, _runtime.Sentinels.UndefinedInstance);
             il.Emit(OpCodes.Stloc, value);
             var done = il.DefineLabel();
-            string property = FieldClrNames.Instance(fields, field.Name.Lexeme);
+            string property = GetClassRegistry().OwnGuestFieldPropertyName((TypeBuilder)context.CurrentClassBuilder!, fields, field.Name.Lexeme);
             bool nativeOwn = context.CurrentClassBuilder is TypeBuilder nativeOwnOwner
                 && (_nativeOwnAdapters.ContainsKey(nativeOwnOwner) || _observableFieldOwners.Contains(nativeOwnOwner));
             if (field.ComputedKey == null && (field.Initializer != null || nativeOwn)
