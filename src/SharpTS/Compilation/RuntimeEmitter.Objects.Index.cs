@@ -100,7 +100,9 @@ public partial class RuntimeEmitter
         MethodInfo ToPropertyKey,
         ProxyDeleteCheckInputs ProxyDelete,
         Type UndefinedType,
-        EmittedGuestOwnPropertyRuntime? GuestOwnProperties = null
+        EmittedGuestOwnPropertyRuntime? GuestOwnProperties = null,
+        MethodBuilder? DeclaredMethod = null,
+        MethodBuilder? SharedStrictCore = null
     );
 
     private readonly record struct DeleteIndexCoreInputs(
@@ -130,7 +132,8 @@ public partial class RuntimeEmitter
         MethodInfo ToPropertyKey,
         ProxyDeleteCheckInputs ProxyDelete,
         Type UndefinedType,
-        EmittedGuestOwnPropertyRuntime? GuestOwnProperties = null
+        EmittedGuestOwnPropertyRuntime? GuestOwnProperties = null,
+        MethodBuilder? DeclaredMethod = null
     );
 
     private void EmitGetIndex(TypeBuilder typeBuilder, EmittedObjectReadRuntime objectRead, GetIndexInputs inputs)
@@ -2333,7 +2336,23 @@ public partial class RuntimeEmitter
     /// Handles both symbol keys and string keys for delete operations.
     /// </summary>
     private void EmitDeleteIndex(TypeBuilder typeBuilder, EmittedObjectDeletionRuntime objectDeletion, DeleteIndexInputs inputs)
-        => EmitDeleteIndexCore(
+    {
+        if (inputs.SharedStrictCore is { } core)
+        {
+            // Production supplies its exact strict shell. Independent helper
+            // emission still builds a body from its own supplied carrier inputs.
+            var method = inputs.DeclaredMethod ?? typeBuilder.DefineMethod("DeleteIndex",
+                MethodAttributes.Public | MethodAttributes.Static, _types.Boolean, [_types.Object, _types.Object]);
+            objectDeletion.Index = method;
+            var il = method.GetILGenerator();
+            il.Emit(OpCodes.Ldarg_0);
+            il.Emit(OpCodes.Ldarg_1);
+            il.Emit(OpCodes.Ldc_I4_0);
+            il.Emit(OpCodes.Call, core);
+            il.Emit(OpCodes.Ret);
+            return;
+        }
+        EmitDeleteIndexCore(
             typeBuilder,
             objectDeletion,
             new DeleteIndexCoreInputs(
@@ -2350,8 +2369,10 @@ public partial class RuntimeEmitter
                 inputs.UndefinedType,
                 inputs.GuestOwnProperties
             ),
-            strict: false
+            strict: false,
+            inputs.DeclaredMethod
         );
+    }
 
     /// <summary>
     /// Emits DeleteIndex(object obj, object key) -> bool (non-strict) or
@@ -2365,10 +2386,11 @@ public partial class RuntimeEmitter
         TypeBuilder typeBuilder,
         EmittedObjectDeletionRuntime objectDeletion,
         DeleteIndexCoreInputs inputs,
-        bool strict
+        bool strict,
+        MethodBuilder? declaredMethod = null
     )
     {
-        var method = typeBuilder.DefineMethod(
+        var method = declaredMethod ?? typeBuilder.DefineMethod(
             strict ? "DeleteIndexStrict" : "DeleteIndex",
             MethodAttributes.Public | MethodAttributes.Static,
             _types.Boolean,
@@ -2850,7 +2872,8 @@ public partial class RuntimeEmitter
                 inputs.UndefinedType,
                 inputs.GuestOwnProperties
             ),
-            strict: true
+            strict: true,
+            inputs.DeclaredMethod
         );
 
     /// <summary>

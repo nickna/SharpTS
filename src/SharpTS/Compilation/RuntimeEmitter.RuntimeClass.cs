@@ -1751,6 +1751,12 @@ public partial class RuntimeEmitter
                 NativeProxyRejection: runtime.ReflectedMethods.NativeProxyRejection
             )
         );
+        // Keep declaration order while sharing the complete computed-delete
+        // operation. The ordinary entry supplies false to the strictness input.
+        var deleteIndex = typeBuilder.DefineMethod("DeleteIndex", MethodAttributes.Public | MethodAttributes.Static,
+            _types.Boolean, [_types.Object, _types.Object]);
+        var deleteIndexStrict = typeBuilder.DefineMethod("DeleteIndexStrict", MethodAttributes.Public | MethodAttributes.Static,
+            _types.Boolean, [_types.Object, _types.Object, _types.Boolean]);
         EmitDeleteIndex(
             typeBuilder,
             runtime.ObjectDeletion,
@@ -1767,7 +1773,9 @@ public partial class RuntimeEmitter
                 new ProxyDeleteCheckInputs(runtime.ObjectRead.Property, runtime.ReflectedMethods.InvokeUnwrapped,
                     runtime.ObjectDescriptors, runtime.ObjectState, NativeProxyRejection: runtime.ReflectedMethods.NativeProxyRejection),
                 runtime.Sentinels.UndefinedType,
-                GuestOwnProperties: runtime.GuestOwnProperties
+                GuestOwnProperties: runtime.GuestOwnProperties,
+                DeclaredMethod: deleteIndex,
+                SharedStrictCore: deleteIndexStrict
             )
         );
         EmitDeleteIndexStrict(
@@ -1786,7 +1794,8 @@ public partial class RuntimeEmitter
                 new ProxyDeleteCheckInputs(runtime.ObjectRead.Property, runtime.ReflectedMethods.InvokeUnwrapped,
                     runtime.ObjectDescriptors, runtime.ObjectState, NativeProxyRejection: runtime.ReflectedMethods.NativeProxyRejection),
                 runtime.Sentinels.UndefinedType,
-                GuestOwnProperties: runtime.GuestOwnProperties
+                GuestOwnProperties: runtime.GuestOwnProperties,
+                DeclaredMethod: deleteIndexStrict
             )
         );
         EmitStrictModeHelpers(typeBuilder, runtime.Operators, runtime.Errors);
