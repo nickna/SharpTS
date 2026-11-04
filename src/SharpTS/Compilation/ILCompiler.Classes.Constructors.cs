@@ -387,6 +387,25 @@ public partial class ILCompiler
 
         void EmitOrderedFieldInitializersCore()
         {
+            if (_observableFieldOwners.Contains(typeBuilder))
+            {
+                EmitUninitializedParameterProperties(il, typeBuilder, constructor);
+                ctx.FieldsField = fieldsField;
+                ctx.IsInstanceMethod = true;
+                var previousReceiver = ctx.ClassConstructorReceiver;
+                if (previousReceiver == null)
+                {
+                    ctx.ClassConstructorReceiver = il.DeclareLocal(_types.Object);
+                    il.Emit(OpCodes.Ldarg_0); il.Emit(OpCodes.Stloc, ctx.ClassConstructorReceiver);
+                }
+                EmitEffectiveClassElements(ctx, classStmt.Fields,
+                    _typedInterop.PropertyBackingFields.GetValueOrDefault(className),
+                    _typedInterop.PropertyTypes.GetValueOrDefault(className),
+                    field => il.Emit(OpCodes.Ldsfld, _classes.DeferredDefinitions.RequireFieldKey(field)),
+                    classStmt.AutoAccessors);
+                ctx.ClassConstructorReceiver = previousReceiver;
+                return;
+            }
             Label? nativeDone = null;
             if (_nativeOwnAdapters.ContainsKey(typeBuilder))
             {

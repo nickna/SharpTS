@@ -45,8 +45,19 @@ public partial class ILCompiler
     {
         foreach (var field in GetClassRegistry().GetOwnGuestDataFields(owner))
         {
-            bool nativeOwn = _nativeOwnSourceDeclarations.ContainsKey(owner);
+            bool nativeOwn = _nativeOwnSourceDeclarations.ContainsKey(owner) || _observableFieldOwners.Contains(owner);
             var get = field.GuestGetter.GetILGenerator();
+            if (_observableFieldOwners.Contains(owner))
+            {
+                var active = get.DefineLabel();
+                var inactive = get.DefineLabel();
+                EmitInactiveFieldBranch(get, owner, field, inactive);
+                get.Emit(OpCodes.Br, active);
+                get.MarkLabel(inactive);
+                get.Emit(OpCodes.Ldarg_0); get.Emit(OpCodes.Ldstr, field.SourceName);
+                get.Emit(OpCodes.Call, _runtime.ObjectRead.Property); get.Emit(OpCodes.Ret);
+                get.MarkLabel(active);
+            }
             var native = get.DefineLabel();
             if (field.IsPrimitive || field.BackingField == null || nativeOwn)
             {
@@ -88,6 +99,7 @@ public partial class ILCompiler
                 set.Emit(OpCodes.Ldarg_1);
                 set.Emit(OpCodes.Unbox_Any, field.NativeType);
                 set.Emit(OpCodes.Call, EmitterTypeHelpers.SelfMethodReference(field.NativeSetter!));
+                EmitObservableFieldWrite(set, owner, field.SourceName);
                 set.Emit(OpCodes.Ret);
             }
             else if (field.BackingField is { } typedBacking)
@@ -99,6 +111,7 @@ public partial class ILCompiler
                 else if (field.NativeType != _types.Object) set.Emit(OpCodes.Castclass, field.NativeType);
                 set.Emit(OpCodes.Stfld, EmitterTypeHelpers.SelfFieldReference(typedBacking));
                 if (nativeOwn) EmitClearGuestFieldOverride(set, store, field.SourceName);
+                EmitObservableFieldWrite(set, owner, field.SourceName);
                 set.Emit(OpCodes.Ret);
             }
             set.MarkLabel(raw);
@@ -109,10 +122,20 @@ public partial class ILCompiler
                 set.Emit(OpCodes.Ldstr, field.SourceName);
                 set.Emit(OpCodes.Ldarg_1);
                 set.Emit(OpCodes.Callvirt, _types.DictionaryStringObjectSetItem);
+                EmitObservableFieldWrite(set, owner, field.SourceName);
                 set.Emit(OpCodes.Ret);
             }
 
             var has = field.HasRawOverride.GetILGenerator();
+            if (_observableFieldOwners.Contains(owner))
+            {
+                var active = has.DefineLabel();
+                var inactive = has.DefineLabel();
+                EmitInactiveFieldBranch(has, owner, field, inactive);
+                has.Emit(OpCodes.Br, active);
+                has.MarkLabel(inactive); has.Emit(OpCodes.Ldc_I4_1); has.Emit(OpCodes.Ret);
+                has.MarkLabel(active);
+            }
             if (!field.IsPrimitive)
                 has.Emit(OpCodes.Ldc_I4_1);
             else
@@ -170,6 +193,7 @@ public partial class ILCompiler
         il.Emit(OpCodes.Ldstr, field.SourceName);
         il.Emit(OpCodes.Call, _types.GetMethod(_types.String, "op_Equality", _types.String, _types.String));
         il.Emit(OpCodes.Brfalse, next);
+        if (!write) EmitInactiveFieldBranch(il, owner, field, next);
         il.Emit(OpCodes.Ldarg_0);
         if (write) il.Emit(OpCodes.Ldarg_2);
         il.Emit(OpCodes.Call, target);

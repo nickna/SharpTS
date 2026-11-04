@@ -146,7 +146,7 @@ public partial class RuntimeEmitter
         unionValues.ValueGetter = _types.GetProperty(unionValues.Interface, "Value")!.GetGetMethod()!;
     }
 
-    private void EmitSourceDataDefinitionContract(ModuleBuilder module, EmittedObjectFieldRuntime fields)
+    private void EmitSourceDataDefinitionContract(ModuleBuilder module)
     {
         var builder = EmitTypeDefinitions.DefineType(module, "<>SourceDataDefinition",
             TypeAttributes.NotPublic | TypeAttributes.Interface | TypeAttributes.Abstract);
@@ -154,7 +154,7 @@ public partial class RuntimeEmitter
             | MethodAttributes.Virtual | MethodAttributes.HideBySig | MethodAttributes.NewSlot,
             _types.Void, [_types.String, _types.Object]);
         var contract = builder.CreateType()!;
-        fields.DeclareSourceDataDefinition(contract, contract.GetMethod("DefineValue")!);
+        _sourceDataDefinitionContract = contract;
     }
 
     /// <summary>

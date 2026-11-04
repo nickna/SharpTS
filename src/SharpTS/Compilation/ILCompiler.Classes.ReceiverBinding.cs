@@ -47,7 +47,8 @@ public partial class ILCompiler
             il.Emit(OpCodes.Stloc, value);
             var done = il.DefineLabel();
             string property = FieldClrNames.Instance(fields, field.Name.Lexeme);
-            bool nativeOwn = context.CurrentClassBuilder is TypeBuilder nativeOwnOwner && _nativeOwnAdapters.ContainsKey(nativeOwnOwner);
+            bool nativeOwn = context.CurrentClassBuilder is TypeBuilder nativeOwnOwner
+                && (_nativeOwnAdapters.ContainsKey(nativeOwnOwner) || _observableFieldOwners.Contains(nativeOwnOwner));
             if (field.ComputedKey == null && (field.Initializer != null || nativeOwn)
                 && backingFields?.TryGetValue(property, out var backing) == true)
             {
@@ -69,7 +70,9 @@ public partial class ILCompiler
                 }
                 if (nativeOwn)
                 {
-                    var legacy = EmitNativeOwnReceiverGuard(il);
+                    Label? legacy = context.CurrentClassBuilder is TypeBuilder adapterOwner
+                        && _nativeOwnAdapters.ContainsKey(adapterOwner) && !_observableFieldOwners.Contains(adapterOwner)
+                        ? EmitNativeOwnReceiverGuard(il) : null;
                     // Complete the throwing public field definition before selecting
                     // the exact owner-local native/raw storage for its value.
                     il.Emit(OpCodes.Ldarg_0); il.Emit(OpCodes.Ldstr, field.Name.Lexeme);
@@ -81,7 +84,8 @@ public partial class ILCompiler
                     il.Emit(OpCodes.Ldarg_0); il.Emit(OpCodes.Ldstr, field.Name.Lexeme);
                     il.Emit(OpCodes.Ldstr, NativeOwnFieldIdentity(guestField!)); il.Emit(OpCodes.Ldc_I4_1);
                     il.Emit(OpCodes.Call, _runtime.GuestOwnProperties!.CommitDefinition);
-                    il.Emit(OpCodes.Br, done); il.MarkLabel(legacy);
+                    il.Emit(OpCodes.Br, done);
+                    if (legacy is { } legacyLabel) il.MarkLabel(legacyLabel);
                 }
                 if (field.Initializer == null) il.Emit(OpCodes.Br, external);
                 else Store(false);

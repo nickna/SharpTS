@@ -155,8 +155,10 @@ public partial class ILCompiler
             setterIL.Emit(OpCodes.Ldarg_0);          // this
             setterIL.Emit(OpCodes.Ldarg_1);          // value (already typed)
             setterIL.Emit(OpCodes.Stfld, backingFieldRef);  // this.__fieldName = value
-            if (propertyType == _types.Double || propertyType == _types.Boolean || propertyType == _types.String)
+            if (_observableFieldOwners.Contains(typeBuilder)
+                || propertyType == _types.Double || propertyType == _types.Boolean || propertyType == _types.String)
                 EmitClearGuestFieldOverride(setterIL, _classes.InstanceFieldsField[className], fieldName);
+            EmitObservableFieldWrite(setterIL, typeBuilder, fieldName);
             setterIL.Emit(OpCodes.Ret);
             if (field.ComputedKey == null)
                 DefineGuestDataField(typeBuilder, field, propertyType, backingField, getter, setter);

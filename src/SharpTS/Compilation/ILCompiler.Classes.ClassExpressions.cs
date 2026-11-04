@@ -92,6 +92,7 @@ public partial class ILCompiler
         }
 
         _classes.GenericParameters.Declare(typeBuilder, classGenericParams ?? [], canonicalArguments);
+        if (_runtime.GuestOwnProperties != null) _observableFieldOwners.Add(typeBuilder);
 
         EmitTypeDefinitions.AddInterfaceImplementation(typeBuilder, _runtime.ClassDefinitions.InstanceInterface);
         var definitionField = typeBuilder.DefineField("$definition", _types.Object, FieldAttributes.Assembly);
@@ -318,8 +319,10 @@ public partial class ILCompiler
         setterIL.Emit(OpCodes.Ldarg_0);
         setterIL.Emit(OpCodes.Ldarg_1);
         setterIL.Emit(OpCodes.Stfld, backingField);
-        if (propertyType == _types.Double || propertyType == _types.Boolean || propertyType == _types.String)
+        if (_observableFieldOwners.Contains(typeBuilder)
+            || propertyType == _types.Double || propertyType == _types.Boolean || propertyType == _types.String)
             EmitClearGuestFieldOverride(setterIL, _classes.InstanceFieldsField[_classExprs.Names[classExpr]], fieldName);
+        EmitObservableFieldWrite(setterIL, typeBuilder, fieldName);
         setterIL.Emit(OpCodes.Ret);
         DefineGuestDataField(typeBuilder, field, propertyType, backingField, getter, setter);
 

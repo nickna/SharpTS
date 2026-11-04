@@ -243,11 +243,14 @@ public partial class ILCompiler
         var setItem = _types.DictionaryStringObjectSetItem;
         foreach (var field in ownFields)
         {
+            var absent = il.DefineLabel();
+            EmitInactiveFieldBranch(il, owner, field, absent);
             il.Emit(OpCodes.Ldloc, result);
             il.Emit(OpCodes.Ldstr, field.SourceName);
             il.Emit(OpCodes.Ldarg_0);
             il.Emit(OpCodes.Call, EmitterTypeHelpers.SelfMethodReference(field.GuestGetter));
             il.Emit(OpCodes.Callvirt, setItem);
+            il.MarkLabel(absent);
         }
         foreach (var (name, backing) in backingFields ?? [])
         {
@@ -445,6 +448,12 @@ public partial class ILCompiler
             il.Emit(OpCodes.Ldnull); il.Emit(OpCodes.Cgt_Un); il.Emit(OpCodes.Ret);
             il.MarkLabel(legacy);
         }
+        if (_observableFieldOwners.Contains((TypeBuilder)method.DeclaringType!))
+        {
+            il.Emit(OpCodes.Ldarg_0); il.Emit(OpCodes.Ldarg_1);
+            il.Emit(OpCodes.Call, _runtime.GuestOwnProperties!.HasOwn); il.Emit(OpCodes.Ret);
+            return;
+        }
         var returnTrueLabel = il.DefineLabel();
         var noFieldsLabel = il.DefineLabel();
         var dynamicFieldsLabel = il.DefineLabel();
@@ -610,8 +619,10 @@ public partial class ILCompiler
                 il.Emit(OpCodes.Call, _types.GetMethod(_types.String, "op_Equality", _types.String, _types.String));
                 il.Emit(OpCodes.Brfalse, nextLabel);
 
-                il.Emit(OpCodes.Ldarg_0);
                 if (GetClassRegistry().TryGetOwnGuestDataField((TypeBuilder)method.DeclaringType!, jsName, out var guestField))
+                    EmitInactiveFieldBranch(il, (TypeBuilder)method.DeclaringType!, guestField, nextLabel);
+                il.Emit(OpCodes.Ldarg_0);
+                if (guestField != null)
                     il.Emit(OpCodes.Call, EmitterTypeHelpers.SelfMethodReference(guestField.GuestGetter));
                 else
                 {
@@ -879,6 +890,7 @@ public partial class ILCompiler
         il.Emit(OpCodes.Ldarg_1);
         il.Emit(OpCodes.Ldarg_2);
         il.Emit(OpCodes.Callvirt, _types.GetMethod(_types.DictionaryStringObject, "set_Item", [_types.String, _types.Object])!);
+        EmitObservableDynamicWrite(il, (TypeBuilder)method.DeclaringType!);
         il.Emit(OpCodes.Ret);
     }
 
@@ -1015,8 +1027,10 @@ public partial class ILCompiler
                 il.Emit(OpCodes.Call, _types.GetMethod(_types.String, "op_Equality", _types.String, _types.String));
                 il.Emit(OpCodes.Brfalse, nextLabel);
 
-                il.Emit(OpCodes.Ldarg_0);
                 if (GetClassRegistry().TryGetOwnGuestDataField((TypeBuilder)method.DeclaringType!, camelName, out var guestField))
+                    EmitInactiveFieldBranch(il, (TypeBuilder)method.DeclaringType!, guestField, nextLabel);
+                il.Emit(OpCodes.Ldarg_0);
+                if (guestField != null)
                     il.Emit(OpCodes.Call, EmitterTypeHelpers.SelfMethodReference(guestField.GuestGetter));
                 else
                 {
@@ -1543,6 +1557,7 @@ public partial class ILCompiler
         il.Emit(OpCodes.Ldarg_1);
         il.Emit(OpCodes.Ldarg_2);
         il.Emit(OpCodes.Callvirt, _types.GetMethod(_types.DictionaryStringObject, "set_Item", [_types.String, _types.Object])!);
+        EmitObservableDynamicWrite(il, (TypeBuilder)method.DeclaringType!);
         il.Emit(OpCodes.Ret);
     }
     private void EmitClassPrototypeReadBranch(ILGenerator il)
