@@ -2954,7 +2954,11 @@ public partial class RuntimeEmitter
                 runtime.ObjectFields.FieldsGetter, runtime.ObjectFields.Interface,
                 runtime.Generators.Type, runtime.AsyncGenerators?.Type,
                 runtime.ObjectDescriptors, runtime.ObjectKeys, runtime.ObjectOwnProperties, runtime.Reflect,
-                runtime.Symbols, runtime.Sentinels.UndefinedType)
+                runtime.Symbols, runtime.Sentinels.UndefinedType,
+                new ProxyOwnKeysCallInputs(runtime.ObjectKeys.Ordinary, runtime.ObjectKeys.CreateProxyList,
+                    runtime.ObjectDescriptors.GetOwnPropertyDescriptor, runtime.ObjectState.IsExtensible,
+                    runtime.Symbols.IsSymbol, runtime.ObjectRead.Property, runtime.ReflectedMethods.InvokeUnwrapped,
+                    NativeProxyRejection: runtime.ReflectedMethods.NativeProxyRejection))
         );
         // #685: array binding-pattern source normalizer uses the declared iterator
         // collection helper and array storage constructor.
