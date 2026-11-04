@@ -11,6 +11,7 @@ public partial class RuntimeEmitter
         EmittedErrorRuntime Errors,
         EmittedObjectDescriptorRuntime ObjectDescriptors,
         EmittedObjectPrototypeRuntime ObjectPrototypes,
+        EmittedObjectReadRuntime ObjectRead,
         EmittedStringCoercionRuntime StringCoercion,
         TypeBuilder TSFunctionType,
         FieldInfo UndefinedInstance,
@@ -30,7 +31,9 @@ public partial class RuntimeEmitter
     private readonly record struct LookupAccessorHelperInputs(
         EmittedDescriptorStorageRuntime DescriptorStorage,
         EmittedErrorRuntime Errors,
+        EmittedObjectDescriptorRuntime ObjectDescriptors,
         EmittedObjectPrototypeRuntime ObjectPrototypes,
+        EmittedObjectReadRuntime ObjectRead,
         EmittedStringCoercionRuntime StringCoercion,
         FieldInfo UndefinedInstance,
         Type UndefinedType
@@ -58,7 +61,9 @@ public partial class RuntimeEmitter
             new LookupAccessorHelperInputs(
                 inputs.DescriptorStorage,
                 inputs.Errors,
+                inputs.ObjectDescriptors,
                 inputs.ObjectPrototypes,
+                inputs.ObjectRead,
                 inputs.StringCoercion,
                 inputs.UndefinedInstance,
                 inputs.UndefinedType
@@ -71,7 +76,9 @@ public partial class RuntimeEmitter
             new LookupAccessorHelperInputs(
                 inputs.DescriptorStorage,
                 inputs.Errors,
+                inputs.ObjectDescriptors,
                 inputs.ObjectPrototypes,
+                inputs.ObjectRead,
                 inputs.StringCoercion,
                 inputs.UndefinedInstance,
                 inputs.UndefinedType
@@ -205,7 +212,7 @@ public partial class RuntimeEmitter
         var il = method.GetILGenerator();
         var keyLocal = il.DeclareLocal(_types.String);
         var oLocal = il.DeclareLocal(_types.Object);
-        var descLocal = il.DeclareLocal(inputs.DescriptorStorage.DescriptorType);
+        var descLocal = il.DeclareLocal(_types.Object);
 
         var returnUndefinedLabel = il.DefineLabel();
         var throwThisLabel = il.DefineLabel();
@@ -233,20 +240,24 @@ public partial class RuntimeEmitter
         il.Emit(OpCodes.Isinst, inputs.UndefinedType);
         il.Emit(OpCodes.Brtrue, returnUndefinedLabel);
 
-        // desc = PDSGetPropertyDescriptor(O, key)
+        // [[GetOwnProperty]] must invoke Proxy traps and return the actual
+        // supplied accessor value, including when the wrapper has no PDS slot.
         il.Emit(OpCodes.Ldloc, oLocal);
         il.Emit(OpCodes.Ldloc, keyLocal);
-        il.Emit(OpCodes.Call, inputs.DescriptorStorage.GetPropertyDescriptor);
+        il.Emit(OpCodes.Call, inputs.ObjectDescriptors.GetOwnPropertyDescriptor);
         il.Emit(OpCodes.Stloc, descLocal);
 
         var noDescLabel = il.DefineLabel();
         il.Emit(OpCodes.Ldloc, descLocal);
         il.Emit(OpCodes.Brfalse, noDescLabel);
-
-        // PDS desc found. If isGetter: return desc.Getter ?? undefined. Else Setter.
-        var slot = isGetter ? inputs.DescriptorStorage.DescriptorGetter : inputs.DescriptorStorage.DescriptorSetter;
         il.Emit(OpCodes.Ldloc, descLocal);
-        il.Emit(OpCodes.Callvirt, slot.GetGetMethod()!);
+        il.Emit(OpCodes.Isinst, inputs.UndefinedType);
+        il.Emit(OpCodes.Brtrue, noDescLabel);
+
+        // A data descriptor shadows an inherited accessor and returns undefined.
+        il.Emit(OpCodes.Ldloc, descLocal);
+        il.Emit(OpCodes.Ldstr, isGetter ? "get" : "set");
+        il.Emit(OpCodes.Call, inputs.ObjectRead.Property);
         il.Emit(OpCodes.Dup);
         il.Emit(OpCodes.Brtrue, hasSlotLabel);
         // null slot — data descriptor on this level, return undefined per spec.
@@ -257,16 +268,6 @@ public partial class RuntimeEmitter
         il.Emit(OpCodes.Ret);
 
         il.MarkLabel(noDescLabel);
-        // No PDS descriptor. If a non-accessor data property exists on this
-        // level (dict key, etc.), spec says return undefined. Otherwise walk up.
-        il.Emit(OpCodes.Ldloc, oLocal);
-        il.Emit(OpCodes.Ldloc, keyLocal);
-        il.Emit(OpCodes.Call, objectOwnProperties.HasOwnProperty);
-        il.Emit(OpCodes.Brfalse, advanceProtoLabel);
-        // Has data property at this level → return undefined.
-        il.Emit(OpCodes.Ldsfld, inputs.UndefinedInstance);
-        il.Emit(OpCodes.Ret);
-
         il.MarkLabel(advanceProtoLabel);
         // O = ObjectGetPrototypeOf(O). When the dispatch returns null (top of
         // chain), the loop-start null check returns undefined.

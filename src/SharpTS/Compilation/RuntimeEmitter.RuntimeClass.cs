@@ -2398,6 +2398,7 @@ public partial class RuntimeEmitter
                 runtime.Errors,
                 runtime.ObjectDescriptors,
                 runtime.ObjectPrototypes,
+                runtime.ObjectRead,
                 runtime.StringCoercion,
                 runtime.FunctionValues.Type,
                 runtime.Sentinels.UndefinedInstance,
