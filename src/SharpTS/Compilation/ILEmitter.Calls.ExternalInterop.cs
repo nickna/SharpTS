@@ -292,6 +292,8 @@ public partial class ILEmitter
 
         // Emit newobj instruction
         IL.Emit(OpCodes.Newobj, _ctx.TypeMapper.ForEmission(ctor));
+        if (externalType.IsValueType)
+            IL.Emit(OpCodes.Box, _ctx.TypeMapper.ForEmission(externalType));
         SetStackUnknown();
     }
 
