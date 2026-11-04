@@ -2232,7 +2232,8 @@ public partial class TypeChecker
                 tsCode: "TS2364");
         }
 
-        var declaredType = GetDeclaredType(assign.Name.Lexeme);
+        var declaredType = GetDeclaredType(assign.Name.Lexeme)
+            ?? (assign.Name.Lexeme == BuiltInNames.Array ? LookupVariable(assign.Name) : null);
         if (declaredType == null)
         {
             throw new TypeCheckException($" Undefined variable '{assign.Name.Lexeme}'.", line: assign.Name.Line, tsCode: "TS2304");
