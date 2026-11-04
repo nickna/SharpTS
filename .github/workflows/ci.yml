@@ -215,6 +215,15 @@ jobs:
         run: dotnet test tests/gui-conformance/SharpTS.Gui.Conformance.Tests/SharpTS.Gui.Conformance.Tests.csproj --no-build --configuration Release --verbosity normal --filter "Category!=LiveNetwork&Category!=LoadSensitive&Category!=npm"
         timeout-minutes: 10
 
+      - name: Upload unexpected GUI conformance diagnostics
+        if: always()
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7
+        with:
+          name: gui-conformance-failures-${{ matrix.os }}
+          path: artifacts/gui-conformance-failures/
+          if-no-files-found: ignore
+          retention-days: 7
+
       - name: Test NuGet release helper
         shell: pwsh
         run: ./scripts/test-nuget-release.ps1

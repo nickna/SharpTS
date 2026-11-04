@@ -136,6 +136,14 @@ foreach ($partition in @($coreJob, $processJob, $standaloneJob)) {
     }
 }
 $standaloneScript = Get-Content -LiteralPath (Join-Path $PSScriptRoot 'test-standalone-shard.ps1') -Raw
+$guiFailureUpload = [regex]::Match($coreJob,
+    '(?ms)^      - name: Upload unexpected GUI conformance diagnostics\r?\n.*?(?=^      - |\z)').Value
+foreach ($requiredText in @('name: gui-conformance-failures-${{ matrix.os }}',
+    'path: artifacts/gui-conformance-failures/', 'if: always()', 'if-no-files-found: ignore', 'retention-days: 7')) {
+    if (-not $guiFailureUpload.Contains($requiredText, [StringComparison]::Ordinal)) {
+        $errors.Add("Core GUI tests must retain unexpected failure diagnostics: $requiredText")
+    }
+}
 if (-not $coreJob.Contains('--filter "' + $corePartitions.InProcess + '"', [StringComparison]::Ordinal) -or
     -not $processJob.Contains('--filter "' + $corePartitions.Process + '"', [StringComparison]::Ordinal) -or
     -not $standaloneScript.Contains('$baseFilter = ''' + $standaloneFilter + '''', [StringComparison]::Ordinal)) {
@@ -268,6 +276,10 @@ foreach ($requiredText in @(
 }
 
 $desktop = Get-Content -LiteralPath (Join-Path $workflowRoot 'desktop-gui.yml') -Raw
+$macDesktopJob = Get-WorkflowJob $desktop 'macos-native' 'desktop-gui.yml'
+if (-not $macDesktopJob.Contains('            artifacts/gui-conformance-failures/', [StringComparison]::Ordinal)) {
+    $errors.Add('macOS desktop conformance must upload unexpected failure diagnostics before temporary-stage cleanup loses them.')
+}
 foreach ($requiredText in @(
     'name: Desktop GUI',
     'cancel-in-progress: ${{ github.event_name == ''pull_request'' }}',
