@@ -268,7 +268,8 @@ public partial class ILCompiler
         il.Emit(OpCodes.Call, EmitterTypeHelpers.SelfMethodReference(ensureFields));
         il.Emit(OpCodes.Stloc, fields);
         EmitAppendFieldSnapshot(il, fields, result, overwrite: false);
-        EmitInstanceFieldOrderProjection(il, owner, result);
+        if (_observableFieldOwners.Contains(owner)) EmitObservableFieldOrder(il, owner, result);
+        else EmitInstanceFieldOrderProjection(il, owner, result);
         il.Emit(OpCodes.Ldloc, result);
         il.Emit(OpCodes.Ret);
     }
