@@ -22,6 +22,7 @@ public class SuperConstructorHandler : ICallHandler
             return false;
 
         var ctx = emitter.Context;
+        if (TryEmitLexicalReceiverConstruction(emitter, call)) return true;
         if (ctx.ConstructorSuperBound is { } bound)
         {
             var first = emitter.IL.DefineLabel();
@@ -188,6 +189,46 @@ public class SuperConstructorHandler : ICallHandler
         }
 
         return false;
+    }
+
+    private static bool TryEmitLexicalReceiverConstruction(IEmitterContext emitter, Expr.Call call)
+    {
+        var ctx = emitter.Context;
+        // This finite path has no child elements to initialize after binding
+        // this. Other classes retain their existing constructor lowering.
+        if (!ctx.CapturesConstructorThisCell || ctx.CurrentClassExpr is not { } expression
+            || expression.Fields.Any(field => !field.IsStatic && !field.IsDeclare)
+            || expression.AutoAccessors is { Count: > 0 }
+            || expression.Methods.Any(method => method.Name.Lexeme == "constructor"
+                && method.Parameters.Any(parameter => parameter.IsParameterProperty))
+            || ctx.CapturedFields?.TryGetValue("this", out var thisCell) != true
+            || ctx.CapturedFields.TryGetValue(CompilationContext.SuperOwnerCaptureName, out var owner) != true
+            || ctx.CapturedFields.TryGetValue(CompilationContext.NewTargetCaptureName, out var newTarget) != true)
+            return false;
+
+        var il = emitter.IL;
+        var result = il.DeclareLocal(ctx.Types.Object);
+        var cell = il.DeclareLocal(ctx.Types.ObjectArray);
+        il.Emit(OpCodes.Ldarg_0); il.Emit(OpCodes.Ldfld, owner);
+        il.Emit(OpCodes.Call, ctx.Runtime!.ObjectPrototypes.GetPrototypeOf);
+        emitter.EmitArgsArrayWithSpread(call.Arguments);
+        il.Emit(OpCodes.Ldarg_0); il.Emit(OpCodes.Ldfld, newTarget);
+        il.Emit(OpCodes.Call, ctx.Runtime.DynamicConstruction.ConstructWithNewTarget);
+        il.Emit(OpCodes.Stloc, result);
+        il.Emit(OpCodes.Ldarg_0); il.Emit(OpCodes.Ldfld, thisCell!);
+        il.Emit(OpCodes.Castclass, ctx.Types.ObjectArray); il.Emit(OpCodes.Stloc, cell);
+        il.Emit(OpCodes.Ldloc, cell); il.Emit(OpCodes.Ldc_I4_0); il.Emit(OpCodes.Ldelem_Ref);
+        il.Emit(OpCodes.Isinst, ctx.Runtime.Sentinels.UndefinedType);
+        var unbound = il.DefineLabel();
+        il.Emit(OpCodes.Brtrue, unbound);
+        GuestErrorEmitter.ThrowError(il, ctx.Runtime.Errors.CreateException,
+            ctx.Runtime.Errors.ReferenceErrorConstructor, "Super constructor may only be called once");
+        il.MarkLabel(unbound);
+        il.Emit(OpCodes.Ldloc, cell); il.Emit(OpCodes.Ldc_I4_0); il.Emit(OpCodes.Ldloc, result);
+        il.Emit(OpCodes.Stelem_Ref);
+        il.Emit(OpCodes.Ldloc, result);
+        emitter.SetStackUnknown();
+        return true;
     }
 
     /// <summary>

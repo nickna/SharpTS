@@ -65,9 +65,15 @@ public partial class ILCompiler
         if (name is null) return false;
         var expression = _classExprs.Names.FirstOrDefault(entry => entry.Value == name).Key;
         var source = expression is null ? _classes.Declarations.FirstOrDefault(declaration =>
-            GetQualifiedClassDeclarationName(declaration) == name) : null;
+            GetQualifiedClassDeclarationName(declaration) == name)
+            : _runtimeClassDeclarations.FirstOrDefault(entry => ReferenceEquals(entry.Value, expression)).Key;
         var type = expression is not null ? _typeMap.GetClassExprType(expression)
             : source is not null ? _typeMap.GetClassType(source) : _typeMap.GetClassType(name);
-        return _typeMapper.IsDynamicClassInstance(type);
+        // Capture analysis precedes registration of receiver-based templates.
+        // The source construction policy already proves that these arrows must
+        // retain the mutable this cell, including under unchecked JS compilation.
+        return _typeMapper.IsDynamicClassInstance(type)
+            || source is not null && UsesReceiverConstruction(source)
+            || expression?.SuperclassExpr is Expr.ClassExpr && _features?.UsesClassPrototypeMutation == true;
     }
 }

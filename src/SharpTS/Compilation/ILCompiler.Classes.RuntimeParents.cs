@@ -138,7 +138,8 @@ public partial class ILCompiler
             && _classes.Builders.ContainsKey(GetDefinitionContext().ResolveClassName(leaf)) && !expressionOwnedParent)
             || Runtime.BuiltIns.BuiltInNames.IsErrorTypeName(leaf)
             || leaf is "Array" or "Promise" or "Map" or "Set" or "WeakMap" or "WeakSet" or "Date" or "RegExp" or "Buffer")) return false;
-        if (!captureLexicalOwner && !repeating && declaration.SuperclassExpr is Expr.ClassExpr { Methods.Count: 0, Fields.Count: 0 }) return false;
+        if (!captureLexicalOwner && !repeating && _features?.UsesClassPrototypeMutation != true
+            && declaration.SuperclassExpr is Expr.ClassExpr { Methods.Count: 0, Fields.Count: 0 }) return false;
         if (!_runtimeClassDeclarations.TryGetValue(declaration, out var expression))
             _runtimeClassDeclarations.Add(declaration, expression = CreateRuntimeClassExpression(declaration));
         if (_typeMap.GetClassType(declaration) is { } checkedType) _typeMap.SetClassExprType(expression, checkedType);
@@ -178,8 +179,9 @@ public partial class ILCompiler
         var visited = new HashSet<Expr.ClassExpr>(ReferenceEqualityComparer.Instance);
         while (visited.Add(expression))
         {
-            if (expression.SuperclassExpr == null
-                || expression.SuperclassExpr is Expr.ClassExpr { Methods.Count: 0, Fields.Count: 0 }) return false;
+            if (expression.SuperclassExpr == null) return false;
+            if (expression.SuperclassExpr is Expr.ClassExpr { Methods.Count: 0, Fields.Count: 0 })
+                return _features?.UsesClassPrototypeMutation == true;
             var parent = _classExprs.Builders[expression].BaseType;
             if (parent == null || parent == _types.Object) return true;
             if (parent.IsConstructedGenericType) parent = parent.GetGenericTypeDefinition();

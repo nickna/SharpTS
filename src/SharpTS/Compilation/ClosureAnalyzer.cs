@@ -1182,6 +1182,9 @@ public class ClosureAnalyzer : AstVisitorBase
     }
 
     protected override void VisitNewTarget(Expr.NewTarget expr)
+        => CaptureLexicalNewTarget();
+
+    private void CaptureLexicalNewTarget()
     {
         foreach (var frame in _functionStack)
         {
@@ -1194,6 +1197,8 @@ public class ClosureAnalyzer : AstVisitorBase
     protected override void VisitSuper(Expr.Super expr)
     {
         CaptureLexicalThis();
+        if (expr.Method is null || expr.Method.Lexeme == "constructor")
+            CaptureLexicalNewTarget();
     }
 
     private void CaptureLexicalThis()
