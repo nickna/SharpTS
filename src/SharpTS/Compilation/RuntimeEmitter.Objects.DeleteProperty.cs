@@ -308,7 +308,7 @@ public partial class RuntimeEmitter
         il.Emit(OpCodes.Isinst, inputs.UndefinedType);
         il.Emit(OpCodes.Brfalse, validReceiver);
         il.MarkLabel(nullish);
-        EmitThrowTypeError(il, inputs.Errors, "Cannot delete property of null or undefined");
+        EmitThrowTypeError(il, inputs.Errors, "Cannot convert undefined or null to object");
         il.MarkLabel(validReceiver);
 
         // Proxy check: uses obj.GetType().FullName comparison (no SharpTS.dll dependency)

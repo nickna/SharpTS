@@ -34,7 +34,7 @@ public class ProcessExecutionHostTests
     {
         var assembly = Assembly.Load(TestHarness.CompileUncheckedAndVerify("console.log(process.platform, process.arch);"));
         var process = assembly.GetType("$Process", throwOnError: true)!;
-        AssertFirstCall(process.GetMethod("get_Platform")!, "get_Windows");
+        AssertFirstCall(process.GetMethod("get_Platform")!, "IsWindows");
         AssertFirstCall(process.GetMethod("get_Arch")!, "get_ProcessArchitecture");
     }
 

@@ -2960,7 +2960,8 @@ public partial class RuntimeEmitter
                 new ProxyOwnKeysCallInputs(runtime.ObjectKeys.Ordinary, runtime.ObjectKeys.CreateProxyList,
                     runtime.ObjectDescriptors.GetOwnPropertyDescriptor, runtime.ObjectState.IsExtensible,
                     runtime.Symbols.IsSymbol, runtime.ObjectRead.Property, runtime.ReflectedMethods.InvokeUnwrapped,
-                    NativeProxyRejection: runtime.ReflectedMethods.NativeProxyRejection))
+                    NativeProxyRejection: runtime.ReflectedMethods.NativeProxyRejection),
+                ProxySelected: _features.UsesProxy)
         );
         // #685: array binding-pattern source normalizer uses the declared iterator
         // collection helper and array storage constructor.

@@ -8,11 +8,10 @@ internal static class ProcessHostEmitter
     internal static void EmitPlatform(ILGenerator il)
     {
         var done = il.DefineLabel();
-        foreach (var (property, name) in new[] { ("Windows", "win32"), ("Linux", "linux"), ("OSX", "darwin") })
+        foreach (var (method, name) in new[] { ("IsWindows", "win32"), ("IsLinux", "linux"), ("IsMacOS", "darwin") })
         {
             var next = il.DefineLabel();
-            il.Emit(OpCodes.Call, typeof(OSPlatform).GetProperty(property)!.GetMethod!);
-            il.Emit(OpCodes.Call, typeof(RuntimeInformation).GetMethod(nameof(RuntimeInformation.IsOSPlatform))!);
+            il.Emit(OpCodes.Call, typeof(OperatingSystem).GetMethod(method, Type.EmptyTypes)!);
             il.Emit(OpCodes.Brfalse, next);
             il.Emit(OpCodes.Ldstr, name);
             il.Emit(OpCodes.Br, done);
