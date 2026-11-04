@@ -1572,7 +1572,8 @@ public class Lexer(string source)
             return;
         i++; // consume @
 
-        // Match the pragma name. We accept the directive when followed by EOL or whitespace.
+        // Line directives also accept a colon before their description;
+        // file-level pragma boundaries retain their existing whitespace policy.
         if (MatchesPragma(i, bodyEndExclusive, "ts-check"))
         {
             if (!_hasEmittedCodeToken) _hasTsCheck = true;
@@ -1581,25 +1582,25 @@ public class Lexer(string source)
         {
             if (!_hasEmittedCodeToken) _hasTsNoCheck = true;
         }
-        else if (MatchesPragma(i, bodyEndExclusive, "ts-ignore"))
+        else if (MatchesPragma(i, bodyEndExclusive, "ts-ignore", allowDescriptionColon: true))
         {
             _tsIgnoreLines.Add(commentLine);
         }
-        else if (MatchesPragma(i, bodyEndExclusive, "ts-expect-error"))
+        else if (MatchesPragma(i, bodyEndExclusive, "ts-expect-error", allowDescriptionColon: true))
         {
             _tsExpectErrorLines.Add(commentLine);
         }
     }
 
-    private bool MatchesPragma(int start, int endExclusive, string name)
+    private bool MatchesPragma(int start, int endExclusive, string name, bool allowDescriptionColon = false)
     {
         if (start + name.Length > endExclusive) return false;
         for (int k = 0; k < name.Length; k++)
             if (_source[start + k] != name[k]) return false;
-        // Directive must end at EOL or whitespace — `@ts-check-ignore` shouldn't match `ts-check`.
+        // Keep name boundaries: `@ts-check-ignore` must not match `ts-check`.
         int after = start + name.Length;
         if (after >= endExclusive) return true;
         char c = _source[after];
-        return c == ' ' || c == '\t' || c == '\r';
+        return c == ' ' || c == '\t' || c == '\r' || allowDescriptionColon && c == ':';
     }
 }
