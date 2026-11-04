@@ -1020,6 +1020,8 @@ static void CompileModuleFile(string absolutePath, string outputPath, bool prese
 static void EmitCompiledAssembly(string outputPath, bool preserveConstEnums, bool useReferenceAssemblies, string? sdkPath, bool verifyIL, DecoratorMode decoratorMode, OutputOptions outputOptions, AssemblyMetadata? metadata, IReadOnlyList<string> references, OutputTarget target, BundlerMode bundlerMode, GcProfile gcProfile, bool hosted, ReferenceSet externalRefs, ExecutionTimingCollector? timings, Action<ILCompiler> compileBody)
 {
     string assemblyName = Path.GetFileNameWithoutExtension(outputPath);
+    if (target == OutputTarget.Dll)
+        SharpTS.Cli.ManagedOutputName.Validate(assemblyName);
 
     if (hosted && target != OutputTarget.Dll)
         throw new InvalidOperationException("Hosted ABI output is valid only for DLL output.");
