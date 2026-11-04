@@ -733,10 +733,12 @@ public partial class RuntimeEmitter
         if (inputs.TypedArrays.Implementation is not null)
         {
             il.MarkLabel(typedArrayLabel);
+            // Canonical numeric keys were handled above. Remaining keys use
+            // ordinary property lookup, including descriptors and prototypes.
             il.Emit(OpCodes.Ldarg_0);
             il.Emit(OpCodes.Ldarg_1);
-            il.Emit(OpCodes.Call, _types.GetMethod(_types.Convert, "ToInt32", _types.Object));
-            il.Emit(OpCodes.Call, inputs.TypedArrays.RequireImplementation().GetElement);
+            il.Emit(OpCodes.Call, inputs.StringCoercion.ToJsString);
+            il.Emit(OpCodes.Call, objectRead.Property);
             il.Emit(OpCodes.Ret);
         }
 
