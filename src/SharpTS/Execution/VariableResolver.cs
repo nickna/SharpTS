@@ -623,6 +623,9 @@ public class VariableResolver : AstVisitorBase
             Define(expr.Name.Lexeme);
         }
 
+        if (expr.SuperclassExpr != null)
+            Visit(expr.SuperclassExpr);
+
         // If there's a superclass, create a scope for 'super'
         if (expr.SuperclassExpr != null)
         {
