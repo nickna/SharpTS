@@ -1,3 +1,4 @@
+using System.Reflection;
 using SharpTS.Diagnostics.Exceptions;
 
 namespace SharpTS.Cli;
@@ -6,11 +7,14 @@ internal static class ManagedOutputName
 {
     internal static void Validate(string assemblyName)
     {
-        if (PEPacker.EmbeddedReferenceAssemblyIndex.Default.TryGetIdentity(assemblyName, out _) ||
-            IsTrustedFrameworkAssembly(assemblyName) ||
-            assemblyName.Equals(typeof(Console).Assembly.GetName().Name, StringComparison.OrdinalIgnoreCase) ||
-            assemblyName.Equals(typeof(object).Assembly.GetName().Name, StringComparison.OrdinalIgnoreCase) ||
-            assemblyName.Equals(typeof(Uri).Assembly.GetName().Name, StringComparison.OrdinalIgnoreCase))
+        // Match the assembly identity that ILCompiler emits, including display
+        // names and whitespace normalized by AssemblyName.
+        string identity = new AssemblyName(assemblyName).Name!;
+        if (PEPacker.EmbeddedReferenceAssemblyIndex.Default.TryGetIdentity(identity, out _) ||
+            IsTrustedFrameworkAssembly(identity) ||
+            identity.Equals(typeof(Console).Assembly.GetName().Name, StringComparison.OrdinalIgnoreCase) ||
+            identity.Equals(typeof(object).Assembly.GetName().Name, StringComparison.OrdinalIgnoreCase) ||
+            identity.Equals(typeof(Uri).Assembly.GetName().Name, StringComparison.OrdinalIgnoreCase))
             throw new CompileException(
                 $"Managed output assembly name '{assemblyName}' would shadow a framework assembly. Choose a different output file name.");
     }

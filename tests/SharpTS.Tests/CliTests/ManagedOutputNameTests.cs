@@ -12,6 +12,8 @@ public sealed class ManagedOutputNameTests
     [InlineData("System.Console")]
     [InlineData("system.console")]
     [InlineData("System.Private.CoreLib")]
+    [InlineData(" System.Console ")]
+    [InlineData("System.Console, Version=1.0.0.0")]
     public void FrameworkOutputNamesAreRejectedBeforeReplacingAnExistingFile(string name)
     {
         using var directory = CliTestHelper.CreateTempDirectory();
