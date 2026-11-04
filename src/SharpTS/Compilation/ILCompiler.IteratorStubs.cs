@@ -394,6 +394,7 @@ public partial class ILCompiler
         ctx.CurrentClassName = currentClassName;
         ctx.CurrentClassBuilder = methodBuilder.DeclaringType as TypeBuilder;
         ctx.EmittingTypeBuilder = methodBuilder.DeclaringType as TypeBuilder;
+        ApplyClassDefinitionStateMachineContext(ctx, methodBuilder, isInstanceMethod);
         ApplyCapturedTopLevelVariableAccess(ctx);
         ApplyCommonJsModuleAccess(ctx);
 
