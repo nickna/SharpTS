@@ -943,7 +943,7 @@ public partial class TypeChecker
                 }
                 Dictionary<string, TypeInfo> spreadFields = [];
                 HashSet<string> spreadOptional = [];
-                if (TryMergeSpreadFields(spreadType, spreadFields, spreadOptional))
+                if (!_jsxAttributeObjects.Contains(obj) && TryMergeSpreadFields(spreadType, spreadFields, spreadOptional))
                     foreach (string name in spreadFields.Keys)
                         if (!spreadOptional.Contains(name) && explicitPropertyLines.Remove(name, out int line))
                             RecordTypeError(new TypeCheckException(
