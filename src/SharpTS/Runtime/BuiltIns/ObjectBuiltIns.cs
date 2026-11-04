@@ -186,14 +186,18 @@ public static partial class ObjectBuiltIns
                         includeValues ? interpreter.GetProperty(error, key) : null);
                 yield break;
             case SharpTSFunction fn:
-                foreach (var k in fn.PropertyKeys)
-                    yield return new(k,
-                        includeValues && fn.TryGetProperty(k, out var v) ? v : null);
+                foreach (var k in fn.PropertyKeys.ToList())
+                {
+                    if (fn.GetOwnPropertyDescriptor(k)?.Enumerable != true) continue;
+                    yield return new(k, includeValues ? interpreter.GetPropertyValue(fn, k) : null);
+                }
                 yield break;
             case SharpTSArrowFunction arrowFn:
-                foreach (var k in arrowFn.PropertyKeys)
-                    yield return new(k,
-                        includeValues && arrowFn.TryGetProperty(k, out var av) ? av : null);
+                foreach (var k in arrowFn.PropertyKeys.ToList())
+                {
+                    if (arrowFn.GetOwnPropertyDescriptor(k)?.Enumerable != true) continue;
+                    yield return new(k, includeValues ? interpreter.GetPropertyValue(arrowFn, k) : null);
+                }
                 yield break;
             case ISharpTSPrimitiveConstructor primitiveConstructor:
                 foreach (var key in primitiveConstructor.OwnEnumerableKeys().ToList())
