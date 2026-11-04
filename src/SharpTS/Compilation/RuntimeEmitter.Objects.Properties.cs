@@ -2887,6 +2887,14 @@ public partial class RuntimeEmitter
             il.Emit(OpCodes.Ldstr, "Number");
             il.Emit(OpCodes.Ret);
             il.MarkLabel(notNumberNameLabel);
+            var notFunctionNameLabel = il.DefineLabel();
+            il.Emit(OpCodes.Ldloc, typeLocal);
+            il.Emit(OpCodes.Ldtoken, inputs.TSFunctionType);
+            il.Emit(OpCodes.Call, _types.TypeGetTypeFromHandle);
+            il.Emit(OpCodes.Bne_Un, notFunctionNameLabel);
+            il.Emit(OpCodes.Ldstr, "Function");
+            il.Emit(OpCodes.Ret);
+            il.MarkLabel(notFunctionNameLabel);
             var notMapNameLabel = il.DefineLabel();
             il.Emit(OpCodes.Ldloc, typeLocal);
             il.Emit(OpCodes.Ldtoken, _types.DictionaryObjectObject);
