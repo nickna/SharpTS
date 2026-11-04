@@ -702,6 +702,9 @@ internal sealed class LoopBodyCellAnalyzer : AstVisitorBase
             var binding = _declarations[declarations.First()];
             binding.FunctionBody = body;
             binding.ParameterBodyCopy = parameter != null;
+            if (hasParameterExpressions && _owners[^1].Node is Expr.ArrowFunction
+                { HasOwnThis: true, Name: { } self } && self.Lexeme == name)
+                binding.NeedsUndefinedCell = true;
             // Every redeclaration and var-loop header uses one function-owned
             // binding, regardless of its source token.
             _scopes.Peek()[name] = binding;
