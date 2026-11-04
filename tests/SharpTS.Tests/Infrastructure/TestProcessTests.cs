@@ -23,7 +23,7 @@ public sealed class TestProcessTests
         await using var process = new TestProcess(Start("parent"), TimeSpan.FromSeconds(2));
         var exception = await Assert.ThrowsAsync<TimeoutException>(() => process.WaitForExitAsync());
         Assert.True(process.HasExited);
-        Assert.Contains("exceeded 2 seconds waiting for process exit", exception.Message);
+        Assert.Contains("exceeded 2 seconds. waiting for process exit", exception.Message);
         Assert.Contains("cleanup completed", exception.Message);
         Assert.Contains("exited with code", exception.Message);
         int childId = int.Parse(process.StandardOutput.Trim());
@@ -45,7 +45,7 @@ public sealed class TestProcessTests
             var exception = await Assert.ThrowsAsync<TimeoutException>(() => process.WaitForExitAsync());
             Assert.True(process.HasExited);
             Assert.Contains($"CHILD:{childId}", exception.Message);
-            Assert.Contains("exceeded 0.2 seconds draining stdout/stderr after process exit", exception.Message);
+            Assert.Contains("exceeded 0.2 seconds. draining stdout/stderr after process exit", exception.Message);
             Assert.True(clock.Elapsed < TimeSpan.FromSeconds(5));
         }
         finally

@@ -110,7 +110,8 @@ internal sealed class TestProcess : IAsyncDisposable
     private async Task<TimeoutException> CreateTimeoutAsync(string stage, TimeSpan budget)
     {
         string cleanup = await CleanupAsync().ConfigureAwait(false);
-        return new TimeoutException($"{_description} exceeded {budget.TotalSeconds:0.###} seconds {stage}; " +
+        string seconds = budget.TotalSeconds.ToString("0.###", System.Globalization.CultureInfo.InvariantCulture);
+        return new TimeoutException($"{_description} exceeded {seconds} seconds. {stage}; " +
             $"{Diagnostics()}; {cleanup}; timeline: {Tail(Timeline)}");
     }
 
