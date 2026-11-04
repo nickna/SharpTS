@@ -29,12 +29,18 @@ public sealed class NativeReflectiveCallableBoundaryTests
         {
             Assert.Equal(11d, Invoke(wrapper, args)); Assert.Equal("Invoke", both.Branch); Assert.Same(args, both.Arguments);
         }
-        if (rejects) Boundary(assembly, () => Call(assembly, both, args));
+        var callOnly = new CallOnly();
+        if (rejects) Boundary(assembly, () => Invoke(Wrap(assembly, callOnly), args));
         else
         {
-            Assert.Equal(22, Call(assembly, both, args)); Assert.Equal("Call", both.Branch);
-            Assert.Null(both.Context); Assert.IsType<List<object>>(both.Arguments); Assert.NotSame(args, both.Arguments);
+            Assert.Equal(22d, Invoke(Wrap(assembly, callOnly), args));
+            Assert.Null(callOnly.Context); Assert.IsType<List<object>>(callOnly.Arguments); Assert.NotSame(args, callOnly.Arguments);
         }
+        // #3052: an explicit $MethodCallable wrapper preserves its legacy bridge;
+        // an unmarked object with a public Call method has no call capability.
+        if (rejects) Boundary(assembly, () => Call(assembly, both, args));
+        else GuestTypeError(assembly, () => Call(assembly, both, args));
+        Assert.Equal(rejects ? null : "Invoke", both.Branch);
         var original = new InvalidOperationException("sentinel");
         var throwing = new ThrowCall(original);
         if (rejects)
@@ -46,8 +52,9 @@ public sealed class NativeReflectiveCallableBoundaryTests
         {
             var wrapperError = Failure(() => Invoke(Wrap(assembly, throwing), args));
             Assert.Same(original, Assert.IsType<TargetInvocationException>(wrapperError).InnerException);
-            Assert.Same(original, Failure(() => Call(assembly, throwing, args)));
+            GuestTypeError(assembly, () => Call(assembly, throwing, args));
         }
+        Assert.Equal(rejects ? 0 : 1, throwing.Calls);
         var invokeOnly = new InvokeOnly();
         if (rejects) Boundary(assembly, () => Invoke(Wrap(assembly, invokeOnly), args));
         else Assert.Equal(44d, Invoke(Wrap(assembly, invokeOnly), args));
@@ -112,7 +119,7 @@ public sealed class NativeReflectiveCallableBoundaryTests
     [Theory]
     [InlineData(false)]
     [InlineData(true)]
-    public void SourceAliasesCallbacksAndCurrentManagedDuckCallBehaviorRemainExplicit(bool native)
+    public void SourceAliasesAndCallbacksRemainCallableWithoutPromotingPublicCallMembers(bool native)
     {
         const string source = """
             const fn:any=(x:number)=>x+1;
@@ -129,7 +136,7 @@ public sealed class NativeReflectiveCallableBoundaryTests
             """;
         var duckAssembly = Compile(duck, native);
         string output = TestHarness.RunCompiledWithTimeout(() => duckAssembly, TimeSpan.FromSeconds(20));
-        Assert.Equal(native ? "true\n" + RuntimeEmitter.NativeReflectiveCallableMessage + "\n" : "called\n42\n", output);
+        Assert.Equal("true\n" + (native ? RuntimeEmitter.NativeReflectiveCallableMessage : "object is not a function") + "\n", output);
     }
 
     private static object Wrap(Assembly assembly, object? callable) => Activator.CreateInstance(assembly.GetType("$MethodCallable")!, [callable])!;
@@ -172,7 +179,16 @@ public sealed class NativeReflectiveCallableBoundaryTests
         public object Call(object? context,List<object> args) { Branch="Call";Context=context;Arguments=args;return 22; }
     }
     public sealed class InvokeOnly { public object Invoke(object[] args) => 44; }
-    public sealed class ThrowCall(Exception error) { public object Call(object? context,List<object> args) => throw error; }
+    public sealed class CallOnly
+    {
+        public object? Context; public object? Arguments;
+        public object Call(object? context, List<object> args) { Context=context;Arguments=args;return 22; }
+    }
+    public sealed class ThrowCall(Exception error)
+    {
+        public int Calls;
+        public object Call(object? context,List<object> args) { Calls++;throw error; }
+    }
     public sealed class Ambiguous
     {
         public object Invoke(object[] args) => 1;
