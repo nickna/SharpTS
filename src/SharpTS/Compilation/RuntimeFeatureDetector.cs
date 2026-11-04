@@ -148,6 +148,8 @@ public sealed partial class RuntimeFeatureDetector
     public RuntimeFeatureSet Detect(List<Stmt> statements, TypeMap? typeMap = null)
     {
         _typeMap = typeMap;
+        _set.UsesAliasedGlobalEvaluator = _nativeClassBodiesOnly &&
+            GlobalEvaluatorProvenanceAnalysis.RequiresRuntime(statements, typeMap);
         CollectStableSourceFunctionNames(statements);
         CollectCanonicalCompactRecordShapes(statements);
         foreach (var stmt in statements)

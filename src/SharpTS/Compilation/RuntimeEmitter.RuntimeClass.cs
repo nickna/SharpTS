@@ -44,6 +44,8 @@ public partial class RuntimeEmitter
         // particular — could refer to them. Re-use the existing TypeBuilder
         // here; everything below adds fields/methods to the same type.
         var typeBuilder = runtime.RuntimeClass.Type;
+        if (_features.UsesAliasedGlobalEvaluator)
+            runtime.Deployment.Require("indirect eval through aliased global object");
 
         DefineCancellationFlag(typeBuilder, runtime.Cancellation);
 
