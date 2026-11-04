@@ -283,7 +283,8 @@ internal sealed class CheckedTypeRenderer(bool conformance)
         if (record.ConstructorSignatures is not null)
             members.AddRange(record.ConstructorSignatures.Select(RenderConstructorSignature));
 
-        foreach (var field in record.Fields.OrderBy(pair => pair.Key, StringComparer.Ordinal))
+        foreach (var field in conformance ? SourceTypeMemberOrder.Fields(record)
+            : record.Fields.OrderBy(pair => pair.Key, StringComparer.Ordinal))
         {
             string readOnly = record.IsReadonly || record.IsGetterOnly(field.Key) ? "readonly " : "";
             string optional = record.IsFieldOptional(field.Key) ? "?" : "";

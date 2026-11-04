@@ -19,11 +19,26 @@ internal static class DeferredTypeAliasPresentation
 
     internal static TypeInfo RetainSourceAlias(TypeInfo type, string name, object declaration)
     {
-        if (type is not TypeInfo.Union || Get(type) is not null) return type;
+        if (type is not (TypeInfo.Union or TypeInfo.Record) || Get(type) is not null) return type;
         // A source alias must never rename a shared or structurally equal type.
         var owned = type with { };
         Aliases.Add(owned, new(name, [], declaration));
         return owned;
+    }
+
+    internal static TypeInfo RetainMapped(TypeInfo type, string name, IReadOnlyList<TypeInfo> arguments, object declaration)
+    {
+        if (type is not (TypeInfo.MappedType or TypeInfo.Record or TypeInfo.Interface)) return type;
+        var owned = type with { };
+        Aliases.Add(owned, new(name, arguments.ToArray(), declaration));
+        return owned;
+    }
+
+    internal static TypeInfo TransferMapped(TypeInfo original, TypeInfo replacement)
+    {
+        if (Get(original) is { Declaration: not null } alias)
+            Aliases.AddOrUpdate(replacement, alias);
+        return replacement;
     }
 
     internal static void Substitute(TypeInfo original, TypeInfo replacement, Func<TypeInfo, TypeInfo> substitute)
@@ -34,7 +49,7 @@ internal static class DeferredTypeAliasPresentation
             replacement is TypeInfo.MappedType or TypeInfo.ConditionalType)
             Retain(replacement, alias.Name, alias.Arguments.Select(substitute).ToArray());
         if (!ReferenceEquals(original, replacement) && Get(original) is { Declaration: not null } source &&
-            replacement is TypeInfo.Union)
+            replacement is TypeInfo.Union or TypeInfo.Record or TypeInfo.Interface or TypeInfo.MappedType)
             Aliases.AddOrUpdate(replacement, source with { Arguments = source.Arguments.Select(substitute).ToArray() });
     }
 }
