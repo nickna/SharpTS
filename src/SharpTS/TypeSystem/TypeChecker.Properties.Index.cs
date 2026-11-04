@@ -973,8 +973,7 @@ public partial class TypeChecker
         if (objType is TypeInfo.InstantiatedGeneric igSet &&
             FlattenInstantiatedInterface(igSet) is { } flatSet)
         {
-            if (flatSet.NumberIndexType is not null || flatSet.StringIndexType is not null || flatSet.SymbolIndexType is not null)
-                objType = flatSet;
+            objType = flatSet;
         }
 
         // Reject a readonly slot before the generic index-signature write helper can
