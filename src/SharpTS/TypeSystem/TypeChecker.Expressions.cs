@@ -917,6 +917,7 @@ public partial class TypeChecker
         // Track getter/setter names to identify getter-only properties
         HashSet<string> getterNames = [];
         HashSet<string> setterNames = [];
+        Dictionary<string, int> explicitPropertyLines = new(StringComparer.Ordinal);
 
         // Pass 1: Collect property types without checking accessor bodies
         // For accessors, use type annotations only (don't check bodies yet)
@@ -940,6 +941,14 @@ public partial class TypeChecker
                     stringIndexType = TypeInfo.Any.Shared;
                     continue;
                 }
+                Dictionary<string, TypeInfo> spreadFields = [];
+                HashSet<string> spreadOptional = [];
+                if (TryMergeSpreadFields(spreadType, spreadFields, spreadOptional))
+                    foreach (string name in spreadFields.Keys)
+                        if (!spreadOptional.Contains(name) && explicitPropertyLines.Remove(name, out int line))
+                            RecordTypeError(new TypeCheckException(
+                                $"'{name}' is specified more than once, so this usage will be overwritten.",
+                                line, tsCode: "TS2783"));
                 if (!TryMergeSpreadFields(spreadType, fields, optionalFields))
                 {
                     throw new TypeCheckException($" Spread in object literal requires an object, got '{spreadType}'.", tsCode: "TS2698");
@@ -1074,6 +1083,17 @@ public partial class TypeChecker
                             RecordTypeError(new TypeCheckException(" A computed property name must be of type 'string', 'number', 'symbol', or 'any'.", line: TryGetExprLine(ck.Expression), tsCode: "TS2464"));
                         break;
                 }
+            }
+            if (!prop.IsSpread)
+            {
+                string? name = FreshCallPropertyName(prop.Key);
+                if (name is not null)
+                    explicitPropertyLines[name] = prop.Key switch
+                    {
+                        Expr.IdentifierKey identifier => identifier.Name.Line,
+                        Expr.LiteralKey literal => literal.Literal.Line,
+                        _ => TryGetExprLine(prop.Value) ?? _currentStatementLine ?? 0,
+                    };
             }
         }
 
