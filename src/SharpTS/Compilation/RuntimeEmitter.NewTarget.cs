@@ -9,7 +9,7 @@ public partial class RuntimeEmitter
         EmittedFunctionAttributesRuntime attributes, FieldInfo? currentArguments, FieldBuilder methodField,
         FieldBuilder targetField, FieldBuilder expectsThisField, FieldBuilder currentThisField,
         MethodBuilder adjustArguments, Action<ILGenerator, LocalBuilder> convertArguments,
-        MethodInfo? nativeGenericResolver, MethodInfo? nativeCoreLookup)
+        MethodInfo erasedInvokerTarget, MethodInfo? nativeGenericResolver, MethodInfo? nativeCoreLookup)
     {
         var method = owner.DefineMethod("InvokeConstructed", MethodAttributes.Public, _types.Object,
             [_types.Object, _types.ObjectArray, _types.Object]);
@@ -44,6 +44,9 @@ public partial class RuntimeEmitter
         il.Emit(OpCodes.Ldarg_0); il.Emit(OpCodes.Ldfld, methodField);
         if (nativeGenericResolver is null)
         {
+            // Match ordinary value invocation's canonical closure, retaining
+            // the open entry MethodInfo only as the function's identity.
+            il.Emit(OpCodes.Call, erasedInvokerTarget);
             il.Emit(OpCodes.Callvirt, _types.GetMethodNoParams(_types.MethodInfo, "GetGenericArguments"));
             il.Emit(OpCodes.Callvirt, _types.GetMethod(_types.MethodInfo, "MakeGenericMethod", _types.MakeArrayType(_types.Type)));
         }
