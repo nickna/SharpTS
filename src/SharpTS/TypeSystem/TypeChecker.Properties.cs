@@ -1109,13 +1109,13 @@ public partial class TypeChecker
              substitutions = promiseSubstitutions;
              while (current != null)
              {
-                 if (promiseHeritage)
-                     substitutions = ComposePromiseHeritageSubstitutions(current, substitutions);
+                 substitutions = promiseHeritage
+                     ? ComposePromiseHeritageSubstitutions(current, substitutions)
+                     : ComposeInheritedFieldSubstitutions(current, substitutions);
                  var fieldTypes = GetFieldTypes(current);
                  if (fieldTypes != null && fieldTypes.TryGetValue(memberName, out var fieldDeclType))
                  {
-                     if (promiseHeritage)
-                         fieldDeclType = SubstituteConstructorMember(fieldDeclType, substitutions);
+                     fieldDeclType = SubstituteConstructorMember(fieldDeclType, substitutions);
                      ObserveSourceMemberSelection(set.Name, current, MemberFacet.Instance);
                      fieldDeclType = ClassFieldWriteType(current, memberName, fieldDeclType);
                      if (fieldDeclType is not (TypeInfo.Inferred or TypeInfo.Any)
