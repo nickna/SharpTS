@@ -2725,15 +2725,16 @@ public static partial class ObjectBuiltIns
         SharpTSBooleanPrototype => interp?.GetObjectPrototype(),
         SharpTSBigIntPrototype => interp?.GetObjectPrototype(),
         SharpTSSymbolPrototype => interp?.GetObjectPrototype(),
+        SharpTSTypedArray { HasExplicitPrototype: true } typedArray => typedArray.ExplicitPrototype,
+        SharpTSTypedArray typedArray => interp?.GetTypedArrayPrototype(typedArray.TypeName),
         // These native carriers do not yet materialize their individual
         // prototype objects. Their conceptual chains still reach Object.prototype.
         // Keep this fallback limited to native types without an explicit prototype
         // carrier: ordinary null roots and Proxy trap results remain authoritative.
-        SharpTSTypedArray { HasExplicitPrototype: true } typedArray => typedArray.ExplicitPrototype,
         SharpTSMap or SharpTSSet or SharpTSWeakMap or SharpTSWeakSet
             or SharpTSWeakRef or SharpTSFinalizationRegistry
             or SharpTSArrayBuffer or SharpTSSharedArrayBuffer or SharpTSDataView
-            or SharpTSTypedArray or SharpTSBuffer
+            or SharpTSBuffer
             or SharpTSAbortController or SharpTSAbortSignal
             or SharpTSIterator or SharpTSTextEncoder or SharpTSTextDecoder
             or SharpTSEventEmitter or SharpTSTimeout
@@ -2841,7 +2842,7 @@ public static partial class ObjectBuiltIns
                 return true;
 
             case SharpTSTypedArray typedArray:
-                if (typedArray.HasExplicitPrototype && ReferenceEquals(typedArray.ExplicitPrototype, proto)) return true;
+                if (ReferenceEquals(PrototypeOf(interpreter, typedArray), proto)) return true;
                 if (!PropertyDescriptorStore.IsExtensible(typedArray)) return false;
                 if (WouldCreatePrototypeCycle(interpreter, typedArray, proto)) return false;
                 typedArray.SetExplicitPrototype(proto);

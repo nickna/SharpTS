@@ -755,6 +755,9 @@ public partial class Interpreter
 
             if (current is SharpTSFunctionGlobal && name == "prototype")
                 return GetFunctionPrototype();
+            if (name == "prototype" && current is IBuiltInTypeConstructor
+                && TryGetTypedArrayConstructorPrototype(current, out var typedArrayPrototype))
+                return typedArrayPrototype;
 
             // Native own statics remain visible before following a callable's parent.
             if (current is ArrayBufferConstructorImpl arrayBufferConstructor
@@ -2732,6 +2735,9 @@ public partial class Interpreter
                 ?? InheritedObjectPrototypeMember(fnGlobal, memberName)
                 ?? SharpTSUndefined.Instance;
         }
+        if (memberName == "prototype" && obj is IBuiltInTypeConstructor
+            && TryGetTypedArrayConstructorPrototype(obj, out var typedArrayPrototype))
+            return typedArrayPrototype;
         if (obj is SharpTSFunctionPrototype fnProto)
         {
             return GetPropertyValue(fnProto, memberName);
