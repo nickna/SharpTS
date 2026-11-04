@@ -77,7 +77,7 @@ public partial class ILCompiler
     private void DefineInstanceProperty(TypeBuilder typeBuilder, string className, Stmt.Field field, GenericTypeParameterBuilder[]? classGenericParams = null)
     {
         string fieldName = field.Name.Lexeme;
-        string pascalName = FieldClrNames.Instance(GetNominalClassDeclaration(typeBuilder)?.Fields ?? [], fieldName);
+        string pascalName = GetClassRegistry().OwnGuestFieldPropertyName(typeBuilder, GetNominalClassDeclaration(typeBuilder)?.Fields ?? [], fieldName);
         Type propertyType = GetFieldType(field, className, classGenericParams);
 
         // Track as declared property (using PascalCase for .NET interop)

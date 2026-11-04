@@ -477,7 +477,7 @@ public partial class ILCompiler
                     }
 
                     string fieldName = field.Name.Lexeme;
-                    string pascalName = FieldClrNames.Instance(classStmt.Fields, fieldName);
+                    string pascalName = GetClassRegistry().OwnGuestFieldPropertyName(typeBuilder, classStmt.Fields, fieldName);
 
                     // Check if this is a declared property with a backing field (using PascalCase key)
                     if (_typedInterop.PropertyBackingFields.TryGetValue(className, out var backingFields) &&

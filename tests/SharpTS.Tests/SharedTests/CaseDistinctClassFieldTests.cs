@@ -82,4 +82,43 @@ public class CaseDistinctClassFieldTests
             console.log(dynamic['x'], dynamic['X']);
             """, mode));
     }
+
+    [Theory, ModeData]
+    public void CaseDistinctFieldsAcrossOwnersPreserveSameKeyOverrides(ExecutionMode mode)
+    {
+        Assert.Equal("3 2\n4 5 4\n4 5\nx,X\n", TestHarness.Run("""
+            class Base { x: number = 1; }
+            class Middle extends Base { X: number = 2; }
+            class Leaf extends Middle { x: number = 3; }
+            const value = new Leaf();
+            console.log(value.x, value.X);
+            value.x = 4;
+            value.X = 5;
+            const base: Base = value;
+            console.log(value.x, value.X, base.x);
+            const dynamic: any = value;
+            console.log(dynamic['x'], dynamic['X']);
+            console.log(Object.keys(value).join(','));
+            """, mode));
+    }
+
+    [Theory, ModeData]
+    public void LocalCollisionsReuseOnlyTheirExactInheritedKey(ExecutionMode mode)
+    {
+        Assert.Equal("2 3\n4 3\nfirst upper\nnext upper\n", TestHarness.Run("""
+            class Base { x: number = 1; }
+            class Child extends Base { x: number = 2; X: number = 3; }
+            const value = new Child();
+            const base: Base = value;
+            console.log(value.x, value.X);
+            value.x = 4;
+            console.log(base.x, value.X);
+            class Generic<T> { constructor(public x: T) {} }
+            class Derived extends Generic<string> { X: string = 'upper'; }
+            const generic = new Derived('first');
+            console.log(generic.x, generic.X);
+            (generic as any).x = 'next';
+            console.log(generic.x, generic.X);
+            """, mode));
+    }
 }
