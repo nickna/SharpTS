@@ -546,6 +546,7 @@ public partial class ILCompiler
         if (context?.CurrentClassExpr != null && context.ClassDefinitionParameterIndex is { } definitionParameter)
         {
             il.Emit(OpCodes.Ldarg, definitionParameter);
+            il.Emit(OpCodes.Castclass, _runtime.ClassDefinitions.Type);
             il.Emit(OpCodes.Ldfld, _runtime.ClassDefinitions.PrivateMembers);
             il.Emit(OpCodes.Ldstr, "'instanceStorage");
             il.Emit(OpCodes.Callvirt, _types.GetMethod(_types.DictionaryStringObject, "get_Item", _types.String));

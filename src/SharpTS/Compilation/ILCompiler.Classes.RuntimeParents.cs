@@ -179,6 +179,7 @@ public partial class ILCompiler
         var visited = new HashSet<Expr.ClassExpr>(ReferenceEqualityComparer.Instance);
         while (visited.Add(expression))
         {
+            if (_lexicalSuperElementInitializers.ContainsKey(expression)) return true;
             if (expression.SuperclassExpr == null) return false;
             if (expression.SuperclassExpr is Expr.ClassExpr { Methods.Count: 0, Fields.Count: 0 })
                 return _features?.UsesClassPrototypeMutation == true;
@@ -422,7 +423,20 @@ public partial class ILCompiler
                 il.Emit(OpCodes.Ldloc, ctx.ClassConstructorReceiver!);
                 il.Emit(OpCodes.Ldarg_2);
                 il.Emit(OpCodes.Ldloc, ctx.ClassConstructorThisCell!);
+                var parameters = constructor?.Parameters.Where(parameter => parameter.IsParameterProperty).ToList() ?? [];
+                if (parameters.Count == 0) il.Emit(OpCodes.Ldnull);
+                else
+                {
+                    il.Emit(OpCodes.Ldc_I4, parameters.Count); il.Emit(OpCodes.Newarr, _types.Object);
+                    for (int index = 0; index < parameters.Count; index++)
+                    {
+                        il.Emit(OpCodes.Dup); il.Emit(OpCodes.Ldc_I4, index);
+                        il.Emit(OpCodes.Ldloc, ctx.ParameterCaptureCells[parameters[index].Name.Lexeme].Cell);
+                        il.Emit(OpCodes.Stelem_Ref);
+                    }
+                }
                 il.Emit(OpCodes.Call, elements);
+                return;
             }
             else
                 EmitEffectiveClassElements(ctx, declaration.Fields, null, null,

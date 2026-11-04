@@ -85,7 +85,10 @@ internal static class LexicalEnvironmentCellAccess
     internal static bool TryEmitCaptureReference(ILGenerator il, CompilationContext ctx, object closure, string name)
     {
         if (ctx.ClosureAnalyzer?.TryGetLoopBodyCellCapture(closure, name, out var declaration) != true) return false;
-        if (ctx.LexicalCellStorageNames.TryGetValue(declaration, out var storage)
+        if (ctx.ParameterCaptureCells.TryGetValue(declaration.Lexeme, out var parameter)
+            && ReferenceEquals(parameter.Declaration, declaration))
+            il.Emit(OpCodes.Ldloc, parameter.Cell);
+        else if (ctx.LexicalCellStorageNames.TryGetValue(declaration, out var storage)
             && ctx.LoopBodyCellDeclarations.TryGetValue(storage, out var active) && ReferenceEquals(active, declaration))
             EmitOwnReference(il, ctx, storage);
         else if (ctx.LoopBodyCellCaptures?.TryGetValue(name, out var captured) == true

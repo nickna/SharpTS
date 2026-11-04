@@ -15,20 +15,32 @@ public partial class ILCompiler
         var lexicalSuper = new LexicalSuperCallVisitor();
         foreach (var statement in expression.Methods.FirstOrDefault(method =>
             !method.IsStatic && method.Name.Lexeme == "constructor")?.Body ?? []) lexicalSuper.Visit(statement);
-        if (!expression.Fields.Any(field => !field.IsStatic && !field.IsDeclare)
+        bool ownElements = expression.Fields.Any(field => !field.IsStatic && !field.IsDeclare)
+            || expression.AutoAccessors?.Any(accessor => !accessor.IsStatic) == true
+            || expression.Methods.Any(method => !method.IsStatic && method.IsPrivate)
+            || expression.Accessors?.Any(accessor => !accessor.IsStatic && accessor.Name.Type == TokenType.PRIVATE_IDENTIFIER) == true;
+        string? parentName = Expr.GetSuperclassLeafName(expression.SuperclassExpr);
+        if (!ownElements || expression.SuperclassExpr == null
             || !lexicalSuper.Found
-            || !SupportsReceiverInitialization(declaration)
-            || (!HasRuntimeParent(expression) && !RequiresConstructorReturnAdapter(declaration))
-            || expression.Methods.Any(method => method.Name.Lexeme == "constructor"
-                && method.Parameters.Any(parameter => parameter.IsParameterProperty))) return;
+            || expression.TypeParams is { Count: > 0 }
+            || parentName is "Array" or "Promise" or "Map" or "Set" or "WeakMap" or "WeakSet" or "Date" or "RegExp" or "Buffer"
+            || Runtime.BuiltIns.BuiltInNames.IsErrorTypeName(parentName ?? "")
+            || _nativeAotProjectOutput && (!SupportsReceiverInitialization(declaration)
+                || expression.Accessors?.Any(accessor => accessor.Name.Type == TokenType.PRIVATE_IDENTIFIER) == true)) return;
         _lexicalSuperElementInitializers.Add(expression, owner.DefineMethod("$InitializeLexicalSuperElements",
-            MethodAttributes.Assembly | MethodAttributes.Static, _types.Void, [_types.Object, _types.Object, _types.ObjectArray]));
+            MethodAttributes.Assembly | MethodAttributes.Static, _types.Void,
+            [_types.Object, _types.Object, _types.ObjectArray, _types.ObjectArray]));
+        _usesRuntimeParents = true;
+        if (_typeMap.GetClassExprType(expression) is { } checkedClass)
+            _typeMapper.RegisterDynamicClassInstance(checkedClass.Core.DeclarationId);
         // A class returned from a function can have its arrows discovered before
         // its template is defined. Apply the same source-owner proof to those
         // already-discovered arrows before their display classes are emitted.
         var fieldArrows = new FieldInitializerArrowVisitor();
         foreach (var field in expression.Fields.Where(field => !field.IsStatic && !field.IsDeclare))
             if (field.Initializer != null) fieldArrows.Visit(field.Initializer);
+        foreach (var accessor in expression.AutoAccessors?.Where(accessor => !accessor.IsStatic) ?? [])
+            if (accessor.Initializer != null) fieldArrows.Visit(accessor.Initializer);
         foreach (var (arrow, captures) in _collectedArrows)
         {
             if (arrow.HasOwnThis || !captures.Contains("this")) continue;
@@ -59,8 +71,34 @@ public partial class ILCompiler
         // arrows rather than allocating a second receiver environment.
         context.ClassConstructorThisCell = il.DeclareLocal(_types.ObjectArray);
         il.Emit(OpCodes.Ldarg_2); il.Emit(OpCodes.Stloc, context.ClassConstructorThisCell);
+        var constructor = expression.Methods.FirstOrDefault(method =>
+            !method.IsStatic && method.Name.Lexeme == "constructor");
+        var parameters = constructor?.Parameters.Where(parameter => parameter.IsParameterProperty).ToList() ?? [];
+        var parameterFields = new HashSet<Token>(parameters.Select(parameter => parameter.Name), ReferenceEqualityComparer.Instance);
         EmitEffectiveClassElements(context, expression.Fields, null, null,
-            _ => throw new InvalidOperationException("Lexical super elements require ordinary field keys."));
+            field =>
+            {
+                var keys = _classExprs.Factories[expression].Keys;
+                int index = Enumerable.Range(0, keys.Count).First(index => ReferenceEquals(keys[index], field.ComputedKey));
+                il.Emit(OpCodes.Ldarg_1);
+                il.Emit(OpCodes.Castclass, _runtime.ClassDefinitions.Type);
+                il.Emit(OpCodes.Ldfld, _runtime.ClassDefinitions.Keys);
+                il.Emit(OpCodes.Ldc_I4, index); il.Emit(OpCodes.Ldelem_Ref);
+            }, expression.AutoAccessors,
+            leadingFields: parameterFields);
+        var emitter = new ILEmitter(context);
+        foreach (var assignment in constructor?.Body?.Where(statement => IsConstructorParameterProperty(statement, constructor)) ?? [])
+        {
+            var value = (Expr.Variable)((Expr.Set)((Stmt.Expression)assignment).Expr).Value;
+            int index = parameters.FindIndex(parameter => ReferenceEquals(parameter.Name, value.Name));
+            var local = il.DeclareLocal(_types.Object);
+            var storage = LexicalCellStorage.ForDeclaration(context, value.Name);
+            il.Emit(OpCodes.Ldarg_3); il.Emit(OpCodes.Ldc_I4, index); il.Emit(OpCodes.Ldelem_Ref);
+            il.Emit(OpCodes.Castclass, storage.ReferenceType); il.Emit(OpCodes.Ldfld, storage.ValueField);
+            context.EmitLexicalTdzValueCheck(il, value.Name.Lexeme, provenCell: true);
+            il.Emit(OpCodes.Stloc, local);
+            emitter.EmitConstructorParameterProperty(assignment, local);
+        }
         il.Emit(OpCodes.Ret);
     }
 

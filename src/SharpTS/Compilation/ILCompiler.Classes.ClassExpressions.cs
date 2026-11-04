@@ -597,7 +597,8 @@ public partial class ILCompiler
         EmitLexicalSuperElementInitializer(classExpr, typeBuilder);
         if (_usesRuntimeParents && !_classes.ErrorSubclasses.Contains(className)
             && !_classes.PromiseSubclasses.Contains(className)
-            && SupportsReceiverInitialization(ClassExpressionDeclaration(classExpr), allowGenericOwner: true))
+            && (SupportsReceiverInitialization(ClassExpressionDeclaration(classExpr), allowGenericOwner: true)
+                || _lexicalSuperElementInitializers.ContainsKey(classExpr)))
             EmitReceiverInitializer(typeBuilder, ClassExpressionDeclaration(classExpr), classExpr);
 
         // Emit the constructor-free prototype path before the .cctor that uses it.

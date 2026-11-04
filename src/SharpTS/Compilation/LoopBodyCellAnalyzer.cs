@@ -112,6 +112,34 @@ internal sealed class LoopBodyCellAnalyzer : AstVisitorBase
         return false;
     }
 
+    internal void RequireParameterCapture(object closure, string alias, Token declaration)
+    {
+        if (!_declarations.TryGetValue(declaration, out var binding) || !binding.FormalParameter)
+            throw new InvalidOperationException("Constructor element transport requires its canonical parameter declaration.");
+        bool selected = _cells.Add(declaration);
+        binding.Captured = true;
+        if (!ClosureCaptures.TryGetValue(closure, out var captures))
+            ClosureCaptures[closure] = captures = new(StringComparer.Ordinal);
+        captures[alias] = declaration;
+        if (!selected) return;
+        // Existing ordinary references to this parameter must use the same cell.
+        foreach (var (other, references) in _tentative)
+            foreach (var (name, reference) in references)
+                if (ReferenceEquals(reference.Name, declaration))
+                {
+                    if (!ClosureCaptures.TryGetValue(other, out var shared))
+                        ClosureCaptures[other] = shared = new(StringComparer.Ordinal);
+                    shared[name] = declaration;
+                }
+        if (_declarations.Values.Where(candidate => ReferenceEquals(candidate.Owner, binding.Owner)
+                && candidate.Name.Lexeme == declaration.Lexeme).All(candidate => _cells.Contains(candidate.Name)))
+        {
+            if (!_cellOnlyCapturedNames.TryGetValue(binding.Owner.Node, out var names))
+                _cellOnlyCapturedNames[binding.Owner.Node] = names = new(StringComparer.Ordinal);
+            names.Add(declaration.Lexeme);
+        }
+    }
+
     public void Analyze(List<Stmt> statements, IReadOnlyDictionary<Stmt, object>? moduleOwners = null,
         IReadOnlyDictionary<Stmt.Class, Expr.ClassExpr>? runtimeClassDeclarations = null)
     {
@@ -413,6 +441,12 @@ internal sealed class LoopBodyCellAnalyzer : AstVisitorBase
         }
         if (ReferenceEquals(binding.Owner, _owners[^1])) return;
         binding.Captured = true;
+        // Keep declaration identities for ordinary parameter captures even when
+        // they initially use a function display class. A lexical super may later
+        // select that parameter's canonical cell for constructor element transport.
+        if (binding.FormalParameter)
+            for (int index = _owners.Count - 1; index >= 0 && !ReferenceEquals(_owners[index], binding.Owner); index--)
+                RecordCapture(_owners[index].Node, name, binding);
         if (IsAsyncPrivateSelfBinding(binding))
             for (int index = _owners.Count - 1; index >= 0 && !ReferenceEquals(_owners[index], binding.Owner); index--)
                 RecordCapture(_owners[index].Node, name, binding);

@@ -6,6 +6,20 @@ namespace SharpTS.Tests.SharedTests;
 public class LexicalSuperInstanceElementsTests
 {
     [Theory, ModeData]
+    public void NamedNominalParentRunsItsGuestConstructorOnlyOnce(ExecutionMode mode)
+    {
+        Assert.Equal("3 1\n", TestHarness.Run("""
+            let calls = 0;
+            const Parent = class { constructor() { calls++; } };
+            const C = class extends Parent {
+                value = 3;
+                constructor() { const initialize = () => super(); initialize(); }
+            };
+            console.log(new C().value, calls);
+            """, mode));
+    }
+
+    [Theory, ModeData]
     public void LexicalSuperInitializesFieldsBeforeReturningToTheArrow(ExecutionMode mode)
     {
         Assert.Equal("1\n9 1\n", TestHarness.RunUnchecked("""

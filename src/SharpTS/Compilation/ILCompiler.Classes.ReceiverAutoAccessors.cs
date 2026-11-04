@@ -164,9 +164,12 @@ public partial class ILCompiler
         // exists. The actual-object slot still records guest undefined.
         if (source.Initializer == null) return;
         var done = il.DefineLabel();
-        il.Emit(OpCodes.Ldloc, context.ClassConstructorReceiver!); il.Emit(OpCodes.Ldarg_0); il.Emit(OpCodes.Bne_Un, done);
         var backing = _autoAccessorBackingFields[source];
-        il.Emit(OpCodes.Ldarg_0); il.Emit(OpCodes.Ldloc, value); EmitBoxedFieldConversion(il, backing.FieldType);
+        Type declaring = backing.DeclaringType!;
+        if (declaring.IsGenericTypeDefinition) declaring = EmitGenerics.MakeGenericType(declaring, declaring.GetGenericArguments());
+        il.Emit(OpCodes.Ldloc, context.ClassConstructorReceiver!); il.Emit(OpCodes.Isinst, declaring); il.Emit(OpCodes.Brfalse, done);
+        il.Emit(OpCodes.Ldloc, context.ClassConstructorReceiver!); il.Emit(OpCodes.Castclass, declaring);
+        il.Emit(OpCodes.Ldloc, value); EmitBoxedFieldConversion(il, backing.FieldType);
         il.Emit(OpCodes.Stfld, EmitterTypeHelpers.SelfFieldReference(backing));
         il.MarkLabel(done);
     }

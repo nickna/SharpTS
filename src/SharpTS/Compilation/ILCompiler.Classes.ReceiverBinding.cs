@@ -14,7 +14,8 @@ public partial class ILCompiler
 
     private void EmitEffectiveClassElements(CompilationContext context, IEnumerable<Stmt.Field> fields,
         IReadOnlyDictionary<string, FieldBuilder>? backingFields, IReadOnlyDictionary<string, Type>? propertyTypes,
-        Action<Stmt.Field> loadComputedKey, IEnumerable<Stmt.AutoAccessor>? autoAccessors = null)
+        Action<Stmt.Field> loadComputedKey, IEnumerable<Stmt.AutoAccessor>? autoAccessors = null,
+        IReadOnlySet<Token>? leadingFields = null)
     {
         var il = context.IL;
         var emitter = new ILEmitter(context);
@@ -23,7 +24,8 @@ public partial class ILCompiler
         var slots = EmitPrivateFieldStorage(il, context.CurrentClassName!, context, emitter);
         var elements = fields.Where(field => !field.IsStatic && !field.IsDeclare).Cast<Stmt>()
             .Concat((autoAccessors ?? []).Where(accessor => !accessor.IsStatic))
-            .OrderBy(element => element is Stmt.Field field ? field.Name.SourceOrderOffset : ((Stmt.AutoAccessor)element).Name.SourceOrderOffset);
+            .OrderBy(element => element is Stmt.Field field && leadingFields?.Contains(field.Name) == true ? 0 : 1)
+            .ThenBy(element => element is Stmt.Field field ? field.Name.SourceOrderOffset : ((Stmt.AutoAccessor)element).Name.SourceOrderOffset);
         foreach (var element in elements)
         {
             if (element is Stmt.AutoAccessor accessor)

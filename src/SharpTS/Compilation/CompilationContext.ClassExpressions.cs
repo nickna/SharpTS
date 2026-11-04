@@ -36,6 +36,7 @@ public partial class CompilationContext
     public Dictionary<Expr.ClassExpr, Dictionary<string, int>>? ClassExprCaptureSlots { get; set; }
     internal const string PrivateOwnerCaptureName = "'privateOwner";
     internal const string SuperOwnerCaptureName = "'superOwner";
+    internal static string ConstructorParameterCaptureName(string name) => "'constructorParameter:" + name;
     // This key cannot collide with a source identifier such as `__this`.
     internal const string ThisParameterName = "'this";
     internal IReadOnlyDictionary<Expr.ClassExpr, string>? ClassExprEnclosingClasses { get; set; }

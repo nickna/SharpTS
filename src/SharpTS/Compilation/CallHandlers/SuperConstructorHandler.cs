@@ -204,18 +204,18 @@ public class SuperConstructorHandler : ICallHandler
     private static bool TryEmitLexicalReceiverConstruction(IEmitterContext emitter, Expr.Call call)
     {
         var ctx = emitter.Context;
-        // Ordinary runtime-parent fields use the same owner-local element
-        // operation as direct super; other shapes retain their existing lowering.
+        // Bind the shared receiver, then run the same class-owned element
+        // operation used by direct super.
         if (!ctx.CapturesConstructorThisCell || ctx.CurrentClassExpr is not { } expression
-            || expression.AutoAccessors is { Count: > 0 }
-            || expression.Methods.Any(method => method.Name.Lexeme == "constructor"
-                && method.Parameters.Any(parameter => parameter.IsParameterProperty))
             || ctx.CapturedFields?.TryGetValue("this", out var thisCell) != true
             || ctx.CapturedFields.TryGetValue(CompilationContext.SuperOwnerCaptureName, out var owner) != true
             || ctx.CapturedFields.TryGetValue(CompilationContext.NewTargetCaptureName, out var newTarget) != true)
             return false;
         MethodBuilder? elements = null;
-        if (expression.Fields.Any(field => !field.IsStatic && !field.IsDeclare)
+        if ((expression.Fields.Any(field => !field.IsStatic && !field.IsDeclare)
+                || expression.AutoAccessors?.Any(accessor => !accessor.IsStatic) == true
+                || expression.Methods.Any(method => !method.IsStatic && method.IsPrivate)
+                || expression.Accessors?.Any(accessor => !accessor.IsStatic && accessor.Name.Type == TokenType.PRIVATE_IDENTIFIER) == true)
             && ctx.LexicalSuperElementInitializers?.TryGetValue(expression, out elements) != true)
             return false;
 
@@ -244,6 +244,21 @@ public class SuperConstructorHandler : ICallHandler
             il.Emit(OpCodes.Ldloc, result);
             il.Emit(OpCodes.Ldarg_0); il.Emit(OpCodes.Ldfld, owner);
             il.Emit(OpCodes.Ldloc, cell);
+            var parameters = expression.Methods.FirstOrDefault(method =>
+                !method.IsStatic && method.Name.Lexeme == "constructor")?.Parameters
+                .Where(parameter => parameter.IsParameterProperty).ToList() ?? [];
+            if (parameters.Count == 0) il.Emit(OpCodes.Ldnull);
+            else
+            {
+                il.Emit(OpCodes.Ldc_I4, parameters.Count); il.Emit(OpCodes.Newarr, ctx.Types.Object);
+                for (int index = 0; index < parameters.Count; index++)
+                {
+                    il.Emit(OpCodes.Dup); il.Emit(OpCodes.Ldc_I4, index);
+                    il.Emit(OpCodes.Ldarg_0);
+                    il.Emit(OpCodes.Ldfld, ctx.CapturedFields[CompilationContext.ConstructorParameterCaptureName(parameters[index].Name.Lexeme)]);
+                    il.Emit(OpCodes.Stelem_Ref);
+                }
+            }
             il.Emit(OpCodes.Call, elements);
         }
         il.Emit(OpCodes.Ldloc, result);
