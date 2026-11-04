@@ -1160,7 +1160,8 @@ public partial class RuntimeEmitter
                 runtime.Sentinels.UndefinedInstance,
                 runtime.Sentinels.UndefinedType,
                 runtime.ReflectedMethods.NativePropertyGetter,
-                runtime.Vm
+                runtime.Vm,
+                ExternalFieldReads: _features.UsesExternalFieldReads || _emitHosted
             )
         );
         EmitGetListProperty(

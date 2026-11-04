@@ -98,6 +98,7 @@ public sealed partial class RuntimeFeatureDetector
             UsesReflect = false,
             UsesIteratorHelpers = false,
             UsesPromise = false,
+            UsesExternalFieldReads = false,
             UsesUserClasses = false,
             UsesObjectDefinitionRuntime = false,
             UsesPropertyWrites = false,
@@ -265,7 +266,10 @@ public sealed partial class RuntimeFeatureDetector
         }
 
         if (_set.UsesSourceExecution || _set.UsesVm)
+        {
             _set.UsesStructuredClone = true;
+            _set.UsesExternalFieldReads = true;
+        }
 
         return _set;
     }
@@ -399,6 +403,7 @@ public sealed partial class RuntimeFeatureDetector
                 _set.UsesObjectIntegrityMutation = true;
                 if (name is "eval" or "Function")
                 {
+                    _set.UsesExternalFieldReads = true;
                     _set.UsesTimerFunctionValues = true;
                     _set.UsesMicrotaskFunctionValues = true;
                     _set.UsesArrayMethodValues = true;
@@ -713,6 +718,9 @@ public sealed partial class RuntimeFeatureDetector
         switch (stmt)
         {
             case Stmt.Import imp:
+                if (!imp.IsTypeOnly && (Modules.DotNetImports.IsDotNetSpecifier(imp.ModulePath) ||
+                    Modules.DotNetExtensionImports.IsSpecifier(imp.ModulePath)))
+                    _set.UsesExternalFieldReads = true;
                 if (!imp.IsTypeOnly && imp.NamespaceImport is not null &&
                     Runtime.BuiltIns.Modules.BuiltInModuleRegistry.GetModuleName(imp.ModulePath) is null &&
                     !Modules.DotNetImports.IsDotNetSpecifier(imp.ModulePath) && !Modules.DotNetExtensionImports.IsSpecifier(imp.ModulePath))
@@ -837,6 +845,9 @@ public sealed partial class RuntimeFeatureDetector
                 break;
 
             case Stmt.Class cls:
+                if (cls.Decorators?.Any(decorator => decorator.Expression is Expr.Call
+                    { Callee: Expr.Variable { Name.Lexeme: "DotNetType" } }) == true)
+                    _set.UsesExternalFieldReads = true;
                 // Native output need not retain source-class machinery for a
                 // declaration that the class producer never emits. This is
                 // reachability selection, not a runtime owner certificate.

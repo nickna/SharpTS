@@ -19,6 +19,7 @@ namespace SharpTS.Compilation;
 public sealed class RuntimeFeatureSet
 {
     public bool UsesNewTarget { get; set; } = true;
+    public bool UsesExternalFieldReads { get; set; } = true;
     internal bool UsesAliasedGlobalEvaluator { get; set; }
     internal bool UsesArrayConstructorMutation { get; set; }
     internal HashSet<Expr.ArrayLiteral> LocalRecordNumericArrays { get; } = new(ReferenceEqualityComparer.Instance);

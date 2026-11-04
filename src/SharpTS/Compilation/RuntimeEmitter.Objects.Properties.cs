@@ -394,7 +394,8 @@ public partial class RuntimeEmitter
         FieldInfo UndefinedInstance,
         Type UndefinedType,
         MethodInfo? NativePropertyGetter = null,
-        EmittedVmRuntime? Vm = null
+        EmittedVmRuntime? Vm = null,
+        bool ExternalFieldReads = true
     );
 
     private readonly record struct GetListPropertyInputs(
@@ -1156,6 +1157,42 @@ public partial class RuntimeEmitter
         }
 
         il.MarkLabel(noPropertyLabel);
+
+        if (inputs.NativePropertyGetter is null && inputs.ExternalFieldReads)
+        {
+            // Managed CLR instances can cross an any/object boundary after
+            // construction. Match the interop spelling before the exact CLR
+            // spelling; source-class names already returned through IHasFields.
+            // Native output keeps its completed owner/property contract above.
+            var owner = il.DeclareLocal(_types.Type);
+            var field = il.DeclareLocal(_types.FieldInfo);
+            var foundField = il.DefineLabel();
+            var noField = il.DefineLabel();
+            il.Emit(OpCodes.Ldarg_0);
+            il.Emit(OpCodes.Callvirt, _types.GetMethodNoParams(_types.Object, "GetType"));
+            il.Emit(OpCodes.Stloc, owner);
+            void EmitFieldQuery(Action emitName)
+            {
+                il.Emit(OpCodes.Ldloc, owner);
+                emitName();
+                il.Emit(OpCodes.Ldc_I4, (int)(BindingFlags.Instance | BindingFlags.Public));
+                il.Emit(OpCodes.Callvirt, _types.GetMethod(_types.Type, "GetField", _types.String, typeof(BindingFlags)));
+                il.Emit(OpCodes.Stloc, field);
+            }
+            EmitFieldQuery(() => il.Emit(OpCodes.Ldloc, pascalNameLocal));
+            il.Emit(OpCodes.Ldloc, field);
+            il.Emit(OpCodes.Brtrue, foundField);
+            EmitFieldQuery(() => il.Emit(OpCodes.Ldarg_1));
+            il.MarkLabel(foundField);
+            il.Emit(OpCodes.Ldloc, field);
+            il.Emit(OpCodes.Brfalse, noField);
+            il.Emit(OpCodes.Ldloc, field);
+            il.Emit(OpCodes.Ldarg_0);
+            il.Emit(OpCodes.Callvirt, _types.GetMethod(_types.FieldInfo, "GetValue", _types.Object));
+            EmitNormalizeClrNumericReturn(il);
+            il.Emit(OpCodes.Ret);
+            il.MarkLabel(noField);
+        }
 
         // Fallback: Try reflection-based method lookup for runtime-emitted types
         // This handles methods like Push, Pipe, etc. on $Readable, $Writable, $Dir, etc.
