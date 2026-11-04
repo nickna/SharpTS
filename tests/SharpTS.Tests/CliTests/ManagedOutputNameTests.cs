@@ -25,8 +25,10 @@ public sealed class ManagedOutputNameTests
         Assert.False(File.Exists(Path.ChangeExtension(output, ".runtimeconfig.json")));
     }
 
-    [Fact]
-    public async Task SimilarNonFrameworkOutputRetainsEntryPointArgumentsAndExitCode()
+    [Theory]
+    [InlineData("System.Console.Application")]
+    [InlineData("PEPacker")]
+    public async Task NonFrameworkOutputRetainsEntryPointArgumentsAndExitCode(string name)
     {
         using var directory = CliTestHelper.CreateTempDirectory();
         string source = directory.CreateFile("main.ts", """
@@ -34,7 +36,7 @@ public sealed class ManagedOutputNameTests
             console.log(process.argv.slice(2).join('|'));
             process.exitCode = 7;
             """);
-        string output = directory.GetPath("System.Console.Application.dll");
+        string output = directory.GetPath(name + ".dll");
         var compile = CliTestHelper.RunCli(
             $"--no-tsconfig --compile \"{source}\" -o \"{output}\" --verify", directory.Path);
         Assert.True(compile.ExitCode == 0, compile.StandardOutput + compile.StandardError);
