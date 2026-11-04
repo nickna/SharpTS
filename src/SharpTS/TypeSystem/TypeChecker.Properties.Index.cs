@@ -1094,7 +1094,7 @@ public partial class TypeChecker
         {
             // Typed-array unions expose the union of their numeric element
             // types, as in TypeScript's number | bigint index signature.
-            if ((IsNumber(indexType) || indexType is TypeInfo.NumberLiteral)
+            if (IsNumericConstructorIndex(indexType)
                 && union.FlattenedTypes.Count > 0
                 && union.FlattenedTypes.All(member => member is TypeInfo.TypedArray))
             {
