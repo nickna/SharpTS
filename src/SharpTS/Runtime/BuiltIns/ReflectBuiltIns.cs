@@ -742,27 +742,12 @@ public static class ReflectBuiltIns
             "apply" => BuiltInMethod.CreateV2("apply", 3, static (interpreter, _, args) =>
             {
                 var target = args[0].ToObject() as ISharpTSCallable
-                    ?? throw new Exception("Runtime Error: Reflect.apply requires a function target.");
+                    ?? throw new ThrowException(new SharpTSTypeError("Reflect.apply requires a function target"));
+                if (target is SharpTSProxy { IsCallable: false })
+                    throw new ThrowException(new SharpTSTypeError("Reflect.apply requires a function target"));
                 var thisArg = args[1].ToObject();
                 var argsList = args[2].ToObject();
-
-                List<object?> callArgs;
-                if (argsList == null)
-                {
-                    callArgs = [];
-                }
-                else if (argsList is SharpTSArray tsArray)
-                {
-                    callArgs = new List<object?>(tsArray);
-                }
-                else if (argsList is List<object?> list)
-                {
-                    callArgs = new List<object?>(list);
-                }
-                else
-                {
-                    throw new Exception("Runtime Error: Reflect.apply third argument must be an array-like object.");
-                }
+                var callArgs = CreateArgumentList(interpreter, argsList);
 
                 return RuntimeValue.FromBoxed(FunctionBuiltIns.CallWithThis(
                     interpreter, target, thisArg, callArgs));
@@ -787,24 +772,7 @@ public static class ReflectBuiltIns
                     throw new ThrowException(new SharpTSTypeError(
                         "Reflect.construct newTarget is not a constructor"));
 
-                List<object?> callArgs;
-                if (argsList == null)
-                {
-                    callArgs = [];
-                }
-                else if (argsList is SharpTSArray tsArray)
-                {
-                    callArgs = new List<object?>(tsArray);
-                }
-                else if (argsList is List<object?> list)
-                {
-                    callArgs = new List<object?>(list);
-                }
-                else
-                {
-                    throw new ThrowException(new SharpTSTypeError(
-                        "Reflect.construct second argument must be an array-like object"));
-                }
+                var callArgs = CreateArgumentList(interpreter, argsList);
 
                 // Promise validates the executor before
                 // GetPrototypeFromConstructor(newTarget). In particular, an
@@ -822,6 +790,21 @@ public static class ReflectBuiltIns
 
             _ => null
         };
+    }
+
+    private static List<object?> CreateArgumentList(Interpreter interpreter, object? arguments)
+    {
+        if (!RuntimeValue.FromBoxed(arguments).IsObject)
+            throw new ThrowException(new SharpTSTypeError("Reflect argument list must be an object"));
+        // Host lists are a legacy ABI carrier; guest arrays must use ordinary
+        // property reads so holes, accessors and inherited indices remain visible.
+        if (arguments is List<object?> list) return new(list);
+        long length = ArrayBuiltIns.ToLength(interpreter.GetPropertyValue(arguments, "length"), interpreter);
+        List<object?> result = [];
+        for (long index = 0; index < length; index++)
+            result.Add(interpreter.GetPropertyValue(arguments,
+                index.ToString(System.Globalization.CultureInfo.InvariantCulture)));
+        return result;
     }
 
     /// <summary>
