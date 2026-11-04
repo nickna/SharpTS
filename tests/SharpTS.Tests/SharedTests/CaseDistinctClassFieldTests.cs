@@ -117,8 +117,25 @@ public class CaseDistinctClassFieldTests
             class Derived extends Generic<string> { X: string = 'upper'; }
             const generic = new Derived('first');
             console.log(generic.x, generic.X);
-            (generic as any).x = 'next';
+            generic.x = 'next';
             console.log(generic.x, generic.X);
+            """, mode));
+    }
+
+    [Theory, ModeData]
+    public void QuotedFieldKeysCannotCollideWithGeneratedClrAliases(ExecutionMode mode)
+    {
+        Assert.Equal("1 2 3 4\n1 5 6 4\n1 2 3 4\n", TestHarness.Run("""
+            class Base { x: number = 1; }
+            class Child extends Base { X: number = 2; '<field>X': number = 3; '<field>X$1': number = 4; }
+            const value = new Child();
+            console.log(value.x, value.X, value['<field>X'], value['<field>X$1']);
+            value.X = 5;
+            value['<field>X'] = 6;
+            console.log(value.x, value.X, value['<field>X'], value['<field>X$1']);
+            class Reverse extends Base { '<field>X$1': number = 4; '<field>X': number = 3; X: number = 2; }
+            const reverse = new Reverse();
+            console.log(reverse.x, reverse.X, reverse['<field>X'], reverse['<field>X$1']);
             """, mode));
     }
 }
