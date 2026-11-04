@@ -125,10 +125,11 @@ unsupported values/comparers remain opaque, and explicit
 providers separately or substitute empirical timing weights.
 
 Local results include each standalone plan, its inventory digest, exact filter,
-method weights and shard totals. CI uses six shards on each platform and uploads
+method weights and shard totals. CI uses eight shards on each platform and uploads
 the plan, execution duration and TRX results as `standalone-<os>-<shard>` artifacts
 for seven days, including failed runs. Compare Linux and Windows durations and
 executed case counts alongside the inventory digest when assessing balance.
+The release workflow uses the same eight-way partition on Linux.
 The 35-minute CI test step, 40-minute job and 120-second hang guard stay bounded.
 
 CI runs core integration and packaging tests on a separate Windows/Linux job from
@@ -137,7 +138,7 @@ the same category exclusions. Three fresh discoveries prove that their disjoint
 filters reproduce the complete original core inventory, including every discovered
 theory row; each job uploads that inventory proof. Process tests acquire their own
 independent Windows signature verifier, and the required gate waits for both jobs.
-The six standalone shards on each platform keep their existing coverage and budgets.
+The eight standalone shards on each platform keep their existing coverage and budgets.
 
 Core tests use xUnit's conservative parallel scheduler with the default CPU-based
 collection limit. It bounds unfinished collections so awaited test continuations

@@ -171,8 +171,8 @@ foreach ($requiredText in @('WaitForExit(60000)', '5000', 'New-CoreTestPartition
         $errors.Add("Core partition discovery is missing a coverage or budget guard: $requiredText")
     }
 }
-foreach ($requiredText in @('shard: [0, 1, 2, 3, 4, 5]', 'shell: pwsh',
-    './scripts/test-standalone-shard.ps1 -ShardIndex ${{ matrix.shard }} -ShardCount 6',
+foreach ($requiredText in @('shard: [0, 1, 2, 3, 4, 5, 6, 7]', 'shell: pwsh',
+    './scripts/test-standalone-shard.ps1 -ShardIndex ${{ matrix.shard }} -ShardCount 8',
     '-ResultsDirectory artifacts/standalone/${{ matrix.os }}-${{ matrix.shard }}',
     'timeout-minutes: 35', 'timeout-minutes: 40', 'fail-fast: false', 'if: always()',
     'name: standalone-${{ matrix.os }}-${{ matrix.shard }}',
@@ -382,8 +382,8 @@ foreach ($requiredText in @('timeout-minutes: 50', '--blame-hang-timeout 120s', 
         $errors.Add("Publish build must retain its bounded core budget and per-test hang guard: $requiredText")
     }
 }
-foreach ($requiredText in @('runs-on: ubuntu-24.04', 'shard: [0, 1, 2, 3, 4, 5]', 'shell: pwsh',
-    './scripts/test-standalone-shard.ps1 -ShardIndex ${{ matrix.shard }} -ShardCount 6',
+foreach ($requiredText in @('runs-on: ubuntu-24.04', 'shard: [0, 1, 2, 3, 4, 5, 6, 7]', 'shell: pwsh',
+    './scripts/test-standalone-shard.ps1 -ShardIndex ${{ matrix.shard }} -ShardCount 8',
     '-ResultsDirectory artifacts/release-standalone/${{ matrix.shard }}',
     'timeout-minutes: 35', 'timeout-minutes: 40', 'fail-fast: false', 'if: always()',
     'name: release-standalone-${{ matrix.shard }}', 'path: artifacts/release-standalone/', 'retention-days: 7')) {
