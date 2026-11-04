@@ -1816,7 +1816,8 @@ public partial class TypeChecker
                 else
                 {
                     // No type annotation and no expected type - use Any
-                    paramType = TypeInfo.Any.Shared;
+                    paramType = param.DefaultValue is Expr.Literal literal
+                        ? WidenLiteralType(GetLiteralType(literal.Value)) : TypeInfo.Any.Shared;
                 }
                 paramTypes.Add(paramType);
                 if (!param.IsRest && param.DefaultValue is null && !param.IsOptional)
@@ -1888,6 +1889,11 @@ public partial class TypeChecker
                     }
                     namedDefaults?.Check(param.DefaultValue, i);
                     defaultBindings.Check(param.DefaultValue, i);
+                    if (param.Type is null && (expectedFuncType is null || i >= expectedFuncType.ParamTypes.Count))
+                    {
+                        paramType = WidenClassFieldInitializerType(param.DefaultValue, defaultType);
+                        paramTypes[i] = paramType;
+                    }
                     if (!IsCompatible(paramType, defaultType))
                     {
                         throw new TypeCheckException($" Default value type '{defaultType}' is not assignable to parameter type '{paramType}'.",

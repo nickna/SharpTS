@@ -1209,7 +1209,8 @@ public partial class TypeChecker
         var paramScope = new TypeEnvironment(_environment);
         if (editorOwner is not null)
             RegisterEditorParameterScope(editorOwner, paramScope);
-        var annotations = parameters.Select(param => ResolveAnnotation(param.Type, param.TypeAnnotationNode, param)).ToList();
+        var annotations = parameters.Select(param => ResolveAnnotation(param.Type, param.TypeAnnotationNode, param)
+            ?? (param.DefaultValue is Expr.Literal literal ? WidenLiteralType(GetLiteralType(literal.Value)) : null)).ToList();
         var defaultBindings = new ParameterDefaultBindings(this, editorOwner, parameters,
             annotations.Select(type => type ?? TypeInfo.Any.Shared).ToList(), paramScope, validateDefaults);
         using var bindingScope = new ParameterBindingCheckScope(this, editorOwner, validateDefaults,
@@ -1278,6 +1279,11 @@ public partial class TypeChecker
                         defaultType = CheckDeferredClassDefault(param.DefaultValue, ParameterDefaultTupleContext(paramType));
                     }
                     defaultBindings.Check(param.DefaultValue, parameterIndex);
+                    if (resolvedParameter is null)
+                    {
+                        paramType = WidenClassFieldInitializerType(param.DefaultValue, defaultType);
+                        paramTypes[parameterIndex] = paramType;
+                    }
                     if (!IsCompatible(paramType, defaultType))
                     {
                         throw new TypeMismatchException($"Default value type is not assignable to parameter type in {contextName}",
