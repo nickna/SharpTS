@@ -545,7 +545,7 @@ public partial class TypeChecker
             var fieldSubstitutions = subs;
             while (currentSuper != null)
             {
-                fieldSubstitutions = ComposeInheritedFieldReadSubstitutions(currentSuper, fieldSubstitutions);
+                fieldSubstitutions = ComposeInheritedFieldSubstitutions(currentSuper, fieldSubstitutions);
                 var superMethods = GetMethods(currentSuper);
                 var superFields = GetFieldTypes(currentSuper);
                 if (superMethods != null && superMethods.TryGetValue(memberName, out var superMethod))
@@ -567,7 +567,7 @@ public partial class TypeChecker
         return TypeInfo.Any.Shared;
     }
 
-    private Dictionary<string, TypeInfo> ComposeInheritedFieldReadSubstitutions(
+    private Dictionary<string, TypeInfo> ComposeInheritedFieldSubstitutions(
         TypeInfo current, Dictionary<string, TypeInfo> substitutions)
     {
         if (current is not TypeInfo.InstantiatedGeneric
@@ -636,9 +636,11 @@ public partial class TypeChecker
             {
                 return builtInMember;
             }
+            if (current is TypeInfo.MutableClass { IsDynamicSuperclass: true })
+                return TypeInfo.Any.Shared;
 
             if (!promiseHeritage)
-                fieldSubstitutions = ComposeInheritedFieldReadSubstitutions(current, fieldSubstitutions);
+                fieldSubstitutions = ComposeInheritedFieldSubstitutions(current, fieldSubstitutions);
 
             // If current is an InstantiatedGeneric, build/extend the substitution map
             if (current is TypeInfo.InstantiatedGeneric igCurrent &&

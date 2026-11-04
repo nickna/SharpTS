@@ -75,6 +75,9 @@ public sealed class EmittedMapSetRuntimeTests
     {
         var module = NewAssembly().DefineDynamicModule("main");
         var emitter = new RuntimeEmitter(TypeProvider.Runtime);
+        var sentinels = new EmittedRuntime().Sentinels;
+        typeof(RuntimeEmitter).GetMethod("EmitUndefinedClass", InstanceMembers)!
+            .Invoke(emitter, [module, sentinels]);
         object owner = Activator.CreateInstance(OwnerType(family), nonPublic: true)!;
         typeof(RuntimeEmitter).GetMethod("EmitBound" + family + "MethodTypeDefinition", InstanceMembers)!
             .Invoke(emitter, [module, owner, null]);
@@ -82,10 +85,11 @@ public sealed class EmittedMapSetRuntimeTests
             Assert.NotNull(owner.GetType().GetProperty(name)!.GetValue(owner));
         var operation = owner.GetType().GetProperty("Size")!;
         Expect<InvalidOperationException>(() => operation.GetValue(owner));
-        // Property dispatch only needs the forward-declared bound constructor and BCL Count.
+        // Property dispatch only needs the forward-declared bound constructor, BCL Count,
+        // and this output's undefined sentinel for missing properties.
         // This is a construction-stage test; saved runtime execution is verified separately.
         typeof(RuntimeEmitter).GetMethod("EmitGet" + family + "Property", InstanceMembers)!
-            .Invoke(emitter, [module.DefineType("Dispatch"), owner]);
+            .Invoke(emitter, [module.DefineType("Dispatch"), owner, sentinels.UndefinedInstance]);
         Assert.NotNull(owner.GetType().GetProperty("GetProperty")!.GetValue(owner));
         Expect<InvalidOperationException>(() => operation.GetValue(owner));
         Expect<InvalidOperationException>(() => owner.GetType().GetMethod("CompleteEmission", InstanceMembers)!.Invoke(owner, null));

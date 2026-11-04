@@ -12,13 +12,7 @@ public sealed class VisualRegressionIntegrationTests(ITestOutputHelper testOutpu
     public async Task HeadlessHost_CapturesAndVerifiesSkiaPngBaseline()
     {
         string repositoryRoot = FindRepositoryRoot();
-#if DEBUG
-        const string configuration = "Debug";
-#else
-        const string configuration = "Release";
-#endif
-        string hostSource = Path.Combine(
-            repositoryRoot, "src", "SharpTS.Gui.Host", "bin", configuration, "net10.0");
+string hostSource = GuiConformanceBuildPaths.DesktopHostDirectory;
         string fixture = Path.Combine(
             repositoryRoot, "tests", "gui-conformance", "SharpTS.Gui.Conformance.Tests",
             "Fixtures",
@@ -31,7 +25,7 @@ public sealed class VisualRegressionIntegrationTests(ITestOutputHelper testOutpu
             string guestDirectory = Path.Combine(temporaryRoot, "Guest");
             Directory.CreateDirectory(guestDirectory);
             File.Copy(fixture, Path.Combine(guestDirectory, "main.tsx"), overwrite: true);
-            GuiInterpretedTestAssets.Stage(repositoryRoot, configuration, temporaryRoot);
+            GuiInterpretedTestAssets.Stage(repositoryRoot, temporaryRoot);
 
             var start = new ProcessStartInfo("dotnet")
             {

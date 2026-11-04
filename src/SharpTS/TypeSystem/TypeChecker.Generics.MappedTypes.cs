@@ -379,7 +379,7 @@ public partial class TypeChecker
         }
 
         // Return as Interface to preserve optional / readonly info (a Record can carry neither).
-        return optionalFields.Count > 0 || readonlyFields.Count > 0
+        TypeInfo result = optionalFields.Count > 0 || readonlyFields.Count > 0
             ? new TypeInfo.Interface("", fields.ToFrozenDictionary(), optionalFields.ToFrozenSet(),
                 StringIndexType: stringIndexType,
                 NumberIndexType: numberIndexType,
@@ -389,6 +389,7 @@ public partial class TypeChecker
                 StringIndexType: stringIndexType,
                 NumberIndexType: numberIndexType,
                 SymbolIndexType: symbolIndexType);
+        return DeferredTypeAliasPresentation.TransferMapped(mapped, result);
     }
 
     /// <summary>

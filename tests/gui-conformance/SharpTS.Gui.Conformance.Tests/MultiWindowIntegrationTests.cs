@@ -13,16 +13,8 @@ public sealed class MultiWindowIntegrationTests(ITestOutputHelper testOutput)
     public async Task OwnedWindowsAndIsolatedFailuresMatchInBothGuestModes()
     {
         string repositoryRoot = FindRepositoryRoot();
-#if DEBUG
-        const string configuration = "Debug";
-#else
-        const string configuration = "Release";
-#endif
-        string hostSource = Path.Combine(
-            repositoryRoot, "tests", "gui-conformance", "SharpTS.Gui.ConformanceHost", "bin", configuration, "net10.0");
-        string compiledGuest = Path.Combine(
-            repositoryRoot, "tests", "gui-conformance", "SharpTS.Gui.Conformance.Tests", "obj", configuration,
-            "net10.0", ".sharpts-gui-conformance", "MultiWindow.Guest.dll");
+string hostSource = GuiConformanceBuildPaths.HostDirectory;
+        string compiledGuest = Path.Combine(GuiConformanceBuildPaths.Assets, "MultiWindow.Guest.dll");
         string fixture = Path.Combine(
             repositoryRoot, "tests", "gui-conformance", "SharpTS.Gui.Conformance.Tests", "Fixtures", "MultiWindow", "main.tsx");
         Assert.True(File.Exists(compiledGuest), $"Multi-window guest was not built: {compiledGuest}");

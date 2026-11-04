@@ -14,7 +14,8 @@ public partial class ILCompiler
 
     private void EmitEffectiveClassElements(CompilationContext context, IEnumerable<Stmt.Field> fields,
         IReadOnlyDictionary<string, FieldBuilder>? backingFields, IReadOnlyDictionary<string, Type>? propertyTypes,
-        Action<Stmt.Field> loadComputedKey, IEnumerable<Stmt.AutoAccessor>? autoAccessors = null)
+        Action<Stmt.Field> loadComputedKey, IEnumerable<Stmt.AutoAccessor>? autoAccessors = null,
+        IReadOnlySet<Token>? leadingFields = null)
     {
         var il = context.IL;
         var emitter = new ILEmitter(context);
@@ -23,7 +24,8 @@ public partial class ILCompiler
         var slots = EmitPrivateFieldStorage(il, context.CurrentClassName!, context, emitter);
         var elements = fields.Where(field => !field.IsStatic && !field.IsDeclare).Cast<Stmt>()
             .Concat((autoAccessors ?? []).Where(accessor => !accessor.IsStatic))
-            .OrderBy(element => element is Stmt.Field field ? field.Name.SourceOrderOffset : ((Stmt.AutoAccessor)element).Name.SourceOrderOffset);
+            .OrderBy(element => element is Stmt.Field field && leadingFields?.Contains(field.Name) == true ? 0 : 1)
+            .ThenBy(element => element is Stmt.Field field ? field.Name.SourceOrderOffset : ((Stmt.AutoAccessor)element).Name.SourceOrderOffset);
         foreach (var element in elements)
         {
             if (element is Stmt.AutoAccessor accessor)
@@ -46,8 +48,9 @@ public partial class ILCompiler
             else il.Emit(OpCodes.Ldsfld, _runtime.Sentinels.UndefinedInstance);
             il.Emit(OpCodes.Stloc, value);
             var done = il.DefineLabel();
-            string property = NamingConventions.ToPascalCase(field.Name.Lexeme);
-            bool nativeOwn = context.CurrentClassBuilder is TypeBuilder nativeOwnOwner && _nativeOwnAdapters.ContainsKey(nativeOwnOwner);
+            string property = GetClassRegistry().OwnGuestFieldPropertyName((TypeBuilder)context.CurrentClassBuilder!, fields, field.Name.Lexeme);
+            bool nativeOwn = context.CurrentClassBuilder is TypeBuilder nativeOwnOwner
+                && (_nativeOwnAdapters.ContainsKey(nativeOwnOwner) || _observableFieldOwners.Contains(nativeOwnOwner));
             if (field.ComputedKey == null && (field.Initializer != null || nativeOwn)
                 && backingFields?.TryGetValue(property, out var backing) == true)
             {
@@ -69,7 +72,9 @@ public partial class ILCompiler
                 }
                 if (nativeOwn)
                 {
-                    var legacy = EmitNativeOwnReceiverGuard(il);
+                    Label? legacy = context.CurrentClassBuilder is TypeBuilder adapterOwner
+                        && _nativeOwnAdapters.ContainsKey(adapterOwner) && !_observableFieldOwners.Contains(adapterOwner)
+                        ? EmitNativeOwnReceiverGuard(il) : null;
                     // Complete the throwing public field definition before selecting
                     // the exact owner-local native/raw storage for its value.
                     il.Emit(OpCodes.Ldarg_0); il.Emit(OpCodes.Ldstr, field.Name.Lexeme);
@@ -81,7 +86,8 @@ public partial class ILCompiler
                     il.Emit(OpCodes.Ldarg_0); il.Emit(OpCodes.Ldstr, field.Name.Lexeme);
                     il.Emit(OpCodes.Ldstr, NativeOwnFieldIdentity(guestField!)); il.Emit(OpCodes.Ldc_I4_1);
                     il.Emit(OpCodes.Call, _runtime.GuestOwnProperties!.CommitDefinition);
-                    il.Emit(OpCodes.Br, done); il.MarkLabel(legacy);
+                    il.Emit(OpCodes.Br, done);
+                    if (legacy is { } legacyLabel) il.MarkLabel(legacyLabel);
                 }
                 if (field.Initializer == null) il.Emit(OpCodes.Br, external);
                 else Store(false);

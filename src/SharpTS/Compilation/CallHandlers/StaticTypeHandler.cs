@@ -23,6 +23,9 @@ public class StaticTypeHandler : ICallHandler
         var ctx = emitter.Context;
         if (ctx.TypeEmitterRegistry == null)
             return false;
+        if (staticVar.Name.Lexeme == "Array" && (ctx.RuntimeFeatures?.UsesArrayConstructorMutation == true ||
+            emitter.HasVariable("Array") || ctx.HasVisibleValueBinding("Array")))
+            return false;
 
         if (staticVar.Name.Lexeme == "Number"
             && (emitter.HasVariable("Number")
@@ -72,6 +75,12 @@ public class StaticTypeHandler : ICallHandler
 
         if (!staticStrategy.TryEmitStaticCall(emitter, staticGet.Name.Lexeme, call.Arguments))
             return false;
+
+        // The selected descriptor entry reads an existing value; it does not
+        // choose a source constructor context. Argument/callback invocations
+        // keep their independently recorded family obligations.
+        if (staticStrategy is ObjectStaticEmitter && staticGet.Name.Lexeme == "getOwnPropertyDescriptor")
+            ctx.NativeClosedFamilies?.SelectNonConstructingCall(call, ctx.IL);
 
         if (staticVar.Name.Lexeme == "Number"
             && staticGet.Name.Lexeme == "parseInt"

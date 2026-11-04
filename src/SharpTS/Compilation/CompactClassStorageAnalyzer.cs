@@ -74,7 +74,66 @@ internal static class CompactClassStorageAnalyzer
             && (method.Decorators is null or { Count: 0 }))
         && (statement.Accessors?.All(accessor =>
             accessor.ComputedKey is null
-            && (accessor.Decorators is null or { Count: 0 })) ?? true);
+            && (accessor.Decorators is null or { Count: 0 })) ?? true)
+        && HasSafeReceiverUse(statement);
+
+    private static bool HasSafeReceiverUse(Stmt.Class statement)
+    {
+        var visitor = new ReceiverUsageVisitor(statement);
+        visitor.InInitializer = true;
+        foreach (var field in statement.Fields)
+            if (field.Initializer != null) visitor.Visit(field.Initializer);
+        visitor.InInitializer = false;
+        foreach (var method in statement.Methods) visitor.Visit(method);
+        if (statement.Accessors != null)
+            foreach (var accessor in statement.Accessors) visitor.Visit(accessor);
+        return !visitor.Unsafe;
+    }
+
+    // A typed local does not prove its receiver stayed private during construction.
+    // Initializers can observe incomplete fields or publish a receiver which later
+    // aborts. In methods/constructors, retain only direct declared member use;
+    // escaping, indexed/asserted access and deletion need ordinary object semantics.
+    private sealed class ReceiverUsageVisitor(Stmt.Class statement) : AstVisitorBase
+    {
+        internal bool InInitializer { get; set; }
+        internal bool Unsafe { get; private set; }
+        protected override void VisitThis(Expr.This expression) => Unsafe = true;
+        private bool IsField(string name) => statement.Fields.Any(field =>
+            !field.IsStatic && field.Name.Lexeme == name);
+        private bool IsMember(string name) => IsField(name)
+            || statement.Methods.Any(method => !method.IsStatic && method.Name.Lexeme == name)
+            || (statement.Accessors?.Any(accessor => !accessor.IsStatic && accessor.Name.Lexeme == name) ?? false);
+        protected override void VisitGet(Expr.Get expression)
+        {
+            if (!InInitializer && !expression.Optional && expression.Object is Expr.This
+                && IsMember(expression.Name.Lexeme)) return;
+            base.VisitGet(expression);
+        }
+        protected override void VisitSet(Expr.Set expression)
+        {
+            if (!InInitializer && expression.Object is Expr.This && IsField(expression.Name.Lexeme))
+                Visit(expression.Value);
+            else base.VisitSet(expression);
+        }
+        protected override void VisitCompoundSet(Expr.CompoundSet expression)
+        {
+            if (!InInitializer && expression.Object is Expr.This && IsField(expression.Name.Lexeme))
+                Visit(expression.Value);
+            else base.VisitCompoundSet(expression);
+        }
+        protected override void VisitLogicalSet(Expr.LogicalSet expression)
+        {
+            if (!InInitializer && expression.Object is Expr.This && IsField(expression.Name.Lexeme))
+                Visit(expression.Value);
+            else base.VisitLogicalSet(expression);
+        }
+        protected override void VisitDelete(Expr.Delete expression)
+        {
+            if (expression.Operand is Expr.Get { Object: Expr.This }) Unsafe = true;
+            base.VisitDelete(expression);
+        }
+    }
 
     private sealed class DeclarationCollector : AstVisitorBase
     {

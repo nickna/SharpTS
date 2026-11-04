@@ -19,13 +19,43 @@ public sealed class NativeTaskSourceBufferProofTests
 {
     private const string Original = "const a:any=new Uint8Array(2);let gets=0;Object.defineProperty(a,'probe',{get(){gets++;return 9},enumerable:true,configurable:true});Object.defineProperty(a,'length',{value:7,writable:true,configurable:true});console.log(Object.getOwnPropertyNames(a).join(','),Reflect.ownKeys(a).join(','),Object.keys(a).join(','),gets);";
     private const string Expected = "0,1,probe,length 0,1,probe,length 0,1,probe 0\n";
+    // Select actual Promise producers for the Task proof rather than relying on
+    // the incidental Object.defineProperty dependency removed by #3297.
+    private const string PromiseProof = "Promise.resolve(0);" + Original;
 
     [Theory]
     [InlineData(false, false)]
     [InlineData(false, true)]
     [InlineData(true, false)]
     [InlineData(true, true)]
-    public void ActualDefinitionSourceKeepsItsThreeGlobalReceiptsAndCertifiesFinalArtifacts(bool references, bool symbols)
+    public void OriginalDefinitionSourceOmitsIncidentalPromiseRuntimeAndPreservesPrototypeBoundary(bool references, bool symbols)
+    {
+        var compiler = CompileSource(Original, references); compiler.EmitDebugSymbols = symbols;
+        var artifacts = compiler.SaveArtifacts("task-original.pdb");
+        using var verifier = new ILVerifier(extraProbeDirectories: [AppContext.BaseDirectory]);
+        using var image = new MemoryStream(artifacts.Assembly);
+        Assert.Empty(verifier.Verify(image));
+        var saved = Assembly.Load(artifacts.Assembly);
+        Assert.Equal(Expected, TestHarness.RunCompiledWithTimeout(() => saved, TimeSpan.FromSeconds(20)));
+        Assert.Empty(compiler.NativePrototypeFields!.CompletedUnprovedResults.Producers);
+        // #3297 removes incidental Task carriers; it does not certify an
+        // unrelated callable carrier for which this source has no allocation.
+        Assert.True(compiler.NativePrototypeFields.UsesLegacy);
+        Assert.Equal(new[] { "No completed allocation producer for admitted callable carrier: $ClassDefinition" },
+            compiler.NativePrototypeFields.Blockers);
+        Assert.False(compiler.NativeTypedArrayBuffers!.UsesLegacy);
+        Assert.Empty(compiler.NativeTypedArrayBuffers.Blockers);
+        Assert.Null(saved.GetType("$Promise"));
+        Assert.Null(saved.GetType("$Runtime")!.GetMethod("PromiseResolveValueWithRoot"));
+        if (symbols) Assert.NotEmpty(artifacts.Pdb!);
+    }
+
+    [Theory]
+    [InlineData(false, false)]
+    [InlineData(false, true)]
+    [InlineData(true, false)]
+    [InlineData(true, true)]
+    public void ExplicitPromiseFixtureKeepsItsThreeGlobalReceiptsAndCertifiesFinalArtifacts(bool references, bool symbols)
     {
         var compiler = Compile(references); compiler.EmitDebugSymbols = symbols;
         var artifacts = compiler.SaveArtifacts("task-proof.pdb");
@@ -171,9 +201,11 @@ public sealed class NativeTaskSourceBufferProofTests
         Assert.Throws<InvalidOperationException>(() => proof.Claims(new(typeof(TaskCompletionSource<object>).GetProperty("Task")!.GetMethod!, method.GetILGenerator(), 0, 1)));
     }
 
-    private static ILCompiler Compile(bool references)
+    private static ILCompiler Compile(bool references) => CompileSource(PromiseProof, references);
+
+    private static ILCompiler CompileSource(string source, bool references)
     {
-        var statements = new Parser(new Lexer(Original).ScanTokens()).ParseOrThrow(); var checker = new TypeChecker(); var map = checker.Check(statements);
+        var statements = new Parser(new Lexer(source).ScanTokens()).ParseOrThrow(); var checker = new TypeChecker(); var map = checker.Check(statements);
         Assert.DoesNotContain(checker.GetDiagnostics(), row => row.Severity == SharpTS.Diagnostics.DiagnosticSeverity.Error);
         var compiler = new ILCompiler("task_source_" + Guid.NewGuid().ToString("N"), false, references, null, null, null, OutputTarget.Dll);
         compiler.EnableNativeAotProjectOutput(); compiler.Compile(statements, map); return compiler;

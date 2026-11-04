@@ -18,6 +18,9 @@ public class BuiltInConstructorHandler : ICallHandler
     {
         if (call.Callee is not Expr.Variable v)
             return false;
+        if (v.Name.Lexeme == "Array" && (emitter.Context.RuntimeFeatures?.UsesArrayConstructorMutation == true ||
+            emitter.HasVariable("Array") || emitter.Context.HasVisibleValueBinding("Array")))
+            return false;
 
         return v.Name.Lexeme switch
         {

@@ -88,6 +88,7 @@ public partial class RuntimeEmitter
         EmittedNativeMethodLookupRuntime? nativeMethodLookup = null,
         EmittedNativeConstructorMetadataRuntime? nativeConstructorMetadata = null)
     {
+        _sourceDataDefinition = null;
         _nativeUnionParameters = functionPolicy.NativeUnionParameters;
         _nativeDeletionLookup?.ValidateForEmitter(moduleBuilder, _emitNativeCallables);
         _nativeConstructorFactories?.ValidateForEmitter(moduleBuilder, _emitNativeCallables);
@@ -418,6 +419,8 @@ public partial class RuntimeEmitter
         // $Array: array length truncation must remove indexed descriptors as
         // well as dense/sparse storage. The descriptor store itself depends
         // only on helper types emitted above.
+        if (features.UsesUserClasses)
+            EmitSourceDataDefinitionContract(moduleBuilder);
         var guestOwnProperties = EmitPropertyDescriptorTypes(moduleBuilder, runtime.DescriptorStorage,
             new DescriptorKeyInputs(runtime.FunctionValues.Type, runtime.FunctionValues.GetMethodInfo,
                 runtime.FunctionValues.PropertyIdentityField, runtime.ObjectKeys.ForgetConstructorKey),
@@ -431,8 +434,8 @@ public partial class RuntimeEmitter
         // Emit $IHasFields interface for unified property access
         // Must come before $Object which implements it
         EmitHasFieldsInterface(moduleBuilder, runtime.ObjectFields);
-        if (features.UsesUserClasses)
-            EmitSourceDataDefinitionContract(moduleBuilder, runtime.ObjectFields);
+        if (_sourceDataDefinition is { } sourceDataDefinition)
+            runtime.ObjectFields.DeclareSourceDataDefinition(sourceDataDefinition.Contract, sourceDataDefinition.DefineValue);
         sourceOwners?.DeclareContract(runtime.ObjectFields.Interface);
         runtime.ObjectFields.CompleteEmission();
         EmitCompactObjectRecordInterface(moduleBuilder, runtime.Records);

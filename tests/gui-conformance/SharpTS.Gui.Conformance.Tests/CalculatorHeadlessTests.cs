@@ -26,19 +26,14 @@ public sealed class CalculatorHeadlessTests(ITestOutputHelper testOutput)
     private async Task<TraceEvent[]> RunAsync(string mode)
     {
         string root = FindRepositoryRoot();
-#if DEBUG
-        const string configuration = "Debug";
-#else
-        const string configuration = "Release";
-#endif
-        string hostSource = Path.Combine(root, "src", "SharpTS.Gui.Host", "bin", configuration, "net10.0");
-        string conformanceRoot = Path.Combine(root, "tests", "gui-conformance", "SharpTS.Gui.Conformance.Tests", "obj", configuration, "net10.0", ".sharpts-gui-conformance");
+string hostSource = GuiConformanceBuildPaths.DesktopHostDirectory;
+        string conformanceRoot = GuiConformanceBuildPaths.Assets;
         string stage = Path.Combine(Path.GetTempPath(), $"sharpts-calculator-{mode}-{Guid.NewGuid():N}");
         Directory.CreateDirectory(stage);
         try
         {
             CopyDirectory(hostSource, stage);
-            GuiInterpretedTestAssets.Stage(root, configuration, stage);
+            GuiInterpretedTestAssets.Stage(root, stage);
             string guestDirectory = Path.Combine(stage, "Guest");
             Directory.CreateDirectory(guestDirectory);
             File.Copy(Path.Combine(root, "samples", "Calculator", "headless.tests.tsx"), Path.Combine(guestDirectory, "main.tsx"), true);

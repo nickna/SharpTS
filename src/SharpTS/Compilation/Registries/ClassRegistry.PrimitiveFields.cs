@@ -1,5 +1,6 @@
 using System.Diagnostics.CodeAnalysis;
 using System.Reflection.Emit;
+using SharpTS.Parsing;
 
 namespace SharpTS.Compilation.Registries;
 
@@ -29,6 +30,40 @@ public sealed partial class ClassRegistry
     {
         field = _guestDataFields.GetValueOrDefault(owner)?.GetValueOrDefault(name);
         return field != null;
+    }
+
+    internal string ResolveGuestFieldPropertyName(string className, string sourceName)
+    {
+        if (!_builders.TryGetValue(className, out var owner))
+            _guestFieldOwners.TryGetValue(className, out owner);
+        for (Type? current = owner; current != null; current = current.BaseType)
+        {
+            var definition = current.IsConstructedGenericType ? current.GetGenericTypeDefinition() : current;
+            if (definition is not TypeBuilder builder) break;
+            if (TryGetOwnGuestDataField(builder, sourceName, out var field))
+                return field.NativeGetter is { } getter ? getter.Name["get_".Length..] : "<guest>" + sourceName;
+        }
+        return NamingConventions.ToPascalCase(sourceName);
+    }
+
+    internal string OwnGuestFieldPropertyName(TypeBuilder owner, IEnumerable<Stmt.Field> fields, string sourceName)
+    {
+        if (TryGetOwnGuestDataField(owner, sourceName, out var registered) && registered.NativeGetter is { } ownGetter)
+            return ownGetter.Name["get_".Length..];
+        var inherited = new List<GuestDataField>();
+        for (Type? current = owner.BaseType; current != null; current = current.BaseType)
+        {
+            var definition = current.IsConstructedGenericType ? current.GetGenericTypeDefinition() : current;
+            if (definition is not TypeBuilder builder) break;
+            inherited.AddRange(GetOwnGuestDataFields(builder));
+        }
+        // The same guest key must retain its inherited virtual slot. A
+        // different exact key must never override that slot through casing.
+        var sameKey = inherited.FirstOrDefault(field => field.SourceName == sourceName && field.NativeGetter != null);
+        if (sameKey?.NativeGetter is { } inheritedGetter) return inheritedGetter.Name["get_".Length..];
+        string preferred = FieldClrNames.Instance(fields, sourceName);
+        return inherited.Any(field => field.NativeGetter?.Name == "get_" + preferred)
+            ? "<field>" + sourceName : preferred;
     }
 
     public bool TryGetPrimitiveGuestField(string className, string sourceName,

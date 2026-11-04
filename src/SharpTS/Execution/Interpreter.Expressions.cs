@@ -2366,6 +2366,16 @@ public partial class Interpreter
         // Generate name for anonymous classes
         string className = classExpr.Name?.Lexeme ?? $"$ClassExpr_{++_classExprCounter}";
 
+        // The expression's lexical self exists during heritage evaluation, but
+        // remains uninitialized until the class definition has been created.
+        RuntimeEnvironment classNameEnvironment = _environment;
+        if (classExpr.Name != null)
+        {
+            classNameEnvironment = new RuntimeEnvironment(_environment);
+            classNameEnvironment.ReserveLexical(classExpr.Name.Lexeme);
+        }
+        using var classNameScope = PushScope(classNameEnvironment);
+
         // Resolve superclass if present
         object? superclass = null;
         SharpTSBuiltInConstructor? intrinsicPromiseParent = null;
@@ -2396,14 +2406,7 @@ public partial class Interpreter
         }
 
         // Create environment for class body
-        RuntimeEnvironment classEnv = _environment;
-
-        // If named, define the name in class body scope for self-reference
-        if (classExpr.Name != null)
-        {
-            classEnv = new RuntimeEnvironment(_environment);
-            classEnv.Define(classExpr.Name.Lexeme, null); // Placeholder for self-reference
-        }
+        RuntimeEnvironment classEnv = classNameEnvironment;
 
         if (classExpr.SuperclassExpr != null)
         {
@@ -2664,7 +2667,7 @@ public partial class Interpreter
             // can invoke methods and accessors that close over it.
             if (classExpr.Name != null)
             {
-                classEnv.Assign(classExpr.Name, klass);
+                classNameEnvironment.Define(classExpr.Name.Lexeme, klass);
             }
 
             // Execute static initializers in declaration order (if present)

@@ -21,7 +21,9 @@ public partial class RuntimeEmitter
         EmittedObjectOwnPropertiesRuntime ObjectOwnProperties,
         EmittedReflectRuntime Reflect,
         EmittedSymbolRuntime Symbols,
-        Type UndefinedType);
+        Type UndefinedType,
+        ProxyOwnKeysCallInputs ProxyOwnKeys,
+        bool ProxySelected = false);
 
     private readonly record struct GetValuesInputs(
         EmittedArrayStorageRuntime ArrayStorage,
@@ -239,6 +241,12 @@ public partial class RuntimeEmitter
             il.Emit(OpCodes.Isinst, generatorInterface);
             il.Emit(OpCodes.Brtrue, copySource);
         }
+        if (inputs.ProxySelected)
+        {
+            var unsupportedSource = il.DefineLabel();
+            EmitProxyTypeCheck(il, () => il.Emit(OpCodes.Ldarg_0), copySource, unsupportedSource);
+            il.MarkLabel(unsupportedSource);
+        }
         il.Emit(OpCodes.Newobj, _types.GetDefaultConstructor(_types.DictionaryStringObject));
         il.Emit(OpCodes.Ret);
 
@@ -290,8 +298,20 @@ public partial class RuntimeEmitter
         // Snapshot every own string and Symbol key before reading any value.
         // Descriptor presence/enumerability remain live for each retained key.
         il.MarkLabel(exclusionsReady);
+        var keysReady = il.DefineLabel();
+        if (inputs.ProxySelected)
+        {
+            var proxyKeys = il.DefineLabel();
+            var ordinaryKeys = il.DefineLabel();
+            EmitProxyTypeCheck(il, () => il.Emit(OpCodes.Ldarg_0), proxyKeys, ordinaryKeys);
+            il.MarkLabel(proxyKeys);
+            EmitProxyOwnKeysCompiledCall(il, inputs.ProxyOwnKeys, () => il.Emit(OpCodes.Ldarg_0));
+            il.Emit(OpCodes.Br, keysReady);
+            il.MarkLabel(ordinaryKeys);
+        }
         il.Emit(OpCodes.Ldarg_0);
         il.Emit(OpCodes.Call, inputs.ObjectKeys.Ordinary);
+        il.MarkLabel(keysReady);
         il.Emit(OpCodes.Stloc, keys);
         il.Emit(OpCodes.Newobj, _types.GetDefaultConstructor(_types.DictionaryStringObject));
         il.Emit(OpCodes.Stloc, result);
@@ -326,6 +346,12 @@ public partial class RuntimeEmitter
         il.Emit(OpCodes.Brfalse, nextKey);
         // An ordinary own data descriptor supplies its current value directly,
         // including undefined. Accessors perform [[Get]] with the source receiver.
+        if (inputs.ProxySelected)
+        {
+            var ordinarySource = il.DefineLabel();
+            EmitProxyTypeCheck(il, () => il.Emit(OpCodes.Ldarg_0), readAccessor, ordinarySource);
+            il.MarkLabel(ordinarySource);
+        }
         il.Emit(OpCodes.Ldloc, descriptor);
         il.Emit(OpCodes.Ldstr, "value");
         il.Emit(OpCodes.Call, inputs.ObjectOwnProperties.HasOwnProperty);

@@ -441,6 +441,7 @@ public partial class ILEmitter
 
     protected override void EmitAssign(Expr.Assign a)
     {
+        if (TryEmitArrayGlobalAssignment(a)) return;
         if (_ctx.HasLoopBodyBindingAccess(a.Name.Lexeme))
         {
             EmitExpression(a.Value);

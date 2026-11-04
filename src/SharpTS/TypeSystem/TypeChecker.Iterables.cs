@@ -138,7 +138,7 @@ public partial class TypeChecker
         {
             // Compose each owner's arguments in the incoming instance scope before
             // reading its native-placeholder signature; never mutate the shared class.
-            substitutions = ComposeInheritedFieldReadSubstitutions(current, substitutions);
+            substitutions = ComposeInheritedFieldSubstitutions(current, substitutions);
             TypeInfo? iteratorFactory = current is TypeInfo.MutableClass mc
                 ? (mc.Methods.TryGetValue("@@iterator", out var m) ? m : null)
                 : GetMethods(current)?.GetValueOrDefault("@@iterator");

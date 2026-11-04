@@ -44,6 +44,19 @@ public sealed class NativePrototypeFieldsTests
     public static IEnumerable<object[]> Cases()
     {
         yield return ["ordinary-class", "class Counter { value=7; } console.log(new Counter().value);", "7\n"];
+        yield return ["source-field-reflection", """
+            class C { value: number = 1; flag: boolean = true; }
+            const value = new C(), other = new C();
+            console.log(Reflect.set(value, "value", null), Reflect.set(value, "flag", undefined), value.value, value.flag);
+            console.log(Reflect.set(value, "value", 7), Reflect.set(value, "flag", false), value.value, value.flag);
+            const raw: any = {};
+            const numberSet = Reflect.set(value, "value", raw), booleanSet = Reflect.set(value, "flag", raw);
+            const descriptor: any = Object.getOwnPropertyDescriptor(value, "value");
+            const copy: any = Object.assign({}, value);
+            console.log(numberSet, booleanSet, Object.is(value.value, raw), Object.is(value.flag, raw),
+                Object.is(descriptor.value, raw), Object.is(copy.flag, raw));
+            console.log(other.value, other.flag);
+            """, "true true null undefined\ntrue true 7 false\ntrue true true true true true\n1 true\n"];
         yield return ["dynamic-store", "class C{} const c:any=new C(); (C.prototype as any).value=7; console.log(c.value,c.absent);", "7 undefined\n"];
         yield return ["descriptor-receiver-and-setter-only", """
             class C{value=9;} const c:any=new C();
@@ -102,8 +115,14 @@ public sealed class NativePrototypeFieldsTests
         Assert.True(compiler.NativePrototypeFields!.IsComplete);
         if (name is "generic-base" or "promise") Assert.True(compiler.NativePrototypeFields.UsesLegacy);
         if (name == "ordinary-class") Assert.False(compiler.NativePrototypeFields.UsesLegacy);
-        // Prototype mutation conservatively enables Promise protocol bodies.
-        // Their actual Task results require legacy until subclass closure is proved.
+        if (name == "source-field-reflection")
+        {
+            Assert.False(compiler.NativePrototypeFields.UsesLegacy,
+                string.Join("\n", compiler.NativePrototypeFields.Blockers));
+            Assert.Empty(compiler.NativePrototypeFields.CompletedUnprovedResults.Producers);
+        }
+        // Actual Promise-producing bodies retain their Task-result fallback
+        // until the concrete result domain is proved.
         Assert.All(compiler.NativePrototypeFields.Blockers, blocker => Assert.True(
             blocker.StartsWith("Unproved actual carrier result:", StringComparison.Ordinal) ||
             blocker.StartsWith("Unproved owned generic prototype family:", StringComparison.Ordinal) ||

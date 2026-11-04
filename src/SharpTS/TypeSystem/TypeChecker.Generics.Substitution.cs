@@ -193,6 +193,7 @@ public partial class TypeChecker
         if (!evalConditionals || type is not TypeInfo.ConditionalType)
             DeferredTypeAliasPresentation.Substitute(type, result, Sub);
         InstantiatedRestTuplePresentation.Capture(type, result);
+        SourceTypeMemberOrder.Copy(type, result);
         CopyEditorSignatureMetadata(type, result);
         if (!ReferenceEquals(type, result) && _typeMap.GetClassMethodImplementation(type) is { } implementation)
         {

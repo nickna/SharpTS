@@ -387,6 +387,25 @@ public partial class ILCompiler
 
         void EmitOrderedFieldInitializersCore()
         {
+            if (_observableFieldOwners.Contains(typeBuilder))
+            {
+                EmitUninitializedParameterProperties(il, typeBuilder, constructor);
+                ctx.FieldsField = fieldsField;
+                ctx.IsInstanceMethod = true;
+                var previousReceiver = ctx.ClassConstructorReceiver;
+                if (previousReceiver == null)
+                {
+                    ctx.ClassConstructorReceiver = il.DeclareLocal(_types.Object);
+                    il.Emit(OpCodes.Ldarg_0); il.Emit(OpCodes.Stloc, ctx.ClassConstructorReceiver);
+                }
+                EmitEffectiveClassElements(ctx, classStmt.Fields,
+                    _typedInterop.PropertyBackingFields.GetValueOrDefault(className),
+                    _typedInterop.PropertyTypes.GetValueOrDefault(className),
+                    field => il.Emit(OpCodes.Ldsfld, _classes.DeferredDefinitions.RequireFieldKey(field)),
+                    classStmt.AutoAccessors);
+                ctx.ClassConstructorReceiver = previousReceiver;
+                return;
+            }
             Label? nativeDone = null;
             if (_nativeOwnAdapters.ContainsKey(typeBuilder))
             {
@@ -458,7 +477,7 @@ public partial class ILCompiler
                     }
 
                     string fieldName = field.Name.Lexeme;
-                    string pascalName = NamingConventions.ToPascalCase(fieldName);
+                    string pascalName = GetClassRegistry().OwnGuestFieldPropertyName(typeBuilder, classStmt.Fields, fieldName);
 
                     // Check if this is a declared property with a backing field (using PascalCase key)
                     if (_typedInterop.PropertyBackingFields.TryGetValue(className, out var backingFields) &&
@@ -527,6 +546,7 @@ public partial class ILCompiler
         if (context?.CurrentClassExpr != null && context.ClassDefinitionParameterIndex is { } definitionParameter)
         {
             il.Emit(OpCodes.Ldarg, definitionParameter);
+            il.Emit(OpCodes.Castclass, _runtime.ClassDefinitions.Type);
             il.Emit(OpCodes.Ldfld, _runtime.ClassDefinitions.PrivateMembers);
             il.Emit(OpCodes.Ldstr, "'instanceStorage");
             il.Emit(OpCodes.Callvirt, _types.GetMethod(_types.DictionaryStringObject, "get_Item", _types.String));

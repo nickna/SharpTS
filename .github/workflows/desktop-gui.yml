@@ -276,6 +276,7 @@ jobs:
         with:
           name: desktop-gui-macos-arm64
           path: |
+            artifacts/gui-conformance-failures/
             artifacts/desktop-gui/osx-arm64/*-trace.json
             artifacts/desktop-gui/osx-arm64/published single file/SharpTS.Gui.Sdk.Consumer
             artifacts/desktop-gui/osx-arm64/cli published single file/cli_app_with_spaces

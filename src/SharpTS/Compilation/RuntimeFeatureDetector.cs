@@ -98,6 +98,7 @@ public sealed partial class RuntimeFeatureDetector
             UsesReflect = false,
             UsesIteratorHelpers = false,
             UsesPromise = false,
+            UsesExternalFieldReads = false,
             UsesUserClasses = false,
             UsesObjectDefinitionRuntime = false,
             UsesPropertyWrites = false,
@@ -148,6 +149,8 @@ public sealed partial class RuntimeFeatureDetector
     public RuntimeFeatureSet Detect(List<Stmt> statements, TypeMap? typeMap = null)
     {
         _typeMap = typeMap;
+        _set.UsesAliasedGlobalEvaluator = _nativeClassBodiesOnly &&
+            GlobalEvaluatorProvenanceAnalysis.RequiresRuntime(statements, typeMap);
         CollectStableSourceFunctionNames(statements);
         CollectCanonicalCompactRecordShapes(statements);
         foreach (var stmt in statements)
@@ -245,8 +248,10 @@ public sealed partial class RuntimeFeatureDetector
         // Promise is a shared dependency of async syntax and of emitted module
         // families that expose Promise-returning APIs. Keep these implications
         // coarse and conservative: over-emission is preferable to leaving a
-        // metadata reference to an omitted $Promise helper.
-        if (_set.UsesPromisePrototypeMutation || _set.UsesDynamicImport ||
+        // metadata reference to an omitted $Promise helper. A possible prototype
+        // mutation alone does not produce a Promise: ordinary Object/Reflect
+        // operations must not add unrelated Task producers to a native guest.
+        if (_set.UsesDynamicImport ||
             _set.UsesAsyncGenerator || _set.UsesForAwaitOf || _set.UsesFetch ||
             _set.UsesHttp || _set.UsesDns || _set.UsesFs || _set.UsesCrypto ||
             _set.UsesNodeStreams || _set.UsesWebStreams || _set.UsesReadline ||
@@ -261,7 +266,10 @@ public sealed partial class RuntimeFeatureDetector
         }
 
         if (_set.UsesSourceExecution || _set.UsesVm)
+        {
             _set.UsesStructuredClone = true;
+            _set.UsesExternalFieldReads = true;
+        }
 
         return _set;
     }
@@ -395,6 +403,7 @@ public sealed partial class RuntimeFeatureDetector
                 _set.UsesObjectIntegrityMutation = true;
                 if (name is "eval" or "Function")
                 {
+                    _set.UsesExternalFieldReads = true;
                     _set.UsesTimerFunctionValues = true;
                     _set.UsesMicrotaskFunctionValues = true;
                     _set.UsesArrayMethodValues = true;
@@ -709,6 +718,9 @@ public sealed partial class RuntimeFeatureDetector
         switch (stmt)
         {
             case Stmt.Import imp:
+                if (!imp.IsTypeOnly && (Modules.DotNetImports.IsDotNetSpecifier(imp.ModulePath) ||
+                    Modules.DotNetExtensionImports.IsSpecifier(imp.ModulePath)))
+                    _set.UsesExternalFieldReads = true;
                 if (!imp.IsTypeOnly && imp.NamespaceImport is not null &&
                     Runtime.BuiltIns.Modules.BuiltInModuleRegistry.GetModuleName(imp.ModulePath) is null &&
                     !Modules.DotNetImports.IsDotNetSpecifier(imp.ModulePath) && !Modules.DotNetExtensionImports.IsSpecifier(imp.ModulePath))
@@ -833,6 +845,9 @@ public sealed partial class RuntimeFeatureDetector
                 break;
 
             case Stmt.Class cls:
+                if (cls.Decorators?.Any(decorator => decorator.Expression is Expr.Call
+                    { Callee: Expr.Variable { Name.Lexeme: "DotNetType" } }) == true)
+                    _set.UsesExternalFieldReads = true;
                 // Native output need not retain source-class machinery for a
                 // declaration that the class producer never emits. This is
                 // reachability selection, not a runtime owner certificate.
@@ -1280,8 +1295,13 @@ public sealed partial class RuntimeFeatureDetector
                 break;
 
             case Expr.Call c:
+                if (c.Arguments.Count > 0 && IsGlobalObject(c.Arguments[0]) && c.Callee is Expr.Get
+                    { Object: Expr.Variable { Name.Lexeme: "Object" or "Reflect" },
+                      Name.Lexeme: "defineProperty" or "defineProperties" or "set" or "deleteProperty" or "assign" })
+                    _set.UsesArrayConstructorMutation = true;
                 if (c.Callee is Expr.Variable { Name.Lexeme: "eval" })
                 {
+                    _set.UsesArrayConstructorMutation = true;
                     _set.UsesDatePrototypeMutation = true;
                     _set.UsesPromisePrototypeMutation = true;
                     _set.UsesNumberPrototypeMutation = true;
@@ -1416,6 +1436,8 @@ public sealed partial class RuntimeFeatureDetector
                 break;
 
             case Expr.Assign asg:
+                if (asg.Name.Lexeme == "Array")
+                    _set.UsesArrayConstructorMutation = true;
                 if (asg.Name.Lexeme == "Date")
                     _set.UsesDateConstructorMutation = true;
                 TrackGlobalObjectAlias(asg.Name.Lexeme, asg.Value);
@@ -2079,6 +2101,7 @@ public sealed partial class RuntimeFeatureDetector
 
     private void MarkOpaqueEvaluatorMutation()
     {
+        _set.UsesArrayConstructorMutation = true;
         _set.UsesObjectIntegrityMutation = true;
         _set.UsesClassPrototypeMutation = true;
         _set.UsesDatePrototypeMutation = true;
@@ -2101,6 +2124,9 @@ public sealed partial class RuntimeFeatureDetector
 
         switch (propertyName)
         {
+            case "Array":
+                _set.UsesArrayConstructorMutation = true;
+                break;
             case "Date":
                 _set.UsesDatePrototypeMutation = true;
                 _set.UsesDateConstructorMutation = true;

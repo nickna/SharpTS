@@ -6,6 +6,10 @@ public partial class TypeChecker
     // Its constraint supplies a callable signature only for checking invocation.
     private TypeInfo IndexedCallableConstraint(TypeInfo type)
     {
+        HashSet<TypeInfo> callableParameters = new(ReferenceEqualityComparer.Instance);
+        while (type is TypeInfo.TypeParameter { Constraint: { } callableConstraint } &&
+            callableParameters.Add(type))
+            type = callableConstraint;
         if (type is not TypeInfo.IndexedAccess indexed) return type;
         TypeInfo owner = indexed.ObjectType;
         HashSet<TypeInfo> visited = new(ReferenceEqualityComparer.Instance);

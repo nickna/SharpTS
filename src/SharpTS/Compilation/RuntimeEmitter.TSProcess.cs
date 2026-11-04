@@ -448,9 +448,8 @@ public partial class RuntimeEmitter
     /// Emits the static info-object getters (versions/release/features/config)
     /// as dictionary-building IL from compile-time-baked values, cached in
     /// static fields. (No JsonParse dependency — the JSON helpers are gated on
-    /// UsesJSON, but $Process is unconditional.) Compile-time platform ==
-    /// runtime platform is an established emitter assumption
-    /// (EmitPlatformString does the same).
+    /// UsesJSON, but $Process is unconditional.) Build configuration records
+    /// compiler information; live process properties and reports query their host.
     /// </summary>
     private void EmitProcessJsonInfoHelpers(TypeBuilder tb, EmittedProcessRuntime process)
     {
@@ -1015,18 +1014,6 @@ public partial class RuntimeEmitter
         var build = tb.DefineMethod("ProcessBuildReport",
             MethodAttributes.Public | MethodAttributes.Static, _types.Object, Type.EmptyTypes);
         {
-            string arch = RuntimeInformation.ProcessArchitecture switch
-            {
-                Architecture.X64 => "x64",
-                Architecture.X86 => "ia32",
-                Architecture.Arm64 => "arm64",
-                Architecture.Arm => "arm",
-                _ => "unknown"
-            };
-            string platform = RuntimeInformation.IsOSPlatform(OSPlatform.Windows) ? "win32"
-                : RuntimeInformation.IsOSPlatform(OSPlatform.Linux) ? "linux"
-                : RuntimeInformation.IsOSPlatform(OSPlatform.OSX) ? "darwin" : "unknown";
-
             var il = build.GetILGenerator();
             var rootLocal = il.DeclareLocal(_types.DictionaryStringObject);
             var headerLocal = il.DeclareLocal(_types.DictionaryStringObject);
@@ -1040,9 +1027,6 @@ public partial class RuntimeEmitter
                     ("event", "JavaScript API"),
                     ("trigger", "GetReport"),
                     ("nodejsVersion", "v" + Runtime.BuiltIns.ProcessBuiltIns.NodeVersion),
-                    ("wordSize", 64.0),
-                    ("arch", arch),
-                    ("platform", platform),
                 }),
                 ("javascriptStack", (object)new (string, object)[] { ("message", "") }),
                 ("javascriptHeap", (object)Array.Empty<(string, object)>()),
@@ -1075,6 +1059,23 @@ public partial class RuntimeEmitter
             il.Emit(OpCodes.Stloc, headerLocal);
 
             // header dynamic fields
+            il.Emit(OpCodes.Ldloc, headerLocal);
+            il.Emit(OpCodes.Ldstr, "wordSize");
+            il.Emit(OpCodes.Call, typeof(IntPtr).GetProperty(nameof(IntPtr.Size))!.GetMethod!);
+            il.Emit(OpCodes.Ldc_I4_8); il.Emit(OpCodes.Mul); il.Emit(OpCodes.Conv_R8);
+            il.Emit(OpCodes.Box, _types.Double);
+            il.Emit(OpCodes.Callvirt, setItem);
+
+            il.Emit(OpCodes.Ldloc, headerLocal);
+            il.Emit(OpCodes.Ldstr, "arch");
+            ProcessHostEmitter.EmitArchitecture(il);
+            il.Emit(OpCodes.Callvirt, setItem);
+
+            il.Emit(OpCodes.Ldloc, headerLocal);
+            il.Emit(OpCodes.Ldstr, "platform");
+            ProcessHostEmitter.EmitPlatform(il);
+            il.Emit(OpCodes.Callvirt, setItem);
+
             il.Emit(OpCodes.Ldloc, headerLocal);
             il.Emit(OpCodes.Ldstr, "processId");
             il.Emit(OpCodes.Call, _types.GetPropertyGetter(_types.Environment, "ProcessId"));
@@ -1575,20 +1576,8 @@ public partial class RuntimeEmitter
             }
         }
 
-        string platform = RuntimeInformation.IsOSPlatform(OSPlatform.Windows) ? "win32"
-            : RuntimeInformation.IsOSPlatform(OSPlatform.Linux) ? "linux"
-            : RuntimeInformation.IsOSPlatform(OSPlatform.OSX) ? "darwin" : "unknown";
-        string arch = RuntimeInformation.ProcessArchitecture switch
-        {
-            Architecture.X64 => "x64",
-            Architecture.X86 => "ia32",
-            Architecture.Arm64 => "arm64",
-            Architecture.Arm => "arm",
-            _ => "unknown"
-        };
-
-        Define("Platform", il => il.Emit(OpCodes.Ldstr, platform));
-        Define("Arch", il => il.Emit(OpCodes.Ldstr, arch));
+        Define("Platform", ProcessHostEmitter.EmitPlatform);
+        Define("Arch", ProcessHostEmitter.EmitArchitecture);
         Define("Pid", il =>
         {
             il.Emit(OpCodes.Call, _types.GetPropertyGetter(_types.Environment, "ProcessId"));

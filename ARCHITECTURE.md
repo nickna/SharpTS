@@ -2039,6 +2039,13 @@ disables the optimization. Generated record shapes and JSON-specialized carriers
 property order, aliases, recursive identity, `null`/`undefined`, and observable JavaScript object
 semantics when materialized.
 
+Observable source-class fields use committed property definitions as their own-presence and
+creation-order authority. CLR declarations, default backing values and raw-value overrides do not
+prove that an initializer completed. A weak instance ledger records successful definitions,
+updates and deletions while typed CLR slots retain their interop ABI. The compact, non-escaping
+class proof is selected before optional runtime metadata is frozen; proven compact classes keep
+their existing storage path. Managed lifecycle tracking does not widen native guest admission.
+
 ### Emitted-runtime constraint
 
 Normal compiled output embeds the JavaScript runtime helpers it uses. Code emitted into the guest

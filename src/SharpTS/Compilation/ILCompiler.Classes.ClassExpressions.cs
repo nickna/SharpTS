@@ -92,6 +92,7 @@ public partial class ILCompiler
         }
 
         _classes.GenericParameters.Declare(typeBuilder, classGenericParams ?? [], canonicalArguments);
+        if (_runtime.GuestOwnProperties != null) _observableFieldOwners.Add(typeBuilder);
 
         EmitTypeDefinitions.AddInterfaceImplementation(typeBuilder, _runtime.ClassDefinitions.InstanceInterface);
         var definitionField = typeBuilder.DefineField("$definition", _types.Object, FieldAttributes.Assembly);
@@ -250,6 +251,7 @@ public partial class ILCompiler
 
         // Store the type builder
         _classExprs.Builders[classExpr] = typeBuilder;
+        DeclareLexicalSuperElementInitializer(classExpr, typeBuilder);
         if (_typeMap.GetClassExprType(classExpr) is { } checkedClass)
             _classes.CheckedDeclarationNames[checkedClass.Core.DeclarationId] = className;
     }
@@ -264,7 +266,7 @@ public partial class ILCompiler
         GenericTypeParameterBuilder[]? classGenericParams)
     {
         string fieldName = field.Name.Lexeme;
-        string pascalName = NamingConventions.ToPascalCase(fieldName);
+        string pascalName = GetClassRegistry().OwnGuestFieldPropertyName(typeBuilder, classExpr.Fields, fieldName);
         Type propertyType = GetClassExprFieldType(classExpr, field, classGenericParams);
 
         // Track as declared property
@@ -318,8 +320,10 @@ public partial class ILCompiler
         setterIL.Emit(OpCodes.Ldarg_0);
         setterIL.Emit(OpCodes.Ldarg_1);
         setterIL.Emit(OpCodes.Stfld, backingField);
-        if (propertyType == _types.Double || propertyType == _types.Boolean || propertyType == _types.String)
+        if (_observableFieldOwners.Contains(typeBuilder)
+            || propertyType == _types.Double || propertyType == _types.Boolean || propertyType == _types.String)
             EmitClearGuestFieldOverride(setterIL, _classes.InstanceFieldsField[_classExprs.Names[classExpr]], fieldName);
+        EmitObservableFieldWrite(setterIL, typeBuilder, fieldName);
         setterIL.Emit(OpCodes.Ret);
         DefineGuestDataField(typeBuilder, field, propertyType, backingField, getter, setter);
 
@@ -590,9 +594,11 @@ public partial class ILCompiler
 
         string className = _classExprs.Names[classExpr];
         var fieldsField = _classes.InstanceFieldsField[className];
+        EmitLexicalSuperElementInitializer(classExpr, typeBuilder);
         if (_usesRuntimeParents && !_classes.ErrorSubclasses.Contains(className)
             && !_classes.PromiseSubclasses.Contains(className)
-            && SupportsReceiverInitialization(ClassExpressionDeclaration(classExpr), allowGenericOwner: true))
+            && (SupportsReceiverInitialization(ClassExpressionDeclaration(classExpr), allowGenericOwner: true)
+                || _lexicalSuperElementInitializers.ContainsKey(classExpr)))
             EmitReceiverInitializer(typeBuilder, ClassExpressionDeclaration(classExpr), classExpr);
 
         // Emit the constructor-free prototype path before the .cctor that uses it.

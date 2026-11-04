@@ -1320,10 +1320,11 @@ public partial class Interpreter
         object? obj = (await ctx.EvaluateExprAsync(getIndex.Object)).ToObject();
         object? key = (await ctx.EvaluateExprAsync(getIndex.Index)).ToObject();
 
-        // Keep the separately tracked nullish delete boundary (#3034) ahead of
-        // key coercion. Valid receivers share one actual ToPropertyKey result.
+        // RequireObjectCoercible precedes ToPropertyKey, while evaluation of
+        // the key expression still belongs to creating the property reference.
         if (obj is null or SharpTSUndefined)
-            return true;
+            throw new ThrowException(new SharpTSTypeError(
+                "Cannot delete property of null or undefined"));
         key = ToPropertyKey(key);
 
         if (obj is ISharpTSOwnPropertyObject carrier)

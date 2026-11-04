@@ -80,7 +80,7 @@ foreach ($requiredText in @(
         $errors.Add("ci.yml is missing change-routing contract text: $requiredText")
     }
 }
-foreach ($jobName in @('build', 'standalone', 'typescript-conformance', 'editor-contract', 'dap-macos-smoke', 'aot-ratchet', 'native-aot-compile-smoke')) {
+foreach ($jobName in @('build', 'process-tests', 'standalone', 'typescript-conformance', 'editor-contract', 'dap-macos-smoke', 'aot-ratchet', 'native-aot-compile-smoke')) {
     $job = Get-WorkflowJob $ci $jobName 'ci.yml'
     if (-not $job.Contains('needs: workflow-policy', [StringComparison]::Ordinal) -or
         -not $job.Contains("if: needs.workflow-policy.outputs.mode == 'full'", [StringComparison]::Ordinal)) {
@@ -97,6 +97,7 @@ if ($ciGateJob -notmatch '(?m)^    needs: \[[^\r\n]*\bstandalone\b' -or
     $errors.Add('ci.yml Gate must require standalone tests in the full route and skip them in lightweight routes.')
 }
 $coreJob = Get-WorkflowJob $ci 'build' 'ci.yml'
+$processJob = Get-WorkflowJob $ci 'process-tests' 'ci.yml'
 $standaloneJob = Get-WorkflowJob $ci 'standalone' 'ci.yml'
 foreach ($requiredText in @('name: Acquire pinned independent Authenticode verifier', 'id: signature-verifier',
     "if: runner.os == 'Windows'", './scripts/get-osslsigncode.ps1',
@@ -126,18 +127,60 @@ if ($signatureTool.IndexOf('Get-FileHash', [StringComparison]::Ordinal) -gt
 }
 $coreFilter = 'Category!=LiveNetwork&Category!=LoadSensitive&Category!=npm&FullyQualifiedName!~SharpTS.Tests.CompilerTests.StandaloneDllTests.'
 $standaloneFilter = $coreFilter.Replace('FullyQualifiedName!~', 'FullyQualifiedName~')
-foreach ($partition in @($coreJob, $standaloneJob)) {
+. (Join-Path $PSScriptRoot 'core-test-partitions.ps1')
+$corePartitions = Get-CoreTestFilters
+if ($corePartitions.Base -cne $coreFilter) { $errors.Add('Core partitions changed the existing core/category boundary.') }
+foreach ($partition in @($coreJob, $processJob, $standaloneJob)) {
     if (-not $partition.Contains('os: [ubuntu-24.04, windows-2025]', [StringComparison]::Ordinal)) {
         $errors.Add('ci.yml core and standalone jobs must cover complementary filters on both platforms.')
     }
 }
 $standaloneScript = Get-Content -LiteralPath (Join-Path $PSScriptRoot 'test-standalone-shard.ps1') -Raw
-if (-not $coreJob.Contains('--filter "' + $coreFilter + '"', [StringComparison]::Ordinal) -or
+$guiFailureUpload = [regex]::Match($coreJob,
+    '(?ms)^      - name: Upload unexpected GUI conformance diagnostics\r?\n.*?(?=^      - |\z)').Value
+foreach ($requiredText in @('name: gui-conformance-failures-${{ matrix.os }}',
+    'path: artifacts/gui-conformance-failures/', 'if: always()', 'if-no-files-found: ignore', 'retention-days: 7')) {
+    if (-not $guiFailureUpload.Contains($requiredText, [StringComparison]::Ordinal)) {
+        $errors.Add("Core GUI tests must retain unexpected failure diagnostics: $requiredText")
+    }
+}
+if (-not $coreJob.Contains('--filter "' + $corePartitions.InProcess + '"', [StringComparison]::Ordinal) -or
+    -not $processJob.Contains('--filter "' + $corePartitions.Process + '"', [StringComparison]::Ordinal) -or
     -not $standaloneScript.Contains('$baseFilter = ''' + $standaloneFilter + '''', [StringComparison]::Ordinal)) {
     $errors.Add('Core and standalone discovery must retain their complementary category/class filters.')
 }
-foreach ($requiredText in @('shard: [0, 1, 2, 3, 4, 5]', 'shell: pwsh',
-    './scripts/test-standalone-shard.ps1 -ShardIndex ${{ matrix.shard }} -ShardCount 6',
+foreach ($partition in @($coreJob, $processJob)) {
+    foreach ($requiredText in @('./scripts/verify-core-test-partitions.ps1', 'timeout-minutes: 50',
+        'timeout-minutes: 30', 'artifacts/core-partitions/', 'retention-days: 7')) {
+        if (-not $partition.Contains($requiredText, [StringComparison]::Ordinal)) {
+            $errors.Add("Core partitions must retain full discovery proof and existing budgets: $requiredText")
+        }
+    }
+}
+foreach ($requiredText in @('name: Acquire pinned independent Authenticode verifier', 'id: signature-verifier',
+    "if: runner.os == 'Windows'", './scripts/get-osslsigncode.ps1',
+    'SHARPTS_TEST_OSSLSIGNCODE: ${{ steps.signature-verifier.outputs.executable }}',
+    'trx;LogFileName=process-tests.trx', 'name: process-tests-${{ matrix.os }}')) {
+    if (-not $processJob.Contains($requiredText, [StringComparison]::Ordinal)) {
+        $errors.Add("Process tests are missing an independent verifier or result artifact: $requiredText")
+    }
+}
+if ($processJob.IndexOf('name: Acquire pinned independent Authenticode verifier', [StringComparison]::Ordinal) -gt
+    $processJob.IndexOf('name: Test process integration and packaging', [StringComparison]::Ordinal)) {
+    $errors.Add('Process tests must acquire their own signature verifier before execution.')
+}
+if ($ciGateJob -notmatch '(?m)^    needs: \[[^\r\n]*\bprocess-tests\b' -or
+    $ciGateJob -notmatch '(?m)^          \$heavy = @\([^\r\n]*''process-tests''') {
+    $errors.Add('Gate must require the complementary process tests on the full route.')
+}
+$coreProofScript = Get-Content -LiteralPath (Join-Path $PSScriptRoot 'verify-core-test-partitions.ps1') -Raw
+foreach ($requiredText in @('WaitForExit(60000)', '5000', 'New-CoreTestPartitionProof', 'core-partitions.json', '--list-tests')) {
+    if (-not $coreProofScript.Contains($requiredText, [StringComparison]::Ordinal)) {
+        $errors.Add("Core partition discovery is missing a coverage or budget guard: $requiredText")
+    }
+}
+foreach ($requiredText in @('shard: [0, 1, 2, 3, 4, 5, 6, 7]', 'shell: pwsh',
+    './scripts/test-standalone-shard.ps1 -ShardIndex ${{ matrix.shard }} -ShardCount 8',
     '-ResultsDirectory artifacts/standalone/${{ matrix.os }}-${{ matrix.shard }}',
     'timeout-minutes: 35', 'timeout-minutes: 40', 'fail-fast: false', 'if: always()',
     'name: standalone-${{ matrix.os }}-${{ matrix.shard }}',
@@ -149,6 +192,9 @@ foreach ($requiredText in @('shard: [0, 1, 2, 3, 4, 5]', 'shell: pwsh',
 $policyJob = Get-WorkflowJob $ci 'workflow-policy' 'ci.yml'
 if (-not $policyJob.Contains('./scripts/test-standalone-shard-plan.ps1', [StringComparison]::Ordinal)) {
     $errors.Add('ci.yml workflow-policy must execute the pure standalone planner regressions.')
+}
+if (-not $policyJob.Contains('./scripts/test-core-test-partitions.ps1', [StringComparison]::Ordinal)) {
+    $errors.Add('Workflow policy must execute the pure core partition regressions.')
 }
 foreach ($requiredText in @('WaitForExit(60000)', '5000',
     'Unrecognized standalone test identity; refusing partial coverage:',
@@ -170,6 +216,19 @@ foreach ($requiredText in @('build, typescript-conformance,', "'typescript-confo
     }
 }
 $typeScriptJob = Get-WorkflowJob $ci 'typescript-conformance' 'ci.yml'
+$nativeHostJob = Get-WorkflowJob $ci 'native-aot-custom-host-smoke' 'ci.yml'
+foreach ($requiredText in @('timeout-minutes: 15', 'samples/NativeInteropHost/NativeInteropHost.csproj',
+    'samples/NativeInteropHost/custom-interop.ts', "grep -qx 'changed'", "grep -qx '42 42 counter'",
+    "grep -qx '3'", 'NativeInteropExample.dll', 'System.Runtime.dll',
+    'diff -u "$scratch/interpreted.txt" "$scratch/compiled.txt"')) {
+    if (-not $nativeHostJob.Contains($requiredText, [StringComparison]::Ordinal)) {
+        $errors.Add("The independent native host job must retain its complete workload and deadline: $requiredText")
+    }
+}
+if ($ciGateJob -notmatch '(?m)^    needs: \[[^\r\n]*\bnative-aot-custom-host-smoke\b' -or
+    -not $ciGateJob.Contains("'native-aot-custom-host-smoke'", [StringComparison]::Ordinal)) {
+    $errors.Add('CI Gate must require the independent native host smoke in the full route.')
+}
 foreach ($requiredText in @('./scripts/test-typescript-conformance.ps1', 'if: always()',
     'path: artifacts/typescript-conformance/', 'if-no-files-found: error', 'timeout-minutes: 10')) {
     if (-not $typeScriptJob.Contains($requiredText, [StringComparison]::Ordinal)) {
@@ -217,6 +276,10 @@ foreach ($requiredText in @(
 }
 
 $desktop = Get-Content -LiteralPath (Join-Path $workflowRoot 'desktop-gui.yml') -Raw
+$macDesktopJob = Get-WorkflowJob $desktop 'macos-native' 'desktop-gui.yml'
+if (-not $macDesktopJob.Contains('            artifacts/gui-conformance-failures/', [StringComparison]::Ordinal)) {
+    $errors.Add('macOS desktop conformance must upload unexpected failure diagnostics before temporary-stage cleanup loses them.')
+}
 foreach ($requiredText in @(
     'name: Desktop GUI',
     'cancel-in-progress: ${{ github.event_name == ''pull_request'' }}',
@@ -331,8 +394,8 @@ foreach ($requiredText in @('timeout-minutes: 50', '--blame-hang-timeout 120s', 
         $errors.Add("Publish build must retain its bounded core budget and per-test hang guard: $requiredText")
     }
 }
-foreach ($requiredText in @('runs-on: ubuntu-24.04', 'shard: [0, 1, 2, 3, 4, 5]', 'shell: pwsh',
-    './scripts/test-standalone-shard.ps1 -ShardIndex ${{ matrix.shard }} -ShardCount 6',
+foreach ($requiredText in @('runs-on: ubuntu-24.04', 'shard: [0, 1, 2, 3, 4, 5, 6, 7]', 'shell: pwsh',
+    './scripts/test-standalone-shard.ps1 -ShardIndex ${{ matrix.shard }} -ShardCount 8',
     '-ResultsDirectory artifacts/release-standalone/${{ matrix.shard }}',
     'timeout-minutes: 35', 'timeout-minutes: 40', 'fail-fast: false', 'if: always()',
     'name: release-standalone-${{ matrix.shard }}', 'path: artifacts/release-standalone/', 'retention-days: 7')) {

@@ -541,7 +541,8 @@ public partial class TypeChecker
             foreach (var param in arrow.Parameters)
             {
                 TypeInfo paramType = ResolveAnnotation(param.Type, param.TypeAnnotationNode, param)
-                    ?? TypeInfo.Any.Shared;
+                    ?? (param.DefaultValue is Expr.Literal literal
+                        ? WidenLiteralType(GetLiteralType(literal.Value)) : TypeInfo.Any.Shared);
 
                 if (param.IsRest)
                 {

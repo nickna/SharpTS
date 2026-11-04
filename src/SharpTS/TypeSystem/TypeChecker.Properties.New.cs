@@ -1360,6 +1360,10 @@ public partial class TypeChecker
             {
                 InferFromTypeForConstructor(ctorSig.ParamTypes[i], argTypes[i], inferred);
             }
+            foreach (var parameter in ctorSig.TypeParams)
+                if (!parameter.IsConst && parameter.Constraint is null or TypeInfo.Any or TypeInfo.Unknown &&
+                    inferred.TryGetValue(parameter.Name, out var inferredType))
+                    inferred[parameter.Name] = WidenLiteralType(inferredType);
         }
 
         // Check if all type parameters were inferred

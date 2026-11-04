@@ -454,6 +454,13 @@ public sealed class EmittedTypedArrayImplementation
         internal set => Set(ref _getMember, value);
     }
 
+    private MethodBuilder? _intrinsicPrototype;
+    public MethodBuilder IntrinsicPrototype
+    {
+        get => Require(_intrinsicPrototype);
+        internal set => Set(ref _intrinsicPrototype, value);
+    }
+
     private FieldBuilder? _bufferField;
     public FieldBuilder BufferField
     {
@@ -595,6 +602,7 @@ public sealed class EmittedTypedArrayImplementation
         _ = ByteLengthGetter;
         _ = BufferGetter;
         _ = GetBuffer;
+        _ = IntrinsicPrototype;
         _ = ElementGet;
         _ = ElementSet;
         _ = Fill;

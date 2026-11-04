@@ -492,6 +492,20 @@ public partial class Interpreter
     /// </summary>
     private RuntimeValue IncrementIndex(object? obj, object? index, double delta, bool returnOld)
     {
+        // A present Number data element needs no guest ToNumeric call. The
+        // guarded write still admits only ordinary writable dense storage;
+        // every other representation retains the reference operations below.
+        if (obj is SharpTSArray array && array is not SharpTSArguments && !array.IsFrozen
+            && index is double number && double.IsFinite(number)
+            && number >= 0 && number <= SharpTSArray.MaxWriteIndex && Math.Truncate(number) == number
+            && array.TryGetPresentDataIndexRV((long)number, out var denseOld)
+            && denseOld.Kind == ValueKind.Number)
+        {
+            var denseNew = RuntimeValue.FromNumber(denseOld.AsNumberUnsafe() + delta);
+            if (array.TrySetDenseDataIndex((long)number, denseNew))
+                return returnOld ? denseOld : denseNew;
+        }
+
         // Retain the evaluated key expression. GetValue and PutValue each
         // convert an object key, so the write may select a different property.
         if (TryGetIndex(obj, index, out object? currentObj))

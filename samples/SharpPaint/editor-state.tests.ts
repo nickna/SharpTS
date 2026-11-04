@@ -1,4 +1,5 @@
-import { appReducer, initialState } from "./editor-state";
+import { appReducer, effectForDialog, initialState } from "./editor-state";
+import type { RasterPreview } from "./editor-state";
 import { createDocument } from "./document";
 function expect(name: string, condition: boolean): void {
     if (!condition) throw new Error("Editor state: " + name);
@@ -53,3 +54,34 @@ expect(
 );
 opacityEditor = appReducer(opacityEditor, { type: "undo" });
 expect("opacity remains its own undo step", opacityEditor.history.document.layers[0].opacity === 1);
+
+let effectEditor = appReducer(initialState(createDocument(40, 40)), { type: "showEffect", kind: "gaussianBlur" });
+const radiusFourPreview: RasterPreview = {
+    revision: effectEditor.revision,
+    layerId: effectEditor.selectedLayerId,
+    signature: JSON.stringify(effectForDialog(effectEditor.effectDialog!)),
+    command: { kind: "image", source: "radius-four", x: 0, y: 0, width: 40, height: 40 }
+};
+effectEditor = appReducer(effectEditor, { type: "effectPreview", preview: radiusFourPreview });
+expect("initial matching preview is ready", effectEditor.effectPreview === radiusFourPreview && effectEditor.status === "Effect preview ready");
+effectEditor = appReducer(effectEditor, { type: "effectParameter", first: 8 });
+expect("parameter edit invalidates ready status immediately", effectEditor.effectPreview === null && effectEditor.status === "Effect preview pending");
+effectEditor = appReducer(effectEditor, { type: "busy", value: "Rendering effect preview…" });
+const pendingEffect = effectEditor;
+effectEditor = appReducer(effectEditor, { type: "effectPreview", preview: radiusFourPreview });
+expect("old radius completion cannot finish the replacement", effectEditor === pendingEffect);
+const radiusEightPreview: RasterPreview = {
+    ...radiusFourPreview,
+    signature: JSON.stringify(effectForDialog(effectEditor.effectDialog!)),
+    command: { ...radiusFourPreview.command, source: "radius-eight" }
+};
+effectEditor = appReducer(effectEditor, { type: "effectPreview", preview: { ...radiusEightPreview, layerId: "another-layer" } });
+expect("another layer cannot finish the replacement", effectEditor === pendingEffect);
+effectEditor = appReducer(effectEditor, { type: "effectPreview", preview: { ...radiusEightPreview, revision: effectEditor.revision - 1 } });
+expect("another revision cannot finish the replacement", effectEditor === pendingEffect);
+effectEditor = appReducer(effectEditor, { type: "effectPreview", preview: radiusEightPreview });
+expect("current radius result finishes the replacement", effectEditor.effectPreview === radiusEightPreview && effectEditor.status === "Effect preview ready" && effectEditor.busy === null);
+effectEditor = appReducer(effectEditor, { type: "cancelEffect" });
+const canceledEffect = effectEditor;
+effectEditor = appReducer(effectEditor, { type: "effectPreview", preview: radiusEightPreview });
+expect("completion cannot reopen a canceled effect", effectEditor === canceledEffect);

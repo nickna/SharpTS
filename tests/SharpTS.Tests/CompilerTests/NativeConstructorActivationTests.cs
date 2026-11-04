@@ -33,9 +33,8 @@ public sealed class NativeConstructorActivationTests
             console.log(calls,Object.getPrototypeOf(second)===Alt.prototype);
             """;
         var saved = Compile(source, native, out _, "intrinsic-matrix");
-        // #3099 records the preserved compiler's alternate-Promise-newTarget
-        // prototype defect. This admission slice preserves that existing path.
-        Assert.Equal("42 true\n2 true\n1 function\n2 false\n", Run(saved));
+        // #3099: alternate Promise new.target supplies its prototype in both admission modes.
+        Assert.Equal("42 true\n2 true\n1 function\n2 true\n", Run(saved));
     }
 
     [Theory]

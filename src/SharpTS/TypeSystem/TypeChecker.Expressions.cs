@@ -917,6 +917,7 @@ public partial class TypeChecker
         // Track getter/setter names to identify getter-only properties
         HashSet<string> getterNames = [];
         HashSet<string> setterNames = [];
+        Dictionary<string, int> explicitPropertyLines = new(StringComparer.Ordinal);
 
         // Pass 1: Collect property types without checking accessor bodies
         // For accessors, use type annotations only (don't check bodies yet)
@@ -940,6 +941,14 @@ public partial class TypeChecker
                     stringIndexType = TypeInfo.Any.Shared;
                     continue;
                 }
+                Dictionary<string, TypeInfo> spreadFields = [];
+                HashSet<string> spreadOptional = [];
+                if (!_jsxAttributeObjects.Contains(obj) && TryMergeSpreadFields(spreadType, spreadFields, spreadOptional))
+                    foreach (string name in spreadFields.Keys)
+                        if (!spreadOptional.Contains(name) && explicitPropertyLines.Remove(name, out int line))
+                            RecordTypeError(new TypeCheckException(
+                                $"'{name}' is specified more than once, so this usage will be overwritten.",
+                                line, tsCode: "TS2783"));
                 if (!TryMergeSpreadFields(spreadType, fields, optionalFields))
                 {
                     throw new TypeCheckException($" Spread in object literal requires an object, got '{spreadType}'.", tsCode: "TS2698");
@@ -1074,6 +1083,17 @@ public partial class TypeChecker
                             RecordTypeError(new TypeCheckException(" A computed property name must be of type 'string', 'number', 'symbol', or 'any'.", line: TryGetExprLine(ck.Expression), tsCode: "TS2464"));
                         break;
                 }
+            }
+            if (!prop.IsSpread)
+            {
+                string? name = FreshCallPropertyName(prop.Key);
+                if (name is not null)
+                    explicitPropertyLines[name] = prop.Key switch
+                    {
+                        Expr.IdentifierKey identifier => identifier.Name.Line,
+                        Expr.LiteralKey literal => literal.Literal.Line,
+                        _ => TryGetExprLine(prop.Value) ?? _currentStatementLine ?? 0,
+                    };
             }
         }
 
@@ -1796,7 +1816,8 @@ public partial class TypeChecker
                 else
                 {
                     // No type annotation and no expected type - use Any
-                    paramType = TypeInfo.Any.Shared;
+                    paramType = param.DefaultValue is Expr.Literal literal
+                        ? WidenLiteralType(GetLiteralType(literal.Value)) : TypeInfo.Any.Shared;
                 }
                 paramTypes.Add(paramType);
                 if (!param.IsRest && param.DefaultValue is null && !param.IsOptional)
@@ -1868,6 +1889,11 @@ public partial class TypeChecker
                     }
                     namedDefaults?.Check(param.DefaultValue, i);
                     defaultBindings.Check(param.DefaultValue, i);
+                    if (param.Type is null && (expectedFuncType is null || i >= expectedFuncType.ParamTypes.Count))
+                    {
+                        paramType = WidenClassFieldInitializerType(param.DefaultValue, defaultType);
+                        paramTypes[i] = paramType;
+                    }
                     if (!IsCompatible(paramType, defaultType))
                     {
                         throw new TypeCheckException($" Default value type '{defaultType}' is not assignable to parameter type '{paramType}'.",
@@ -2232,7 +2258,8 @@ public partial class TypeChecker
                 tsCode: "TS2364");
         }
 
-        var declaredType = GetDeclaredType(assign.Name.Lexeme);
+        var declaredType = GetDeclaredType(assign.Name.Lexeme)
+            ?? (assign.Name.Lexeme == BuiltInNames.Array ? LookupVariable(assign.Name) : null);
         if (declaredType == null)
         {
             throw new TypeCheckException($" Undefined variable '{assign.Name.Lexeme}'.", line: assign.Name.Line, tsCode: "TS2304");

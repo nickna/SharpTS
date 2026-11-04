@@ -1719,10 +1719,10 @@ public partial class RuntimeEmitter
             il.Emit(OpCodes.Bgt, promiseHasExecutorLabel);
             GuestErrorEmitter.ThrowError(il, inputs.CreateException, inputs.TypeErrorConstructor, "Promise executor is not callable");
             il.MarkLabel(promiseHasExecutorLabel);
+            il.Emit(OpCodes.Ldarg_0);
             il.Emit(OpCodes.Ldloc, argsLocal);
-            il.Emit(OpCodes.Ldc_I4_0);
-            il.Emit(OpCodes.Ldelem_Ref);
-            il.Emit(OpCodes.Call, inputs.Promise.FromExecutor);
+            il.Emit(OpCodes.Ldloc, newTargetLocal);
+            il.Emit(OpCodes.Call, inputs.ConstructDynamicValue);
             il.Emit(OpCodes.Ret);
 
             il.MarkLabel(notPromiseTypeLabel);

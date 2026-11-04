@@ -1,6 +1,5 @@
 using System.Diagnostics;
 using System.Reflection.Emit;
-using System.Runtime.InteropServices;
 using SharpTS.Parsing;
 
 namespace SharpTS.Compilation.Emitters;
@@ -336,36 +335,9 @@ public sealed class ProcessStaticEmitter : IStaticTypeEmitterStrategy
         emitter.Context.IL.Emit(OpCodes.Call, helper);
     }
 
-    private static void EmitPlatformString(ILGenerator il)
-    {
-        // At compile time, we know the platform, so emit the string directly
-        string platform;
-        if (RuntimeInformation.IsOSPlatform(OSPlatform.Windows))
-            platform = "win32";
-        else if (RuntimeInformation.IsOSPlatform(OSPlatform.Linux))
-            platform = "linux";
-        else if (RuntimeInformation.IsOSPlatform(OSPlatform.OSX))
-            platform = "darwin";
-        else
-            platform = "unknown";
+    private static void EmitPlatformString(ILGenerator il) => ProcessHostEmitter.EmitPlatform(il);
 
-        il.Emit(OpCodes.Ldstr, platform);
-    }
-
-    private static void EmitArchString(ILGenerator il)
-    {
-        // At compile time, we know the architecture, so emit the string directly
-        string arch = RuntimeInformation.ProcessArchitecture switch
-        {
-            Architecture.X64 => "x64",
-            Architecture.X86 => "ia32",
-            Architecture.Arm64 => "arm64",
-            Architecture.Arm => "arm",
-            _ => "unknown"
-        };
-
-        il.Emit(OpCodes.Ldstr, arch);
-    }
+    private static void EmitArchString(ILGenerator il) => ProcessHostEmitter.EmitArchitecture(il);
 
     /// <summary>
     /// Emits IL for process.hrtime(prev?).

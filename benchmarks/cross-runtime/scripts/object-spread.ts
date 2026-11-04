@@ -15,6 +15,7 @@ function spreadMultipleOverwrite(n: number): number {
     for (let i: number = 0; i < n; i++) {
         const overwriteFirst = { a: i, b: i + 1, c: i + 2 };
         const overwriteSecond = { b: i + 3, c: i + 4, d: i + 5 };
+        // @ts-expect-error Intentionally measure a later spread overwriting the explicit b property.
         const overwriteResult = { ...overwriteFirst, b: i + 6, ...overwriteSecond, c: i + 7 };
         total = total + overwriteResult.a + overwriteResult.b + overwriteResult.c + overwriteResult.d;
     }

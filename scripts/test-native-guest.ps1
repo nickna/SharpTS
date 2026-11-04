@@ -3,7 +3,7 @@ param(
     [Parameter(Mandatory)][string]$RuntimeIdentifier,
     [string]$CompilerPath = 'src/SharpTS/bin/Release/net10.0/SharpTS.dll',
     [string]$ResultsDirectory = 'artifacts/native-guest',
-    [string[]]$Cases = @('language', 'classes', 'arguments', 'modules', 'collections', 'generators', 'async', 'parameter-defaults', 'exceptions', 'crypto', 'networking', 'bcl', 'typedarray-iterator', 'generic-inheritance', 'bigint-unary')
+    [string[]]$Cases = @('language', 'classes', 'arguments', 'modules', 'collections', 'generators', 'async', 'parameter-defaults', 'exceptions', 'crypto', 'networking', 'bcl', 'typedarray-iterator', 'generic-inheritance', 'bigint-unary', 'source-field-reflection', 'generic-static-descriptor')
 )
 
 Set-StrictMode -Version Latest
@@ -101,6 +101,8 @@ $cohort = @{
     bcl = @{ source = 'bcl.ts'; expected = "native 6`nfalse`n"; arguments = @(); exitCode = 0 }
     'typedarray-iterator' = @{ source = 'typedarray-iterator.ts'; expected = "next 0`nnext 1`nnext 2`nconvert`nconvert`n2 7 7`n"; arguments = @(); exitCode = 0 }
     'generic-inheritance' = @{ source = 'generic-inheritance.ts'; expected = "7`n"; arguments = @(); exitCode = 0 }
+    'source-field-reflection' = @{ source = 'source-field-reflection.ts'; expected = "true true null undefined`ntrue true 7 false`ntrue true true true true true`n1 true`n"; arguments = @(); exitCode = 0 }
+    'generic-static-descriptor' = @{ source = 'generic-static-descriptor.ts'; expected = "present`npresent`n"; arguments = @(); exitCode = 0 }
     'bigint-unary' = @{ source = 'bigint-unary.ts'; expected = "bigint true bigint true`n"; arguments = @(); exitCode = 0 }
 }
 try {

@@ -73,6 +73,27 @@ public partial class ILEmitter
         _ctx.IsStrictMode = savedStrictMode
             || Parsing.DirectivePrologue.HasUseStrict(statements);
 
+        if (!_ctx.IsStrictMode && _ctx.DefaultParameterTdzNames is not null)
+        {
+            // Literal eval vars belong to the parameter environment. Publish
+            // into its shared storage so default-created and body closures
+            // observe one binding rather than an uninitialized capture field.
+            foreach (var declaration in Runtime.ParameterBinder.BodyVarDeclarations(statements))
+            {
+                string name = declaration.Name.Lexeme;
+                if (_ctx.ArrowScopeDisplayClassFields?.ContainsKey(name) == true)
+                {
+                    (_ctx.CapturedArrowLocals ??= []).Add(name);
+                    (_ctx.InitializedParameterBindingNames ??= []).Add(name);
+                }
+                if (_ctx.FunctionDisplayClassFields?.ContainsKey(name) == true)
+                {
+                    (_ctx.CapturedFunctionLocals ??= []).Add(name);
+                    (_ctx.InitializedParameterBindingNames ??= []).Add(name);
+                }
+            }
+        }
+
         // Function declarations are instantiated before the first eval
         // statement, regardless of textual order.
         foreach (var function in statements.OfType<Stmt.Function>())
@@ -258,7 +279,7 @@ public partial class ILEmitter
         // new-FuncDecl all working correctly), test262 harness asserts fire
         // properly so any false positives surfaced by this pattern matcher
         // reclassify as real Fails — making Test262 numbers meaningful.
-        if (TryEmitArrayPrototypeCall(c)) return;
+        if (_ctx.RuntimeFeatures?.UsesArrayConstructorMutation != true && TryEmitArrayPrototypeCall(c)) return;
 
         // ECMA-262 Object.prototype.toString.call(x) — return the proper
         // "[object X]" tag for built-in types. Intercepted at the syntactic

@@ -185,6 +185,8 @@ public partial class RuntimeEmitter
         // deliberate allowance for a second call after (undefined, undefined).
         var capture = typeBuilder.DefineMethod(
             "Capture", MethodAttributes.Public, _types.Object, [_types.ObjectArray]);
+        capture.SetCustomAttribute(runtime.FunctionAttributes.NonConstructibleCtor,
+            CustomAttributeEncoder.Encode(runtime.FunctionAttributes.NonConstructibleCtor));
         {
             var il = capture.GetILGenerator();
             var checkRejectLabel = il.DefineLabel();
@@ -329,17 +331,18 @@ public partial class RuntimeEmitter
     {
         var il = runtime.RequirePromise().PreparePromiseCapabilityMethod.GetILGenerator();
         var capabilityType = runtime.RequirePromise().CapabilityType;
-        var funcType = _types.FuncObjectArrayToObject;
         var capabilityLocal = il.DeclareLocal(capabilityType);
         var instanceLocal = il.DeclareLocal(_types.Object);
-        var executorLocal = il.DeclareLocal(funcType);
+        var executorLocal = il.DeclareLocal(runtime.FunctionValues.Type);
 
         il.Emit(OpCodes.Newobj, runtime.RequirePromise().CapabilityCtor);
         il.Emit(OpCodes.Stloc, capabilityLocal);
 
         il.Emit(OpCodes.Ldloc, capabilityLocal);
-        il.Emit(OpCodes.Ldftn, runtime.RequirePromise().CapabilityCaptureMethod);
-        il.Emit(OpCodes.Newobj, _types.GetConstructor(funcType, [_types.Object, typeof(IntPtr)])!);
+        EmitReflectedMethodLiteral(il, runtime.RequirePromise().CapabilityCaptureMethod);
+        il.Emit(OpCodes.Ldstr, string.Empty);
+        il.Emit(OpCodes.Ldc_I4_2);
+        il.Emit(OpCodes.Newobj, runtime.FunctionConstruction.CachedConstructor);
         il.Emit(OpCodes.Stloc, executorLocal);
 
         // The intrinsic Promise constructor is represented by

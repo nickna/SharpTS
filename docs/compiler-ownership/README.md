@@ -74,5 +74,5 @@ The Release All run started before the final L01 traversal follow-up. An
 additional full Debug core run checks that final source revision. The consolidated
 PR's validation results report its totals and all three standalone shard totals;
 local logs/TRX remain under the evidence directory above. PR CI supplies separate
-Linux/Windows, six-shard standalone, conformance, packaging and Native AOT checks;
+Linux/Windows, eight-shard standalone, conformance, packaging and Native AOT checks;
 those results must be assessed at the current PR head.

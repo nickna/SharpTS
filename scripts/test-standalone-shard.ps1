@@ -1,6 +1,7 @@
 param(
     [Parameter(Mandatory)][ValidateRange(0, 31)][int]$ShardIndex,
     [ValidateRange(1, 32)][int]$ShardCount = 3,
+    [switch]$ExpandToFit,
     [switch]$DescribeOnly,
     [ValidateSet('Debug', 'Release')][string]$Configuration = 'Release',
     [switch]$IncludeExternal,
@@ -65,7 +66,8 @@ foreach ($line in $discovery) {
     }
     $listedMethods.Add($match.Groups[1].Value)
 }
-$plan = New-StandaloneShardPlan -MethodEntries $listedMethods.ToArray() -ShardCount $ShardCount -BaseFilter $baseFilter
+$plan = New-StandaloneShardPlan -MethodEntries $listedMethods.ToArray() -ShardCount $ShardCount -BaseFilter $baseFilter -ExpandToFit:$ExpandToFit
+$ShardCount = $plan.ShardCount
 $partition = $plan.Shards[$ShardIndex]
 $methods = $plan.Methods
 $selected = $partition.SelectedMethods

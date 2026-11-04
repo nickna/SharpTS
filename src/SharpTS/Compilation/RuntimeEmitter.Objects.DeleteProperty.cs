@@ -300,9 +300,16 @@ public partial class RuntimeEmitter
             il.Emit(OpCodes.Ret);
         }
 
-        // null check - return true (deleting from null is allowed in JS)
+        var nullish = il.DefineLabel();
+        var validReceiver = il.DefineLabel();
         il.Emit(OpCodes.Ldarg_0);
-        il.Emit(OpCodes.Brfalse, trueLabel);
+        il.Emit(OpCodes.Brfalse, nullish);
+        il.Emit(OpCodes.Ldarg_0);
+        il.Emit(OpCodes.Isinst, inputs.UndefinedType);
+        il.Emit(OpCodes.Brfalse, validReceiver);
+        il.MarkLabel(nullish);
+        EmitThrowTypeError(il, inputs.Errors, "Cannot convert undefined or null to object");
+        il.MarkLabel(validReceiver);
 
         // Proxy check: uses obj.GetType().FullName comparison (no SharpTS.dll dependency)
         var notProxyLabel = il.DefineLabel();

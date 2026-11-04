@@ -12,13 +12,7 @@ public sealed class HostedDesktopIntegrationTests(ITestOutputHelper testOutput)
     public async Task ManagedHostedCompilation_CoLocatesHostedAbiSidecar()
     {
         string repositoryRoot = FindRepositoryRoot();
-#if DEBUG
-        const string configuration = "Debug";
-#else
-        const string configuration = "Release";
-#endif
-        string compilerAssembly = Path.Combine(
-            repositoryRoot, "src", "SharpTS", "bin", configuration, "net10.0", "SharpTS.dll");
+string compilerAssembly = GuiConformanceBuildPaths.Compiler;
         string stageDirectory = Path.Combine(
             Path.GetTempPath(), $"sharpts-hosted-sidecar-{Guid.NewGuid():N}");
         string sourcePath = Path.Combine(stageDirectory, "main.ts");
@@ -72,16 +66,7 @@ public sealed class HostedDesktopIntegrationTests(ITestOutputHelper testOutput)
     public async Task HeadlessScenario_UsesHostedAbiOwnerThreadAndDispatcherFairness(string mode)
     {
         string repositoryRoot = FindRepositoryRoot();
-#if DEBUG
-        const string configuration = "Debug";
-#else
-        const string configuration = "Release";
-#endif
-        string hostDirectory = Path.Combine(
-            repositoryRoot, "tests", "gui-conformance", "SharpTS.Gui.ConformanceHost",
-            "bin",
-            configuration,
-            "net10.0");
+string hostDirectory = GuiConformanceBuildPaths.HostDirectory;
         string hostAssembly = Path.Combine(hostDirectory, "SharpTS.Gui.ConformanceHost.dll");
         string tracePath = Path.Combine(Path.GetTempPath(), $"sharpts-gui-hosted-{mode}-{Guid.NewGuid():N}.json");
         Assert.True(File.Exists(hostAssembly), $"GUI host was not built: {hostAssembly}");
@@ -174,13 +159,7 @@ public sealed class HostedDesktopIntegrationTests(ITestOutputHelper testOutput)
     public async Task InterpretedWindowClose_UsesOrderedIdempotentShutdown(string scenario)
     {
         string repositoryRoot = FindRepositoryRoot();
-#if DEBUG
-        const string configuration = "Debug";
-#else
-        const string configuration = "Release";
-#endif
-        string hostDirectory = Path.Combine(
-            repositoryRoot, "tests", "gui-conformance", "SharpTS.Gui.ConformanceHost", "bin", configuration, "net10.0");
+string hostDirectory = GuiConformanceBuildPaths.HostDirectory;
         string hostAssembly = Path.Combine(hostDirectory, "SharpTS.Gui.ConformanceHost.dll");
         string tracePath = Path.Combine(
             Path.GetTempPath(), $"sharpts-gui-window-close-{scenario}-{Guid.NewGuid():N}.json");
@@ -228,13 +207,7 @@ public sealed class HostedDesktopIntegrationTests(ITestOutputHelper testOutput)
         bool useUnwritableTracePath)
     {
         string repositoryRoot = FindRepositoryRoot();
-#if DEBUG
-        const string configuration = "Debug";
-#else
-        const string configuration = "Release";
-#endif
-        string hostDirectory = Path.Combine(
-            repositoryRoot, "tests", "gui-conformance", "SharpTS.Gui.ConformanceHost", "bin", configuration, "net10.0");
+string hostDirectory = GuiConformanceBuildPaths.HostDirectory;
         string hostAssembly = Path.Combine(hostDirectory, "SharpTS.Gui.ConformanceHost.dll");
         string stage = Path.Combine(
             Path.GetTempPath(), "sharpts-gui-trace-failure-" + Guid.NewGuid().ToString("N"));
@@ -285,13 +258,7 @@ public sealed class HostedDesktopIntegrationTests(ITestOutputHelper testOutput)
     public async Task Headless_InitializesExpandedTopLevelAwaitModuleJobs(string mode)
     {
         string repositoryRoot = FindRepositoryRoot();
-#if DEBUG
-        const string configuration = "Debug";
-#else
-        const string configuration = "Release";
-#endif
-        string hostSource = Path.Combine(
-            repositoryRoot, "tests", "gui-conformance", "SharpTS.Gui.ConformanceHost", "bin", configuration, "net10.0");
+string hostSource = GuiConformanceBuildPaths.HostDirectory;
         string stageDirectory = Path.Combine(
             Path.GetTempPath(), $"sharpts-gui-tla-host-{Guid.NewGuid():N}");
         string hostAssembly = Path.Combine(stageDirectory, "SharpTS.Gui.ConformanceHost.dll");
@@ -315,12 +282,7 @@ public sealed class HostedDesktopIntegrationTests(ITestOutputHelper testOutput)
                     overwrite: true);
             }
 
-            string conformanceRoot = Path.Combine(
-                repositoryRoot, "tests", "gui-conformance", "SharpTS.Gui.Conformance.Tests",
-                "obj",
-                configuration,
-                "net10.0",
-                ".sharpts-gui-conformance");
+            string conformanceRoot = GuiConformanceBuildPaths.Assets;
             string stageConfigDirectory = Path.Combine(stageDirectory, ".sharpts");
             Directory.CreateDirectory(stageConfigDirectory);
             File.Copy(
@@ -337,13 +299,9 @@ public sealed class HostedDesktopIntegrationTests(ITestOutputHelper testOutput)
 
             if (mode == "compiled")
             {
-                string compilerAssembly = Path.Combine(
-                    repositoryRoot, "src", "SharpTS", "bin", configuration, "net10.0", "SharpTS.dll");
-                string bridgeAssembly = Path.Combine(
-                    repositoryRoot, "src", "SharpTS.Gui", "bin", configuration, "net10.0", "SharpTS.Gui.dll");
-                string supportAssembly = Path.Combine(
-                    repositoryRoot, "tests", "gui-conformance", "SharpTS.Gui.ConformanceSupport", "bin", configuration, "net10.0",
-                    "SharpTS.Gui.ConformanceSupport.dll");
+                string compilerAssembly = GuiConformanceBuildPaths.Compiler;
+                string bridgeAssembly = GuiConformanceBuildPaths.Bridge;
+                string supportAssembly = GuiConformanceBuildPaths.Support;
                 var compile = new ProcessStartInfo("dotnet")
                 {
                     WorkingDirectory = stageDirectory,

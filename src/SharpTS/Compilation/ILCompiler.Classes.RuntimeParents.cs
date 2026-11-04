@@ -138,7 +138,8 @@ public partial class ILCompiler
             && _classes.Builders.ContainsKey(GetDefinitionContext().ResolveClassName(leaf)) && !expressionOwnedParent)
             || Runtime.BuiltIns.BuiltInNames.IsErrorTypeName(leaf)
             || leaf is "Array" or "Promise" or "Map" or "Set" or "WeakMap" or "WeakSet" or "Date" or "RegExp" or "Buffer")) return false;
-        if (!captureLexicalOwner && !repeating && declaration.SuperclassExpr is Expr.ClassExpr { Methods.Count: 0, Fields.Count: 0 }) return false;
+        if (!captureLexicalOwner && !repeating && _features?.UsesClassPrototypeMutation != true
+            && declaration.SuperclassExpr is Expr.ClassExpr { Methods.Count: 0, Fields.Count: 0 }) return false;
         if (!_runtimeClassDeclarations.TryGetValue(declaration, out var expression))
             _runtimeClassDeclarations.Add(declaration, expression = CreateRuntimeClassExpression(declaration));
         if (_typeMap.GetClassType(declaration) is { } checkedType) _typeMap.SetClassExprType(expression, checkedType);
@@ -178,8 +179,10 @@ public partial class ILCompiler
         var visited = new HashSet<Expr.ClassExpr>(ReferenceEqualityComparer.Instance);
         while (visited.Add(expression))
         {
-            if (expression.SuperclassExpr == null
-                || expression.SuperclassExpr is Expr.ClassExpr { Methods.Count: 0, Fields.Count: 0 }) return false;
+            if (_lexicalSuperElementInitializers.ContainsKey(expression)) return true;
+            if (expression.SuperclassExpr == null) return false;
+            if (expression.SuperclassExpr is Expr.ClassExpr { Methods.Count: 0, Fields.Count: 0 })
+                return _features?.UsesClassPrototypeMutation == true;
             var parent = _classExprs.Builders[expression].BaseType;
             if (parent == null || parent == _types.Object) return true;
             if (parent.IsConstructedGenericType) parent = parent.GetGenericTypeDefinition();
@@ -415,8 +418,29 @@ public partial class ILCompiler
             ? constructor?.Body?.Where(statement => IsConstructorParameterProperty(statement, constructor)).ToList() ?? [] : [];
         EmitOnceOnlyConstructorElements(ctx, () =>
         {
-            EmitEffectiveClassElements(ctx, declaration.Fields, null, null,
-                _ => throw new InvalidOperationException("Runtime receiver initializer cannot have computed fields."));
+            if (expression != null && _lexicalSuperElementInitializers.TryGetValue(expression, out var elements))
+            {
+                il.Emit(OpCodes.Ldloc, ctx.ClassConstructorReceiver!);
+                il.Emit(OpCodes.Ldarg_2);
+                il.Emit(OpCodes.Ldloc, ctx.ClassConstructorThisCell!);
+                var parameters = constructor?.Parameters.Where(parameter => parameter.IsParameterProperty).ToList() ?? [];
+                if (parameters.Count == 0) il.Emit(OpCodes.Ldnull);
+                else
+                {
+                    il.Emit(OpCodes.Ldc_I4, parameters.Count); il.Emit(OpCodes.Newarr, _types.Object);
+                    for (int index = 0; index < parameters.Count; index++)
+                    {
+                        il.Emit(OpCodes.Dup); il.Emit(OpCodes.Ldc_I4, index);
+                        il.Emit(OpCodes.Ldloc, ctx.ParameterCaptureCells[parameters[index].Name.Lexeme].Cell);
+                        il.Emit(OpCodes.Stelem_Ref);
+                    }
+                }
+                il.Emit(OpCodes.Call, elements);
+                return;
+            }
+            else
+                EmitEffectiveClassElements(ctx, declaration.Fields, null, null,
+                    _ => throw new InvalidOperationException("Runtime receiver initializer cannot have computed fields."));
             var parameterEmitter = new ILEmitter(ctx);
             foreach (var assignment in parameterProperties)
             {

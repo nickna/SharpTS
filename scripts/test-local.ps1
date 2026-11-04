@@ -4,7 +4,7 @@
 param(
     [ValidateSet('All', 'Core', 'Gui', 'Standalone')][string]$Suite = 'All',
     [ValidateSet('Debug', 'Release')][string]$Configuration = 'Release',
-    [ValidateRange(1, 8)][int]$ShardCount = 3,
+    [ValidateRange(1, 32)][int]$ShardCount = 3,
     [ValidateRange(1, 120)][int]$StageTimeoutMinutes = 30,
     [ValidateRange(1, 3600)][int]$HangTimeoutSeconds = 120,
     [switch]$NoBuild,
@@ -130,9 +130,11 @@ if ($Suite -in @('All', 'Gui')) {
     $stages.Add((New-TestStage 'gui' $gui ($categoryFilter.TrimEnd('&'))))
 }
 if ($Suite -in @('All', 'Standalone')) {
+    $expandToFit = -not $PSBoundParameters.ContainsKey('ShardCount')
     for ($shard = 0; $shard -lt $ShardCount; $shard++) {
         $plan = & (Join-Path $PSScriptRoot 'test-standalone-shard.ps1') -ShardIndex $shard -ShardCount $ShardCount `
-            -Configuration $Configuration -IncludeExternal:(-not $Hermetic) -DescribeOnly | ConvertFrom-Json
+            -Configuration $Configuration -IncludeExternal:(-not $Hermetic) -ExpandToFit:$expandToFit -DescribeOnly | ConvertFrom-Json
+        $ShardCount = $plan.ShardCount
         if (-not $DescribeOnly) {
             $plan | ConvertTo-Json -Depth 8 | Set-Content -LiteralPath `
                 (Join-Path $ResultsDirectory "standalone-$shard.plan.json") -Encoding utf8

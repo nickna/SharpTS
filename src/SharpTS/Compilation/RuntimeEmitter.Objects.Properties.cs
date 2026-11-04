@@ -394,7 +394,8 @@ public partial class RuntimeEmitter
         FieldInfo UndefinedInstance,
         Type UndefinedType,
         MethodInfo? NativePropertyGetter = null,
-        EmittedVmRuntime? Vm = null
+        EmittedVmRuntime? Vm = null,
+        bool ExternalFieldReads = true
     );
 
     private readonly record struct GetListPropertyInputs(
@@ -1157,6 +1158,42 @@ public partial class RuntimeEmitter
 
         il.MarkLabel(noPropertyLabel);
 
+        if (inputs.NativePropertyGetter is null && inputs.ExternalFieldReads)
+        {
+            // Managed CLR instances can cross an any/object boundary after
+            // construction. Match the interop spelling before the exact CLR
+            // spelling; source-class names already returned through IHasFields.
+            // Native output keeps its completed owner/property contract above.
+            var owner = il.DeclareLocal(_types.Type);
+            var field = il.DeclareLocal(_types.FieldInfo);
+            var foundField = il.DefineLabel();
+            var noField = il.DefineLabel();
+            il.Emit(OpCodes.Ldarg_0);
+            il.Emit(OpCodes.Callvirt, _types.GetMethodNoParams(_types.Object, "GetType"));
+            il.Emit(OpCodes.Stloc, owner);
+            void EmitFieldQuery(Action emitName)
+            {
+                il.Emit(OpCodes.Ldloc, owner);
+                emitName();
+                il.Emit(OpCodes.Ldc_I4, (int)(BindingFlags.Instance | BindingFlags.Public));
+                il.Emit(OpCodes.Callvirt, _types.GetMethod(_types.Type, "GetField", _types.String, typeof(BindingFlags)));
+                il.Emit(OpCodes.Stloc, field);
+            }
+            EmitFieldQuery(() => il.Emit(OpCodes.Ldloc, pascalNameLocal));
+            il.Emit(OpCodes.Ldloc, field);
+            il.Emit(OpCodes.Brtrue, foundField);
+            EmitFieldQuery(() => il.Emit(OpCodes.Ldarg_1));
+            il.MarkLabel(foundField);
+            il.Emit(OpCodes.Ldloc, field);
+            il.Emit(OpCodes.Brfalse, noField);
+            il.Emit(OpCodes.Ldloc, field);
+            il.Emit(OpCodes.Ldarg_0);
+            il.Emit(OpCodes.Callvirt, _types.GetMethod(_types.FieldInfo, "GetValue", _types.Object));
+            EmitNormalizeClrNumericReturn(il);
+            il.Emit(OpCodes.Ret);
+            il.MarkLabel(noField);
+        }
+
         // Fallback: Try reflection-based method lookup for runtime-emitted types
         // This handles methods like Push, Pipe, etc. on $Readable, $Writable, $Dir, etc.
         // Uses SafeGetMethod so overloaded methods (e.g. Guid.ToString, StringBuilder.Append)
@@ -1530,7 +1567,7 @@ public partial class RuntimeEmitter
         il.Emit(OpCodes.Ret);
     }
 
-    private void EmitGetMapProperty(TypeBuilder typeBuilder, EmittedMapRuntime map)
+    private void EmitGetMapProperty(TypeBuilder typeBuilder, EmittedMapRuntime map, FieldInfo undefinedInstance)
     {
         // GetMapProperty(map: Dictionary<object,object>, name: string) -> object?
         // Returns size as double, or a $BoundMapMethod wrapper for known Map methods.
@@ -1575,8 +1612,8 @@ public partial class RuntimeEmitter
             il.MarkLabel(skipLabel);
         }
 
-        // Unknown property: return null
-        il.Emit(OpCodes.Ldnull);
+        // Missing JavaScript properties use the guest undefined sentinel.
+        il.Emit(OpCodes.Ldsfld, undefinedInstance);
         il.Emit(OpCodes.Ret);
 
         // size case: return (double)map.Count
@@ -1588,7 +1625,7 @@ public partial class RuntimeEmitter
         il.Emit(OpCodes.Ret);
     }
 
-    private void EmitGetSetProperty(TypeBuilder typeBuilder, EmittedSetRuntime set)
+    private void EmitGetSetProperty(TypeBuilder typeBuilder, EmittedSetRuntime set, FieldInfo undefinedInstance)
     {
         // GetSetProperty(set: HashSet<object>, name: string) -> object?
         // Returns size as double, or a $BoundSetMethod wrapper for known Set methods
@@ -1633,8 +1670,8 @@ public partial class RuntimeEmitter
             il.MarkLabel(skipLabel);
         }
 
-        // Unknown property: return null
-        il.Emit(OpCodes.Ldnull);
+        // Missing JavaScript properties use the guest undefined sentinel.
+        il.Emit(OpCodes.Ldsfld, undefinedInstance);
         il.Emit(OpCodes.Ret);
 
         // size case: return (double)set.Count
@@ -2244,7 +2281,8 @@ public partial class RuntimeEmitter
         il.Emit(OpCodes.Call, inputs.Symbols.PopulatePrototype);
         il.Emit(OpCodes.Ldsfld, inputs.Symbols.Prototype);
         il.Emit(OpCodes.Ldarg_1);
-        il.Emit(OpCodes.Call, method);
+        il.Emit(OpCodes.Ldarg_0);
+        il.Emit(OpCodes.Call, inputs.Reflect.Get);
         il.Emit(OpCodes.Ret);
         il.MarkLabel(notSymbolPrimitiveLabel);
 
@@ -2628,6 +2666,18 @@ public partial class RuntimeEmitter
                 il.MarkLabel(notArrayBufferPrototype);
             }
 
+            if (inputs.TypedArrays.Implementation is { } arrayPrototypes)
+            {
+                var notTypedArrayConstructor = il.DefineLabel();
+                il.Emit(OpCodes.Ldarg_0);
+                il.Emit(OpCodes.Call, arrayPrototypes.IntrinsicPrototype);
+                il.Emit(OpCodes.Dup);
+                il.Emit(OpCodes.Brfalse, notTypedArrayConstructor);
+                il.Emit(OpCodes.Ret);
+                il.MarkLabel(notTypedArrayConstructor);
+                il.Emit(OpCodes.Pop);
+            }
+
             // Emitted user classes implement $IHasFields. Their prototype is
             // a stable constructor-free instance whose normal GetProperty
             // implementation exposes declared methods/accessors.
@@ -2887,6 +2937,14 @@ public partial class RuntimeEmitter
             il.Emit(OpCodes.Ldstr, "Number");
             il.Emit(OpCodes.Ret);
             il.MarkLabel(notNumberNameLabel);
+            var notFunctionNameLabel = il.DefineLabel();
+            il.Emit(OpCodes.Ldloc, typeLocal);
+            il.Emit(OpCodes.Ldtoken, inputs.TSFunctionType);
+            il.Emit(OpCodes.Call, _types.TypeGetTypeFromHandle);
+            il.Emit(OpCodes.Bne_Un, notFunctionNameLabel);
+            il.Emit(OpCodes.Ldstr, "Function");
+            il.Emit(OpCodes.Ret);
+            il.MarkLabel(notFunctionNameLabel);
             var notMapNameLabel = il.DefineLabel();
             il.Emit(OpCodes.Ldloc, typeLocal);
             il.Emit(OpCodes.Ldtoken, _types.DictionaryObjectObject);

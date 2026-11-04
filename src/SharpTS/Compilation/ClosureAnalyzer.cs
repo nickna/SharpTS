@@ -1182,6 +1182,9 @@ public class ClosureAnalyzer : AstVisitorBase
     }
 
     protected override void VisitNewTarget(Expr.NewTarget expr)
+        => CaptureLexicalNewTarget();
+
+    private void CaptureLexicalNewTarget()
     {
         foreach (var frame in _functionStack)
         {
@@ -1194,6 +1197,17 @@ public class ClosureAnalyzer : AstVisitorBase
     protected override void VisitSuper(Expr.Super expr)
     {
         CaptureLexicalThis();
+        if (expr.Method is null || expr.Method.Lexeme == "constructor")
+        {
+            CaptureLexicalNewTarget();
+            var arrows = _functionStack.TakeWhile(frame => frame is Expr.ArrowFunction { HasOwnThis: false }).ToList();
+            if (arrows.Count != 0 && _functionStack.Skip(arrows.Count).FirstOrDefault() is Stmt.Function constructor
+                && constructor.Name.Lexeme == "constructor")
+                foreach (var parameter in constructor.Parameters.Where(parameter => parameter.IsParameterProperty))
+                    foreach (var arrow in arrows)
+                        _bodyCells.RequireParameterCapture(arrow!,
+                            CompilationContext.ConstructorParameterCaptureName(parameter.Name.Lexeme), parameter.Name);
+        }
     }
 
     private void CaptureLexicalThis()

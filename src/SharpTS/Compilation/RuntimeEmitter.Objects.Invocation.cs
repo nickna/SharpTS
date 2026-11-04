@@ -1153,6 +1153,15 @@ public partial class RuntimeEmitter
         }
         else
         {
+            // Interpreter values crossing the managed bridge declare their call
+            // capability. A source class method merely named Call cannot supply it.
+            var callableType = il.DeclareLocal(_types.Type);
+            il.Emit(OpCodes.Stloc, callableType);
+            il.Emit(OpCodes.Ldloc, callableType);
+            il.Emit(OpCodes.Ldstr, "SharpTS.Runtime.Types.ISharpTSCallable");
+            il.Emit(OpCodes.Callvirt, _types.GetMethod(_types.Type, "GetInterface", _types.String));
+            il.Emit(OpCodes.Brfalse, noCallMethodLabel);
+            il.Emit(OpCodes.Ldloc, callableType);
             il.Emit(OpCodes.Ldstr, "Call");
             il.Emit(OpCodes.Callvirt, _types.GetMethod(_types.Type, "GetMethod", _types.String));
             var callMiLocal = il.DeclareLocal(typeof(MethodInfo));

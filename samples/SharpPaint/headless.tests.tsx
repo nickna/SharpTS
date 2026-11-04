@@ -181,7 +181,10 @@ async function run(): Promise<void> {
     await status("Effect preview ready");
     snapshot("effect");
     driver.setNumericValue("effect-first-number", 8);
+    await rendered();
+    expect("replacement effect radius is committed", driver.getProperty("effect-first-number", "value") === "8");
     await status("Effect preview ready");
+    console.log("Changed-radius preview completed");
     driver.click("cancel-effect");
     await rendered();
     expect("cancel effect preserves history", count() === "1 commands · 1 layers");

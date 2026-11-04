@@ -4477,7 +4477,13 @@ public partial class ILEmitter
         IL.Emit(OpCodes.Ldarg_0);
         IL.Emit(OpCodes.Ldloc, _ctx.ClassConstructorReturnValue!);
         IL.Emit(_ctx.IsDerivedClassConstructor ? OpCodes.Ldc_I4_1 : OpCodes.Ldc_I4_0);
-        IL.Emit(OpCodes.Ldloc, _ctx.ClassConstructorReceiver!);
+        if (_ctx.ClassConstructorThisCell is { } thisCell)
+        {
+            IL.Emit(OpCodes.Ldloc, thisCell);
+            IL.Emit(OpCodes.Ldc_I4_0);
+            IL.Emit(OpCodes.Ldelem_Ref);
+        }
+        else IL.Emit(OpCodes.Ldloc, _ctx.ClassConstructorReceiver!);
         IL.Emit(OpCodes.Call, _ctx.Runtime!.DynamicConstruction.RecordClassReturn);
         if (_ctx.IsRuntimeReceiverInitializer)
         {

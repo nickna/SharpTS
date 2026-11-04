@@ -24,6 +24,10 @@ The CI cohort runs on matching Windows, Linux and macOS x64/ARM64 runners:
   consuming the iterator before converting elements and avoiding the length getter.
 - `generic-inheritance`: a closed generic base context and inherited field storage.
 - `bigint-unary`: the original #3144 asserted negative-BigInt comparison.
+- `source-field-reflection`: raw/nullish source field transitions through Reflect,
+  descriptors and Object.assign, without unrelated Promise producer emission.
+- `generic-static-descriptor`: a generic constructor alias retains its static
+  field value and own descriptor through the proved canonical storage context.
 
 Run that cohort after building the managed compiler:
 

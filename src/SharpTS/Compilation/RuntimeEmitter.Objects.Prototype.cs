@@ -60,7 +60,8 @@ public partial class RuntimeEmitter
         Type UndefinedType,
         MethodInfo? NativeProxyRejection,
         EmittedGuestOwnPropertyRuntime? GuestOwnProperties = null,
-        EmittedVmRuntime? Vm = null
+        EmittedVmRuntime? Vm = null,
+        EmittedTypedArrayRuntime? TypedArrays = null
     );
 
     private readonly record struct ObjectSetPrototypeOfInputs(
@@ -1121,6 +1122,17 @@ public partial class RuntimeEmitter
         }
         EmitNativePrototypeFallback(inputs.NativeFunctionTypes,
             inputs.FunctionPrototypePopulateMethod, inputs.FunctionPrototypeField);
+        if (inputs.TypedArrays?.Implementation is { } arrays)
+        {
+            var notTypedArray = il.DefineLabel();
+            il.Emit(OpCodes.Ldarg_0);
+            il.Emit(OpCodes.Isinst, arrays.BaseType);
+            il.Emit(OpCodes.Brfalse, notTypedArray);
+            il.Emit(OpCodes.Ldarg_0);
+            il.Emit(OpCodes.Call, arrays.IntrinsicPrototype);
+            il.Emit(OpCodes.Ret);
+            il.MarkLabel(notTypedArray);
+        }
         EmitNativePrototypeFallback(inputs.NativeObjectTypes,
             null, objectPrototypes.Prototype);
 
@@ -1379,19 +1391,6 @@ public partial class RuntimeEmitter
         il.Emit(OpCodes.Ldloc, currentPrototypeLocal);
         il.Emit(OpCodes.Ldarg_1);
         il.Emit(OpCodes.Bne_Un, prototypeDiffers);
-        if (inputs.TypedArrays?.Implementation is { } typedArrays)
-        {
-            // A conceptual Object.prototype fallback is not the view's actual
-            // intrinsic prototype. Only an explicit equal link is a no-op.
-            var actualPrototypeMatch = il.DefineLabel();
-            il.Emit(OpCodes.Ldarg_0);
-            il.Emit(OpCodes.Isinst, typedArrays.BaseType);
-            il.Emit(OpCodes.Brfalse, actualPrototypeMatch);
-            il.Emit(OpCodes.Ldarg_0);
-            il.Emit(OpCodes.Call, inputs.DescriptorStorage.HasPrototypeEntry);
-            il.Emit(OpCodes.Brfalse, prototypeDiffers);
-            il.MarkLabel(actualPrototypeMatch);
-        }
         il.Emit(OpCodes.Ldarg_0);
         il.Emit(OpCodes.Ret);
         il.MarkLabel(prototypeDiffers);

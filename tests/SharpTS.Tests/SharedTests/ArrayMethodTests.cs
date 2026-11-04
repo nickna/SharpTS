@@ -193,7 +193,7 @@ public class ArrayMethodTests
             }
 
             try {
-                [].flat.call();
+                ([].flat as any).call();
             } catch (error) {
                 console.log(error instanceof TypeError);
             }

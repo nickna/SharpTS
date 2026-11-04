@@ -1154,8 +1154,7 @@ public partial class TypeChecker
     /// This enables identity-based caching in IsCompatible to work correctly with recursive types.
     /// Key: alias name (or "name&lt;arg1,arg2&gt;" for generic), Value: expanded TypeInfo
     /// </summary>
-    [ThreadStatic]
-    private static Dictionary<string, TypeInfo>? _expandedTypeAliasCache;
+    private Dictionary<string, TypeInfo>? _expandedTypeAliasCache;
 
     /// <summary>
     /// RAII-style helper for safely managing TypeEnvironment scope changes.
@@ -1210,7 +1209,8 @@ public partial class TypeChecker
         var paramScope = new TypeEnvironment(_environment);
         if (editorOwner is not null)
             RegisterEditorParameterScope(editorOwner, paramScope);
-        var annotations = parameters.Select(param => ResolveAnnotation(param.Type, param.TypeAnnotationNode, param)).ToList();
+        var annotations = parameters.Select(param => ResolveAnnotation(param.Type, param.TypeAnnotationNode, param)
+            ?? (param.DefaultValue is Expr.Literal literal ? WidenLiteralType(GetLiteralType(literal.Value)) : null)).ToList();
         var defaultBindings = new ParameterDefaultBindings(this, editorOwner, parameters,
             annotations.Select(type => type ?? TypeInfo.Any.Shared).ToList(), paramScope, validateDefaults);
         using var bindingScope = new ParameterBindingCheckScope(this, editorOwner, validateDefaults,
@@ -1279,6 +1279,11 @@ public partial class TypeChecker
                         defaultType = CheckDeferredClassDefault(param.DefaultValue, ParameterDefaultTupleContext(paramType));
                     }
                     defaultBindings.Check(param.DefaultValue, parameterIndex);
+                    if (resolvedParameter is null)
+                    {
+                        paramType = WidenClassFieldInitializerType(param.DefaultValue, defaultType);
+                        paramTypes[parameterIndex] = paramType;
+                    }
                     if (!IsCompatible(paramType, defaultType))
                     {
                         throw new TypeMismatchException($"Default value type is not assignable to parameter type in {contextName}",
@@ -1863,6 +1868,7 @@ public partial class TypeChecker
 
         // Clear compatibility cache for fresh check
         _compatibilityCache = null;
+        _expandedTypeAliasCache = null;
 
         _moduleResolver = resolver;
         _hasDefaultLibraries = modules.Any(module => module.IsDefaultLibrary);

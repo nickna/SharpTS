@@ -161,6 +161,8 @@ public partial class AsyncArrowMoveNextEmitter
         if (BlockScopeRenames.TryGetValue(a, out var renamed))
             a = a with { Name = RenameToken(a.Name, renamed) };
 
+        if (TryEmitArrayGlobalAssignment(a)) return;
+
         string name = a.Name.Lexeme;
         EmitExpression(a.Value);
         EnsureBoxed();

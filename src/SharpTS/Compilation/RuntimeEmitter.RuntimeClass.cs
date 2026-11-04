@@ -44,6 +44,8 @@ public partial class RuntimeEmitter
         // particular — could refer to them. Re-use the existing TypeBuilder
         // here; everything below adds fields/methods to the same type.
         var typeBuilder = runtime.RuntimeClass.Type;
+        if (_features.UsesAliasedGlobalEvaluator)
+            runtime.Deployment.Require("indirect eval through aliased global object");
 
         DefineCancellationFlag(typeBuilder, runtime.Cancellation);
 
@@ -735,6 +737,8 @@ public partial class RuntimeEmitter
                 MethodAttributes.Private | MethodAttributes.Static, _types.Void, Type.EmptyTypes);
             cctorIL.Emit(OpCodes.Call, globalTimerInitializer);
         }
+        EmitTypedArrayPrototypes(typeBuilder, new TypedArrayPrototypesInputs(runtime.TypedArrays,
+            runtime.ObjectPrototypes, runtime.DescriptorStorage), cctorIL);
         cctorIL.Emit(OpCodes.Ret);
 
         // Emit all methods - these are now in partial class files
@@ -1156,7 +1160,8 @@ public partial class RuntimeEmitter
                 runtime.Sentinels.UndefinedInstance,
                 runtime.Sentinels.UndefinedType,
                 runtime.ReflectedMethods.NativePropertyGetter,
-                runtime.Vm
+                runtime.Vm,
+                ExternalFieldReads: _features.UsesExternalFieldReads || _emitHosted
             )
         );
         EmitGetListProperty(
@@ -1182,9 +1187,9 @@ public partial class RuntimeEmitter
         // its respective Map/Set method MethodBuilders (and BoundMapMethodCtor
         // / BoundSetMethodCtor wrappers), so they fold up under UsesMap / UsesSet.
         if (runtime.Map is not null)
-            EmitGetMapProperty(typeBuilder, runtime.RequireMap());
+            EmitGetMapProperty(typeBuilder, runtime.RequireMap(), runtime.Sentinels.UndefinedInstance);
         if (runtime.Set is not null)
-            EmitGetSetProperty(typeBuilder, runtime.RequireSet());
+            EmitGetSetProperty(typeBuilder, runtime.RequireSet(), runtime.Sentinels.UndefinedInstance);
         // Exception helpers were moved earlier (above EmitToNumber) since
         // ToNumber's Symbol-throw branch emits a CreateException call that
         // must resolve to a non-null MethodBuilder.
@@ -1497,7 +1502,8 @@ public partial class RuntimeEmitter
                 runtime.Sentinels.UndefinedType,
                 NativeProxyRejection: runtime.ReflectedMethods.NativeProxyRejection,
                 SourceOwners: runtime.ClassInitialization.SourceOwners,
-                Promise: runtime.Promise
+                Promise: runtime.Promise,
+                RegExps: runtime.RegExps
             )
         );
         EmitDeleteProperty(
@@ -1746,6 +1752,12 @@ public partial class RuntimeEmitter
                 NativeProxyRejection: runtime.ReflectedMethods.NativeProxyRejection
             )
         );
+        // Keep declaration order while sharing the complete computed-delete
+        // operation. The ordinary entry supplies false to the strictness input.
+        var deleteIndex = typeBuilder.DefineMethod("DeleteIndex", MethodAttributes.Public | MethodAttributes.Static,
+            _types.Boolean, [_types.Object, _types.Object]);
+        var deleteIndexStrict = typeBuilder.DefineMethod("DeleteIndexStrict", MethodAttributes.Public | MethodAttributes.Static,
+            _types.Boolean, [_types.Object, _types.Object, _types.Boolean]);
         EmitDeleteIndex(
             typeBuilder,
             runtime.ObjectDeletion,
@@ -1761,7 +1773,10 @@ public partial class RuntimeEmitter
                 runtime.Reflect.ToPropertyKey,
                 new ProxyDeleteCheckInputs(runtime.ObjectRead.Property, runtime.ReflectedMethods.InvokeUnwrapped,
                     runtime.ObjectDescriptors, runtime.ObjectState, NativeProxyRejection: runtime.ReflectedMethods.NativeProxyRejection),
-                GuestOwnProperties: runtime.GuestOwnProperties
+                runtime.Sentinels.UndefinedType,
+                GuestOwnProperties: runtime.GuestOwnProperties,
+                DeclaredMethod: deleteIndex,
+                SharedStrictCore: deleteIndexStrict
             )
         );
         EmitDeleteIndexStrict(
@@ -1779,7 +1794,9 @@ public partial class RuntimeEmitter
                 runtime.Reflect.ToPropertyKey,
                 new ProxyDeleteCheckInputs(runtime.ObjectRead.Property, runtime.ReflectedMethods.InvokeUnwrapped,
                     runtime.ObjectDescriptors, runtime.ObjectState, NativeProxyRejection: runtime.ReflectedMethods.NativeProxyRejection),
-                GuestOwnProperties: runtime.GuestOwnProperties
+                runtime.Sentinels.UndefinedType,
+                GuestOwnProperties: runtime.GuestOwnProperties,
+                DeclaredMethod: deleteIndexStrict
             )
         );
         EmitStrictModeHelpers(typeBuilder, runtime.Operators, runtime.Errors);
@@ -2359,7 +2376,8 @@ public partial class RuntimeEmitter
                 runtime.Sentinels.UndefinedType,
                 NativeProxyRejection: runtime.ReflectedMethods.NativeProxyRejection,
                 GuestOwnProperties: runtime.GuestOwnProperties,
-                Vm: runtime.Vm
+                Vm: runtime.Vm,
+                TypedArrays: runtime.TypedArrays
             ),
             prototypeStoreField
         );
@@ -2396,6 +2414,7 @@ public partial class RuntimeEmitter
                 runtime.Errors,
                 runtime.ObjectDescriptors,
                 runtime.ObjectPrototypes,
+                runtime.ObjectRead,
                 runtime.StringCoercion,
                 runtime.FunctionValues.Type,
                 runtime.Sentinels.UndefinedInstance,
@@ -2947,7 +2966,12 @@ public partial class RuntimeEmitter
                 runtime.ObjectFields.FieldsGetter, runtime.ObjectFields.Interface,
                 runtime.Generators.Type, runtime.AsyncGenerators?.Type,
                 runtime.ObjectDescriptors, runtime.ObjectKeys, runtime.ObjectOwnProperties, runtime.Reflect,
-                runtime.Symbols, runtime.Sentinels.UndefinedType)
+                runtime.Symbols, runtime.Sentinels.UndefinedType,
+                new ProxyOwnKeysCallInputs(runtime.ObjectKeys.Ordinary, runtime.ObjectKeys.CreateProxyList,
+                    runtime.ObjectDescriptors.GetOwnPropertyDescriptor, runtime.ObjectState.IsExtensible,
+                    runtime.Symbols.IsSymbol, runtime.ObjectRead.Property, runtime.ReflectedMethods.InvokeUnwrapped,
+                    NativeProxyRejection: runtime.ReflectedMethods.NativeProxyRejection),
+                ProxySelected: _features.UsesProxy)
         );
         // #685: array binding-pattern source normalizer uses the declared iterator
         // collection helper and array storage constructor.

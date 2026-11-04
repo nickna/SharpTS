@@ -13,13 +13,7 @@ public sealed class HotReloadIntegrationTests(ITestOutputHelper testOutput)
     public async Task InterpretedWatch_RemountsFreshStateAfterSourceChange()
     {
         string repositoryRoot = FindRepositoryRoot();
-#if DEBUG
-        const string configuration = "Debug";
-#else
-        const string configuration = "Release";
-#endif
-        string hostSource = Path.Combine(
-            repositoryRoot, "src", "SharpTS.Gui.Host", "bin", configuration, "net10.0");
+string hostSource = GuiConformanceBuildPaths.DesktopHostDirectory;
         string fixture = Path.Combine(
             repositoryRoot, "tests", "gui-conformance", "SharpTS.Gui.Conformance.Tests", "Fixtures", "HotReload", "main.tsx");
         string temporaryRoot = Path.Combine(
@@ -31,7 +25,7 @@ public sealed class HotReloadIntegrationTests(ITestOutputHelper testOutput)
             Directory.CreateDirectory(guestDirectory);
             string entry = Path.Combine(guestDirectory, "main.tsx");
             File.Copy(fixture, entry, overwrite: true);
-            GuiInterpretedTestAssets.Stage(repositoryRoot, configuration, temporaryRoot);
+            GuiInterpretedTestAssets.Stage(repositoryRoot, temporaryRoot);
 
             string tracePath = Path.Combine(temporaryRoot, "hot-reload-trace.json");
             var start = new ProcessStartInfo("dotnet")

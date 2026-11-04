@@ -5,6 +5,7 @@ namespace SharpTS.Compilation;
 
 public partial class RuntimeEmitter
 {
+    private EmittedSourceDataDefinitionRuntime? _sourceDataDefinition;
     private readonly record struct GuestOwnQueryInputs(EmittedGuestOwnPropertyRuntime Runtime, MethodInfo ToPropertyKey);
 
     private void EmitGuestOwnNamedIndex(ILGenerator il, EmittedGuestOwnPropertyRuntime? own, MethodInfo? property, bool write)
@@ -30,11 +31,25 @@ public partial class RuntimeEmitter
         Action loadReceiver, Action loadKey)
     {
         if (own == null) return;
+        var done = il.DefineLabel();
         var legacy = EmitGuestOwnReceiverGuard(il, own, loadReceiver);
         loadReceiver(); loadKey();
         if (!deleting) il.Emit(OpCodes.Ldnull);
         il.Emit(OpCodes.Ldc_I4_1); il.Emit(OpCodes.Call, deleting ? own.CommitDelete : own.CommitDefinition);
+        il.Emit(OpCodes.Br, done);
         il.MarkLabel(legacy);
+        if (_sourceDataDefinition is { } source)
+        {
+            loadReceiver(); il.Emit(OpCodes.Isinst, source.Contract); il.Emit(OpCodes.Brfalse, done);
+            if (!deleting)
+            {
+                loadReceiver(); loadKey(); il.Emit(OpCodes.Call, own.HasOwn); il.Emit(OpCodes.Brtrue, done);
+            }
+            loadReceiver(); loadKey();
+            if (!deleting) il.Emit(OpCodes.Ldnull);
+            il.Emit(OpCodes.Ldc_I4_1); il.Emit(OpCodes.Call, deleting ? own.CommitDelete : own.CommitDefinition);
+        }
+        il.MarkLabel(done);
     }
 
     private void EmitGuestOwnDescriptorQuery(ILGenerator il, GuestOwnQueryInputs? inputs,

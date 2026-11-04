@@ -199,7 +199,7 @@ public partial class TypeChecker
 
                 // Re-contextualize callbacks after inference. This includes callbacks nested in
                 // object/array arguments, whose parameter types depend on the instantiated props.
-                ContextualizeGenericCallArguments(call.Arguments, instFunc.ParamTypes);
+                ContextualizeGenericCallArguments(call.Arguments, instFunc.ParamTypes, genericFunc.ParamTypes);
                 if (call.TypeArgs is not { Count: > 0 } && call.Arguments.Any(ContainsGenericTupleCallback))
                 {
                     argTypes = RefreshContextualizedGenericArguments(call.Arguments, argTypes);
@@ -207,7 +207,7 @@ public partial class TypeChecker
                         InferTypeArguments(genericFunc,
                             PrepareFreshCallArgumentsForInference(genericFunc, call.Arguments, argTypes),
                             contextualResultType));
-                    ContextualizeGenericCallArguments(call.Arguments, instFunc.ParamTypes);
+                    ContextualizeGenericCallArguments(call.Arguments, instFunc.ParamTypes, genericFunc.ParamTypes);
                 }
                 argTypes = RefreshContextualizedGenericArguments(call.Arguments, argTypes);
                 argTypes = ContextualFreshCallArguments(call.Arguments, argTypes, instFunc.ParamTypes, instFunc.HasRestParam, publish: true);
@@ -1137,10 +1137,17 @@ public partial class TypeChecker
     /// </summary>
     private void ContextualizeGenericCallArguments(
         IReadOnlyList<Expr> arguments,
-        IReadOnlyList<TypeInfo> parameterTypes)
+        IReadOnlyList<TypeInfo> parameterTypes,
+        IReadOnlyList<TypeInfo>? sourceParameterTypes = null)
     {
         for (int i = 0; i < arguments.Count && i < parameterTypes.Count; i++)
-            ContextualizeNestedGenericCallback(arguments[i], parameterTypes[i]);
+        {
+            bool constrained = sourceParameterTypes is not null && i < sourceParameterTypes.Count &&
+                sourceParameterTypes[i] is TypeInfo.TypeParameter { Constraint: not null };
+            if (constrained) _constrainedCallbackReturnWideningDepth++;
+            try { ContextualizeNestedGenericCallback(arguments[i], parameterTypes[i]); }
+            finally { if (constrained) _constrainedCallbackReturnWideningDepth--; }
+        }
     }
 
     private List<TypeInfo> RefreshContextualizedGenericArguments(IReadOnlyList<Expr> arguments, IReadOnlyList<TypeInfo> previous)
@@ -2121,7 +2128,8 @@ public partial class TypeChecker
                 break; // No more parameters to check
             }
 
-            if (!IsCompatible(expectedType, argTypes[i]))
+            bool optional = i < regularParamCount && i >= signature.MinArity;
+            if (!IsArgumentCompatible(expectedType, argTypes[i], optional))
             {
                 return false;
             }

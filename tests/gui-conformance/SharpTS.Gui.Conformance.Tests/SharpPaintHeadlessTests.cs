@@ -35,12 +35,7 @@ public sealed class SharpPaintHeadlessTests(ITestOutputHelper testOutput)
     private static async Task<string> RunModelTestsAsync(TimeSpan executionTimeout)
     {
         string root = FindRepositoryRoot();
-#if DEBUG
-        const string configuration = "Debug";
-#else
-        const string configuration = "Release";
-#endif
-        string compiler = Path.Combine(root, "src", "SharpTS", "bin", configuration, "net10.0", "SharpTS.dll");
+string compiler = GuiConformanceBuildPaths.Compiler;
         var start = new ProcessStartInfo("dotnet")
         {
             WorkingDirectory = root,
@@ -101,27 +96,75 @@ public sealed class SharpPaintHeadlessTests(ITestOutputHelper testOutput)
         Assert.Contains("stderr:", exception.Message, StringComparison.Ordinal);
     }
 
+    [Theory]
+    [InlineData(false)]
+    [InlineData(true)]
+    public async Task UnexpectedFailureRetainsDiagnosticsAndSuccessfulRunOnlyCleansUp(bool fail)
+    {
+        string? stage = null;
+        byte[]? traceBytes = null;
+        string? retained = null;
+        const string sentinel = "injected failure after successful headless verification";
+        try
+        {
+            Exception? failure = await Record.ExceptionAsync(async () => await RunAsync(
+                "interpreted", entryPoint: "main.tsx", smokeClose: true,
+                verifyBeforeCleanup: currentStage =>
+                {
+                    stage = currentStage;
+                    retained = Path.Combine(FindRepositoryRoot(), "artifacts", "gui-conformance-failures", Path.GetFileName(stage));
+                    traceBytes = File.ReadAllBytes(Path.Combine(stage, "interpreted.json"));
+                    if (fail) throw new InvalidOperationException(sentinel);
+                }));
+            Assert.NotNull(stage);
+            Assert.False(Directory.Exists(stage));
+            Assert.NotNull(retained);
+            if (!fail)
+            {
+                Assert.Null(failure);
+                Assert.False(Directory.Exists(retained));
+                return;
+            }
+            Assert.Equal(sentinel, Assert.IsType<InvalidOperationException>(failure).Message);
+            Assert.Equal(traceBytes, File.ReadAllBytes(Path.Combine(retained, "trace.json")));
+            using JsonDocument evidence = JsonDocument.Parse(await File.ReadAllTextAsync(Path.Combine(retained, "failure.json")));
+            JsonElement root = evidence.RootElement;
+            Assert.Equal("interpreted", root.GetProperty("Mode").GetString());
+            Assert.Equal("editing", root.GetProperty("Scenario").GetString());
+            Assert.Equal("main.tsx", root.GetProperty("EntryPoint").GetString());
+            Assert.True(root.GetProperty("TracePresent").GetBoolean());
+            Assert.Contains(sentinel, root.GetProperty("Failure").GetString());
+            Assert.Equal(0, root.GetProperty("ExitCode").GetInt32());
+            Assert.Contains("SharpTS GUI Interpreted trace:", root.GetProperty("StandardOutput").GetString());
+            Assert.Equal("", root.GetProperty("StandardError").GetString());
+            Assert.NotEmpty(root.GetProperty("Timeline").GetString()!);
+            Assert.Equal(2, Directory.GetFiles(retained).Length);
+        }
+        finally
+        {
+            if (retained is not null) await TestDirectory.TryDeleteAsync(retained, testOutput.WriteLine);
+        }
+    }
+
     private async Task<TraceEvent[]> RunAsync(
         string mode,
         string entryPoint = "headless.tests.tsx",
         bool smokeClose = false,
         TimeSpan? executionTimeout = null,
-        string scenario = "editing")
+        string scenario = "editing",
+        Action<string>? verifyBeforeCleanup = null)
     {
         string root = FindRepositoryRoot();
-#if DEBUG
-        const string configuration = "Debug";
-#else
-        const string configuration = "Release";
-#endif
-        string hostSource = Path.Combine(root, "src", "SharpTS.Gui.Host", "bin", configuration, "net10.0");
-        string conformanceRoot = Path.Combine(root, "tests", "gui-conformance", "SharpTS.Gui.Conformance.Tests", "obj", configuration, "net10.0", ".sharpts-gui-conformance");
+string hostSource = GuiConformanceBuildPaths.DesktopHostDirectory;
+        string conformanceRoot = GuiConformanceBuildPaths.Assets;
         string stage = Path.Combine(Path.GetTempPath(), $"sharpts-sharpaint-{mode}-{Guid.NewGuid():N}");
         Directory.CreateDirectory(stage);
+        TestProcessResult? process = null;
+        TestProcess? observedProcess = null;
         try
         {
             CopyDirectory(hostSource, stage);
-            GuiInterpretedTestAssets.Stage(root, configuration, stage);
+            GuiInterpretedTestAssets.Stage(root, stage);
             string guestDirectory = Path.Combine(stage, "Guest");
             Directory.CreateDirectory(guestDirectory);
             foreach (string file in Directory.GetFiles(Path.Combine(root, "samples", "SharpPaint"), "*.ts*").Select(Path.GetFileName).OfType<string>().Where(file => file != "main.tsx" || entryPoint == "main.tsx"))
@@ -148,7 +191,8 @@ public sealed class SharpPaintHeadlessTests(ITestOutputHelper testOutput)
                 start.Environment["SHARPTS_GUI_SMOKE_CLOSE"] = "1";
 
             TimeSpan limit = executionTimeout ?? (smokeClose ? SmokeTestTimeout : WorkflowTestTimeout);
-            var process = await TestProcess.RunAsync(start, limit, $"SharpPaint {mode} Headless run");
+            await using (observedProcess = new TestProcess(start, limit, $"SharpPaint {mode} Headless run"))
+                process = await observedProcess.WaitForExitAsync();
             testOutput.WriteLine($"{mode} / {scenario}:\n{process.Timeline}");
             string output = process.StandardOutput;
             string errors = process.StandardError;
@@ -160,11 +204,31 @@ public sealed class SharpPaintHeadlessTests(ITestOutputHelper testOutput)
 
             if (!smokeClose) Assert.True(output.Contains("SharpPaint headless workflows passed.", StringComparison.Ordinal), $"stdout: {output}\nstderr: {errors}");
             using JsonDocument trace = JsonDocument.Parse(await File.ReadAllTextAsync(tracePath));
-            return trace.RootElement.EnumerateArray().Select(item => new TraceEvent(
+            TraceEvent[] events = trace.RootElement.EnumerateArray().Select(item => new TraceEvent(
                 item.GetProperty("Stage").GetString()!,
                 item.GetProperty("Detail").ValueKind == JsonValueKind.Null
                     ? null
                     : item.GetProperty("Detail").GetString())).ToArray();
+            verifyBeforeCleanup?.Invoke(stage);
+            return events;
+        }
+        catch (Exception failure)
+        {
+            // The zero-timeout cases deliberately test process cleanup. Preserve
+            // unexpected failures before the existing temporary-stage cleanup.
+            if (executionTimeout != TimeSpan.Zero)
+            {
+                try
+                {
+                    string retained = SharpPaintFailureArtifacts.Retain(root, stage, mode, scenario, entryPoint, failure, process, observedProcess);
+                    testOutput.WriteLine($"Retained SharpPaint failure diagnostics: {retained}");
+                }
+                catch (Exception diagnosticsFailure) when (diagnosticsFailure is IOException or UnauthorizedAccessException)
+                {
+                    testOutput.WriteLine($"Could not retain SharpPaint diagnostics: {diagnosticsFailure.Message}");
+                }
+            }
+            throw;
         }
         finally
         {

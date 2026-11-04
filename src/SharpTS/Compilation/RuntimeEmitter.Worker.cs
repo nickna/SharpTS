@@ -682,7 +682,7 @@ public partial class RuntimeEmitter
         {
             EmitGetTypedArrayElementHelper(runtimeType, runtime.TypedArrays.RequireImplementation());
             EmitSetTypedArrayElementHelper(runtimeType, runtime.TypedArrays.RequireImplementation());
-            EmitGetTypedArrayMemberHelper(runtimeType, runtime.TypedArrays.RequireImplementation());
+            EmitGetTypedArrayMemberHelper(runtimeType, runtime.TypedArrays.RequireImplementation(), runtime.Sentinels.UndefinedInstance);
         }
     }
 
@@ -803,7 +803,7 @@ public partial class RuntimeEmitter
     /// Emits a helper that gets a member from a TypedArray.
     /// Handles both emitted pure-IL TypedArray types and interpreter TypedArrays.
     /// </summary>
-    private void EmitGetTypedArrayMemberHelper(TypeBuilder runtimeType, EmittedTypedArrayImplementation arrays)
+    private void EmitGetTypedArrayMemberHelper(TypeBuilder runtimeType, EmittedTypedArrayImplementation arrays, FieldInfo undefinedInstance)
     {
         var method = runtimeType.DefineMethod(
             "GetTypedArrayMember",
@@ -926,8 +926,8 @@ public partial class RuntimeEmitter
         il.Emit(OpCodes.Br, endLabel);
 
         il.MarkLabel(returnNullLabel);
-        // Unknown property - return null (undefined)
-        il.Emit(OpCodes.Ldnull);
+        // Missing properties retain JavaScript undefined rather than CLR null.
+        il.Emit(OpCodes.Ldsfld, undefinedInstance);
         il.Emit(OpCodes.Br, endLabel);
 
         il.MarkLabel(endLabel);

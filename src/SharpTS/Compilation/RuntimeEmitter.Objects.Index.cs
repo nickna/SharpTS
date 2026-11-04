@@ -99,7 +99,10 @@ public partial class RuntimeEmitter
         TypeBuilder TSFunctionType,
         MethodInfo ToPropertyKey,
         ProxyDeleteCheckInputs ProxyDelete,
-        EmittedGuestOwnPropertyRuntime? GuestOwnProperties = null
+        Type UndefinedType,
+        EmittedGuestOwnPropertyRuntime? GuestOwnProperties = null,
+        MethodBuilder? DeclaredMethod = null,
+        MethodBuilder? SharedStrictCore = null
     );
 
     private readonly record struct DeleteIndexCoreInputs(
@@ -113,6 +116,7 @@ public partial class RuntimeEmitter
         TypeBuilder TSFunctionType,
         MethodInfo ToPropertyKey,
         ProxyDeleteCheckInputs ProxyDelete,
+        Type UndefinedType,
         EmittedGuestOwnPropertyRuntime? GuestOwnProperties = null
     );
 
@@ -127,7 +131,9 @@ public partial class RuntimeEmitter
         TypeBuilder TSFunctionType,
         MethodInfo ToPropertyKey,
         ProxyDeleteCheckInputs ProxyDelete,
-        EmittedGuestOwnPropertyRuntime? GuestOwnProperties = null
+        Type UndefinedType,
+        EmittedGuestOwnPropertyRuntime? GuestOwnProperties = null,
+        MethodBuilder? DeclaredMethod = null
     );
 
     private void EmitGetIndex(TypeBuilder typeBuilder, EmittedObjectReadRuntime objectRead, GetIndexInputs inputs)
@@ -733,10 +739,12 @@ public partial class RuntimeEmitter
         if (inputs.TypedArrays.Implementation is not null)
         {
             il.MarkLabel(typedArrayLabel);
+            // Canonical numeric keys were handled above. Remaining keys use
+            // ordinary property lookup, including descriptors and prototypes.
             il.Emit(OpCodes.Ldarg_0);
             il.Emit(OpCodes.Ldarg_1);
-            il.Emit(OpCodes.Call, _types.GetMethod(_types.Convert, "ToInt32", _types.Object));
-            il.Emit(OpCodes.Call, inputs.TypedArrays.RequireImplementation().GetElement);
+            il.Emit(OpCodes.Call, inputs.StringCoercion.ToJsString);
+            il.Emit(OpCodes.Call, objectRead.Property);
             il.Emit(OpCodes.Ret);
         }
 
@@ -2328,7 +2336,23 @@ public partial class RuntimeEmitter
     /// Handles both symbol keys and string keys for delete operations.
     /// </summary>
     private void EmitDeleteIndex(TypeBuilder typeBuilder, EmittedObjectDeletionRuntime objectDeletion, DeleteIndexInputs inputs)
-        => EmitDeleteIndexCore(
+    {
+        if (inputs.SharedStrictCore is { } core)
+        {
+            // Production supplies its exact strict shell. Independent helper
+            // emission still builds a body from its own supplied carrier inputs.
+            var method = inputs.DeclaredMethod ?? typeBuilder.DefineMethod("DeleteIndex",
+                MethodAttributes.Public | MethodAttributes.Static, _types.Boolean, [_types.Object, _types.Object]);
+            objectDeletion.Index = method;
+            var il = method.GetILGenerator();
+            il.Emit(OpCodes.Ldarg_0);
+            il.Emit(OpCodes.Ldarg_1);
+            il.Emit(OpCodes.Ldc_I4_0);
+            il.Emit(OpCodes.Call, core);
+            il.Emit(OpCodes.Ret);
+            return;
+        }
+        EmitDeleteIndexCore(
             typeBuilder,
             objectDeletion,
             new DeleteIndexCoreInputs(
@@ -2342,10 +2366,13 @@ public partial class RuntimeEmitter
                 inputs.TSFunctionType,
                 inputs.ToPropertyKey,
                 inputs.ProxyDelete,
+                inputs.UndefinedType,
                 inputs.GuestOwnProperties
             ),
-            strict: false
+            strict: false,
+            inputs.DeclaredMethod
         );
+    }
 
     /// <summary>
     /// Emits DeleteIndex(object obj, object key) -> bool (non-strict) or
@@ -2359,10 +2386,11 @@ public partial class RuntimeEmitter
         TypeBuilder typeBuilder,
         EmittedObjectDeletionRuntime objectDeletion,
         DeleteIndexCoreInputs inputs,
-        bool strict
+        bool strict,
+        MethodBuilder? declaredMethod = null
     )
     {
-        var method = typeBuilder.DefineMethod(
+        var method = declaredMethod ?? typeBuilder.DefineMethod(
             strict ? "DeleteIndexStrict" : "DeleteIndex",
             MethodAttributes.Public | MethodAttributes.Static,
             _types.Boolean,
@@ -2394,9 +2422,18 @@ public partial class RuntimeEmitter
         var symbolKeyLabel = il.DefineLabel();
         var trueLabel = il.DefineLabel();
 
-        // null check on obj - return true (deleting from null is allowed in JS)
+        // A delete reference requires an object-coercible base before evaluating
+        // ToPropertyKey. In particular, a key conversion must not run for nullish bases.
+        var nullish = il.DefineLabel();
+        var validReceiver = il.DefineLabel();
         il.Emit(OpCodes.Ldarg_0);
-        il.Emit(OpCodes.Brfalse, trueLabel);
+        il.Emit(OpCodes.Brfalse, nullish);
+        il.Emit(OpCodes.Ldarg_0);
+        il.Emit(OpCodes.Isinst, inputs.UndefinedType);
+        il.Emit(OpCodes.Brfalse, validReceiver);
+        il.MarkLabel(nullish);
+        EmitThrowTypeError(il, inputs.Errors, "Cannot convert undefined or null to object");
+        il.MarkLabel(validReceiver);
 
         il.Emit(OpCodes.Ldarg_1);
         il.Emit(OpCodes.Call, inputs.ToPropertyKey);
@@ -2832,9 +2869,11 @@ public partial class RuntimeEmitter
                 inputs.TSFunctionType,
                 inputs.ToPropertyKey,
                 inputs.ProxyDelete,
+                inputs.UndefinedType,
                 inputs.GuestOwnProperties
             ),
-            strict: true
+            strict: true,
+            inputs.DeclaredMethod
         );
 
     /// <summary>

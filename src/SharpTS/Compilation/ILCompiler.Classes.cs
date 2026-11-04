@@ -300,7 +300,9 @@ public partial class ILCompiler
         NativeSourceOwnerCatalog.Implement(typeBuilder, _runtime.ObjectFields.Interface, _runtime.ClassInitialization.SourceOwners);
 
         string className = qualifiedClassName;
-        if (_runtime.GuestOwnProperties != null && classStmt.SuperclassExpr == null && !classStmt.IsAbstract
+        if (_runtime.GuestOwnProperties != null && !_classes.CompactStorageClasses.Contains(classStmt))
+            _observableFieldOwners.Add(typeBuilder);
+        if (_nativeAotProjectOutput && _runtime.GuestOwnProperties != null && classStmt.SuperclassExpr == null && !classStmt.IsAbstract
             && !_repeatingClassDeclarations.Contains(classStmt) && !_runtimeClassDeclarations.ContainsKey(classStmt)
             && !(classStmt.AutoAccessors?.Any(accessor => !accessor.IsStatic) ?? false)
             && !classStmt.Fields.Any(field => !field.IsStatic && !field.IsPrivate && field.ComputedKey != null)

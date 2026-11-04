@@ -64,6 +64,25 @@ public sealed class NativeClosedSourceFamilyTests
         Assert.Equal(17d, numberField.GetValue(null)); Assert.Equal(23d, stringField.GetValue(null));
     }
 
+    [Fact]
+    public void GenericConstructorAliasesKeepStaticFieldAndDescriptorMetadata()
+    {
+        const string source = """
+            class Box<T> { static value = 'present'; }
+            const constructor: any = Box;
+            console.log(constructor.value);
+            const descriptor = Object.getOwnPropertyDescriptor(constructor, 'value');
+            console.log(descriptor === undefined ? 'missing' : descriptor.value);
+            """;
+        var (compiler, saved) = Build(source);
+        var proof = compiler.NativeClosedFamilies!.Completed;
+        Assert.False(proof.UsesLegacy, string.Join("\n", proof.Blockers));
+        Assert.False(compiler.NativeStaticFields!.UsesLegacy);
+        Assert.False(compiler.NativeStaticMembers!.UsesLegacy);
+        Assert.False(compiler.NativeRuntimeInitializers!.UsesLegacy);
+        Assert.Equal("present\npresent\n", TestHarness.RunCompiledWithTimeout(() => saved, TimeSpan.FromSeconds(20)));
+    }
+
     [Theory]
     [InlineData("class Box<T>{constructor(public value:T){}} const C:any=Box; console.log(new C(7).value);")]
     [InlineData("class Box<T>{constructor(public value:T){}} console.log(Reflect.construct(Box,[7]).value);")]

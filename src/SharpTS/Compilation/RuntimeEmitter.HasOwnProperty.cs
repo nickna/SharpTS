@@ -549,6 +549,7 @@ public partial class RuntimeEmitter
         NameEq("MAX_SAFE_INTEGER"); NameEq("MIN_SAFE_INTEGER"); NameEq("EPSILON");
         NameEq("parseInt"); NameEq("parseFloat");
         NameEq("isNaN"); NameEq("isFinite"); NameEq("isInteger"); NameEq("isSafeInteger");
+        il.Emit(OpCodes.Br, falseLabel);
         il.MarkLabel(notDoubleLabel);
 
         // String static names.
@@ -558,6 +559,7 @@ public partial class RuntimeEmitter
         il.Emit(OpCodes.Call, _types.GetMethod(_types.Type, "GetTypeFromHandle")!);
         il.Emit(OpCodes.Bne_Un, notStringTypeLabel);
         NameEq("fromCharCode"); NameEq("fromCodePoint"); NameEq("raw");
+        il.Emit(OpCodes.Br, falseLabel);
         il.MarkLabel(notStringTypeLabel);
 
         // System.Object → JS Object constructor's static names. Reflection on
@@ -577,6 +579,7 @@ public partial class RuntimeEmitter
         NameEq("groupBy"); NameEq("hasOwn"); NameEq("is"); NameEq("isExtensible");
         NameEq("isFrozen"); NameEq("isSealed"); NameEq("keys"); NameEq("preventExtensions");
         NameEq("seal"); NameEq("setPrototypeOf"); NameEq("values");
+        il.Emit(OpCodes.Br, falseLabel);
         il.MarkLabel(notObjectTypeLabel);
 
         // Array static names (typeof Array → IList<object>).
@@ -586,6 +589,7 @@ public partial class RuntimeEmitter
         il.Emit(OpCodes.Call, _types.GetMethod(_types.Type, "GetTypeFromHandle")!);
         il.Emit(OpCodes.Bne_Un, notArrayConsLabel);
         NameEq("from"); NameEq("fromAsync"); NameEq("isArray"); NameEq("of");
+        il.Emit(OpCodes.Br, falseLabel);
         il.MarkLabel(notArrayConsLabel);
 
         // Promise and Error statics are runtime-emitted helpers rather than
@@ -598,6 +602,7 @@ public partial class RuntimeEmitter
         NameEq("resolve"); NameEq("reject"); NameEq("all"); NameEq("race");
         NameEq("allKeyed"); NameEq("allSettled"); NameEq("allSettledKeyed");
         NameEq("any"); NameEq("withResolvers");
+        il.Emit(OpCodes.Br, falseLabel);
         il.MarkLabel(notPromiseConsLabel);
 
         var notErrorConsLabel = il.DefineLabel();
@@ -606,6 +611,7 @@ public partial class RuntimeEmitter
         il.Emit(OpCodes.Call, _types.GetMethod(_types.Type, "GetTypeFromHandle")!);
         il.Emit(OpCodes.Bne_Un, notErrorConsLabel);
         NameEq("isError");
+        il.Emit(OpCodes.Br, falseLabel);
         il.MarkLabel(notErrorConsLabel);
 
         if (inputs.RegExps.Implementation is not null)
@@ -616,6 +622,7 @@ public partial class RuntimeEmitter
             il.Emit(OpCodes.Call, _types.GetMethod(_types.Type, "GetTypeFromHandle")!);
             il.Emit(OpCodes.Bne_Un, notRegExpConsLabel);
             NameEq("escape");
+            il.Emit(OpCodes.Br, falseLabel);
             il.MarkLabel(notRegExpConsLabel);
         }
 
@@ -628,6 +635,21 @@ public partial class RuntimeEmitter
         il.Emit(OpCodes.Ldloc, nameLocal);
         il.Emit(OpCodes.Call, inputs.LookupBuiltInStaticMember);
         il.Emit(OpCodes.Brtrue, trueLabel);
+
+        // Intrinsic constructors expose the JavaScript inventory above, not
+        // fields or properties of the CLR type used to represent the token.
+        foreach (var intrinsic in new Type[]
+        {
+            _types.Boolean, _types.BigInteger,
+            _types.DictionaryObjectObject, _types.HashSetOfObject,
+            inputs.TSFunctionType
+        })
+        {
+            il.Emit(OpCodes.Ldarg_0);
+            il.Emit(OpCodes.Ldtoken, intrinsic);
+            il.Emit(OpCodes.Call, _types.TypeGetTypeFromHandle);
+            il.Emit(OpCodes.Beq, falseLabel);
+        }
 
         // Constructor inheritance belongs to value lookup, never own-property lookup.
         const BindingFlags staticPub = BindingFlags.Public | BindingFlags.Static | BindingFlags.DeclaredOnly;

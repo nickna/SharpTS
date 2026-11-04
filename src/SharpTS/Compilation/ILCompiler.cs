@@ -665,15 +665,12 @@ public partial class ILCompiler
         // The stable iterator result shape must be known before Phase 1 emits its
         // result carrier. Closure-based eligibility is rechecked later.
         StableCustomIteratorAnalyzer.Analyze(statements, _typeMap, null, _features);
+        PrepareClassFieldLifecycle(statements);
         return statements;
     }
 
     private void AnalyzeClosuresAndPromotions(List<Stmt> statements, IReadOnlyList<ParsedModule>? modules = null)
     {
-        foreach (var (declaration, type) in _typeMap.ClassDeclarations)
-            RegisterLiveSuperConstruction(declaration, type);
-        foreach (var (expression, type) in _typeMap.ClassExpressions)
-            RegisterLiveSuperConstruction(ClassExpressionDeclaration(expression), type);
         PrepareRepeatingClassDeclarations(statements);
         Phase2_AnalyzeClosures(statements, modules);
         _closures.ConstArrowBindings = ConstArrowBindingAnalyzer.Collect(statements);
@@ -699,8 +696,6 @@ public partial class ILCompiler
             statements, _typeMap, _closures.Analyzer, _closures.DirectCallArrowBindings);
         StableClassLocalScalarReplacementAnalyzer.Analyze(
             statements, _typeMap, _closures.Analyzer, _features, _typeMapper);
-        _classes.CompactStorageClasses.UnionWith(
-            CompactClassStorageAnalyzer.Analyze(statements, _typeMap, _features, _typeMapper));
         ArrayLocalPromotionAnalyzer.Analyze(statements, _typeMap, _closures.Analyzer, _features);
         StringAccumulatorPromotionAnalyzer.Analyze(statements, _typeMap, _closures.Analyzer);
         // Callee identity proofs stay inside their module. The combined object-local pass
@@ -797,7 +792,7 @@ public partial class ILCompiler
             };
         }
         _runtime = new RuntimeEmitter(_types, _hosted, _nativeAotProjectOutput,
-            _nativeAotProjectOutput && (_features?.UsesUserClasses ?? true),
+            (_nativeAotProjectOutput && (_features?.UsesUserClasses ?? true)) || _needsObservableFieldLifecycle,
             _nativeStaticFieldLookup?.FindField, _nativeConstructorMembers?.GetMembers,
             nativeDeletionLookup: _nativeDeletionLookup, nativeHasInMemberLookup: _nativeHasInMembers?.HasMember,
             nativeConstructorFactories: _nativeConstructorFactories,
@@ -1462,6 +1457,7 @@ public partial class ILCompiler
         // combined module closure analysis.
         StableCustomIteratorAnalyzer.Analyze(
             allStatements, _typeMap, null, _features);
+        PrepareClassFieldLifecycle(allStatements);
 
         return allStatements;
     }

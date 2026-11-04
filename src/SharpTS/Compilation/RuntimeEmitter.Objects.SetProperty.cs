@@ -126,7 +126,8 @@ public partial class RuntimeEmitter
         Type UndefinedType,
         MethodInfo? NativeProxyRejection,
         NativeSourceOwnerCatalog? SourceOwners = null,
-        EmittedPromiseRuntime? Promise = null
+        EmittedPromiseRuntime? Promise = null,
+        EmittedRegExpRuntime? RegExps = null
     );
 
     private readonly record struct SetIndexStrictInputs(
@@ -3019,6 +3020,23 @@ public partial class RuntimeEmitter
         }
 
         EmitTypedArrayPropertySet(il, inputs.TypedArrays, inputs.ReflectAssignment, inputs.Errors, forwardStrict: true);
+
+        if (inputs.RegExps?.Implementation is { } regularExpressions)
+        {
+            var ordinaryOwnStorage = il.DefineLabel();
+            il.Emit(OpCodes.Ldarg_0);
+            il.Emit(OpCodes.Isinst, regularExpressions.Type);
+            il.Emit(OpCodes.Brfalse, ordinaryOwnStorage);
+            // lastIndex and explicit own overrides retain their carrier store.
+            // Absent own properties consult the live inherited descriptor first.
+            il.Emit(OpCodes.Ldarg_0);
+            il.Emit(OpCodes.Ldarg_1);
+            il.Emit(OpCodes.Call, inputs.ObjectDescriptors.GetOwnPropertyDescriptor);
+            il.Emit(OpCodes.Isinst, inputs.UndefinedType);
+            il.Emit(OpCodes.Brfalse, ordinaryOwnStorage);
+            EmitDescriptorObjectSetStrict(il, inputs, requireDeletedBuiltin: false);
+            il.MarkLabel(ordinaryOwnStorage);
+        }
 
         // Constructor metadata descriptors are synthesized rather than stored
         // in PDS. Strict writes must consult that same guest descriptor.

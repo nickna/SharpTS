@@ -2545,7 +2545,7 @@ public partial class ILEmitter
         string className = _ctx.ResolveClassName(receiverType, simpleClassName);
 
         // Convert TypeScript camelCase property name to .NET PascalCase for lookup
-        string pascalPropertyName = NamingConventions.ToPascalCase(propertyName);
+        string pascalPropertyName = _ctx.ClassRegistry!.ResolveGuestFieldPropertyName(className, propertyName);
 
         // Look up the getter in the class hierarchy
         var getterBuilder = _ctx.ResolveInstanceGetter(className, pascalPropertyName);
@@ -2684,7 +2684,7 @@ public partial class ILEmitter
         string className = _ctx.ResolveClassName(receiverType, simpleClassName);
 
         // Convert TypeScript camelCase property name to .NET PascalCase for lookup
-        string pascalPropertyName = NamingConventions.ToPascalCase(propertyName);
+        string pascalPropertyName = _ctx.ClassRegistry!.ResolveGuestFieldPropertyName(className, propertyName);
 
         // Look up the setter in the class hierarchy
         var setterBuilder = _ctx.ResolveInstanceSetter(className, pascalPropertyName);
@@ -3062,6 +3062,8 @@ public partial class ILEmitter
 
         string namespaceName = innerGet.Name.Lexeme;
         string propertyName = g.Name.Lexeme;
+        if (namespaceName == "Array" && _ctx.RuntimeFeatures?.UsesArrayConstructorMutation == true)
+            return false;
 
         // Handle globalThis.globalThis.X case (self-reference chain)
         if (namespaceName == "globalThis")

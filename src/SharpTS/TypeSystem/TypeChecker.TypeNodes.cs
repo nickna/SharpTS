@@ -416,7 +416,7 @@ public partial class TypeChecker
                 new TypeInfo.ConstructorSignature(tps, f.ParamTypes, f.ReturnType, f.RequiredParams, f.HasRestParam, f.ParamNames)));
         }
 
-        return new TypeInfo.Record(
+        var result = new TypeInfo.Record(
             fields.ToFrozenDictionary(),
             stringIndexType,
             numberIndexType,
@@ -426,6 +426,8 @@ public partial class TypeChecker
             ConstructorSignatures: recCtorSigs,
             MethodMembers: methodMembers.Count > 0 ? methodMembers.ToFrozenSet() : null,
             ReadonlyFields: readonlyFields.Count > 0 ? readonlyFields.ToFrozenSet() : null);
+        SourceTypeMemberOrder.Capture(result, obj.Members.OfType<PropertyMemberNode>().Select(member => member.Name));
+        return result;
     }
 
     /// <summary>
@@ -663,6 +665,8 @@ public partial class TypeChecker
 
             result = FlattenTupleSpreads(result);
             ValidateSpreadConstraints(result);
+            if (definitionNode is MappedTypeNode)
+                result = DeferredTypeAliasPresentation.RetainMapped(result, baseName, typeArgs, definitionNode);
             return result;
         }
         finally

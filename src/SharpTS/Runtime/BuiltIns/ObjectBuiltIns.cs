@@ -186,14 +186,18 @@ public static partial class ObjectBuiltIns
                         includeValues ? interpreter.GetProperty(error, key) : null);
                 yield break;
             case SharpTSFunction fn:
-                foreach (var k in fn.PropertyKeys)
-                    yield return new(k,
-                        includeValues && fn.TryGetProperty(k, out var v) ? v : null);
+                foreach (var k in fn.PropertyKeys.ToList())
+                {
+                    if (fn.GetOwnPropertyDescriptor(k)?.Enumerable != true) continue;
+                    yield return new(k, includeValues ? interpreter.GetPropertyValue(fn, k) : null);
+                }
                 yield break;
             case SharpTSArrowFunction arrowFn:
-                foreach (var k in arrowFn.PropertyKeys)
-                    yield return new(k,
-                        includeValues && arrowFn.TryGetProperty(k, out var av) ? av : null);
+                foreach (var k in arrowFn.PropertyKeys.ToList())
+                {
+                    if (arrowFn.GetOwnPropertyDescriptor(k)?.Enumerable != true) continue;
+                    yield return new(k, includeValues ? interpreter.GetPropertyValue(arrowFn, k) : null);
+                }
                 yield break;
             case ISharpTSPrimitiveConstructor primitiveConstructor:
                 foreach (var key in primitiveConstructor.OwnEnumerableKeys().ToList())
@@ -2128,6 +2132,25 @@ public static partial class ObjectBuiltIns
     internal static SharpTSObject ObjectRest(
         Interpreter interpreter, object? source, IEnumerable<object?> excludeKeys)
     {
+        if (source is SharpTSProxy proxy)
+        {
+            var excludedProxyKeys = excludeKeys.Select(interpreter.ToPropertyKey).ToHashSet();
+            var proxyRest = new SharpTSObject([]);
+            foreach (var key in proxy.TrapOwnPropertyKeys(interpreter))
+            {
+                if (key is null || excludedProxyKeys.Contains(key)) continue;
+                var descriptor = key is SharpTSSymbol symbolKey
+                    ? proxy.TrapGetOwnPropertyDescriptor(symbolKey, interpreter)
+                    : proxy.TrapGetOwnPropertyDescriptor((string)key, interpreter);
+                if (descriptor is null or SharpTSUndefined || !Compilation.RuntimeTypes.IsTruthy(
+                        interpreter.GetProperty(descriptor, "enumerable"))) continue;
+                if (key is SharpTSSymbol symbol)
+                    proxyRest.SetBySymbol(symbol, interpreter.GetSymbolPropertyValue(proxy, symbol));
+                else
+                    proxyRest.SetProperty((string)key, proxy.TrapGet((string)key, interpreter));
+            }
+            return proxyRest;
+        }
         if (source is SharpTSObjectNamespace objectNamespace)
         {
             var excludedNamespaceKeys = excludeKeys.Select(interpreter.ToPropertyKey).ToHashSet();
@@ -2721,15 +2744,16 @@ public static partial class ObjectBuiltIns
         SharpTSBooleanPrototype => interp?.GetObjectPrototype(),
         SharpTSBigIntPrototype => interp?.GetObjectPrototype(),
         SharpTSSymbolPrototype => interp?.GetObjectPrototype(),
+        SharpTSTypedArray { HasExplicitPrototype: true } typedArray => typedArray.ExplicitPrototype,
+        SharpTSTypedArray typedArray => interp?.GetTypedArrayPrototype(typedArray.TypeName),
         // These native carriers do not yet materialize their individual
         // prototype objects. Their conceptual chains still reach Object.prototype.
         // Keep this fallback limited to native types without an explicit prototype
         // carrier: ordinary null roots and Proxy trap results remain authoritative.
-        SharpTSTypedArray { HasExplicitPrototype: true } typedArray => typedArray.ExplicitPrototype,
         SharpTSMap or SharpTSSet or SharpTSWeakMap or SharpTSWeakSet
             or SharpTSWeakRef or SharpTSFinalizationRegistry
             or SharpTSArrayBuffer or SharpTSSharedArrayBuffer or SharpTSDataView
-            or SharpTSTypedArray or SharpTSBuffer
+            or SharpTSBuffer
             or SharpTSAbortController or SharpTSAbortSignal
             or SharpTSIterator or SharpTSTextEncoder or SharpTSTextDecoder
             or SharpTSEventEmitter or SharpTSTimeout
@@ -2837,7 +2861,7 @@ public static partial class ObjectBuiltIns
                 return true;
 
             case SharpTSTypedArray typedArray:
-                if (typedArray.HasExplicitPrototype && ReferenceEquals(typedArray.ExplicitPrototype, proto)) return true;
+                if (ReferenceEquals(PrototypeOf(interpreter, typedArray), proto)) return true;
                 if (!PropertyDescriptorStore.IsExtensible(typedArray)) return false;
                 if (WouldCreatePrototypeCycle(interpreter, typedArray, proto)) return false;
                 typedArray.SetExplicitPrototype(proto);

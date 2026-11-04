@@ -973,8 +973,7 @@ public partial class TypeChecker
         if (objType is TypeInfo.InstantiatedGeneric igSet &&
             FlattenInstantiatedInterface(igSet) is { } flatSet)
         {
-            if (flatSet.NumberIndexType is not null || flatSet.StringIndexType is not null || flatSet.SymbolIndexType is not null)
-                objType = flatSet;
+            objType = flatSet;
         }
 
         // Reject a readonly slot before the generic index-signature write helper can
@@ -1095,7 +1094,7 @@ public partial class TypeChecker
         {
             // Typed-array unions expose the union of their numeric element
             // types, as in TypeScript's number | bigint index signature.
-            if ((IsNumber(indexType) || indexType is TypeInfo.NumberLiteral)
+            if (IsNumericConstructorIndex(indexType)
                 && union.FlattenedTypes.Count > 0
                 && union.FlattenedTypes.All(member => member is TypeInfo.TypedArray))
             {
