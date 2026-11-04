@@ -1,6 +1,5 @@
 using System.Collections.Immutable;
 using System.Reflection.Emit;
-using System.Runtime.InteropServices;
 using SharpTS.Parsing;
 
 namespace SharpTS.Compilation.Emitters.Modules;
@@ -399,32 +398,13 @@ public sealed class ProcessModuleEmitter : IBuiltInModuleEmitter
 
     private static bool EmitPlatform(IEmitterContext emitter)
     {
-        var il = emitter.Context.IL;
-        string platform;
-        if (RuntimeInformation.IsOSPlatform(OSPlatform.Windows))
-            platform = "win32";
-        else if (RuntimeInformation.IsOSPlatform(OSPlatform.Linux))
-            platform = "linux";
-        else if (RuntimeInformation.IsOSPlatform(OSPlatform.OSX))
-            platform = "darwin";
-        else
-            platform = "unknown";
-        il.Emit(OpCodes.Ldstr, platform);
+        ProcessHostEmitter.EmitPlatform(emitter.Context.IL);
         return true;
     }
 
     private static bool EmitArch(IEmitterContext emitter)
     {
-        var il = emitter.Context.IL;
-        string arch = RuntimeInformation.ProcessArchitecture switch
-        {
-            Architecture.X64 => "x64",
-            Architecture.X86 => "ia32",
-            Architecture.Arm64 => "arm64",
-            Architecture.Arm => "arm",
-            _ => "unknown"
-        };
-        il.Emit(OpCodes.Ldstr, arch);
+        ProcessHostEmitter.EmitArchitecture(emitter.Context.IL);
         return true;
     }
 

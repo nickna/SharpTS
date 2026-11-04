@@ -1575,20 +1575,8 @@ public partial class RuntimeEmitter
             }
         }
 
-        string platform = RuntimeInformation.IsOSPlatform(OSPlatform.Windows) ? "win32"
-            : RuntimeInformation.IsOSPlatform(OSPlatform.Linux) ? "linux"
-            : RuntimeInformation.IsOSPlatform(OSPlatform.OSX) ? "darwin" : "unknown";
-        string arch = RuntimeInformation.ProcessArchitecture switch
-        {
-            Architecture.X64 => "x64",
-            Architecture.X86 => "ia32",
-            Architecture.Arm64 => "arm64",
-            Architecture.Arm => "arm",
-            _ => "unknown"
-        };
-
-        Define("Platform", il => il.Emit(OpCodes.Ldstr, platform));
-        Define("Arch", il => il.Emit(OpCodes.Ldstr, arch));
+        Define("Platform", ProcessHostEmitter.EmitPlatform);
+        Define("Arch", ProcessHostEmitter.EmitArchitecture);
         Define("Pid", il =>
         {
             il.Emit(OpCodes.Call, _types.GetPropertyGetter(_types.Environment, "ProcessId"));
