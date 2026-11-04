@@ -2244,7 +2244,8 @@ public partial class RuntimeEmitter
         il.Emit(OpCodes.Call, inputs.Symbols.PopulatePrototype);
         il.Emit(OpCodes.Ldsfld, inputs.Symbols.Prototype);
         il.Emit(OpCodes.Ldarg_1);
-        il.Emit(OpCodes.Call, method);
+        il.Emit(OpCodes.Ldarg_0);
+        il.Emit(OpCodes.Call, inputs.Reflect.Get);
         il.Emit(OpCodes.Ret);
         il.MarkLabel(notSymbolPrimitiveLabel);
 
