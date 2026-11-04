@@ -417,8 +417,16 @@ public partial class ILCompiler
             ? constructor?.Body?.Where(statement => IsConstructorParameterProperty(statement, constructor)).ToList() ?? [] : [];
         EmitOnceOnlyConstructorElements(ctx, () =>
         {
-            EmitEffectiveClassElements(ctx, declaration.Fields, null, null,
-                _ => throw new InvalidOperationException("Runtime receiver initializer cannot have computed fields."));
+            if (expression != null && _lexicalSuperElementInitializers.TryGetValue(expression, out var elements))
+            {
+                il.Emit(OpCodes.Ldloc, ctx.ClassConstructorReceiver!);
+                il.Emit(OpCodes.Ldarg_2);
+                il.Emit(OpCodes.Ldloc, ctx.ClassConstructorThisCell!);
+                il.Emit(OpCodes.Call, elements);
+            }
+            else
+                EmitEffectiveClassElements(ctx, declaration.Fields, null, null,
+                    _ => throw new InvalidOperationException("Runtime receiver initializer cannot have computed fields."));
             var parameterEmitter = new ILEmitter(ctx);
             foreach (var assignment in parameterProperties)
             {

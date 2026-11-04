@@ -251,6 +251,7 @@ public partial class ILCompiler
 
         // Store the type builder
         _classExprs.Builders[classExpr] = typeBuilder;
+        DeclareLexicalSuperElementInitializer(classExpr, typeBuilder);
         if (_typeMap.GetClassExprType(classExpr) is { } checkedClass)
             _classes.CheckedDeclarationNames[checkedClass.Core.DeclarationId] = className;
     }
@@ -593,6 +594,7 @@ public partial class ILCompiler
 
         string className = _classExprs.Names[classExpr];
         var fieldsField = _classes.InstanceFieldsField[className];
+        EmitLexicalSuperElementInitializer(classExpr, typeBuilder);
         if (_usesRuntimeParents && !_classes.ErrorSubclasses.Contains(className)
             && !_classes.PromiseSubclasses.Contains(className)
             && SupportsReceiverInitialization(ClassExpressionDeclaration(classExpr), allowGenericOwner: true))

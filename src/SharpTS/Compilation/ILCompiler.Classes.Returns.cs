@@ -74,6 +74,7 @@ public partial class ILCompiler
         // retain the mutable this cell, including under unchecked JS compilation.
         return _typeMapper.IsDynamicClassInstance(type)
             || source is not null && UsesReceiverConstruction(source)
+            || expression != null && _lexicalSuperElementInitializers.ContainsKey(expression)
             || expression?.SuperclassExpr is Expr.ClassExpr && _features?.UsesClassPrototypeMutation == true;
     }
 }

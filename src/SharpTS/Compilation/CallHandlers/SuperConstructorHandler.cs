@@ -26,8 +26,18 @@ public class SuperConstructorHandler : ICallHandler
         if (ctx.ConstructorSuperBound is { } bound)
         {
             var first = emitter.IL.DefineLabel();
-            emitter.IL.Emit(OpCodes.Ldloc, bound);
-            emitter.IL.Emit(OpCodes.Brfalse, first);
+            if (ctx.ClassConstructorThisCell is { } sharedThis)
+            {
+                emitter.IL.Emit(OpCodes.Ldloc, sharedThis);
+                emitter.IL.Emit(OpCodes.Ldc_I4_0); emitter.IL.Emit(OpCodes.Ldelem_Ref);
+                emitter.IL.Emit(OpCodes.Isinst, ctx.Runtime!.Sentinels.UndefinedType);
+                emitter.IL.Emit(OpCodes.Brtrue, first);
+            }
+            else
+            {
+                emitter.IL.Emit(OpCodes.Ldloc, bound);
+                emitter.IL.Emit(OpCodes.Brfalse, first);
+            }
             // A second super still constructs its own parent object and runs
             // its effects before BindThisValue rejects the already-bound this.
             if (ctx.ClassDefinitionParameterIndex is { } classDefinition)
@@ -194,16 +204,19 @@ public class SuperConstructorHandler : ICallHandler
     private static bool TryEmitLexicalReceiverConstruction(IEmitterContext emitter, Expr.Call call)
     {
         var ctx = emitter.Context;
-        // This finite path has no child elements to initialize after binding
-        // this. Other classes retain their existing constructor lowering.
+        // Ordinary runtime-parent fields use the same owner-local element
+        // operation as direct super; other shapes retain their existing lowering.
         if (!ctx.CapturesConstructorThisCell || ctx.CurrentClassExpr is not { } expression
-            || expression.Fields.Any(field => !field.IsStatic && !field.IsDeclare)
             || expression.AutoAccessors is { Count: > 0 }
             || expression.Methods.Any(method => method.Name.Lexeme == "constructor"
                 && method.Parameters.Any(parameter => parameter.IsParameterProperty))
             || ctx.CapturedFields?.TryGetValue("this", out var thisCell) != true
             || ctx.CapturedFields.TryGetValue(CompilationContext.SuperOwnerCaptureName, out var owner) != true
             || ctx.CapturedFields.TryGetValue(CompilationContext.NewTargetCaptureName, out var newTarget) != true)
+            return false;
+        MethodBuilder? elements = null;
+        if (expression.Fields.Any(field => !field.IsStatic && !field.IsDeclare)
+            && ctx.LexicalSuperElementInitializers?.TryGetValue(expression, out elements) != true)
             return false;
 
         var il = emitter.IL;
@@ -226,6 +239,13 @@ public class SuperConstructorHandler : ICallHandler
         il.MarkLabel(unbound);
         il.Emit(OpCodes.Ldloc, cell); il.Emit(OpCodes.Ldc_I4_0); il.Emit(OpCodes.Ldloc, result);
         il.Emit(OpCodes.Stelem_Ref);
+        if (elements != null)
+        {
+            il.Emit(OpCodes.Ldloc, result);
+            il.Emit(OpCodes.Ldarg_0); il.Emit(OpCodes.Ldfld, owner);
+            il.Emit(OpCodes.Ldloc, cell);
+            il.Emit(OpCodes.Call, elements);
+        }
         il.Emit(OpCodes.Ldloc, result);
         emitter.SetStackUnknown();
         return true;
