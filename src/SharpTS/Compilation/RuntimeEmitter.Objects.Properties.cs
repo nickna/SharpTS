@@ -1530,7 +1530,7 @@ public partial class RuntimeEmitter
         il.Emit(OpCodes.Ret);
     }
 
-    private void EmitGetMapProperty(TypeBuilder typeBuilder, EmittedMapRuntime map)
+    private void EmitGetMapProperty(TypeBuilder typeBuilder, EmittedMapRuntime map, FieldInfo undefinedInstance)
     {
         // GetMapProperty(map: Dictionary<object,object>, name: string) -> object?
         // Returns size as double, or a $BoundMapMethod wrapper for known Map methods.
@@ -1575,8 +1575,8 @@ public partial class RuntimeEmitter
             il.MarkLabel(skipLabel);
         }
 
-        // Unknown property: return null
-        il.Emit(OpCodes.Ldnull);
+        // Missing JavaScript properties use the guest undefined sentinel.
+        il.Emit(OpCodes.Ldsfld, undefinedInstance);
         il.Emit(OpCodes.Ret);
 
         // size case: return (double)map.Count
@@ -1588,7 +1588,7 @@ public partial class RuntimeEmitter
         il.Emit(OpCodes.Ret);
     }
 
-    private void EmitGetSetProperty(TypeBuilder typeBuilder, EmittedSetRuntime set)
+    private void EmitGetSetProperty(TypeBuilder typeBuilder, EmittedSetRuntime set, FieldInfo undefinedInstance)
     {
         // GetSetProperty(set: HashSet<object>, name: string) -> object?
         // Returns size as double, or a $BoundSetMethod wrapper for known Set methods
@@ -1633,8 +1633,8 @@ public partial class RuntimeEmitter
             il.MarkLabel(skipLabel);
         }
 
-        // Unknown property: return null
-        il.Emit(OpCodes.Ldnull);
+        // Missing JavaScript properties use the guest undefined sentinel.
+        il.Emit(OpCodes.Ldsfld, undefinedInstance);
         il.Emit(OpCodes.Ret);
 
         // size case: return (double)set.Count

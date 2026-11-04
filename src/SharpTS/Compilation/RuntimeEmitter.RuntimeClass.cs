@@ -1182,9 +1182,9 @@ public partial class RuntimeEmitter
         // its respective Map/Set method MethodBuilders (and BoundMapMethodCtor
         // / BoundSetMethodCtor wrappers), so they fold up under UsesMap / UsesSet.
         if (runtime.Map is not null)
-            EmitGetMapProperty(typeBuilder, runtime.RequireMap());
+            EmitGetMapProperty(typeBuilder, runtime.RequireMap(), runtime.Sentinels.UndefinedInstance);
         if (runtime.Set is not null)
-            EmitGetSetProperty(typeBuilder, runtime.RequireSet());
+            EmitGetSetProperty(typeBuilder, runtime.RequireSet(), runtime.Sentinels.UndefinedInstance);
         // Exception helpers were moved earlier (above EmitToNumber) since
         // ToNumber's Symbol-throw branch emits a CreateException call that
         // must resolve to a non-null MethodBuilder.
