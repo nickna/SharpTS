@@ -6,7 +6,8 @@ namespace SharpTS.Compilation;
 public partial class RuntimeEmitter
 {
     private MethodBuilder EmitArrayCallbackPrototypeAdapter(
-        TypeBuilder typeBuilder, EmittedRuntime runtime, MethodBuilder helper)
+        TypeBuilder typeBuilder, EmittedRuntime runtime, MethodBuilder helper,
+        bool isReducer = false)
     {
         var method = typeBuilder.DefineMethod(
             helper.Name + "Proto",
@@ -34,37 +35,51 @@ public partial class RuntimeEmitter
         il.Emit(OpCodes.Call, runtime.BoxedPrimitives.ToObject);
         il.Emit(OpCodes.Stsfld, runtime.ArrayOperations.CurrentReceiverField);
 
-        var explicitThisArg = il.DefineLabel();
-        var thisArgReady = il.DefineLabel();
-        il.Emit(OpCodes.Ldarg_1);
-        il.Emit(OpCodes.Ldlen);
-        il.Emit(OpCodes.Conv_I4);
-        il.Emit(OpCodes.Ldc_I4_2);
-        il.Emit(OpCodes.Bge, explicitThisArg);
-        il.Emit(OpCodes.Ldsfld, runtime.Sentinels.UndefinedInstance);
-        il.Emit(OpCodes.Br, thisArgReady);
-        il.MarkLabel(explicitThisArg);
-        il.Emit(OpCodes.Ldarg_1);
-        il.Emit(OpCodes.Ldc_I4_1);
-        il.Emit(OpCodes.Ldelem_Ref);
-        il.MarkLabel(thisArgReady);
+        if (isReducer)
+        {
+            // A reducer's second argument is its initial accumulator, not a
+            // callback thisArg. Its complete argument list is forwarded below.
+            il.Emit(OpCodes.Ldsfld, runtime.Sentinels.UndefinedInstance);
+        }
+        else
+        {
+            var explicitThisArg = il.DefineLabel();
+            var thisArgReady = il.DefineLabel();
+            il.Emit(OpCodes.Ldarg_1);
+            il.Emit(OpCodes.Ldlen);
+            il.Emit(OpCodes.Conv_I4);
+            il.Emit(OpCodes.Ldc_I4_2);
+            il.Emit(OpCodes.Bge, explicitThisArg);
+            il.Emit(OpCodes.Ldsfld, runtime.Sentinels.UndefinedInstance);
+            il.Emit(OpCodes.Br, thisArgReady);
+            il.MarkLabel(explicitThisArg);
+            il.Emit(OpCodes.Ldarg_1);
+            il.Emit(OpCodes.Ldc_I4_1);
+            il.Emit(OpCodes.Ldelem_Ref);
+            il.MarkLabel(thisArgReady);
+        }
         il.Emit(OpCodes.Stsfld, runtime.ArrayOperations.CallbackThisArgField);
 
         il.Emit(OpCodes.Ldarg_0);
         il.Emit(OpCodes.Call, runtime.ArrayOperations.MaterializeForIteration);
 
-        var explicitCallback = il.DefineLabel();
-        var callbackReady = il.DefineLabel();
-        il.Emit(OpCodes.Ldarg_1);
-        il.Emit(OpCodes.Ldlen);
-        il.Emit(OpCodes.Brtrue, explicitCallback);
-        il.Emit(OpCodes.Ldsfld, runtime.Sentinels.UndefinedInstance);
-        il.Emit(OpCodes.Br, callbackReady);
-        il.MarkLabel(explicitCallback);
-        il.Emit(OpCodes.Ldarg_1);
-        il.Emit(OpCodes.Ldc_I4_0);
-        il.Emit(OpCodes.Ldelem_Ref);
-        il.MarkLabel(callbackReady);
+        if (isReducer)
+            il.Emit(OpCodes.Ldarg_1);
+        else
+        {
+            var explicitCallback = il.DefineLabel();
+            var callbackReady = il.DefineLabel();
+            il.Emit(OpCodes.Ldarg_1);
+            il.Emit(OpCodes.Ldlen);
+            il.Emit(OpCodes.Brtrue, explicitCallback);
+            il.Emit(OpCodes.Ldsfld, runtime.Sentinels.UndefinedInstance);
+            il.Emit(OpCodes.Br, callbackReady);
+            il.MarkLabel(explicitCallback);
+            il.Emit(OpCodes.Ldarg_1);
+            il.Emit(OpCodes.Ldc_I4_0);
+            il.Emit(OpCodes.Ldelem_Ref);
+            il.MarkLabel(callbackReady);
+        }
         il.Emit(OpCodes.Call, helper);
         if (helper.ReturnType == _types.Void)
             il.Emit(OpCodes.Ldsfld, runtime.Sentinels.UndefinedInstance);

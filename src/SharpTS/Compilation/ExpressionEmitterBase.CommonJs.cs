@@ -24,6 +24,12 @@ public abstract partial class ExpressionEmitterBase
     /// <summary>True if the current emission context is inside a CJS module body.</summary>
     protected bool InCjsContext => Ctx.CurrentCjsExportsField != null;
 
+    // The implicit `module` object is itself a top-level static binding, so a
+    // general HasVariable check would disable its intrinsic unconditionally.
+    // Only a nearer parameter/local/capture replaces that wrapper binding.
+    private bool HasCjsLocalBinding(string name) =>
+        HasClassDefinitionCaptureShadow(name) || TryGetClassDefinitionCaptureSlot(name, out _);
+
     /// <summary>
     /// Tries to load a CJS-special variable (currently just <c>exports</c>). Returns true if handled.
     /// </summary>
@@ -50,7 +56,8 @@ public abstract partial class ExpressionEmitterBase
 
         if (get.Object is Expr.Variable v &&
             v.Name.Lexeme == "module" &&
-            get.Name.Lexeme == "exports")
+            get.Name.Lexeme == "exports" &&
+            !HasCjsLocalBinding("module"))
         {
             IL.Emit(OpCodes.Ldsfld, Ctx.CurrentCjsExportsField!);
             SetStackUnknown();
@@ -70,7 +77,8 @@ public abstract partial class ExpressionEmitterBase
 
         if (set.Object is Expr.Variable v &&
             v.Name.Lexeme == "module" &&
-            set.Name.Lexeme == "exports")
+            set.Name.Lexeme == "exports" &&
+            !HasCjsLocalBinding("module"))
         {
             EmitExpression(set.Value);
             EnsureBoxed();
@@ -98,6 +106,8 @@ public abstract partial class ExpressionEmitterBase
     {
         if (!InCjsContext) return false;
         if (a.Name.Lexeme != "exports") return false;
+        if (Resolver.HasVariable("exports") || Ctx.HasVisibleValueBinding("exports")
+            || TryGetClassDefinitionCaptureSlot("exports", out _)) return false;
 
         EmitExpression(a.Value);
         EnsureBoxed();
@@ -120,6 +130,10 @@ public abstract partial class ExpressionEmitterBase
     {
         if (call.Callee is not Expr.Variable callee || callee.Name.Lexeme != "require")
             return false;
+        // Module-scope createRequire bindings hold a placeholder consumed by
+        // this syntax-directed lowering. Nearer lexical bindings are real
+        // callable values and must follow ordinary variable resolution.
+        if (HasCjsLocalBinding("require")) return false;
 
         if (call.Arguments.Count != 1)
         {

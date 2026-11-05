@@ -181,6 +181,9 @@ public partial class ILCompiler
         ApplyModuleMaps(ctx);
         ctx.CurrentModulePath = _modules.CurrentPath;
         ctx.CurrentNamespacePath = _currentNamespacePath;
+        // Every member body, including guest method-value adapters, shares its
+        // enclosing module's CommonJS bindings and require resolution.
+        ApplyCommonJsModuleAccess(ctx);
         ctx.AsyncArrowBuilders = _async.ArrowBuilders.Count > 0 ? _async.ArrowBuilders : null;
         ctx.AsyncArrowOuterBuilders = _async.ArrowOuterBuilders;
         ctx.AsyncArrowParentBuilders = _async.ArrowParentBuilders;

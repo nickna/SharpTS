@@ -137,9 +137,9 @@ public partial class RuntimeEmitter
             || _features.UsesClassPrototypeMutation
             || _features.UsesSourceExecution;
 
-        void WireCallback(string jsName, MethodBuilder helper)
+        void WireCallback(string jsName, MethodBuilder helper, bool isReducer = false)
             => Wire(jsName, usesPrototypeAdapters
-                ? EmitArrayCallbackPrototypeAdapter(typeBuilder, runtime, helper)
+                ? EmitArrayCallbackPrototypeAdapter(typeBuilder, runtime, helper, isReducer)
                 : helper, 1);
 
         void WireSearch(string jsName, MethodBuilder helper)
@@ -156,8 +156,8 @@ public partial class RuntimeEmitter
         WireCallback("findLastIndex", runtime.ArrayOperations.FindLastIndex);
         WireCallback("some",          runtime.ArrayOperations.Some);
         WireCallback("every",         runtime.ArrayOperations.Every);
-        Wire("reduce",         runtime.ArrayOperations.Reduce,         1);
-        Wire("reduceRight",    runtime.ArrayOperations.ReduceRight,    1);
+        WireCallback("reduce",      runtime.ArrayOperations.Reduce,      isReducer: true);
+        WireCallback("reduceRight", runtime.ArrayOperations.ReduceRight, isReducer: true);
         Wire("includes",       runtime.ArrayOperations.IncludesProto,  1);
         WireSearch("indexOf",     runtime.ArrayOperations.IndexOf);
         WireSearch("lastIndexOf", runtime.ArrayOperations.LastIndexOf);
