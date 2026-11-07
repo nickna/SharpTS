@@ -133,6 +133,7 @@ public partial class ILCompiler
                 || method.Parameters.Any(parameter => parameter.Decorators is { Count: > 0 }))
             && !declaration.Fields.Any(field => field.Decorators is { Count: > 0 })
             && declaration.Accessors?.Any(accessor => accessor.Decorators is { Count: > 0 }) != true
+            && declaration.AutoAccessors?.Any(accessor => accessor.Decorators is { Count: > 0 }) != true
             && ContainsLexicalSuper(declaration.Methods);
         if (expressionOwnedParent && declaration.Decorators is { Count: > 0 }) return false;
         // Declaration decorators and unsupported intrinsic heritage keep their
