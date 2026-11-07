@@ -93,7 +93,8 @@ public abstract partial class ExpressionEmitterBase
         return true;
     }
 
-    private void EmitOrdinaryStaticPrivateBrandCheck(string owner, LocalBuilder receiver, string name)
+    private void EmitOrdinaryStaticPrivateBrandCheck(string owner, LocalBuilder receiver, string name,
+        string? displayName = null)
     {
         var declaration = Ctx.ClassRegistry!.GetPrivateElements(owner)
             ?? throw new InvalidOperationException("Static private member has no declaration owner.");
@@ -121,7 +122,7 @@ public abstract partial class ExpressionEmitterBase
         IL.Emit(OpCodes.Call, Types.TypeGetTypeFromHandle);
         IL.Emit(OpCodes.Ceq); IL.Emit(OpCodes.Brtrue, valid);
         IL.MarkLabel(invalid);
-        GuestErrorEmitter.ThrowTypeError(IL, Ctx.Runtime!, $"Cannot access private member #{name} from an object whose class did not declare it");
+        GuestErrorEmitter.ThrowTypeError(IL, Ctx.Runtime!, $"Cannot access private member #{displayName ?? name} from an object whose class did not declare it");
         IL.MarkLabel(valid);
     }
 
@@ -209,6 +210,13 @@ public abstract partial class ExpressionEmitterBase
 
     protected bool TryEmitPrivateFieldCall(Expr.CallPrivate call)
     {
+        if (FindPrivateAccessor(call.Name) is { } accessor)
+        {
+            var accessorReceiver = SpillBoxed(call.Object);
+            EmitPrivateAccessorFacet(accessor, accessorReceiver);
+            EmitGuestMethodInvocation(accessorReceiver, call.Arguments);
+            return true;
+        }
         if (Ctx.CurrentClassName is not { } current) return false;
         string name = call.Name.Lexeme.TrimStart('#');
         string owner = Ctx.ResolvePrivateFieldOwner(current, name);
@@ -271,17 +279,19 @@ public abstract partial class ExpressionEmitterBase
         return true;
     }
 
-    private void EmitPrivateMethodValue(PrivateMethodValue value, string owner, string name, LocalBuilder receiver)
+    private void EmitPrivateMethodValue(PrivateMethodValue value, string owner, string name, LocalBuilder receiver,
+        string? displayName = null)
     {
-        var definition = value.Definition == null ? null : EmitDefinitionPrivateBrandCheck(receiver, name, value.Source.IsStatic, owner);
+        displayName ??= name;
+        var definition = value.Definition == null ? null : EmitDefinitionPrivateBrandCheck(receiver, displayName, value.Source.IsStatic, owner);
         if (value.Source.IsStatic && definition == null)
         {
-            EmitOrdinaryStaticPrivateBrandCheck(owner, receiver, name);
+            EmitOrdinaryStaticPrivateBrandCheck(owner, receiver, name, displayName);
         }
         else if (definition == null && !value.Source.IsStatic && Ctx.ClassRegistry!.GetPrivateInstanceBridge(owner) is { } bridge)
-            EmitGenericPrivateBrandCheck(bridge, receiver, name);
+            EmitGenericPrivateBrandCheck(bridge, receiver, displayName);
         else if (definition == null && !value.Source.IsStatic)
-            EmitOrdinaryPrivateBrandCheck(owner, receiver, name);
+            EmitOrdinaryPrivateBrandCheck(owner, receiver, displayName);
         if (definition == null) IL.Emit(OpCodes.Ldsfld, value.Cache!);
         else
         {

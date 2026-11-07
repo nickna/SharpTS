@@ -13,6 +13,7 @@ public partial class ILEmitter
     /// </summary>
     protected override void EmitGetPrivate(Expr.GetPrivate gp)
     {
+        if (TryEmitPrivateAccessor(gp.Object, gp.Name)) return;
         if (TryEmitPrivateMethodValue(gp)) return;
         if (TryEmitDefinitionPrivateField(gp.Object, gp.Name)) return;
         if (TryEmitGuestStaticPrivateField(gp.Object, gp.Name)) return;
@@ -116,6 +117,7 @@ public partial class ILEmitter
     /// </summary>
     protected override void EmitSetPrivate(Expr.SetPrivate sp)
     {
+        if (TryEmitPrivateAccessor(sp.Object, sp.Name, sp.Value)) return;
         if (TryEmitDefinitionPrivateField(sp.Object, sp.Name, sp.Value)) return;
         if (TryEmitGuestStaticPrivateField(sp.Object, sp.Name, sp.Value)) return;
         if (TryEmitGuestInstancePrivateField(sp.Object, sp.Name, sp.Value)) return;

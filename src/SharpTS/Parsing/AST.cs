@@ -421,6 +421,10 @@ public abstract record Stmt
     {
         // Ambient optional methods retain presence information for structural checking.
         public bool IsOptional { get; init; }
+
+        // Private accessors share private method storage. Name identifies the callable
+        // facet, while this token identifies the private property written in source.
+        public Token? PrivateAccessorName { get; init; }
     }
     public record Parameter(Token Name, string? Type, Expr? DefaultValue = null, bool IsRest = false, bool IsParameterProperty = false, AccessModifier? Access = null, bool IsReadonly = false, bool IsOptional = false, List<Decorator>? Decorators = null, TypeNode? TypeAnnotationNode = null, List<DestructuredParameterProperty>? DestructuredProperties = null, bool HasBindingExpressions = false);
     public record DestructuredParameterProperty(Token Key, Token Binding, Expr? DefaultValue, bool IsRenamed);

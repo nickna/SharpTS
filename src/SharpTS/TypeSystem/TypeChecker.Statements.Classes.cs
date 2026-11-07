@@ -937,7 +937,7 @@ public partial class TypeChecker
     {
         bool anyInferredMethodReturnResolved = false;
         // Only check methods that have bodies (skip overload signatures)
-        foreach (var method in classStmt.Methods.Where(m => m.Body != null))
+        foreach (var method in ClassMethodsInCheckOrder(classStmt.Methods))
         {
             // Check method decorators
             DecoratorTarget methodTarget = method.IsStatic ? DecoratorTarget.StaticMethod : DecoratorTarget.Method;
@@ -952,8 +952,9 @@ public partial class TypeChecker
             // Methods and constructors both arrive here (the constructor is a Method named
             // "constructor"), and only implementations do — the Where(Body != null) filter
             // above already excluded overload signatures.
-            ReportImplicitAnyParameters(method.Parameters,
-                isAmbient: classStmt.IsDeclare || method.IsAbstract);
+            TypeInfo? accessorParameter = InferPrivateAccessorSetterParameter(method, mutableClass);
+            if (accessorParameter is null)
+                ReportImplicitAnyParameters(method.Parameters, isAmbient: classStmt.IsDeclare || method.IsAbstract);
 
             // For static methods, use a different environment without this/super
             TypeEnvironment methodEnv;
@@ -1008,6 +1009,8 @@ public partial class TypeChecker
             }
 
             TypeInfo.Function methodType = ClassMethodBodySignature(method, methodEnv);
+            if (accessorParameter is not null)
+                methodType = methodType with { ParamTypes = [accessorParameter] };
 
             if (methodType.ThisType is { } explicitMethodThis)
                 methodEnv.Define("this", explicitMethodThis);
@@ -1143,6 +1146,11 @@ public partial class TypeChecker
                         {
                             if (method.IsStatic) mutableClass.StaticPrivateMethods[mName] = updatedMethodType;
                             else mutableClass.PrivateMethods[mName] = updatedMethodType;
+                            if (method.PrivateAccessorName is not null)
+                            {
+                                mutableClass.ResetFrozenCache();
+                                _currentClass = classTypeForBody = mutableClass.Freeze();
+                            }
                         }
                         else
                         {

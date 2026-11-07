@@ -11,10 +11,7 @@ public abstract partial class ExpressionEmitterBase
         string current = Ctx.CurrentClassName ?? throw new InvalidOperationException("Private name has no lexical owner.");
         string owner = Ctx.TypeMap?.GetPrivateInOwner(expression.Name) is { } checkedOwner
             ? Ctx.ResolveClassName(checkedOwner, checkedOwner.Name)
-            : new[] { current }.Concat(Ctx.EnclosingClassNames ?? [])
-                .First(className => Ctx.ClassRegistry?.GetPrivateElements(className) is { } elements
-                    && (elements.FieldNames.Contains(name) || elements.StaticFields.ContainsKey(name)
-                        || elements.Methods.ContainsKey(name) || elements.StaticMethods.ContainsKey(name)));
+            : Ctx.ResolvePrivateFieldOwner(current, name);
         var declaration = Ctx.ClassRegistry!.GetPrivateElements(owner)!;
         var receiver = SpillGenericPrivateOperand(expression.Object);
         var invalid = IL.DefineLabel();
@@ -30,7 +27,8 @@ public abstract partial class ExpressionEmitterBase
             IL.Emit(OpCodes.Brtrue, invalid);
         }
 
-        bool isStatic = declaration.StaticFields.ContainsKey(name) || declaration.StaticMethods.ContainsKey(name);
+        bool hasStaticMethod = declaration.StaticMethods.ContainsKey(name) || PrivateAccessorNames.Contains(declaration.StaticMethods, name);
+        bool isStatic = declaration.StaticFields.ContainsKey(name) || hasStaticMethod;
         if (TryEmitPrivateInOwnerDefinition(owner))
         {
             var definition = IL.DeclareLocal(Ctx.Runtime!.ClassDefinitions.Type);
@@ -41,7 +39,7 @@ public abstract partial class ExpressionEmitterBase
                 IL.Emit(OpCodes.Ldloc, definition);
                 IL.Emit(OpCodes.Ceq);
                 IL.Emit(OpCodes.Brfalse, absent);
-                if (declaration.StaticMethods.ContainsKey(name)) IL.Emit(OpCodes.Ldc_I4_1);
+                if (hasStaticMethod) IL.Emit(OpCodes.Ldc_I4_1);
                 else
                 {
                     IL.Emit(OpCodes.Ldloc, definition);
@@ -68,7 +66,7 @@ public abstract partial class ExpressionEmitterBase
             else IL.Emit(OpCodes.Ldloc, receiver);
             IL.Emit(OpCodes.Ldtoken, builder); IL.Emit(OpCodes.Call, Types.TypeGetTypeFromHandle);
             IL.Emit(OpCodes.Ceq); IL.Emit(OpCodes.Brfalse, absent);
-            if (declaration.StaticMethods.ContainsKey(name)) IL.Emit(OpCodes.Ldc_I4_1);
+            if (hasStaticMethod) IL.Emit(OpCodes.Ldc_I4_1);
             else
             {
                 Ctx.ClassRegistry.TryGetCallableStaticPrivateField(owner, name, out var ownerField);
@@ -101,7 +99,7 @@ public abstract partial class ExpressionEmitterBase
             IL.Emit(OpCodes.Ldloc, receiver); IL.Emit(OpCodes.Ldloca, slots);
             IL.Emit(OpCodes.Callvirt, Types.GetMethod(declaration.Storage!.FieldType, "TryGetValue", Types.Object, Types.DictionaryStringObject.MakeByRefType()));
             IL.Emit(OpCodes.Brfalse, absent);
-            if (declaration.Methods.ContainsKey(name)) IL.Emit(OpCodes.Ldc_I4_1);
+            if (declaration.Methods.ContainsKey(name) || PrivateAccessorNames.Contains(declaration.Methods, name)) IL.Emit(OpCodes.Ldc_I4_1);
             else
             {
                 IL.Emit(OpCodes.Ldloc, slots); IL.Emit(OpCodes.Ldstr, name);

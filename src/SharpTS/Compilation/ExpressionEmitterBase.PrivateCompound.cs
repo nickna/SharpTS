@@ -6,7 +6,8 @@ namespace SharpTS.Compilation;
 
 public abstract partial class ExpressionEmitterBase
 {
-    private readonly record struct PrivateFieldReference(FieldInfo? StaticField, LocalBuilder? Storage, string Key);
+    private readonly record struct PrivateFieldReference(FieldInfo? StaticField, LocalBuilder? Storage, string Key,
+        PrivateAccessorReference? Accessor = null);
 
     protected void EmitCompoundSetPrivate(Expr.CompoundSetPrivate expression)
     {
@@ -44,6 +45,8 @@ public abstract partial class ExpressionEmitterBase
 
     private PrivateFieldReference ResolvePrivateFieldReference(Token fieldName, LocalBuilder receiver)
     {
+        if (FindPrivateAccessor(fieldName) is { } accessor)
+            return new(null, receiver, accessor.Name, accessor);
         string name = fieldName.Lexeme.TrimStart('#');
         string owner = Ctx.CurrentClassName is { } current
             ? Ctx.ResolvePrivateFieldOwner(current, name)
@@ -107,7 +110,9 @@ public abstract partial class ExpressionEmitterBase
 
     private void EmitPrivateFieldReferenceRead(PrivateFieldReference reference)
     {
-        if (reference.StaticField is { } field)
+        if (reference.Accessor is { } accessor)
+            EmitPrivateAccessorFacet(accessor, reference.Storage!);
+        else if (reference.StaticField is { } field)
             IL.Emit(OpCodes.Ldsfld, field);
         else
         {
@@ -121,7 +126,9 @@ public abstract partial class ExpressionEmitterBase
 
     private void EmitPrivateFieldReferenceWrite(PrivateFieldReference reference, LocalBuilder value)
     {
-        if (reference.StaticField is { } field)
+        if (reference.Accessor is { } accessor)
+            EmitPrivateAccessorFacet(accessor, reference.Storage!, value);
+        else if (reference.StaticField is { } field)
         {
             IL.Emit(OpCodes.Ldloc, value);
             IL.Emit(OpCodes.Stsfld, field);

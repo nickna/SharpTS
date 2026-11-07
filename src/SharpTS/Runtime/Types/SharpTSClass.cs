@@ -129,6 +129,8 @@ public partial class SharpTSClass(
     private readonly Dictionary<string, object?> _staticPrivateFields = staticPrivateFields ?? [];
     private readonly HashSet<string> _installedStaticPrivateFields = new(StringComparer.Ordinal);
     private readonly FrozenDictionary<string, ISharpTSCallable> _staticPrivateMethods = staticPrivateMethods?.ToFrozenDictionary() ?? FrozenDictionary<string, ISharpTSCallable>.Empty;
+    private readonly bool _hasPrivateAccessors = privateMethods?.Keys.Any(PrivateAccessorNames.IsFacet) == true
+        || staticPrivateMethods?.Keys.Any(PrivateAccessorNames.IsFacet) == true;
 
     // Auto-accessor backing storage (TypeScript 4.9+)
     // Instance auto-accessor storage - ConditionalWeakTable for per-instance backing values
@@ -827,7 +829,19 @@ public partial class SharpTSClass(
     internal bool DeclaresPrivateName(string name)
         => _instancePrivateFields.Any(field => field.Name.Lexeme == name)
             || _privateMethods.ContainsKey(name) || _staticPrivateFields.ContainsKey(name)
-            || _staticPrivateMethods.ContainsKey(name);
+            || _staticPrivateMethods.ContainsKey(name)
+            || _hasPrivateAccessors &&
+                (PrivateAccessorNames.Contains(_privateMethods, name) || PrivateAccessorNames.Contains(_staticPrivateMethods, name));
+
+    internal bool TryGetPrivateAccessor(string name, out bool isStatic,
+        out ISharpTSCallable? getter, out ISharpTSCallable? setter)
+    {
+        if (_hasPrivateAccessors)
+            return PrivateAccessorNames.TryGet(_privateMethods, _staticPrivateMethods, name, out isStatic, out getter, out setter);
+        isStatic = false;
+        getter = setter = null;
+        return false;
+    }
 
     internal bool HasInstalledPrivateField(object receiver, string name)
         => _privateFieldStorage.TryGetValue(receiver, out var fields) && fields.ContainsKey(name);

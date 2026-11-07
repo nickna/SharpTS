@@ -3072,7 +3072,7 @@ public partial class TypeChecker
 
         try
         {
-            foreach (var method in classExpr.Methods.Where(m => m.Body != null))
+            foreach (var method in ClassMethodsInCheckOrder(classExpr.Methods))
             {
                 TypeEnvironment methodEnv;
                 if (method.IsStatic)
@@ -3120,6 +3120,8 @@ public partial class TypeChecker
                 }
 
                 TypeInfo.Function methodType = ClassMethodBodySignature(method, methodEnv);
+                if (InferPrivateAccessorSetterParameter(method, mutableClass) is { } accessorParameter)
+                    methodType = methodType with { ParamTypes = [accessorParameter] };
 
                 var bodyParamTypes = WidenOptionalParamsForBody(methodType.ParamTypes, method.Parameters);
                 for (int i = 0; i < method.Parameters.Count; i++)
@@ -3229,6 +3231,11 @@ public partial class TypeChecker
                             {
                                 if (method.IsStatic) mutableClass.StaticPrivateMethods[mName] = updatedMethodType;
                                 else mutableClass.PrivateMethods[mName] = updatedMethodType;
+                                if (method.PrivateAccessorName is not null)
+                                {
+                                    mutableClass.ResetFrozenCache();
+                                    _currentClass = classTypeForBody = mutableClass.Freeze();
+                                }
                             }
                             else
                             {

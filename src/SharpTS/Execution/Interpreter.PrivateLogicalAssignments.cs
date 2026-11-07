@@ -20,8 +20,13 @@ public partial class Interpreter
         // logical condition will skip the RHS and the eventual write.
         bool isStatic = owner.HasStaticPrivateField(name);
         bool isMethod = owner.GetPrivateMethod(name) is not null || owner.GetStaticPrivateMethod(name) is not null;
+        bool isAccessor = owner.TryGetPrivateAccessor(name, out bool isStaticAccessor, out var getter, out var setter);
         RuntimeValue current;
-        if (isMethod)
+        if (isAccessor)
+        {
+            current = InvokePrivateAccessor(owner, receiver, name, isStaticAccessor, getter);
+        }
+        else if (isMethod)
         {
             current = GetPrivateCore(receiver, name);
         }
@@ -48,6 +53,8 @@ public partial class Interpreter
         if (!assign) return current;
 
         RuntimeValue value = await ctx.EvaluateExprAsync(logical.Value);
+        if (isAccessor)
+            return InvokePrivateAccessor(owner, receiver, name, isStaticAccessor, setter, value);
         if (isMethod)
             throw new ThrowException(new SharpTSTypeError($"Private method {name} is not writable"));
 

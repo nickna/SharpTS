@@ -253,6 +253,13 @@ public partial class Parser
                 }
 
                 Token kind = Advance(); // consume 'get' or 'set'
+                if (Match(TokenType.PRIVATE_IDENTIFIER))
+                {
+                    methods.Add(ParsePrivateClassAccessor(kind, Previous(), isStatic, isDeclare,
+                        hasExplicitAccessModifier || isReadonly || isMemberAbstract || isOverride || isMemberAsync ||
+                        isMemberDeclare || memberDecorators is not null));
+                    continue;
+                }
                 (Token accessorName, Expr? accessorComputedKey) = ParseAccessorName();
                 Token accessorParametersOpen = Consume(TokenType.LEFT_PAREN, "Expect '(' after accessor name.");
 
@@ -588,6 +595,7 @@ public partial class Parser
         }
 
         if (isDeclare) _ambientClassDepth--;
+        ValidatePrivateAccessorNames(methods, fields);
         Consume(TokenType.RIGHT_BRACE, "Expect '}' after class body.");
         var declaration = new Stmt.Class(name, typeParams, superclassExpr, superclassTypeArgs, methods, fields, accessors.Count > 0 ? accessors : null, autoAccessors.Count > 0 ? autoAccessors : null, interfaces, interfaceTypeArgs, isAbstract, classDecorators, isDeclare, staticInitializers.Count > 0 ? staticInitializers : null, indexSignatures.Count > 0 ? indexSignatures : null, superclassTypeArgNodes, interfaceTypeArgNodes);
         RecordClassSyntax(declaration, name, headerStart, bodyOpen.Start, ConsumedSourceEnd);
@@ -810,6 +818,7 @@ public partial class Parser
             {
             // Parse modifiers (no decorators on class expression members per TypeScript spec)
             AccessModifier access = AccessModifier.Public;
+            bool hasExplicitAccessModifier = false;
             bool isStatic = false;
             bool isReadonly = false;
             bool isOverride = false;
@@ -823,9 +832,9 @@ public partial class Parser
                 var modifier = Previous().Type;
                 switch (modifier)
                 {
-                    case TokenType.PUBLIC: access = AccessModifier.Public; break;
-                    case TokenType.PRIVATE: access = AccessModifier.Private; break;
-                    case TokenType.PROTECTED: access = AccessModifier.Protected; break;
+                    case TokenType.PUBLIC: access = AccessModifier.Public; hasExplicitAccessModifier = true; break;
+                    case TokenType.PRIVATE: access = AccessModifier.Private; hasExplicitAccessModifier = true; break;
+                    case TokenType.PROTECTED: access = AccessModifier.Protected; hasExplicitAccessModifier = true; break;
                     case TokenType.STATIC:
                         if (isOverride)
                             throw new Exception("Parse Error: 'static' modifier must precede 'override' modifier.");
@@ -931,6 +940,12 @@ public partial class Parser
                 }
 
                 Token kind = Advance(); // consume 'get' or 'set'
+                if (Match(TokenType.PRIVATE_IDENTIFIER))
+                {
+                    methods.Add(ParsePrivateClassAccessor(kind, Previous(), isStatic, isDeclare: false,
+                        hasExplicitAccessModifier || isReadonly || isOverride || isMemberAsync || isMemberDeclare));
+                    continue;
+                }
                 (Token accessorName, Expr? accessorComputedKey) = ParseAccessorName();
                 Token accessorParametersOpen = Consume(TokenType.LEFT_PAREN, "Expect '(' after accessor name.");
 
@@ -1169,6 +1184,7 @@ public partial class Parser
             }
         }
 
+        ValidatePrivateAccessorNames(methods, fields);
         Consume(TokenType.RIGHT_BRACE, "Expect '}' after class body.");
 
         var expression = new Expr.ClassExpr(
@@ -1205,6 +1221,66 @@ public partial class Parser
             Access: parameter.Access ?? AccessModifier.Public,
             IsReadonly: parameter.IsReadonly,
             IsOptional: parameter.IsOptional);
+    }
+
+    private Stmt.Function ParsePrivateClassAccessor(Token kind, Token name, bool isStatic, bool isDeclare, bool hasInvalidModifiers)
+    {
+        if (hasInvalidModifiers)
+            throw new Exception($"Parse Error at line {name.Line}: Private accessors only allow the 'static' modifier.");
+        if (name.Lexeme == "#constructor")
+            throw new Exception($"Parse Error at line {name.Line}: '#constructor' is not a valid private name.");
+
+        bool isSetter = kind.Type == TokenType.SET;
+        var open = Consume(TokenType.LEFT_PAREN, "Expect '(' after accessor name.");
+        var (parameters, destructured, thisType, _) = ParseRuntimeParameters(allowParameterDecoratorsAndProperties: false);
+        var close = Consume(TokenType.RIGHT_PAREN, "Expect ')' after accessor parameters.");
+        if (parameters.Count != (isSetter ? 1 : 0) || parameters.Any(parameter => parameter.IsRest) || thisType is not null)
+            throw new Exception($"Parse Error at line {name.Line}: Invalid parameter list for private {kind.Lexeme} accessor.");
+
+        string? returnType = null;
+        TypeNode? returnTypeNode = null;
+        if (Match(TokenType.COLON))
+        {
+            if (isSetter)
+                throw new Exception($"Parse Error at line {name.Line}: A setter cannot have a return type annotation.");
+            returnType = ParseTypeAnnotation();
+            returnTypeNode = TakeTypeNode();
+        }
+
+        int headerEnd = ConsumedSourceEnd;
+        SourceSpan? bodySpan = null;
+        List<Stmt>? body = null;
+        if (isDeclare)
+            Match(TokenType.SEMICOLON);
+        else
+        {
+            var bodyOpen = Consume(TokenType.LEFT_BRACE, "Expect '{' before accessor body.");
+            body = PrependDestructuringPrologue(destructured, Block());
+            bodySpan = new SourceSpan(bodyOpen.Start, ConsumedSourceEnd);
+            headerEnd = bodyOpen.Start;
+        }
+
+        string key = isSetter ? PrivateAccessorNames.Setter(name.Lexeme) : PrivateAccessorNames.Getter(name.Lexeme);
+        var internalName = new Token(TokenType.PRIVATE_IDENTIFIER, key, null, name.Line) { SourceOrderOffset = name.Start };
+        var method = new Stmt.Function(internalName, null, null, parameters, body, returnType, isStatic,
+            IsPrivate: true, IsDeclare: isDeclare, ReturnTypeNode: returnTypeNode) { PrivateAccessorName = name };
+        RecordFunctionSyntax(method, kind.Start, open, close, headerEnd, bodySpan);
+        return method;
+    }
+
+    private void ValidatePrivateAccessorNames(List<Stmt.Function> methods, List<Stmt.Field> fields)
+    {
+        foreach (var group in methods.Where(method => method.PrivateAccessorName is not null)
+                     .GroupBy(method => method.PrivateAccessorName!.Lexeme, StringComparer.Ordinal))
+        {
+            var accessor = group.First();
+            string name = group.Key;
+            if (group.Any(other => other.IsStatic != accessor.IsStatic) ||
+                group.GroupBy(other => other.Name.Lexeme).Any(facet => facet.Count() > 1) ||
+                methods.Any(method => method.IsPrivate && method.Name.Lexeme == name) ||
+                fields.Any(field => field.IsPrivate && field.Name.Lexeme == name))
+                RecordError($"Parse Error at line {accessor.Name.Line}: Duplicate private name '{name}'.");
+        }
     }
 
     private void RecordAccessorSyntax(Stmt.Accessor accessor, Token kind, Token open, Token close, SourceSpan? body)

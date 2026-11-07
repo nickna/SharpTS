@@ -12,19 +12,23 @@ public partial class TypeChecker
     private TypeInfo CheckPrivateIncrement(Expr update, Expr.GetPrivate field, Token operation)
     {
         using var memberLookup = BeginSourceMemberLookup(field, field.Name, MemberOperation.Read | MemberOperation.Write);
-        var (receiver, owner, isStatic, fieldType) = CheckWritablePrivateField(update, field.Object, field.Name);
+        var (receiver, owner, isStatic, fieldType, accessorWriteType) = CheckWritablePrivateField(update, field.Object, field.Name);
         if (ExtractNarrowingPath(field) is { } path && GetNarrowing(path) is { } narrowed)
             fieldType = narrowed;
         if (!IsTypeOfKind(fieldType, type => type is TypeInfo.Primitive { Type: TokenType.TYPE_NUMBER }
                 or TypeInfo.NumberLiteral or TypeInfo.BigInt or TypeInfo.BigIntLiteral or TypeInfo.Enum { Kind: EnumKind.Numeric }))
             throw new TypeCheckException("An arithmetic operand must be of type 'any', 'number', 'bigint' or an enum type.", operation.Line, tsCode: "TS2356");
+        TypeInfo result = PrivateIncrementResult(fieldType);
+        if (accessorWriteType is not null && !IsCompatible(accessorWriteType, result))
+            throw new TypeCheckException($"Type '{result}' is not assignable to private accessor '{field.Name.Lexeme}' of type '{accessorWriteType}'.",
+                operation.Line, tsCode: "TS2322");
         _typeMap.Set(field, fieldType);
         _typeMap.MarkRawNumericResult(update);
         ObservePrivateSourceMemberSelection(field.Name, receiver, owner,
             isStatic ? MemberFacet.PrivateStatic : MemberFacet.PrivateInstance);
         InvalidatePrivateNarrowing(field.Object, field.Name);
         memberLookup?.Succeed();
-        return PrivateIncrementResult(fieldType);
+        return result;
     }
 
     private static TypeInfo PrivateIncrementResult(TypeInfo type) => type switch
@@ -39,7 +43,7 @@ public partial class TypeChecker
     private TypeInfo CheckCompoundSetPrivate(Expr.CompoundSetPrivate compound)
     {
         using var memberLookup = BeginSourceMemberLookup(compound, compound.Name, MemberOperation.Read | MemberOperation.Write);
-        var (receiver, owner, isStatic, fieldType) = CheckWritablePrivateField(compound, compound.Object, compound.Name);
+        var (receiver, owner, isStatic, fieldType, accessorWriteType) = CheckWritablePrivateField(compound, compound.Object, compound.Name);
         string name = compound.Name.Lexeme;
         TypeInfo right = CheckExpr(compound.Value);
         int line = compound.Operator.Line;
@@ -51,8 +55,9 @@ public partial class TypeChecker
             TokenType.GREATER_GREATER_GREATER_EQUAL => CheckUnsignedShiftBinary(fieldType, right, line),
             _ => CheckArithmeticBinary(fieldType, right, line)
         };
-        if (!IsCompatible(fieldType, result))
-            throw new TypeCheckException($"Type '{result}' is not assignable to private field '{name}' of type '{fieldType}'.", line, tsCode: "TS2322");
+        TypeInfo writeType = accessorWriteType ?? fieldType;
+        if (!IsCompatible(writeType, result))
+            throw new TypeCheckException($"Type '{result}' is not assignable to private field '{name}' of type '{writeType}'.", line, tsCode: "TS2322");
 
         ObservePrivateSourceMemberSelection(compound.Name, receiver, owner,
             isStatic ? MemberFacet.PrivateStatic : MemberFacet.PrivateInstance);
@@ -61,7 +66,7 @@ public partial class TypeChecker
         return result;
     }
 
-    private (TypeInfo Receiver, TypeInfo.Class Owner, bool IsStatic, TypeInfo FieldType) CheckWritablePrivateField(
+    private (TypeInfo Receiver, TypeInfo.Class Owner, bool IsStatic, TypeInfo FieldType, TypeInfo? AccessorWriteType) CheckWritablePrivateField(
         Expr assignment, Expr receiverExpression, Token member, bool allowDynamicReceiver = false)
     {
         if (_currentClass is null)
@@ -72,6 +77,11 @@ public partial class TypeChecker
         var owner = FindLexicalPrivateOwner(name);
         if (owner is null)
             throw new TypeCheckException($"Private field '{name}' does not exist on class '{_currentClass.Name}'.", member.Line, tsCode: "TS2339");
+
+        if (TryGetPrivateAccessorTypes(owner, name, out bool isStaticAccessor, out var readType, out var writeType))
+            return (receiver, owner, isStaticAccessor,
+                CheckPrivateAccessorFacet(receiver, owner, isStaticAccessor, member, readType),
+                CheckPrivateAccessorFacet(receiver, owner, isStaticAccessor, member, writeType, isWrite: true));
 
         bool isStatic = false;
         TypeInfo? fieldType = owner.PrivateFieldTypes.GetValueOrDefault(name);
@@ -89,7 +99,7 @@ public partial class TypeChecker
 
         ValidatePrivateReceiver(receiver, owner, isStatic, member);
         if (allowDynamicReceiver && receiver is TypeInfo.Any)
-            return (receiver, owner, isStatic, TypeInfo.Any.Shared);
+            return (receiver, owner, isStatic, TypeInfo.Any.Shared, null);
 
         // Readonly initialization is a syntax/context permission: an alias of
         // this, or an arrow nested in a constructor, does not receive it.
@@ -100,7 +110,7 @@ public partial class TypeChecker
             throw new TypeCheckException($"Cannot assign to '{name}' because it is a read-only property.", member.Line, tsCode: "TS2540");
 
         fieldType = InstantiatePrivateCompoundFieldType(fieldType, receiver, owner);
-        return (receiver, owner, isStatic, fieldType);
+        return (receiver, owner, isStatic, fieldType, null);
     }
 
     private TypeInfo InstantiatePrivateCompoundFieldType(TypeInfo fieldType, TypeInfo receiver, TypeInfo.Class owner)
