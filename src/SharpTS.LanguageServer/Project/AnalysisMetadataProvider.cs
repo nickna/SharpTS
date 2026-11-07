@@ -45,8 +45,10 @@ public sealed class AnalysisMetadataProvider : IDisposable
 
     public AnalysisMetadataView Capture()
     {
+        LspHoverTrace.Mark("metadata.wait");
         lock (_gate)
         {
+            LspHoverTrace.Mark("metadata.acquired");
             ObjectDisposedException.ThrowIf(_disposed, this);
             var inputs = new MetadataInputCapture(CompilerFileSystem.Current);
             using var fileSystemScope = CompilerFileSystem.Use(inputs, CompilerFileSystem.CancellationToken);
@@ -97,7 +99,9 @@ public sealed class AnalysisMetadataProvider : IDisposable
                     foreach (string error in errors)
                         _log?.Invoke(error);
                 }
-                return new AnalysisMetadataView(this, snapshot, _generation, errors.Count == 0, distinctPaths);
+                var view = new AnalysisMetadataView(this, snapshot, _generation, errors.Count == 0, distinctPaths);
+                LspHoverTrace.Mark("metadata.captured");
+                return view;
             }
             catch
             {

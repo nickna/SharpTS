@@ -134,6 +134,7 @@ public sealed class DiagnosticsCoordinator : IDisposable
     private async Task RunPendingDocumentsAsync(CancellationToken cancellationToken)
     {
         await Task.Delay(_debounce, cancellationToken);
+        using var trace = LspHoverTrace.Begin("diagnostics");
         var prepared = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
         var failed = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
         // Cancellation retires a capture, not its queued URIs. Expand all affected open files
@@ -157,6 +158,7 @@ public sealed class DiagnosticsCoordinator : IDisposable
                 {
                     if (!_store.TryCapture(uri, out DocumentRequestSnapshot? snapshot))
                         continue;
+                    LspHoverTrace.Mark("diagnostics.inputs");
                     DiagnosticsDocumentInputs inputs = await _diagnostics.GetDocumentInputsAsync(
                         snapshot, _settings.Mode, cancellationToken).ConfigureAwait(false);
                     cancellationToken.ThrowIfCancellationRequested();
@@ -195,6 +197,7 @@ public sealed class DiagnosticsCoordinator : IDisposable
                     }
                     continue;
                 }
+                LspHoverTrace.Mark("diagnostics.publish");
                 await PublishAsync(snapshot, snapshot.Document, cancellationToken).ConfigureAwait(false);
             }
             catch (OperationCanceledException) { throw; }

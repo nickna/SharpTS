@@ -3,7 +3,8 @@ import { mkdir, mkdtemp, writeFile, stat, utimes } from "node:fs/promises";
 import { dirname, resolve, join } from "node:path";
 import { fileURLToPath, pathToFileURL } from "node:url";
 import { setTimeout as delay } from "node:timers/promises";
-import { LspStdioClient } from "./lib/lsp-stdio.mjs";
+import { LspRequestTimeoutError, LspStdioClient } from "./lib/lsp-stdio.mjs";
+import { captureLspTimeoutStack } from "./lib/lsp-timeout-stack.mjs";
 
 const repository = resolve(dirname(fileURLToPath(import.meta.url)), "..");
 const server = resolve(repository, process.argv[2] ?? "src/SharpTS.LanguageServer/bin/Release/net10.0/SharpTS.LanguageServer.dll");
@@ -173,7 +174,13 @@ try {
       dirtyVersions: [1, 2, 3], removedMemberRefused: true, closeRestoredDisk: true, cancelSent, cancellationOutcome, freshAfterCancellation: true } };
 } finally { await full.close(); }
 
-const interop = new LspStdioClient("dotnet", [server, "--language-features", "interop-only"], { cwd: workspace });
+const traceInterop = process.platform === "win32";
+const interop = new LspStdioClient("dotnet", [server, "--language-features", "interop-only"], {
+  cwd: workspace,
+  trace: traceInterop,
+  env: traceInterop ? { ...process.env, SHARPTS_LSP_HOVER_TRACE: "1" } : undefined,
+});
+let hoverTimedOut = false;
 try {
   const caps = await initialize(interop);
   for (const key of ["definitionProvider", "referencesProvider", "renameProvider", "documentSymbolProvider"])
@@ -189,6 +196,27 @@ try {
   assert.equal(refusedMember.error?.code, -32601);
   assert.ok(!interop.registeredMethods.some((method) => /formatting/i.test(method)));
   report.interopOnly = { generalCapabilitiesAbsent: true, clrHover: "passed", definitionError: -32601, memberDefinitionError: -32601 };
-} finally { await interop.close(); }
+} catch (error) {
+  if (traceInterop && error instanceof LspRequestTimeoutError && error.method === "textDocument/hover") {
+    hoverTimedOut = true;
+    try {
+      // Capture the live server before cleanup. The request has already failed its deadline.
+      const stack = await captureLspTimeoutStack(interop.livePid);
+      const { pid, wire, stderr } = interop.diagnosticTrace();
+      const evidencePath = join(workspace, "interop-hover-timeout.json");
+      await writeFile(evidencePath, JSON.stringify({
+        pid,
+        request: { id: error.id, method: error.method, deadlineMs: error.timeoutMs },
+        wire,
+        serverPhases: stderr.split(/\r?\n/).filter(line => line.startsWith("[sharpts-lsp-hover]")),
+        stack,
+      }, null, 2) + "\n");
+      console.error(`Interop hover timeout evidence: ${evidencePath}`);
+    } catch (captureError) {
+      console.error(`Could not save interop hover timeout evidence: ${captureError.message}`);
+    }
+  }
+  throw error;
+} finally { await interop.close({ force: hoverTimedOut }); }
 await writeFile(join(workspace, "result.json"), JSON.stringify(report, null, 2) + "\n");
 console.log(JSON.stringify(report, null, 2));
