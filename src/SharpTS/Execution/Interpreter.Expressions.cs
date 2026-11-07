@@ -919,16 +919,11 @@ public partial class Interpreter
         }
         else if (spreadValue is SharpTSInstance inst)
         {
-            var stringKeys = inst.GetFieldNames().ToList();
-            var symbolKeys = inst.GetSymbolPropertyNames().ToList();
-            foreach (string key in stringKeys)
-            {
-                if (inst.GetOwnPropertyDescriptor(key)?.Enumerable != true)
-                    continue;
-                stringFields[key] = GetPropertyValue(inst, key);
-            }
-            foreach (SharpTSSymbol symbol in symbolKeys)
-                (symbolFields ??= [])[symbol] = GetSymbolPropertyValue(inst, symbol);
+            foreach (var entry in ObjectBuiltIns.EnumerateInstanceOwnEnumerable(this, inst))
+                if (entry.Key is SharpTSSymbol symbol)
+                    (symbolFields ??= [])[symbol] = entry.Value;
+                else
+                    stringFields[(string)entry.Key] = entry.Value;
         }
         else if (spreadValue is SharpTSProxy proxy)
         {
