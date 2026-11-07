@@ -133,6 +133,8 @@ public partial class RuntimeEmitter
     private readonly record struct SetIndexStrictInputs(
         EmittedArrayOperationsRuntime ArrayOperations,
         EmittedArrayStorageRuntime ArrayStorage,
+        Type ArgumentsType,
+        MethodInfo HasOwnProperty,
         EmittedDescriptorStorageRuntime DescriptorStorage,
         EmittedErrorRuntime Errors,
         MethodBuilder InvokeMethodUnwrapped,
@@ -2834,6 +2836,21 @@ public partial class RuntimeEmitter
         MethodInfo? NativeProxyRejection
     );
 
+    private void EmitArgumentsIndexPrototypeSetPolicy(ILGenerator il, Type argumentsType, MethodInfo hasOwnProperty,
+        ArrayIndexPrototypeSetInputs inputs, LocalBuilder key, Label ownStorage, Label reject)
+    {
+        // Missing arguments indices are ordinary properties. Consult the
+        // inherited descriptor before attempting to create an own slot.
+        il.Emit(OpCodes.Ldarg_0);
+        il.Emit(OpCodes.Isinst, argumentsType);
+        il.Emit(OpCodes.Brfalse, ownStorage);
+        il.Emit(OpCodes.Ldarg_0);
+        il.Emit(OpCodes.Ldloc, key);
+        il.Emit(OpCodes.Call, hasOwnProperty);
+        il.Emit(OpCodes.Brtrue, ownStorage);
+        EmitArrayIndexPrototypeSetPolicy(il, inputs, () => il.Emit(OpCodes.Ldloc, key), ownStorage, reject);
+    }
+
     // Empty stack on entry and every branch. A successful inherited setter or
     // Proxy returns from SetIndex; data continues to the existing storage path
     // after the nearest descriptor has claimed the key.
@@ -3852,6 +3869,17 @@ public partial class RuntimeEmitter
         il.Emit(OpCodes.Ret);
 
         il.MarkLabel(strictListNumericLabel);
+        var strictListRejectLabel = il.DefineLabel();
+        if (_features.UsesArguments)
+        {
+            var strictListOwnStorage = il.DefineLabel();
+            EmitArgumentsIndexPrototypeSetPolicy(il, inputs.ArgumentsType, inputs.HasOwnProperty,
+                new ArrayIndexPrototypeSetInputs(inputs.DescriptorStorage, inputs.InvokeMethodUnwrapped,
+                    inputs.InvokeMethodValue, inputs.ObjectDescriptors, inputs.ObjectPrototypes, inputs.ObjectRead,
+                    inputs.ProxySelected, inputs.ReflectAssignment, inputs.UndefinedType, inputs.NativeProxyRejection),
+                strictListKeyLocal, strictListOwnStorage, strictListRejectLabel);
+            il.MarkLabel(strictListOwnStorage);
+        }
 
         // Check if frozen - in strict mode, throw TypeError.
         var listFrozenCheckLocal = il.DeclareLocal(_types.Object);
@@ -3874,7 +3902,6 @@ public partial class RuntimeEmitter
         var strictListSetterLocal = il.DeclareLocal(_types.Object);
         var strictListCanCreateLabel = il.DefineLabel();
         var strictListRawStoreLabel = il.DefineLabel();
-        var strictListRejectLabel = il.DefineLabel();
 
         il.Emit(OpCodes.Ldarg_0);
         il.Emit(OpCodes.Ldloc, strictListKeyLocal);

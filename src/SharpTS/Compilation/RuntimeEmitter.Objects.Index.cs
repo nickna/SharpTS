@@ -10,6 +10,7 @@ public partial class RuntimeEmitter
         EmittedClassPrototypeRuntime ClassPrototypes,
         EmittedArrayOperationsRuntime ArrayOperations,
         EmittedArrayStorageRuntime ArrayStorage,
+        Type ArgumentsType,
         EmittedBufferRuntime? Buffer,
         EmittedDescriptorStorageRuntime DescriptorStorage,
         EmittedErrorRuntime Errors,
@@ -1843,6 +1844,16 @@ public partial class RuntimeEmitter
             il.Emit(OpCodes.Br, listSetRawStorage);
 
             il.MarkLabel(listSetCanCreate);
+            if (desc.Kind == ArrayElementsKind.Object && _features.UsesArguments)
+            {
+                var listCheckExtensible = il.DefineLabel();
+                EmitArgumentsIndexPrototypeSetPolicy(il, inputs.ArgumentsType, inputs.ObjectOwnProperties.HasOwnProperty,
+                    new ArrayIndexPrototypeSetInputs(inputs.DescriptorStorage, inputs.InvokeMethodUnwrapped,
+                        inputs.InvokeMethodValue, inputs.ObjectDescriptors, inputs.ObjectPrototypes, inputs.ObjectRead,
+                        inputs.ProxySelected, inputs.ReflectAssignment, inputs.UndefinedType, inputs.NativeProxyRejection),
+                    listSetKeyLocal, listCheckExtensible, nullLabel);
+                il.MarkLabel(listCheckExtensible);
+            }
             il.Emit(OpCodes.Ldarg_0);
             il.Emit(OpCodes.Ldloc, listSetKeyLocal);
             il.Emit(OpCodes.Call, inputs.DescriptorStorage.CanAddProperty);

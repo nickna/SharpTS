@@ -1697,6 +1697,7 @@ public partial class RuntimeEmitter
                 runtime.ClassPrototypes,
                 runtime.ArrayOperations,
                 runtime.ArrayStorage,
+                runtime.Arguments.Type,
                 runtime.Buffer,
                 runtime.DescriptorStorage,
                 runtime.Errors,
@@ -1733,6 +1734,8 @@ public partial class RuntimeEmitter
             new SetIndexStrictInputs(
                 runtime.ArrayOperations,
                 runtime.ArrayStorage,
+                runtime.Arguments.Type,
+                runtime.ObjectOwnProperties.HasOwnProperty,
                 runtime.DescriptorStorage,
                 runtime.Errors,
                 runtime.ReflectedMethods.InvokeUnwrapped,

@@ -9,6 +9,8 @@ internal static class MappedArgumentsEmitter
         Action loadArguments, Action loadCell)
     {
         var storage = runtime.DescriptorStorage;
+        var parameterCell = storage.DescriptorParameterCell
+            ?? throw new InvalidOperationException("Mapped arguments require parameter cell metadata.");
         var skip = il.DefineLabel();
         loadArguments();
         il.Emit(OpCodes.Castclass, runtime.Arguments.Type);
@@ -20,7 +22,7 @@ internal static class MappedArgumentsEmitter
         il.Emit(OpCodes.Newobj, storage.DescriptorConstructor);
         il.Emit(OpCodes.Dup);
         loadCell();
-        il.Emit(OpCodes.Callvirt, storage.DescriptorParameterCell.GetSetMethod()!);
+        il.Emit(OpCodes.Callvirt, parameterCell.GetSetMethod()!);
         il.Emit(OpCodes.Call, storage.DefineValidatedProperty);
         il.Emit(OpCodes.Pop);
         il.MarkLabel(skip);

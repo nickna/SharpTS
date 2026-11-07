@@ -131,6 +131,7 @@ public sealed class RuntimeFeatureSet
     public bool UsesReflect { get; set; } = true;           // Reflect.set/get/deleteProperty/has/etc.
     public bool UsesIteratorHelpers { get; set; } = true;   // Iterator.prototype.map/filter/flatMap/take/drop
     public bool UsesPromise { get; set; } = true;           // Promise references, async/await, and Promise-returning host/module surfaces
+    internal bool UsesArguments { get; set; } = true;
     public bool UsesUserClasses { get; set; } = true;       // user-class receiver initialization and guest prototype lookup
     // Emission-only reachability of the public Object descriptor-definition helpers.
     // Keep separate from mutation guards, which control semantic optimizations.

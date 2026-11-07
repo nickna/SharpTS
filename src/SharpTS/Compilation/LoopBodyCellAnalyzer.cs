@@ -681,7 +681,7 @@ internal sealed class LoopBodyCellAnalyzer : AstVisitorBase
                 Declare(parameter.Name);
                 _declarations[parameter.Name].FormalParameter = true;
             }
-            if (localCellScope && !_strictArgumentsScope
+            if (!_strictArgumentsScope
                 && _currentModuleOwner is not Modules.ParsedModule { IsCommonJs: false }
                 && node is Stmt.Function or Expr.ArrowFunction { HasOwnThis: true }
                 && ArgumentsRefScanner.Contains(parameters, body, expressionBody, treatEvalReferenceAsUse: true))
@@ -712,7 +712,10 @@ internal sealed class LoopBodyCellAnalyzer : AstVisitorBase
             EnterScope(statements, allowCandidates: false, hoistVars: true);
             try
             {
-                if (synchronous && !directSuspension) PrepareFunctionBodyVars(parameters, body);
+                if (synchronous && !directSuspension)
+                    PrepareFunctionBodyVars(parameters, body);
+                else if (parameters.Any(parameter => _mappedArgumentParameters.Contains(parameter.Name)))
+                    PrepareFunctionBodyVars(parameters, body, mappedOnly: true);
                 if (expressionBody is not null) Visit(expressionBody);
                 foreach (var statement in statements) Visit(statement);
             }
@@ -727,7 +730,7 @@ internal sealed class LoopBodyCellAnalyzer : AstVisitorBase
         }
     }
 
-    private void PrepareFunctionBodyVars(List<Stmt.Parameter> parameters, List<Stmt> body)
+    private void PrepareFunctionBodyVars(List<Stmt.Parameter> parameters, List<Stmt> body, bool mappedOnly = false)
     {
         var vars = new VarCollector();
         foreach (var statement in body) vars.Visit(statement);
@@ -747,9 +750,11 @@ internal sealed class LoopBodyCellAnalyzer : AstVisitorBase
             string name = declarations.Key;
             if (functionNames.Contains(name)) continue;
             parameterNames.TryGetValue(name, out var parameter);
+            bool mappedParameter = parameter is not null && _mappedArgumentParameters.Contains(parameter);
+            if (mappedOnly && !mappedParameter) continue;
             if (parameter != null && !hasParameterExpressions)
             {
-                if (_declarations[parameter].ParameterPattern)
+                if (mappedParameter || _declarations[parameter].ParameterPattern)
                 {
                     _scopes.Peek()[name] = _declarations[parameter];
                     foreach (var declaration in declarations)
@@ -886,18 +891,27 @@ internal sealed class LoopBodyCellAnalyzer : AstVisitorBase
     }
 
     protected override void VisitNamespace(Stmt.Namespace stmt) =>
-        VisitClassBody(stmt.Name, () => VisitStatementScope(stmt.Members));
+        VisitClassBody(stmt.Name, () => VisitStatementScope(stmt.Members), isNamespace: true);
 
-    private void VisitClassBody(Token? name, Action visit, Expr.ClassExpr? expression = null)
+    private void VisitClassBody(Token? name, Action visit, Expr.ClassExpr? expression = null, bool isNamespace = false)
     {
         int previousDepth = _loopBodyDepth;
+        bool previousStrictArguments = _strictArgumentsScope;
+        _strictArgumentsScope |= !isNamespace;
         _loopBodyDepth = 0;
         _classDepth++;
         _owners.Add(new(expression ?? (object)new object(), false, false,
             canOwnGeneratorCells: false, classCaptureOwner: expression));
         EnterScope([], allowCandidates: false);
         try { if (name is not null) Declare(name); visit(); }
-        finally { _scopes.Pop(); _owners.RemoveAt(_owners.Count - 1); _classDepth--; _loopBodyDepth = previousDepth; }
+        finally
+        {
+            _scopes.Pop();
+            _owners.RemoveAt(_owners.Count - 1);
+            _classDepth--;
+            _loopBodyDepth = previousDepth;
+            _strictArgumentsScope = previousStrictArguments;
+        }
     }
 
     private static bool HasDirectSuspension(IEnumerable<Stmt> statements, Expr? expression = null)

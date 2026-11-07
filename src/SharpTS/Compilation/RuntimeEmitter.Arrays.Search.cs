@@ -305,66 +305,12 @@ public partial class RuntimeEmitter
         il.Emit(OpCodes.Br, throwLabel);
         il.MarkLabel(notUndefined);
 
-        // $Arguments → take only the first `_length` elements per ECMA-262
-        // sloppy arguments semantics. `arguments[N] = v` for N >= length does
-        // NOT update length, so a materialized array-like view must not see
-        // those out-of-range slots. Without this slice, `every.call(arguments, cb)`
-        // visits the out-of-range index 2 in test patterns like
-        // `function(a, b) { arguments[2] = 9; ...every.call(arguments, ...) }`.
-        var notArguments = il.DefineLabel();
+        // Arguments has an independent length and its mapped indices read
+        // the live parameter binding. Snapshot through ordinary properties.
+        var materializeProperties = il.DefineLabel();
         il.Emit(OpCodes.Ldarg_0);
         il.Emit(OpCodes.Isinst, runtime.Arguments.Type);
-        il.Emit(OpCodes.Brfalse, notArguments);
-        // result = new List<object>(); for (i = 0; i < _length; i++) result.Add(args[i]);
-        var argsLocal = il.DeclareLocal(runtime.Arguments.Type);
-        var argsResultLocal = il.DeclareLocal(_types.ListOfObject);
-        var argsIdxLocal = il.DeclareLocal(_types.Int32);
-        var argsLenLocal = il.DeclareLocal(_types.Int32);
-        il.Emit(OpCodes.Ldarg_0);
-        il.Emit(OpCodes.Castclass, runtime.Arguments.Type);
-        il.Emit(OpCodes.Stloc, argsLocal);
-        il.Emit(OpCodes.Ldloc, argsLocal);
-        il.Emit(OpCodes.Ldfld, runtime.Arguments.LengthField);
-        il.Emit(OpCodes.Stloc, argsLenLocal);
-        il.Emit(OpCodes.Ldloc, argsLenLocal);
-        il.Emit(OpCodes.Newobj, _types.GetConstructor(_types.ListOfObject, _types.Int32));
-        il.Emit(OpCodes.Stloc, argsResultLocal);
-        il.Emit(OpCodes.Ldc_I4_0);
-        il.Emit(OpCodes.Stloc, argsIdxLocal);
-        var argsLoop = il.DefineLabel();
-        var argsLoopEnd = il.DefineLabel();
-        il.MarkLabel(argsLoop);
-        il.Emit(OpCodes.Ldloc, argsIdxLocal);
-        il.Emit(OpCodes.Ldloc, argsLenLocal);
-        il.Emit(OpCodes.Bge, argsLoopEnd);
-        // Bounds check against List.Count too — _length could in principle exceed Count
-        // if length was lifted programmatically; treat absent slots as undefined.
-        il.Emit(OpCodes.Ldloc, argsIdxLocal);
-        il.Emit(OpCodes.Ldloc, argsLocal);
-        il.Emit(OpCodes.Callvirt, _types.GetProperty(_types.ListOfObject, "Count").GetGetMethod()!);
-        var argsHaveLabel = il.DefineLabel();
-        var argsAfterAddLabel = il.DefineLabel();
-        il.Emit(OpCodes.Blt, argsHaveLabel);
-        il.Emit(OpCodes.Ldloc, argsResultLocal);
-        il.Emit(OpCodes.Ldsfld, runtime.Sentinels.UndefinedInstance);
-        il.Emit(OpCodes.Callvirt, _types.GetMethod(_types.ListOfObject, "Add", _types.Object));
-        il.Emit(OpCodes.Br, argsAfterAddLabel);
-        il.MarkLabel(argsHaveLabel);
-        il.Emit(OpCodes.Ldloc, argsResultLocal);
-        il.Emit(OpCodes.Ldloc, argsLocal);
-        il.Emit(OpCodes.Ldloc, argsIdxLocal);
-        il.Emit(OpCodes.Callvirt, _types.GetMethod(_types.ListOfObject, "get_Item", _types.Int32));
-        il.Emit(OpCodes.Callvirt, _types.GetMethod(_types.ListOfObject, "Add", _types.Object));
-        il.MarkLabel(argsAfterAddLabel);
-        il.Emit(OpCodes.Ldloc, argsIdxLocal);
-        il.Emit(OpCodes.Ldc_I4_1);
-        il.Emit(OpCodes.Add);
-        il.Emit(OpCodes.Stloc, argsIdxLocal);
-        il.Emit(OpCodes.Br, argsLoop);
-        il.MarkLabel(argsLoopEnd);
-        il.Emit(OpCodes.Ldloc, argsResultLocal);
-        il.Emit(OpCodes.Ret);
-        il.MarkLabel(notArguments);
+        il.Emit(OpCodes.Brtrue, materializeProperties);
 
         // List<object> → passthrough
         var notList = il.DefineLabel();
@@ -463,6 +409,7 @@ public partial class RuntimeEmitter
         // PDS-store fallback) and other receivers that expose length+indexed
         // properties. Receivers without length yield NaN → 0 → empty list,
         // matching the previous fallback's silent-empty behavior.
+        il.MarkLabel(materializeProperties);
         EmitMaterializeViaGetProperty(il, runtime);
         il.Emit(OpCodes.Ret);
 

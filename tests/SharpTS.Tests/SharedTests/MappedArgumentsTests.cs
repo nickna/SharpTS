@@ -155,6 +155,74 @@ public sealed class MappedArgumentsTests
             }
             main();
             """, "2 2\n5 5 5\n4 4\n9 9\n8 8\n10\n10\n5\n1 2\n"];
+        yield return ["""
+            namespace Sloppy {
+                export function run(value: number) {
+                    const read = () => value;
+                    arguments[0] = 8;
+                    console.log(value, read(), arguments[0]);
+                }
+            }
+            class Strict {
+                run(value: number) {
+                    arguments[0] = 8;
+                    console.log(value, arguments[0]);
+                }
+            }
+            Sloppy.run(1);
+            new Strict().run(1);
+            """, "8 8 8\n1 8\n"];
+        yield return ["""
+            function check(value) {
+                var value = 3;
+                const read = () => value;
+                console.log(value, read(), arguments[0]);
+                arguments[0] = 7;
+                var value;
+                console.log(value, read(), arguments[0]);
+            }
+            async function suspended(value) {
+                var value = 3;
+                await Promise.resolve();
+                const read = () => value;
+                console.log(value, read(), arguments[0]);
+                arguments[0] = 7;
+                var value;
+                console.log(value, read(), arguments[0]);
+            }
+            check(1);
+            suspended(1);
+            """, "3 3 3\n7 7 7\n3 3 3\n7 7 7\n"];
+        yield return ["""
+            function installPrototype(args) {
+                delete args[0];
+                Object.setPrototypeOf(args, {
+                    get 0() { return 10; },
+                    set 0(value) { console.log("setter", value); }
+                });
+                Object.preventExtensions(args);
+            }
+            function sloppy(value) {
+                installPrototype(arguments);
+                console.log(arguments["0"]++, Object.hasOwn(arguments, "0"), value);
+            }
+            function strict(value) {
+                "use strict";
+                installPrototype(arguments);
+                console.log(++arguments["0"], Object.hasOwn(arguments, "0"), value);
+            }
+            sloppy(1);
+            strict(2);
+            """, "setter 11\n10 false 1\nsetter 11\n11 false 2\n"];
+        yield return ["""
+            function sort(a, b) {
+                a = 2;
+                b = 1;
+                Array.prototype.sort.call(arguments);
+                console.log(a, b, arguments[0], arguments[1]);
+            }
+            sort(7, 8);
+            """, "1 2 1 2\n"];
     }
 
     public static IEnumerable<object[]> ModeCases() => Cases()

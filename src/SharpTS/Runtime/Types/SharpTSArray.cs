@@ -621,7 +621,8 @@ public class SharpTSArray : ITypeCategorized, IReadOnlyList<object?>
         long expectedLength, bool checkForHoles = true)
     {
         MaterializeNumeric();
-        if (IsFrozen
+        if (this is SharpTSArguments
+            || IsFrozen
             || expectedLength < 0
             || expectedLength > int.MaxValue
             || _length != expectedLength

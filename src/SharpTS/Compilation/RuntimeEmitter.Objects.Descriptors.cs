@@ -798,8 +798,9 @@ public partial class RuntimeEmitter
             "Cannot define property on a non-extensible object");
         il.MarkLabel(descriptorStoredLabel);
 
-        EmitMappedArgumentRedefinition(il, inputs.DescriptorStorage,
-            existingDescLocal, descriptorLocal, newIsAccessorOuter);
+        if (inputs.DescriptorStorage.DescriptorParameterCell is { } parameterCell)
+            EmitMappedArgumentRedefinition(il, inputs.DescriptorStorage, parameterCell,
+                existingDescLocal, descriptorLocal, newIsAccessorOuter);
 
         EmitDefinePropertyArrayIndexLengthGrowth(il, inputs.ArrayStorage, propNameLocal);
 
@@ -843,7 +844,7 @@ public partial class RuntimeEmitter
     }
 
     private static void EmitMappedArgumentRedefinition(ILGenerator il,
-        EmittedDescriptorStorageRuntime storage, LocalBuilder previous,
+        EmittedDescriptorStorageRuntime storage, PropertyInfo parameterCell, LocalBuilder previous,
         LocalBuilder replacement, LocalBuilder isAccessor)
     {
         var done = il.DefineLabel();
@@ -851,7 +852,7 @@ public partial class RuntimeEmitter
         il.Emit(OpCodes.Ldloc, previous);
         il.Emit(OpCodes.Brfalse, done);
         il.Emit(OpCodes.Ldloc, previous);
-        il.Emit(OpCodes.Callvirt, storage.DescriptorParameterCell.GetGetMethod()!);
+        il.Emit(OpCodes.Callvirt, parameterCell.GetGetMethod()!);
         il.Emit(OpCodes.Stloc, cell);
         il.Emit(OpCodes.Ldloc, cell);
         il.Emit(OpCodes.Brfalse, done);
@@ -870,7 +871,7 @@ public partial class RuntimeEmitter
         il.Emit(OpCodes.Brfalse, done);
         il.Emit(OpCodes.Ldloc, replacement);
         il.Emit(OpCodes.Ldloc, cell);
-        il.Emit(OpCodes.Callvirt, storage.DescriptorParameterCell.GetSetMethod()!);
+        il.Emit(OpCodes.Callvirt, parameterCell.GetSetMethod()!);
         il.MarkLabel(done);
     }
 

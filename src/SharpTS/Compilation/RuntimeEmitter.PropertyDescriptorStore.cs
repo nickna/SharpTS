@@ -156,7 +156,10 @@ public partial class RuntimeEmitter
         ctorIl.Emit(OpCodes.Ret);
 
         // Properties
-        EmitDescriptorValue(typeBuilder, valueField);
+        if (_features.UsesArguments)
+            EmitMappedDescriptorValue(typeBuilder, valueField);
+        else
+            EmitAutoProperty(typeBuilder, "Value", _types.Object, valueField);
         EmitAutoProperty(typeBuilder, "Getter", _types.Object, getterField);
         EmitAutoProperty(typeBuilder, "Setter", _types.Object, setterField);
         EmitAutoProperty(typeBuilder, "Writable", _types.Boolean, writableField);
@@ -167,7 +170,8 @@ public partial class RuntimeEmitter
         storage.DescriptorType = type;
         storage.DescriptorConstructor = ctor;
         storage.DescriptorValue = type.GetProperty("Value")!;
-        storage.DescriptorParameterCell = type.GetProperty("ParameterCell")!;
+        if (_features.UsesArguments)
+            storage.DescriptorParameterCell = type.GetProperty("ParameterCell")!;
         storage.DescriptorGetter = type.GetProperty("Getter")!;
         storage.DescriptorSetter = type.GetProperty("Setter")!;
         storage.DescriptorWritable = type.GetProperty("Writable")!;
@@ -175,7 +179,7 @@ public partial class RuntimeEmitter
         storage.DescriptorConfigurable = type.GetProperty("Configurable")!;
     }
 
-    private void EmitDescriptorValue(TypeBuilder typeBuilder, FieldBuilder valueField)
+    private void EmitMappedDescriptorValue(TypeBuilder typeBuilder, FieldBuilder valueField)
     {
         var cellType = typeof(IStrongBox);
         var cell = typeBuilder.DefineField("_parameterCell", cellType, FieldAttributes.Private);
@@ -369,7 +373,8 @@ public partial class RuntimeEmitter
         var il = method.GetILGenerator();
         var stateLocal = il.DeclareLocal(storage.StateType);
 
-        EmitFreezeMappedArgumentDescriptors(il, storage, descriptorsField, descriptorsTryGet, descriptorsDictType);
+        if (storage.DescriptorParameterCell is { } parameterCell)
+            EmitFreezeMappedArgumentDescriptors(il, storage, parameterCell, descriptorsField, descriptorsTryGet, descriptorsDictType);
 
         // var state = _frozenSealedState.GetOrCreateValue(obj);
         il.Emit(OpCodes.Ldsfld, frozenSealedField);
@@ -396,7 +401,7 @@ public partial class RuntimeEmitter
     }
 
     private void EmitFreezeMappedArgumentDescriptors(ILGenerator il, EmittedDescriptorStorageRuntime storage,
-        FieldBuilder descriptorsField, MethodInfo descriptorsTryGet, Type descriptorsDictType)
+        PropertyInfo parameterCell, FieldBuilder descriptorsField, MethodInfo descriptorsTryGet, Type descriptorsDictType)
     {
         // Only arguments objects have mapped descriptors, and their carrier
         // is a List. Snapshot live values before freezing makes them immutable.
@@ -433,14 +438,14 @@ public partial class RuntimeEmitter
         il.Emit(OpCodes.Call, EmitterTypeHelpers.ResolveMethod(pairType, typeof(KeyValuePair<,>).GetProperty("Value")!.GetGetMethod()!));
         il.Emit(OpCodes.Stloc, descriptor);
         il.Emit(OpCodes.Ldloc, descriptor);
-        il.Emit(OpCodes.Callvirt, storage.DescriptorParameterCell.GetGetMethod()!);
+        il.Emit(OpCodes.Callvirt, parameterCell.GetGetMethod()!);
         il.Emit(OpCodes.Brfalse, loop);
         il.Emit(OpCodes.Ldloc, descriptor);
         il.Emit(OpCodes.Callvirt, storage.DescriptorValue.GetGetMethod()!);
         il.Emit(OpCodes.Stloc, value);
         il.Emit(OpCodes.Ldloc, descriptor);
         il.Emit(OpCodes.Ldnull);
-        il.Emit(OpCodes.Callvirt, storage.DescriptorParameterCell.GetSetMethod()!);
+        il.Emit(OpCodes.Callvirt, parameterCell.GetSetMethod()!);
         il.Emit(OpCodes.Ldloc, descriptor);
         il.Emit(OpCodes.Ldloc, value);
         il.Emit(OpCodes.Callvirt, storage.DescriptorValue.GetSetMethod()!);

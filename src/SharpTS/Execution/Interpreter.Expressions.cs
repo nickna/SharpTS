@@ -1967,55 +1967,10 @@ public partial class Interpreter
         switch (target)
         {
             case IndexTarget.Array t:
-                if (t.Target is not SharpTSArguments)
-                {
-                    // Simple writes share compound assignment's OrdinarySet
-                    // policy, including present-but-undefined accessors.
-                    string key = t.Index.ToString(
-                        System.Globalization.CultureInfo.InvariantCulture);
-                    SetOwnPropertyObjectValue(t.Target, key, value, strictMode);
-                    break;
-                }
-                if (t.Target is SharpTSArguments && t.Index >= t.Target.LongLength)
-                {
-                    t.Target.SetNamedProperty(t.Index.ToString(
-                        System.Globalization.CultureInfo.InvariantCulture), value);
-                    break;
-                }
-                if (!t.Target.HasIndex(t.Index)
-                    && t.Target.HasExplicitPrototype
-                    && t.Target.ExplicitPrototype is SharpTSProxy arrayPrototypeProxy)
-                {
-                    string propertyKey = t.Index.ToString(
-                        System.Globalization.CultureInfo.InvariantCulture);
-                    bool assigned = arrayPrototypeProxy.TrapSetProperty(
-                        propertyKey, value, this, t.Target);
-                    if (!assigned && strictMode)
-                        throw new ThrowException(new SharpTSTypeError(
-                            $"Proxy set trap rejected property '{propertyKey}'"));
-                    break;
-                }
-                if (t.Target.TryGetIndexAccessor(
-                    t.Index, out _, out var indexSetter))
-                {
-                    if (indexSetter != null)
-                    {
-                        BindAccessorToObject(indexSetter, t.Target).CallBoxed(this, [value]);
-                    }
-                    else if (strictMode)
-                    {
-                        throw new ThrowException(new SharpTSTypeError(
-                            $"Cannot set array index '{t.Index}' which has only a getter."));
-                    }
-                }
-                else if (strictMode)
-                {
-                    t.Target.SetStrict(t.Index, value, strictMode);
-                }
-                else
-                {
-                    t.Target.Set(t.Index, value);
-                }
+                // Indexed writes share OrdinarySet, including inherited
+                // setters and mapped arguments' own data descriptors.
+                string arrayKey = t.Index.ToString(System.Globalization.CultureInfo.InvariantCulture);
+                SetOwnPropertyObjectValue(t.Target, arrayKey, value, strictMode);
                 break;
 
             case IndexTarget.ArrayString t:
