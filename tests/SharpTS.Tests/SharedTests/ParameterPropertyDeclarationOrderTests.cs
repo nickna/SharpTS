@@ -6,6 +6,21 @@ namespace SharpTS.Tests.SharedTests;
 public sealed class ParameterPropertyDeclarationOrderTests
 {
     [Fact]
+    public void AConstructorBetweenFieldsDoesNotResetEarlierFieldWrites()
+    {
+        const string source = """
+            class Item {
+              first = (this.value = 7);
+              constructor(public value = 1) {}
+              last = this.value;
+            }
+            const item = new Item();
+            console.log(item.first, item.last, item.value, Object.keys(item).join(','));
+            """;
+        Assert.Equal("7 7 1 value,first,last\n", TestHarness.RunUnchecked(source, ExecutionMode.Interpreted));
+    }
+
+    [Fact]
     public void ParameterPropertiesExistBeforeOrdinaryFieldsAndUseTheCurrentBinding()
     {
         const string source = """
@@ -33,6 +48,7 @@ public sealed class ParameterPropertyDeclarationOrderTests
     [Fact]
     public void AbruptInitializerLeavesTheDeclarationOnAnEscapedReplacementReceiver()
     {
+        // Compiled replacement receivers have a separate declaration gap (#3514).
         const string source = """
             const receiver = Object.create({ set value(input) { throw 'setter'; } });
             let escaped;

@@ -367,12 +367,16 @@ public partial class SharpTSClass(
 
         // Parameter properties declare own fields before the ordinary initializers.
         // Their assignments run later using the live constructor bindings.
+        HashSet<Token>? parameterPropertyFields = null;
         if (FindOwnMethod("constructor") is SharpTSFunction constructor)
         {
             foreach (var parameter in constructor.Parameters)
-                if (parameter.IsParameterProperty)
-                    ObjectBuiltIns.CreateDataPropertyOrThrow(interpreter, receiver, parameter.Name.Lexeme,
-                        SharpTSUndefined.Instance);
+            {
+                if (!parameter.IsParameterProperty) continue;
+                (parameterPropertyFields ??= new(ReferenceEqualityComparer.Instance)).Add(parameter.Name);
+                ObjectBuiltIns.CreateDataPropertyOrThrow(interpreter, receiver, parameter.Name.Lexeme,
+                    SharpTSUndefined.Instance);
+            }
         }
 
         var elements = (OrderedInstanceFields ?? _instanceFields.Concat(_instancePrivateFields).ToList()).Cast<Stmt>()
@@ -386,6 +390,8 @@ public partial class SharpTSClass(
                 continue;
             }
             var field = (Stmt.Field)element;
+            // The checker field shares its declaration token with the parameter.
+            if (parameterPropertyFields?.Contains(field.Name) == true) continue;
             object? value = field.Initializer != null
                 ? interpreter.EvaluateClassInitializer(this, receiver, field.Initializer)
                 : SharpTSUndefined.Instance;
