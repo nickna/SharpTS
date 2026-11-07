@@ -581,7 +581,8 @@ public static class SourceDeclarationEmitter
                     string? value = RenderConstantExpression(member.Value);
                     if (value is null && resolved?.Members.TryGetValue(member.Name.Lexeme, out object? checkedValue) == true)
                         value = RenderConstant(checkedValue);
-                    WriteLine($"{member.Name.Lexeme}{(value is null ? "" : $" = {value}")},");
+                    string name = member.Name.Type == TokenType.STRING ? Quote(member.Name.Lexeme) : member.Name.Lexeme;
+                    WriteLine($"{name}{(value is null ? "" : $" = {value}")},");
                 }
             });
             WriteLine("}");

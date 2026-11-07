@@ -839,7 +839,7 @@ public partial class Parser
         List<Stmt.EnumMember> members = [];
         while (!Check(TokenType.RIGHT_BRACE) && !IsAtEnd())
         {
-            Token memberName = Consume(TokenType.IDENTIFIER, "Expect member name.");
+            Token memberName = ConsumeSpecifierName("Expect member name.");
             Expr? value = Match(TokenType.EQUAL) ? Expression() : null;
             members.Add(new Stmt.EnumMember(memberName, value));
 
