@@ -24,13 +24,14 @@ public sealed class ClassIntegerKeyOrderTests
             const value = new C();
             console.log(Object.keys(value).join(','));
             console.log(Object.getOwnPropertyNames(value).join(','));
-            console.log(Reflect.ownKeys(value).map(String).join(','));
+            const keys = Reflect.ownKeys(value);
+            console.log(keys.slice(0, -1).join(','), keys[6] === symbol);
             console.log(Object.values(value).join(','));
             console.log(Object.entries(value).map(pair => pair.join(':')).join(','));
             console.log(Object.keys({ ...value }).join(','));
             """;
         Assert.Equal("2,10,extra,first,later,01\n2,10,extra,first,later,01\n"
-            + "2,10,extra,first,later,01,Symbol(s)\n6,7,1,1,7,8\n"
+            + "2,10,extra,first,later,01 true\n6,7,1,1,7,8\n"
             + "2:6,10:7,extra:1,first:1,later:7,01:8\n2,10,extra,first,later,01\n",
             TestHarness.RunUnchecked(source, mode));
     }
