@@ -558,26 +558,16 @@ public partial class RuntimeEmitter
         il.Emit(OpCodes.Isinst, inputs.ArrayStorage.HoleType);
         il.Emit(OpCodes.Brtrue, listLoopSkip);
 
-        // Indexed array/list properties can carry descriptor metadata in PDS.
-        // Object.keys and for-in must omit a present element whose own
-        // descriptor is enumerable:false (for example an index created by
-        // Object.defineProperties with no enumerable member).
+        // Descriptor-backed keys are appended by the enumerable PDS scan.
+        // Skipping them here avoids counting one property in both stores.
         var listKeyLocal = il.DeclareLocal(_types.String);
-        var listKeyDescLocal = il.DeclareLocal(inputs.DescriptorStorage.DescriptorType);
         il.Emit(OpCodes.Ldloca, indexLocal);
         il.Emit(OpCodes.Call, _types.GetMethod(_types.Int32, "ToString", Type.EmptyTypes)!);
         il.Emit(OpCodes.Stloc, listKeyLocal);
         il.Emit(OpCodes.Ldarg_0);
         il.Emit(OpCodes.Ldloc, listKeyLocal);
         il.Emit(OpCodes.Call, inputs.DescriptorStorage.GetPropertyDescriptor);
-        il.Emit(OpCodes.Stloc, listKeyDescLocal);
-        var listKeyEnumerableLabel = il.DefineLabel();
-        il.Emit(OpCodes.Ldloc, listKeyDescLocal);
-        il.Emit(OpCodes.Brfalse, listKeyEnumerableLabel);
-        il.Emit(OpCodes.Ldloc, listKeyDescLocal);
-        il.Emit(OpCodes.Callvirt, inputs.DescriptorStorage.DescriptorEnumerable.GetGetMethod()!);
-        il.Emit(OpCodes.Brfalse, listLoopSkip);
-        il.MarkLabel(listKeyEnumerableLabel);
+        il.Emit(OpCodes.Brtrue, listLoopSkip);
 
         il.Emit(OpCodes.Ldloc, resultLocal);
         il.Emit(OpCodes.Ldloc, listKeyLocal);
@@ -592,11 +582,8 @@ public partial class RuntimeEmitter
 
         il.MarkLabel(listLoopEnd);
 
-        // Append PDS extras: arrays can have user-defined accessor properties
-        // (`Object.defineProperty(arr, "prop", {get: ...})`) whose keys aren't
-        // numeric indices and aren't in the list's element slots. Mirror the
-        // dict-path PDSGetEnumerableExtraKeys append. Test262 keys/15.2.3.14-
-        // 5-12 covers this.
+        // Append enumerable PDS keys, including any indices skipped above
+        // and named or accessor properties with no backing slot.
         var pdsArrayKeysList = il.DeclareLocal(listType);
         il.Emit(OpCodes.Ldarg_0);
         il.Emit(OpCodes.Ldnull);
