@@ -338,6 +338,10 @@ public partial class TypeChecker
                 CheckClassDeclaration(classStmt);
                 break;
 
+            case Stmt.Enum enumStmt:
+                CheckEnumDeclaration(enumStmt);
+                break;
+
             case Stmt.TypeAlias typeAlias:
                 if (typeAlias.TypeParameters != null && typeAlias.TypeParameters.Count > 0)
                 {
