@@ -2546,6 +2546,7 @@ public partial class RuntimeEmitter
                     runtime.Errors.CreateException,
                     runtime.Errors.TypeErrorConstructor,
                     runtime.FunctionBindings,
+                    runtime.Arguments.Type,
                     NativeProxyRejection: runtime.ReflectedMethods.NativeProxyRejection
                 )
             );

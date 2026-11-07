@@ -2673,6 +2673,14 @@ public partial class RuntimeEmitter
             il.Emit(OpCodes.Ldloca, listDeleteIndexLocal);
             il.Emit(OpCodes.Call, _types.GetMethod(_types.Int32, "TryParse", _types.String, _types.Int32.MakeByRefType()));
             il.Emit(OpCodes.Brfalse, listDeleteNotNumeric);
+            il.Emit(OpCodes.Ldloc, listDeleteIndexLocal);
+            il.Emit(OpCodes.Ldc_I4_0);
+            il.Emit(OpCodes.Blt, listDeleteNotNumeric);
+            il.Emit(OpCodes.Ldloc, listDeleteKeyLocal);
+            il.Emit(OpCodes.Ldloca, listDeleteIndexLocal);
+            il.Emit(OpCodes.Call, _types.GetMethodNoParams(_types.Int32, "ToString"));
+            il.Emit(OpCodes.Call, _types.StringOpEquality);
+            il.Emit(OpCodes.Brfalse, listDeleteNotNumeric);
 
             var listDeleteDescriptorLocal = il.DeclareLocal(inputs.DescriptorStorage.DescriptorType);
             var listDeleteStorage = il.DefineLabel();

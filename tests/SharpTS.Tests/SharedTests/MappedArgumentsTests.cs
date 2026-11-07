@@ -24,11 +24,11 @@ public sealed class MappedArgumentsTests
             console.log(live.args[0]);
             live.args[0] = 8;
             console.log(live.get());
-            delete live.args[0];
+            console.log(Reflect.deleteProperty(live.args, "0"), Object.hasOwn(live.args, "0"));
             live.args[0] = 13;
             live.set(20);
             console.log(live.args[0], live.get());
-            """, "3 4 5 5\n8 8 8,15\n5\n8\n13 20\n"];
+            """, "3 4 5 5\n8 8 8,15\n5\n8\ntrue false\n13 20\n"];
         yield return ["""
             function descriptors(a, b, c, d) {
                 const args = arguments;
