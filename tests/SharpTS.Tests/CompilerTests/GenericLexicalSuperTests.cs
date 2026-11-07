@@ -14,7 +14,10 @@ public sealed class GenericLexicalSuperTests
                 value: T;
                 order = ++initialized;
                 constructor(value: T) {
-                    const initialize = () => super();
+                    const initialize = () => {
+                        super();
+                        console.log(this.order);
+                    };
                     initialize();
                     this.value = value;
                 }
@@ -26,7 +29,7 @@ public sealed class GenericLexicalSuperTests
 
         var (errors, output) = TestHarness.CompileVerifyAndRun(source);
         Assert.Empty(errors);
-        Assert.Equal("7 s 1 2\n", output);
+        Assert.Equal("1\n2\n7 s 1 2\n", output);
     }
 
     [Fact]
