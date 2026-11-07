@@ -16,24 +16,25 @@ public sealed class AmbientEnumDeclarationTests
     public void ParsesAndChecksAmbientModuleEnum(string prefix, bool exported, bool constant)
     {
         var tokens = new Lexer($$"""
-            declare module "fixture" { {{prefix}} Value { Known, "ready-now" = 4 } }
+            declare module "fixture" {
+                {{prefix}} Value { Known, "ready-now" = 4 }
+                const member: Value;
+            }
             """).ScanTokens();
         var result = new Parser(tokens, DecoratorMode.None).Parse();
         Assert.Empty(result.Errors);
         var module = Assert.IsType<Stmt.DeclareModule>(Assert.Single(result.Statements));
-        var member = Assert.Single(module.Members);
+        var member = module.Members[0];
         if (exported)
             member = Assert.IsType<Stmt.Export>(member).Declaration!;
 
         var declaration = Assert.IsType<Stmt.Enum>(member);
         Assert.Equal("Value", declaration.Name.Lexeme);
         Assert.Equal(constant, declaration.IsConst);
+        Assert.Equal(new[] { "Known", "ready-now" }, declaration.Members.Select(item => item.Name.Lexeme));
         var checker = new TypeChecker(strictNullChecks: true);
-        var map = checker.Check(result.Statements);
+        checker.Check(result.Statements);
         Assert.Empty(checker.GetDiagnostics());
-        var type = Assert.IsType<TypeInfo.Enum>(map.GetDeclaredValueType(declaration.Name));
-        Assert.Equal(0d, type.Members["Known"]);
-        Assert.Equal(4d, type.Members["ready-now"]);
     }
 
     [Fact]
@@ -79,6 +80,9 @@ public sealed class AmbientEnumDeclarationTests
         var modules = resolver.GetModulesInOrder(resolver.LoadProgram(entry));
         var checker = new TypeChecker(strictNullChecks: true);
         checker.CheckModules(modules, resolver);
+        var fixture = Assert.Single(modules, module => module.IsAmbientModule);
+        Assert.Equal(4d, Assert.IsType<TypeInfo.Enum>(fixture.ExportedTypes["Value"]).Members["ready"]);
+        Assert.Equal(0d, Assert.IsType<TypeInfo.Enum>(fixture.ExportedTypes["Other"]).Members["Known"]);
         var diagnostic = Assert.Single(checker.GetDiagnostics(), d => d.Severity == DiagnosticSeverity.Error);
         Assert.Equal("TS2339", diagnostic.TsCode);
         Assert.Contains("Missing", diagnostic.Message);
