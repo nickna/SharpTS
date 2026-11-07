@@ -85,4 +85,33 @@ public sealed class GenericLexicalSuperTests
         Assert.Empty(errors);
         Assert.Equal("1 7 true\n", output);
     }
+
+    [Fact]
+    public void RepeatedDirectSuperConstructsTheLiveParentAfterLexicalSuper()
+    {
+        const string source = """
+            const effects: string[] = [];
+            const First = class {
+                constructor() { effects.push('first'); }
+            };
+            const Replacement = class {
+                constructor() { effects.push('replacement'); throw 7; }
+            };
+            const C = class<T> extends First {
+                value = 1;
+                constructor() {
+                    const initialize = () => super();
+                    initialize();
+                    Object.setPrototypeOf(C, Replacement);
+                    try { super(); } catch (error) { console.log(error === 7, error instanceof ReferenceError); }
+                }
+            };
+            const result = new C<number>();
+            console.log(result.value, effects.join(','));
+            """;
+
+        var (errors, output) = TestHarness.CompileVerifyAndRun(source);
+        Assert.Empty(errors);
+        Assert.Equal("true false\n1 first,replacement\n", output);
+    }
 }

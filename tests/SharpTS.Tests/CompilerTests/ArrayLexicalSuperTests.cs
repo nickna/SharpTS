@@ -68,4 +68,26 @@ public sealed class ArrayLexicalSuperTests
 
         Assert.Equal("true true\ntrue true 7 first,second\n", TestHarness.RunUnchecked(source, ExecutionMode.Compiled));
     }
+
+    [Fact]
+    public void DirectSuperKeepsTheReceiverBoundWhileItsArgumentsWereEvaluated()
+    {
+        const string source = """
+            let runs = 0;
+            const C = class extends Array {
+                value = ++runs;
+                constructor() {
+                    let inner;
+                    const initialize = () => inner = super(2);
+                    try { super(initialize()); }
+                    catch (error) { console.log(error instanceof ReferenceError); }
+                    console.log(this === inner);
+                }
+            };
+            const value = new C();
+            console.log(value.length, value.value, runs, Array.isArray(value));
+            """;
+
+        Assert.Equal("true\ntrue\n2 1 1 true\n", TestHarness.RunUnchecked(source, ExecutionMode.Compiled));
+    }
 }

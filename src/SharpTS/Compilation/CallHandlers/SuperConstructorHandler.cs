@@ -27,6 +27,8 @@ public class SuperConstructorHandler : ICallHandler
             && ctx.CurrentClassBuilder?.BaseType == ctx.Runtime!.ArrayStorage.Type
             && ctx.CurrentClassExpr is { } arrayExpression
             && ctx.LexicalSuperElementInitializers?.ContainsKey(arrayExpression) == true;
+        bool liveParent = ctx.IsRuntimeReceiverInitializer
+            && (intrinsicArray || ctx.RuntimeFeatures?.UsesClassPrototypeMutation != false);
         if (ctx.ConstructorSuperBound is { } bound)
         {
             var first = emitter.IL.DefineLabel();
@@ -47,7 +49,7 @@ public class SuperConstructorHandler : ICallHandler
             if (ctx.ClassDefinitionParameterIndex is { } classDefinition)
             {
                 emitter.IL.Emit(OpCodes.Ldarg, classDefinition);
-                emitter.IL.Emit(OpCodes.Call, intrinsicArray
+                emitter.IL.Emit(OpCodes.Call, liveParent
                     ? ctx.Runtime!.ObjectPrototypes.GetPrototypeOf : ctx.Runtime!.ClassDefinitions.GetParent);
             }
             else if (ctx.CurrentSuperclassName == "Promise")
@@ -77,7 +79,6 @@ public class SuperConstructorHandler : ICallHandler
         }
         if (ctx.IsRuntimeReceiverInitializer && ctx.ClassDefinitionParameterIndex is { } definitionParameter)
         {
-            bool liveParent = intrinsicArray || ctx.RuntimeFeatures?.UsesClassPrototypeMutation != false;
             emitter.IL.Emit(OpCodes.Ldarg, definitionParameter);
             emitter.IL.Emit(OpCodes.Call, liveParent
                 ? ctx.Runtime!.ObjectPrototypes.GetPrototypeOf : ctx.Runtime!.ClassDefinitions.GetParent);
@@ -88,11 +89,17 @@ public class SuperConstructorHandler : ICallHandler
             else emitter.IL.Emit(OpCodes.Ldsfld, ctx.Runtime.Sentinels.UndefinedInstance);
             emitter.IL.Emit(OpCodes.Call, liveParent
                 ? ctx.Runtime.DynamicConstruction.ConstructWithNewTarget : ctx.Runtime.ClassDefinitions.InitializeReceiver);
+            // Argument evaluation or the parent body can invoke a lexical super
+            // before this call completes. Keep that earlier receiver binding.
+            var receiver = emitter.IL.DeclareLocal(ctx.Types.Object);
+            emitter.IL.Emit(OpCodes.Stloc, receiver);
+            EmitRequireUnboundThis(emitter.IL, ctx, ctx.ClassConstructorThisCell!);
             if (ctx.ConstructorSuperBound is { } completed)
             {
                 emitter.IL.Emit(OpCodes.Ldc_I4_1);
                 emitter.IL.Emit(OpCodes.Stloc, completed);
             }
+            emitter.IL.Emit(OpCodes.Ldloc, receiver);
             emitter.IL.Emit(OpCodes.Stloc, ctx.ClassConstructorReceiver!);
             emitter.IL.Emit(OpCodes.Ldloc, ctx.ClassConstructorThisCell!);
             emitter.IL.Emit(OpCodes.Ldc_I4_0);
@@ -239,13 +246,7 @@ public class SuperConstructorHandler : ICallHandler
         il.Emit(OpCodes.Stloc, result);
         il.Emit(OpCodes.Ldarg_0); il.Emit(OpCodes.Ldfld, thisCell!);
         il.Emit(OpCodes.Castclass, ctx.Types.ObjectArray); il.Emit(OpCodes.Stloc, cell);
-        il.Emit(OpCodes.Ldloc, cell); il.Emit(OpCodes.Ldc_I4_0); il.Emit(OpCodes.Ldelem_Ref);
-        il.Emit(OpCodes.Isinst, ctx.Runtime.Sentinels.UndefinedType);
-        var unbound = il.DefineLabel();
-        il.Emit(OpCodes.Brtrue, unbound);
-        GuestErrorEmitter.ThrowError(il, ctx.Runtime.Errors.CreateException,
-            ctx.Runtime.Errors.ReferenceErrorConstructor, "Super constructor may only be called once");
-        il.MarkLabel(unbound);
+        EmitRequireUnboundThis(il, ctx, cell);
         il.Emit(OpCodes.Ldloc, cell); il.Emit(OpCodes.Ldc_I4_0); il.Emit(OpCodes.Ldloc, result);
         il.Emit(OpCodes.Stelem_Ref);
         if (elements != null)
@@ -276,6 +277,19 @@ public class SuperConstructorHandler : ICallHandler
         il.Emit(OpCodes.Ldloc, result);
         emitter.SetStackUnknown();
         return true;
+    }
+
+    private static void EmitRequireUnboundThis(ILGenerator il, CompilationContext context, LocalBuilder cell)
+    {
+        var unbound = il.DefineLabel();
+        il.Emit(OpCodes.Ldloc, cell);
+        il.Emit(OpCodes.Ldc_I4_0);
+        il.Emit(OpCodes.Ldelem_Ref);
+        il.Emit(OpCodes.Isinst, context.Runtime!.Sentinels.UndefinedType);
+        il.Emit(OpCodes.Brtrue, unbound);
+        GuestErrorEmitter.ThrowError(il, context.Runtime.Errors.CreateException,
+            context.Runtime.Errors.ReferenceErrorConstructor, "Super constructor may only be called once");
+        il.MarkLabel(unbound);
     }
 
     /// <summary>
