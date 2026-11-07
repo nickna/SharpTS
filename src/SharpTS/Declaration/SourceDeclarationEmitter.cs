@@ -899,15 +899,20 @@ public static class SourceDeclarationEmitter
             _ => null,
         };
 
-        private static string ExportPrefix(
+        private string ExportPrefix(
             ExportKind kind,
             bool ambient,
-            bool defaultAmbient = true) => kind switch
+            bool defaultAmbient = true)
         {
-            ExportKind.Default => ambient && defaultAmbient ? "export default declare " : "export default ",
-            ExportKind.Named => ambient ? "export declare " : "export ",
-            _ => ambient ? "declare " : "",
-        };
+            // Nested declarations are already inside an ambient module, global, or namespace body.
+            bool needsDeclare = ambient && _indent == 0;
+            return kind switch
+            {
+                ExportKind.Default => needsDeclare && defaultAmbient ? "export default declare " : "export default ",
+                ExportKind.Named => needsDeclare ? "export declare " : "export ",
+                _ => needsDeclare ? "declare " : "",
+            };
+        }
 
         private static string RenderAccess(AccessModifier access) => access switch
         {

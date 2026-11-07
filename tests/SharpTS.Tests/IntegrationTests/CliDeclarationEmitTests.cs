@@ -66,6 +66,27 @@ public class CliDeclarationEmitTests
     }
 
     [Fact]
+    public void DeclarationEmitRoundTripsAnAmbientModuleWithAQuotedEnumMember()
+    {
+        using var dir = CliTestHelper.CreateTempDirectory();
+        dir.CreateFile("src/library.ts", """
+            declare module "fixture" {
+                export enum Status { "remote-ready" = 4 }
+                export function read(): Status;
+            }
+            """);
+        var result = CliTestHelper.RunCli(
+            "--no-tsconfig --compile src/library.ts --emitDeclarationOnly --declarationDir types", dir.Path);
+
+        Assert.Equal(0, result.ExitCode);
+        string declaration = File.ReadAllText(dir.GetPath("types/library.d.ts"));
+        Assert.Contains("export enum Status", declaration);
+        Assert.Contains("\"remote-ready\" = 4", declaration);
+        Assert.Contains("export function read(): Status;", declaration);
+        Assert.Equal(0, CliTestHelper.RunCli("--no-tsconfig --noEmit types/library.d.ts", dir.Path).ExitCode);
+    }
+
+    [Fact]
     public void ProjectDeclarationEmitUsesRootDirAndDeclarationDir()
     {
         using var dir = CliTestHelper.CreateTempDirectory();
