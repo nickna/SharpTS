@@ -126,6 +126,14 @@ public partial class ILCompiler
         var leaf = Expr.GetSuperclassLeafName(declaration.SuperclassExpr);
         bool expressionOwnedParent = ResolveClassExpressionParent(
             _typeMap.GetClassType(declaration)?.Superclass, declaration.SuperclassExpr) != null;
+        bool lexicalArraySuper = !_nativeAotProjectOutput && leaf == "Array" && !expressionOwnedParent
+            && !_classes.Builders.ContainsKey(GetDefinitionContext().ResolveClassName(leaf))
+            && declaration.Decorators is not { Count: > 0 }
+            && !declaration.Methods.Any(method => method.Decorators is { Count: > 0 }
+                || method.Parameters.Any(parameter => parameter.Decorators is { Count: > 0 }))
+            && !declaration.Fields.Any(field => field.Decorators is { Count: > 0 })
+            && declaration.Accessors?.Any(accessor => accessor.Decorators is { Count: > 0 }) != true
+            && ContainsLexicalSuper(declaration.Methods);
         if (expressionOwnedParent && declaration.Decorators is { Count: > 0 }) return false;
         // Declaration decorators and unsupported intrinsic heritage keep their
         // existing declaration handling; the expression adapter has no class
@@ -134,7 +142,7 @@ public partial class ILCompiler
             && declaration.Decorators is not { Count: > 0 }
             && leaf is not ("Map" or "Set" or "WeakMap" or "WeakSet" or "Date" or "RegExp" or "Buffer");
         if ((declaration.SuperclassExpr == null && !captureLexicalOwner && !repeating) || declaration.IsDeclare) return false;
-        if (!captureLexicalOwner && !repeating && leaf != null && ((_typeMap.Get(declaration.SuperclassExpr!) is not TypeSystem.TypeInfo.Any
+        if (!captureLexicalOwner && !repeating && !lexicalArraySuper && leaf != null && ((_typeMap.Get(declaration.SuperclassExpr!) is not TypeSystem.TypeInfo.Any
             && _classes.Builders.ContainsKey(GetDefinitionContext().ResolveClassName(leaf)) && !expressionOwnedParent)
             || Runtime.BuiltIns.BuiltInNames.IsErrorTypeName(leaf)
             || leaf is "Array" or "Promise" or "Map" or "Set" or "WeakMap" or "WeakSet" or "Date" or "RegExp" or "Buffer")) return false;

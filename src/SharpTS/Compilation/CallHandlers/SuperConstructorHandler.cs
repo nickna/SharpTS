@@ -23,6 +23,10 @@ public class SuperConstructorHandler : ICallHandler
 
         var ctx = emitter.Context;
         if (TryEmitLexicalReceiverConstruction(emitter, call)) return true;
+        bool intrinsicArray = ctx.IsRuntimeReceiverInitializer
+            && ctx.CurrentClassBuilder?.BaseType == ctx.Runtime!.ArrayStorage.Type
+            && ctx.CurrentClassExpr is { } arrayExpression
+            && ctx.LexicalSuperElementInitializers?.ContainsKey(arrayExpression) == true;
         if (ctx.ConstructorSuperBound is { } bound)
         {
             var first = emitter.IL.DefineLabel();
@@ -43,7 +47,8 @@ public class SuperConstructorHandler : ICallHandler
             if (ctx.ClassDefinitionParameterIndex is { } classDefinition)
             {
                 emitter.IL.Emit(OpCodes.Ldarg, classDefinition);
-                emitter.IL.Emit(OpCodes.Call, ctx.Runtime!.ClassDefinitions.GetParent);
+                emitter.IL.Emit(OpCodes.Call, intrinsicArray
+                    ? ctx.Runtime!.ObjectPrototypes.GetPrototypeOf : ctx.Runtime!.ClassDefinitions.GetParent);
             }
             else if (ctx.CurrentSuperclassName == "Promise")
             {
@@ -72,7 +77,7 @@ public class SuperConstructorHandler : ICallHandler
         }
         if (ctx.IsRuntimeReceiverInitializer && ctx.ClassDefinitionParameterIndex is { } definitionParameter)
         {
-            bool liveParent = ctx.RuntimeFeatures?.UsesClassPrototypeMutation != false;
+            bool liveParent = intrinsicArray || ctx.RuntimeFeatures?.UsesClassPrototypeMutation != false;
             emitter.IL.Emit(OpCodes.Ldarg, definitionParameter);
             emitter.IL.Emit(OpCodes.Call, liveParent
                 ? ctx.Runtime!.ObjectPrototypes.GetPrototypeOf : ctx.Runtime!.ClassDefinitions.GetParent);
