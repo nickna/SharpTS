@@ -139,6 +139,7 @@ public sealed class PrivateAccessorTests
     [InlineData("class C { get #constructor() {} }")]
     [InlineData("class C { set #x(...v) {} }")]
     [InlineData("class C { get #x(v) {} }")]
+    [InlineData("class C { get #x(this) {} }")]
     [InlineData("class C { public get #x() {} }")]
     public void InvalidPrivateAccessorDeclarationsAreRejected(string source)
         => Assert.False(new Parser(new Lexer(source).ScanTokens()).Parse().IsSuccess);

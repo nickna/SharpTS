@@ -1232,9 +1232,11 @@ public partial class Parser
 
         bool isSetter = kind.Type == TokenType.SET;
         var open = Consume(TokenType.LEFT_PAREN, "Expect '(' after accessor name.");
-        var (parameters, destructured, thisType, _) = ParseRuntimeParameters(allowParameterDecoratorsAndProperties: false);
+        if (Check(TokenType.THIS))
+            throw new Exception($"Parse Error at line {name.Line}: Private accessors cannot have a 'this' parameter.");
+        var (parameters, destructured, _, _) = ParseRuntimeParameters(allowParameterDecoratorsAndProperties: false);
         var close = Consume(TokenType.RIGHT_PAREN, "Expect ')' after accessor parameters.");
-        if (parameters.Count != (isSetter ? 1 : 0) || parameters.Any(parameter => parameter.IsRest) || thisType is not null)
+        if (parameters.Count != (isSetter ? 1 : 0) || parameters.Any(parameter => parameter.IsRest))
             throw new Exception($"Parse Error at line {name.Line}: Invalid parameter list for private {kind.Lexeme} accessor.");
 
         string? returnType = null;
