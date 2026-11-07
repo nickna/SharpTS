@@ -547,7 +547,7 @@ public partial class Interpreter
             // honoring enumerability — consistent with Object.keys (#475).
             // Snapshot candidates before the body; keep descriptor checks live.
             SharpTSObject o => o.OwnVisibleStringKeys().ToArray().Where(o.IsOwnEnumerableProperty),
-            SharpTSInstance inst => inst.GetFieldNames(),
+            SharpTSInstance inst => inst.OwnEnumerableKeys(),
             // for...in skips holes per ECMA-262.
             SharpTSArray arr => Enumerable.Range(0, arr.Length).Where(arr.HasIndex).Select(i => i.ToString()),
             SharpTSRegExp regex => regex.OwnEnumerableKeys(),

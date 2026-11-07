@@ -196,7 +196,7 @@ public static class JSONBuiltIns
         }
         else if (val is SharpTSInstance inst)
         {
-            var keys = inst.GetFieldNames().ToList();
+            var keys = inst.OwnEnumerableKeys().ToList();
             foreach (var prop in keys)
             {
                 var newElement = InternalizeJSONProperty(interp, val, prop, reviver);
