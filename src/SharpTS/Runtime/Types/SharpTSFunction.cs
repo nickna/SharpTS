@@ -61,6 +61,7 @@ public class SharpTSFunction : ISharpTSCallable, ITypeCategorized
     private readonly int _arity;
     internal bool IsConstructible { get; }
     internal bool IsStaticMethod => _declaration.IsStatic;
+    internal IReadOnlyList<Stmt.Parameter> Parameters => _declaration.Parameters;
     internal SharpTSClass? PrivateOwner { get; set; }
     // `this` value stored on the function itself (from BindThis) rather than in an
     // extra closure scope — otherwise the resolver's scope-distance count wouldn't

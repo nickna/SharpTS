@@ -363,6 +363,16 @@ public partial class SharpTSClass(
                 throw new ThrowException(new SharpTSTypeError("Cannot initialize private methods twice on the same object"));
         }
 
+        // Parameter properties declare own fields before the ordinary initializers.
+        // Their assignments run later using the live constructor bindings.
+        if (FindOwnMethod("constructor") is SharpTSFunction constructor)
+        {
+            foreach (var parameter in constructor.Parameters)
+                if (parameter.IsParameterProperty)
+                    ObjectBuiltIns.CreateDataPropertyOrThrow(interpreter, receiver, parameter.Name.Lexeme,
+                        SharpTSUndefined.Instance);
+        }
+
         var elements = (OrderedInstanceFields ?? _instanceFields.Concat(_instancePrivateFields).ToList()).Cast<Stmt>()
             .Concat(_instanceAutoAccessors)
             .OrderBy(element => element is Stmt.Field field ? field.Name.SourceOrderOffset : ((Stmt.AutoAccessor)element).Name.SourceOrderOffset);
