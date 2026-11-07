@@ -435,7 +435,7 @@ public partial class ILCompiler
                         il.Emit(OpCodes.Stelem_Ref);
                     }
                 }
-                il.Emit(OpCodes.Call, elements);
+                il.Emit(OpCodes.Call, EmitterTypeHelpers.SelfMethodReference(elements));
                 return;
             }
             else

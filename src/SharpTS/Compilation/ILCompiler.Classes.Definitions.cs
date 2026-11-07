@@ -13,9 +13,7 @@ public partial class ILCompiler
         ConstructorInfo target = NewTargetConstructor(constructor);
         if (builder.IsGenericTypeDefinition)
         {
-            var erased = expression.TypeParams!.Select(parameter => parameter.Constraint is { } constraint
-                ? ResolveConstraintType(constraint) : _types.Object).ToArray();
-            template = EmitGenerics.MakeGenericType(builder, erased);
+            template = CanonicalGenericClassOwner(builder);
             target = EmitterTypeHelpers.ResolveConstructor(template, NewTargetConstructor(constructor));
         }
         var method = _programType.DefineMethod("$Create_" + _classExprs.Names[expression],

@@ -224,6 +224,8 @@ public class SuperConstructorHandler : ICallHandler
         var cell = il.DeclareLocal(ctx.Types.ObjectArray);
         il.Emit(OpCodes.Ldarg_0); il.Emit(OpCodes.Ldfld, owner);
         il.Emit(OpCodes.Call, ctx.Runtime!.ObjectPrototypes.GetPrototypeOf);
+        var template = ctx.ClassExprFactories![expression].Template;
+        ConstructorReceiverEmitter.CloseNominalSuperTarget(il, ctx, template.BaseType);
         emitter.EmitArgsArrayWithSpread(call.Arguments);
         il.Emit(OpCodes.Ldarg_0); il.Emit(OpCodes.Ldfld, newTarget);
         il.Emit(OpCodes.Call, ctx.Runtime.DynamicConstruction.ConstructWithNewTarget);
@@ -259,7 +261,11 @@ public class SuperConstructorHandler : ICallHandler
                     il.Emit(OpCodes.Stelem_Ref);
                 }
             }
-            il.Emit(OpCodes.Call, elements);
+            // Class-expression factories execute on the canonical closed CLR
+            // owner. The arrow's display class has no owner type parameters.
+            var target = template.IsConstructedGenericType
+                ? EmitterTypeHelpers.ResolveMethod(template, elements) : elements;
+            il.Emit(OpCodes.Call, target);
         }
         il.Emit(OpCodes.Ldloc, result);
         emitter.SetStackUnknown();

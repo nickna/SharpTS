@@ -22,7 +22,6 @@ public partial class ILCompiler
         string? parentName = Expr.GetSuperclassLeafName(expression.SuperclassExpr);
         if (!ownElements || expression.SuperclassExpr == null
             || !lexicalSuper.Found
-            || expression.TypeParams is { Count: > 0 }
             || parentName is "Array" or "Promise" or "Map" or "Set" or "WeakMap" or "WeakSet" or "Date" or "RegExp" or "Buffer"
             || Runtime.BuiltIns.BuiltInNames.IsErrorTypeName(parentName ?? "")
             || _nativeAotProjectOutput && (!SupportsReceiverInitialization(declaration)
@@ -60,6 +59,8 @@ public partial class ILCompiler
         if (!_lexicalSuperElementInitializers.TryGetValue(expression, out var method)) return;
         var il = method.GetILGenerator();
         var context = CreateClassExpressionContext(il, expression, owner, null, method);
+        foreach (var parameter in _classes.GenericParameters.Require(owner))
+            context.GenericTypeParameters[parameter.Name] = parameter;
         context.HasGuestReceiver = true;
         context.GuestThisVariableName = CompilationContext.ThisParameterName;
         context.DefineParameter(CompilationContext.ThisParameterName, 0, _types.Object);
