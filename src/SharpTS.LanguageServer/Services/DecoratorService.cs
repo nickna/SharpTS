@@ -89,8 +89,10 @@ public sealed class DecoratorService
             if (name == "DotNetType" && arg is not null)
             {
                 Type? type;
+                LspHoverTrace.Mark("clr.resolve");
                 try { type = DotNetTypeRegistry.ResolveFriendly(arg, _resolve); }
                 catch (ArgumentException) { type = null; }
+                LspHoverTrace.Mark("clr.resolved");
                 if (type is not null)
                     return Markdown(TypeMarkdown(type));
             }
@@ -180,7 +182,9 @@ public sealed class DecoratorService
     private string TypeMarkdown(Type type)
     {
         string md = $"```csharp\n{type.FullName}\n```";
+        LspHoverTrace.Mark("xml.summary");
         var summary = _xmlDoc.GetTypeSummary(type);
+        LspHoverTrace.Mark("xml.summarized");
         if (!string.IsNullOrWhiteSpace(summary))
             md += $"\n\n{summary}";
         return md;

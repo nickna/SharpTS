@@ -33,6 +33,7 @@ public sealed class TextDocumentSyncHandler : TextDocumentSyncHandlerBase
 
     public override Task<Unit> Handle(DidOpenTextDocumentParams request, CancellationToken ct)
     {
+        using var trace = LspHoverTrace.Begin("didOpen");
         string uri = request.TextDocument.Uri.ToString();
         if (_store.Open(
                 uri,
@@ -40,6 +41,7 @@ public sealed class TextDocumentSyncHandler : TextDocumentSyncHandlerBase
                 request.TextDocument.Version ?? 0))
         {
             _analysis?.InvalidateAll();
+            LspHoverTrace.Mark("diagnostics.queue");
             _diagnostics.Queue(uri);
         }
         return Unit.Task;

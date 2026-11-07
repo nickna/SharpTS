@@ -32,15 +32,22 @@ public sealed class HoverHandler : HoverHandlerBase
 
     public override async Task<Hover?> Handle(HoverParams request, CancellationToken ct)
     {
+        using var trace = _semantic is null ? LspHoverTrace.Begin("hover") : null;
         ct.ThrowIfCancellationRequested();
+        LspHoverTrace.Mark("document.capture");
         if (!_store.TryCapture(
                 request.TextDocument.Uri.ToString(),
                 out DocumentRequestSnapshot? capture))
+        {
+            LspHoverTrace.Mark("document.missing");
             return null;
+        }
+        LspHoverTrace.Mark("guard.capture");
         using var guard = new EditorRequestGuard(_store, capture, _metadata, ct);
         DocumentSnapshot snapshot = capture.Document;
 
         int line = request.Position.Line, ch = request.Position.Character;
+        LspHoverTrace.Mark("hover.resolve");
         // Preserve the existing priority without starting shared analysis for a cheap result.
         Hover? result =
             _gui.Hover(snapshot.FilePath, snapshot.Text, line, ch) ??
@@ -55,8 +62,11 @@ public sealed class HoverHandler : HoverHandlerBase
             validation = semantic.Validation;
         }
         ct.ThrowIfCancellationRequested();
-        return guard.IsCurrent(ct) && (validation?.IsCurrent(ct) ?? true)
+        LspHoverTrace.Mark("guard.validate");
+        Hover? response = guard.IsCurrent(ct) && (validation?.IsCurrent(ct) ?? true)
             ? SemanticHoverService.AdaptMarkup(result, _format) : null;
+        LspHoverTrace.Mark(response is null ? "response.null" : "response.ready");
+        return response;
     }
 
     protected override HoverRegistrationOptions CreateRegistrationOptions(
