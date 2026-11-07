@@ -483,7 +483,7 @@ public class SharpTSInstance(SharpTSClass klass) : ISharpTSPropertyAccessor, ITy
     public bool HasField(string name) => _fields.ContainsKey(name);
 
     /// <summary>
-    /// Get all field names for Object.keys() support
+    /// Gets own string keys with array indices first in ascending order.
     /// </summary>
     public IEnumerable<string> GetFieldNames()
         => _fields.Keys
@@ -493,7 +493,8 @@ public class SharpTSInstance(SharpTSClass klass) : ISharpTSPropertyAccessor, ITy
                 .Where(name => _getters?.ContainsKey(name) == true))
             .Concat((_setters?.Keys as IEnumerable<string> ?? Enumerable.Empty<string>())
                 .Where(name => _setters?.ContainsKey(name) == true))
-            .Distinct();
+            .Distinct()
+            .OrderBy(static name => PropertySemantics.TryGetArrayIndex(name, out uint index) ? index : uint.MaxValue);
 
     /// <summary>
     /// Enumerates own string keys whose descriptors are enumerable.
