@@ -56,6 +56,7 @@ internal sealed class LoopBodyCellAnalyzer : AstVisitorBase
     private readonly object _singleSourceRootOwner = new();
     private readonly Dictionary<object, Dictionary<string, Binding>> _tentative = new(ReferenceEqualityComparer.Instance);
     private readonly HashSet<Token> _cells = new(ReferenceEqualityComparer.Instance);
+    private readonly HashSet<Token> _mappedArgumentParameters = new(ReferenceEqualityComparer.Instance);
     private readonly Dictionary<object, HashSet<string>> _cellOnlyCapturedNames = new(ReferenceEqualityComparer.Instance);
     private readonly HashSet<Token> _ordinaryBlockShadows = new(ReferenceEqualityComparer.Instance);
     private readonly Dictionary<List<Stmt>, IReadOnlyList<(Token Declaration, Token Parameter)>> _parameterBodyCopies = new(ReferenceEqualityComparer.Instance);
@@ -70,11 +71,13 @@ internal sealed class LoopBodyCellAnalyzer : AstVisitorBase
     private int? _staticBlockClassDepth;
     private IReadOnlyDictionary<Stmt.Class, Expr.ClassExpr>? _runtimeClassDeclarations;
     private object? _currentModuleOwner;
+    private bool _strictArgumentsScope;
 
     public Dictionary<object, Dictionary<string, Token>> ClosureCaptures { get; } = new(ReferenceEqualityComparer.Instance);
     private readonly Dictionary<object, Dictionary<string, Token>> _privateSelfCaptures = new(ReferenceEqualityComparer.Instance);
     public IEnumerable<Token> CellDeclarations => _cells;
     public bool IsCellDeclaration(Token token) => _cells.Contains(token);
+    public bool IsMappedArgumentParameter(Token token) => _mappedArgumentParameters.Contains(token);
     public object? GetCellOwner(Token token) => _declarations.GetValueOrDefault(token)?.Owner.Node;
     public bool IsOrdinaryBlockShadowDeclaration(Token token) => _ordinaryBlockShadows.Contains(token);
     public bool IsFunctionBodyVarDeclaration(Token token) => _functionBodyVarDeclarations.ContainsKey(token);
@@ -154,6 +157,7 @@ internal sealed class LoopBodyCellAnalyzer : AstVisitorBase
         _classStaticBlockVars.Clear();
         _functionBodyVarDeclarations.Clear();
         _cellOnlyCapturedNames.Clear();
+        _mappedArgumentParameters.Clear();
         _classSelfReferences.Clear();
         _transportedClassSelfReferences.Clear();
         _loopBodyDepth = 0;
@@ -161,6 +165,7 @@ internal sealed class LoopBodyCellAnalyzer : AstVisitorBase
         _staticBlockClassDepth = null;
         _runtimeClassDeclarations = runtimeClassDeclarations;
         _currentModuleOwner = null;
+        _strictArgumentsScope = moduleOwners is null && DirectivePrologue.HasUseStrict(statements);
         _owners.Add(new(new object(), !HasDirectSuspension(statements), false));
         EnterScope(statements, allowCandidates: false, hoistVars: true, moduleOwners: moduleOwners);
         try
@@ -656,6 +661,8 @@ internal sealed class LoopBodyCellAnalyzer : AstVisitorBase
         bool canRelayClassSelf = true, Expr.ClassExpr? classCaptureOwner = null)
     {
         int previousDepth = _loopBodyDepth;
+        bool previousStrictArguments = _strictArgumentsScope;
+        _strictArgumentsScope |= DirectivePrologue.HasUseStrict(body);
         _loopBodyDepth = 0;
         bool directSuspension = HasDirectSuspension(body, expressionBody);
         bool localCellScope = _classDepth == 0 || _staticBlockClassDepth == _classDepth;
@@ -673,6 +680,17 @@ internal sealed class LoopBodyCellAnalyzer : AstVisitorBase
             {
                 Declare(parameter.Name);
                 _declarations[parameter.Name].FormalParameter = true;
+            }
+            if (localCellScope && !_strictArgumentsScope
+                && _currentModuleOwner is not Modules.ParsedModule { IsCommonJs: false }
+                && node is Stmt.Function or Expr.ArrowFunction { HasOwnThis: true }
+                && ArgumentsRefScanner.Contains(parameters, body, expressionBody, treatEvalReferenceAsUse: true))
+            {
+                foreach (var (_, parameter) in Runtime.ParameterBinder.MappedArgumentParameters(parameters, body))
+                {
+                    _cells.Add(parameter);
+                    _mappedArgumentParameters.Add(parameter);
+                }
             }
             var initializers = Runtime.ParameterBinder.ParameterInitializers(body);
             foreach (var initializer in initializers?.Values.AsEnumerable() ?? [])
@@ -700,7 +718,13 @@ internal sealed class LoopBodyCellAnalyzer : AstVisitorBase
             }
             finally { _scopes.Pop(); }
         }
-        finally { _scopes.Pop(); _owners.RemoveAt(_owners.Count - 1); _loopBodyDepth = previousDepth; }
+        finally
+        {
+            _scopes.Pop();
+            _owners.RemoveAt(_owners.Count - 1);
+            _loopBodyDepth = previousDepth;
+            _strictArgumentsScope = previousStrictArguments;
+        }
     }
 
     private void PrepareFunctionBodyVars(List<Stmt.Parameter> parameters, List<Stmt> body)

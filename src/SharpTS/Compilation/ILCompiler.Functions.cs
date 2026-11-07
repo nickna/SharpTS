@@ -905,9 +905,10 @@ public partial class ILCompiler
         bool createsArgumentsBinding = true,
         int publishedArgsLeadingSkip = 0)
     {
+        LocalBuilder? arguments = null;
         if (createsArgumentsBinding && ReferencesArgumentsIdentifier(body, parameters))
         {
-            EmitArgumentsLocalPrologueCore(
+            arguments = EmitArgumentsLocalPrologueCore(
                 il,
                 ctx,
                 parameters,
@@ -918,6 +919,7 @@ public partial class ILCompiler
 
         emitter.EmitDefaultParameters(parameters, argumentOffset, paramTypes, body,
             publishCapturedParameters: true);
+        EmitMappedArgumentsBindings(il, ctx, arguments, parameters, body);
         ctx.InitializedParameterNames = parameters.Select(parameter => parameter.Name.Lexeme)
             .Concat(body is null ? [] : body.OfType<Stmt.Sequence>()
                 .Where(sequence => sequence.ParameterName != null)

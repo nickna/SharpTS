@@ -18,6 +18,18 @@ namespace SharpTS.Runtime;
 /// <seealso cref="TypeEnvironment"/>
 public class RuntimeEnvironment : ScopeChain<RuntimeValue, RuntimeEnvironment>
 {
+    private bool? _requiresUnmappedArguments;
+
+    // Module-owned functions inherit this even when invoked from another
+    // source file or after the module's execution context has been restored.
+    internal bool RequiresUnmappedArguments
+    {
+        get => _requiresUnmappedArguments ?? Enclosing?.RequiresUnmappedArguments ?? false;
+        init => _requiresUnmappedArguments = value;
+    }
+
+    internal void RequireUnmappedArguments() => _requiresUnmappedArguments = true;
+
     private Dictionary<string, SharpTSNamespace>? _namespaces;
     private HashSet<string>? _uninitializedLexicalNames;
     private string? _directBindingName;

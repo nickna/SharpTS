@@ -156,7 +156,7 @@ public partial class RuntimeEmitter
         ctorIl.Emit(OpCodes.Ret);
 
         // Properties
-        EmitAutoProperty(typeBuilder, "Value", _types.Object, valueField);
+        EmitDescriptorValue(typeBuilder, valueField);
         EmitAutoProperty(typeBuilder, "Getter", _types.Object, getterField);
         EmitAutoProperty(typeBuilder, "Setter", _types.Object, setterField);
         EmitAutoProperty(typeBuilder, "Writable", _types.Boolean, writableField);
@@ -167,11 +167,55 @@ public partial class RuntimeEmitter
         storage.DescriptorType = type;
         storage.DescriptorConstructor = ctor;
         storage.DescriptorValue = type.GetProperty("Value")!;
+        storage.DescriptorParameterCell = type.GetProperty("ParameterCell")!;
         storage.DescriptorGetter = type.GetProperty("Getter")!;
         storage.DescriptorSetter = type.GetProperty("Setter")!;
         storage.DescriptorWritable = type.GetProperty("Writable")!;
         storage.DescriptorEnumerable = type.GetProperty("Enumerable")!;
         storage.DescriptorConfigurable = type.GetProperty("Configurable")!;
+    }
+
+    private void EmitDescriptorValue(TypeBuilder typeBuilder, FieldBuilder valueField)
+    {
+        var cellType = typeof(IStrongBox);
+        var cell = typeBuilder.DefineField("_parameterCell", cellType, FieldAttributes.Private);
+        EmitAutoProperty(typeBuilder, "ParameterCell", cellType, cell);
+
+        var value = typeBuilder.DefineProperty("Value", PropertyAttributes.None, _types.Object, null);
+        const MethodAttributes attributes = MethodAttributes.Public | MethodAttributes.SpecialName | MethodAttributes.HideBySig;
+        var get = typeBuilder.DefineMethod("get_Value", attributes, _types.Object, Type.EmptyTypes);
+        var il = get.GetILGenerator();
+        var ordinaryRead = il.DefineLabel();
+        il.Emit(OpCodes.Ldarg_0);
+        il.Emit(OpCodes.Ldfld, cell);
+        il.Emit(OpCodes.Dup);
+        il.Emit(OpCodes.Brfalse, ordinaryRead);
+        il.Emit(OpCodes.Callvirt, typeof(IStrongBox).GetProperty(nameof(IStrongBox.Value))!.GetGetMethod()!);
+        il.Emit(OpCodes.Ret);
+        il.MarkLabel(ordinaryRead);
+        il.Emit(OpCodes.Pop);
+        il.Emit(OpCodes.Ldarg_0);
+        il.Emit(OpCodes.Ldfld, valueField);
+        il.Emit(OpCodes.Ret);
+        value.SetGetMethod(get);
+
+        var set = typeBuilder.DefineMethod("set_Value", attributes, _types.Void, [_types.Object]);
+        il = set.GetILGenerator();
+        var ordinaryWrite = il.DefineLabel();
+        il.Emit(OpCodes.Ldarg_0);
+        il.Emit(OpCodes.Ldfld, cell);
+        il.Emit(OpCodes.Dup);
+        il.Emit(OpCodes.Brfalse, ordinaryWrite);
+        il.Emit(OpCodes.Ldarg_1);
+        il.Emit(OpCodes.Callvirt, typeof(IStrongBox).GetProperty(nameof(IStrongBox.Value))!.GetSetMethod()!);
+        il.Emit(OpCodes.Ret);
+        il.MarkLabel(ordinaryWrite);
+        il.Emit(OpCodes.Pop);
+        il.Emit(OpCodes.Ldarg_0);
+        il.Emit(OpCodes.Ldarg_1);
+        il.Emit(OpCodes.Stfld, valueField);
+        il.Emit(OpCodes.Ret);
+        value.SetSetMethod(set);
     }
 
     /// <summary>
@@ -280,7 +324,8 @@ public partial class RuntimeEmitter
         var descriptorsGetOrCreate = EmitterTypeHelpers.ResolveMethod(cwtDescriptors, cwtGetOrCreateValue);
 
         // Emit all methods
-        EmitPDSFreeze(typeBuilder, storage, frozenSealedField, frozenSealedGetOrCreate);
+        EmitPDSFreeze(typeBuilder, storage, frozenSealedField, frozenSealedGetOrCreate,
+            descriptorsField, descriptorsTryGet, descriptorsDictType);
         EmitPDSSeal(typeBuilder, storage, frozenSealedField, frozenSealedGetOrCreate);
         EmitPDSPreventExtensions(typeBuilder, storage, frozenSealedField, frozenSealedGetOrCreate);
         EmitPDSIsExtensible(typeBuilder, storage, frozenSealedField, frozenSealedTryGet);
@@ -310,7 +355,8 @@ public partial class RuntimeEmitter
     /// Emits: public static void Freeze(object obj)
     /// </summary>
     private void EmitPDSFreeze(TypeBuilder typeBuilder, EmittedDescriptorStorageRuntime storage,
-        FieldBuilder frozenSealedField, MethodInfo getOrCreateValue)
+        FieldBuilder frozenSealedField, MethodInfo getOrCreateValue,
+        FieldBuilder descriptorsField, MethodInfo descriptorsTryGet, Type descriptorsDictType)
     {
         var method = typeBuilder.DefineMethod(
             "Freeze",
@@ -322,6 +368,8 @@ public partial class RuntimeEmitter
 
         var il = method.GetILGenerator();
         var stateLocal = il.DeclareLocal(storage.StateType);
+
+        EmitFreezeMappedArgumentDescriptors(il, storage, descriptorsField, descriptorsTryGet, descriptorsDictType);
 
         // var state = _frozenSealedState.GetOrCreateValue(obj);
         il.Emit(OpCodes.Ldsfld, frozenSealedField);
@@ -345,6 +393,62 @@ public partial class RuntimeEmitter
         il.Emit(OpCodes.Callvirt, storage.StateIsExtensible.GetSetMethod()!);
 
         il.Emit(OpCodes.Ret);
+    }
+
+    private void EmitFreezeMappedArgumentDescriptors(ILGenerator il, EmittedDescriptorStorageRuntime storage,
+        FieldBuilder descriptorsField, MethodInfo descriptorsTryGet, Type descriptorsDictType)
+    {
+        // Only arguments objects have mapped descriptors, and their carrier
+        // is a List. Snapshot live values before freezing makes them immutable.
+        var done = il.DefineLabel();
+        var descriptors = il.DeclareLocal(descriptorsDictType);
+        il.Emit(OpCodes.Ldarg_0);
+        il.Emit(OpCodes.Isinst, _types.ListOfObject);
+        il.Emit(OpCodes.Brfalse, done);
+        il.Emit(OpCodes.Ldsfld, descriptorsField);
+        il.Emit(OpCodes.Ldarg_0);
+        il.Emit(OpCodes.Ldloca, descriptors);
+        il.Emit(OpCodes.Callvirt, descriptorsTryGet);
+        il.Emit(OpCodes.Brfalse, done);
+
+        var pairType = _types.MakeGenericType(typeof(KeyValuePair<,>), _types.String, storage.DescriptorType);
+        var enumeratorType = _types.MakeGenericType(typeof(Dictionary<,>.Enumerator), _types.String, storage.DescriptorType);
+        var enumerator = il.DeclareLocal(enumeratorType);
+        var pair = il.DeclareLocal(pairType);
+        var descriptor = il.DeclareLocal(storage.DescriptorType);
+        var value = il.DeclareLocal(_types.Object);
+        il.Emit(OpCodes.Ldloc, descriptors);
+        il.Emit(OpCodes.Callvirt, EmitterTypeHelpers.ResolveMethod(descriptorsDictType, typeof(Dictionary<,>).GetMethod("GetEnumerator")!));
+        il.Emit(OpCodes.Stloc, enumerator);
+        var loop = il.DefineLabel();
+        var dispose = il.DefineLabel();
+        il.MarkLabel(loop);
+        il.Emit(OpCodes.Ldloca, enumerator);
+        il.Emit(OpCodes.Call, EmitterTypeHelpers.ResolveMethod(enumeratorType, typeof(Dictionary<,>.Enumerator).GetMethod("MoveNext")!));
+        il.Emit(OpCodes.Brfalse, dispose);
+        il.Emit(OpCodes.Ldloca, enumerator);
+        il.Emit(OpCodes.Call, EmitterTypeHelpers.ResolveMethod(enumeratorType, typeof(Dictionary<,>.Enumerator).GetProperty("Current")!.GetGetMethod()!));
+        il.Emit(OpCodes.Stloc, pair);
+        il.Emit(OpCodes.Ldloca, pair);
+        il.Emit(OpCodes.Call, EmitterTypeHelpers.ResolveMethod(pairType, typeof(KeyValuePair<,>).GetProperty("Value")!.GetGetMethod()!));
+        il.Emit(OpCodes.Stloc, descriptor);
+        il.Emit(OpCodes.Ldloc, descriptor);
+        il.Emit(OpCodes.Callvirt, storage.DescriptorParameterCell.GetGetMethod()!);
+        il.Emit(OpCodes.Brfalse, loop);
+        il.Emit(OpCodes.Ldloc, descriptor);
+        il.Emit(OpCodes.Callvirt, storage.DescriptorValue.GetGetMethod()!);
+        il.Emit(OpCodes.Stloc, value);
+        il.Emit(OpCodes.Ldloc, descriptor);
+        il.Emit(OpCodes.Ldnull);
+        il.Emit(OpCodes.Callvirt, storage.DescriptorParameterCell.GetSetMethod()!);
+        il.Emit(OpCodes.Ldloc, descriptor);
+        il.Emit(OpCodes.Ldloc, value);
+        il.Emit(OpCodes.Callvirt, storage.DescriptorValue.GetSetMethod()!);
+        il.Emit(OpCodes.Br, loop);
+        il.MarkLabel(dispose);
+        il.Emit(OpCodes.Ldloca, enumerator);
+        il.Emit(OpCodes.Call, EmitterTypeHelpers.ResolveMethod(enumeratorType, typeof(Dictionary<,>.Enumerator).GetMethod("Dispose")!));
+        il.MarkLabel(done);
     }
 
     /// <summary>

@@ -1,6 +1,7 @@
 using System.Reflection;
 using System.Reflection.Emit;
 using SharpTS.Compilation.Symbols;
+using SharpTS.Parsing;
 
 namespace SharpTS.Compilation;
 
@@ -30,6 +31,16 @@ public abstract class StateMachineBuilderBase
     internal StateMachineDebugSymbols? DebugSymbols { get; set; }
     internal IReadOnlyDictionary<SharpTS.Parsing.Token, LexicalCellStorage>? DebugLexicalCellStorages { get; set; }
     private readonly Dictionary<SharpTS.Parsing.Token, FieldBuilder> _projectedLexicalCellFields = new(ReferenceEqualityComparer.Instance);
+    internal Dictionary<Token, (int Index, FieldBuilder Field)> MappedArgumentFields { get; } =
+        new(ReferenceEqualityComparer.Instance);
+
+    internal void DefineMappedArgumentField(int index, Token parameter, Type referenceType)
+    {
+        var field = _projectedLexicalCellFields.GetValueOrDefault(parameter)
+            ?? StateMachineType.DefineField(DebugScaffoldingName($"<>parameterMapCell{index}"),
+                referenceType, FieldAttributes.Public);
+        MappedArgumentFields.Add(parameter, (index, field));
+    }
 
     protected void DefineProjectedLexicalCellFields()
     {

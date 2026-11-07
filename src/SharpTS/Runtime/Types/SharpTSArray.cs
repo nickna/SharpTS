@@ -372,6 +372,8 @@ public class SharpTSArray : ITypeCategorized, IReadOnlyList<object?>
         _mayHaveHoles = true;
         if (IsFrozen) return;
         if ((ulong)index >= (ulong)_length) return;
+        if (this is SharpTSArguments arguments)
+            arguments.UnmapArgument(index);
         MaterializeNumeric();
         if (index <= uint.MaxValue)
             _indexAccessors?.Remove((uint)index);
@@ -394,6 +396,8 @@ public class SharpTSArray : ITypeCategorized, IReadOnlyList<object?>
             return (ulong)index < (ulong)_numericCount
                 ? _numericStore[(int)index]
                 : ArrayHole.Instance;
+        if (this is SharpTSArguments arguments && arguments.TryGetMappedArgument(index, out var mapped))
+            return mapped;
         if (_sparse == null || index < _dense.Count)
             return _dense[(int)index];
         if (index > uint.MaxValue) return ArrayHole.Instance;
@@ -412,6 +416,8 @@ public class SharpTSArray : ITypeCategorized, IReadOnlyList<object?>
     /// <summary>Writes the slot at the given index without mutating length or transitioning.</summary>
     private void SetCore(long index, object? value)
     {
+        if (this is SharpTSArguments arguments)
+            arguments.SetMappedArgument(index, value);
         if (_numericStore is not null)
         {
             if (value is double number && index >= 0 && index < _numericCount)
@@ -445,9 +451,12 @@ public class SharpTSArray : ITypeCategorized, IReadOnlyList<object?>
         // every step. Mutations during iteration are therefore observable:
         // shrinking stops the iterator early, while appended elements can be
         // visited. Do not snapshot _dense.Count/_length here.
+        var arguments = this as SharpTSArguments;
         for (long i = 0; i < _length; i++)
         {
-            if (i < _dense.Count)
+            if (arguments?.TryGetMappedArgument(i, out var mapped) == true)
+                yield return mapped;
+            else if (i < _dense.Count)
                 yield return UnholeForRead(_dense[(int)i]);
             else if (_sparse != null && i <= uint.MaxValue
                 && _sparse.TryGetValue((uint)i, out var value))
@@ -765,6 +774,8 @@ public class SharpTSArray : ITypeCategorized, IReadOnlyList<object?>
     /// </summary>
     public void Freeze()
     {
+        if (this is SharpTSArguments arguments)
+            arguments.SetMappedArgumentsIntegrity(freeze: true);
         SetNamedPropertyIntegrityLevel(frozen: true);
         _symbolProperties?.Freeze();
         IsFrozen = true;
@@ -777,6 +788,8 @@ public class SharpTSArray : ITypeCategorized, IReadOnlyList<object?>
     /// </summary>
     public void Seal()
     {
+        if (this is SharpTSArguments arguments)
+            arguments.SetMappedArgumentsIntegrity(freeze: false);
         SetNamedPropertyIntegrityLevel(frozen: false);
         _symbolProperties?.Seal();
         IsSealed = true;
@@ -924,7 +937,7 @@ public class SharpTSArray : ITypeCategorized, IReadOnlyList<object?>
         // Pure-dense path.
         if (index < _length)
         {
-            _dense[(int)index] = value;
+            SetCore(index, value);
             return;
         }
 
@@ -1583,6 +1596,8 @@ public class SharpTSArray : ITypeCategorized, IReadOnlyList<object?>
 
             if (becomesAccessor)
             {
+                if (this is SharpTSArguments accessorArguments)
+                    accessorArguments.UnmapArgument(index);
                 _indexAccessors ??= [];
                 _indexAccessors[uindex] = (
                     descriptor.HasGet ? descriptor.Get : existingIsAccessor ? existingGetter : null,
@@ -1601,6 +1616,13 @@ public class SharpTSArray : ITypeCategorized, IReadOnlyList<object?>
                     SetCore(index, descriptor.Value);
                 else if (!hasExisting || existingIsAccessor)
                     SetCore(index, SharpTSUndefined.Instance);
+
+                if (!writable && this is SharpTSArguments dataArguments
+                    && dataArguments.TryGetMappedArgument(index, out var mapped))
+                {
+                    dataArguments.UnmapArgument(index);
+                    SetCore(index, mapped);
+                }
             }
 
             _descriptors ??= new Dictionary<string, PropertyDescriptorFlags>();

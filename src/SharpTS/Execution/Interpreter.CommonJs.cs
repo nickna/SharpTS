@@ -144,7 +144,10 @@ public partial class Interpreter
         _loadedModules[module.Path] = moduleInstance;
 
         // Build the CJS module-scoped environment.
-        var moduleEnv = new RuntimeEnvironment(_environment);
+        var moduleEnv = new RuntimeEnvironment(_environment)
+        {
+            RequiresUnmappedArguments = Parsing.DirectivePrologue.HasUseStrict(module.Statements)
+        };
         moduleEnv.Define("module", moduleObj);
         moduleEnv.Define("exports", exportsObj);
         // `global` in Node is a reference to the global object (same as

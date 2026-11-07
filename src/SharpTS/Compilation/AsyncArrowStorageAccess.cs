@@ -38,6 +38,8 @@ internal sealed class AsyncArrowStorageAccess
     public static AsyncArrowStorageAccess OwnDisplayClassField(FieldInfo displayClassField, FieldInfo field)
         => new(null, field, new ReceiverStep(displayClassField));
 
+    internal void EmitCellReference(ILGenerator il) => EmitReceiver(il);
+
     public static AsyncArrowStorageAccess CapturedField(
         AsyncArrowStateMachineBuilder builder, string name, FieldInfo field)
         => new(null, field, OuterReceiverPath(builder,

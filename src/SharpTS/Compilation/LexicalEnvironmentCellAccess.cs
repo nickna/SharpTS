@@ -106,6 +106,8 @@ internal static class LexicalEnvironmentCellAccess
             il.Emit(OpCodes.Ldfld, generator.EnvironmentField);
             foreach (var step in capture.TargetPath) il.Emit(OpCodes.Ldfld, step);
         }
+        else if (ctx.AsyncMappedParameterCaptures?.TryGetValue(declaration, out var asyncCell) == true)
+            asyncCell.EmitCellReference(il);
         else throw new CompileException($"Live lexical cell for capture '{name}' is unavailable.");
         return true;
     }

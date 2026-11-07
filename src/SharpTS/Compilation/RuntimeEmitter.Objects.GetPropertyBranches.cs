@@ -501,15 +501,10 @@ public partial class RuntimeEmitter
         il.Emit(OpCodes.Ldsfld, inputs.UndefinedInstance);
         il.Emit(OpCodes.Ret);
         il.MarkLabel(listDataDescriptorValueLabel);
-        // Dense Array/List indices keep their value in backing storage, but
-        // arguments.length is an ordinary data property whose redefined value
-        // lives only in its descriptor.
+        // Arguments descriptors own their data value, including a mapped
+        // index's live binding. Legacy List indices use backing storage.
         il.Emit(OpCodes.Ldarg_0);
         il.Emit(OpCodes.Isinst, inputs.ArgumentsType);
-        il.Emit(OpCodes.Brfalse, listNoDescriptorLabel);
-        il.Emit(OpCodes.Ldarg_1);
-        il.Emit(OpCodes.Ldstr, "length");
-        il.Emit(OpCodes.Call, _types.GetMethod(_types.String, "op_Equality", _types.String, _types.String));
         il.Emit(OpCodes.Brfalse, listNoDescriptorLabel);
         il.Emit(OpCodes.Ldloc, listOwnDescriptor);
         il.Emit(OpCodes.Callvirt, inputs.DescriptorStorage.DescriptorValue.GetGetMethod()!);
@@ -567,6 +562,11 @@ public partial class RuntimeEmitter
         il.Emit(OpCodes.Ldloc, listIdxLocal);
         il.Emit(OpCodes.Ldc_I4_0);
         il.Emit(OpCodes.Blt, listNotIndexLabel);
+        il.Emit(OpCodes.Ldarg_1);
+        il.Emit(OpCodes.Ldloca, listIdxLocal);
+        il.Emit(OpCodes.Call, _types.GetMethodNoParams(_types.Int32, "ToString"));
+        il.Emit(OpCodes.Call, _types.StringOpEquality);
+        il.Emit(OpCodes.Brfalse, listNotIndexLabel);
         il.Emit(OpCodes.Ldloc, listIdxLocal);
         il.Emit(OpCodes.Ldarg_0);
         il.Emit(OpCodes.Castclass, _types.ListOfObject);

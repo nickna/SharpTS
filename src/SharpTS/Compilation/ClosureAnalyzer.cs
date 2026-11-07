@@ -159,6 +159,7 @@ public class ClosureAnalyzer : AstVisitorBase
     private readonly LoopBodyCellAnalyzer _bodyCells = new();
 
     internal bool IsLoopBodyCellDeclaration(Token declaration) => _bodyCells.IsCellDeclaration(declaration);
+    internal bool IsMappedArgumentParameter(Token declaration) => _bodyCells.IsMappedArgumentParameter(declaration);
     internal object? GetLoopBodyCellOwner(Token declaration) => _bodyCells.GetCellOwner(declaration);
     internal bool IsOrdinaryBlockShadowDeclaration(Token declaration) => _bodyCells.IsOrdinaryBlockShadowDeclaration(declaration);
     internal bool IsFunctionBodyVarDeclaration(Token declaration) => _bodyCells.IsFunctionBodyVarDeclaration(declaration);
