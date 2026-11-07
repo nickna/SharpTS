@@ -890,7 +890,7 @@ public partial class TypeChecker
             try
             {
                 anyInferredMethodReturnResolved = CheckClassMethodBodies(
-                    classStmt, classTypeForBody, mutableClass, prevEnv, recoverComputedSymbolDiagnostics);
+                    classStmt.Methods, classStmt.IsDeclare, classTypeForBody, mutableClass, prevEnv, recoverComputedSymbolDiagnostics);
                 anyInferredMethodReturnResolved |= CheckClassAccessorBodies(
                     classStmt.Accessors, mutableClass, recoverComputedSymbolDiagnostics);
             }
@@ -929,16 +929,19 @@ public partial class TypeChecker
 
     // Returns whether mutable metadata changed and the frozen class must be republished.
     private bool CheckClassMethodBodies(
-        Stmt.Class classStmt,
+        IReadOnlyList<Stmt.Function> methods,
+        bool isAmbient,
         TypeInfo.Class classTypeForBody,
         TypeInfo.MutableClass mutableClass,
         TypeEnvironment outerEnvironment,
-        bool recoverComputedSymbolDiagnostics)
+        bool recoverComputedSymbolDiagnostics,
+        bool provisionalGetter = false)
     {
         bool anyInferredMethodReturnResolved = false;
         // Only check methods that have bodies (skip overload signatures)
-        foreach (var method in ClassMethodsInCheckOrder(classStmt.Methods))
+        foreach (var method in ClassMethodsInCheckOrder(methods))
         {
+            ValidatePrivateSetterReturns(method);
             // Check method decorators
             DecoratorTarget methodTarget = method.IsStatic ? DecoratorTarget.StaticMethod : DecoratorTarget.Method;
             CheckDecorators(method.Decorators, methodTarget);
@@ -954,7 +957,7 @@ public partial class TypeChecker
             // above already excluded overload signatures.
             TypeInfo? accessorParameter = InferPrivateAccessorSetterParameter(method, mutableClass);
             if (accessorParameter is null)
-                ReportImplicitAnyParameters(method.Parameters, isAmbient: classStmt.IsDeclare || method.IsAbstract);
+                ReportImplicitAnyParameters(method.Parameters, isAmbient: isAmbient || method.IsAbstract);
 
             // For static methods, use a different environment without this/super
             TypeEnvironment methodEnv;
@@ -1132,7 +1135,9 @@ public partial class TypeChecker
                     // Update the method type in the class. Computed symbol-keyed methods are keyed
                     // by their @@name (e.g. @@iterator), not the synthetic `<computed>` lexeme; an
                     // arbitrary computed key (no well-known @@name) carries no static member to update.
-                    var updatedMethodType = UpdateClassMethodReturn(method, declaredMethodType, methodType, inferredReturn);
+                    var updatedMethodType = provisionalGetter
+                        ? methodType with { ReturnType = inferredReturn }
+                        : UpdateClassMethodReturn(method, declaredMethodType, methodType, inferredReturn);
                     string? mName = method.ComputedKey != null
                         ? TryGetComputedClassMemberName(method.ComputedKey)
                         : method.Name.Lexeme;
@@ -1632,6 +1637,12 @@ public partial class TypeChecker
                 var method = methods[0];
                 if (!TryResolveAmbientMember(() => BuildMethodFuncType(method), out TypeInfo funcType))
                     continue;
+
+                if (method.IsPrivate)
+                {
+                    (method.IsStatic ? mutableClass.StaticPrivateMethods : mutableClass.PrivateMethods)[methodName] = funcType;
+                    continue;
+                }
 
                 if (method.IsStatic)
                     mutableClass.StaticMethods[methodName] = funcType;

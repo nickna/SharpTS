@@ -3074,6 +3074,7 @@ public partial class TypeChecker
         {
             foreach (var method in ClassMethodsInCheckOrder(classExpr.Methods))
             {
+                ValidatePrivateSetterReturns(method);
                 TypeEnvironment methodEnv;
                 if (method.IsStatic)
                 {

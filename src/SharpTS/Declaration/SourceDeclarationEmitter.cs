@@ -451,6 +451,22 @@ public static class SourceDeclarationEmitter
         private void EmitClassMethod(Stmt.Function method, TypeInfo? classType)
         {
             TypeInfo? resolved = GetClassMemberType(classType, method.Name.Lexeme, method.IsStatic, method.IsPrivate);
+            if (method.PrivateAccessorName is { } privateName)
+            {
+                var accessor = resolved as TypeInfo.Function;
+                string modifier = method.IsStatic ? "static " : "";
+                if (method.Parameters is [var parameter])
+                {
+                    string type = RenderAnnotation(parameter.Type, accessor?.ParamTypes[0]);
+                    WriteLine($"{modifier}set {privateName.Lexeme}({parameter.Name.Lexeme}: {type});");
+                }
+                else
+                {
+                    string type = RenderAnnotation(method.ReturnType, accessor?.ReturnType);
+                    WriteLine($"{modifier}get {privateName.Lexeme}(): {type};");
+                }
+                return;
+            }
             static (IReadOnlyList<TypeInfo>? Params, TypeInfo? Return, IReadOnlyList<TypeInfo.TypeParameter>? TypeParams)
                 Signature(
                     IReadOnlyList<TypeInfo>? parameters,

@@ -27,9 +27,19 @@ public partial class TypeChecker
     {
         bool found = PrivateAccessorNames.TryGet(owner.PrivateMethodTypes, owner.StaticPrivateMethodTypes,
             name, out isStatic, out var getter, out var setter);
-        readType = getter is TypeInfo.Function read ? PendingPrivateAccessorType(read.ReturnType) : null;
+        readType = (getter as TypeInfo.Function)?.ReturnType;
         writeType = (setter as TypeInfo.Function)?.ParamTypes[0];
         return found;
+    }
+
+    private static void ValidatePrivateSetterReturns(Stmt.Function method)
+    {
+        if (method.PrivateAccessorName is null || method.Parameters.Count == 0 || method.Body is null)
+            return;
+
+        var collector = new ClassMemberReturnCollector(statement => throw new TypeCheckException(
+            "Setters cannot return a value.", statement.Keyword.Line, tsCode: "TS2408"));
+        foreach (var statement in method.Body) collector.Visit(statement);
     }
 
     private TypeInfo CheckPrivateAccessorFacet(TypeInfo receiver, TypeInfo.Class owner, bool isStatic, Token name,
@@ -40,6 +50,8 @@ public partial class TypeChecker
             throw isWrite
                 ? new TypeCheckException($"Cannot assign to '{name.Lexeme}' because it is a read-only property.", name.Line, tsCode: "TS2540")
                 : new TypeCheckException($"Private accessor '{name.Lexeme}' was defined without a getter.", name.Line, tsCode: "TS2806");
+        if (!isWrite && facet is TypeInfo.Inferred)
+            facet = PendingPrivateAccessorType(ResolveFieldStagePrivateGetter(owner, isStatic, name.Lexeme, facet));
         return InstantiatePrivateCompoundFieldType(facet, receiver, owner);
     }
 }

@@ -111,6 +111,25 @@ public sealed class PrivateAccessorTests
     [Theory]
     [InlineData(ExecutionMode.Interpreted)]
     [InlineData(ExecutionMode.Compiled)]
+    public void NestedVarDeclarationsBelongToTheAccessor(ExecutionMode mode)
+    {
+        const string source = """
+            let value = 0;
+            class C {
+                get #x() {
+                    if (true) { var value = 7; }
+                    return value;
+                }
+                read() { return this.#x; }
+            }
+            console.log(new C().read(), value);
+            """;
+        Assert.Equal("7 0\n", TestHarness.RunUnchecked(source, mode));
+    }
+
+    [Theory]
+    [InlineData(ExecutionMode.Interpreted)]
+    [InlineData(ExecutionMode.Compiled)]
     public void AccessorCallsAndSuspensionRetainTheOriginalReceiver(ExecutionMode mode)
     {
         const string source = """
@@ -138,6 +157,7 @@ public sealed class PrivateAccessorTests
     [InlineData("class C { static get #x() {} set #x(v) {} }")]
     [InlineData("class C { get #constructor() {} }")]
     [InlineData("class C { set #x(...v) {} }")]
+    [InlineData("class C { set #x(v?: number) {} }")]
     [InlineData("class C { get #x(v) {} }")]
     [InlineData("class C { get #x(this) {} }")]
     [InlineData("class C { public get #x() {} }")]
@@ -148,11 +168,69 @@ public sealed class PrivateAccessorTests
     [InlineData("get #x() { return 1; }", "this.#x = 1;", "TS2540")]
     [InlineData("set #x(value: number) {}", "this.#x;", "TS2806")]
     [InlineData("set #x(value: number) {}", "this.#x = 'bad';", "TS2322")]
+    [InlineData("get #x() { return 1; } set #x(value) {}", "this.#x = 'bad';", "TS2322")]
     [InlineData("get #x() { return 1; }", "({}).#x;", "TS2339")]
     public void CheckerValidatesAccessorFacetAndReceiver(string accessor, string operation, string code)
     {
         string source = $"class C {{ {accessor} test() {{ {operation} }} }}";
         var error = Assert.ThrowsAny<TypeCheckException>(() => new TypeChecker().Check(TestHarness.ParseOrThrow(source)));
         Assert.Equal(code, error.Diagnostic.TsCode);
+    }
+
+    [Theory]
+    [InlineData("class C { value = this.#x; get #x() { return 1; } }", "new C().value")]
+    [InlineData("const C = class { #stored = 1; value = this.#x; get #x() { return this.#stored; } };", "new C().value")]
+    [InlineData("class C { value = this.#x; #stored = 1; get #x() { return this.#stored; } }", "new C().value")]
+    [InlineData("class C { static value = C.#x; static get #x() { return 1; } }", "C.value")]
+    public void FieldTypesUseInferredPrivateGetterReturns(string declaration, string access)
+    {
+        var statements = TestHarness.ParseOrThrow($"{declaration} const wrong: string = {access};");
+        var error = Assert.ThrowsAny<TypeCheckException>(() => new TypeChecker().Check(statements));
+        Assert.Equal("TS2322", error.Diagnostic.TsCode);
+    }
+
+    [Theory]
+    [InlineData("class C { set #x(v: number) { if (v) return 123; } }")]
+    [InlineData("const C = class { static set #x(v: number) { return undefined; } };")]
+    public void CheckerRejectsValueReturnsFromPrivateSetters(string source)
+    {
+        var error = Assert.ThrowsAny<TypeCheckException>(() => new TypeChecker().Check(TestHarness.ParseOrThrow(source)));
+        Assert.Equal("TS2408", error.Diagnostic.TsCode);
+    }
+
+    [Fact]
+    public void CheckerRejectsPrivateSetterParameterInitializers()
+    {
+        const string source = "class C { set #x(value: number = 1) {} }";
+        var error = Assert.ThrowsAny<TypeCheckException>(() => new TypeChecker().Check(TestHarness.ParseOrThrow(source)));
+        Assert.Equal("TS1052", error.Diagnostic.TsCode);
+    }
+
+    [Theory]
+    [InlineData(ExecutionMode.Interpreted)]
+    [InlineData(ExecutionMode.Compiled)]
+    public void UncheckedJavaScriptPrivateSettersAllowDefaultsAndIgnoreReturnedValues(ExecutionMode mode)
+    {
+        const string source = """
+            class C {
+                set #x(value = 1) { console.log(value); return 5; }
+                run() { console.log(this.#x = undefined); }
+            }
+            new C().run();
+            """;
+        Assert.Equal("1\nundefined\n", TestHarness.RunUnchecked(source, mode));
+    }
+
+    [Fact]
+    public void AmbientPrivateAccessorFacetsKeepClassBrandsDistinct()
+    {
+        const string source = """
+            declare class A { get #x(): number; }
+            declare class B { get #x(): number; }
+            declare const b: B;
+            const a: A = b;
+            """;
+        var error = Assert.ThrowsAny<TypeCheckException>(() => new TypeChecker().Check(TestHarness.ParseOrThrow(source)));
+        Assert.Equal("TS2322", error.Diagnostic.TsCode);
     }
 }

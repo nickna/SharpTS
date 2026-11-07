@@ -1236,7 +1236,7 @@ public partial class Parser
             throw new Exception($"Parse Error at line {name.Line}: Private accessors cannot have a 'this' parameter.");
         var (parameters, destructured, _, _) = ParseRuntimeParameters(allowParameterDecoratorsAndProperties: false);
         var close = Consume(TokenType.RIGHT_PAREN, "Expect ')' after accessor parameters.");
-        if (parameters.Count != (isSetter ? 1 : 0) || parameters.Any(parameter => parameter.IsRest))
+        if (parameters.Count != (isSetter ? 1 : 0) || parameters.Any(parameter => parameter.IsRest || parameter.IsOptional))
             throw new Exception($"Parse Error at line {name.Line}: Invalid parameter list for private {kind.Lexeme} accessor.");
 
         string? returnType = null;
@@ -1257,7 +1257,7 @@ public partial class Parser
         else
         {
             var bodyOpen = Consume(TokenType.LEFT_BRACE, "Expect '{' before accessor body.");
-            body = PrependDestructuringPrologue(destructured, Block());
+            body = PrependDestructuringPrologue(destructured, VarHoister.Hoist(Block(), _spans));
             bodySpan = new SourceSpan(bodyOpen.Start, ConsumedSourceEnd);
             headerEnd = bodyOpen.Start;
         }

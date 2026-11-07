@@ -45,6 +45,27 @@ public class CliDeclarationEmitTests
     }
 
     [Fact]
+    public void DeclarationEmitKeepsPrivateAccessorSyntax()
+    {
+        using var dir = CliTestHelper.CreateTempDirectory();
+        dir.CreateFile("src/library.ts", """
+            export class Service {
+                get #value() { return 3; }
+                set #value(next) {}
+                static get #tag() { return "service"; }
+            }
+            """);
+        var result = CliTestHelper.RunCli(
+            "--no-tsconfig --compile src/library.ts --emitDeclarationOnly --declarationDir types", dir.Path);
+
+        Assert.Equal(0, result.ExitCode);
+        string declaration = File.ReadAllText(dir.GetPath("types/library.d.ts"));
+        Assert.Contains("get #value(): number;", declaration);
+        Assert.Contains("set #value(next: number);", declaration);
+        Assert.Contains("static get #tag(): string;", declaration);
+    }
+
+    [Fact]
     public void ProjectDeclarationEmitUsesRootDirAndDeclarationDir()
     {
         using var dir = CliTestHelper.CreateTempDirectory();
