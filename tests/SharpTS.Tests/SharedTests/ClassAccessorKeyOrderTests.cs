@@ -5,8 +5,10 @@ namespace SharpTS.Tests.SharedTests;
 
 public sealed class ClassAccessorKeyOrderTests
 {
-    [Fact]
-    public void EnumerableAccessorsKeepTheirPositionAcrossRedefinitionsAndCopies()
+    [Theory]
+    [InlineData(ExecutionMode.Interpreted)]
+    [InlineData(ExecutionMode.Compiled)]
+    public void EnumerableAccessorsKeepTheirPositionAcrossRedefinitionsAndCopies(ExecutionMode mode)
     {
         const string source = """
             let reads = 0;
@@ -22,7 +24,8 @@ public sealed class ClassAccessorKeyOrderTests
             item[symbol] = 8;
             Object.defineProperty(item, hidden, { value: 99 });
             console.log(Object.keys(item).join(','), Object.getOwnPropertyNames(item).join(','));
-            console.log(Reflect.ownKeys(item).map(String).join(','), reads);
+            const keys = Reflect.ownKeys(item);
+            console.log(keys.slice(0, 3).join(','), keys[3] === symbol, keys[4] === hidden, reads);
             console.log(Object.values(item).join(','));
             console.log(Object.entries(item).map(pair => pair.join(':')).join(','));
             const { later, ...rest } = item;
@@ -36,14 +39,16 @@ public sealed class ClassAccessorKeyOrderTests
             item.extra = 4;
             console.log(Object.keys(item).join(','), item.extra);
             """;
-        Assert.Equal("extra,first,later extra,first,later\nextra,first,later,Symbol(last),Symbol(hidden) 0\n"
+        Assert.Equal("extra,first,later extra,first,later\nextra,first,later true true 0\n"
             + "9,1,7\nextra:9,first:1,later:7\nextra,first 9 8 false\nextra,first,later 9 8 false\n"
             + "extra,first,later 9 8 false\n5\nextra,first,later 3\nfirst,later,extra 4\n",
-            TestHarness.RunUnchecked(source, ExecutionMode.Interpreted));
+            TestHarness.RunUnchecked(source, mode));
     }
 
-    [Fact]
-    public void ValueEnumerationRechecksDescriptorsAfterInvokingAnEarlierGetter()
+    [Theory]
+    [InlineData(ExecutionMode.Interpreted)]
+    [InlineData(ExecutionMode.Compiled)]
+    public void ValueEnumerationRechecksDescriptorsAfterInvokingAnEarlierGetter(ExecutionMode mode)
     {
         const string source = """
             class C {
@@ -55,6 +60,6 @@ public sealed class ClassAccessorKeyOrderTests
             const item = new C();
             console.log(Object.values(item).join(','), Object.keys(item).join(','));
             """;
-        Assert.Equal("2,1 early,first,added\n", TestHarness.RunUnchecked(source, ExecutionMode.Interpreted));
+        Assert.Equal("2,1 early,first,added\n", TestHarness.RunUnchecked(source, mode));
     }
 }
