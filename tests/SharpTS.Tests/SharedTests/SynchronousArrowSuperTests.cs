@@ -48,6 +48,23 @@ public sealed class SynchronousArrowSuperTests
     public static IEnumerable<object[]> SourceCases() => Cases().Select(row => row[1..]);
     public static IEnumerable<object[]> HostedCases() => Cases().Select(row => row[..2]);
 
+    [Theory, ModeData]
+    public void ArrowInitializesNominalDerivedClassDeclaration(ExecutionMode mode)
+    {
+        const string source = """
+            class Base {
+                value: number;
+                constructor() { this.value = 3; }
+            }
+            class Child extends Base {
+                constructor() { const initialize = () => super(); initialize(); }
+            }
+            console.log(new Child().value);
+            """;
+
+        Assert.Equal("3\n", TestHarness.Run(source, mode));
+    }
+
     [Theory, MemberData(nameof(SourceCases))]
     public void SuperAccessesUseTheLexicalReceiverInSynchronousArrows(string source, string expected)
     {
