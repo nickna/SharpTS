@@ -2653,32 +2653,18 @@ public partial class RuntimeEmitter
         }
         il.Emit(OpCodes.Ret);
 
-        // List<object> handler: honor an indexed PDS descriptor, then replace
-        // an in-range live slot with the shared hole sentinel.
+        // List-backed arguments have both stored descriptors and dense slots.
         il.MarkLabel(listDeleteIdxLabel);
         {
             var listDeleteKeyLocal = il.DeclareLocal(_types.String);
             var listDeleteIndexLocal = il.DeclareLocal(_types.Int32);
+            var listDeleteDescriptorLocal = il.DeclareLocal(inputs.DescriptorStorage.DescriptorType);
+            var listDeleteLiveSlot = il.DeclareLocal(_types.Boolean);
             var listDeleteNotNumeric = il.DefineLabel();
+            var listDeleteCheckIntegrity = il.DefineLabel();
             il.Emit(OpCodes.Ldarg_1);
             il.Emit(OpCodes.Call, inputs.StringCoercion.ToJsString);
             il.Emit(OpCodes.Stloc, listDeleteKeyLocal);
-
-            // SetIntegrityLevel marks the List-backed receiver frozen/sealed
-            // in PDS state. Deletion must fail even when an older descriptor
-            // object still carries configurable=true.
-            var listDeleteNotFrozen = il.DefineLabel();
-            il.Emit(OpCodes.Ldarg_0);
-            il.Emit(OpCodes.Call, inputs.DescriptorStorage.IsFrozen);
-            il.Emit(OpCodes.Brfalse, listDeleteNotFrozen);
-            EmitDeleteIndexFail("Cannot delete property of a frozen arguments object");
-            il.MarkLabel(listDeleteNotFrozen);
-            var listDeleteNotSealed = il.DefineLabel();
-            il.Emit(OpCodes.Ldarg_0);
-            il.Emit(OpCodes.Call, inputs.DescriptorStorage.IsSealed);
-            il.Emit(OpCodes.Brfalse, listDeleteNotSealed);
-            EmitDeleteIndexFail("Cannot delete property of a sealed arguments object");
-            il.MarkLabel(listDeleteNotSealed);
 
             il.Emit(OpCodes.Ldloc, listDeleteKeyLocal);
             il.Emit(OpCodes.Ldloca, listDeleteIndexLocal);
@@ -2693,12 +2679,50 @@ public partial class RuntimeEmitter
             il.Emit(OpCodes.Call, _types.StringOpEquality);
             il.Emit(OpCodes.Brfalse, listDeleteNotNumeric);
 
-            var listDeleteDescriptorLocal = il.DeclareLocal(inputs.DescriptorStorage.DescriptorType);
-            var listDeleteStorage = il.DefineLabel();
+            il.Emit(OpCodes.Ldloc, listDeleteIndexLocal);
+            il.Emit(OpCodes.Ldarg_0);
+            il.Emit(OpCodes.Castclass, _types.ListOfObject);
+            il.Emit(OpCodes.Callvirt, _types.GetProperty(_types.ListOfObject, "Count").GetGetMethod()!);
+            il.Emit(OpCodes.Bge, listDeleteNotNumeric);
+            il.Emit(OpCodes.Ldarg_0);
+            il.Emit(OpCodes.Castclass, _types.ListOfObject);
+            il.Emit(OpCodes.Ldloc, listDeleteIndexLocal);
+            il.Emit(OpCodes.Callvirt, _types.GetMethod(_types.ListOfObject, "get_Item", _types.Int32));
+            il.Emit(OpCodes.Ldsfld, inputs.ArrayStorage.HoleInstance);
+            il.Emit(OpCodes.Ceq);
+            il.Emit(OpCodes.Ldc_I4_0);
+            il.Emit(OpCodes.Ceq);
+            il.Emit(OpCodes.Stloc, listDeleteLiveSlot);
+
+            il.MarkLabel(listDeleteNotNumeric);
             il.Emit(OpCodes.Ldarg_0);
             il.Emit(OpCodes.Ldloc, listDeleteKeyLocal);
             il.Emit(OpCodes.Call, inputs.DescriptorStorage.GetPropertyDescriptor);
             il.Emit(OpCodes.Stloc, listDeleteDescriptorLocal);
+            il.Emit(OpCodes.Ldloc, listDeleteDescriptorLocal);
+            il.Emit(OpCodes.Brtrue, listDeleteCheckIntegrity);
+            il.Emit(OpCodes.Ldloc, listDeleteLiveSlot);
+            il.Emit(OpCodes.Brtrue, listDeleteCheckIntegrity);
+            // Length is synthesized even when no stored descriptor exists.
+            il.Emit(OpCodes.Ldloc, listDeleteKeyLocal);
+            il.Emit(OpCodes.Ldstr, "length");
+            il.Emit(OpCodes.Call, _types.StringOpEquality);
+            il.Emit(OpCodes.Brfalse, trueLabel);
+
+            il.MarkLabel(listDeleteCheckIntegrity);
+            // The receiver's integrity state also applies to descriptors that
+            // still carry configurable=true in storage.
+            var listDeleteCheckDescriptor = il.DefineLabel();
+            il.Emit(OpCodes.Ldarg_0);
+            il.Emit(OpCodes.Call, inputs.DescriptorStorage.IsFrozen);
+            il.Emit(OpCodes.Ldarg_0);
+            il.Emit(OpCodes.Call, inputs.DescriptorStorage.IsSealed);
+            il.Emit(OpCodes.Or);
+            il.Emit(OpCodes.Brfalse, listDeleteCheckDescriptor);
+            EmitDeleteIndexFail("Cannot delete a non-configurable arguments property");
+
+            il.MarkLabel(listDeleteCheckDescriptor);
+            var listDeleteStorage = il.DefineLabel();
             il.Emit(OpCodes.Ldloc, listDeleteDescriptorLocal);
             il.Emit(OpCodes.Brfalse, listDeleteStorage);
             il.Emit(OpCodes.Ldloc, listDeleteDescriptorLocal);
@@ -2713,49 +2737,14 @@ public partial class RuntimeEmitter
             il.Emit(OpCodes.Pop);
 
             il.MarkLabel(listDeleteStorage);
-            var listDeleteDone = il.DefineLabel();
-            il.Emit(OpCodes.Ldloc, listDeleteIndexLocal);
-            il.Emit(OpCodes.Ldc_I4_0);
-            il.Emit(OpCodes.Blt, listDeleteDone);
-            il.Emit(OpCodes.Ldloc, listDeleteIndexLocal);
-            il.Emit(OpCodes.Ldarg_0);
-            il.Emit(OpCodes.Castclass, _types.ListOfObject);
-            il.Emit(OpCodes.Callvirt, _types.GetProperty(_types.ListOfObject, "Count").GetGetMethod()!);
-            il.Emit(OpCodes.Bge, listDeleteDone);
+            il.Emit(OpCodes.Ldloc, listDeleteLiveSlot);
+            il.Emit(OpCodes.Brfalse, trueLabel);
             il.Emit(OpCodes.Ldarg_0);
             il.Emit(OpCodes.Castclass, _types.ListOfObject);
             il.Emit(OpCodes.Ldloc, listDeleteIndexLocal);
             il.Emit(OpCodes.Ldsfld, inputs.ArrayStorage.HoleInstance);
             il.Emit(OpCodes.Callvirt, _types.GetMethod(_types.ListOfObject, "set_Item", [_types.Int32, _types.Object]));
-            il.MarkLabel(listDeleteDone);
-            il.Emit(OpCodes.Ldc_I4_1);
-            il.Emit(OpCodes.Ret);
-
-            il.MarkLabel(listDeleteNotNumeric);
-            // Named properties on List-backed arguments live entirely in PDS.
-            // Delete them here instead of delegating to DeleteProperty, whose
-            // receiver table intentionally has no raw-List branch.
-            var listNamedDeleteDescriptor = il.DeclareLocal(inputs.DescriptorStorage.DescriptorType);
-            il.Emit(OpCodes.Ldarg_0);
-            il.Emit(OpCodes.Ldloc, listDeleteKeyLocal);
-            il.Emit(OpCodes.Call, inputs.DescriptorStorage.GetPropertyDescriptor);
-            il.Emit(OpCodes.Stloc, listNamedDeleteDescriptor);
-            var listNamedDeleteDone = il.DefineLabel();
-            il.Emit(OpCodes.Ldloc, listNamedDeleteDescriptor);
-            il.Emit(OpCodes.Brfalse, listNamedDeleteDone);
-            il.Emit(OpCodes.Ldloc, listNamedDeleteDescriptor);
-            il.Emit(OpCodes.Callvirt, inputs.DescriptorStorage.DescriptorConfigurable.GetGetMethod()!);
-            var listNamedDeleteConfigurable = il.DefineLabel();
-            il.Emit(OpCodes.Brtrue, listNamedDeleteConfigurable);
-            EmitDeleteIndexFail("Cannot delete a non-configurable arguments property");
-            il.MarkLabel(listNamedDeleteConfigurable);
-            il.Emit(OpCodes.Ldarg_0);
-            il.Emit(OpCodes.Ldloc, listDeleteKeyLocal);
-            il.Emit(OpCodes.Call, inputs.DescriptorStorage.DeleteProperty);
-            il.Emit(OpCodes.Pop);
-            il.MarkLabel(listNamedDeleteDone);
-            il.Emit(OpCodes.Ldc_I4_1);
-            il.Emit(OpCodes.Ret);
+            il.Emit(OpCodes.Br, trueLabel);
         }
 
         // Symbol key handler: deleting a missing own property succeeds even

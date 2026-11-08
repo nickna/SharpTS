@@ -8,6 +8,38 @@ public sealed class UnmappedArgumentsIntegrityTests
     [Theory]
     [InlineData(ExecutionMode.Interpreted)]
     [InlineData(ExecutionMode.Compiled)]
+    public void StrictDeletionOfMissingIndicesSucceedsAfterSealOrFreeze(ExecutionMode mode)
+    {
+        const string source = """
+            function remove(args, key) {
+                "use strict";
+                try { return delete args[key]; }
+                catch (error) { return error instanceof TypeError ? "TypeError" : "unexpected"; }
+            }
+
+            function check(integrity, first, second) {
+                "use strict";
+                const args = arguments;
+                delete args[1];
+                Object.setPrototypeOf(args, { 1: "inherited" });
+                Object.defineProperty(args, "10", { value: "stored", configurable: true });
+                Object.defineProperty(args, "named", { value: "stored", configurable: true });
+                integrity(args);
+                console.log(remove(args, 7), remove(args, 1), remove(args, "01"), args[1]);
+                console.log(remove(args, 0), remove(args, 10), remove(args, "named"), remove(args, "length"));
+            }
+
+            check(Object.seal, 1, 2);
+            check(Object.freeze, 1, 2);
+            """;
+
+        const string expected = "true true true inherited\nTypeError TypeError TypeError TypeError\n";
+        Assert.Equal(expected + expected, TestHarness.RunUnchecked(source, mode));
+    }
+
+    [Theory]
+    [InlineData(ExecutionMode.Interpreted)]
+    [InlineData(ExecutionMode.Compiled)]
     public void IndexedDescriptorsHonorSealAndFreeze(ExecutionMode mode)
     {
         const string source = """
