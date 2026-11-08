@@ -1929,7 +1929,7 @@ public partial class Interpreter : IDisposable
         }
 
         // Create module-scoped environment
-        var moduleEnv = new RuntimeEnvironment(_environment, strictMode: true);
+        var moduleEnv = CreateEsModuleEnvironment();
 
         // Bind imports from dependencies
         BindModuleImports(module, moduleEnv);
@@ -1969,6 +1969,15 @@ public partial class Interpreter : IDisposable
             }
             moduleInstance.IsExecuted = true;
         }
+    }
+
+    private RuntimeEnvironment CreateEsModuleEnvironment()
+    {
+        // A dynamic import can be evaluated while a derived constructor's this
+        // is still uninitialized. The module owns an independent this binding.
+        var environment = new RuntimeEnvironment(_environment, strictMode: true) { ConstructionFrame = null };
+        environment.Define("this", SharpTSUndefined.Instance);
+        return environment;
     }
 
     /// <summary>
