@@ -9,6 +9,31 @@ namespace SharpTS.Tests.SharedTests;
 /// </summary>
 public class EnumTests
 {
+    [Theory, ModeData]
+    public void RegularInitializerReadsEarlierMember(ExecutionMode mode)
+    {
+        const string source = """
+            enum E { First = 2, Next = First + 1 }
+            console.log(E.Next);
+            """;
+        Assert.Equal("3\n", TestHarness.Run(source, mode));
+    }
+
+    [Fact]
+    public void InterpretedInitializerPreservesEnclosingLexicalBindings()
+    {
+        const string source = """
+            function run() {
+                const First = 100;
+                const offset = 4;
+                enum E { First = 2, Next = First + offset }
+                console.log(E.Next, First);
+            }
+            run();
+            """;
+        Assert.Equal("6 100\n", TestHarness.Run(source, ExecutionMode.Interpreted));
+    }
+
     #region Numeric Enums
 
     [Theory, ModeData]
