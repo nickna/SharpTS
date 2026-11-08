@@ -23,4 +23,20 @@ public sealed class ExplicitEsModuleExtensionTests
         Assert.Equal("caught true\n", TestHarness.RunModules(
             new Dictionary<string, string> { [file] = source }, file, mode, allowTypeErrors: true));
     }
+
+    [Theory, ModeData]
+    public void MarkerFreeDeclarationFilesKeepTheirGlobalScope(ExecutionMode mode)
+    {
+        var files = new Dictionary<string, string>
+        {
+            ["main.ts"] = """
+                /// <reference path="./globals.d.mts" />
+                const item: ReferencedGlobal = { count: 1 };
+                console.log(item.count);
+                """,
+            ["globals.d.mts"] = "interface ReferencedGlobal { count: number; }",
+        };
+
+        Assert.Equal("1\n", TestHarness.RunModules(files, "main.ts", mode));
+    }
 }

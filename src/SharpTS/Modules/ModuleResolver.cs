@@ -995,9 +995,10 @@ public class ModuleResolver
             };
             module.ParseDiagnostics.AddRange(parseResult.Diagnostics);
 
-            // Explicit ES module extensions do not need an import or export marker.
+            // Explicit ES module source extensions do not need an import or export marker.
             string extension = Path.GetExtension(absolutePath).ToLowerInvariant();
-            module.IsScript = extension is not (".mjs" or ".mts") && ScriptDetector.IsScriptFile(statements);
+            module.IsScript = (module.IsDeclarationFile || extension is not (".mjs" or ".mts"))
+                && ScriptDetector.IsScriptFile(statements);
 
             // Determine if this is a CommonJS module
             module.IsCommonJs = CommonJsDetector.Detect(
