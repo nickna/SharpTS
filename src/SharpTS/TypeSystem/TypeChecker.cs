@@ -1827,8 +1827,8 @@ public partial class TypeChecker
             members.ToFrozenDictionary(),
             EnumKind.Numeric,
             enumStmt.IsConst
-        );
-        DeclareValue(enumStmt.Name, enumType);
+        ) { DeclarationBinding = RegisterValueDeclaration(enumStmt.Name) };
+        DeclareValue(enumStmt.Name, enumType, mergeWithLocal: true);
         _environment.DefineType(enumStmt.Name.Lexeme, enumType);
     }
 

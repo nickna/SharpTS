@@ -11,7 +11,7 @@ public partial class TypeChecker
 {
     private void CheckEnumDeclaration(Stmt.Enum enumStmt)
     {
-        RegisterValueDeclaration(enumStmt.Name, mergeWithLocal: true);
+        var declarationBinding = RegisterValueDeclaration(enumStmt.Name, mergeWithLocal: true);
 
         Dictionary<string, object> members = [];
         double? currentNumericValue = null;
@@ -114,11 +114,17 @@ public partial class TypeChecker
                             tsCode: "TS18033");
                     }
 
-                    members[member.Name.Lexeme] = double.NaN;
+                    members[member.Name.Lexeme] = ConstEnumExpressionEvaluator.EvaluateKnownNumericMember(
+                        member.Value, members, enumStmt.Name.Lexeme);
                     currentNumericValue = null;
                     hasNumeric = true;
                     autoIncrementActive = false;
                 }
+            }
+            else if (enumStmt.IsAmbient && !enumStmt.IsConst)
+            {
+                members[member.Name.Lexeme] = double.NaN;
+                hasNumeric = true;
             }
             else
             {
@@ -145,7 +151,10 @@ public partial class TypeChecker
             _ => EnumKind.Numeric  // Empty enum defaults to numeric
         };
 
-        var enumType = new TypeInfo.Enum(enumStmt.Name.Lexeme, members.ToFrozenDictionary(), kind, enumStmt.IsConst);
+        var enumType = new TypeInfo.Enum(enumStmt.Name.Lexeme, members.ToFrozenDictionary(), kind, enumStmt.IsConst)
+        {
+            DeclarationBinding = declarationBinding
+        };
         DeclareValue(enumStmt.Name, enumType, mergeWithLocal: true);
         _environment.DefineType(enumStmt.Name.Lexeme, enumType);
     }

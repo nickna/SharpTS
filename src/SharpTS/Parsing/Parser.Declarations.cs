@@ -245,7 +245,7 @@ public partial class Parser
         if (Match(TokenType.CONST))
         {
             // declare const enum E { ... }
-            if (Match(TokenType.ENUM)) return EnumDeclaration(isConst: true);
+            if (Match(TokenType.ENUM)) return EnumDeclaration(isConst: true, isAmbient: true);
             return AmbientVarDeclaration(isConst: true);
         }
         if (Match(TokenType.LET) || Match(TokenType.VAR))
@@ -254,7 +254,7 @@ public partial class Parser
         }
         if (Match(TokenType.ENUM))
         {
-            return EnumDeclaration(isConst: false);
+            return EnumDeclaration(isAmbient: true);
         }
         if (Match(TokenType.INTERFACE))
         {
@@ -837,7 +837,7 @@ public partial class Parser
         return $"{genericPrefix}({string.Join(", ", paramTypes)}) => {returnType}";
     }
 
-    private Stmt EnumDeclaration(bool isConst = false)
+    private Stmt EnumDeclaration(bool isConst = false, bool isAmbient = false)
     {
         Token name = Consume(TokenType.IDENTIFIER, "Expect enum name.");
         Consume(TokenType.LEFT_BRACE, "Expect '{' before enum body.");
@@ -856,7 +856,10 @@ public partial class Parser
         }
 
         Consume(TokenType.RIGHT_BRACE, "Expect '}' after enum body.");
-        return new Stmt.Enum(name, members, isConst);
+        return new Stmt.Enum(name, members, isConst)
+        {
+            IsAmbient = isAmbient || _isDeclarationFile || _ambientNamespaceDepth > 0
+        };
     }
 
     private Stmt VarDeclaration(bool isConst = false, bool isVar = false)
@@ -1117,14 +1120,14 @@ public partial class Parser
             if (Match(TokenType.CONST))
             {
                 var declaration = Match(TokenType.ENUM)
-                    ? EnumDeclaration(isConst: true)
+                    ? EnumDeclaration(isConst: true, isAmbient: true)
                     : AmbientVarDeclaration(isConst: true);
                 return new Stmt.Export(exportKeyword, declaration, null, null, null, false);
             }
 
             if (Match(TokenType.ENUM))
             {
-                return new Stmt.Export(exportKeyword, EnumDeclaration(), null, null, null, false);
+                return new Stmt.Export(exportKeyword, EnumDeclaration(isAmbient: true), null, null, null, false);
             }
 
             // export let x: number; / export var x: number;
@@ -1172,12 +1175,14 @@ public partial class Parser
 
         if (Match(TokenType.CONST))
         {
-            return Match(TokenType.ENUM) ? EnumDeclaration(isConst: true) : AmbientVarDeclaration(isConst: true);
+            return Match(TokenType.ENUM)
+                ? EnumDeclaration(isConst: true, isAmbient: true)
+                : AmbientVarDeclaration(isConst: true);
         }
 
         if (Match(TokenType.ENUM))
         {
-            return EnumDeclaration();
+            return EnumDeclaration(isAmbient: true);
         }
 
         if (Match(TokenType.LET) || Match(TokenType.VAR))

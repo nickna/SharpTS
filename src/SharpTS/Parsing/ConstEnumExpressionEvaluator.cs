@@ -30,11 +30,13 @@ internal readonly record struct ConstEnumError(ConstEnumErrorKind Kind, string M
 /// <remarks>
 /// Failures are reported through the <c>error</c> factory so each phase throws its own exception
 /// type (TypeCheckException with a TS code / InterpreterException / CompileException) without
-/// this evaluator knowing about any of them. Numeric semantics are preserved exactly: all
-/// arithmetic is double, bitwise/shift operators cast through int and back to double.
+/// this evaluator knowing about any of them. Arithmetic uses doubles and bitwise
+/// operators use the JavaScript 32-bit integer conversion.
 /// </remarks>
 internal static class ConstEnumExpressionEvaluator
 {
+    private sealed class NonConstantInitializerException : Exception;
+
     /// <summary>Recognizes numeric literals through grouping and unary signs, without evaluating arbitrary expressions.</summary>
     public static bool TryEvaluateSignedLiteral(Expr? expression, out double value)
     {
@@ -55,11 +57,28 @@ internal static class ConstEnumExpressionEvaluator
         }
     }
 
+    public static double EvaluateKnownNumericMember(
+        Expr expression, IReadOnlyDictionary<string, object> resolvedMembers, string enumName)
+    {
+        try
+        {
+            return Evaluate(expression, resolvedMembers, enumName,
+                static _ => new NonConstantInitializerException(), regularEnum: true) is double number
+                ? number
+                : double.NaN;
+        }
+        catch (NonConstantInitializerException)
+        {
+            return double.NaN;
+        }
+    }
+
     public static object Evaluate(
         Expr expression,
         IReadOnlyDictionary<string, object> resolvedMembers,
         string enumName,
-        Func<ConstEnumError, Exception> error)
+        Func<ConstEnumError, Exception> error,
+        bool regularEnum = false)
     {
         return expression switch
         {
@@ -68,17 +87,16 @@ internal static class ConstEnumExpressionEvaluator
                 "Const enum expression cannot be null.")),
 
             Expr.Get g when g.Object is Expr.Variable v && v.Name.Lexeme == enumName =>
-                resolvedMembers.TryGetValue(g.Name.Lexeme, out var val)
-                    ? val
-                    : throw error(new(
-                        ConstEnumErrorKind.ForwardReference,
-                        $"Const enum member '{g.Name.Lexeme}' referenced before definition.")),
+                ResolveMember(g.Name.Lexeme, resolvedMembers, error, regularEnum),
 
-            Expr.Grouping gr => Evaluate(gr.Expression, resolvedMembers, enumName, error),
+            Expr.Variable variable when regularEnum =>
+                ResolveMember(variable.Name.Lexeme, resolvedMembers, error, regularEnum),
 
-            Expr.Unary u => EvaluateUnary(u, resolvedMembers, enumName, error),
+            Expr.Grouping gr => Evaluate(gr.Expression, resolvedMembers, enumName, error, regularEnum),
 
-            Expr.Binary b => EvaluateBinary(b, resolvedMembers, enumName, error),
+            Expr.Unary u => EvaluateUnary(u, resolvedMembers, enumName, error, regularEnum),
+
+            Expr.Binary b => EvaluateBinary(b, resolvedMembers, enumName, error, regularEnum),
 
             _ => throw error(new(
                 ConstEnumErrorKind.DisallowedExpression,
@@ -86,19 +104,31 @@ internal static class ConstEnumExpressionEvaluator
         };
     }
 
+    private static object ResolveMember(string name, IReadOnlyDictionary<string, object> resolvedMembers,
+        Func<ConstEnumError, Exception> error, bool regularEnum)
+    {
+        if (resolvedMembers.TryGetValue(name, out var value) &&
+            !(regularEnum && value is double number && double.IsNaN(number)))
+            return value;
+
+        throw error(new(ConstEnumErrorKind.ForwardReference,
+            $"Const enum member '{name}' referenced before definition."));
+    }
+
     private static object EvaluateUnary(
         Expr.Unary unary,
         IReadOnlyDictionary<string, object> resolvedMembers,
         string enumName,
-        Func<ConstEnumError, Exception> error)
+        Func<ConstEnumError, Exception> error,
+        bool regularEnum)
     {
-        var operand = Evaluate(unary.Right, resolvedMembers, enumName, error);
+        var operand = Evaluate(unary.Right, resolvedMembers, enumName, error, regularEnum);
 
         return unary.Operator.Type switch
         {
             TokenType.MINUS when operand is double d => -d,
             TokenType.PLUS when operand is double d => d,
-            TokenType.TILDE when operand is double d => (double)(~(int)d),
+            TokenType.TILDE when operand is double d => (double)~ToInt32(d),
             _ => throw error(new(
                 ConstEnumErrorKind.DisallowedOperator,
                 $"Operator '{unary.Operator.Lexeme}' is not allowed in const enum expressions."))
@@ -109,10 +139,11 @@ internal static class ConstEnumExpressionEvaluator
         Expr.Binary binary,
         IReadOnlyDictionary<string, object> resolvedMembers,
         string enumName,
-        Func<ConstEnumError, Exception> error)
+        Func<ConstEnumError, Exception> error,
+        bool regularEnum)
     {
-        var left = Evaluate(binary.Left, resolvedMembers, enumName, error);
-        var right = Evaluate(binary.Right, resolvedMembers, enumName, error);
+        var left = Evaluate(binary.Left, resolvedMembers, enumName, error, regularEnum);
+        var right = Evaluate(binary.Right, resolvedMembers, enumName, error, regularEnum);
 
         if (left is double l && right is double r)
         {
@@ -124,11 +155,13 @@ internal static class ConstEnumExpressionEvaluator
                 TokenType.SLASH => l / r,
                 TokenType.PERCENT => l % r,
                 TokenType.STAR_STAR => Math.Pow(l, r),
-                TokenType.AMPERSAND => (double)((int)l & (int)r),
-                TokenType.PIPE => (double)((int)l | (int)r),
-                TokenType.CARET => (double)((int)l ^ (int)r),
-                TokenType.LESS_LESS => (double)((int)l << (int)r),
-                TokenType.GREATER_GREATER => (double)((int)l >> (int)r),
+                TokenType.AMPERSAND => (double)(ToInt32(l) & ToInt32(r)),
+                TokenType.PIPE => (double)(ToInt32(l) | ToInt32(r)),
+                TokenType.CARET => (double)(ToInt32(l) ^ ToInt32(r)),
+                TokenType.LESS_LESS => (double)(ToInt32(l) << ToInt32(r)),
+                TokenType.GREATER_GREATER => (double)(ToInt32(l) >> ToInt32(r)),
+                TokenType.GREATER_GREATER_GREATER when regularEnum =>
+                    (double)(unchecked((uint)ToInt32(l)) >> ToInt32(r)),
                 _ => throw error(new(
                     ConstEnumErrorKind.DisallowedOperator,
                     $"Operator '{binary.Operator.Lexeme}' is not allowed in const enum expressions."))
@@ -144,4 +177,7 @@ internal static class ConstEnumExpressionEvaluator
             ConstEnumErrorKind.InvalidOperandTypes,
             $"Invalid operand types for operator '{binary.Operator.Lexeme}' in const enum expression."));
     }
+
+    private static int ToInt32(double number) =>
+        double.IsFinite(number) ? unchecked((int)(long)(Math.Truncate(number) % 4294967296.0)) : 0;
 }

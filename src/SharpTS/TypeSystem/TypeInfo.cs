@@ -735,15 +735,22 @@ public abstract record TypeInfo
 
     public record Enum(string Name, FrozenDictionary<string, object> Members, EnumKind Kind, bool IsConst = false) : TypeInfo
     {
+        // Different declarations and pre-registration snapshots can have the same display name.
+        private static long _nextCacheId;
+        private readonly long _cacheId = Interlocked.Increment(ref _nextCacheId);
+
+        internal BindingSymbol? DeclarationBinding { get; init; }
         internal EnumFacet Facet { get; init; }
         internal bool IsScalar => Facet == EnumFacet.Scalar;
+        internal bool HasSameDeclaration(Enum other) => _cacheId == other._cacheId ||
+            DeclarationBinding is not null && ReferenceEquals(DeclarationBinding, other.DeclarationBinding);
 
         // Only create reverse mapping for numeric members (not available for const enums)
         public Dictionary<double, string> ReverseMembers =>
             Members.Where(kvp => kvp.Value is double)
                    .ToDictionary(kvp => (double)kvp.Value, kvp => kvp.Key);
         public override string ToString() => IsConst ? $"const enum {Name}" : $"enum {Name}";
-        internal override string CacheKey() => IsScalar ? $"{ToString()}#value" : base.CacheKey();
+        internal override string CacheKey() => IsScalar ? $"enum#{_cacheId}#value" : $"enum#{_cacheId}";
     }
 
     /// <summary>

@@ -458,6 +458,27 @@ public partial class TypeChecker
         return reduced.Count == members.Count ? members : reduced; // never reduce to empty
     }
 
+    private static bool AreEnumsCompatible(TypeInfo.Enum expected, TypeInfo.Enum actual)
+    {
+        if (expected.IsScalar != actual.IsScalar)
+            return false;
+
+        if (expected.HasSameDeclaration(actual))
+            return true;
+
+        if (expected.Name != actual.Name || expected.IsConst || actual.IsConst)
+            return false;
+
+        // A scalar source can have fewer members, but an enum object must provide
+        // every target member as a property as well.
+        bool compareMemberSets = expected.IsScalar && expected.Members.Count > 1 && actual.Members.Count > 1;
+        return (expected.IsScalar || expected.Members.Count == actual.Members.Count) &&
+            actual.Members.All(member => expected.Members.TryGetValue(member.Key, out var value) &&
+                (Equals(member.Value, value) ||
+                    compareMemberSets && value is double expectedNumber && member.Value is double actualNumber &&
+                    (double.IsNaN(expectedNumber) || double.IsNaN(actualNumber))));
+    }
+
     /// <summary>
     /// Core type compatibility logic without caching.
     /// </summary>
@@ -798,9 +819,8 @@ public partial class TypeChecker
         // here so they fall through to false).
         if (expected is TypeInfo.Enum expectedEnum)
         {
-            // The enum's runtime object and its member values are distinct facets.
-            if (actual is TypeInfo.Enum actualEnum && expectedEnum.Name == actualEnum.Name)
-                return expectedEnum.IsScalar == actualEnum.IsScalar;
+            if (actual is TypeInfo.Enum actualEnum)
+                return AreEnumsCompatible(expectedEnum, actualEnum);
 
             // Numeric enum accepts (widened) number
             if (expectedEnum.Kind == EnumKind.Numeric &&
