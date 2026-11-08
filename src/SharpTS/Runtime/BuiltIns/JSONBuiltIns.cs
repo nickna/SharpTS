@@ -200,11 +200,10 @@ public static class JSONBuiltIns
             foreach (var prop in keys)
             {
                 var newElement = InternalizeJSONProperty(interp, val, prop, reviver);
-                var token = new Parsing.Token(Parsing.TokenType.IDENTIFIER, prop, null, 0);
                 if (IsUndefinedRevive(newElement))
                     inst.DeleteFieldStrict(prop, false);
                 else
-                    inst.Set(token, newElement);
+                    inst.DefineProperty(prop, CreateDataPropertyDescriptor(newElement));
             }
         }
 
