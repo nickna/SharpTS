@@ -417,6 +417,8 @@ public sealed partial class RuntimeFeatureDetector
                     // eval after this walk. Retain receiver scopes for opaque
                     // source as well as the direct eval AST visited below.
                     _set.UsesArrayReceiverScopes = true;
+                    if (name == "eval")
+                        _set.UsesInlineArrayPrototypeScopes = true;
                     _set.UsesDatePrototypeMutation = true;
                     _set.UsesDateConstructorMutation = true;
                     _set.UsesRegExpPrototypeMutation = true;
