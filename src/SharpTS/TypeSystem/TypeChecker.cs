@@ -1829,7 +1829,7 @@ public partial class TypeChecker
 
         var enumType = new TypeInfo.Enum(
             enumStmt.Name.Lexeme,
-            members.ToFrozenDictionary(),
+            members,
             ClassifyEnumMembers(members.Values.Any(value => value is double), members.Values.Any(value => value is string)),
             enumStmt.IsConst
         ) { DeclarationBinding = RegisterValueDeclaration(enumStmt.Name) };

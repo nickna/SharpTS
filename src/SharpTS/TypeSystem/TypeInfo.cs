@@ -738,6 +738,7 @@ public abstract record TypeInfo
         // Different declarations and pre-registration snapshots can have the same display name.
         private static long _nextCacheId;
         private readonly long _cacheId = Interlocked.Increment(ref _nextCacheId);
+        private readonly (FrozenDictionary<string, object> Source, string[] Names) _memberOrder;
 
         internal BindingSymbol? DeclarationBinding { get; init; }
         internal EnumFacet Facet { get; init; }
@@ -745,10 +746,28 @@ public abstract record TypeInfo
         internal bool HasSameDeclaration(Enum other) => _cacheId == other._cacheId ||
             DeclarationBinding is not null && ReferenceEquals(DeclarationBinding, other.DeclarationBinding);
 
-        // Only create reverse mapping for numeric members (not available for const enums)
-        public Dictionary<double, string> ReverseMembers =>
-            Members.Where(kvp => kvp.Value is double)
-                   .ToDictionary(kvp => (double)kvp.Value, kvp => kvp.Key);
+        internal Enum(string name, Dictionary<string, object> members, EnumKind kind, bool isConst)
+            : this(name, members.ToFrozenDictionary(), kind, isConst)
+        {
+            _memberOrder = (Members, members.Keys.ToArray());
+        }
+
+        public Dictionary<double, string> ReverseMembers
+        {
+            get
+            {
+                var reverse = new Dictionary<double, string>();
+                // A caller-supplied FrozenDictionary has no declaration-order contract.
+                IEnumerable<string> names = ReferenceEquals(_memberOrder.Source, Members)
+                    ? _memberOrder.Names : Members.Keys;
+                foreach (string name in names)
+                {
+                    if (Members[name] is double value)
+                        reverse[value] = name;
+                }
+                return reverse;
+            }
+        }
         public override string ToString() => IsConst ? $"const enum {Name}" : $"enum {Name}";
         internal override string CacheKey() => IsScalar ? $"enum#{_cacheId}#value" : $"enum#{_cacheId}";
     }

@@ -1,5 +1,4 @@
 using SharpTS.TypeSystem.Exceptions;
-using System.Collections.Frozen;
 using SharpTS.Parsing;
 
 namespace SharpTS.TypeSystem;
@@ -152,7 +151,7 @@ public partial class TypeChecker
         // Determine enum kind
         EnumKind kind = ClassifyEnumMembers(hasNumeric, hasString);
 
-        var enumType = new TypeInfo.Enum(enumStmt.Name.Lexeme, members.ToFrozenDictionary(), kind, enumStmt.IsConst)
+        var enumType = new TypeInfo.Enum(enumStmt.Name.Lexeme, members, kind, enumStmt.IsConst)
         {
             DeclarationBinding = declarationBinding
         };
