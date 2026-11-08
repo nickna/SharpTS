@@ -21,12 +21,6 @@ public partial class RuntimeEmitter
         MethodInfo? NativeProxyRejection
     );
 
-    private readonly record struct ReviverListBranchInputs(
-        MethodBuilder DeleteProperty,
-        EmittedDescriptorStorageRuntime DescriptorStorage,
-        Type UndefinedType
-    );
-
     /// <summary>
     /// Emits JsonParseWithReviver(text, reviver). Implements ECMA-262 25.5.1.1
     /// JSON.parse(reviver) by parsing into a tree of <c>Dictionary&lt;string,
@@ -161,7 +155,7 @@ public partial class RuntimeEmitter
         );
         EmitReviverListBranch(
             il,
-            new ReviverListBranchInputs(inputs.DeleteProperty, inputs.DescriptorStorage, inputs.UndefinedType),
+            inputs,
             method,
             valLocal,
             afterIterLabel
@@ -430,7 +424,7 @@ public partial class RuntimeEmitter
     /// with val as the new holder, then CreateDataProperty or Delete according
     /// to the reviver result. Falls through if val is not a List&lt;object?&gt;.
     /// </summary>
-    private void EmitReviverListBranch(ILGenerator il, ReviverListBranchInputs inputs, MethodBuilder applyReviverMethod, LocalBuilder valLocal, Label afterIterLabel)
+    private void EmitReviverListBranch(ILGenerator il, JsonParseWithReviverInputs inputs, MethodBuilder applyReviverMethod, LocalBuilder valLocal, Label afterIterLabel)
     {
         var notListLabel = il.DefineLabel();
 
@@ -470,13 +464,6 @@ public partial class RuntimeEmitter
         il.Emit(OpCodes.Call, applyReviverMethod);
         il.Emit(OpCodes.Stloc, newElemLocal);
 
-        // ECMA-262 25.5.1.1.1 InternalizeJSONProperty step 2.b.iii.3.a:
-        // CreateDataProperty(val, ToString(I), newElement). When the property
-        // already exists on the holder with Configurable: false (as set by a
-        // reviver-side defineProperty on `this`), [[DefineOwnProperty]] must
-        // return false silently and the slot is left untouched. Mirror that
-        // here by consulting PDS; without this guard the direct set_Item
-        // would punch through the non-configurable lock.
         var doSetLabel = il.DefineLabel();
         var afterSetLabel = il.DefineLabel();
         il.Emit(OpCodes.Ldloc, newElemLocal);
@@ -489,26 +476,23 @@ public partial class RuntimeEmitter
         il.Emit(OpCodes.Br, afterSetLabel);
 
         il.MarkLabel(doSetLabel);
-        var descLocal = il.DeclareLocal(inputs.DescriptorStorage.DescriptorType);
+        // Direct storage is safe only for a default index on an extensible array.
+        var defineLabel = il.DefineLabel();
         il.Emit(OpCodes.Ldloc, valLocal);
         il.Emit(OpCodes.Ldloc, propLocal);
         il.Emit(OpCodes.Call, inputs.DescriptorStorage.GetPropertyDescriptor);
-        il.Emit(OpCodes.Stloc, descLocal);
-        il.Emit(OpCodes.Ldloc, descLocal);
-        var writeElementLabel = il.DefineLabel();
-        il.Emit(OpCodes.Brfalse, writeElementLabel);
-        il.Emit(OpCodes.Ldloc, descLocal);
-        il.Emit(OpCodes.Callvirt, inputs.DescriptorStorage.DescriptorConfigurable.GetGetMethod()!);
-        il.Emit(OpCodes.Brtrue, writeElementLabel);
-        // Non-configurable: skip set, fall through to the increment.
-        il.Emit(OpCodes.Br, afterSetLabel);
-
-        il.MarkLabel(writeElementLabel);
-        // list[i] = newElement
+        il.Emit(OpCodes.Brtrue, defineLabel);
+        il.Emit(OpCodes.Ldloc, valLocal);
+        il.Emit(OpCodes.Call, inputs.DescriptorStorage.IsExtensible);
+        il.Emit(OpCodes.Brfalse, defineLabel);
         il.Emit(OpCodes.Ldloc, listLocal);
         il.Emit(OpCodes.Ldloc, iLocal);
         il.Emit(OpCodes.Ldloc, newElemLocal);
         il.Emit(OpCodes.Callvirt, _types.GetMethod(_types.ListOfObject, "set_Item", [_types.Int32, _types.Object]));
+        il.Emit(OpCodes.Br, afterSetLabel);
+
+        il.MarkLabel(defineLabel);
+        EmitReviverCreateDataProperty(il, inputs, valLocal, propLocal, newElemLocal);
         il.MarkLabel(afterSetLabel);
 
         // i++
@@ -522,6 +506,24 @@ public partial class RuntimeEmitter
         il.Emit(OpCodes.Br, afterIterLabel);
 
         il.MarkLabel(notListLabel);
+    }
+
+    private void EmitReviverCreateDataProperty(
+        ILGenerator il, JsonParseWithReviverInputs inputs, LocalBuilder valLocal,
+        LocalBuilder propLocal, LocalBuilder newElemLocal)
+    {
+        // CreateDataProperty ignores a refusal from an ordinary object.
+        // The descriptor has only data fields, so this cannot invoke a setter.
+        il.BeginExceptionBlock();
+        var descriptor = EmitReviverDataDescriptor(il, inputs.DescriptorStorage, newElemLocal);
+        il.Emit(OpCodes.Ldloc, valLocal);
+        il.Emit(OpCodes.Ldloc, propLocal);
+        il.Emit(OpCodes.Ldloc, descriptor);
+        il.Emit(OpCodes.Call, inputs.ObjectDefineProperty);
+        il.Emit(OpCodes.Pop);
+        il.BeginCatchBlock(inputs.ThrownValueType);
+        il.Emit(OpCodes.Pop);
+        il.EndExceptionBlock();
     }
 
     private LocalBuilder EmitReviverDataDescriptor(
@@ -627,18 +629,7 @@ public partial class RuntimeEmitter
         il.Emit(OpCodes.Br, endIfLabel);
 
         il.MarkLabel(defineLabel);
-        // CreateDataProperty ignores a refusal from an ordinary object.
-        // The descriptor has only data fields, so this cannot invoke a setter.
-        il.BeginExceptionBlock();
-        var descriptor = EmitReviverDataDescriptor(il, inputs.DescriptorStorage, newElemLocal);
-        il.Emit(OpCodes.Ldloc, valLocal);
-        il.Emit(OpCodes.Ldloc, propLocal);
-        il.Emit(OpCodes.Ldloc, descriptor);
-        il.Emit(OpCodes.Call, inputs.ObjectDefineProperty);
-        il.Emit(OpCodes.Pop);
-        il.BeginCatchBlock(inputs.ThrownValueType);
-        il.Emit(OpCodes.Pop);
-        il.EndExceptionBlock();
+        EmitReviverCreateDataProperty(il, inputs, valLocal, propLocal, newElemLocal);
         il.Emit(OpCodes.Br, endIfLabel);
 
         il.MarkLabel(deleteLabel);
@@ -665,7 +656,7 @@ public partial class RuntimeEmitter
     /// Emits the read side of ECMA-262 [[Get]] for an arbitrary holder shape:
     /// <list type="bullet">
     ///   <item>SharpTSProxy → TrapGet via reflection.</item>
-    ///   <item>List&lt;object?&gt; with numeric key → indexed access (returns null if out of range).</item>
+    ///   <item>List&lt;object?&gt; with numeric key → ordinary array index lookup.</item>
     ///   <item>Parsed dictionary or replacement class instance → ordinary property lookup.</item>
     /// </list>
     /// Pushes the resulting object? on the stack.
@@ -730,61 +721,11 @@ public partial class RuntimeEmitter
 
         il.MarkLabel(notProxyLabel);
 
-        // If holder is a List<object?> and key parses as a non-negative int < Count → list[i]
-        var notListLabel = il.DefineLabel();
-        il.Emit(OpCodes.Ldloc, holderTmp);
-        il.Emit(OpCodes.Isinst, _types.ListOfObject);
-        il.Emit(OpCodes.Brfalse, notListLabel);
-
-        var listHolderLocal = il.DeclareLocal(_types.ListOfObject);
-        il.Emit(OpCodes.Ldloc, holderTmp);
-        il.Emit(OpCodes.Castclass, _types.ListOfObject);
-        il.Emit(OpCodes.Stloc, listHolderLocal);
-
-        // Try int.TryParse(key.ToString(), out idx)
-        var idxLocal = il.DeclareLocal(_types.Int32);
-        var listFailLabel = il.DefineLabel();
-        var listOkLabel = il.DefineLabel();
-        il.Emit(OpCodes.Ldloc, keyTmp);
-        var keyTmpNullLabel = il.DefineLabel();
-        var keyTmpStrLabel = il.DefineLabel();
-        il.Emit(OpCodes.Dup);
-        il.Emit(OpCodes.Brfalse, keyTmpNullLabel);
-        il.Emit(OpCodes.Callvirt, _types.GetMethod(_types.Object, "ToString"));
-        il.Emit(OpCodes.Br, keyTmpStrLabel);
-        il.MarkLabel(keyTmpNullLabel);
-        il.Emit(OpCodes.Pop);
-        il.Emit(OpCodes.Ldstr, "");
-        il.MarkLabel(keyTmpStrLabel);
-        il.Emit(OpCodes.Ldloca, idxLocal);
-        il.Emit(OpCodes.Call, _types.GetMethod(_types.Int32, "TryParse", _types.String, _types.Int32.MakeByRefType()));
-        il.Emit(OpCodes.Brfalse, listFailLabel);
-
-        // Bounds check: 0 <= idx < list.Count
-        il.Emit(OpCodes.Ldloc, idxLocal);
-        il.Emit(OpCodes.Ldc_I4_0);
-        il.Emit(OpCodes.Blt, listFailLabel);
-        il.Emit(OpCodes.Ldloc, idxLocal);
-        il.Emit(OpCodes.Ldloc, listHolderLocal);
-        il.Emit(OpCodes.Callvirt, _types.GetProperty(_types.ListOfObject, "Count").GetGetMethod()!);
-        il.Emit(OpCodes.Bge, listFailLabel);
-
-        // list[idx]
-        il.Emit(OpCodes.Ldloc, listHolderLocal);
-        il.Emit(OpCodes.Ldloc, idxLocal);
-        il.Emit(OpCodes.Callvirt, _types.GetMethod(_types.ListOfObject, "get_Item", [_types.Int32]));
-        il.Emit(OpCodes.Stloc, resultLocal);
-        il.Emit(OpCodes.Br, doneLabel);
-
-        il.MarkLabel(listFailLabel);
-        il.Emit(OpCodes.Ldnull);
-        il.Emit(OpCodes.Stloc, resultLocal);
-        il.Emit(OpCodes.Br, doneLabel);
-
-        il.MarkLabel(notListLabel);
-
         var ordinaryLabel = il.DefineLabel();
         var otherLabel = il.DefineLabel();
+        il.Emit(OpCodes.Ldloc, holderTmp);
+        il.Emit(OpCodes.Isinst, _types.ListOfObject);
+        il.Emit(OpCodes.Brtrue, ordinaryLabel);
         il.Emit(OpCodes.Ldloc, holderTmp);
         il.Emit(OpCodes.Isinst, _types.DictionaryStringObject);
         il.Emit(OpCodes.Brtrue, ordinaryLabel);

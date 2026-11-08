@@ -6,6 +6,33 @@ namespace SharpTS.Tests.SharedTests;
 public sealed class JSONReviverPropertyTests
 {
     [Theory, ModeData]
+    public void ReviverReadsAndReplacesAnInjectedArrayIndexGetter(ExecutionMode mode)
+    {
+        const string source = """
+            let reads = 0;
+            let writes = 0;
+            const result = JSON.parse('[1,2]', function (key, value) {
+                if (key === '0') {
+                    const holder = this;
+                    Object.defineProperty(this, '1', {
+                        get() { reads++; return this === holder ? 7 : 99; },
+                        set() { writes++; },
+                        configurable: true, enumerable: true
+                    });
+                }
+                if (key === '1') {
+                    console.log(value);
+                    return 8;
+                }
+                return value;
+            });
+            const descriptor = Object.getOwnPropertyDescriptor(result, '1');
+            console.log(reads, writes, result[1], descriptor.value);
+            """;
+        Assert.Equal("7\n1 0 8 8\n", TestHarness.RunUnchecked(source, mode));
+    }
+
+    [Theory, ModeData]
     public void ReviverReadsAndReplacesAnInjectedGetter(ExecutionMode mode)
     {
         const string source = """
