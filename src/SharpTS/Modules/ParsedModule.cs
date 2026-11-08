@@ -218,9 +218,8 @@ public class ParsedModule
     public List<TripleSlashDirective> PathReferences { get; set; } = [];
 
     /// <summary>
-    /// Files referenced via /// &lt;reference path="..." /&gt;.
-    /// These are processed differently from module Dependencies.
-    /// Referenced scripts merge into the global scope rather than having isolated scope.
+    /// Type-only references excluded from the executable dependency graph.
+    /// Referenced scripts contribute global declarations. Referenced modules keep isolated scope.
     /// </summary>
     public List<ParsedModule> ReferencedScripts { get; set; } = [];
 

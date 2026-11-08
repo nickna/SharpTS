@@ -1,3 +1,4 @@
+using SharpTS.Modules;
 using SharpTS.Tests.Infrastructure;
 using Xunit;
 
@@ -38,5 +39,46 @@ public sealed class ExplicitEsModuleExtensionTests
         };
 
         Assert.Equal("1\n", TestHarness.RunModules(files, "main.ts", mode));
+    }
+
+    [Theory, ModeData]
+    public void PathReferenceKeepsMarkerFreeModuleBindingsIsolated(ExecutionMode mode)
+    {
+        var files = new Dictionary<string, string>
+        {
+            ["main.ts"] = """
+                /// <reference path="./module.mts" />
+                const local = 2;
+                console.log(local);
+                """,
+            ["module.mts"] = "const local = 1; const moduleOnly = 3;",
+        };
+
+        Assert.Equal("2\n", TestHarness.RunModules(files, "main.ts", mode));
+
+        files["main.ts"] += "\nconsole.log(moduleOnly);";
+        var error = Assert.Throws<TypeCheckDiagnosticException>(() => TestHarness.RunModules(files, "main.ts", mode));
+        Assert.Contains("Undefined variable 'moduleOnly'", error.Message);
+    }
+
+    [Fact]
+    public void PathReferenceToMarkerFreeModuleIsTypeOnly()
+    {
+        string root = Path.Combine(Path.GetTempPath(), Guid.NewGuid().ToString("N"));
+        string entryPath = Path.Combine(root, "main.ts");
+        string referencePath = Path.Combine(root, "module.mts");
+        var resolver = new ModuleResolver(entryPath, new Dictionary<string, string>
+        {
+            [entryPath] = """
+                /// <reference path="./module.mts" />
+                console.log("main");
+                """,
+            [referencePath] = "console.log(\"reference\");",
+        });
+
+        ParsedModule entry = resolver.LoadModule(entryPath);
+        ParsedModule reference = Assert.Single(resolver.GetModulesInOrder(entry), module => module.Path == referencePath);
+        Assert.False(reference.IsScript);
+        Assert.DoesNotContain(reference, resolver.GetRuntimeModulesInOrder(entry));
     }
 }
