@@ -995,8 +995,9 @@ public class ModuleResolver
             };
             module.ParseDiagnostics.AddRange(parseResult.Diagnostics);
 
-            // Determine if this is a script or module file
-            module.IsScript = ScriptDetector.IsScriptFile(statements);
+            // Explicit ES module extensions do not need an import or export marker.
+            string extension = Path.GetExtension(absolutePath).ToLowerInvariant();
+            module.IsScript = extension is not (".mjs" or ".mts") && ScriptDetector.IsScriptFile(statements);
 
             // Determine if this is a CommonJS module
             module.IsCommonJs = CommonJsDetector.Detect(
