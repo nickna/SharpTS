@@ -89,10 +89,10 @@ public sealed class JSONReviverPropertyTests
     }
 
     [Theory, ModeData]
-    public void ReviverReadsAnInheritedValueAfterAnOwnPropertyIsDeleted(ExecutionMode mode)
+    public void ReviverReadsAnInheritedGetterWithTheHolderAsReceiver(ExecutionMode mode)
     {
         const string source = """
-            const prototype = { inherited: 7 };
+            const prototype = { get inherited() { return this.a + 6; } };
             const result = JSON.parse('{"a":1,"inherited":2}', function (key, value) {
                 if (key === 'a') {
                     delete this.inherited;
@@ -104,8 +104,8 @@ public sealed class JSONReviverPropertyTests
                 }
                 return value;
             });
-            console.log(Object.hasOwn(result, 'inherited'), result.inherited, prototype.inherited);
+            console.log(Object.hasOwn(result, 'inherited'), result.inherited);
             """;
-        Assert.Equal("7\ntrue 8 7\n", TestHarness.RunUnchecked(source, mode));
+        Assert.Equal("7\ntrue 8\n", TestHarness.RunUnchecked(source, mode));
     }
 }
