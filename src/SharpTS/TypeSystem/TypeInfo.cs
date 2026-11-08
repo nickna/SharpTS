@@ -1,5 +1,4 @@
 using System.Collections.Frozen;
-using System.Runtime.CompilerServices;
 using System.Text;
 using SharpTS.Parsing;
 
@@ -986,9 +985,6 @@ public abstract record TypeInfo
         FrozenSet<string>? ReadonlyFields = null
     ) : TypeInfo
     {
-        private static readonly ConditionalWeakTable<Interface, string> _interfaceFieldKeys = new();
-        private static long _nextInterfaceFieldKey;
-
         /// <summary>True when the field was declared with method syntax (`m(x): T`), which keeps
         /// bivariant parameter relating under strictFunctionTypes (tsc's method exemption).</summary>
         public bool IsMethodMember(string name) => MethodMembers?.Contains(name) ?? false;
@@ -1020,12 +1016,37 @@ public abstract record TypeInfo
 
         public override string ToString() => Render(static type => type.ToString());
 
-        // Repeated interface fields share a compact identity instead of expanding the
-        // same member fingerprint once per field. Distinct interfaces still compare normally.
-        internal override string CacheKey() => Render(static type => type is Interface iface
-            ? _interfaceFieldKeys.GetValue(iface,
-                static _ => $"interface#{Interlocked.Increment(ref _nextInterfaceFieldKey)}")
-            : type.CacheKey());
+        internal override string CacheKey()
+        {
+            if (!Fields.Values.Any(static type => type is Interface))
+                return Render(static type => type.CacheKey());
+
+            // Write each distinct interface fingerprint once. Layout references are
+            // structural so equivalent interface snapshots also produce the same key.
+            Dictionary<Interface, string> references = new(ReferenceEqualityComparer.Instance);
+            Dictionary<string, string> labels = new(StringComparer.Ordinal);
+            List<string> fingerprints = [];
+            string RenderField(TypeInfo type)
+            {
+                if (type is not Interface iface) return type.CacheKey();
+                if (references.TryGetValue(iface, out string? label)) return label;
+
+                string fingerprint = iface.CacheKey();
+                if (!labels.TryGetValue(fingerprint, out label))
+                {
+                    label = $"interface#{fingerprints.Count}";
+                    labels.Add(fingerprint, label);
+                    fingerprints.Add(fingerprint);
+                }
+                references.Add(iface, label);
+                return label;
+            }
+
+            var key = new StringBuilder(Render(RenderField));
+            foreach (string fingerprint in fingerprints)
+                key.Append('#').Append(fingerprint.Length).Append(':').Append(fingerprint);
+            return key.ToString();
+        }
 
         private string Render(Func<TypeInfo, string> renderType)
         {

@@ -107,6 +107,23 @@ public sealed class EnumMemberCompatibilityTests
     }
 
     [Fact]
+    public void RecordsWithEquivalentInterfaceFieldsCollapseInUnions()
+    {
+        var statements = TestHarness.ParseOrThrow("""
+            interface Value { member: number }
+            type Left = { field: Partial<Value> }
+            type Right = { field: Partial<Value> }
+            declare const combined: Left | Right;
+            const wrong: number = combined;
+            """);
+
+        var diagnostic = Assert.Single(
+            new TypeChecker(TypeCheckerOptions.Strict).CheckWithRecovery(statements).Diagnostics);
+        Assert.Equal("TS2322", diagnostic.TsCode);
+        Assert.DoesNotContain(" | ", diagnostic.Message);
+    }
+
+    [Fact]
     public void HoistedFunctionSignatureRetainsKnownEnumValues()
     {
         var statements = TestHarness.ParseOrThrow("""
