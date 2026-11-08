@@ -28,7 +28,7 @@ public sealed class NativeGuestOwnSourceTests
             """, "false false []\n"];
         yield return ["direct-initializer-reads-inherited-value-before-definition", """
             let reads = 0;
-            class Value { first: any = this.later; second: any = this['later']; later: number = 2; }
+            class Value { first: any = (this as any).later; second: any = this['later']; later: number = 2; }
             Object.defineProperty(Value.prototype, 'later', { get() { reads++; return 7; }, configurable: true });
             const value: any = new Value();
             console.log(value.first, value.second, value.later, reads, Object.keys(value).join(','));

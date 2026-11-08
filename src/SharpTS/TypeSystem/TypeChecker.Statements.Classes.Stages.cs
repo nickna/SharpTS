@@ -371,6 +371,7 @@ public partial class TypeChecker
                 var previousNarrowings = PushIsolatedClassFieldNarrowingScope();
                 try
                 {
+                    getterScope.EagerInitializer = field;
                     getterScope.ActiveFields.Add(field);
                     if (validationOnly)
                         CheckExpr(field.Initializer);
@@ -380,6 +381,7 @@ public partial class TypeChecker
                 }
                 finally
                 {
+                    getterScope.EagerInitializer = null;
                     RestoreClassFieldNarrowingScope(previousNarrowings);
                     RestoreDefiniteAssignmentState(previousAssignmentState);
                     if (field.IsStatic)

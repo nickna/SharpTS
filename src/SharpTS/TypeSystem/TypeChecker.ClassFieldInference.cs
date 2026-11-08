@@ -63,6 +63,7 @@ public partial class TypeChecker
         private Dictionary<Stmt.Field, HashSet<Stmt.Field>>? _fieldDependents;
         public int DeferredReadDepth { get; set; }
         public bool IsRetryingFields { get; set; }
+        public Stmt.Field? EagerInitializer { get; set; }
 
         public void DeferActiveFields()
         {
@@ -169,13 +170,13 @@ public partial class TypeChecker
         RegisterPrivateGetterDependencies(scope, methods.Where(IsUnannotatedPrivateGetter));
 
         foreach (var field in fields)
+        {
+            var key = (field.IsStatic, GetFieldMemberName(field));
+            scope.Fields[key] = field;
             if (field.Initializer is not null && !field.IsDeclare &&
                 field.TypeAnnotation is null && field.TypeAnnotationNode is null)
-            {
-                var key = (field.IsStatic, GetFieldMemberName(field));
                 scope.PendingFields.Add(key);
-                scope.Fields[key] = field;
-            }
+        }
         return scope;
     }
 
@@ -213,6 +214,24 @@ public partial class TypeChecker
         for (var scope = _fieldGetterScope; scope is not null; scope = scope.Previous)
             if (scope.Owner.DeclarationId == ownerId) return scope;
         return null;
+    }
+
+    private void CheckEagerClassFieldRead(Expr target, TypeInfo receiver, Token member, bool isPrivate = false)
+    {
+        if (target is Expr.Get or Expr.GetIndex or Expr.GetPrivate ||
+            _fieldGetterScope is not { EagerInitializer: { } initializer } scope ||
+            _classFieldDeferredReadDepth != scope.DeferredReadDepth || scope.Active.Count != 0 ||
+            _currentClass?.Core.DeclarationId != scope.Owner.DeclarationId)
+            return;
+
+        var owner = receiver is TypeInfo.Instance instance ? instance.ResolvedClassType : receiver;
+        if (SelectedSourceClassId(owner) != scope.Owner.DeclarationId ||
+            !scope.Fields.TryGetValue((receiver is not TypeInfo.Instance, member.Lexeme), out var field) ||
+            field.IsOptional || field.IsPrivate != isPrivate || field.Name.Start <= initializer.Name.Start)
+            return;
+
+        throw new TypeCheckException($"Property '{member.Lexeme}' is used before its initialization.",
+            member.Line, tsCode: "TS2729");
     }
 
     private void ObservePendingGetterFieldRead(TypeInfo owner, bool isStatic, string name)
