@@ -30,8 +30,8 @@ public sealed class ClassInstanceEnumerabilityTests
         Assert.Equal("visible\nvisible\n", TestHarness.RunUnchecked(source, mode));
     }
 
-    [Fact]
-    public void JsonReviverVisitsOnlyEnumerableFieldsOfAReplacementInstance()
+    [Theory, ModeData]
+    public void JsonReviverVisitsOnlyEnumerableFieldsOfAReplacementInstance(ExecutionMode mode)
     {
         const string source = """
             class Box { visible = 1; }
@@ -45,7 +45,41 @@ public sealed class ClassInstanceEnumerabilityTests
             });
             console.log(keys.join(','));
             """;
-        Assert.Equal("first,visible,last\n", TestHarness.RunUnchecked(source, ExecutionMode.Interpreted));
+        Assert.Equal("first,visible,last\n", TestHarness.RunUnchecked(source, mode));
+    }
+
+    [Fact]
+    public void CompiledJsonReviverUpdatesReplacementInstanceOwnProperties()
+    {
+        const string source = """
+            class Box { removed = 1; later = 2; }
+            const box = new Box();
+            const trace = [];
+            Object.defineProperty(box, 'locked', { value: 3, enumerable: true });
+            Object.defineProperty(box, 'access', {
+                get() { trace.push(this === box ? 'get' : 'wrong getter'); return 4; },
+                set() { trace.push('set'); },
+                enumerable: true, configurable: true
+            });
+            JSON.parse('{"first":0,"last":0}', function (key, value) {
+                if (key === 'first') this.last = box;
+                if (this === box) {
+                    trace.push(key + ':' + value);
+                    if (key === 'removed') {
+                        this.later = 8;
+                        this.added = 9;
+                        return undefined;
+                    }
+                    if (key === 'locked') return 99;
+                    if (key === 'access') return null;
+                }
+                return value;
+            });
+            console.log(trace.join(','));
+            console.log(Object.hasOwn(box, 'removed'), box.later, box.locked, box.access, box.added);
+            """;
+        Assert.Equal("removed:1,later:8,locked:3,get,access:4\nfalse 8 3 null 9\n",
+            TestHarness.RunUnchecked(source, ExecutionMode.Compiled));
     }
 
     [Theory]

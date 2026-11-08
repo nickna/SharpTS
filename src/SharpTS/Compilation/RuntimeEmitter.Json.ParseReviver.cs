@@ -9,32 +9,14 @@ public partial class RuntimeEmitter
         MethodBuilder DeleteProperty,
         EmittedDescriptorStorageRuntime DescriptorStorage,
         MethodBuilder InvokeMethodUnwrapped,
-        MethodBuilder NormalizeOwnPropertyKeys,
+        MethodBuilder GetKeys,
+        MethodBuilder GetProperty,
+        Type HasFieldsInterface,
+        Type ThrownValueType,
         EmittedNumericCoercionRuntime NumericCoercion,
         MethodBuilder ObjectDefineProperty,
         MethodBuilder TSFunctionInvokeWithThis,
         TypeBuilder TSFunctionType,
-        Type UndefinedType,
-        MethodInfo? NativeProxyRejection
-    );
-
-    private readonly record struct ApplyReviverHelperInputs(
-        MethodBuilder DeleteProperty,
-        EmittedDescriptorStorageRuntime DescriptorStorage,
-        MethodBuilder InvokeMethodUnwrapped,
-        MethodBuilder NormalizeOwnPropertyKeys,
-        EmittedNumericCoercionRuntime NumericCoercion,
-        MethodBuilder ObjectDefineProperty,
-        MethodBuilder TSFunctionInvokeWithThis,
-        TypeBuilder TSFunctionType,
-        Type UndefinedType,
-        MethodInfo? NativeProxyRejection
-    );
-
-    private readonly record struct ReviverProxyBranchInputs(
-        MethodBuilder InvokeMethodUnwrapped,
-        EmittedNumericCoercionRuntime NumericCoercion,
-        MethodBuilder ObjectDefineProperty,
         Type UndefinedType,
         MethodInfo? NativeProxyRejection
     );
@@ -44,15 +26,6 @@ public partial class RuntimeEmitter
         EmittedDescriptorStorageRuntime DescriptorStorage,
         Type UndefinedType
     );
-
-    private readonly record struct ReviverDictBranchInputs(
-        MethodBuilder DeleteProperty,
-        EmittedDescriptorStorageRuntime DescriptorStorage,
-        MethodBuilder NormalizeOwnPropertyKeys,
-        Type UndefinedType
-    );
-
-    private readonly record struct HolderGetInputs(MethodBuilder InvokeMethodUnwrapped, MethodInfo? NativeProxyRejection);
 
     /// <summary>
     /// Emits JsonParseWithReviver(text, reviver). Implements ECMA-262 25.5.1.1
@@ -70,21 +43,7 @@ public partial class RuntimeEmitter
     /// </summary>
     private void EmitJsonParseWithReviver(TypeBuilder typeBuilder, EmittedJsonImplementation json, JsonParseWithReviverInputs inputs)
     {
-        var applyReviver = EmitApplyReviverHelper(
-            typeBuilder,
-            new ApplyReviverHelperInputs(
-                inputs.DeleteProperty,
-                inputs.DescriptorStorage,
-                inputs.InvokeMethodUnwrapped,
-                inputs.NormalizeOwnPropertyKeys,
-                inputs.NumericCoercion,
-                inputs.ObjectDefineProperty,
-                inputs.TSFunctionInvokeWithThis,
-                inputs.TSFunctionType,
-                inputs.UndefinedType,
-                NativeProxyRejection: inputs.NativeProxyRejection
-            )
-        );
+        var applyReviver = EmitApplyReviverHelper(typeBuilder, inputs);
 
         var method = typeBuilder.DefineMethod(
             "JsonParseWithReviver",
@@ -165,7 +124,7 @@ public partial class RuntimeEmitter
     /// reflection on the proxy's runtime type — no compile-time SharpTS.dll
     /// reference is embedded in the emitted assembly.
     /// </summary>
-    private MethodBuilder EmitApplyReviverHelper(TypeBuilder typeBuilder, ApplyReviverHelperInputs inputs)
+    private MethodBuilder EmitApplyReviverHelper(TypeBuilder typeBuilder, JsonParseWithReviverInputs inputs)
     {
         var method = typeBuilder.DefineMethod(
             "ApplyReviver",
@@ -180,7 +139,7 @@ public partial class RuntimeEmitter
         var valLocal = il.DeclareLocal(_types.Object);
         EmitHolderGet(
             il,
-            new HolderGetInputs(inputs.InvokeMethodUnwrapped, NativeProxyRejection: inputs.NativeProxyRejection),
+            inputs,
             ldHolder: () => il.Emit(OpCodes.Ldarg_0),
             ldKey: () => il.Emit(OpCodes.Ldarg_1)
         );
@@ -195,13 +154,7 @@ public partial class RuntimeEmitter
         // path and lose trap dispatch.
         EmitReviverProxyBranch(
             il,
-            new ReviverProxyBranchInputs(
-                inputs.InvokeMethodUnwrapped,
-                inputs.NumericCoercion,
-                inputs.ObjectDefineProperty,
-                inputs.UndefinedType,
-                NativeProxyRejection: inputs.NativeProxyRejection
-            ),
+            inputs,
             method,
             valLocal,
             afterIterLabel
@@ -213,18 +166,7 @@ public partial class RuntimeEmitter
             valLocal,
             afterIterLabel
         );
-        EmitReviverDictBranch(
-            il,
-            new ReviverDictBranchInputs(
-                inputs.DeleteProperty,
-                inputs.DescriptorStorage,
-                inputs.NormalizeOwnPropertyKeys,
-                inputs.UndefinedType
-            ),
-            method,
-            valLocal,
-            afterIterLabel
-        );
+        EmitReviverObjectBranch(il, inputs, method, valLocal, afterIterLabel);
 
         il.MarkLabel(afterIterLabel);
 
@@ -258,7 +200,7 @@ public partial class RuntimeEmitter
     /// TrapSet (kept) or TrapDeleteProperty (newElement is null/undefined).
     /// Falls through to the next branch if val is not a proxy.
     /// </summary>
-    private void EmitReviverProxyBranch(ILGenerator il, ReviverProxyBranchInputs inputs, MethodBuilder applyReviverMethod, LocalBuilder valLocal, Label afterIterLabel)
+    private void EmitReviverProxyBranch(ILGenerator il, JsonParseWithReviverInputs inputs, MethodBuilder applyReviverMethod, LocalBuilder valLocal, Label afterIterLabel)
     {
         var notProxyLabel = il.DefineLabel();
         var proxyLabel = il.DefineLabel();
@@ -309,7 +251,7 @@ public partial class RuntimeEmitter
         var proxyArrayLength = il.DeclareLocal(_types.Int32);
         EmitHolderGet(
             il,
-            new HolderGetInputs(inputs.InvokeMethodUnwrapped, NativeProxyRejection: inputs.NativeProxyRejection),
+            inputs,
             ldHolder: () => il.Emit(OpCodes.Ldloc, valLocal),
             ldKey: () => il.Emit(OpCodes.Ldstr, "length")
         );
@@ -465,26 +407,7 @@ public partial class RuntimeEmitter
         // CreateDataProperty uses [[DefineOwnProperty]], not [[Set]]. Route
         // through ObjectDefineProperty so Proxy defineProperty traps observe
         // each revived child. All CreateDataProperty attributes are true.
-        var createDescLocal = il.DeclareLocal(_types.DictionaryStringObject);
-        il.Emit(OpCodes.Newobj, _types.DictionaryStringObjectCtor);
-        il.Emit(OpCodes.Stloc, createDescLocal);
-        void SetCreateDescriptorField(string name, Action emitValue)
-        {
-            il.Emit(OpCodes.Ldloc, createDescLocal);
-            il.Emit(OpCodes.Ldstr, name);
-            emitValue();
-            il.Emit(OpCodes.Callvirt, _types.GetMethod(
-                _types.DictionaryStringObject, "set_Item", _types.String, _types.Object));
-        }
-        SetCreateDescriptorField("value", () => il.Emit(OpCodes.Ldloc, newElemLocal));
-        foreach (var attribute in new[] { "writable", "enumerable", "configurable" })
-        {
-            SetCreateDescriptorField(attribute, () =>
-            {
-                il.Emit(OpCodes.Ldc_I4_1);
-                il.Emit(OpCodes.Box, _types.Boolean);
-            });
-        }
+        var createDescLocal = EmitReviverDataDescriptor(il, newElemLocal);
         il.Emit(OpCodes.Ldloc, valLocal);
         il.Emit(OpCodes.Ldloc, propLocal);
         il.Emit(OpCodes.Ldloc, createDescLocal);
@@ -620,65 +543,45 @@ public partial class RuntimeEmitter
         il.MarkLabel(notListLabel);
     }
 
-    /// <summary>
-    /// Emits the Dictionary branch of ApplyReviver: snapshot keys (so revivers
-    /// that defineProperty on `this` don't shift the iteration), recurse on each
-    /// key with val as the new holder, then CreateDataProperty or Delete
-    /// according to the reviver result. Falls through if val is not a
-    /// Dictionary&lt;string, object?&gt;.
-    /// </summary>
-    private void EmitReviverDictBranch(ILGenerator il, ReviverDictBranchInputs inputs, MethodBuilder applyReviverMethod, LocalBuilder valLocal, Label afterIterLabel)
+    private LocalBuilder EmitReviverDataDescriptor(ILGenerator il, LocalBuilder value)
     {
-        var notDictLabel = il.DefineLabel();
+        var descriptor = il.DeclareLocal(_types.DictionaryStringObject);
+        il.Emit(OpCodes.Newobj, _types.DictionaryStringObjectCtor);
+        il.Emit(OpCodes.Stloc, descriptor);
+        var setItem = _types.GetMethod(_types.DictionaryStringObject, "set_Item", _types.String, _types.Object);
+        il.Emit(OpCodes.Ldloc, descriptor);
+        il.Emit(OpCodes.Ldstr, "value");
+        il.Emit(OpCodes.Ldloc, value);
+        il.Emit(OpCodes.Callvirt, setItem);
+        foreach (var attribute in new[] { "writable", "enumerable", "configurable" })
+        {
+            il.Emit(OpCodes.Ldloc, descriptor);
+            il.Emit(OpCodes.Ldstr, attribute);
+            il.Emit(OpCodes.Ldc_I4_1);
+            il.Emit(OpCodes.Box, _types.Boolean);
+            il.Emit(OpCodes.Callvirt, setItem);
+        }
+        return descriptor;
+    }
 
-        il.Emit(OpCodes.Ldloc, valLocal);
-        il.Emit(OpCodes.Isinst, _types.DictionaryStringObject);
-        il.Emit(OpCodes.Brfalse, notDictLabel);
-
+    /// <summary>Revives the enumerable own keys of parsed objects and replacement instances.</summary>
+    private void EmitReviverObjectBranch(ILGenerator il, JsonParseWithReviverInputs inputs, MethodBuilder applyReviverMethod, LocalBuilder valLocal, Label afterIterLabel)
+    {
         var dictLocal = il.DeclareLocal(_types.DictionaryStringObject);
         il.Emit(OpCodes.Ldloc, valLocal);
-        il.Emit(OpCodes.Castclass, _types.DictionaryStringObject);
+        il.Emit(OpCodes.Isinst, _types.DictionaryStringObject);
         il.Emit(OpCodes.Stloc, dictLocal);
-
-        // Snapshot keys to a List<object>: spec EnumerableOwnProperties is
-        // captured before iteration. Without snapshotting, dict.Keys is a live
-        // KeyCollection — adding/removing keys during the loop throws.
-        var keysLocal = il.DeclareLocal(_types.ListOfObject);
-        il.Emit(OpCodes.Newobj, _types.GetDefaultConstructor(_types.ListOfObject));
-        il.Emit(OpCodes.Stloc, keysLocal);
-
-        // foreach (var k in dict.Keys) keys.Add(k);
-        var keyEnumLocal = il.DeclareLocal(typeof(Dictionary<string, object>.KeyCollection.Enumerator));
+        var objectLabel = il.DefineLabel();
         il.Emit(OpCodes.Ldloc, dictLocal);
-        il.Emit(OpCodes.Castclass, _types.DictionaryStringObject);
-        il.Emit(OpCodes.Callvirt, _types.GetProperty(_types.DictionaryStringObject, "Keys").GetGetMethod()!);
-        il.Emit(OpCodes.Callvirt,
-            typeof(Dictionary<string, object>.KeyCollection).GetMethod("GetEnumerator")!);
-        il.Emit(OpCodes.Stloc, keyEnumLocal);
+        il.Emit(OpCodes.Brtrue, objectLabel);
+        il.Emit(OpCodes.Ldloc, valLocal);
+        il.Emit(OpCodes.Isinst, inputs.HasFieldsInterface);
+        il.Emit(OpCodes.Brfalse, afterIterLabel);
+        il.MarkLabel(objectLabel);
 
-        var keyCopyStart = il.DefineLabel();
-        var keyCopyEnd = il.DefineLabel();
-        il.MarkLabel(keyCopyStart);
-        il.Emit(OpCodes.Ldloca, keyEnumLocal);
-        il.Emit(OpCodes.Call,
-            typeof(Dictionary<string, object>.KeyCollection.Enumerator).GetMethod("MoveNext")!);
-        il.Emit(OpCodes.Brfalse, keyCopyEnd);
-
-        il.Emit(OpCodes.Ldloc, keysLocal);
-        il.Emit(OpCodes.Ldloca, keyEnumLocal);
-        il.Emit(OpCodes.Call,
-            typeof(Dictionary<string, object>.KeyCollection.Enumerator)
-                .GetProperty("Current")!.GetGetMethod()!);
-        il.Emit(OpCodes.Callvirt, _types.GetMethod(_types.ListOfObject, "Add", [_types.Object]));
-        il.Emit(OpCodes.Br, keyCopyStart);
-        il.MarkLabel(keyCopyEnd);
-
-        // EnumerableOwnPropertyNames uses OrdinaryOwnPropertyKeys ordering:
-        // canonical array indices first in ascending order, then other string
-        // keys in creation order. Reuse the shared normalizer used by
-        // Object.keys/ownKeys consumers.
-        il.Emit(OpCodes.Ldloc, keysLocal);
-        il.Emit(OpCodes.Call, inputs.NormalizeOwnPropertyKeys);
+        var keysLocal = il.DeclareLocal(_types.ListOfObject);
+        il.Emit(OpCodes.Ldloc, valLocal);
+        il.Emit(OpCodes.Call, inputs.GetKeys);
         il.Emit(OpCodes.Stloc, keysLocal);
 
         // for (int i = 0; i < keys.Count; i++)
@@ -720,6 +623,24 @@ public partial class RuntimeEmitter
         il.Emit(OpCodes.Br, setLabel);
 
         il.MarkLabel(setLabel);
+        var setDictionaryLabel = il.DefineLabel();
+        il.Emit(OpCodes.Ldloc, dictLocal);
+        il.Emit(OpCodes.Brtrue, setDictionaryLabel);
+        // CreateDataProperty ignores a refusal from an ordinary instance.
+        // The descriptor has only data fields, so this cannot invoke a setter.
+        il.BeginExceptionBlock();
+        var descriptor = EmitReviverDataDescriptor(il, newElemLocal);
+        il.Emit(OpCodes.Ldloc, valLocal);
+        il.Emit(OpCodes.Ldloc, propLocal);
+        il.Emit(OpCodes.Ldloc, descriptor);
+        il.Emit(OpCodes.Call, inputs.ObjectDefineProperty);
+        il.Emit(OpCodes.Pop);
+        il.BeginCatchBlock(inputs.ThrownValueType);
+        il.Emit(OpCodes.Pop);
+        il.EndExceptionBlock();
+        il.Emit(OpCodes.Br, endIfLabel);
+
+        il.MarkLabel(setDictionaryLabel);
         // CreateDataProperty cannot replace a non-configurable own property.
         // Its false result is ignored by InternalizeJSONProperty.
         var dictDescLocal = il.DeclareLocal(inputs.DescriptorStorage.DescriptorType);
@@ -759,9 +680,6 @@ public partial class RuntimeEmitter
         il.Emit(OpCodes.Br, loopStart);
 
         il.MarkLabel(loopEnd);
-        il.Emit(OpCodes.Br, afterIterLabel);
-
-        il.MarkLabel(notDictLabel);
     }
 
     /// <summary>
@@ -770,11 +688,11 @@ public partial class RuntimeEmitter
     ///   <item>SharpTSProxy → TrapGet via reflection.</item>
     ///   <item>List&lt;object?&gt; with numeric key → indexed access (returns null if out of range).</item>
     ///   <item>Dictionary&lt;string, object?&gt; → TryGetValue.</item>
-    ///   <item>Otherwise → null.</item>
+    ///   <item>Replacement class instance → ordinary property lookup.</item>
     /// </list>
     /// Pushes the resulting object? on the stack.
     /// </summary>
-    private void EmitHolderGet(ILGenerator il, HolderGetInputs inputs, Action ldHolder, Action ldKey)
+    private void EmitHolderGet(ILGenerator il, JsonParseWithReviverInputs inputs, Action ldHolder, Action ldKey)
     {
         // Cache holder/key in temporaries so the multiple branches don't
         // re-evaluate ldHolder/ldKey (which may have side effects in
@@ -914,6 +832,18 @@ public partial class RuntimeEmitter
         il.Emit(OpCodes.Br, doneLabel);
 
         il.MarkLabel(notDictLabel);
+
+        var notClassLabel = il.DefineLabel();
+        il.Emit(OpCodes.Ldloc, holderTmp);
+        il.Emit(OpCodes.Isinst, inputs.HasFieldsInterface);
+        il.Emit(OpCodes.Brfalse, notClassLabel);
+        il.Emit(OpCodes.Ldloc, holderTmp);
+        il.Emit(OpCodes.Ldloc, keyTmp);
+        il.Emit(OpCodes.Castclass, _types.String);
+        il.Emit(OpCodes.Call, inputs.GetProperty);
+        il.Emit(OpCodes.Stloc, resultLocal);
+        il.Emit(OpCodes.Br, doneLabel);
+        il.MarkLabel(notClassLabel);
 
         // Fallthrough: result = null
         il.Emit(OpCodes.Ldnull);
