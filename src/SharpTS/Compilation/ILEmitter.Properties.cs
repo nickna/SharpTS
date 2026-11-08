@@ -189,7 +189,8 @@ public partial class ILEmitter
             return;
         }
 
-        if (TryEmitEnumMember(g.Object, g.Name.Lexeme)) return;
+        if (ResolveEnumReceiver(g.Object) is { } enumReceiver
+            && TryEmitEnumMember(g.Object, enumReceiver, g.Name.Lexeme)) return;
 
         // External read of a namespace-level mutable variable must observe the live binding,
         // not the declaration-time snapshot stored in the namespace object (#623). Redirect
@@ -1126,10 +1127,28 @@ public partial class ILEmitter
         IL.Emit(OpCodes.Ldloc, setResultLocal);
     }
 
-    private bool TryEmitEnumMember(Expr receiver, string name)
+    private string? ResolveEnumReceiver(Expr receiver)
     {
-        if (receiver is not Expr.Variable variable) return false;
-        string enumName = _ctx.ResolveEnumName(variable.Name.Lexeme);
+        if (receiver is not Expr.Variable variable) return null;
+        string name = variable.Name.Lexeme;
+        string enumName = _ctx.ResolveEnumName(name);
+        var checkedType = _ctx.TypeMap?.Get(variable);
+        if (_ctx.EnumMembers?.ContainsKey(enumName) != true || _ctx.HasLoopBodyBindingAccess(name)
+            || HasClassDefinitionCaptureShadow(name) || TryGetClassDefinitionCaptureSlot(name, out _)
+            || _ctx.InnerFunctionMethodsByName?.ContainsKey(name) == true
+            || _ctx.CurrentClassExpr?.Name?.Lexeme == name || _ctx.ResolveNamespaceVariableField(name) != null
+            || checkedType is not (null or TypeInfo.Any or TypeInfo.Enum)) return null;
+
+        // Imported const enums have a module slot but no runtime value. Keep
+        // their checked inlining after ruling out callable-local shadows.
+        if (_resolver.HasVariable(name) && !(checkedType is TypeInfo.Enum { IsConst: true }
+            && _ctx.CurrentModulePath is { } path
+            && _ctx.ModuleImportFields?.GetValueOrDefault(path)?.ContainsKey(name) == true)) return null;
+        return enumName;
+    }
+
+    private bool TryEmitEnumMember(Expr receiver, string enumName, string name)
+    {
         if (_ctx.EnumValueFields?.ContainsKey(enumName) == true)
         {
             EmitExpression(receiver);
@@ -1174,8 +1193,9 @@ public partial class ILEmitter
         if (TryEmitStableMapEntryIndex(gi))
             return;
 
-        if (!gi.Optional && gi.Index is Expr.Literal { Value: string enumMember }
-            && TryEmitEnumMember(gi.Object, enumMember))
+        string? enumReceiver = gi.Optional ? null : ResolveEnumReceiver(gi.Object);
+        if (enumReceiver != null && gi.Index is Expr.Literal { Value: string enumMember }
+            && TryEmitEnumMember(gi.Object, enumReceiver, enumMember))
             return;
 
         // A literal string key on a built-in constructor/namespace is the
@@ -1254,8 +1274,7 @@ public partial class ILEmitter
         }
 
         // Enum reverse mapping: Direction[0] -> "Up"
-        if (gi.Object is Expr.Variable enumValueVar &&
-            _ctx.EnumValueFields?.ContainsKey(_ctx.ResolveEnumName(enumValueVar.Name.Lexeme)) == true)
+        if (enumReceiver != null && _ctx.EnumValueFields?.ContainsKey(enumReceiver) == true)
         {
             EmitExpression(gi.Object);
             EnsureBoxed();
@@ -1266,8 +1285,8 @@ public partial class ILEmitter
             return;
         }
 
-        if (gi.Object is Expr.Variable enumVar &&
-            _ctx.EnumReverse?.TryGetValue(_ctx.ResolveEnumName(enumVar.Name.Lexeme), out var reverse) == true)
+        if (enumReceiver != null && gi.Object is Expr.Variable enumVar
+            && _ctx.EnumReverse?.TryGetValue(enumReceiver, out var reverse) == true)
         {
             // Check if index is a literal we can resolve at compile time
             if (gi.Index is Expr.Literal lit && lit.Value is double d && reverse.TryGetValue(d, out var memberName))
