@@ -90,6 +90,30 @@ public sealed class CliArraySubclassTests
         var path = directory.CreateFile("main.ts", source);
         var result = CliTestHelper.RunCli($"--no-tsconfig --strict --noEmit \"{path}\"", directory.Path);
         Assert.True(result.ExitCode == 0, result.StandardOutput + result.StandardError);
+
+        var invalid = directory.CreateFile("invalid.ts", source + "\nconst wrong: string[] = value[0];");
+        result = CliTestHelper.RunCli($"--no-tsconfig --strict --noEmit \"{invalid}\"", directory.Path);
+        Assert.NotEqual(0, result.ExitCode);
+        Assert.Contains("not assignable to type 'string[]'", result.StandardOutput + result.StandardError);
+    }
+
+    [Theory]
+    [InlineData("declare const value: Child<number> | Child<string>; const item: number | string = value[0];",
+        "const wrong: number = value[0];", "number")]
+    [InlineData("function read<T extends Child<number>>(value: T): number { return value[0]; }",
+        "function wrong<T extends Child<number>>(value: T): string { return value[0]; }", "string")]
+    public void DelegatedNumericReadsPreserveArrayElementTypes(string source, string incompatible, string target)
+    {
+        const string declaration = "class Child<T> extends Array<T> {}\n";
+        using var directory = CliTestHelper.CreateTempDirectory();
+        var path = directory.CreateFile("main.ts", declaration + source);
+        var result = CliTestHelper.RunCli($"--no-tsconfig --strict --noEmit \"{path}\"", directory.Path);
+        Assert.True(result.ExitCode == 0, result.StandardOutput + result.StandardError);
+
+        var invalid = directory.CreateFile("invalid.ts", declaration + source + "\n" + incompatible);
+        result = CliTestHelper.RunCli($"--no-tsconfig --strict --noEmit \"{invalid}\"", directory.Path);
+        Assert.NotEqual(0, result.ExitCode);
+        Assert.Contains($"not assignable to type '{target}'", result.StandardOutput + result.StandardError);
     }
 
     [Theory]

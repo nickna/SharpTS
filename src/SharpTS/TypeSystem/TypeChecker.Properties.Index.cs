@@ -1702,6 +1702,11 @@ public partial class TypeChecker
         if (indexType is TypeInfo.Symbol or TypeInfo.UniqueSymbol &&
             GetConstructorIndexType(objType, TokenType.TYPE_SYMBOL) is { } constructorSymbolIndex)
             return WithUncheckedUndefined(constructorSymbolIndex);
+        if ((IsNumber(indexType) || indexType is TypeInfo.NumberLiteral) &&
+            objType is TypeInfo.Instance arraySubclass &&
+            TryGetBuiltInArraySubclassElement(arraySubclass, out var arraySubclassElement))
+            return WithUncheckedUndefined(GetClassIndexType(arraySubclass, TokenType.TYPE_NUMBER)
+                ?? GetClassIndexType(arraySubclass, TokenType.TYPE_STRING) ?? arraySubclassElement);
         if (IsStringOrNumberIndexDomain(indexType) && ReadStringIndexOf(objType) is { } domainIndex)
         {
             if (objType is TypeInfo.Class or TypeInfo.GenericClass or TypeInfo.InstantiatedGeneric { GenericDefinition: TypeInfo.GenericClass } &&
