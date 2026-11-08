@@ -402,7 +402,7 @@ public partial class TypeChecker
                 }
             }
             RefreshSelfBindings(mutableClass.Freeze());
-            fieldsWithUnresolvedGetters = getterScope.FieldsWithUnresolvedGetters;
+            fieldsWithUnresolvedGetters = getterScope.GetFieldsToRetry();
             return anyInferredFieldTypeResolved;
         }
         finally

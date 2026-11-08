@@ -59,14 +59,46 @@ public partial class TypeChecker
         public HashSet<(bool IsStatic, string Name)> PendingFields { get; } = [];
         public Dictionary<(bool IsStatic, string Name), Stmt.Field> Fields { get; } = [];
         public HashSet<Stmt.Field> ActiveFields { get; } = new(ReferenceEqualityComparer.Instance);
-        public HashSet<Stmt.Field>? FieldsWithUnresolvedGetters { get; private set; }
+        private HashSet<Stmt.Field>? _fieldsWithUnresolvedGetters;
+        private Dictionary<Stmt.Field, HashSet<Stmt.Field>>? _fieldDependents;
         public int DeferredReadDepth { get; set; }
         public bool IsRetryingFields { get; set; }
 
         public void DeferActiveFields()
         {
             if (ActiveFields.Count == 0) return;
-            (FieldsWithUnresolvedGetters ??= new(ReferenceEqualityComparer.Instance)).UnionWith(ActiveFields);
+            (_fieldsWithUnresolvedGetters ??= new(ReferenceEqualityComparer.Instance)).UnionWith(ActiveFields);
+        }
+
+        public bool HasUnresolvedGetter(Stmt.Field field) => _fieldsWithUnresolvedGetters?.Contains(field) == true;
+
+        public void RecordFieldRead(Stmt.Field field)
+        {
+            if (IsRetryingFields) return;
+            foreach (var reader in ActiveFields)
+            {
+                if (ReferenceEquals(reader, field)) continue;
+                _fieldDependents ??= new(ReferenceEqualityComparer.Instance);
+                if (!_fieldDependents.TryGetValue(field, out var readers))
+                    _fieldDependents[field] = readers = new(ReferenceEqualityComparer.Instance);
+                readers.Add(reader);
+            }
+        }
+
+        public HashSet<Stmt.Field>? GetFieldsToRetry()
+        {
+            if (_fieldsWithUnresolvedGetters is not { } retry || _fieldDependents is null)
+                return _fieldsWithUnresolvedGetters;
+
+            // An earlier initializer can read a field before its getter dependency is known.
+            var pending = new Queue<Stmt.Field>(retry);
+            while (pending.TryDequeue(out var field))
+            {
+                if (!_fieldDependents.TryGetValue(field, out var readers)) continue;
+                foreach (var reader in readers)
+                    if (retry.Add(reader)) pending.Enqueue(reader);
+            }
+            return retry;
         }
     }
 
@@ -187,8 +219,9 @@ public partial class TypeChecker
     {
         if (FindFieldGetterScope(owner) is not { } scope ||
             !scope.Fields.TryGetValue((isStatic, name), out var field)) return;
+        scope.RecordFieldRead(field);
         var dependency = ActiveGetterDependency;
-        if (scope.FieldsWithUnresolvedGetters?.Contains(field) == true)
+        if (scope.HasUnresolvedGetter(field))
         {
             _fieldGetterScope?.DeferActiveFields();
             if (dependency is not null) dependency.HasUnresolvedDependency = true;
@@ -243,7 +276,9 @@ public partial class TypeChecker
         {
             // Restore the speculative flow so the ordinary initializer pass
             // retains source-order behavior.
-            CheckAndInferClassFieldInitializer(field, scope.Owner);
+            if (CheckAndInferClassFieldInitializer(field, scope.Owner) && scope.IsRetryingFields)
+                // An indexed read can infer this field before selecting its member from the class snapshot.
+                scope.Owner.Freeze();
             scope.PendingFields.Remove((field.IsStatic, GetFieldMemberName(field)));
         }
         finally
