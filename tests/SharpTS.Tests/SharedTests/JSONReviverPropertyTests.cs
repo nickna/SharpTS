@@ -1,0 +1,55 @@
+using SharpTS.Tests.Infrastructure;
+using Xunit;
+
+namespace SharpTS.Tests.SharedTests;
+
+public sealed class JSONReviverPropertyTests
+{
+    [Theory, ModeData]
+    public void ReviverReadsAndReplacesAnInjectedGetter(ExecutionMode mode)
+    {
+        const string source = """
+            let reads = 0;
+            let writes = 0;
+            let holder;
+            const values = [];
+            const result = JSON.parse('{"first":0,"last":{"a":1}}', function (key, value) {
+                if (key === 'first') {
+                    holder = this.last;
+                    Object.defineProperty(holder, 'injected', {
+                        get() { reads++; return this === holder ? 7 : 99; },
+                        set() { writes++; },
+                        configurable: true, enumerable: true
+                    });
+                }
+                if (key === 'injected') values.push(value);
+                return key === 'injected' ? 8 : value;
+            });
+            const descriptor = Object.getOwnPropertyDescriptor(result.last, 'injected');
+            console.log(reads, writes, JSON.stringify(values), result.last.injected);
+            console.log(descriptor.value, descriptor.writable, descriptor.enumerable, descriptor.configurable);
+            """;
+        Assert.Equal("1 0 [7] 8\n8 true true true\n", TestHarness.RunUnchecked(source, mode));
+    }
+
+    [Theory, ModeData]
+    public void ReviverReadsButDoesNotReplaceANonConfigurableGetter(ExecutionMode mode)
+    {
+        const string source = """
+            let reads = 0;
+            const result = JSON.parse('{"a":1,"b":2}', function (key, value) {
+                if (key === 'a') Object.defineProperty(this, 'b', {
+                    get() { reads++; return 7; },
+                    configurable: false, enumerable: true
+                });
+                if (key === 'b') {
+                    console.log(value);
+                    return 8;
+                }
+                return value;
+            });
+            console.log(result.b, reads);
+            """;
+        Assert.Equal("7\n7 2\n", TestHarness.RunUnchecked(source, mode));
+    }
+}

@@ -218,10 +218,7 @@ public static class JSONBuiltIns
             case SharpTSProxy proxy:
                 return proxy.TrapGet(key, interp);
             case SharpTSObject obj:
-                {
-                    var v = obj.GetProperty(key);
-                    return v is SharpTSUndefined ? null : v;
-                }
+                return interp.GetPropertyValue(obj, key);
             case SharpTSArray arr:
                 if (long.TryParse(key, System.Globalization.NumberStyles.Integer,
                         System.Globalization.CultureInfo.InvariantCulture, out var idx)
