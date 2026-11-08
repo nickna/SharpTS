@@ -849,7 +849,8 @@ public partial class TypeChecker
             TypeInfo.Class classTypeForBody = PublishInitialClassType(classStmt, mutableClass, classTypeParams);
 
             bool anyInferredFieldTypeResolved = CheckClassFieldInitializers(
-                classStmt, classStmt.Fields, mutableClass, classTypeEnv, classTypeParams);
+                classStmt, classStmt.Fields, mutableClass, classTypeEnv, classTypeParams,
+                out var fieldsWithUnresolvedGetters);
             using (new EnvironmentScope(this, classTypeEnv))
                 anyInferredFieldTypeResolved |= CheckClassAutoAccessorInitializers(classStmt, mutableClass);
             if (anyInferredFieldTypeResolved)
@@ -906,6 +907,10 @@ public partial class TypeChecker
                 // the flow established by eagerly executed static blocks.
                 if (staticBlockExit is not null) RestoreValueFlow(staticBlockExit);
             }
+
+            if (anyInferredMethodReturnResolved && fieldsWithUnresolvedGetters is { Count: > 0 })
+                anyInferredFieldTypeResolved |= RevalidateClassFieldInitializers(
+                    classStmt, classStmt.Fields, mutableClass, classTypeEnv, classTypeParams, fieldsWithUnresolvedGetters);
 
             CheckStrictPropertyInitialization(classStmt, mutableClass);
 

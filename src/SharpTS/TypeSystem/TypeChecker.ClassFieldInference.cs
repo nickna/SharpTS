@@ -59,7 +59,14 @@ public partial class TypeChecker
         public HashSet<(bool IsStatic, string Name)> PendingFields { get; } = [];
         public Dictionary<(bool IsStatic, string Name), Stmt.Field> Fields { get; } = [];
         public HashSet<Stmt.Field> ActiveFields { get; } = new(ReferenceEqualityComparer.Instance);
+        public HashSet<Stmt.Field>? FieldsWithUnresolvedGetters { get; private set; }
         public int DeferredReadDepth { get; set; }
+
+        public void DeferActiveFields()
+        {
+            if (ActiveFields.Count == 0) return;
+            (FieldsWithUnresolvedGetters ??= new(ReferenceEqualityComparer.Instance)).UnionWith(ActiveFields);
+        }
     }
 
     private FieldGetterScope? _fieldGetterScope;
@@ -178,12 +185,17 @@ public partial class TypeChecker
     private void ObservePendingGetterFieldRead(TypeInfo owner, bool isStatic, string name)
     {
         if (FindFieldGetterScope(owner) is not { } scope ||
-            !scope.PendingFields.Contains((isStatic, name))) return;
+            !scope.Fields.TryGetValue((isStatic, name), out var field)) return;
+        var dependency = ActiveGetterDependency;
+        if (scope.FieldsWithUnresolvedGetters?.Contains(field) == true)
+        {
+            _fieldGetterScope?.DeferActiveFields();
+            if (dependency is not null) dependency.HasUnresolvedDependency = true;
+        }
+        if (!scope.PendingFields.Contains((isStatic, name))) return;
         // A getter body is checked without executing it. Infer any forward
         // field type it needs in the same isolated flow used for deferred reads.
-        var dependency = ActiveGetterDependency;
         if ((_classFieldDeferredReadDepth > scope.DeferredReadDepth || dependency is not null) &&
-            scope.Fields.TryGetValue((isStatic, name), out var field) &&
             !scope.ActiveFields.Contains(field))
         {
             InferDeferredClassFieldDependency(scope, field);
@@ -342,6 +354,7 @@ public partial class TypeChecker
     private TypeInfo CheckFieldStageGetter(FieldGetterScope scope, object accessor, Func<FieldGetterDependency, TypeInfo> check)
     {
         var caller = ActiveGetterDependency;
+        var callerScope = _fieldGetterScope;
         if (scope.Resolved.TryGetValue(accessor, out var resolved))
             return ObserveResult(resolved);
         if (scope.Active.Any(dependency => ReferenceEquals(dependency.Accessor, accessor)))
@@ -386,7 +399,11 @@ public partial class TypeChecker
         // Checking a nested class can run its own independent inference.
         TypeInfo ObserveResult(TypeInfo result)
         {
-            if (result is TypeInfo.Inferred && caller is not null) caller.HasUnresolvedDependency = true;
+            if (result is TypeInfo.Inferred)
+            {
+                if (caller is not null) caller.HasUnresolvedDependency = true;
+                callerScope?.DeferActiveFields();
+            }
             return result;
         }
     }

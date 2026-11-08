@@ -19,4 +19,18 @@ public sealed class PublicGetterFieldInferenceTests
             TestHarness.ParseOrThrow($"{declaration} const wrong: string = {access};")));
         Assert.Equal("TS2322", error.Diagnostic.TsCode);
     }
+
+    [Theory]
+    [InlineData("class C { get x() { this.y; return 1; } y = this.x; }", "new C().y")]
+    [InlineData("const C = class { get x() { this.y; return 1; } y = this.x; };", "new C().y")]
+    [InlineData("class C { static get x() { C.y; return 1; } static y = C.x; }", "C.y")]
+    [InlineData("class C { get x() { this.y; return 1; } y = this.x; z = this.y; }", "new C().z")]
+    public void AGetterWithACompletedReturnTypeCanResolveCyclicFields(string declaration, string access)
+    {
+        new TypeChecker(strictNullChecks: true).Check(
+            TestHarness.ParseOrThrow($"{declaration} const right: number = {access};"));
+        var error = Assert.ThrowsAny<TypeCheckException>(() => new TypeChecker(strictNullChecks: true).Check(
+            TestHarness.ParseOrThrow($"{declaration} const wrong: string = {access};")));
+        Assert.Equal("TS2322", error.Diagnostic.TsCode);
+    }
 }

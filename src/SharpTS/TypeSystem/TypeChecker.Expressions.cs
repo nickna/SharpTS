@@ -2968,7 +2968,8 @@ public partial class TypeChecker
         mutableClass.ResetFrozenCache();
 
         bool anyInferredFieldTypeResolved = CheckClassFieldInitializers(
-            classExpr, classExpr.Fields, mutableClass, classTypeEnv, classTypeParams);
+            classExpr, classExpr.Fields, mutableClass, classTypeEnv, classTypeParams,
+            out var fieldsWithUnresolvedGetters);
         using (new EnvironmentScope(this, classTypeEnv))
             anyInferredFieldTypeResolved |= CheckClassAutoAccessorInitializers(declarationView, mutableClass);
         if (anyInferredFieldTypeResolved)
@@ -3288,6 +3289,10 @@ public partial class TypeChecker
             _privateNameEnclosingClasses.Pop();
             _currentClass = prevClass;
         }
+
+        if (anyInferredMethodReturnResolved && fieldsWithUnresolvedGetters is { Count: > 0 })
+            anyInferredFieldTypeResolved |= RevalidateClassFieldInitializers(
+                classExpr, classExpr.Fields, mutableClass, classTypeEnv, classTypeParams, fieldsWithUnresolvedGetters);
 
         // Publish method return types inferred during the body pass. The class was frozen with
         // <inferred> placeholders before the body could be checked, so the frozen Class the binding
