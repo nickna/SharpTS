@@ -5,6 +5,8 @@ namespace SharpTS.Compilation;
 
 public partial class AsyncArrowMoveNextEmitter
 {
+    internal IReadOnlyDictionary<string, FieldBuilder> StandaloneCaptureFields => _builder.StandaloneCaptureFields;
+
     // EmitExpression dispatch is inherited from ExpressionEmitterBase.
     // EmitLiteral is inherited from the base too: it leaves value-type literals (number/boolean)
     // UNBOXED with a tracked StackType (Double/Boolean), the convention the shared expression
@@ -30,6 +32,12 @@ public partial class AsyncArrowMoveNextEmitter
 
     protected override void EmitThis()
     {
+        if (Resolver.TryLoadThisBindingCell())
+        {
+            ConstructorReceiverEmitter.ReadCell(_il, Ctx);
+            SetStackUnknown();
+            return;
+        }
         if (TryEmitGuestThis()) return;
         // Async function expression or lowered declaration: `this` is bound dynamically at
         // call time (fn.call/apply/bind) and snapshotted into OwnThisField by the
