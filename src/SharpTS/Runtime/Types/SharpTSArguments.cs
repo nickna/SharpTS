@@ -29,8 +29,15 @@ public sealed class SharpTSArguments : SharpTSArray
         var result = new SharpTSArguments(arguments);
         result.DefineProperty(SharpTSSymbol.Iterator,
             SharpTSPropertyDescriptor.ForMethod(interpreter.GetArrayPrototype().GetIntrinsicValuesMethod()));
-        if (!environment.IsStrictMode && !environment.RequiresUnmappedArguments
-            && body is not null && !ParameterBinder.HasUseStrict(body))
+        if (environment.IsStrictMode || environment.RequiresUnmappedArguments
+            || ParameterBinder.HasUseStrict(body)
+            || parameters.Any(parameter => parameter.IsRest || parameter.DefaultValue is not null)
+            || ParameterBinder.ParameterInitializers(body) is not null)
+        {
+            var thrower = interpreter.GetArgumentsCalleeThrower();
+            result.DefineProperty("callee", new SharpTSPropertyDescriptor(getter: thrower, setter: thrower));
+        }
+        else if (body is not null)
         {
             foreach (var (index, name) in ParameterBinder.MappedArgumentParameters(parameters, body))
             {
