@@ -1247,15 +1247,16 @@ public partial class Interpreter
             ThrowCannotReadProperty(obj, key);
         }
 
-        if (index is string enumMember)
+        if (obj is SharpTSEnum enumValue && index is string or double)
         {
-            if (obj is SharpTSEnum enumValue)
-                return enumValue.HasMember(enumMember)
-                    ? enumValue.GetMemberRV(enumMember)
-                    : RuntimeValue.FromBoxed(enumValue.FindReverseProperty(enumMember)
-                        ?? GetPropertyValue(GetObjectPrototype(), enumMember, enumValue));
-            if (obj is ConstEnumValues constEnum) return constEnum.GetMemberRV(enumMember);
+            string key = index as string ?? ToPropertyKeyString(index);
+            return enumValue.HasMember(key)
+                ? enumValue.GetMemberRV(key)
+                : RuntimeValue.FromBoxed(enumValue.FindReverseProperty(key)
+                    ?? GetPropertyValue(GetObjectPrototype(), key, enumValue));
         }
+        if (obj is ConstEnumValues constEnum && index is string enumMember)
+            return constEnum.GetMemberRV(enumMember);
 
         if (HasArrayObjectKey(obj, index))
             index = ToPropertyKey(index);
@@ -1488,7 +1489,6 @@ public partial class Interpreter
                 ?? SharpTSUndefined.Instance,
             IndexTarget.TypedArray t => t.Target[t.Index],
             IndexTarget.Buffer t => t.Target[t.Index],
-            IndexTarget.EnumReverse t => t.Target.GetReverse(t.Index),
             IndexTarget.ConstEnumError t => throw new InterpreterException(
                 $"Runtime Error: Cannot use index access on const enum '{t.Target.Name}'. Const enum members can only be accessed by name."),
             // Route through the same implementation the dotted path uses. A bare
