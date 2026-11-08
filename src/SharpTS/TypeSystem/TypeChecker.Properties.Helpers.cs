@@ -758,8 +758,7 @@ public partial class TypeChecker
 
     private TypeInfo? ResolveArraySuperclassMember(TypeInfo superclass, string memberName,
         Dictionary<string, TypeInfo> substitutions)
-        => superclass is TypeInfo.MutableClass
-                { IsDynamicSuperclass: true, Name: BuiltInNames.Array or "ReadonlyArray" } placeholder
+        => superclass is TypeInfo.MutableClass { IsBuiltInArraySuperclass: true } placeholder
             ? BuiltInTypes.GetArrayMemberType(memberName,
                 SubstituteConstructorMember(GetArrayPlaceholderElement(placeholder), substitutions))
             : null;

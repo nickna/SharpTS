@@ -56,6 +56,11 @@ public sealed class CliArraySubclassTests
     public void DeclarationLibrariesKeepTheElementTypeInInheritedArrayMethods(string declaration)
     {
         using var directory = CliTestHelper.CreateTempDirectory();
+        var validPath = directory.CreateFile("valid.ts",
+            $"{declaration} const length: number = value.push(); value.push(7);");
+        var valid = CliTestHelper.RunCli($"--no-tsconfig --strict --noEmit \"{validPath}\"", directory.Path);
+        Assert.True(valid.ExitCode == 0, valid.StandardOutput + valid.StandardError);
+
         var path = directory.CreateFile("main.ts", $"{declaration} value.push(7); value.push(\"wrong\");");
         var result = CliTestHelper.RunCli($"--no-tsconfig --strict --noEmit \"{path}\"", directory.Path);
         Assert.NotEqual(0, result.ExitCode);
@@ -78,6 +83,22 @@ public sealed class CliArraySubclassTests
         var result = CliTestHelper.RunCli($"--no-tsconfig --strict --noEmit \"{path}\"", directory.Path);
         Assert.NotEqual(0, result.ExitCode);
         Assert.Contains("not assignable to type 'number'", result.StandardOutput + result.StandardError);
+    }
+
+    [Fact]
+    public void QualifiedAnyArraySuperclassKeepsUnknownMembers()
+    {
+        const string source = """
+            const X: any = { Array: class {} };
+            class Child<T> extends X.Array {}
+            const value = new Child<number>();
+            const length: string = value.length;
+            value.push("value");
+            """;
+        using var directory = CliTestHelper.CreateTempDirectory();
+        var path = directory.CreateFile("main.ts", source);
+        var result = CliTestHelper.RunCli($"--no-tsconfig --strict --noEmit \"{path}\"", directory.Path);
+        Assert.True(result.ExitCode == 0, result.StandardOutput + result.StandardError);
     }
 
     [Theory]

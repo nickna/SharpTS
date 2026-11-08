@@ -1371,7 +1371,8 @@ public partial class TypeChecker
         if (ProjectDefaultLibraryPromiseHeritage(classStmt.SuperclassExpr, superType,
                 classStmt.SuperclassTypeArgs, classStmt.SuperclassTypeArgNodes) is { } promiseBase)
             return promiseBase;
-        if (IsDefaultLibraryArrayHeritage(classStmt.SuperclassExpr, superType))
+        bool defaultLibraryArray = IsDefaultLibraryArrayHeritage(classStmt.SuperclassExpr, superType);
+        if (defaultLibraryArray)
         {
             // The runtime's Array subclass bridge is also used by the single-file API.
             // Loaded libraries represent its value as ArrayConstructor, not a class.
@@ -1435,7 +1436,15 @@ public partial class TypeChecker
                 // has no lexical leaf name. Its permissive placeholder must not
                 // masquerade as a named built-in or dereference a missing name.
                 var leafName = Expr.GetSuperclassLeafName(classStmt.SuperclassExpr) ?? "<dynamic superclass>";
-                var placeholder = new TypeInfo.MutableClass(leafName) { IsDynamicSuperclass = true };
+                var placeholder = new TypeInfo.MutableClass(leafName)
+                {
+                    IsDynamicSuperclass = true,
+                    IsBuiltInArraySuperclass = defaultLibraryArray ||
+                        (!_hasDefaultLibraries &&
+                         classStmt.SuperclassExpr is Expr.Variable { Name.Lexeme: BuiltInNames.Array } &&
+                         _environment.Get(BuiltInNames.Array) is null &&
+                         _currentMergedNamespace?.Values.ContainsKey(BuiltInNames.Array) != true)
+                };
                 var permissiveConstructor = new TypeInfo.Function(
                     [TypeInfo.Any.Shared], TypeInfo.Void.Shared, RequiredParams: 0, HasRestParam: true);
                 placeholder.Methods["constructor"] = permissiveConstructor;

@@ -2748,9 +2748,14 @@ public partial class TypeChecker
                     (nativeBase.Name.Lexeme is "Array" or "Promise" || BuiltInNames.IsErrorTypeName(nativeBase.Name.Lexeme)) &&
                     _environment.Get(nativeBase.Name.Lexeme) is null &&
                     _currentMergedNamespace?.Values.ContainsKey(nativeBase.Name.Lexeme) != true;
-                var placeholder = new TypeInfo.MutableClass(useBuiltInPlaceholder
+                string placeholderName = useBuiltInPlaceholder
                     ? ((Expr.Variable)classExpr.SuperclassExpr).Name.Lexeme
-                    : "$AnySuperclass") { IsDynamicSuperclass = true };
+                    : "$AnySuperclass";
+                var placeholder = new TypeInfo.MutableClass(placeholderName)
+                {
+                    IsDynamicSuperclass = true,
+                    IsBuiltInArraySuperclass = placeholderName == BuiltInNames.Array
+                };
                 if (useBuiltInPlaceholder)
                 {
                     // Match built-in declaration heritage without changing

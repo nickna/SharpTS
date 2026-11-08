@@ -383,6 +383,8 @@ public abstract record TypeInfo
         // Heritage from an any-valued constructor retains an unknown static
         // surface. Source class shells must not acquire this permission.
         internal bool IsDynamicSuperclass { get; init; }
+        // An unrelated dynamic base can have the same leaf name as Array.
+        internal bool IsBuiltInArraySuperclass { get; init; }
         internal bool IsDotNetMapped { get; set; }
         internal TypeInfo? ComputedConstructorMethodType { get; set; }
         internal AccessModifier ComputedConstructorMethodAccess { get; set; }

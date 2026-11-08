@@ -125,7 +125,7 @@ public static class BuiltInTypes
         return name switch
         {
             "length" => NumberType,
-            "push" => new TypeInfo.Function([new TypeInfo.Array(elementType)], NumberType, RequiredParams: 1, HasRestParam: true), // variadic: push(...items: T[])
+            "push" => new TypeInfo.Function([new TypeInfo.Array(elementType)], NumberType, RequiredParams: 0, HasRestParam: true), // variadic: push(...items: T[])
             "pop" => new TypeInfo.Function([], elementType),
             "shift" => new TypeInfo.Function([], elementType),
             "unshift" => new TypeInfo.Function([new TypeInfo.Array(elementType)], NumberType, RequiredParams: 0, HasRestParam: true), // variadic: unshift(...items: T[])
