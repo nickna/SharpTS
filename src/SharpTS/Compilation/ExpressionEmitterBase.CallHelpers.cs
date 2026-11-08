@@ -224,8 +224,7 @@ public abstract partial class ExpressionEmitterBase
                     && Ctx.Runtime?.Arguments.CurrentField != null)
                 {
                     EmitArgumentsObservingCall(c.Arguments, targetMethod.GetParameters(), hasRestParam);
-                    IL.Emit(OpCodes.Call, targetMethod);
-                    BoxReturnValueIfNeeded(targetMethod.ReturnType);
+                    EmitPreparedStaticCall(c, targetMethod);
                     return;
                 }
 
@@ -378,8 +377,7 @@ public abstract partial class ExpressionEmitterBase
                     }
                 }
 
-                IL.Emit(OpCodes.Call, targetMethod);
-                BoxReturnValueIfNeeded(targetMethod.ReturnType);
+                EmitPreparedStaticCall(c, targetMethod);
                 return;
             }
         }
@@ -404,6 +402,16 @@ public abstract partial class ExpressionEmitterBase
         // Function value call with spread support
         EmitFunctionValueCall(c);
     }
+
+    // The CLR arguments have been prepared on the stack for a static call.
+    protected virtual void EmitPreparedStaticCall(Expr.Call call, MethodInfo target)
+    {
+        IL.Emit(OpCodes.Call, target);
+        BoxReturnValueIfNeeded(target.ReturnType);
+    }
+
+    // Called after the call's inputs have been stored and before loading any of them.
+    protected virtual void EmitCallCompletion(Expr.Call call, Action emit) => emit();
 
     /// <summary>
     /// Lowers a constant indirect eval of a single global identifier to the emitted
@@ -1231,11 +1239,19 @@ public abstract partial class ExpressionEmitterBase
     /// an untracked stack type after an <c>unbox.any</c>.
     /// </summary>
     private LocalBuilder SpillConvertedArg(Expr arg, Type paramType)
+        => SpillAwaitSafeArgument(arg, () =>
+        {
+            EmitExpression(arg);
+            EmitConversionForParameter(arg, paramType);
+            if (paramType.IsValueType)
+                IL.Emit(OpCodes.Box, paramType);
+            SetStackUnknown();
+        });
+
+    protected virtual LocalBuilder SpillAwaitSafeArgument(Expr argument, Action? emitBoxed = null)
     {
-        EmitExpression(arg);
-        EmitConversionForParameter(arg, paramType);
-        if (paramType.IsValueType)
-            IL.Emit(OpCodes.Box, paramType);
+        if (emitBoxed is null) return SpillBoxed(argument);
+        emitBoxed();
         return _helpers.SpillStoreObject();
     }
 
@@ -1429,7 +1445,9 @@ public abstract partial class ExpressionEmitterBase
             IL.Emit(OpCodes.Callvirt, Types.GetMethod(Types.ListOfObject, "ToArray", Types.EmptyTypes));
             return;
         }
-        var argumentLocals = args.Select(SpillBoxed).ToArray();
+        var argumentLocals = AnyContainsSuspension(args)
+            ? args.Select(argument => SpillAwaitSafeArgument(argument)).ToArray()
+            : args.Select(SpillBoxed).ToArray();
         EmitArgsArray(args, argumentLocals);
     }
 
@@ -1791,13 +1809,17 @@ public abstract partial class ExpressionEmitterBase
         // callee's strictness while preserving an explicit `.call(null)` as null.
         var argsLocal = IL.DeclareLocal(Types.ObjectArray);
         IL.Emit(OpCodes.Stloc, argsLocal);
-        if (receiverLocal != null)
-            IL.Emit(OpCodes.Ldloc, receiverLocal);
-        else
-            IL.Emit(OpCodes.Ldsfld, Ctx.Runtime!.Sentinels.UndefinedInstance);
-        IL.Emit(OpCodes.Ldloc, calleeLocal);
-        IL.Emit(OpCodes.Ldloc, argsLocal);
-        IL.Emit(OpCodes.Call, Ctx.Runtime!.Invocation.Method);
+        EmitCallCompletion(c, () =>
+        {
+            if (receiverLocal != null)
+                IL.Emit(OpCodes.Ldloc, receiverLocal);
+            else
+                IL.Emit(OpCodes.Ldsfld, Ctx.Runtime!.Sentinels.UndefinedInstance);
+            IL.Emit(OpCodes.Ldloc, calleeLocal);
+            IL.Emit(OpCodes.Ldloc, argsLocal);
+            IL.Emit(OpCodes.Call, Ctx.Runtime!.Invocation.Method);
+            SetStackUnknown();
+        });
 
         if (optChainNullishLabel != null)
         {

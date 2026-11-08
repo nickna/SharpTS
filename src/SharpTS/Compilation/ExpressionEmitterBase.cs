@@ -496,19 +496,24 @@ public abstract partial class ExpressionEmitterBase : IEmitterContext
         if (TryEmitStableNumericLocalComparison(b))
             return;
 
-        // Numeric binary operations select Number or BigInt only after both
-        // values are evaluated and each ordered ToNumeric completes.
-        if (IsNumericBinaryOp(b.Operator.Type))
-        {
-            EmitDynamicNumericBinary(b);
-            return;
-        }
-
         // Spill operands so an await inside Right doesn't suspend with Left on the stack.
         var leftLocal = SpillBoxed(b.Left);
         var rightLocal = SpillBoxed(b.Right);
+        EmitSpilledBinaryOperation(b, leftLocal, rightLocal);
+    }
+
+    protected void EmitSpilledBinaryOperation(Expr.Binary b, LocalBuilder leftLocal, LocalBuilder rightLocal)
+    {
         IL.Emit(OpCodes.Ldloc, leftLocal);
         IL.Emit(OpCodes.Ldloc, rightLocal);
+
+        if (IsNumericBinaryOp(b.Operator.Type))
+        {
+            IL.Emit(OpCodes.Ldc_I4, (int)b.Operator.Type);
+            IL.Emit(OpCodes.Call, Ctx.Runtime!.Operators.NumericBinary);
+            SetStackUnknown();
+            return;
+        }
 
         // `in` and `instanceof` are binary operators not covered by TryEmitBinaryOperator.
         switch (b.Operator.Type)
@@ -603,11 +608,7 @@ public abstract partial class ExpressionEmitterBase : IEmitterContext
     {
         var leftLocal = SpillBoxed(b.Left);
         var rightLocal = SpillBoxed(b.Right);
-        IL.Emit(OpCodes.Ldloc, leftLocal);
-        IL.Emit(OpCodes.Ldloc, rightLocal);
-        IL.Emit(OpCodes.Ldc_I4, (int)b.Operator.Type);
-        IL.Emit(OpCodes.Call, Ctx.Runtime!.Operators.NumericBinary);
-        SetStackUnknown();
+        EmitSpilledBinaryOperation(b, leftLocal, rightLocal);
     }
 
     /// <summary>

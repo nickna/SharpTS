@@ -53,4 +53,58 @@ public sealed class AsyncGeneratorOperandExceptionTests
 
         Assert.Equal("cleanup\nrejected awaited\n", TestHarness.RunUnchecked(source, mode));
     }
+
+    [Theory, ModeData]
+    public void SynchronousBinaryOperandsReachCatchOnEitherSideOfAwait(ExecutionMode mode)
+    {
+        const string source = """
+            function fail(token) { throw token; }
+            async function* inspect() {
+                try { const value = fail("before") + await Promise.resolve(1); yield value; }
+                catch (error) { yield error; }
+                try { const value = await Promise.resolve(1) - fail("after"); yield value; }
+                catch (error) { yield error; }
+                try {
+                    const operand = { valueOf() { throw "coercion"; } };
+                    const value = operand + await 1;
+                    yield value;
+                } catch (error) { yield error; }
+            }
+            async function run() {
+                const iterator = inspect();
+                console.log((await iterator.next()).value);
+                console.log((await iterator.next()).value);
+                console.log((await iterator.next()).value);
+            }
+            run();
+            """;
+
+        Assert.Equal("before\nafter\ncoercion\n", TestHarness.RunUnchecked(source, mode));
+    }
+
+    [Theory, ModeData]
+    public void SynchronousCallsReachCatchAfterAwaitedArguments(ExecutionMode mode)
+    {
+        const string source = """
+            function fail(token) { throw token; }
+            const alias = fail;
+            async function* inspect() {
+                try { const value = fail(await Promise.resolve("direct")); yield value; }
+                catch (error) { yield error; }
+                try { yield alias(await Promise.resolve("alias")); }
+                catch (error) { yield error; }
+                try { yield alias(fail("argument"), await 1); }
+                catch (error) { yield error; }
+            }
+            async function run() {
+                const iterator = inspect();
+                console.log((await iterator.next()).value);
+                console.log((await iterator.next()).value);
+                console.log((await iterator.next()).value);
+            }
+            run();
+            """;
+
+        Assert.Equal("direct\nalias\nargument\n", TestHarness.RunUnchecked(source, mode));
+    }
 }
