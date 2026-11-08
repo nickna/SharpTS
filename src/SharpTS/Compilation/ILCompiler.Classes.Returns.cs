@@ -92,10 +92,9 @@ public partial class ILCompiler
         // The source construction policy already proves that these arrows must
         // retain the mutable this cell, including under unchecked JS compilation.
         return _typeMapper.IsDynamicClassInstance(type)
-            || (type is null && owner is not null && (NominalClassMayReplaceReceiver(owner)
-                || expression is not null && HasRuntimeParent(expression)))
+            || expression is not null && owner is not null && HasRuntimeParent(expression)
+            || type is null && NominalClassMayReplaceReceiver(owner)
             || source is not null && UsesReceiverConstruction(source)
-            || expression != null && _lexicalSuperElementInitializers.ContainsKey(expression)
             || expression?.SuperclassExpr is Expr.ClassExpr && _features?.UsesClassPrototypeMutation == true;
     }
 }

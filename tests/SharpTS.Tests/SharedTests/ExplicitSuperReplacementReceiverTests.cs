@@ -73,6 +73,27 @@ public sealed class ExplicitSuperReplacementReceiverTests
         Assert.Equal("true 7 true\n", TestHarness.RunUnchecked(source, ExecutionMode.Compiled));
     }
 
+    [Theory, ModeData]
+    public void CanonicalConstructionBindsDynamicParentFieldArrowsToTheReplacement(ExecutionMode mode)
+    {
+        const string source = """
+            const replacement = {};
+            class Base { constructor() { return replacement; } }
+            function make(Parent: any) {
+                class Child extends Parent {
+                    field = 7;
+                    getReceiver = () => this;
+                    constructor() { super(); }
+                }
+                return new Child();
+            }
+            const result: any = make(Base);
+            console.log(result === replacement, result.field, result.getReceiver() === result);
+            """;
+
+        Assert.Equal("true 7 true\n", TestHarness.Run(source, mode));
+    }
+
     public static IEnumerable<object[]> Cases()
     {
         yield return ["original", """

@@ -28,9 +28,10 @@ public partial class ILCompiler
     private void DefineClassExpression(Expr.ClassExpr classExpr)
     {
         if (_classExprs.Builders.ContainsKey(classExpr)) return;
-        RegisterLiveSuperConstruction(ClassExpressionDeclaration(classExpr), _typeMap.GetClassExprType(classExpr));
-        if (ClassConstructorMayReplace(classExpr.Methods) && _typeMap.GetClassExprType(classExpr) is { } replacementClass)
-            _typeMapper.RegisterDynamicClassInstance(replacementClass.Core.DeclarationId);
+        var checkedClass = _typeMap.GetClassExprType(classExpr);
+        RegisterLiveSuperConstruction(ClassExpressionDeclaration(classExpr), checkedClass);
+        if (checkedClass is not null && ClassConstructorMayReplace(classExpr.Methods))
+            _typeMapper.RegisterDynamicClassInstance(checkedClass.Core.DeclarationId);
         if (ResolveClassExpressionParent(classExpr) is { } parent && !ReferenceEquals(parent, classExpr))
             DefineClassExpression(parent);
         string className = _classExprs.Names[classExpr];
@@ -252,10 +253,10 @@ public partial class ILCompiler
         // Store the type builder
         _classExprs.Builders[classExpr] = typeBuilder;
         DeclareLexicalSuperElementInitializer(classExpr, typeBuilder);
-        if (_typeMap.GetClassExprType(classExpr) is { } checkedClass)
+        if (checkedClass is not null)
             _classes.CheckedDeclarationNames[checkedClass.Core.DeclarationId] = className;
-        else if (!_lexicalSuperElementInitializers.ContainsKey(classExpr)
-            && (HasRuntimeParent(classExpr) || NominalClassMayReplaceReceiver(typeBuilder)))
+        if (!_lexicalSuperElementInitializers.ContainsKey(classExpr)
+            && (HasRuntimeParent(classExpr) || checkedClass is null && NominalClassMayReplaceReceiver(typeBuilder)))
             MarkCollectedClassExpressionReceiverArrows(classExpr);
     }
 
