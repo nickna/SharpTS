@@ -742,7 +742,7 @@ public partial class TypeChecker
             // Numeric reverse entries have the exact spelling of the number's
             // property key, including negative and fractional values.
             return !enumType.IsConst && !enumType.IsScalar && enumType.Kind != EnumKind.String && IsNumericConstructorIndex(indexType)
-                ? TypeInfo.String.Shared : null;
+                ? WithUncheckedUndefined(TypeInfo.String.Shared) : null;
         }
         if (!IsNumber(indexType) && indexType is not TypeInfo.NumberLiteral) return null;
         if (enumType.IsConst)
