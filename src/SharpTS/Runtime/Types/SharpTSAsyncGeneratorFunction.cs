@@ -69,10 +69,11 @@ public class SharpTSAsyncGeneratorFunction : ISharpTSGeneratorFunctionValue, IRe
         // parent scope to ordinary or lifted object generator declarations.
         bool isClassMethod = PrivateOwner != null || _declaration.IsStatic;
         bool ownsStrictThis = isClassMethod || _declaration.IsPrivate;
+        bool hasStrictDirective = _declaration.Body != null && DirectivePrologue.HasUseStrict(_declaration.Body);
         RuntimeEnvironment closure = isClassMethod
             ? new RuntimeEnvironment(_closure, strictMode: true) : _closure;
         RuntimeEnvironment environment = new(closure,
-            strictMode: ownsStrictThis ? true : null)
+            strictMode: ownsStrictThis || hasStrictDirective ? true : null)
             { PrivateClass = PrivateOwner, StaticSuper = _declaration.IsStatic };
         environment.NewTarget = RuntimeValue.Undefined;
         environment.ConstructionFrame = null;
@@ -86,7 +87,7 @@ public class SharpTSAsyncGeneratorFunction : ISharpTSGeneratorFunctionValue, IRe
             if (_boundSuper != null)
                 environment.Define("super", _boundSuper);
         }
-        else if (ownsStrictThis)
+        else if (ownsStrictThis || hasStrictDirective)
         {
             environment.Define("this", SharpTSUndefined.Instance);
         }

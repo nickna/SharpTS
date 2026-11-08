@@ -26,7 +26,7 @@ public partial class RuntimeEmitter
         );
         runtime.RuntimeClass.Type = typeBuilder;
         runtime.Arguments.Initialize = typeBuilder.DefineMethod("InitializeArguments",
-            MethodAttributes.Public | MethodAttributes.Static, _types.Void, [_types.Object]);
+            MethodAttributes.Public | MethodAttributes.Static, _types.Void, [_types.Object, _types.Boolean]);
 
         // Reserve Stringify(object) → string. EmitStringify fills the body
         // later; it must skip its own DefineMethod call when this signature

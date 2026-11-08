@@ -630,15 +630,17 @@ public partial class TypeChecker
         return null;
     }
 
-    private static bool TryGetBuiltInArraySubclassElement(
+    private bool TryGetBuiltInArraySubclassElement(
         TypeInfo.Instance instance, out TypeInfo elementType)
     {
         TypeInfo? current = instance.ResolvedClassType;
+        Dictionary<string, TypeInfo> substitutions = [];
         for (int guard = 0; current is not null && guard < 64; guard++)
         {
-            if (current is TypeInfo.MutableClass { Name: "Array" or "ReadonlyArray" } arrayBase)
+            substitutions = ComposeInheritedFieldSubstitutions(current, substitutions);
+            if (current is TypeInfo.MutableClass { IsBuiltInArraySuperclass: true } arrayBase)
             {
-                elementType = GetArrayPlaceholderElement(arrayBase);
+                elementType = SubstituteConstructorMember(GetArrayPlaceholderElement(arrayBase), substitutions);
                 return true;
             }
             current = GetSuperclass(current);
@@ -750,7 +752,7 @@ public partial class TypeChecker
             throw new TypeCheckException($" A const enum member can only be accessed using its name, not by index. Cannot use reverse mapping on const enum '{enumType.Name}'.", tsCode: "TS2476");
         if (enumType.Kind == EnumKind.String)
             throw new TypeCheckException($" Reverse mapping is not supported for string enum '{enumType.Name}'.", tsCode: "TS2476");
-        return TypeInfo.String.Shared;
+        return WithUncheckedUndefined(TypeInfo.String.Shared);
     }
 
     private bool TryEvaluateConcreteKeyOfDomain(TypeInfo.KeyOf keyOf, out TypeInfo domain)
@@ -1700,6 +1702,11 @@ public partial class TypeChecker
         if (indexType is TypeInfo.Symbol or TypeInfo.UniqueSymbol &&
             GetConstructorIndexType(objType, TokenType.TYPE_SYMBOL) is { } constructorSymbolIndex)
             return WithUncheckedUndefined(constructorSymbolIndex);
+        if ((IsNumber(indexType) || indexType is TypeInfo.NumberLiteral) &&
+            objType is TypeInfo.Instance arraySubclass &&
+            TryGetBuiltInArraySubclassElement(arraySubclass, out var arraySubclassElement))
+            return WithUncheckedUndefined(GetClassIndexType(arraySubclass, TokenType.TYPE_NUMBER)
+                ?? GetClassIndexType(arraySubclass, TokenType.TYPE_STRING) ?? arraySubclassElement);
         if (IsStringOrNumberIndexDomain(indexType) && ReadStringIndexOf(objType) is { } domainIndex)
         {
             if (objType is TypeInfo.Class or TypeInfo.GenericClass or TypeInfo.InstantiatedGeneric { GenericDefinition: TypeInfo.GenericClass } &&

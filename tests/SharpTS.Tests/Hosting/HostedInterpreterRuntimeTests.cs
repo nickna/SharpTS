@@ -601,6 +601,53 @@ public sealed class HostedInterpreterRuntimeTests
     }
 
     [Fact]
+    public void CompiledHostedDynamicImport_GivesAwaitingModuleItsOwnReceiver()
+    {
+        var files = new Dictionary<string, string>
+        {
+            ["main.mjs"] = """
+                const receiver = {};
+                let preserved;
+                function load() {
+                    const before = this === receiver;
+                    const pending = import('./lazy.mjs');
+                    preserved = before && this === receiver;
+                    return pending;
+                }
+                const lazy = await load.call(receiver);
+                console.log(preserved, lazy.before === undefined, lazy.after === undefined,
+                    lazy.before === receiver, lazy.after === receiver);
+                export {};
+                """,
+            ["lazy.mjs"] = """
+                export const before = this;
+                await Promise.resolve();
+                export const after = this;
+                """,
+        };
+        SharpTSProgram program = CreateProgramWithDynamicImports(files, "main.mjs");
+        var compiler = new ILCompiler($"hosted_receiver_{Guid.NewGuid():N}");
+        compiler.EnableHostedOutput();
+        compiler.CompileModules(program.RuntimeModules.ToList(), program.Resolver, program.TypeMap);
+        byte[] assembly = compiler.SaveToBytes();
+        using var verifier = new ILVerifier(extraProbeDirectories: [AppContext.BaseDirectory]);
+        using var stream = new MemoryStream(assembly);
+        Assert.Empty(verifier.Verify(stream));
+
+        var dispatcher = new DeterministicHostDispatcher();
+        var errors = new RecordingErrorSink();
+        using var output = Infrastructure.AsyncLocalConsoleRedirector.Capture();
+        using ISharpTSHostedRuntime runtime = SharpTSHostedAssembly.CreateRuntime(
+            System.Reflection.Assembly.Load(assembly), dispatcher, new RecordingLifetime(), errors);
+        Task initialization = runtime.InitializeAsync();
+        dispatcher.RunUntil(() => initialization.IsCompleted);
+        initialization.GetAwaiter().GetResult();
+
+        Assert.Equal("true true true false false", output.GetOutput().Trim());
+        Assert.Empty(errors.Errors);
+    }
+
+    [Fact]
     public void CompiledHostedDynamicImport_RejectsMissingFailedAndSelfImportsInGuestCode()
     {
         var files = new Dictionary<string, string>

@@ -5,6 +5,22 @@ namespace SharpTS.Tests.SharedTests;
 
 public sealed class EnumMissingPropertyTests
 {
+    [Theory, ModeData]
+    public void MissingNumericReverseEntriesUseOrdinaryPropertyLookup(ExecutionMode mode)
+    {
+        const string source = """
+            enum E { Zero = 0, Two = 2 }
+            const value: any = E;
+            console.log(value[3], value["3"], value[-0], value["-0"]);
+            Object.defineProperty(Object.prototype, '3', {
+                get() { return this === value ? 'inherited' : 'wrong receiver'; }, configurable: true
+            });
+            try { console.log(value[3], value["3"]); }
+            finally { delete (Object.prototype as any)['3']; }
+            """;
+        Assert.Equal("undefined undefined Zero undefined\ninherited inherited\n", TestHarness.RunUnchecked(source, mode));
+    }
+
     public static IEnumerable<object[]> Cases()
     {
         yield return new object[] { "missing", """

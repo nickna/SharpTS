@@ -59,7 +59,47 @@ public partial class TypeChecker
         public HashSet<(bool IsStatic, string Name)> PendingFields { get; } = [];
         public Dictionary<(bool IsStatic, string Name), Stmt.Field> Fields { get; } = [];
         public HashSet<Stmt.Field> ActiveFields { get; } = new(ReferenceEqualityComparer.Instance);
+        private HashSet<Stmt.Field>? _fieldsWithUnresolvedGetters;
+        private Dictionary<Stmt.Field, HashSet<Stmt.Field>>? _fieldDependents;
         public int DeferredReadDepth { get; set; }
+        public bool IsRetryingFields { get; set; }
+
+        public void DeferActiveFields()
+        {
+            if (ActiveFields.Count == 0) return;
+            (_fieldsWithUnresolvedGetters ??= new(ReferenceEqualityComparer.Instance)).UnionWith(ActiveFields);
+        }
+
+        public bool HasUnresolvedGetter(Stmt.Field field) => _fieldsWithUnresolvedGetters?.Contains(field) == true;
+
+        public void RecordFieldRead(Stmt.Field field)
+        {
+            if (IsRetryingFields) return;
+            foreach (var reader in ActiveFields)
+            {
+                if (ReferenceEquals(reader, field)) continue;
+                _fieldDependents ??= new(ReferenceEqualityComparer.Instance);
+                if (!_fieldDependents.TryGetValue(field, out var readers))
+                    _fieldDependents[field] = readers = new(ReferenceEqualityComparer.Instance);
+                readers.Add(reader);
+            }
+        }
+
+        public HashSet<Stmt.Field>? GetFieldsToRetry()
+        {
+            if (_fieldsWithUnresolvedGetters is not { } retry || _fieldDependents is null)
+                return _fieldsWithUnresolvedGetters;
+
+            // An earlier initializer can read a field before its getter dependency is known.
+            var pending = new Queue<Stmt.Field>(retry);
+            while (pending.TryDequeue(out var field))
+            {
+                if (!_fieldDependents.TryGetValue(field, out var readers)) continue;
+                foreach (var reader in readers)
+                    if (retry.Add(reader)) pending.Enqueue(reader);
+            }
+            return retry;
+        }
     }
 
     private FieldGetterScope? _fieldGetterScope;
@@ -178,12 +218,17 @@ public partial class TypeChecker
     private void ObservePendingGetterFieldRead(TypeInfo owner, bool isStatic, string name)
     {
         if (FindFieldGetterScope(owner) is not { } scope ||
-            !scope.PendingFields.Contains((isStatic, name))) return;
-        // A getter body is checked without executing it. Infer any forward
-        // field type it needs in the same isolated flow used for deferred reads.
+            !scope.Fields.TryGetValue((isStatic, name), out var field)) return;
+        scope.RecordFieldRead(field);
         var dependency = ActiveGetterDependency;
-        if ((_classFieldDeferredReadDepth > scope.DeferredReadDepth || dependency is not null) &&
-            scope.Fields.TryGetValue((isStatic, name), out var field) &&
+        if (scope.HasUnresolvedGetter(field))
+        {
+            _fieldGetterScope?.DeferActiveFields();
+            if (dependency is not null) dependency.HasUnresolvedDependency = true;
+        }
+        if (!scope.PendingFields.Contains((isStatic, name))) return;
+        // Deferred reads and the retry pass can infer pending dependencies in isolated flow.
+        if ((scope.IsRetryingFields || _classFieldDeferredReadDepth > scope.DeferredReadDepth || dependency is not null) &&
             !scope.ActiveFields.Contains(field))
         {
             InferDeferredClassFieldDependency(scope, field);
@@ -231,7 +276,9 @@ public partial class TypeChecker
         {
             // Restore the speculative flow so the ordinary initializer pass
             // retains source-order behavior.
-            CheckAndInferClassFieldInitializer(field, scope.Owner);
+            if (CheckAndInferClassFieldInitializer(field, scope.Owner) && scope.IsRetryingFields)
+                // An indexed read can infer this field before selecting its member from the class snapshot.
+                scope.Owner.Freeze();
             scope.PendingFields.Remove((field.IsStatic, GetFieldMemberName(field)));
         }
         finally
@@ -342,6 +389,7 @@ public partial class TypeChecker
     private TypeInfo CheckFieldStageGetter(FieldGetterScope scope, object accessor, Func<FieldGetterDependency, TypeInfo> check)
     {
         var caller = ActiveGetterDependency;
+        var callerScope = _fieldGetterScope;
         if (scope.Resolved.TryGetValue(accessor, out var resolved))
             return ObserveResult(resolved);
         if (scope.Active.Any(dependency => ReferenceEquals(dependency.Accessor, accessor)))
@@ -386,7 +434,11 @@ public partial class TypeChecker
         // Checking a nested class can run its own independent inference.
         TypeInfo ObserveResult(TypeInfo result)
         {
-            if (result is TypeInfo.Inferred && caller is not null) caller.HasUnresolvedDependency = true;
+            if (result is TypeInfo.Inferred)
+            {
+                if (caller is not null) caller.HasUnresolvedDependency = true;
+                callerScope?.DeferActiveFields();
+            }
             return result;
         }
     }

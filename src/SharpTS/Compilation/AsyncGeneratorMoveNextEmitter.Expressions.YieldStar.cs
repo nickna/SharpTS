@@ -63,11 +63,8 @@ public partial class AsyncGeneratorMoveNextEmitter
         }
 
         // === First entry path: evaluate and check type ===
-        EmitExpression(y.Value!);
-        EnsureBoxed();
-
         var iterableTemp = _il.DeclareLocal(typeof(object));
-        _il.Emit(OpCodes.Stloc, iterableTemp);
+        EmitSuspensionOperand(y.Value!, iterableTemp);
 
         // Reserve the suspension state for the delegated iterator's next() await (consumed by the async
         // arm below, #688). Allocated AFTER the value expression so any awaits inside it take earlier
@@ -393,9 +390,7 @@ public partial class AsyncGeneratorMoveNextEmitter
 
         // Emit the iterable expression and get its enumerator
         var iterableTemp = _il.DeclareLocal(typeof(object));
-        EmitExpression(y.Value!);
-        EnsureBoxed();
-        _il.Emit(OpCodes.Stloc, iterableTemp);
+        EmitSuspensionOperand(y.Value!, iterableTemp);
         NormalizeYieldStarTypedArrayOrBuffer(iterableTemp);
         _il.Emit(OpCodes.Ldloc, iterableTemp);
         _il.Emit(OpCodes.Castclass, typeof(System.Collections.IEnumerable));

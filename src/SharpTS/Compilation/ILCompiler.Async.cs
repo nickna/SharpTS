@@ -1118,18 +1118,22 @@ public partial class ILCompiler
             var func = _async.Functions[funcName];
             var stubMethod = _functions.Builders[funcName];
             var analysis = _async.Analyses[funcName];
+            bool isHostedModuleRunner = _hostedModuleRunnerKeys.Values.Contains(funcName);
+            bool hasModuleReceiver = isHostedModuleRunner && fnModule != null &&
+                _modules.Resolver?.GetCachedModule(fnModule) is { IsScript: false, IsCommonJs: false };
 
             // Emit stub method body
             EmitAsyncStubMethod(
                 stubMethod,
                 smBuilder,
                 func,
-                coerceSloppyDynamicThis: !IsStrictFunction(func));
+                coerceSloppyDynamicThis: !IsStrictFunction(func),
+                hasModuleReceiver: hasModuleReceiver);
 
             // Create context for MoveNext emission
             var il = smBuilder.MoveNextMethod.GetILGenerator();
             var ctx = CreateModuleMemberContext(il, smBuilder.MoveNextMethod);
-            if (_hostedModuleRunnerKeys.Values.Contains(funcName))
+            if (isHostedModuleRunner)
                 ctx.ModuleExportFields = _modules.ExportFields;
             ctx.AsyncArrowBuilders = _async.ArrowBuilders;
             ctx.AsyncArrowOuterBuilders = _async.ArrowOuterBuilders;
@@ -1463,7 +1467,8 @@ public partial class ILCompiler
         FieldBuilder? lockReentrancyField = null,
         string? functionDCKey = null,
         bool coerceSloppyDynamicThis = false,
-        int? lockReceiverParameterIndex = null)
+        int? lockReceiverParameterIndex = null,
+        bool hasModuleReceiver = false)
     {
         var parameters = function.Parameters;
         var il = stubMethod.GetILGenerator();
@@ -1490,6 +1495,8 @@ public partial class ILCompiler
             il.Emit(OpCodes.Ldloca, smLocal);
             if (isInstanceMethod)
                 il.Emit(OpCodes.Ldarg_0);
+            else if (hasModuleReceiver)
+                il.Emit(OpCodes.Ldsfld, _runtime!.Sentinels.UndefinedInstance);
             else
             {
                 il.Emit(OpCodes.Ldsfld, _runtime!.FunctionValues.CurrentThisField);

@@ -12,13 +12,10 @@ public partial class ILCompiler
     private void DeclareLexicalSuperElementInitializer(Expr.ClassExpr expression, TypeBuilder owner)
     {
         var declaration = ClassExpressionDeclaration(expression);
-        bool ownElements = expression.Fields.Any(field => !field.IsStatic && !field.IsDeclare)
-            || expression.AutoAccessors?.Any(accessor => !accessor.IsStatic) == true
-            || expression.Methods.Any(method => !method.IsStatic && method.IsPrivate)
-            || expression.Accessors?.Any(accessor => !accessor.IsStatic && accessor.Name.Type == TokenType.PRIVATE_IDENTIFIER) == true;
         string? parentName = Expr.GetSuperclassLeafName(expression.SuperclassExpr);
         bool intrinsicArray = !_nativeAotProjectOutput && owner.BaseType == _runtime.ArrayStorage.Type;
-        if ((!ownElements && !intrinsicArray) || expression.SuperclassExpr == null
+        // Lexical super needs to bind the shared receiver even if there are no elements to initialize.
+        if (expression.SuperclassExpr == null
             || !ContainsLexicalSuper(expression.Methods)
             || (parentName == "Array" && !intrinsicArray)
             || parentName is "Promise" or "Map" or "Set" or "WeakMap" or "WeakSet" or "Date" or "RegExp" or "Buffer"
@@ -31,9 +28,14 @@ public partial class ILCompiler
         _usesRuntimeParents = true;
         if (_typeMap.GetClassExprType(expression) is { } checkedClass)
             _typeMapper.RegisterDynamicClassInstance(checkedClass.Core.DeclarationId);
+        MarkCollectedClassExpressionReceiverArrows(expression);
+    }
+
+    private void MarkCollectedClassExpressionReceiverArrows(Expr.ClassExpr expression)
+    {
         // A class returned from a function can have its arrows discovered before
         // its template is defined. Apply the same source-owner proof to those
-        // already-discovered arrows before their display classes are emitted.
+        // already-discovered arrows before their bodies are emitted.
         var fieldArrows = new FieldInitializerArrowVisitor();
         foreach (var field in expression.Fields.Where(field => !field.IsStatic && !field.IsDeclare))
             if (field.Initializer != null) fieldArrows.Visit(field.Initializer);

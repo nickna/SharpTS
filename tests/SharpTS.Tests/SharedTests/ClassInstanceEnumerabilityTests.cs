@@ -48,8 +48,8 @@ public sealed class ClassInstanceEnumerabilityTests
         Assert.Equal("first,visible,last\n", TestHarness.RunUnchecked(source, mode));
     }
 
-    [Fact]
-    public void CompiledJsonReviverUpdatesReplacementInstanceOwnProperties()
+    [Theory, ModeData]
+    public void JsonReviverUpdatesReplacementInstanceOwnProperties(ExecutionMode mode)
     {
         const string source = """
             class Box { removed = 1; later = 2; }
@@ -79,7 +79,7 @@ public sealed class ClassInstanceEnumerabilityTests
             console.log(Object.hasOwn(box, 'removed'), box.later, box.locked, box.access, box.added);
             """;
         Assert.Equal("removed:1,later:8,locked:3,get,access:4\nfalse 8 3 null 9\n",
-            TestHarness.RunUnchecked(source, ExecutionMode.Compiled));
+            TestHarness.RunUnchecked(source, mode));
     }
 
     [Fact]

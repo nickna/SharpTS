@@ -601,19 +601,33 @@ public partial class RuntimeEmitter
         il.Emit(OpCodes.Stloc, newElemLocal);
 
         // Only undefined deletes. JavaScript null remains a data value.
-        var setLabel = il.DefineLabel();
         var deleteLabel = il.DefineLabel();
         var endIfLabel = il.DefineLabel();
         il.Emit(OpCodes.Ldloc, newElemLocal);
         il.Emit(OpCodes.Isinst, inputs.UndefinedType);
         il.Emit(OpCodes.Brtrue, deleteLabel);
-        il.Emit(OpCodes.Br, setLabel);
 
-        il.MarkLabel(setLabel);
-        var setDictionaryLabel = il.DefineLabel();
+        // The parsed dictionary fast path is safe only for ordinary data on
+        // an extensible receiver. An installed accessor or integrity flag
+        // requires CreateDataProperty to consult the actual descriptor.
+        var defineLabel = il.DefineLabel();
         il.Emit(OpCodes.Ldloc, dictLocal);
-        il.Emit(OpCodes.Brtrue, setDictionaryLabel);
-        // CreateDataProperty ignores a refusal from an ordinary instance.
+        il.Emit(OpCodes.Brfalse, defineLabel);
+        il.Emit(OpCodes.Ldloc, valLocal);
+        il.Emit(OpCodes.Ldloc, propLocal);
+        il.Emit(OpCodes.Call, inputs.DescriptorStorage.GetPropertyDescriptor);
+        il.Emit(OpCodes.Brtrue, defineLabel);
+        il.Emit(OpCodes.Ldloc, valLocal);
+        il.Emit(OpCodes.Call, inputs.DescriptorStorage.IsExtensible);
+        il.Emit(OpCodes.Brfalse, defineLabel);
+        il.Emit(OpCodes.Ldloc, dictLocal);
+        il.Emit(OpCodes.Ldloc, propLocal);
+        il.Emit(OpCodes.Ldloc, newElemLocal);
+        il.Emit(OpCodes.Callvirt, _types.GetMethod(_types.DictionaryStringObject, "set_Item", [_types.String, _types.Object]));
+        il.Emit(OpCodes.Br, endIfLabel);
+
+        il.MarkLabel(defineLabel);
+        // CreateDataProperty ignores a refusal from an ordinary object.
         // The descriptor has only data fields, so this cannot invoke a setter.
         il.BeginExceptionBlock();
         var descriptor = EmitReviverDataDescriptor(il, inputs.DescriptorStorage, newElemLocal);
@@ -625,28 +639,6 @@ public partial class RuntimeEmitter
         il.BeginCatchBlock(inputs.ThrownValueType);
         il.Emit(OpCodes.Pop);
         il.EndExceptionBlock();
-        il.Emit(OpCodes.Br, endIfLabel);
-
-        il.MarkLabel(setDictionaryLabel);
-        // CreateDataProperty cannot replace a non-configurable own property.
-        // Its false result is ignored by InternalizeJSONProperty.
-        var dictDescLocal = il.DeclareLocal(inputs.DescriptorStorage.DescriptorType);
-        var writeDictLabel = il.DefineLabel();
-        il.Emit(OpCodes.Ldloc, valLocal);
-        il.Emit(OpCodes.Ldloc, propLocal);
-        il.Emit(OpCodes.Call, inputs.DescriptorStorage.GetPropertyDescriptor);
-        il.Emit(OpCodes.Stloc, dictDescLocal);
-        il.Emit(OpCodes.Ldloc, dictDescLocal);
-        il.Emit(OpCodes.Brfalse, writeDictLabel);
-        il.Emit(OpCodes.Ldloc, dictDescLocal);
-        il.Emit(OpCodes.Callvirt, inputs.DescriptorStorage.DescriptorConfigurable.GetGetMethod()!);
-        il.Emit(OpCodes.Brfalse, endIfLabel);
-        il.MarkLabel(writeDictLabel);
-        // dict[prop] = newElement
-        il.Emit(OpCodes.Ldloc, dictLocal);
-        il.Emit(OpCodes.Ldloc, propLocal);
-        il.Emit(OpCodes.Ldloc, newElemLocal);
-        il.Emit(OpCodes.Callvirt, _types.GetMethod(_types.DictionaryStringObject, "set_Item", [_types.String, _types.Object]));
         il.Emit(OpCodes.Br, endIfLabel);
 
         il.MarkLabel(deleteLabel);
@@ -674,8 +666,7 @@ public partial class RuntimeEmitter
     /// <list type="bullet">
     ///   <item>SharpTSProxy → TrapGet via reflection.</item>
     ///   <item>List&lt;object?&gt; with numeric key → indexed access (returns null if out of range).</item>
-    ///   <item>Dictionary&lt;string, object?&gt; → TryGetValue.</item>
-    ///   <item>Replacement class instance → ordinary property lookup.</item>
+    ///   <item>Parsed dictionary or replacement class instance → ordinary property lookup.</item>
     /// </list>
     /// Pushes the resulting object? on the stack.
     /// </summary>
@@ -792,45 +783,22 @@ public partial class RuntimeEmitter
 
         il.MarkLabel(notListLabel);
 
-        // If holder is a Dictionary<string, object?> → TryGetValue
-        var notDictLabel = il.DefineLabel();
+        var ordinaryLabel = il.DefineLabel();
+        var otherLabel = il.DefineLabel();
         il.Emit(OpCodes.Ldloc, holderTmp);
         il.Emit(OpCodes.Isinst, _types.DictionaryStringObject);
-        il.Emit(OpCodes.Brfalse, notDictLabel);
-
-        // dict.TryGetValue(key.ToString(), out result)
-        il.Emit(OpCodes.Ldloc, holderTmp);
-        il.Emit(OpCodes.Castclass, _types.DictionaryStringObject);
-        il.Emit(OpCodes.Ldloc, keyTmp);
-        var dKeyNullLabel = il.DefineLabel();
-        var dKeyStrLabel = il.DefineLabel();
-        il.Emit(OpCodes.Dup);
-        il.Emit(OpCodes.Brfalse, dKeyNullLabel);
-        il.Emit(OpCodes.Callvirt, _types.GetMethod(_types.Object, "ToString"));
-        il.Emit(OpCodes.Br, dKeyStrLabel);
-        il.MarkLabel(dKeyNullLabel);
-        il.Emit(OpCodes.Pop);
-        il.Emit(OpCodes.Ldstr, "");
-        il.MarkLabel(dKeyStrLabel);
-        il.Emit(OpCodes.Ldloca, resultLocal);
-        il.Emit(OpCodes.Callvirt, _types.GetMethod(_types.DictionaryStringObject, "TryGetValue",
-            _types.String, _types.Object.MakeByRefType()));
-        il.Emit(OpCodes.Pop);  // discard bool — resultLocal is already null when missing
-        il.Emit(OpCodes.Br, doneLabel);
-
-        il.MarkLabel(notDictLabel);
-
-        var notClassLabel = il.DefineLabel();
+        il.Emit(OpCodes.Brtrue, ordinaryLabel);
         il.Emit(OpCodes.Ldloc, holderTmp);
         il.Emit(OpCodes.Isinst, inputs.HasFieldsInterface);
-        il.Emit(OpCodes.Brfalse, notClassLabel);
+        il.Emit(OpCodes.Brfalse, otherLabel);
+        il.MarkLabel(ordinaryLabel);
         il.Emit(OpCodes.Ldloc, holderTmp);
         il.Emit(OpCodes.Ldloc, keyTmp);
         il.Emit(OpCodes.Castclass, _types.String);
         il.Emit(OpCodes.Call, inputs.GetProperty);
         il.Emit(OpCodes.Stloc, resultLocal);
         il.Emit(OpCodes.Br, doneLabel);
-        il.MarkLabel(notClassLabel);
+        il.MarkLabel(otherLabel);
 
         // Fallthrough: result = null
         il.Emit(OpCodes.Ldnull);

@@ -22,20 +22,19 @@ public partial class AsyncGeneratorMoveNextEmitter
             return;
         }
 
-        // 1. Emit the yield value (or null if no value)
+        // 1. Evaluate the operand before entering the yield suspension.
+        var valueTemp = _il.DeclareLocal(typeof(object));
         if (y.Value != null)
         {
-            EmitExpression(y.Value);
-            EnsureBoxed();
+            EmitSuspensionOperand(y.Value, valueTemp);
         }
         else
         {
             _il.Emit(OpCodes.Ldnull);
+            _il.Emit(OpCodes.Stloc, valueTemp);
         }
 
         // 2. Store value in <>2__current field
-        var valueTemp = _il.DeclareLocal(typeof(object));
-        _il.Emit(OpCodes.Stloc, valueTemp);
         _il.Emit(OpCodes.Ldarg_0);
         _il.Emit(OpCodes.Ldloc, valueTemp);
         _il.Emit(OpCodes.Stfld, _builder.CurrentField);
@@ -74,6 +73,22 @@ public partial class AsyncGeneratorMoveNextEmitter
         SetStackUnknown();
     }
 
+    private void EmitSuspensionOperand(Expr operand, LocalBuilder value)
+    {
+        void EvaluateOperand()
+        {
+            EmitExpression(operand);
+            EnsureBoxed();
+            _il.Emit(OpCodes.Stloc, value);
+        }
+
+        // The state dispatch has to be able to branch to a nested suspension's resume label.
+        if (ExprContainsSuspension(operand))
+            EvaluateOperand();
+        else
+            EmitCaptureTryOperation(EvaluateOperand);
+    }
+
     #endregion
 
     #region Await Expressions
@@ -83,8 +98,9 @@ public partial class AsyncGeneratorMoveNextEmitter
         int stateNumber = _currentSuspensionState++;
 
         // 1. Emit the awaited expression (should produce Task<object> or $Promise or any value)
-        EmitExpression(a.Expression);
-        EnsureBoxed();
+        var value = _il.DeclareLocal(typeof(object));
+        EmitSuspensionOperand(a.Expression, value);
+        _il.Emit(OpCodes.Ldloc, value);
 
         // 2+. Coerce to Task<object>, suspend the async generator until it settles, and leave the
         // awaited result on the stack.
@@ -182,7 +198,7 @@ public partial class AsyncGeneratorMoveNextEmitter
 
         // 9. Get result: awaiter.GetResult(). A rejected awaited task throws here.
         var getResultMethod = _types.GetMethod(_types.TaskAwaiterOfObject, "GetResult")!;
-        if (_currentTryExceptionLocal != null)
+        if (_currentTryExceptionLocal != null || _inHandlerBody)
         {
             // Inside a flag-based try: capture the rejection into the try's exception flag (as a sync
             // segment would) and `Leave` to the try's catch/finally, rather than letting it escape

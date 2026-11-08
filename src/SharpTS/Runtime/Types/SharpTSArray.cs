@@ -777,6 +777,8 @@ public class SharpTSArray : ITypeCategorized, IReadOnlyList<object?>
     {
         if (this is SharpTSArguments arguments)
             arguments.SetMappedArgumentsIntegrity(freeze: true);
+        else
+            _lengthWritable = false;
         SetNamedPropertyIntegrityLevel(frozen: true);
         _symbolProperties?.Freeze();
         IsFrozen = true;
@@ -1721,7 +1723,7 @@ public class SharpTSArray : ITypeCategorized, IReadOnlyList<object?>
     {
         var flags = _descriptors?.TryGetValue(name, out var stored) == true
             ? stored : PropertyDescriptorFlags.Default;
-        return this is SharpTSArguments && IsSealed
+        return IsSealed
             ? PropertyDescriptorFlags.ForDefineProperty(flags.Writable && !IsFrozen, flags.Enumerable, false)
             : flags;
     }

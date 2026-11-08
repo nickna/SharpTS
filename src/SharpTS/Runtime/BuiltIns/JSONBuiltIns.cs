@@ -200,11 +200,10 @@ public static class JSONBuiltIns
             foreach (var prop in keys)
             {
                 var newElement = InternalizeJSONProperty(interp, val, prop, reviver);
-                var token = new Parsing.Token(Parsing.TokenType.IDENTIFIER, prop, null, 0);
                 if (IsUndefinedRevive(newElement))
                     inst.DeleteFieldStrict(prop, false);
                 else
-                    inst.Set(token, newElement);
+                    inst.DefineProperty(prop, CreateDataPropertyDescriptor(newElement));
             }
         }
 
@@ -219,10 +218,7 @@ public static class JSONBuiltIns
             case SharpTSProxy proxy:
                 return proxy.TrapGet(key, interp);
             case SharpTSObject obj:
-                {
-                    var v = obj.GetProperty(key);
-                    return v is SharpTSUndefined ? null : v;
-                }
+                return interp.GetPropertyValue(obj, key);
             case SharpTSArray arr:
                 if (long.TryParse(key, System.Globalization.NumberStyles.Integer,
                         System.Globalization.CultureInfo.InvariantCulture, out var idx)

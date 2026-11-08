@@ -735,15 +735,22 @@ public abstract record TypeInfo
 
     public record Enum(string Name, FrozenDictionary<string, object> Members, EnumKind Kind, bool IsConst = false) : TypeInfo
     {
+        // Different declarations and pre-registration snapshots can have the same display name.
+        private static long _nextCacheId;
+        private readonly long _cacheId = Interlocked.Increment(ref _nextCacheId);
+
+        internal BindingSymbol? DeclarationBinding { get; init; }
         internal EnumFacet Facet { get; init; }
         internal bool IsScalar => Facet == EnumFacet.Scalar;
+        internal bool HasSameDeclaration(Enum other) => _cacheId == other._cacheId ||
+            DeclarationBinding is not null && ReferenceEquals(DeclarationBinding, other.DeclarationBinding);
 
         // Only create reverse mapping for numeric members (not available for const enums)
         public Dictionary<double, string> ReverseMembers =>
             Members.Where(kvp => kvp.Value is double)
                    .ToDictionary(kvp => (double)kvp.Value, kvp => kvp.Key);
         public override string ToString() => IsConst ? $"const enum {Name}" : $"enum {Name}";
-        internal override string CacheKey() => IsScalar ? $"{ToString()}#value" : base.CacheKey();
+        internal override string CacheKey() => IsScalar ? $"enum#{_cacheId}#value" : $"enum#{_cacheId}";
     }
 
     /// <summary>
@@ -1007,21 +1014,52 @@ public abstract record TypeInfo
         /// </summary>
         public bool IsGetterOnly(string name) => GetterOnlyFields?.Contains(name) ?? false;
 
-        public override string ToString()
+        public override string ToString() => Render(static type => type.ToString());
+
+        internal override string CacheKey()
+        {
+            if (!Fields.Values.Any(static type => type is Interface))
+                return Render(static type => type.CacheKey());
+
+            // Write each distinct interface fingerprint once. Layout references are
+            // structural so equivalent interface snapshots also produce the same key.
+            Dictionary<Interface, string> references = new(ReferenceEqualityComparer.Instance);
+            Dictionary<string, string> labels = new(StringComparer.Ordinal);
+            List<string> fingerprints = [];
+            string RenderField(TypeInfo type)
+            {
+                if (type is not Interface iface) return type.CacheKey();
+                if (references.TryGetValue(iface, out string? label)) return label;
+
+                string fingerprint = iface.CacheKey();
+                if (!labels.TryGetValue(fingerprint, out label))
+                {
+                    label = $"interface#{fingerprints.Count}";
+                    labels.Add(fingerprint, label);
+                    fingerprints.Add(fingerprint);
+                }
+                references.Add(iface, label);
+                return label;
+            }
+
+            var key = new StringBuilder(Render(RenderField));
+            foreach (string fingerprint in fingerprints)
+                key.Append('#').Append(fingerprint.Length).Append(':').Append(fingerprint);
+            return key.ToString();
+        }
+
+        private string Render(Func<TypeInfo, string> renderType)
         {
             var prefix = IsReadonly ? "readonly " : "";
             // Method-ness must be rendered: under strictFunctionTypes a method member and a
-            // property member of the same function type differ in assignability, and ToString is
-            // the compatibility-cache key.
+            // property member of the same function type differ in assignability.
             var parts = Fields.Select(f =>
-                $"{(ReadonlyFields?.Contains(f.Key) == true ? "readonly " : "")}{f.Key}{(IsMethodMember(f.Key) ? "#m" : "")}{(IsFieldOptional(f.Key) ? "?" : "")}: {f.Value}").ToList();
-            if (CallSignatures != null) parts.InsertRange(0, CallSignatures.Select(s => s.ToString()));
-            if (ConstructorSignatures != null) parts.InsertRange(0, ConstructorSignatures.Select(s => s.ToString()));
-            // Index signatures must be rendered so distinct index types don't collapse to the same
-            // string — ToString is used as the structural key for the compatibility cache.
-            if (StringIndexType != null) parts.Add($"[x: string]: {StringIndexType}");
-            if (NumberIndexType != null) parts.Add($"[x: number]: {NumberIndexType}");
-            if (SymbolIndexType != null) parts.Add($"[x: symbol]: {SymbolIndexType}");
+                $"{(ReadonlyFields?.Contains(f.Key) == true ? "readonly " : "")}{f.Key}{(IsMethodMember(f.Key) ? "#m" : "")}{(IsFieldOptional(f.Key) ? "?" : "")}: {renderType(f.Value)}").ToList();
+            if (CallSignatures != null) parts.InsertRange(0, CallSignatures.Select(renderType));
+            if (ConstructorSignatures != null) parts.InsertRange(0, ConstructorSignatures.Select(renderType));
+            if (StringIndexType != null) parts.Add($"[x: string]: {renderType(StringIndexType)}");
+            if (NumberIndexType != null) parts.Add($"[x: number]: {renderType(NumberIndexType)}");
+            if (SymbolIndexType != null) parts.Add($"[x: symbol]: {renderType(SymbolIndexType)}");
             return $"{prefix}{{ {string.Join(", ", parts)} }}";
         }
 

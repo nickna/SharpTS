@@ -11,7 +11,7 @@ public partial class TypeChecker
 {
     private void CheckEnumDeclaration(Stmt.Enum enumStmt)
     {
-        RegisterValueDeclaration(enumStmt.Name, mergeWithLocal: true);
+        var declarationBinding = RegisterValueDeclaration(enumStmt.Name, mergeWithLocal: true);
 
         Dictionary<string, object> members = [];
         double? currentNumericValue = null;
@@ -114,11 +114,18 @@ public partial class TypeChecker
                             tsCode: "TS18033");
                     }
 
-                    members[member.Name.Lexeme] = double.NaN;
+                    var knownValue = ConstEnumExpressionEvaluator.EvaluateKnownMember(
+                        member.Value, members, enumStmt.Name.Lexeme, isConst: false);
+                    members[member.Name.Lexeme] = knownValue is double number ? number : double.NaN;
                     currentNumericValue = null;
                     hasNumeric = true;
                     autoIncrementActive = false;
                 }
+            }
+            else if (enumStmt.IsAmbient && !enumStmt.IsConst)
+            {
+                members[member.Name.Lexeme] = double.NaN;
+                hasNumeric = true;
             }
             else
             {
@@ -137,18 +144,22 @@ public partial class TypeChecker
         }
 
         // Determine enum kind
-        EnumKind kind = (hasNumeric, hasString) switch
-        {
-            (true, false) => EnumKind.Numeric,
-            (false, true) => EnumKind.String,
-            (true, true) => EnumKind.Heterogeneous,
-            _ => EnumKind.Numeric  // Empty enum defaults to numeric
-        };
+        EnumKind kind = ClassifyEnumMembers(hasNumeric, hasString);
 
-        var enumType = new TypeInfo.Enum(enumStmt.Name.Lexeme, members.ToFrozenDictionary(), kind, enumStmt.IsConst);
+        var enumType = new TypeInfo.Enum(enumStmt.Name.Lexeme, members.ToFrozenDictionary(), kind, enumStmt.IsConst)
+        {
+            DeclarationBinding = declarationBinding
+        };
         DeclareValue(enumStmt.Name, enumType, mergeWithLocal: true);
         _environment.DefineType(enumStmt.Name.Lexeme, enumType);
     }
+
+    private static EnumKind ClassifyEnumMembers(bool hasNumeric, bool hasString) => (hasNumeric, hasString) switch
+    {
+        (false, true) => EnumKind.String,
+        (true, true) => EnumKind.Heterogeneous,
+        _ => EnumKind.Numeric
+    };
 
     /// <summary>
     /// Evaluates a constant expression for const enum members via the shared

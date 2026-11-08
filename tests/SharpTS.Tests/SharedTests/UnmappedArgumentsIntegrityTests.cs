@@ -5,6 +5,81 @@ namespace SharpTS.Tests.SharedTests;
 
 public sealed class UnmappedArgumentsIntegrityTests
 {
+    [Fact]
+    public void CompiledUnmappedArgumentsOwnTheProtectedCalleeAccessor()
+    {
+        const string source = """
+            function inspect(args) {
+                "use strict";
+                const descriptor = Object.getOwnPropertyDescriptor(args, "callee");
+                console.log(typeof descriptor.get, descriptor.get === descriptor.set,
+                    descriptor.enumerable, descriptor.configurable);
+                try { delete args["callee"]; }
+                catch (error) { console.log(error instanceof TypeError); }
+                Object.seal(args);
+                try { delete args["callee"]; }
+                catch (error) { console.log(error instanceof TypeError); }
+                try { console.log(args["callee"]); }
+                catch (error) { console.log(error instanceof TypeError); }
+                try { args["callee"] = 1; }
+                catch (error) { console.log(error instanceof TypeError); }
+            }
+
+            function strict() { "use strict"; inspect(arguments); }
+            function rest(...values) { inspect(arguments); }
+            function defaults(value = 1) { inspect(arguments); }
+            function destructured({ value }) { inspect(arguments); }
+            function derived(parent) {
+                class Derived extends parent {
+                    constructor() { super(); inspect(arguments); }
+                }
+                return Derived;
+            }
+            strict();
+            rest();
+            defaults();
+            destructured({ value: 1 });
+            const Derived = derived(class {});
+            new Derived();
+            """;
+
+        const string expected = "function true false false\ntrue\ntrue\ntrue\ntrue\n";
+        Assert.Equal(string.Concat(Enumerable.Repeat(expected, 5)),
+            TestHarness.RunUnchecked(source, ExecutionMode.Compiled));
+    }
+
+    [Theory]
+    [InlineData(ExecutionMode.Interpreted)]
+    [InlineData(ExecutionMode.Compiled)]
+    public void StrictDeletionOfMissingIndicesSucceedsAfterSealOrFreeze(ExecutionMode mode)
+    {
+        const string source = """
+            function remove(args, key) {
+                "use strict";
+                try { return delete args[key]; }
+                catch (error) { return error instanceof TypeError ? "TypeError" : "unexpected"; }
+            }
+
+            function check(integrity, first, second) {
+                "use strict";
+                const args = arguments;
+                delete args[1];
+                Object.setPrototypeOf(args, { 1: "inherited" });
+                Object.defineProperty(args, "10", { value: "stored", configurable: true });
+                Object.defineProperty(args, "named", { value: "stored", configurable: true });
+                integrity(args);
+                console.log(remove(args, 7), remove(args, 1), remove(args, "01"), args[1]);
+                console.log(remove(args, 0), remove(args, 10), remove(args, "named"), remove(args, "length"));
+            }
+
+            check(Object.seal, 1, 2);
+            check(Object.freeze, 1, 2);
+            """;
+
+        const string expected = "true true true inherited\nTypeError TypeError TypeError TypeError\n";
+        Assert.Equal(expected + expected, TestHarness.RunUnchecked(source, mode));
+    }
+
     [Theory]
     [InlineData(ExecutionMode.Interpreted)]
     [InlineData(ExecutionMode.Compiled)]

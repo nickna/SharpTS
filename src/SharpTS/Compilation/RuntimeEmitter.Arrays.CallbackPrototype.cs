@@ -1,3 +1,4 @@
+using System.Globalization;
 using System.Reflection;
 using System.Reflection.Emit;
 
@@ -5,6 +6,128 @@ namespace SharpTS.Compilation;
 
 public partial class RuntimeEmitter
 {
+    private (MethodBuilder FindLast, MethodBuilder FindLastIndex) EmitArrayReversePredicatePrototypeAdapters(
+        TypeBuilder typeBuilder, EmittedRuntime runtime)
+    {
+        var core = typeBuilder.DefineMethod("ArrayReversePredicate", MethodAttributes.Private | MethodAttributes.Static,
+            _types.Object, [_types.Object, _types.Object, _types.Object, _types.Boolean]);
+        var il = core.GetILGenerator();
+        var (receiver, length) = EmitGenericArrayReceiverAndLength(il, runtime);
+        EmitThrowIfCallbackNotCallable(il, runtime, 1, "Array reverse search");
+
+        var args = il.DeclareLocal(_types.ObjectArray);
+        var index = il.DeclareLocal(_types.Double);
+        var integerKey = il.DeclareLocal(_types.Int64);
+        var element = il.DeclareLocal(_types.Object);
+        il.Emit(OpCodes.Ldc_I4_3);
+        il.Emit(OpCodes.Newarr, _types.Object);
+        il.Emit(OpCodes.Stloc, args);
+        il.Emit(OpCodes.Ldloc, args);
+        il.Emit(OpCodes.Ldc_I4_2);
+        il.Emit(OpCodes.Ldloc, receiver);
+        il.Emit(OpCodes.Stelem_Ref);
+        il.Emit(OpCodes.Ldloc, length);
+        il.Emit(OpCodes.Stloc, index);
+
+        var loop = il.DefineLabel();
+        var missing = il.DefineLabel();
+        var returnValue = il.DefineLabel();
+        il.MarkLabel(loop);
+        il.Emit(OpCodes.Ldloc, index);
+        il.Emit(OpCodes.Ldc_R8, 1.0);
+        il.Emit(OpCodes.Sub);
+        il.Emit(OpCodes.Stloc, index);
+        il.Emit(OpCodes.Ldloc, index);
+        il.Emit(OpCodes.Ldc_R8, 0.0);
+        il.Emit(OpCodes.Blt, missing);
+
+        // FindViaPredicate uses Get at every visited index, including holes,
+        // and returns the value captured before the callback can mutate it.
+        il.Emit(OpCodes.Ldloc, index);
+        il.Emit(OpCodes.Conv_I8);
+        il.Emit(OpCodes.Stloc, integerKey);
+        il.Emit(OpCodes.Ldloc, receiver);
+        il.Emit(OpCodes.Ldloca, integerKey);
+        il.Emit(OpCodes.Call, _types.GetPropertyGetter(typeof(CultureInfo), nameof(CultureInfo.InvariantCulture)));
+        il.Emit(OpCodes.Call, _types.GetMethod(_types.Int64, "ToString", typeof(IFormatProvider)));
+        il.Emit(OpCodes.Call, runtime.ObjectRead.Property);
+        il.Emit(OpCodes.Stloc, element);
+        il.Emit(OpCodes.Ldloc, args);
+        il.Emit(OpCodes.Ldc_I4_0);
+        il.Emit(OpCodes.Ldloc, element);
+        il.Emit(OpCodes.Stelem_Ref);
+        il.Emit(OpCodes.Ldloc, args);
+        il.Emit(OpCodes.Ldc_I4_1);
+        il.Emit(OpCodes.Ldloc, index);
+        il.Emit(OpCodes.Box, _types.Double);
+        il.Emit(OpCodes.Stelem_Ref);
+        il.Emit(OpCodes.Ldarg_2);
+        il.Emit(OpCodes.Ldarg_1);
+        il.Emit(OpCodes.Ldloc, args);
+        il.Emit(OpCodes.Call, runtime.Invocation.Method);
+        il.Emit(OpCodes.Call, runtime.Booleans.IsTruthy);
+        il.Emit(OpCodes.Brfalse, loop);
+
+        il.Emit(OpCodes.Ldarg_3);
+        il.Emit(OpCodes.Brfalse, returnValue);
+        il.Emit(OpCodes.Ldloc, args);
+        il.Emit(OpCodes.Ldc_I4_1);
+        il.Emit(OpCodes.Ldelem_Ref);
+        il.Emit(OpCodes.Ret);
+        il.MarkLabel(returnValue);
+        il.Emit(OpCodes.Ldloc, element);
+        il.Emit(OpCodes.Ret);
+
+        var missingValue = il.DefineLabel();
+        il.MarkLabel(missing);
+        il.Emit(OpCodes.Ldarg_3);
+        il.Emit(OpCodes.Brfalse, missingValue);
+        il.Emit(OpCodes.Ldc_R8, -1.0);
+        il.Emit(OpCodes.Box, _types.Double);
+        il.Emit(OpCodes.Ret);
+        il.MarkLabel(missingValue);
+        il.Emit(OpCodes.Ldsfld, runtime.Sentinels.UndefinedInstance);
+        il.Emit(OpCodes.Ret);
+
+        return (EmitAdapter("ArrayFindLastProto", returnIndex: false),
+            EmitAdapter("ArrayFindLastIndexProto", returnIndex: true));
+
+        MethodBuilder EmitAdapter(string name, bool returnIndex)
+        {
+            var method = typeBuilder.DefineMethod(name, MethodAttributes.Public | MethodAttributes.Static,
+                _types.Object, [_types.Object, _types.ObjectArray]);
+            method.DefineParameter(2, ParameterAttributes.None, "args")
+                .SetCustomAttribute(typeof(ParamArrayAttribute).GetConstructor(Type.EmptyTypes)!,
+                    CustomAttributeEncoder.EmptyBlob);
+            var adapterIL = method.GetILGenerator();
+            adapterIL.Emit(OpCodes.Ldarg_0);
+            EmitArgumentOrUndefined(0);
+            EmitArgumentOrUndefined(1);
+            adapterIL.Emit(returnIndex ? OpCodes.Ldc_I4_1 : OpCodes.Ldc_I4_0);
+            adapterIL.Emit(OpCodes.Call, core);
+            adapterIL.Emit(OpCodes.Ret);
+            return method;
+
+            void EmitArgumentOrUndefined(int argumentIndex)
+            {
+                var provided = adapterIL.DefineLabel();
+                var ready = adapterIL.DefineLabel();
+                adapterIL.Emit(OpCodes.Ldarg_1);
+                adapterIL.Emit(OpCodes.Ldlen);
+                adapterIL.Emit(OpCodes.Conv_I4);
+                adapterIL.Emit(OpCodes.Ldc_I4, argumentIndex);
+                adapterIL.Emit(OpCodes.Bgt, provided);
+                adapterIL.Emit(OpCodes.Ldsfld, runtime.Sentinels.UndefinedInstance);
+                adapterIL.Emit(OpCodes.Br, ready);
+                adapterIL.MarkLabel(provided);
+                adapterIL.Emit(OpCodes.Ldarg_1);
+                adapterIL.Emit(OpCodes.Ldc_I4, argumentIndex);
+                adapterIL.Emit(OpCodes.Ldelem_Ref);
+                adapterIL.MarkLabel(ready);
+            }
+        }
+    }
+
     private MethodBuilder EmitArrayCallbackPrototypeAdapter(
         TypeBuilder typeBuilder, EmittedRuntime runtime, MethodBuilder helper,
         bool isReducer, bool shortCircuits)

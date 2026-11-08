@@ -880,8 +880,6 @@ public partial class RuntimeEmitter
         il.Emit(OpCodes.Ldarg_0);
         il.Emit(OpCodes.Castclass, inputs.ArgumentsType);
         il.Emit(OpCodes.Ldarg_2);
-        il.Emit(OpCodes.Call, inputs.NumericCoercion.ToNumber);
-        il.Emit(OpCodes.Conv_I4);
         il.Emit(OpCodes.Stfld, inputs.ArgumentsLengthField);
         il.Emit(OpCodes.Ret);
         il.MarkLabel(notArgumentsLengthLabel);

@@ -152,8 +152,11 @@ public partial class RuntimeEmitter
         WireCallback("forEach",       runtime.ArrayOperations.ForEach);
         WireCallback("find",          runtime.ArrayOperations.Find, shortCircuits: true);
         WireCallback("findIndex",     runtime.ArrayOperations.FindIndex, shortCircuits: true);
-        WireCallback("findLast",      runtime.ArrayOperations.FindLast, shortCircuits: true);
-        WireCallback("findLastIndex", runtime.ArrayOperations.FindLastIndex, shortCircuits: true);
+        var reversePredicates = usesPrototypeAdapters
+            ? EmitArrayReversePredicatePrototypeAdapters(typeBuilder, runtime)
+            : (runtime.ArrayOperations.FindLast, runtime.ArrayOperations.FindLastIndex);
+        Wire("findLast",      reversePredicates.Item1, 1);
+        Wire("findLastIndex", reversePredicates.Item2, 1);
         WireCallback("some",          runtime.ArrayOperations.Some, shortCircuits: true);
         WireCallback("every",         runtime.ArrayOperations.Every, shortCircuits: true);
         WireCallback("reduce",      runtime.ArrayOperations.Reduce,      isReducer: true);

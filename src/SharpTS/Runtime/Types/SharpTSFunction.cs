@@ -68,7 +68,7 @@ public class SharpTSFunction : ISharpTSCallable, ITypeCategorized
     // match the runtime chain and outer-variable captures would be off-by-one.
     private readonly object? _boundThis;
     private readonly bool _hasBoundThis;
-    private bool _hasInstanceReceiver;
+    private bool _hasReceiverScope;
     // Functions are ordinary objects for their user-defined string properties.
     // Reuse the descriptor-aware object store for assignment, accessors, and
     // Object.defineProperty invariants.
@@ -216,7 +216,7 @@ public class SharpTSFunction : ISharpTSCallable, ITypeCategorized
     private object? CallCore(Interpreter interpreter, List<object?> arguments, RuntimeValue newTarget,
         ClassConstructionFrame? constructionFrame = null)
     {
-        if (PrivateOwner is not null && !_declaration.IsStatic && !_hasInstanceReceiver)
+        if (PrivateOwner is not null && !_declaration.IsStatic && !_hasReceiverScope)
             return BindInstanceReceiver(_hasBoundThis ? _boundThis : SharpTSUndefined.Instance)
                 .CallCore(interpreter, arguments, newTarget, constructionFrame);
         if (_declaration.Body == null)
@@ -247,7 +247,7 @@ public class SharpTSFunction : ISharpTSCallable, ITypeCategorized
         {
             environment.Define("this", _boundThis);
         }
-        else if (_declaration.IsStatic || !_closure.TryGet("this", out _))
+        else if (!_hasReceiverScope)
         {
             environment.Define("this",
                 functionStrict ? SharpTSUndefined.Instance : (object?)interpreter.GlobalThis);
@@ -326,7 +326,7 @@ public class SharpTSFunction : ISharpTSCallable, ITypeCategorized
     internal SharpTSFunction BindInstanceReceiver(object? instance)
     {
         if (_declaration.IsStatic) return BindThis(instance);
-        RuntimeEnvironment closure = _hasInstanceReceiver ? _closure.Enclosing! : _closure;
+        RuntimeEnvironment closure = _hasReceiverScope ? _closure.Enclosing! : _closure;
         RuntimeEnvironment environment = new(closure);
         environment.Define("this", instance);
 
@@ -338,7 +338,7 @@ public class SharpTSFunction : ISharpTSCallable, ITypeCategorized
         }
 
         var bound = ShareObjectState(new SharpTSFunction(_declaration, environment, IsConstructible));
-        bound._hasInstanceReceiver = true;
+        bound._hasReceiverScope = true;
         return bound;
     }
 
@@ -355,7 +355,9 @@ public class SharpTSFunction : ISharpTSCallable, ITypeCategorized
         {
             environment.Define("super", klass.Superclass);
         }
-        return ShareObjectState(new SharpTSFunction(_declaration, environment, IsConstructible));
+        var bound = ShareObjectState(new SharpTSFunction(_declaration, environment, IsConstructible));
+        bound._hasReceiverScope = true;
+        return bound;
     }
 
     /// <summary>
@@ -372,7 +374,7 @@ public class SharpTSFunction : ISharpTSCallable, ITypeCategorized
     {
         bound._properties = _properties;
         bound.PrivateOwner = PrivateOwner;
-        bound._hasInstanceReceiver = _hasInstanceReceiver;
+        bound._hasReceiverScope = _hasReceiverScope;
         return bound;
     }
 
@@ -381,7 +383,7 @@ public class SharpTSFunction : ISharpTSCallable, ITypeCategorized
     /// </summary>
     public RuntimeValue CallV2(Interpreter interpreter, ReadOnlySpan<RuntimeValue> arguments)
     {
-        if (PrivateOwner is not null && !_declaration.IsStatic && !_hasInstanceReceiver)
+        if (PrivateOwner is not null && !_declaration.IsStatic && !_hasReceiverScope)
             return BindInstanceReceiver(_hasBoundThis ? _boundThis : SharpTSUndefined.Instance)
                 .CallV2(interpreter, arguments);
         if (_declaration.Body == null)
@@ -405,7 +407,7 @@ public class SharpTSFunction : ISharpTSCallable, ITypeCategorized
         {
             environment.Define("this", _boundThis);
         }
-        else if (_declaration.IsStatic || !_closure.TryGet("this", out _))
+        else if (!_hasReceiverScope)
         {
             environment.Define("this",
                 functionStrict ? SharpTSUndefined.Instance : (object?)interpreter.GlobalThis);

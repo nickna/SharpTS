@@ -849,7 +849,8 @@ public partial class TypeChecker
             TypeInfo.Class classTypeForBody = PublishInitialClassType(classStmt, mutableClass, classTypeParams);
 
             bool anyInferredFieldTypeResolved = CheckClassFieldInitializers(
-                classStmt, classStmt.Fields, mutableClass, classTypeEnv, classTypeParams);
+                classStmt, classStmt.Fields, mutableClass, classTypeEnv, classTypeParams,
+                out var fieldsWithUnresolvedGetters);
             using (new EnvironmentScope(this, classTypeEnv))
                 anyInferredFieldTypeResolved |= CheckClassAutoAccessorInitializers(classStmt, mutableClass);
             if (anyInferredFieldTypeResolved)
@@ -865,7 +866,8 @@ public partial class TypeChecker
                 classTypeForBody = PublishInitialClassType(classStmt, mutableClass, classTypeParams);
             }
 
-            ValidateDeclaredClassInterfaces(classStmt, classTypeForBody, classTypeParams);
+            if (fieldsWithUnresolvedGetters is null)
+                ValidateDeclaredClassInterfaces(classStmt, classTypeForBody, classTypeParams);
 
             ValidateDeclaredClassMembers(classStmt, classTypeForBody, classTypeParams, classTypeEnv);
 
@@ -907,6 +909,10 @@ public partial class TypeChecker
                 if (staticBlockExit is not null) RestoreValueFlow(staticBlockExit);
             }
 
+            if (anyInferredMethodReturnResolved && fieldsWithUnresolvedGetters is { Count: > 0 })
+                anyInferredFieldTypeResolved |= RevalidateClassFieldInitializers(
+                    classStmt, classStmt.Fields, mutableClass, classTypeEnv, classTypeParams, fieldsWithUnresolvedGetters);
+
             CheckStrictPropertyInitialization(classStmt, mutableClass);
 
             RepublishInferredClassType(
@@ -917,6 +923,8 @@ public partial class TypeChecker
             // it held at the string-index check earlier (ValidateClassPropertiesAgainstIndex).
             mutableClass.ResetFrozenCache();
             var resolvedClass = mutableClass.Freeze();
+            if (fieldsWithUnresolvedGetters is not null)
+                ValidateDeclaredClassInterfaces(classStmt, resolvedClass, classTypeParams);
             ValidateClassMembersAgainstSymbolIndex(classStmt, resolvedClass);
             ValidateStaticOverrideCompatibility(classStmt, resolvedClass);
             PublishForwardClassConstructor(mutableClass,

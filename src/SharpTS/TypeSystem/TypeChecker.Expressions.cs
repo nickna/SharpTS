@@ -2968,7 +2968,8 @@ public partial class TypeChecker
         mutableClass.ResetFrozenCache();
 
         bool anyInferredFieldTypeResolved = CheckClassFieldInitializers(
-            classExpr, classExpr.Fields, mutableClass, classTypeEnv, classTypeParams);
+            classExpr, classExpr.Fields, mutableClass, classTypeEnv, classTypeParams,
+            out var fieldsWithUnresolvedGetters);
         using (new EnvironmentScope(this, classTypeEnv))
             anyInferredFieldTypeResolved |= CheckClassAutoAccessorInitializers(declarationView, mutableClass);
         if (anyInferredFieldTypeResolved)
@@ -3012,9 +3013,13 @@ public partial class TypeChecker
         ValidateOverrideMembers(classExpr.Methods, classExpr.Accessors, classTypeForBody);
         ValidateStaticOverrideCompatibility(classExpr.Methods, classExpr.Accessors, className, classTypeForBody);
 
-        // Validate interface implementations (skip for generic - validated at instantiation)
-        if (classExpr.Interfaces != null && classTypeParams == null)
+        if (fieldsWithUnresolvedGetters is null)
+            ValidateImplementedInterfaces(classTypeForBody);
+
+        void ValidateImplementedInterfaces(TypeInfo.Class implementation)
         {
+            // Generic classes are validated at instantiation.
+            if (classExpr.Interfaces is null || classTypeParams is not null) return;
             for (int i = 0; i < classExpr.Interfaces.Count; i++)
             {
                 var interfaceToken = classExpr.Interfaces[i];
@@ -3023,7 +3028,7 @@ public partial class TypeChecker
                     : _environment.GetTypeBinding(interfaceToken.Lexeme);
                 if (itfTypeInfo is TypeInfo.Interface interfaceType)
                 {
-                    ValidateInterfaceImplementation(classTypeForBody, interfaceType, className, classExpr.Name?.Line);
+                    ValidateInterfaceImplementation(implementation, interfaceType, className, classExpr.Name?.Line);
                 }
                 else if (itfTypeInfo == null && TryResolveIterableProtocolInterface(
                              interfaceToken.Lexeme,
@@ -3033,7 +3038,7 @@ public partial class TypeChecker
                 {
                     // Built-in iterable-protocol interface (Iterable<T>, AsyncIterable<T>, …) — not a
                     // user-declared interface, so validate the class structurally implements it (#756).
-                    ValidateProtocolInterfaceImplementation(classTypeForBody, protocolType, className);
+                    ValidateProtocolInterfaceImplementation(implementation, protocolType, className);
                 }
                 else
                 {
@@ -3289,6 +3294,10 @@ public partial class TypeChecker
             _currentClass = prevClass;
         }
 
+        if (anyInferredMethodReturnResolved && fieldsWithUnresolvedGetters is { Count: > 0 })
+            anyInferredFieldTypeResolved |= RevalidateClassFieldInitializers(
+                classExpr, classExpr.Fields, mutableClass, classTypeEnv, classTypeParams, fieldsWithUnresolvedGetters);
+
         // Publish method return types inferred during the body pass. The class was frozen with
         // <inferred> placeholders before the body could be checked, so the frozen Class the binding
         // (`const C = class …`) and the TypeMap (read by the compiler) hold still carry the
@@ -3323,6 +3332,8 @@ public partial class TypeChecker
         // collected before method and getter bodies were checked.
         mutableClass.ResetFrozenCache();
         TypeInfo.Class indexValidatedClass = mutableClass.Freeze();
+        if (fieldsWithUnresolvedGetters is not null)
+            ValidateImplementedInterfaces(indexValidatedClass);
         ValidateClassPropertiesAgainstIndex(declarationView, indexValidatedClass);
         ValidateClassMembersAgainstSymbolIndex(declarationView, indexValidatedClass);
         ValidateClassIndexSignatureExtends(declarationView, indexValidatedClass);

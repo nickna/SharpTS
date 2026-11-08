@@ -12,6 +12,16 @@ public class EnumTests
     #region Numeric Enums
 
     [Theory, ModeData]
+    public void DuplicateNumericValuesUseTheLastReverseName(ExecutionMode mode)
+    {
+        const string source = """
+            enum E { First = 2, Other = 4, Last = 2 }
+            console.log(E.First, E.Last, E[2], E["2"], E[4]);
+            """;
+        Assert.Equal("2 2 Last Last Other\n", TestHarness.Run(source, mode));
+    }
+
+    [Theory, ModeData]
     public void NumericEnum_ForwardMapping_ReturnsValue(ExecutionMode mode)
     {
         var source = """

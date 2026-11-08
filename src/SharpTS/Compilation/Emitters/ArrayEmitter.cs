@@ -557,24 +557,22 @@ public sealed class ArrayEmitter : ITypeEmitterStrategy
     /// bypassing the full GetProperty runtime dispatch chain.
     /// </summary>
     public bool TryEmitPropertyGet(IEmitterContext emitter, Expr receiver, string propertyName)
-    {
-        if (propertyName != "length" || !TryEmitLengthGet(emitter, receiver)) return false;
-        // Registry callers retain their object-result convention. The sync IL
-        // emitter calls TryEmitLengthGet directly to preserve native arithmetic.
-        emitter.Context.IL.Emit(OpCodes.Box, emitter.Context.Types.Double);
-        emitter.SetStackUnknown();
-        return true;
-    }
-    /// <summary>Preserves the numeric length through arithmetic without a box/unbox round trip.</summary>
-    internal static bool TryEmitLengthGet(IEmitterContext emitter, Expr receiver)
-    {
+        => propertyName == "length" && TryEmitLengthGet(emitter, receiver, boxResult: true);
 
+    internal static bool TryEmitLengthGet(IEmitterContext emitter, Expr receiver,
+        bool boxResult = false, bool numericConsumer = false)
+    {
         var ctx = emitter.Context;
         var il = ctx.IL;
 
         // Resolve the descriptor from the receiver's static type
         var desc = ArrayElements.Resolve(ctx.TypeMap?.Get(receiver));
         if (desc == null) return false;
+
+        // Ordinary reads through typed aliases must preserve a raw arguments
+        // length. Numeric consumers can convert that value on the fallback arm.
+        bool usesArguments = ctx.RuntimeFeatures?.UsesArguments != false;
+        bool returnsObject = boxResult || (usesArguments && !numericConsumer);
 
         // Hoisted path: use cached typed local from loop preamble
         if (receiver is Expr.Variable arrVar)
@@ -599,43 +597,33 @@ public sealed class ArrayEmitter : ITypeEmitterStrategy
                     // arguments object, so no $Arguments check is needed on this arm.
                     il.Emit(OpCodes.Ldloc, h.TypedLocal);
                     il.Emit(OpCodes.Callvirt, ctx.Runtime!.ArrayStorage.LongLengthGetter);
-                    il.Emit(OpCodes.Conv_R8);
+                    EmitNumberLength();
                     il.Emit(OpCodes.Br, endLabel);
                 }
                 else
                 {
                     var listType = h.Descriptor.GetListType(ctx.Types);
 
-                    // $Arguments check: use _length, not Count, per ECMA-262 sloppy
-                    // arguments. Only emits the runtime check when ArgumentsType is
-                    // wired (production: always; tests may skip).
-                    if (ctx.Runtime?.Arguments.Type != null && ctx.Runtime?.Arguments.LengthField != null)
+                    if (usesArguments)
                     {
-                        var notArgsLengthLabel = il.DefineLabel();
                         il.Emit(OpCodes.Ldloc, h.TypedLocal);
                         il.Emit(OpCodes.Isinst, ctx.Runtime!.Arguments.Type);
-                        il.Emit(OpCodes.Brfalse, notArgsLengthLabel);
-                        il.Emit(OpCodes.Ldloc, h.TypedLocal);
-                        il.Emit(OpCodes.Castclass, ctx.Runtime!.Arguments.Type);
-                        il.Emit(OpCodes.Ldfld, ctx.Runtime!.Arguments.LengthField);
-                        il.Emit(OpCodes.Conv_R8);
-                        il.Emit(OpCodes.Br, endLabel);
-                        il.MarkLabel(notArgsLengthLabel);
+                        il.Emit(OpCodes.Brtrue, fallbackLabel);
                     }
 
                     il.Emit(OpCodes.Ldloc, h.TypedLocal);
                     il.Emit(OpCodes.Callvirt, ctx.Types.GetProperty(listType, "Count").GetGetMethod()!);
-                    il.Emit(OpCodes.Conv_R8);
+                    EmitNumberLength();
                     il.Emit(OpCodes.Br, endLabel);
                 }
 
                 il.MarkLabel(fallbackLabel);
                 emitter.EmitExpression(receiver);
                 emitter.EmitBoxIfNeeded(receiver);
-                EmitFallbackLengthGet(emitter);
+                EmitFallback();
 
                 il.MarkLabel(endLabel);
-                emitter.SetStackType(StackType.Double);
+                SetLengthStackType();
                 return true;
             }
         }
@@ -663,24 +651,16 @@ public sealed class ArrayEmitter : ITypeEmitterStrategy
         il.Emit(OpCodes.Ldloc, objLocal);
         il.Emit(OpCodes.Castclass, ctx.Runtime!.ArrayStorage.Type);
         il.Emit(OpCodes.Callvirt, ctx.Runtime!.ArrayStorage.LongLengthGetter);
-        il.Emit(OpCodes.Conv_R8);
+        EmitNumberLength();
         il.Emit(OpCodes.Br, endLabelNH);
 
         il.MarkLabel(tsArrayCheckLabel);
 
-        // $Arguments check: use _length per ECMA-262 sloppy arguments.
-        if (ctx.Runtime?.Arguments.Type != null && ctx.Runtime?.Arguments.LengthField != null)
+        if (usesArguments)
         {
-            var notArgsLengthNH = il.DefineLabel();
             il.Emit(OpCodes.Ldloc, objLocal);
             il.Emit(OpCodes.Isinst, ctx.Runtime!.Arguments.Type);
-            il.Emit(OpCodes.Brfalse, notArgsLengthNH);
-            il.Emit(OpCodes.Ldloc, objLocal);
-            il.Emit(OpCodes.Castclass, ctx.Runtime!.Arguments.Type);
-            il.Emit(OpCodes.Ldfld, ctx.Runtime!.Arguments.LengthField);
-            il.Emit(OpCodes.Conv_R8);
-            il.Emit(OpCodes.Br, endLabelNH);
-            il.MarkLabel(notArgsLengthNH);
+            il.Emit(OpCodes.Brtrue, fallbackLabelNH);
         }
 
         il.Emit(OpCodes.Ldloc, objLocal);
@@ -690,16 +670,50 @@ public sealed class ArrayEmitter : ITypeEmitterStrategy
         il.Emit(OpCodes.Ldloc, objLocal);
         il.Emit(OpCodes.Castclass, listTypeNH);
         il.Emit(OpCodes.Callvirt, ctx.Types.GetProperty(listTypeNH, "Count").GetGetMethod()!);
-        il.Emit(OpCodes.Conv_R8);
+        EmitNumberLength();
         il.Emit(OpCodes.Br, endLabelNH);
 
         il.MarkLabel(fallbackLabelNH);
         il.Emit(OpCodes.Ldloc, objLocal);
-        EmitFallbackLengthGet(emitter);
+        EmitFallback();
 
         il.MarkLabel(endLabelNH);
-        emitter.SetStackType(StackType.Double);
+        SetLengthStackType();
         return true;
+
+        void EmitNumberLength()
+        {
+            il.Emit(OpCodes.Conv_R8);
+            if (returnsObject) il.Emit(OpCodes.Box, ctx.Types.Double);
+        }
+
+        void EmitFallback()
+        {
+            var done = il.DefineLabel();
+            if (usesArguments)
+            {
+                var ordinary = il.DefineLabel();
+                il.Emit(OpCodes.Dup);
+                il.Emit(OpCodes.Isinst, ctx.Runtime!.Arguments.Type);
+                il.Emit(OpCodes.Brfalse, ordinary);
+                il.Emit(OpCodes.Ldstr, "length");
+                il.Emit(OpCodes.Call, ctx.Runtime.ObjectRead.Property);
+                if (!returnsObject)
+                    il.Emit(OpCodes.Call, ctx.Runtime.NumericCoercion.ConvertToNumber);
+                il.Emit(OpCodes.Br, done);
+                il.MarkLabel(ordinary);
+            }
+
+            EmitFallbackLengthGet(emitter);
+            if (returnsObject) il.Emit(OpCodes.Box, ctx.Types.Double);
+            il.MarkLabel(done);
+        }
+
+        void SetLengthStackType()
+        {
+            if (returnsObject) emitter.SetStackUnknown();
+            else emitter.SetStackType(StackType.Double);
+        }
     }
 
     // Consumes one boxed receiver and leaves its numeric length. The canonical

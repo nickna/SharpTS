@@ -5,6 +5,95 @@ namespace SharpTS.Tests.SharedTests;
 
 public sealed class ExplicitSuperReplacementReceiverTests
 {
+    // The compiler API tests exercise receiver selection with an empty TypeMap.
+    [Theory]
+    [InlineData("class Child extends Middle", "constructor() { super(); }")]
+    [InlineData("class Child extends Middle", "constructor() { const initialize = () => super(); initialize(); }")]
+    [InlineData("class Child extends Middle", "")]
+    [InlineData("const Child = class extends Middle", "constructor() { super(); }")]
+    [InlineData("const Child = class extends Middle", "constructor() { const initialize = () => super(); initialize(); }")]
+    public void CompilerApiInitializesElementsOnTheReplacement(string child, string constructor)
+    {
+        string source = $$"""
+            const replacement = {};
+            class Base { constructor() { return replacement; } }
+            class Middle extends Base {}
+            {{child}} {
+                field = 7;
+                getReceiver = () => this;
+                {{constructor}}
+            }
+            const result = new Child();
+            console.log(result === replacement, result.field, result.getReceiver?.() === result);
+            """;
+
+        Assert.Equal("true 7 true\n", TestHarness.RunUnchecked(source, ExecutionMode.Compiled));
+    }
+
+    [Fact]
+    public void CompilerApiBindsNestedClassFieldArrowsToTheReplacement()
+    {
+        const string source = """
+            const replacement = {};
+            class Base { constructor() { return replacement; } }
+            function make() {
+                return class extends Base {
+                    field = 7;
+                    getReceiver = () => this;
+                    constructor() { super(); }
+                };
+            }
+            const Child = make();
+            const result = new Child();
+            console.log(result === replacement, result.field, result.getReceiver() === result);
+            """;
+
+        Assert.Equal("true 7 true\n", TestHarness.RunUnchecked(source, ExecutionMode.Compiled));
+    }
+
+    [Fact]
+    public void CompilerApiBindsRuntimeParentFieldArrowsToTheReplacement()
+    {
+        const string source = """
+            const replacement = {};
+            class Base { constructor() { return replacement; } }
+            function make(Parent) {
+                class Child extends Parent {
+                    field = 7;
+                    getReceiver = () => this;
+                    constructor() { super(); }
+                }
+                return Child;
+            }
+            const Child = make(Base);
+            const result = new Child();
+            console.log(result === replacement, result.field, result.getReceiver() === result);
+            """;
+
+        Assert.Equal("true 7 true\n", TestHarness.RunUnchecked(source, ExecutionMode.Compiled));
+    }
+
+    [Theory, ModeData]
+    public void CanonicalConstructionBindsDynamicParentFieldArrowsToTheReplacement(ExecutionMode mode)
+    {
+        const string source = """
+            const replacement = {};
+            class Base { constructor() { return replacement; } }
+            function make(Parent: any) {
+                class Child extends Parent {
+                    field = 7;
+                    getReceiver = () => this;
+                    constructor() { super(); }
+                }
+                return new Child();
+            }
+            const result: any = make(Base);
+            console.log(result === replacement, result.field, result.getReceiver() === result);
+            """;
+
+        Assert.Equal("true 7 true\n", TestHarness.Run(source, mode));
+    }
+
     public static IEnumerable<object[]> Cases()
     {
         yield return ["original", """

@@ -51,6 +51,72 @@ public sealed class CliArraySubclassTests
     }
 
     [Theory]
+    [InlineData("class Child<T> extends Array<T> {}", false)]
+    [InlineData("class Child<T> extends Array<T> {}", true)]
+    [InlineData("const Child = class<T> extends Array<T> {};", false)]
+    [InlineData("const Child = class<T> extends Array<T> {};", true)]
+    public void NumericReadsUseTheInstantiatedArrayElementType(string declaration, bool noLib)
+    {
+        using var directory = CliTestHelper.CreateTempDirectory();
+        var path = directory.CreateFile("main.ts", $$"""
+            {{declaration}}
+            const value = new Child<number>();
+            value.push(7);
+            const item: number = value[0];
+            console.log(item);
+            """);
+        string options = $"--no-tsconfig{(noLib ? " --noLib" : "")} --strict";
+        var run = CliTestHelper.RunCli($"{options} \"{path}\"", directory.Path);
+        Assert.True(run.ExitCode == 0, run.StandardOutput + run.StandardError);
+        Assert.Equal("7\n", run.StandardOutput);
+
+        var invalid = directory.CreateFile("invalid.ts",
+            $"{declaration} const wrong: string = new Child<number>()[0];");
+        var result = CliTestHelper.RunCli($"{options} --noEmit \"{invalid}\"", directory.Path);
+        Assert.NotEqual(0, result.ExitCode);
+        Assert.Contains("not assignable to type 'string'", result.StandardOutput + result.StandardError);
+    }
+
+    [Fact]
+    public void NumericReadsComposeTransitiveArrayTypeArguments()
+    {
+        const string source = """
+            class Base<T> extends Array<T> {}
+            class Child<U> extends Base<U[]> {}
+            const value = new Child<number>();
+            const item: number[] = value[0];
+            """;
+        using var directory = CliTestHelper.CreateTempDirectory();
+        var path = directory.CreateFile("main.ts", source);
+        var result = CliTestHelper.RunCli($"--no-tsconfig --strict --noEmit \"{path}\"", directory.Path);
+        Assert.True(result.ExitCode == 0, result.StandardOutput + result.StandardError);
+
+        var invalid = directory.CreateFile("invalid.ts", source + "\nconst wrong: string[] = value[0];");
+        result = CliTestHelper.RunCli($"--no-tsconfig --strict --noEmit \"{invalid}\"", directory.Path);
+        Assert.NotEqual(0, result.ExitCode);
+        Assert.Contains("not assignable to type 'string[]'", result.StandardOutput + result.StandardError);
+    }
+
+    [Theory]
+    [InlineData("declare const value: Child<number> | Child<string>; const item: number | string = value[0];",
+        "const wrong: number = value[0];", "number")]
+    [InlineData("function read<T extends Child<number>>(value: T): number { return value[0]; }",
+        "function wrong<T extends Child<number>>(value: T): string { return value[0]; }", "string")]
+    public void DelegatedNumericReadsPreserveArrayElementTypes(string source, string incompatible, string target)
+    {
+        const string declaration = "class Child<T> extends Array<T> {}\n";
+        using var directory = CliTestHelper.CreateTempDirectory();
+        var path = directory.CreateFile("main.ts", declaration + source);
+        var result = CliTestHelper.RunCli($"--no-tsconfig --strict --noEmit \"{path}\"", directory.Path);
+        Assert.True(result.ExitCode == 0, result.StandardOutput + result.StandardError);
+
+        var invalid = directory.CreateFile("invalid.ts", declaration + source + "\n" + incompatible);
+        result = CliTestHelper.RunCli($"--no-tsconfig --strict --noEmit \"{invalid}\"", directory.Path);
+        Assert.NotEqual(0, result.ExitCode);
+        Assert.Contains($"not assignable to type '{target}'", result.StandardOutput + result.StandardError);
+    }
+
+    [Theory]
     [InlineData("const Child = class extends Array<number> {}; const value = new Child();")]
     [InlineData("const Child = class<T> extends Array<T> {}; const value = new Child<number>();")]
     public void DeclarationLibrariesKeepTheElementTypeInInheritedArrayMethods(string declaration)

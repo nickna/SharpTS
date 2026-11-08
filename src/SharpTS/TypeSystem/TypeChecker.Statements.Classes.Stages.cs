@@ -130,8 +130,7 @@ public partial class TypeChecker
         return classTypeForBody;
     }
 
-    // Runs in the outer declaration environment before other member checks.
-    // Keeps interface resolution, source diagnostics, and generic deferral in their original order.
+    // Resolves implemented interfaces in the outer declaration environment.
     private void ValidateDeclaredClassInterfaces(
         Stmt.Class classStmt,
         TypeInfo.Class classTypeForBody,
@@ -306,12 +305,14 @@ public partial class TypeChecker
         TypeInfo.MutableClass mutableClass,
         TypeEnvironment instanceEnvironment,
         List<TypeInfo.TypeParameter>? classTypeParameters,
-        bool validationOnly = false)
+        out HashSet<Stmt.Field>? fieldsWithUnresolvedGetters,
+        bool validationOnly = false,
+        HashSet<Stmt.Field>? retryFields = null)
     {
         bool anyInferredFieldTypeResolved = false;
         TypeEnvironment outerEnvironment = _environment;
         TypeEnvironment staticEnvironment = new(outerEnvironment);
-        if (!validationOnly)
+        if (!validationOnly && retryFields == null)
             RegisterEditorScope(sourceOwner, staticEnvironment, EditorScopeKind.Class, EditorSyntaxRole.Whole);
         string? selfName = sourceOwner switch
         {
@@ -321,12 +322,24 @@ public partial class TypeChecker
         };
 
         var getterScope = CreateFieldGetterScope(sourceOwner, fields, mutableClass, instanceEnvironment);
+        if (retryFields != null)
+        {
+            // Use the return types published by the ordinary accessor and method body passes.
+            mutableClass.ResetFrozenCache();
+            _compatibilityCache = null;
+            _identityCompatibilityCache = null;
+            getterScope.Getters.Clear();
+            getterScope.PrivateGetters.Clear();
+            getterScope.PendingFields.RemoveWhere(key => !retryFields.Contains(getterScope.Fields[key]));
+            getterScope.IsRetryingFields = true;
+        }
         _fieldGetterScope = getterScope;
         try
         {
             foreach (var field in fields)
             {
-                if (field.Initializer == null || field.IsDeclare) continue;
+                if (field.Initializer == null || field.IsDeclare ||
+                    (retryFields != null && !retryFields.Contains(field))) continue;
 
                 TypeInfo.Class currentClass = mutableClass.Freeze();
                 RefreshSelfBindings(currentClass);
@@ -388,6 +401,7 @@ public partial class TypeChecker
                 }
             }
             RefreshSelfBindings(mutableClass.Freeze());
+            fieldsWithUnresolvedGetters = getterScope.GetFieldsToRetry();
             return anyInferredFieldTypeResolved;
         }
         finally
@@ -408,7 +422,7 @@ public partial class TypeChecker
             instanceEnvironment.DefineType(selfName, constructorType);
             staticEnvironment.Define(selfName, constructorType);
             staticEnvironment.DefineType(selfName, constructorType);
-            if (!validationOnly)
+            if (!validationOnly && retryFields == null)
             {
                 BindEditorClassSelf(sourceOwner, instanceEnvironment, constructorType);
                 BindEditorClassSelf(sourceOwner, staticEnvironment, constructorType);
@@ -416,12 +430,11 @@ public partial class TypeChecker
         }
     }
 
-    // Defaults that need completed private/super metadata can refine parameter types
-    // after field inference. Recheck arguments without changing the inferred fields
-    // or applying static initializer flow effects a second time.
-    private void RevalidateClassFieldInitializers(object sourceOwner, IReadOnlyList<Stmt.Field> fields,
+    // Recheck arguments after defaults refine parameter types, or retry inference
+    // for fields that had to wait for getter bodies. Restore initializer flow in either case.
+    private bool RevalidateClassFieldInitializers(object sourceOwner, IReadOnlyList<Stmt.Field> fields,
         TypeInfo.MutableClass owner, TypeEnvironment classEnvironment,
-        List<TypeInfo.TypeParameter>? typeParameters)
+        List<TypeInfo.TypeParameter>? typeParameters, HashSet<Stmt.Field>? retryFields = null)
     {
         var assignmentState = SnapshotDefiniteAssignmentState();
         var aliases = new Dictionary<string, string>(_variableAliases, StringComparer.Ordinal);
@@ -434,8 +447,8 @@ public partial class TypeChecker
         PushNarrowingScope();
         try
         {
-            CheckClassFieldInitializers(sourceOwner, fields, owner, classEnvironment, typeParameters,
-                validationOnly: true);
+            return CheckClassFieldInitializers(sourceOwner, fields, owner, classEnvironment, typeParameters,
+                out _, validationOnly: retryFields == null, retryFields: retryFields);
         }
         finally
         {

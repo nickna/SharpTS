@@ -14,7 +14,7 @@ public partial class ILCompiler
         {
             if (context.ClosureAnalyzer?.IsMappedArgumentParameter(parameter) != true
                 || !context.ParameterCaptureCells.TryGetValue(parameter.Lexeme, out var cell)) continue;
-            MappedArgumentsEmitter.EmitBind(il, runtime, index,
+            MappedArgumentsEmitter.EmitBind(il, runtime, context.Types, index,
                 () => il.Emit(OpCodes.Ldloc, arguments), () => il.Emit(OpCodes.Ldloc, cell.Cell));
         }
     }

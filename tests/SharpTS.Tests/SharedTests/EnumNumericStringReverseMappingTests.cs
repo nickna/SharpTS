@@ -48,19 +48,21 @@ public sealed class EnumNumericStringReverseMappingTests
     }
 
     [Theory]
+    [InlineData("\"1\"")]
+    [InlineData("\"5\"")]
     [InlineData("1")]
     [InlineData("5")]
-    public void NoUncheckedIndexedAccessIncludesUndefinedInNumericStringReads(string key)
+    public void NoUncheckedIndexedAccessIncludesUndefinedInReverseReads(string key)
     {
         const string declaration = "enum E { A = 1 }";
         var checker = new TypeChecker(TypeCheckerOptions.Strict with { NoUncheckedIndexedAccess = true });
         checker.Check(TestHarness.ParseOrThrow($"""
             {declaration}
             const named: E = E["A"];
-            const reverse: string | undefined = E["{key}"];
+            const reverse: string | undefined = E[{key}];
             """));
         var error = Assert.ThrowsAny<TypeCheckException>(() => checker.Check(
-            TestHarness.ParseOrThrow($"""{declaration} const wrong: string = E["{key}"];""")));
+            TestHarness.ParseOrThrow($"""{declaration} const wrong: string = E[{key}];""")));
         Assert.Equal("TS2322", error.Diagnostic.TsCode);
     }
 

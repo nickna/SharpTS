@@ -27,7 +27,8 @@ public partial class RuntimeEmitter
 
     private readonly record struct ArrayIteratorInputs(
         EmittedArgumentsRuntime Arguments,
-        MethodInfo GetIndex
+        MethodInfo GetIndex,
+        EmittedNumericCoercionRuntime NumericCoercion
     );
 
 
@@ -183,6 +184,8 @@ public partial class RuntimeEmitter
         il.Emit(OpCodes.Dup);
         il.Emit(OpCodes.Brfalse, useListCount);
         il.Emit(OpCodes.Ldfld, inputs.Arguments.LengthField);
+        il.Emit(OpCodes.Call, inputs.NumericCoercion.ToNumber);
+        il.Emit(OpCodes.Conv_I4);
         il.Emit(OpCodes.Stloc, liveLength);
         il.Emit(OpCodes.Br, haveLiveLength);
         il.MarkLabel(useListCount);

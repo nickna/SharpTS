@@ -5,7 +5,7 @@ namespace SharpTS.Compilation;
 
 internal static class MappedArgumentsEmitter
 {
-    internal static void EmitBind(ILGenerator il, EmittedRuntime runtime, int index,
+    internal static void EmitBind(ILGenerator il, EmittedRuntime runtime, TypeProvider types, int index,
         Action loadArguments, Action loadCell)
     {
         var storage = runtime.DescriptorStorage;
@@ -13,8 +13,8 @@ internal static class MappedArgumentsEmitter
             ?? throw new InvalidOperationException("Mapped arguments require parameter cell metadata.");
         var skip = il.DefineLabel();
         loadArguments();
-        il.Emit(OpCodes.Castclass, runtime.Arguments.Type);
-        il.Emit(OpCodes.Ldfld, runtime.Arguments.LengthField);
+        il.Emit(OpCodes.Castclass, types.ListOfObject);
+        il.Emit(OpCodes.Callvirt, types.GetPropertyGetter(types.ListOfObject, "Count"));
         il.Emit(OpCodes.Ldc_I4, index);
         il.Emit(OpCodes.Ble, skip);
         loadArguments();
@@ -57,7 +57,7 @@ internal static class MappedArgumentsEmitter
                 il.Emit(OpCodes.Stloc, alias);
             }
             if (!context.IsStrictMode)
-                EmitBind(il, context.Runtime!, index, () =>
+                EmitBind(il, context.Runtime!, context.Types, index, () =>
                 {
                     il.Emit(OpCodes.Ldarg_0);
                     il.Emit(OpCodes.Ldfld, arguments);

@@ -995,8 +995,9 @@ public class ModuleResolver
             };
             module.ParseDiagnostics.AddRange(parseResult.Diagnostics);
 
-            // Determine if this is a script or module file
-            module.IsScript = ScriptDetector.IsScriptFile(statements);
+            // Explicit ES module source extensions do not need an import or export marker.
+            module.IsScript = (module.IsDeclarationFile || !HasExplicitEsModuleExtension(absolutePath))
+                && ScriptDetector.IsScriptFile(statements);
 
             // Determine if this is a CommonJS module
             module.IsCommonJs = CommonJsDetector.Detect(
@@ -1016,10 +1017,8 @@ public class ModuleResolver
             if (module.IsDeclarationFile)
                 _moduleCache[absolutePath] = module;
 
-            // Process triple-slash path references. TypeScript permits a module to
-            // reference a script or declaration file; the referenced file contributes
-            // its global declarations to the program without changing the referrer's
-            // module scope.
+            // Referenced scripts contribute global declarations without changing the
+            // referrer's scope. Modules identified by extension keep their own scope.
             // NOTE: Process BEFORE caching to properly detect circular references
             var directives = lexer.TripleSlashDirectives;
             var pathRefs = directives.Where(d => d.Type == TripleSlashReferenceType.Path).ToList();
@@ -1027,7 +1026,7 @@ public class ModuleResolver
 
             if (pathRefs.Count > 0)
             {
-                // Load referenced scripts
+                // Load referenced files.
                 foreach (var pathRef in pathRefs)
                 {
                     string refPath = ResolveReferencePath(pathRef.Value, absolutePath);
@@ -1041,13 +1040,15 @@ public class ModuleResolver
                     if (refModule.IsDeclarationFile)
                         RegisterAmbientModuleDeclarations([refModule]);
 
-                    if (!refModule.IsScript && !refModule.IsDeclarationFile)
+                    bool isSourceModule = !refModule.IsScript && !refModule.IsDeclarationFile;
+                    if (isSourceModule && (refModule.IsCommonJs || !HasExplicitEsModuleExtension(refPath) ||
+                        !ScriptDetector.IsScriptFile(refModule.Statements)))
                     {
                         throw new Exception($"Type Error: /// <reference path=\"{pathRef.Value}\"> cannot reference a module file. Referenced file '{refPath}' contains import/export statements.");
                     }
 
                     module.PathReferences.Add(pathRef);
-                    AddTypeDependency(module, refModule);
+                    AddTypeDependency(module, refModule, referenceOnly: isSourceModule);
                 }
             }
 
@@ -1599,7 +1600,7 @@ public class ModuleResolver
             }
             visited.Add(module.Path);
 
-            // Visit script references first (they merge into global scope)
+            // Visit type-only references first. Only scripts contribute global bindings.
             foreach (var refScript in module.ReferencedScripts)
             {
                 Visit(refScript);
@@ -1712,16 +1713,16 @@ public class ModuleResolver
         return entry;
     }
 
-    private static void AddTypeDependency(ParsedModule owner, ParsedModule declaration)
+    private static void AddTypeDependency(ParsedModule owner, ParsedModule dependency, bool referenceOnly = false)
     {
-        if (declaration.IsScript)
+        if (dependency.IsScript || referenceOnly)
         {
-            if (!owner.ReferencedScripts.Contains(declaration))
-                owner.ReferencedScripts.Add(declaration);
+            if (!owner.ReferencedScripts.Contains(dependency))
+                owner.ReferencedScripts.Add(dependency);
         }
-        else if (!owner.Dependencies.Contains(declaration))
+        else if (!owner.Dependencies.Contains(dependency))
         {
-            owner.Dependencies.Add(declaration);
+            owner.Dependencies.Add(dependency);
         }
     }
 
@@ -1986,6 +1987,9 @@ public class ModuleResolver
         path.EndsWith(".d.ts", StringComparison.OrdinalIgnoreCase)
         || path.EndsWith(".d.mts", StringComparison.OrdinalIgnoreCase)
         || path.EndsWith(".d.cts", StringComparison.OrdinalIgnoreCase);
+
+    private static bool HasExplicitEsModuleExtension(string path) =>
+        Path.GetExtension(path).ToLowerInvariant() is ".mjs" or ".mts";
 
     /// <summary>
     /// Clears all cached modules.
