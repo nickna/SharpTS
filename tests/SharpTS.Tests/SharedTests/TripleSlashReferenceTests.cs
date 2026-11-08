@@ -8,6 +8,25 @@ namespace SharpTS.Tests.SharedTests;
 /// </summary>
 public class TripleSlashReferenceTests
 {
+    [Theory, ModeData]
+    public void PathReference_AllowsMarkerFreeSourceInEitherImportOrder(ExecutionMode mode)
+    {
+        var files = new Dictionary<string, string>
+        {
+            ["shared.ts"] = "const marker = 1;",
+            ["referrer.ts"] = """
+                /// <reference path="./shared.ts" />
+                export {};
+                """
+        };
+
+        files["main.ts"] = "import './shared'; import './referrer'; console.log('main');";
+        Assert.Equal("main\n", TestHarness.RunModules(files, "./main.ts", mode));
+
+        files["main.ts"] = "import './referrer'; import './shared'; console.log('main');";
+        Assert.Equal("main\n", TestHarness.RunModules(files, "./main.ts", mode));
+    }
+
     #region Basic Path References
 
     [Theory, ModeData]
