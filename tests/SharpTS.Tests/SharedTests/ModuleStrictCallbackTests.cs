@@ -31,14 +31,22 @@ public class ModuleStrictCallbackTests
                 remove(value);
                 arrow(value);
                 [1].find(function() { console.log("callback", this === undefined); return false; });
-                async function* removeAsync(value) { yield delete value.length; }
+                async function* removeAsync(value) {
+                    console.log("async generator deleting");
+                    yield delete value.length;
+                }
                 removeAsync(value).next().then(
                     result => console.log("async generator", result.value),
-                    () => console.log("async generator rejected"));
+                    error => {
+                        const message = String(error);
+                        console.log("async generator rejected",
+                            message.startsWith("TypeError: Cannot delete") && message.includes("'length'"));
+                    });
                 """
         };
 
-        Assert.Equal("classic false\nmodule true\nfunction true\narrow true\ncallback true\nasync generator rejected\n",
+        Assert.Equal("classic false\nmodule true\nfunction true\narrow true\ncallback true\n" +
+            "async generator deleting\nasync generator rejected true\n",
             TestHarness.RunModules(files, "main.mjs", mode, allowTypeErrors: true));
     }
 
