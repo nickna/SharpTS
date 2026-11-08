@@ -15,6 +15,7 @@ namespace SharpTS.Diagnostics;
 public class DiagnosticCollector
 {
     private readonly List<Diagnostic> _diagnostics = [];
+    internal bool SuppressDuplicates { get; set; }
 
     /// <summary>
     /// Maximum number of errors before stopping collection. Default is 10.
@@ -52,6 +53,9 @@ public class DiagnosticCollector
     /// <returns>True if the diagnostic was added, false if error limit reached.</returns>
     public bool Add(Diagnostic diagnostic)
     {
+        if (SuppressDuplicates && _diagnostics.Contains(diagnostic))
+            return false;
+
         if (diagnostic.Severity == DiagnosticSeverity.Error && HitErrorLimit)
             return false;
 

@@ -910,8 +910,14 @@ public partial class TypeChecker
             }
 
             if (anyInferredMethodReturnResolved && fieldsWithUnresolvedGetters is { Count: > 0 })
-                anyInferredFieldTypeResolved |= RevalidateClassFieldInitializers(
+            {
+                bool resolvedFields = RevalidateClassFieldInitializers(
                     classStmt, classStmt.Fields, mutableClass, classTypeEnv, classTypeParams, fieldsWithUnresolvedGetters);
+                anyInferredFieldTypeResolved |= resolvedFields;
+                if (resolvedFields)
+                    RecheckInferredClassMethodReturns(classStmt.Methods, mutableClass, classEnv, classStmt.Name,
+                        classTypeParams, recoverComputedSymbolDiagnostics);
+            }
 
             CheckStrictPropertyInitialization(classStmt, mutableClass);
 
@@ -946,7 +952,8 @@ public partial class TypeChecker
         TypeInfo.MutableClass mutableClass,
         TypeEnvironment outerEnvironment,
         bool recoverComputedSymbolDiagnostics,
-        bool provisionalGetter = false)
+        bool provisionalGetter = false,
+        bool reinferReturn = false)
     {
         bool anyInferredMethodReturnResolved = false;
         // Only check methods that have bodies (skip overload signatures)
@@ -1023,6 +1030,8 @@ public partial class TypeChecker
             }
 
             TypeInfo.Function methodType = ClassMethodBodySignature(method, methodEnv);
+            if (reinferReturn)
+                methodType = methodType with { ReturnType = TypeInfo.Inferred.Shared };
             if (accessorParameter is not null)
                 methodType = methodType with { ParamTypes = [accessorParameter] };
 

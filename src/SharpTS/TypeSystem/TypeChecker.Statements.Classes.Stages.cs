@@ -460,6 +460,51 @@ public partial class TypeChecker
         }
     }
 
+    private void RecheckInferredClassMethodReturns(IReadOnlyList<Stmt.Function> methods,
+        TypeInfo.MutableClass owner, TypeEnvironment classEnvironment, Token? selfName,
+        List<TypeInfo.TypeParameter>? typeParameters, bool recoverComputedSymbolDiagnostics)
+    {
+        var inferredMethods = methods.Where(method => method.Body is not null &&
+            method.ReturnType is null && method.ReturnTypeNode is null &&
+            method.PrivateAccessorName is null && method.Name.Lexeme != "constructor").ToArray();
+        if (inferredMethods.Length == 0) return;
+
+        // Rebuild the class view used by method bodies after getter-dependent fields
+        // have completed. Keep the first pass's inferred signatures available to callers.
+        owner.ResetFrozenCache();
+        _compatibilityCache = null;
+        _identityCompatibilityCache = null;
+        var completed = owner.Freeze();
+        TypeEnvironment outer = new(_environment);
+        if (selfName is not null)
+        {
+            TypeInfo self = typeParameters is { Count: > 0 } ? owner.FreezeGeneric(typeParameters) : completed;
+            outer.Define(selfName.Lexeme, self);
+            classEnvironment.Define(selfName.Lexeme, self);
+        }
+        classEnvironment.Define("this", new TypeInfo.Instance(completed));
+
+        var previousClass = _currentClass;
+        var flow = CaptureValueFlow();
+        bool previousDuplicateSuppression = _diagnostics.SuppressDuplicates;
+        _diagnostics.SuppressDuplicates = true;
+        _currentClass = completed;
+        _privateNameEnclosingClasses.Push(previousClass);
+        try
+        {
+            using var scope = new EnvironmentScope(this, classEnvironment);
+            CheckClassMethodBodies(inferredMethods, isAmbient: false, completed, owner, outer,
+                recoverComputedSymbolDiagnostics, reinferReturn: true);
+        }
+        finally
+        {
+            _privateNameEnclosingClasses.Pop();
+            _currentClass = previousClass;
+            _diagnostics.SuppressDuplicates = previousDuplicateSuppression;
+            RestoreValueFlow(flow);
+        }
+    }
+
     // Checks initializers at declaration scope before static blocks, preserving diagnostic order.
     private bool CheckClassAutoAccessorInitializers(Stmt.Class classStmt, TypeInfo.MutableClass owner)
     {
