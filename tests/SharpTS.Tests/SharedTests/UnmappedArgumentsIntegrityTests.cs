@@ -14,6 +14,8 @@ public sealed class UnmappedArgumentsIntegrityTests
                 const descriptor = Object.getOwnPropertyDescriptor(args, "callee");
                 console.log(typeof descriptor.get, descriptor.get === descriptor.set,
                     descriptor.enumerable, descriptor.configurable);
+                try { delete args["callee"]; }
+                catch (error) { console.log(error instanceof TypeError); }
                 Object.seal(args);
                 try { delete args["callee"]; }
                 catch (error) { console.log(error instanceof TypeError); }
@@ -25,6 +27,8 @@ public sealed class UnmappedArgumentsIntegrityTests
 
             function strict() { "use strict"; inspect(arguments); }
             function rest(...values) { inspect(arguments); }
+            function defaults(value = 1) { inspect(arguments); }
+            function destructured({ value }) { inspect(arguments); }
             function derived(parent) {
                 class Derived extends parent {
                     constructor() { super(); inspect(arguments); }
@@ -33,12 +37,15 @@ public sealed class UnmappedArgumentsIntegrityTests
             }
             strict();
             rest();
+            defaults();
+            destructured({ value: 1 });
             const Derived = derived(class {});
             new Derived();
             """;
 
-        const string expected = "function true false false\ntrue\ntrue\ntrue\n";
-        Assert.Equal(expected + expected + expected, TestHarness.RunUnchecked(source, ExecutionMode.Compiled));
+        const string expected = "function true false false\ntrue\ntrue\ntrue\ntrue\n";
+        Assert.Equal(string.Concat(Enumerable.Repeat(expected, 5)),
+            TestHarness.RunUnchecked(source, ExecutionMode.Compiled));
     }
 
     [Theory]
