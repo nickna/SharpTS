@@ -159,6 +159,7 @@ public partial class ILCompiler
         // Create a compilation context for the state machine
         var il = smBuilder.MoveNextAsyncMethod.GetILGenerator();
         var ctx = CreateModuleMemberContext(il, smBuilder.MoveNextAsyncMethod);
+        ctx.IsStrictMode = IsStrictFunction(funcStmt);
         ApplyIteratorParameterCaptureCells(ctx, smBuilder);
         // Captured top-level variables (entry-point display class)
         ApplyCapturedTopLevelVariableAccess(ctx);

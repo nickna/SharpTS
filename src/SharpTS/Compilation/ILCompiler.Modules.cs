@@ -1240,6 +1240,8 @@ public partial class ILCompiler
             Body: body,
             ReturnType: null,
             IsAsync: true);
+        if (!module.IsScript && !module.IsCommonJs)
+            _strictFunctions.Add(runner);
         DefineFunction(runner);
         string key = GetDefinitionContext().GetQualifiedFunctionName(name);
         _hostedModuleRunnerKeys[module.Path] = key;
