@@ -82,6 +82,33 @@ public sealed class ClassInstanceEnumerabilityTests
             TestHarness.RunUnchecked(source, ExecutionMode.Compiled));
     }
 
+    [Fact]
+    public void CompiledReviverDoesNotReadInheritedDescriptorFields()
+    {
+        const string source = """
+            class Box { value = 1; }
+            const box = new Box();
+            let reads = 0;
+            const poison = Object.create(null);
+            poison.get = () => { reads++; throw 'descriptor get'; };
+            poison.configurable = true;
+            try {
+                JSON.parse('{"first":0,"last":0}', function (key, value) {
+                    if (key === 'first') this.last = box;
+                    if (key === 'value') {
+                        Object.defineProperty(Object.prototype, 'get', poison);
+                        return 2;
+                    }
+                    return value;
+                });
+            } finally {
+                delete Object.prototype.get;
+            }
+            console.log(box.value, reads);
+            """;
+        Assert.Equal("2 0\n", TestHarness.RunUnchecked(source, ExecutionMode.Compiled));
+    }
+
     [Theory]
     [InlineData(ExecutionMode.Interpreted)]
     [InlineData(ExecutionMode.Compiled)]

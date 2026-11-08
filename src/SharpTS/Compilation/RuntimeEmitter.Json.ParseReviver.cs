@@ -293,26 +293,7 @@ public partial class RuntimeEmitter
         il.Emit(OpCodes.Isinst, inputs.UndefinedType);
         il.Emit(OpCodes.Brtrue, arrayDeleteLabel);
 
-        var arrayDescriptor = il.DeclareLocal(_types.DictionaryStringObject);
-        il.Emit(OpCodes.Newobj, _types.DictionaryStringObjectCtor);
-        il.Emit(OpCodes.Stloc, arrayDescriptor);
-        void SetArrayDescriptorField(string name, Action emitValue)
-        {
-            il.Emit(OpCodes.Ldloc, arrayDescriptor);
-            il.Emit(OpCodes.Ldstr, name);
-            emitValue();
-            il.Emit(OpCodes.Callvirt, _types.GetMethod(
-                _types.DictionaryStringObject, "set_Item", _types.String, _types.Object));
-        }
-        SetArrayDescriptorField("value", () => il.Emit(OpCodes.Ldloc, arrayElement));
-        foreach (var attribute in new[] { "writable", "enumerable", "configurable" })
-        {
-            SetArrayDescriptorField(attribute, () =>
-            {
-                il.Emit(OpCodes.Ldc_I4_1);
-                il.Emit(OpCodes.Box, _types.Boolean);
-            });
-        }
+        var arrayDescriptor = EmitReviverDataDescriptor(il, inputs.DescriptorStorage, arrayElement);
         il.Emit(OpCodes.Ldloc, valLocal);
         il.Emit(OpCodes.Ldloc, arrayProp);
         il.Emit(OpCodes.Ldloc, arrayDescriptor);
@@ -407,7 +388,7 @@ public partial class RuntimeEmitter
         // CreateDataProperty uses [[DefineOwnProperty]], not [[Set]]. Route
         // through ObjectDefineProperty so Proxy defineProperty traps observe
         // each revived child. All CreateDataProperty attributes are true.
-        var createDescLocal = EmitReviverDataDescriptor(il, newElemLocal);
+        var createDescLocal = EmitReviverDataDescriptor(il, inputs.DescriptorStorage, newElemLocal);
         il.Emit(OpCodes.Ldloc, valLocal);
         il.Emit(OpCodes.Ldloc, propLocal);
         il.Emit(OpCodes.Ldloc, createDescLocal);
@@ -543,11 +524,17 @@ public partial class RuntimeEmitter
         il.MarkLabel(notListLabel);
     }
 
-    private LocalBuilder EmitReviverDataDescriptor(ILGenerator il, LocalBuilder value)
+    private LocalBuilder EmitReviverDataDescriptor(
+        ILGenerator il, EmittedDescriptorStorageRuntime descriptors, LocalBuilder value)
     {
         var descriptor = il.DeclareLocal(_types.DictionaryStringObject);
         il.Emit(OpCodes.Newobj, _types.DictionaryStringObjectCtor);
         il.Emit(OpCodes.Stloc, descriptor);
+        // CreateDataProperty has no observable descriptor conversion. Keep
+        // omitted fields absent even if a reviver modified Object.prototype.
+        il.Emit(OpCodes.Ldloc, descriptor);
+        il.Emit(OpCodes.Ldnull);
+        il.Emit(OpCodes.Call, descriptors.SetPrototype);
         var setItem = _types.GetMethod(_types.DictionaryStringObject, "set_Item", _types.String, _types.Object);
         il.Emit(OpCodes.Ldloc, descriptor);
         il.Emit(OpCodes.Ldstr, "value");
@@ -629,7 +616,7 @@ public partial class RuntimeEmitter
         // CreateDataProperty ignores a refusal from an ordinary instance.
         // The descriptor has only data fields, so this cannot invoke a setter.
         il.BeginExceptionBlock();
-        var descriptor = EmitReviverDataDescriptor(il, newElemLocal);
+        var descriptor = EmitReviverDataDescriptor(il, inputs.DescriptorStorage, newElemLocal);
         il.Emit(OpCodes.Ldloc, valLocal);
         il.Emit(OpCodes.Ldloc, propLocal);
         il.Emit(OpCodes.Ldloc, descriptor);
