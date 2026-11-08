@@ -510,6 +510,29 @@ public class ArraySortTests
     #region ToSorted
 
     [Theory, ModeData]
+    public void Array_ToSorted_AliasedCallReadsArgumentsLengthOnce(ExecutionMode mode)
+    {
+        const string source = """
+            function sort(first, second) {
+                let reads = 0;
+                let length = 1;
+                Object.defineProperty(arguments, 'length', { get() { reads++; return length; } });
+                Object.defineProperty(arguments, '1', { get() { throw 'outside length'; } });
+                const sortCopy = Array.prototype.toSorted;
+                console.log(sortCopy.apply(arguments, []).join(','), reads);
+                console.log(Reflect.apply(sortCopy, arguments, [undefined]).join(','), reads);
+                try { sortCopy.call(arguments, null); }
+                catch (error) { console.log(error instanceof TypeError, reads); }
+                length = Infinity;
+                try { sortCopy.call(arguments); }
+                catch (error) { console.log(error instanceof RangeError, reads); }
+            }
+            sort(2, 1);
+            """;
+        Assert.Equal("2 1\n2 2\ntrue 2\ntrue 3\n", TestHarness.RunUnchecked(source, mode));
+    }
+
+    [Theory, ModeData]
     public void Array_ToSorted_ReturnsNewArray(ExecutionMode mode)
     {
         var source = """

@@ -2447,6 +2447,8 @@ public partial class RuntimeEmitter
             MethodAttributes.Public | MethodAttributes.Static,
             _types.ListOfObject,
             [_types.Object, _types.Object]);
+        method.SetCustomAttribute(
+            runtime.FunctionAttributes.PadUndefinedCtor, CustomAttributeEncoder.EmptyBlob);
         runtime.ArrayOperations.ToSortedGeneric = method;
 
         var il = method.GetILGenerator();

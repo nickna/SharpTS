@@ -1930,7 +1930,18 @@ public partial class RuntimeEmitter
         il.Emit(OpCodes.Ret);
         il.MarkLabel(notTSObject);
 
-        // Arrays, arguments, strings, and primitive wrappers have bounded CLR
+        if (_features.UsesArguments)
+        {
+            var notArguments = il.DefineLabel();
+            il.Emit(OpCodes.Ldarg_0);
+            il.Emit(OpCodes.Isinst, runtime.Arguments.Type);
+            il.Emit(OpCodes.Brfalse, notArguments);
+            EmitLazyMaterializePath(il, runtime, holeAware: false, copyArguments: true);
+            il.Emit(OpCodes.Ret);
+            il.MarkLabel(notArguments);
+        }
+
+        // Arrays, strings, and primitive wrappers have bounded CLR
         // storage and retain the established materialization behavior.
         il.Emit(OpCodes.Ldarg_0);
         il.Emit(OpCodes.Ldc_I4_0);
@@ -1950,7 +1961,8 @@ public partial class RuntimeEmitter
         EmittedRuntime runtime,
         bool holeAware,
         bool rejectOverArrayLength = false,
-        bool allowArgumentsLength = false)
+        bool allowArgumentsLength = false,
+        bool copyArguments = false)
     {
         var lenLocal = il.DeclareLocal(_types.Int32);
         var listLocal = il.DeclareLocal(_types.ListOfObject);
@@ -1964,11 +1976,13 @@ public partial class RuntimeEmitter
         il.Emit(OpCodes.Call, runtime.NumericCoercion.ToNumber);
         il.Emit(OpCodes.Stloc, dLocal);
 
-        if (rejectOverArrayLength)
+        if (rejectOverArrayLength || copyArguments)
         {
             var withinArrayLimit = il.DefineLabel();
             il.Emit(OpCodes.Ldloc, dLocal);
-            il.Emit(OpCodes.Ldc_R8, 4294967295.0);
+            if (copyArguments)
+                il.Emit(OpCodes.Call, _types.GetMethod(_types.Math, "Truncate", _types.Double));
+            il.Emit(OpCodes.Ldc_R8, copyArguments ? (double)Array.MaxLength : uint.MaxValue);
             // NaN is unordered and becomes length zero below; finite values at
             // or below the maximum are valid. Positive infinity and larger
             // finite values require ArrayCreate to throw RangeError.
@@ -2028,7 +2042,7 @@ public partial class RuntimeEmitter
         il.Emit(OpCodes.Br, afterLen);
         il.MarkLabel(notNegInf);
 
-        EmitClampMaterializedLength(il, runtime, dLocal, lenLocal, afterLen, allowArgumentsLength);
+        EmitClampMaterializedLength(il, runtime, dLocal, lenLocal, afterLen, allowArgumentsLength || copyArguments);
         il.MarkLabel(afterLen);
 
         if (_features.UsesArguments && allowArgumentsLength)
