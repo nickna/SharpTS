@@ -185,19 +185,10 @@ public partial class AsyncGeneratorMoveNextEmitter
     /// analyzer reserved two suspension states (next + return) in
     /// <c>AsyncGeneratorStateAnalyzer.VisitForOf</c>, consumed here in the same order.
     /// </summary>
-    /// <remarks>
-    /// The iterator is driven through the <c>$IAsyncGenerator</c> interface. Synchronous iterables are
-    /// first wrapped by the emitted async-from-sync adapter; custom <c>Symbol.asyncIterator</c> sources
-    /// remain a separate, pre-existing gap in this emitter. <c>next()</c> returns a
-    /// <c>Task&lt;object&gt;</c> ({ value, done }) that maps directly onto the async-gen await mechanism
-    /// (<see cref="EmitAwaitFromValueOnStack"/>), so rejected steps propagate / reach an enclosing try
-    /// exactly as a normal <c>await</c> does.
-    /// </remarks>
     protected override void EmitForAwaitOf(Stmt.ForOf f)
     {
         string varName = GetBindingStorageName(f, f.Variable.Lexeme);
         var varField = _builder.GetVariableField(varName);
-        var asyncGenInterface = _ctx!.Runtime!.RequireAsyncGenerators().Type;
 
         // The iterator must survive the per-iteration suspensions (a MoveNextAsync re-entry wipes IL
         // locals — and the loop body itself may yield/await), so store it in a state-machine field,
@@ -207,17 +198,11 @@ public partial class AsyncGeneratorMoveNextEmitter
         var iteratorField = _builder.StateMachineType.DefineField(
             $"<>7__aiter{loopId}", _types.Object, FieldAttributes.Private);
 
-        // Evaluate the iterable, adapt synchronous sources, and store the
-        // resulting async iterator. Casting validates non-iterable inputs.
-        EmitExpression(f.Iterable);
-        EnsureBoxed();
-        _il.Emit(OpCodes.Call, _ctx.Runtime.RequireAsyncGenerators().RequireFromSync().Adapt);
-        _il.Emit(OpCodes.Castclass, asyncGenInterface);
-        var iterTemp = _il.DeclareLocal(asyncGenInterface);
-        _il.Emit(OpCodes.Stloc, iterTemp);
-        _il.Emit(OpCodes.Ldarg_0);
-        _il.Emit(OpCodes.Ldloc, iterTemp);
-        _il.Emit(OpCodes.Stfld, iteratorField);
+        var isCustomField = _builder.StateMachineType.DefineField(
+            $"<>7__aiterCustom{loopId}", _types.Boolean, FieldAttributes.Private);
+        var iterableLocal = _il.DeclareLocal(_types.Object);
+        EmitSuspensionOperand(f.Iterable, iterableLocal);
+        EmitCaptureTryOperation(() => EmitResolveAsyncIterator(iterableLocal, iteratorField, isCustomField));
 
         int nextState = _currentSuspensionState++;   // iterator.next() await (reused each iteration)
 
@@ -226,18 +211,14 @@ public partial class AsyncGeneratorMoveNextEmitter
         var cleanupLabel = _il.DefineLabel();
         var continueLabel = _il.DefineLabel();
 
-        // break → cleanup (await iterator.return()); natural done → endLabel (no return() per spec).
         EnterLoop(cleanupLabel, continueLabel);
 
         _il.MarkLabel(startLabel);
 
-        // result = await iterator.next(undefined)  — suspends if next() is not yet settled.
-        // for-await-of never sends a value; pass undefined (#473 — next() now takes one argument).
-        _il.Emit(OpCodes.Ldarg_0);
-        _il.Emit(OpCodes.Ldfld, iteratorField);
-        _il.Emit(OpCodes.Castclass, asyncGenInterface);
-        _il.Emit(OpCodes.Ldsfld, _ctx!.Runtime!.Sentinels.UndefinedInstance);
-        _il.Emit(OpCodes.Callvirt, _ctx.Runtime.RequireAsyncGenerators().Next);  // Task<object>
+        // The protocol call can throw synchronously, before the await.
+        var stepLocal = _il.DeclareLocal(_types.Object);
+        EmitCaptureTryOperation(() => EmitProduceAsyncStep(stepLocal, iteratorField, isCustomField, isReturn: false));
+        _il.Emit(OpCodes.Ldloc, stepLocal);
         SetStackUnknown();
         EmitAwaitFromValueOnStack(nextState);
         var resultLocal = _il.DeclareLocal(_types.Object);
@@ -245,12 +226,12 @@ public partial class AsyncGeneratorMoveNextEmitter
 
         // if (result.done) exit without calling return().
         _il.Emit(OpCodes.Ldloc, resultLocal);
-        _il.Emit(OpCodes.Call, _ctx.Runtime.IteratorProtocol.Done);
+        _il.Emit(OpCodes.Call, Ctx.Runtime!.IteratorProtocol.Done);
         _il.Emit(OpCodes.Brtrue, endLabel);
 
         // loopVar = result.value
         _il.Emit(OpCodes.Ldloc, resultLocal);
-        _il.Emit(OpCodes.Call, _ctx.Runtime.IteratorProtocol.Value);
+        _il.Emit(OpCodes.Call, Ctx.Runtime!.IteratorProtocol.Value);
         if (TryInitializeLexicalCell(f.Variable, fresh: true)) { }
         else if (varField != null)
         {
@@ -263,7 +244,7 @@ public partial class AsyncGeneratorMoveNextEmitter
         else
         {
             var varLocal = _il.DeclareLocal(_types.Object);
-            _ctx.Locals.RegisterLocal(varName, varLocal);
+            Ctx.Locals.RegisterLocal(varName, varLocal);
             _il.Emit(OpCodes.Stloc, varLocal);
         }
 
@@ -272,14 +253,10 @@ public partial class AsyncGeneratorMoveNextEmitter
         _il.MarkLabel(continueLabel);
         _il.Emit(OpCodes.Br, startLabel);
 
-        // Cleanup on break: await iterator.return() (runs the iterator's finally blocks), discard result.
-        int returnState = _currentSuspensionState++;   // allocated after the body, matching the analyzer
+        int returnState = _currentSuspensionState++;
         _il.MarkLabel(cleanupLabel);
-        _il.Emit(OpCodes.Ldarg_0);
-        _il.Emit(OpCodes.Ldfld, iteratorField);
-        _il.Emit(OpCodes.Castclass, asyncGenInterface);
-        _il.Emit(OpCodes.Ldnull);
-        _il.Emit(OpCodes.Callvirt, _ctx.Runtime.RequireAsyncGenerators().Return);  // Task<object>
+        EmitCaptureTryOperation(() => EmitProduceAsyncStep(stepLocal, iteratorField, isCustomField, isReturn: true));
+        _il.Emit(OpCodes.Ldloc, stepLocal);
         SetStackUnknown();
         EmitAwaitFromValueOnStack(returnState);
         _il.Emit(OpCodes.Pop);
