@@ -126,8 +126,12 @@ public partial class ILCompiler
         var leaf = Expr.GetSuperclassLeafName(declaration.SuperclassExpr);
         bool expressionOwnedParent = ResolveClassExpressionParent(
             _typeMap.GetClassType(declaration)?.Superclass, declaration.SuperclassExpr) != null;
-        bool lexicalArraySuper = !_nativeAotProjectOutput && leaf == "Array" && !expressionOwnedParent
-            && !_classes.Builders.ContainsKey(GetDefinitionContext().ResolveClassName(leaf))
+        TypeBuilder? nominalParent = leaf is null ? null
+            : _classes.Builders.GetValueOrDefault(GetDefinitionContext().ResolveClassName(leaf));
+        bool needsLexicalSuper = !_nativeAotProjectOutput && !expressionOwnedParent
+            && ((leaf == "Array" && nominalParent is null)
+                || (_typeMap.GetClassType(declaration) is null && declaration.SuperclassExpr is Expr.Variable
+                    && NominalClassMayReplaceReceiver(nominalParent)))
             && declaration.Decorators is not { Count: > 0 }
             && !declaration.Methods.Any(method => method.Decorators is { Count: > 0 }
                 || method.Parameters.Any(parameter => parameter.Decorators is { Count: > 0 }))
@@ -143,8 +147,8 @@ public partial class ILCompiler
             && declaration.Decorators is not { Count: > 0 }
             && leaf is not ("Map" or "Set" or "WeakMap" or "WeakSet" or "Date" or "RegExp" or "Buffer");
         if ((declaration.SuperclassExpr == null && !captureLexicalOwner && !repeating) || declaration.IsDeclare) return false;
-        if (!captureLexicalOwner && !repeating && !lexicalArraySuper && leaf != null && ((_typeMap.Get(declaration.SuperclassExpr!) is not TypeSystem.TypeInfo.Any
-            && _classes.Builders.ContainsKey(GetDefinitionContext().ResolveClassName(leaf)) && !expressionOwnedParent)
+        if (!captureLexicalOwner && !repeating && !needsLexicalSuper && leaf != null && ((_typeMap.Get(declaration.SuperclassExpr!) is not TypeSystem.TypeInfo.Any
+            && nominalParent is not null && !expressionOwnedParent)
             || Runtime.BuiltIns.BuiltInNames.IsErrorTypeName(leaf)
             || leaf is "Array" or "Promise" or "Map" or "Set" or "WeakMap" or "WeakSet" or "Date" or "RegExp" or "Buffer")) return false;
         if (!captureLexicalOwner && !repeating && _features?.UsesClassPrototypeMutation != true

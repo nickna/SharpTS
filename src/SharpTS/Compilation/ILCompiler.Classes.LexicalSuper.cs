@@ -31,9 +31,14 @@ public partial class ILCompiler
         _usesRuntimeParents = true;
         if (_typeMap.GetClassExprType(expression) is { } checkedClass)
             _typeMapper.RegisterDynamicClassInstance(checkedClass.Core.DeclarationId);
+        MarkCollectedClassExpressionReceiverArrows(expression);
+    }
+
+    private void MarkCollectedClassExpressionReceiverArrows(Expr.ClassExpr expression)
+    {
         // A class returned from a function can have its arrows discovered before
         // its template is defined. Apply the same source-owner proof to those
-        // already-discovered arrows before their display classes are emitted.
+        // already-discovered arrows before their bodies are emitted.
         var fieldArrows = new FieldInitializerArrowVisitor();
         foreach (var field in expression.Fields.Where(field => !field.IsStatic && !field.IsDeclare))
             if (field.Initializer != null) fieldArrows.Visit(field.Initializer);

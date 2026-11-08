@@ -13,6 +13,20 @@ public partial class ILCompiler
         return visitor.HasReplacement;
     }
 
+    private bool NominalClassMayReplaceReceiver(Type? type)
+    {
+        while (type != null)
+        {
+            if (type.IsConstructedGenericType) type = type.GetGenericTypeDefinition();
+            if (type is not TypeBuilder builder) return false;
+            var methods = GetNominalClassDeclaration(builder)?.Methods
+                ?? _classExprs.Builders.FirstOrDefault(entry => ReferenceEquals(entry.Value, builder)).Key?.Methods;
+            if (methods != null && ClassConstructorMayReplace(methods)) return true;
+            type = builder.BaseType;
+        }
+        return false;
+    }
+
     private void ConfigureClassConstructorReturns(CompilationContext context, Stmt.Function? constructor, bool derived, bool forceReceiver = false)
     {
         context.AsyncArrowBuilders = _async.ArrowBuilders.Count > 0 ? _async.ArrowBuilders : null;
@@ -23,7 +37,10 @@ public partial class ILCompiler
             visitor.Visit(statement);
         var sourceType = context.CurrentClassExpr is { } expression
             ? _typeMap.GetClassExprType(expression) : _typeMap.GetClassType(context.CurrentClassName ?? "");
-        bool needsReceiver = forceReceiver || visitor.HasReplacement || _typeMapper.IsDynamicClassInstance(sourceType);
+        // The public compiler API also accepts an empty TypeMap. The emitted
+        // superclass still identifies which source constructor can replace this.
+        bool needsReceiver = forceReceiver || visitor.HasReplacement || _typeMapper.IsDynamicClassInstance(sourceType)
+            || (sourceType is null && derived && NominalClassMayReplaceReceiver(context.CurrentClassBuilder?.BaseType));
         context.CapturesClassConstructorReturn = needsReceiver;
         context.IsDerivedClassConstructor = derived;
         if (derived) context.ConstructorSuperBound = context.IL.DeclareLocal(context.Types.Boolean);
@@ -73,6 +90,8 @@ public partial class ILCompiler
         // The source construction policy already proves that these arrows must
         // retain the mutable this cell, including under unchecked JS compilation.
         return _typeMapper.IsDynamicClassInstance(type)
+            || (type is null && NominalClassMayReplaceReceiver(expression is null
+                ? _classes.Builders.GetValueOrDefault(name) : _classExprs.Builders.GetValueOrDefault(expression)))
             || source is not null && UsesReceiverConstruction(source)
             || expression != null && _lexicalSuperElementInitializers.ContainsKey(expression)
             || expression?.SuperclassExpr is Expr.ClassExpr && _features?.UsesClassPrototypeMutation == true;

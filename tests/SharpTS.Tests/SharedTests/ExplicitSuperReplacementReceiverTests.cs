@@ -5,6 +5,51 @@ namespace SharpTS.Tests.SharedTests;
 
 public sealed class ExplicitSuperReplacementReceiverTests
 {
+    [Theory]
+    [InlineData("class Child extends Middle", "constructor() { super(); }")]
+    [InlineData("class Child extends Middle", "constructor() { const initialize = () => super(); initialize(); }")]
+    [InlineData("class Child extends Middle", "")]
+    [InlineData("const Child = class extends Middle", "constructor() { super(); }")]
+    [InlineData("const Child = class extends Middle", "constructor() { const initialize = () => super(); initialize(); }")]
+    public void CompilerApiInitializesElementsOnTheReplacement(string child, string constructor)
+    {
+        string source = $$"""
+            const replacement = {};
+            class Base { constructor() { return replacement; } }
+            class Middle extends Base {}
+            {{child}} {
+                field = 7;
+                getReceiver = () => this;
+                {{constructor}}
+            }
+            const result = new Child();
+            console.log(result === replacement, result.field, result.getReceiver?.() === result);
+            """;
+
+        Assert.Equal("true 7 true\n", TestHarness.RunUnchecked(source, ExecutionMode.Compiled));
+    }
+
+    [Fact]
+    public void CompilerApiBindsNestedClassFieldArrowsToTheReplacement()
+    {
+        const string source = """
+            const replacement = {};
+            class Base { constructor() { return replacement; } }
+            function make() {
+                return class extends Base {
+                    field = 7;
+                    getReceiver = () => this;
+                    constructor() { super(); }
+                };
+            }
+            const Child = make();
+            const result = new Child();
+            console.log(result === replacement, result.field, result.getReceiver() === result);
+            """;
+
+        Assert.Equal("true 7 true\n", TestHarness.RunUnchecked(source, ExecutionMode.Compiled));
+    }
+
     public static IEnumerable<object[]> Cases()
     {
         yield return ["original", """
