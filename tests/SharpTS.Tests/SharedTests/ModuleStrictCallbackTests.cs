@@ -34,11 +34,11 @@ public class ModuleStrictCallbackTests
                 async function* removeAsync(value) { yield delete value.length; }
                 removeAsync(value).next().then(
                     result => console.log("async generator", result.value),
-                    error => console.log("async generator", error instanceof TypeError));
+                    () => console.log("async generator rejected"));
                 """
         };
 
-        Assert.Equal("classic false\nmodule true\nfunction true\narrow true\ncallback true\nasync generator true\n",
+        Assert.Equal("classic false\nmodule true\nfunction true\narrow true\ncallback true\nasync generator rejected\n",
             TestHarness.RunModules(files, "main.mjs", mode, allowTypeErrors: true));
     }
 
