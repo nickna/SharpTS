@@ -57,9 +57,10 @@ public sealed class ClassInstanceEnumerabilityTests
             class Box { visible = 1; }
             const box = new Box();
             Object.defineProperty(box, 'hidden', { value: 2 });
+            Object.defineProperty(box, 'computed', { get() { return 3; }, enumerable: true });
             console.log(JSON.stringify(box));
             console.log(JSON.stringify(box, ['hidden', 'visible']));
             """;
-        Assert.Equal("{\"visible\":1}\n{\"hidden\":2,\"visible\":1}\n", TestHarness.RunUnchecked(source, mode));
+        Assert.Equal("{\"visible\":1,\"computed\":3}\n{\"hidden\":2,\"visible\":1}\n", TestHarness.RunUnchecked(source, mode));
     }
 }
