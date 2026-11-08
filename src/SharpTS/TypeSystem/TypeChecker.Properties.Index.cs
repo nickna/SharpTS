@@ -630,15 +630,17 @@ public partial class TypeChecker
         return null;
     }
 
-    private static bool TryGetBuiltInArraySubclassElement(
+    private bool TryGetBuiltInArraySubclassElement(
         TypeInfo.Instance instance, out TypeInfo elementType)
     {
         TypeInfo? current = instance.ResolvedClassType;
+        Dictionary<string, TypeInfo> substitutions = [];
         for (int guard = 0; current is not null && guard < 64; guard++)
         {
-            if (current is TypeInfo.MutableClass { Name: "Array" or "ReadonlyArray" } arrayBase)
+            substitutions = ComposeInheritedFieldSubstitutions(current, substitutions);
+            if (current is TypeInfo.MutableClass { IsBuiltInArraySuperclass: true } arrayBase)
             {
-                elementType = GetArrayPlaceholderElement(arrayBase);
+                elementType = SubstituteConstructorMember(GetArrayPlaceholderElement(arrayBase), substitutions);
                 return true;
             }
             current = GetSuperclass(current);
