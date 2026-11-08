@@ -9,6 +9,33 @@ public sealed class MappedArgumentsTests
     public static IEnumerable<object[]> Cases()
     {
         yield return ["""
+            function visit(first, second) {
+                const args = arguments;
+                const trace = [];
+                Object.defineProperty(args, "0", {
+                    get() { trace.push("get0"); return 1; }
+                });
+                Object.defineProperty(args, "1", {
+                    get() { trace.push("get1"); return 2; }
+                });
+                const result = Array.prototype.some.call(args, (value, index) => {
+                    trace.push("callback" + index);
+                    return value === 1;
+                });
+                console.log(result, trace.join(","));
+            }
+            visit(1, 2);
+            function mapLive() {
+                "use strict";
+                const args = arguments;
+                console.log(Array.prototype.map.call(args, (value, index) => {
+                    if (index === 0) args[1] = 9;
+                    return value;
+                }).join(","));
+            }
+            mapLive(1, 2);
+            """, "true get0,callback0\n1,9\n"];
+        yield return ["""
             function run(value) {
                 console.log(arguments[0]++, value, ++arguments[0], value);
                 value = 8;
@@ -223,6 +250,19 @@ public sealed class MappedArgumentsTests
             }
             sort(7, 8);
             """, "1 2 1 2\n"];
+    }
+
+    [Fact]
+    public void CompiledArgumentsIterationKeepsTheIndependentLength()
+    {
+        const string source = """
+            function last() {
+                arguments.length = 1048577;
+                console.log(Array.prototype.findLastIndex.call(arguments, () => true));
+            }
+            last();
+            """;
+        Assert.Equal("1048576\n", TestHarness.RunUnchecked(source, ExecutionMode.Compiled));
     }
 
     public static IEnumerable<object[]> ModeCases() => Cases()

@@ -1778,14 +1778,12 @@ public partial class RuntimeEmitter
         // re-reads them via GetProperty so getter side effects propagate
         // and structurally-absent slots return $ArrayHole.
         var flatMapContinue = il.DefineLabel();
-        EmitElementLoad(il, iLocal, runtime.ArrayOperations, isLazyLocal);
-        il.Emit(OpCodes.Isinst, runtime.ArrayStorage.HoleType);
-        il.Emit(OpCodes.Brtrue, flatMapContinue);
+        var element = EmitLoadPresentElement(il, iLocal, flatMapContinue, runtime, isLazyLocal);
 
-        // args[0] = LoadArrayLikeElement(list, i) — lazy-aware
+        // args[0] = the value read during the hole check.
         il.Emit(OpCodes.Ldloc, argsLocal);
         il.Emit(OpCodes.Ldc_I4_0);
-        EmitElementLoad(il, iLocal, runtime.ArrayOperations, isLazyLocal);
+        il.Emit(OpCodes.Ldloc, element);
         il.Emit(OpCodes.Stelem_Ref);
 
         // args[1] = (double)i

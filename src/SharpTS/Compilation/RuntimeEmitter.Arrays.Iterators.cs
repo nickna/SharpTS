@@ -41,14 +41,7 @@ public partial class RuntimeEmitter
         il.MarkLabel(haveReceiver);
 
         var isLazyTrue = il.DefineLabel();
-        var isLazyFalse = il.DefineLabel();
         var doneLabel = il.DefineLabel();
-        // $Arguments inherits List<object>, but its observable `length` is an
-        // independent internal slot. The eager materializer already honors
-        // that slot; treating it as a raw List would visit appended indices.
-        il.Emit(OpCodes.Ldloc, rcvrLocal);
-        il.Emit(OpCodes.Isinst, runtime.Arguments.Type);
-        il.Emit(OpCodes.Brtrue, isLazyFalse);
         il.Emit(OpCodes.Ldloc, rcvrLocal);
         il.Emit(OpCodes.Isinst, _types.DictionaryStringObject);
         il.Emit(OpCodes.Brtrue, isLazyTrue);
@@ -64,7 +57,6 @@ public partial class RuntimeEmitter
         il.Emit(OpCodes.Ldloc, rcvrLocal);
         il.Emit(OpCodes.Isinst, _types.ListOfObject);
         il.Emit(OpCodes.Brtrue, isLazyTrue);
-        il.MarkLabel(isLazyFalse);
         il.Emit(OpCodes.Ldc_I4_0);
         il.Emit(OpCodes.Stloc, isLazyLocal);
         il.Emit(OpCodes.Br, doneLabel);
@@ -176,23 +168,19 @@ public partial class RuntimeEmitter
     }
 
     /// <summary>
-    /// Emits: <c>if (Element(list, indexLocal) is $ArrayHole) goto skipLabel;</c>
-    /// where Element is a per-element load that branches on the hoisted
-    /// <c>isLazyLocal</c>. Used to skip holes in forEach/filter/reduce/every/
-    /// some/flat/flatMap per ECMA-262. Expects <c>arg0 = list</c>.
+    /// Reads the current element once. Branches to <paramref name="skipLabel"/>
+    /// on a hole and returns the local holding the value for present elements.
     /// </summary>
-    /// <remarks>
-    /// On the eager path (lazy field is null at helper entry), this reduces
-    /// to one extra <c>Brtrue</c> over the pre-#90 IL — predictable, branch-
-    /// predictor friendly, and within JIT noise. On the lazy path the work
-    /// goes through <see cref="EmitLoadArrayLikeElement"/> so dynamically-
-    /// added accessors are observed at iteration time (Test262 -b-X tests).
-    /// </remarks>
-    private void EmitSkipIfHole(ILGenerator il, LocalBuilder indexLocal, Label skipLabel, EmittedRuntime runtime, LocalBuilder isLazyLocal)
+    private LocalBuilder EmitLoadPresentElement(
+        ILGenerator il, LocalBuilder indexLocal, Label skipLabel, EmittedRuntime runtime, LocalBuilder isLazyLocal)
     {
+        var element = il.DeclareLocal(_types.Object);
         EmitElementLoad(il, indexLocal, runtime.ArrayOperations, isLazyLocal);
+        il.Emit(OpCodes.Dup);
+        il.Emit(OpCodes.Stloc, element);
         il.Emit(OpCodes.Isinst, runtime.ArrayStorage.HoleType);
         il.Emit(OpCodes.Brtrue, skipLabel);
+        return element;
     }
 
     /// <summary>
@@ -233,10 +221,8 @@ public partial class RuntimeEmitter
     /// <c>this</c> is undefined in strict mode, which we represent as null.
     ///
     /// Stage E.2 M4: args[0] is unholed so callbacks never see the $ArrayHole
-    /// sentinel. Callers that want to skip holes entirely should call
-    /// <see cref="EmitSkipIfHole"/> BEFORE this helper — the unhole here is
-    /// for find/etc. which must still invoke the callback on holes (with
-    /// undefined as the element).
+    /// sentinel. Callers that skip holes can supply the value already read
+    /// by <see cref="EmitLoadPresentElement"/>.
     /// </remarks>
     /// <summary>
     /// Allocates the per-helper-invocation callback args buffer ONCE, pre-fills
@@ -372,17 +358,15 @@ public partial class RuntimeEmitter
         il.MarkLabel(doneLabel);
     }
 
-    private void EmitCallbackArgsAndInvoke(ILGenerator il, LocalBuilder indexLocal, EmittedRuntime runtime, LocalBuilder isLazyLocal, LocalBuilder argsLocal, LocalBuilder skipIndexBoxLocal, Action<ILGenerator>? loadElementOverride = null)
+    private void EmitCallbackArgsAndInvoke(
+        ILGenerator il, LocalBuilder indexLocal, EmittedRuntime runtime, LocalBuilder isLazyLocal,
+        LocalBuilder argsLocal, LocalBuilder skipIndexBoxLocal, LocalBuilder? elementLocal = null)
     {
-        // args[0] = element value. Default: unholed list[i]. When the caller
-        // already knows list[i] would IOOB (e.g. find/findIndex after callback
-        // truncated the array), it passes a loader that emits undefined —
-        // ECMA-262 §23.1.3.10/§23.1.3.11 still invoke the callback with
-        // `kValue = ? Get(O, ToString(k))` which is undefined for OOB.
+        // Find-style helpers visit holes as undefined.
         il.Emit(OpCodes.Ldloc, argsLocal);
         il.Emit(OpCodes.Ldc_I4_0);
-        if (loadElementOverride is not null)
-            loadElementOverride(il);
+        if (elementLocal is not null)
+            il.Emit(OpCodes.Ldloc, elementLocal);
         else
             EmitLoadElementUnholed(il, indexLocal, runtime, isLazyLocal);
         il.Emit(OpCodes.Stelem_Ref);
@@ -469,9 +453,8 @@ public partial class RuntimeEmitter
         // ECMA-262 23.1.3.19: map SKIPS the callback on holes but PRESERVES
         // the hole in the output at the same position. So a `map` over
         // `[1, hole, 3]` yields `[fn(1), hole, fn(3)]`, not `[fn(1), fn(3)]`.
-        EmitSkipIfHole(il, indexLocal, holeLabel, runtime, isLazyLocal);
-
-        EmitCallbackArgsAndInvoke(il, indexLocal, runtime, isLazyLocal, argsLocal, skipIndexBoxLocal);
+        var element = EmitLoadPresentElement(il, indexLocal, holeLabel, runtime, isLazyLocal);
+        EmitCallbackArgsAndInvoke(il, indexLocal, runtime, isLazyLocal, argsLocal, skipIndexBoxLocal, element);
 
         // Store the call result
         var callResultLocal = il.DeclareLocal(_types.Object);
@@ -1314,9 +1297,8 @@ public partial class RuntimeEmitter
 
         // ECMA-262 23.1.3.8: filter skips holes (callback not invoked, element
         // not copied into output — filter densifies).
-        EmitSkipIfHole(il, indexLocal, skipAdd, runtime, isLazyLocal);
-
-        EmitCallbackArgsAndInvoke(il, indexLocal, runtime, isLazyLocal, argsLocal, skipIndexBoxLocal);
+        var element = EmitLoadPresentElement(il, indexLocal, skipAdd, runtime, isLazyLocal);
+        EmitCallbackArgsAndInvoke(il, indexLocal, runtime, isLazyLocal, argsLocal, skipIndexBoxLocal, element);
 
         // Call IsTruthy
         il.Emit(OpCodes.Call, runtime.Booleans.IsTruthy);
@@ -1324,13 +1306,9 @@ public partial class RuntimeEmitter
         // if (!truthy) skip add
         il.Emit(OpCodes.Brfalse, skipAdd);
 
-        // result.Add(<element>) — same lazy-aware load path. ECMA-262 23.1.3.8
-        // says filter calls Get(O, k) once per index — this is the second
-        // call (the first was inside the callback's args[0]). Spec-strict
-        // tests counting getter invocations may flag this; tests that check
-        // value-flow correctness pass.
+        // Filter copies the value that was passed to the callback.
         il.Emit(OpCodes.Ldloc, resultLocal);
-        EmitElementLoad(il, indexLocal, runtime.ArrayOperations, isLazyLocal);
+        il.Emit(OpCodes.Ldloc, element);
         il.Emit(OpCodes.Callvirt, _types.GetMethod(_types.ListOfObject, "Add", _types.Object));
 
         il.MarkLabel(skipAdd);
@@ -1386,9 +1364,8 @@ public partial class RuntimeEmitter
         il.Emit(OpCodes.Bge, loopEnd);
 
         // ECMA-262 23.1.3.15: forEach skips holes.
-        EmitSkipIfHole(il, indexLocal, advance, runtime, isLazyLocal);
-
-        EmitCallbackArgsAndInvoke(il, indexLocal, runtime, isLazyLocal, argsLocal, skipIndexBoxLocal);
+        var element = EmitLoadPresentElement(il, indexLocal, advance, runtime, isLazyLocal);
+        EmitCallbackArgsAndInvoke(il, indexLocal, runtime, isLazyLocal, argsLocal, skipIndexBoxLocal, element);
         il.Emit(OpCodes.Pop); // Discard result
 
         il.MarkLabel(advance);
@@ -1556,9 +1533,8 @@ public partial class RuntimeEmitter
         il.Emit(OpCodes.Bge, loopEnd);
 
         // ECMA-262 23.1.3.29: some skips holes.
-        EmitSkipIfHole(il, indexLocal, advance, runtime, isLazyLocal);
-
-        EmitCallbackArgsAndInvoke(il, indexLocal, runtime, isLazyLocal, argsLocal, skipIndexBoxLocal);
+        var element = EmitLoadPresentElement(il, indexLocal, advance, runtime, isLazyLocal);
+        EmitCallbackArgsAndInvoke(il, indexLocal, runtime, isLazyLocal, argsLocal, skipIndexBoxLocal, element);
         il.Emit(OpCodes.Call, runtime.Booleans.IsTruthy);
 
         il.Emit(OpCodes.Brfalse, advance);
@@ -1619,9 +1595,8 @@ public partial class RuntimeEmitter
 
         // ECMA-262 23.1.3.6: every skips holes (callback not invoked; doesn't
         // affect "all match" result).
-        EmitSkipIfHole(il, indexLocal, continueLoop, runtime, isLazyLocal);
-
-        EmitCallbackArgsAndInvoke(il, indexLocal, runtime, isLazyLocal, argsLocal, skipIndexBoxLocal);
+        var element = EmitLoadPresentElement(il, indexLocal, continueLoop, runtime, isLazyLocal);
+        EmitCallbackArgsAndInvoke(il, indexLocal, runtime, isLazyLocal, argsLocal, skipIndexBoxLocal, element);
         il.Emit(OpCodes.Call, runtime.Booleans.IsTruthy);
 
         il.Emit(OpCodes.Brtrue, continueLoop);
