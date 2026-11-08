@@ -203,6 +203,27 @@ public sealed class PrivateAccessorTests
     }
 
     [Theory]
+    [InlineData("class Inner { copied = this.value; later = 1; get value() { return this.later; } }")]
+    [InlineData("const Inner = class { copied = this.value; later = 1; get value() { return this.later; } };")]
+    public void PendingFieldsInUnrelatedNestedClassesDoNotChangePrivateGetterReturns(string nestedClass)
+    {
+        string declaration = $$"""
+            class C {
+                get #first() { return this.#second; }
+                get #second() {
+                    {{nestedClass}}
+                    return 7;
+                }
+                read() { return this.#first; }
+            }
+            """;
+        new TypeChecker().Check(TestHarness.ParseOrThrow($"{declaration} const right: number = new C().read();"));
+        var error = Assert.ThrowsAny<TypeCheckException>(() => new TypeChecker().Check(
+            TestHarness.ParseOrThrow($"{declaration} const wrong: string = new C().read();")));
+        Assert.Equal("TS2322", error.Diagnostic.TsCode);
+    }
+
+    [Theory]
     [InlineData("class C { set #x(v: number) { if (v) return 123; } }")]
     [InlineData("const C = class { static set #x(v: number) { return undefined; } };")]
     public void CheckerRejectsValueReturnsFromPrivateSetters(string source)

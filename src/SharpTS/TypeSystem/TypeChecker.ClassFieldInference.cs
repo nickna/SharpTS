@@ -63,6 +63,8 @@ public partial class TypeChecker
     }
 
     private FieldGetterScope? _fieldGetterScope;
+    private FieldGetterDependency? ActiveGetterDependency
+        => _fieldGetterScope is { Active.Count: > 0 } scope ? scope.Active[^1] : null;
     private int _classFieldDeferredReadDepth;
 
     private Narrowing.NarrowingContext[] PushIsolatedClassFieldNarrowingScope()
@@ -141,7 +143,7 @@ public partial class TypeChecker
         TypeInfo.MutableClass owner, TypeEnvironment environment)
     {
         var getters = methods.Where(IsUnannotatedPrivateGetter).ToArray();
-        if (getters.Length == 0) return _fieldGetterScope;
+        if (getters.Length == 0 && ActiveGetterDependency is null) return _fieldGetterScope;
 
         // All fields are complete here. The same dependency resolver can
         // check a later private getter before publishing the current body.
@@ -179,17 +181,18 @@ public partial class TypeChecker
             !scope.PendingFields.Contains((isStatic, name))) return;
         // A getter body is checked without executing it. Infer any forward
         // field type it needs in the same isolated flow used for deferred reads.
-        bool privateGetterRead = scope.Active.Count > 0 && scope.Active[^1].Accessor is Stmt.Function;
+        var dependency = ActiveGetterDependency;
+        bool privateGetterRead = dependency?.Accessor is Stmt.Function;
         if ((_classFieldDeferredReadDepth > scope.DeferredReadDepth || privateGetterRead) &&
             scope.Fields.TryGetValue((isStatic, name), out var field))
         {
             if (privateGetterRead && scope.ActiveFields.Contains(field))
-                MarkFieldGetterDependenciesUnresolved();
+                dependency!.HasUnresolvedDependency = true;
             else
                 InferDeferredClassFieldDependency(scope, field);
             return;
         }
-        MarkFieldGetterDependenciesUnresolved();
+        if (dependency is not null) dependency.HasUnresolvedDependency = true;
     }
 
     private TypeInfo CompletedFieldDependencyType(TypeInfo owner, bool isStatic, string name, TypeInfo fallback)
@@ -251,12 +254,6 @@ public partial class TypeChecker
             _classFieldBindingFlowBoundary = previousBindingFlowBoundary;
             scope.ActiveFields.Remove(field);
         }
-    }
-
-    private void MarkFieldGetterDependenciesUnresolved()
-    {
-        for (var scope = _fieldGetterScope; scope is not null; scope = scope.Previous)
-            foreach (var dependency in scope.Active) dependency.HasUnresolvedDependency = true;
     }
 
     private void ObservePendingGetterIndexRead(TypeInfo receiver, string name)
@@ -347,24 +344,21 @@ public partial class TypeChecker
 
     private TypeInfo CheckFieldStageGetter(FieldGetterScope scope, object accessor, Func<FieldGetterDependency, TypeInfo> check)
     {
+        var caller = ActiveGetterDependency;
         if (scope.Resolved.TryGetValue(accessor, out var resolved))
-        {
-            if (resolved is TypeInfo.Inferred) MarkFieldGetterDependenciesUnresolved();
-            return resolved;
-        }
+            return ObserveResult(resolved);
         if (scope.Active.Any(dependency => ReferenceEquals(dependency.Accessor, accessor)))
-        {
-            MarkFieldGetterDependenciesUnresolved();
-            return TypeInfo.Inferred.Shared;
-        }
+            return ObserveResult(TypeInfo.Inferred.Shared);
 
         var dependency = new FieldGetterDependency(accessor);
+        var previousGetterScope = _fieldGetterScope;
         var previousEnvironment = _environment;
         var previousClass = _currentClass;
         var previousEnclosingClasses = _privateNameEnclosingClasses.ToArray();
         bool previousStaticBlock = _inStaticBlock;
         bool previousGlobalThis = _currentArrowCapturesScriptGlobalThis;
         scope.Active.Add(dependency);
+        _fieldGetterScope = scope;
         _environment = scope.Environment;
         _privateNameEnclosingClasses.Clear();
         foreach (var enclosingClass in scope.EnclosingClasses.Reverse())
@@ -375,12 +369,13 @@ public partial class TypeChecker
         {
             resolved = check(dependency);
             scope.Resolved[accessor] = resolved;
-            return resolved;
+            return ObserveResult(resolved);
         }
         finally
         {
             scope.Active.RemoveAt(scope.Active.Count - 1);
             scope.Owner.ResetFrozenCache();
+            _fieldGetterScope = previousGetterScope;
             _environment = previousEnvironment;
             _currentClass = previousClass;
             _privateNameEnclosingClasses.Clear();
@@ -388,6 +383,14 @@ public partial class TypeChecker
                 _privateNameEnclosingClasses.Push(enclosingClass);
             _inStaticBlock = previousStaticBlock;
             _currentArrowCapturesScriptGlobalThis = previousGlobalThis;
+        }
+
+        // Propagate an unresolved read only to the getter that requested it.
+        // Checking a nested class can run its own independent inference.
+        TypeInfo ObserveResult(TypeInfo result)
+        {
+            if (result is TypeInfo.Inferred && caller is not null) caller.HasUnresolvedDependency = true;
+            return result;
         }
     }
 
