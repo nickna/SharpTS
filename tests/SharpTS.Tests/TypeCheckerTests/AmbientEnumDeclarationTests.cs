@@ -55,6 +55,19 @@ public sealed class AmbientEnumDeclarationTests
         Assert.Empty(checker.GetDiagnostics());
     }
 
+    [Theory]
+    [InlineData("declare module \"fixture\" { enum Status { Bad = true } }", "TS2553")]
+    [InlineData("enum Status { Local } declare module \"fixture\" { enum Status { Remote } } Status.Remote;", "TS2339")]
+    public void ChecksAmbientEnumsWithoutExposingTheirMembersOutsideTheModule(string source, string expectedCode)
+    {
+        var result = new Parser(new Lexer(source).ScanTokens(), DecoratorMode.None).Parse();
+        Assert.Empty(result.Errors);
+        var checker = new TypeChecker(strictNullChecks: true);
+        checker.Check(result.Statements);
+        var diagnostic = Assert.Single(checker.GetDiagnostics(), d => d.Severity == DiagnosticSeverity.Error);
+        Assert.Equal(expectedCode, diagnostic.TsCode);
+    }
+
     [Fact]
     public void ImportsExposeTheDeclaredEnumMembers()
     {
@@ -71,7 +84,7 @@ public sealed class AmbientEnumDeclarationTests
                 """,
             [entry] = """
                 import { Value, Other } from "fixture";
-                const first: Value = Value.ready;
+                const first: Value = Value["ready"];
                 const second: Other = Other.Known;
                 Value.Missing;
                 """

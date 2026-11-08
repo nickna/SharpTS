@@ -840,6 +840,8 @@ public partial class Parser
         while (!Check(TokenType.RIGHT_BRACE) && !IsAtEnd())
         {
             Token memberName = ConsumeSpecifierName("Expect member name.");
+            if (memberName.Type == TokenType.STRING)
+                memberName = AliasEditorToken(memberName, Previous());
             Expr? value = Match(TokenType.EQUAL) ? Expression() : null;
             members.Add(new Stmt.EnumMember(memberName, value));
 

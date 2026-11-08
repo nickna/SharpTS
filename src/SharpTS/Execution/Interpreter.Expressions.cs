@@ -1247,6 +1247,12 @@ public partial class Interpreter
             ThrowCannotReadProperty(obj, key);
         }
 
+        if (index is string enumMember)
+        {
+            if (obj is SharpTSEnum enumValue) return enumValue.GetMemberRV(enumMember);
+            if (obj is ConstEnumValues constEnum) return constEnum.GetMemberRV(enumMember);
+        }
+
         if (HasArrayObjectKey(obj, index))
             index = ToPropertyKey(index);
         if (obj is SharpTSTypedArray numericTypedArray
