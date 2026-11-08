@@ -106,7 +106,7 @@ public class SharpTSGeneratorFunction : ISharpTSGeneratorFunctionValue, IReceive
             environment.Define("arguments", SharpTSArguments.Create(arguments, interpreter,
                 environment, _declaration.Parameters, _declaration.Body));
         ParameterBinder.Bind(_declaration.Parameters, arguments, environment, interpreter, _declaration.Body);
-        var prepared = ParameterBinder.PrepareBody(_declaration.Parameters, _declaration.Body, environment);
+        var prepared = ParameterBinder.PrepareBody(_declaration.Parameters, _declaration.Body, environment, interpreter);
 
         // Return a generator that will execute the body lazily
         return new SharpTSGenerator(
@@ -213,7 +213,7 @@ public class SharpTSArrowGeneratorFunction : ISharpTSGeneratorFunctionValue, IRe
             environment.Define("arguments", SharpTSArguments.Create(arguments, interpreter,
                 environment, _declaration.Parameters, _declaration.BlockBody));
         ParameterBinder.Bind(_declaration.Parameters, arguments, environment, interpreter, _declaration.BlockBody);
-        var prepared = ParameterBinder.PrepareBody(_declaration.Parameters, _declaration.BlockBody, environment);
+        var prepared = ParameterBinder.PrepareBody(_declaration.Parameters, _declaration.BlockBody, environment, interpreter);
 
         // A generator function expression drives the same SharpTSGenerator as a declaration — only the
         // block body and the captured environment differ. Generator expressions always have a block

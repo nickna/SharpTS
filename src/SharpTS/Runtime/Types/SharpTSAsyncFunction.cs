@@ -189,7 +189,7 @@ public class SharpTSAsyncFunction : ISharpTSAsyncCallable, ISharpTSFunctionObjec
             environment.Define("arguments", SharpTSArguments.Create(arguments, interpreter,
                 environment, _declaration.Parameters, _declaration.Body));
         await ParameterBinder.BindAsync(_declaration.Parameters, arguments, environment, interpreter, _declaration.Body);
-        var prepared = ParameterBinder.PrepareBody(_declaration.Parameters, _declaration.Body, environment);
+        var prepared = ParameterBinder.PrepareBody(_declaration.Parameters, _declaration.Body, environment, interpreter);
 
         if (_declaration.Body == null)
         {
@@ -363,7 +363,7 @@ public class SharpTSAsyncArrowFunction : ISharpTSAsyncCallable, ISharpTSFunction
             environment.Define("arguments", SharpTSArguments.Create(arguments, interpreter,
                 environment, _declaration.Parameters, _declaration.BlockBody));
         await ParameterBinder.BindAsync(_declaration.Parameters, arguments, environment, interpreter, _declaration.BlockBody);
-        var prepared = ParameterBinder.PrepareBody(_declaration.Parameters, _declaration.BlockBody, environment);
+        var prepared = ParameterBinder.PrepareBody(_declaration.Parameters, _declaration.BlockBody, environment, interpreter);
 
         using var debugFrame = interpreter.EnterDebugFrame(
             _declaration.Name?.Lexeme ?? "<async arrow>", prepared.Environment, _declaration);

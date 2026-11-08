@@ -734,9 +734,11 @@ internal sealed class LoopBodyCellAnalyzer : AstVisitorBase
     {
         var vars = new VarCollector();
         foreach (var statement in body) vars.Visit(statement);
-        var functionNames = Runtime.ParameterBinder.BodyVarDeclarations(body)
+        var functions = Runtime.ParameterBinder.BodyVarDeclarations(body)
             .Where(declaration => declaration.IsFunction)
-            .Select(declaration => declaration.Name.Lexeme).ToHashSet(StringComparer.Ordinal);
+            .Select(declaration => declaration.Name)
+            .GroupBy(name => name.Lexeme, StringComparer.Ordinal)
+            .ToDictionary(group => group.Key, group => group.ToArray(), StringComparer.Ordinal);
         var initializers = Runtime.ParameterBinder.ParameterInitializers(body);
         var parameterNames = parameters.Select(parameter => parameter.Name)
             .Concat((initializers?.Values.AsEnumerable() ?? [])
@@ -745,10 +747,37 @@ internal sealed class LoopBodyCellAnalyzer : AstVisitorBase
             .ToDictionary(group => group.Key, group => group.Last(), StringComparer.Ordinal);
         bool hasParameterExpressions = Runtime.ParameterBinder.HasParameterExpressions(parameters);
         var copies = new List<(Token Declaration, Token Parameter)>();
+        if (!mappedOnly)
+        {
+            foreach (var (name, declarations) in functions)
+            {
+                if (!parameterNames.TryGetValue(name, out var parameter)) continue;
+                bool mappedParameter = _mappedArgumentParameters.Contains(parameter);
+                var binding = _declarations[mappedParameter ? parameter : declarations[^1]];
+                _scopes.Peek()[name] = binding;
+                foreach (var declaration in declarations)
+                    _functionBodyVarDeclarations[declaration] = binding.Name;
+                if (!mappedParameter)
+                {
+                    // The body needs an object-valued binding for the hoisted
+                    // function. Default-created closures keep the original
+                    // parameter storage.
+                    binding.FunctionBody = body;
+                    binding.ParameterBodyCopy = true;
+                    copies.Add((binding.Name, parameter));
+                }
+            }
+        }
         foreach (var declarations in vars.Names.Where(vars.OwnedNames.Contains).GroupBy(token => token.Lexeme))
         {
             string name = declarations.Key;
-            if (functionNames.Contains(name)) continue;
+            if (functions.TryGetValue(name, out var functionDeclarations))
+            {
+                if (_functionBodyVarDeclarations.TryGetValue(functionDeclarations[^1], out var functionBinding))
+                    foreach (var declaration in declarations)
+                        _functionBodyVarDeclarations[declaration] = functionBinding;
+                continue;
+            }
             parameterNames.TryGetValue(name, out var parameter);
             bool mappedParameter = parameter is not null && _mappedArgumentParameters.Contains(parameter);
             if (mappedOnly && !mappedParameter) continue;

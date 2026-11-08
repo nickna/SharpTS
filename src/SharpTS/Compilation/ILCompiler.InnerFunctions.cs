@@ -1048,6 +1048,9 @@ public partial class ILCompiler
         if (!_innerFunctionMethods.TryGetValue(funcStmt, out var method)) return;
 
         var funcName = funcStmt.Name.Lexeme;
+        bool storeInBodyCell = ctx.ClosureAnalyzer?.GetFunctionBodyVarDeclaration(funcStmt.Name) is { } binding
+            && ctx.LoopBodyCellDeclarations.TryGetValue(funcName, out var active)
+            && ReferenceEquals(active, binding);
 
         // Check if this inner function's name is stored in the enclosing function's display class.
         // This happens when the inner function references itself (self-reference is seen as a
@@ -1073,7 +1076,7 @@ public partial class ILCompiler
 
         // Also declare a regular local (used when not stored in DC, or as fallback)
         LocalBuilder? local = null;
-        if (!storeInFunctionDC && !storeInArrowScopeDC)
+        if (!storeInBodyCell && !storeInFunctionDC && !storeInArrowScopeDC)
             local = ctx.Locals.DeclareLocal(funcName, _types.Object);
 
         if (_innerFunctionDisplayClasses.TryGetValue(funcStmt, out var displayClass))
@@ -1162,7 +1165,12 @@ public partial class ILCompiler
         }
 
         // Store TSFunction in the appropriate location
-        if (storeInFunctionDC)
+        if (storeInBodyCell)
+        {
+            if (!LexicalEnvironmentCellAccess.TryStore(il, ctx, funcName))
+                throw new InvalidOperationException($"Missing lexical storage for '{funcName}'.");
+        }
+        else if (storeInFunctionDC)
         {
             // Store in the enclosing function's display class field
             var temp = il.DeclareLocal(_types.Object);
