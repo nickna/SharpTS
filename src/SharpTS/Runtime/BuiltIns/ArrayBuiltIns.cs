@@ -625,7 +625,7 @@ public static class ArrayBuiltIns
                 }
                 return -1d;
             case "findLast":
-                for (int i = len - 1; i >= 0; i--)
+                for (long i = arrayLikeLength - 1; i >= 0; i--)
                 {
                     var element = GetElement(interpreter, receiver, i);
                     if (iter.InvokeRV(interpreter, element, i).IsTruthy())
@@ -633,7 +633,7 @@ public static class ArrayBuiltIns
                 }
                 return SharpTSUndefined.Instance;
             case "findLastIndex":
-                for (int i = len - 1; i >= 0; i--)
+                for (long i = arrayLikeLength - 1; i >= 0; i--)
                 {
                     var element = GetElement(interpreter, receiver, i);
                     if (iter.InvokeRV(interpreter, element, i).IsTruthy())
@@ -699,7 +699,7 @@ public static class ArrayBuiltIns
         }
     }
 
-    private static object? GetElement(Interpreter interpreter, object receiver, int index)
+    private static object? GetElement(Interpreter interpreter, object receiver, long index)
         => interpreter.GetPropertyValue(receiver, index.ToString(
             System.Globalization.CultureInfo.InvariantCulture));
 
@@ -2016,7 +2016,7 @@ public static class ArrayBuiltIns
         /// <summary>
         /// V2-native invoke — returns RuntimeValue without boxing at return boundary.
         /// </summary>
-        public RuntimeValue InvokeRV(Interpreter interp, object? element, int index)
+        public RuntimeValue InvokeRV(Interpreter interp, object? element, long index)
         {
             _argsV2[0] = RuntimeValue.FromBoxed(element);
             _argsV2[1] = RuntimeValue.FromNumber(index);
