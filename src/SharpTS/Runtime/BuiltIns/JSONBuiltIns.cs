@@ -220,11 +220,7 @@ public static class JSONBuiltIns
             case SharpTSObject or SharpTSArray:
                 return interp.GetPropertyValue(holder, key);
             case SharpTSInstance inst:
-                {
-                    var token = new Parsing.Token(Parsing.TokenType.IDENTIFIER, key, null, 0);
-                    var v = inst.Get(token);
-                    return v is SharpTSUndefined ? null : v;
-                }
+                return inst.Get(new Parsing.Token(Parsing.TokenType.IDENTIFIER, key, null, 0));
             default:
                 return null;
         }

@@ -6,6 +6,22 @@ namespace SharpTS.Tests.SharedTests;
 public sealed class JSONReviverPropertyTests
 {
     [Theory, ModeData]
+    public void ReviverPreservesTheDistinctionBetweenUndefinedAndNullInstanceFields(ExecutionMode mode)
+    {
+        const string source = """
+            class Replacement { missing = undefined; present = null; }
+            const result = JSON.parse('{"first":0,"last":{}}', function (key, value) {
+                if (key === 'first') this.last = new Replacement();
+                if (key === 'missing' || key === 'present')
+                    console.log(key, value === undefined, value === null);
+                return value;
+            });
+            console.log(Object.hasOwn(result.last, 'missing'), Object.hasOwn(result.last, 'present'));
+            """;
+        Assert.Equal("missing true false\npresent false true\nfalse true\n", TestHarness.RunUnchecked(source, mode));
+    }
+
+    [Theory, ModeData]
     public void ReviverReadsAndReplacesAnInjectedArrayIndexGetter(ExecutionMode mode)
     {
         const string source = """
