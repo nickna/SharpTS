@@ -40,6 +40,8 @@ public partial class ILCompiler
             if (!builder.Arrow.HasOwnThis || !builder.LocalFields.TryGetValue("arguments", out var field))
                 return;
             var context = CreateModuleMemberContext(il, builder.StubMethod);
+            context.IsStrictMode |= _strictArrows.Contains(builder.Arrow)
+                || BodyDeclaresUseStrict(builder.Arrow.BlockBody);
             var types = builder.StubMethod.GetParameters().Skip(parameterOffset)
                 .Select(parameter => parameter.ParameterType).ToArray();
             // A capture/outer-state target occupies only a CLR parameter slot.
