@@ -21,10 +21,18 @@ public class SharpTSEnum(string name, Dictionary<string, object> members, EnumKi
     public EnumKind Kind { get; } = kind;
     private readonly FrozenDictionary<string, object> _members = members.ToFrozenDictionary();
 
-    // Only build reverse mapping for numeric members
-    private readonly FrozenDictionary<double, string> _reverse =
-        members.Where(kvp => kvp.Value is double)
-               .ToFrozenDictionary(kvp => (double)kvp.Value!, kvp => kvp.Key);
+    private readonly FrozenDictionary<double, string> _reverse = BuildReverseMapping(members);
+
+    private static FrozenDictionary<double, string> BuildReverseMapping(Dictionary<string, object> members)
+    {
+        var reverse = new Dictionary<double, string>();
+        foreach (var (name, value) in members)
+        {
+            if (value is double number)
+                reverse[number] = name;
+        }
+        return reverse.ToFrozenDictionary();
+    }
 
     public object GetMember(string name) =>
         _members.TryGetValue(name, out var v) ? v
