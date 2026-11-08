@@ -1421,7 +1421,7 @@ public class SharpTSArray : ITypeCategorized, IReadOnlyList<object?>
     {
         var descriptor = GetOwnPropertyDescriptor(name);
         if (descriptor is null) return true;
-        if (!descriptor.Configurable || this is SharpTSArguments && IsSealed)
+        if (!descriptor.Configurable || IsSealed)
         {
             if (strictMode)
             {
