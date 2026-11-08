@@ -559,7 +559,8 @@ public sealed class ArrayEmitter : ITypeEmitterStrategy
     public bool TryEmitPropertyGet(IEmitterContext emitter, Expr receiver, string propertyName)
         => propertyName == "length" && TryEmitLengthGet(emitter, receiver, boxResult: true);
 
-    internal static bool TryEmitLengthGet(IEmitterContext emitter, Expr receiver, bool boxResult = false)
+    internal static bool TryEmitLengthGet(IEmitterContext emitter, Expr receiver,
+        bool boxResult = false, bool numericConsumer = false)
     {
         var ctx = emitter.Context;
         var il = ctx.IL;
@@ -568,10 +569,10 @@ public sealed class ArrayEmitter : ITypeEmitterStrategy
         var desc = ArrayElements.Resolve(ctx.TypeMap?.Get(receiver));
         if (desc == null) return false;
 
-        // A typed alias can hold arguments, whose ordinary length property
-        // need not contain a number. Join those reads with boxed Array lengths.
+        // Ordinary reads through typed aliases must preserve a raw arguments
+        // length. Numeric consumers can convert that value on the fallback arm.
         bool usesArguments = ctx.RuntimeFeatures?.UsesArguments != false;
-        bool returnsObject = usesArguments || boxResult;
+        bool returnsObject = boxResult || (usesArguments && !numericConsumer);
 
         // Hoisted path: use cached typed local from loop preamble
         if (receiver is Expr.Variable arrVar)
@@ -697,6 +698,8 @@ public sealed class ArrayEmitter : ITypeEmitterStrategy
                 il.Emit(OpCodes.Brfalse, ordinary);
                 il.Emit(OpCodes.Ldstr, "length");
                 il.Emit(OpCodes.Call, ctx.Runtime.ObjectRead.Property);
+                if (!returnsObject)
+                    il.Emit(OpCodes.Call, ctx.Runtime.NumericCoercion.ConvertToNumber);
                 il.Emit(OpCodes.Br, done);
                 il.MarkLabel(ordinary);
             }

@@ -619,7 +619,7 @@ public partial class ILEmitter
         if (expr is Expr.Get { Optional: false, Name.Lexeme: "length" } arrayLength &&
             _ctx.TypeMap?.Get(arrayLength.Object) is TypeInfo.Array)
         {
-            EmitGet(arrayLength);
+            EmitGet(arrayLength, numericConsumer: true);
             EnsureDouble();
             return;
         }

@@ -309,6 +309,51 @@ public sealed class StableNumericHotPathTests
     }
 
     [Fact]
+    public void ArrayLengthComparisonsStayUnboxedWhenArgumentsAreUsed()
+    {
+        const string source = """
+            function run(repetitions: number): number {
+                const values: number[] = [1, 2, 3, 4, 5, 6, 7, 8];
+                return scan(values, repetitions) + arguments.length;
+            }
+            function scan(values: number[], repetitions: number): number {
+                let total: number = 0;
+                for (let repeat: number = 0; repeat < repetitions; repeat++) {
+                    for (let index: number = 0; index < values.length; index++) total++;
+                }
+                return total;
+            }
+            """;
+
+        Assert.Empty(TestHarness.CompileAndVerifyOnly(source));
+        var run = FindFunction(Compile(source), "run").CreateDelegate<Func<double, object>>();
+        long small = AllocationTestHelper.MeasureRunAllocations(() => (double)run(100), 801).Min();
+        long large = AllocationTestHelper.MeasureRunAllocations(() => (double)run(10_000), 80_001).Min();
+        Assert.True(large <= small + 1_024, $"Array length allocations scaled: {small} vs {large}.");
+    }
+
+    [Fact]
+    public void ArgumentsLengthIsConvertedOnlyForTheNumericConsumer()
+    {
+        const string source = """
+            function run() {
+                const alias: any[] = arguments as any;
+                let conversions = 0;
+                const length = { valueOf() { conversions++; return 2; } };
+                (alias as any).length = length;
+                let visits = 0;
+                for (let i = 0; i < alias.length; i++) {
+                    if (alias.length === (length as any)) visits++;
+                }
+                console.log(visits, conversions);
+            }
+            run();
+            """;
+
+        Assert.Equal("2 3\n", TestHarness.Run(source, ExecutionMode.Compiled));
+    }
+
+    [Fact]
     public void OrdinaryRestPacking_FillsFinalStorageWithoutTemporaryArray()
     {
         const string source = """

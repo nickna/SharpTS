@@ -320,7 +320,8 @@ public partial class ILEmitter
             return;
         }
 
-        if (!g.Optional && g.Name.Lexeme == "length" && ArrayEmitter.TryEmitLengthGet(this, g.Object))
+        if (!g.Optional && g.Name.Lexeme == "length"
+            && ArrayEmitter.TryEmitLengthGet(this, g.Object, numericConsumer: numericConsumer))
             return;
 
         // Try direct getter dispatch for known class instance types
