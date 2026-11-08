@@ -354,30 +354,10 @@ public partial class AsyncGeneratorMoveNextEmitter
             _exitScopes.Add(frame);
         }
 
-        // Throws in the try body are captured by their sync segments, not routed.
         bool previousInHandler = _inHandlerBody;
         _inHandlerBody = false;
-        // Carry this try's capture target down to the suspension points emitted at the top level, so a
-        // rejected `await` inside the try routes its exception into the same flag + catch/finally
-        // instead of escaping MoveNextAsync (#617), setting the present flag so a null rejection still
-        // engages the catch (#628). After the body these revert to the enclosing try, which a throw
-        // escaping this try's catch/finally must route to (#632). Saved/restored for correct nesting.
-        var previousTryExceptionLocal = _currentTryExceptionLocal;
-        var previousTryExceptionPresentLocal = _currentTryExceptionPresentLocal;
-        var previousTryCleanupLabel = _currentTryCleanupLabel;
-        var previousTryScopeDepth = _currentTryScopeDepth;
-        int previousTryFinallyBodyDepth = _currentTryFinallyBodyDepth;
-        _currentTryExceptionLocal = caughtExceptionLocal;
-        _currentTryExceptionPresentLocal = exceptionPresentLocal;
-        _currentTryCleanupLabel = afterTryBodyLabel;
-        _currentTryScopeDepth = _exitScopes.Count;
-        _currentTryFinallyBodyDepth = _finallyBodyDepth;
-        EmitScopedTryBodyWithSuspensions(t.TryBlock, caughtExceptionLocal, exceptionPresentLocal, afterTryBodyLabel);
-        _currentTryExceptionLocal = previousTryExceptionLocal;
-        _currentTryExceptionPresentLocal = previousTryExceptionPresentLocal;
-        _currentTryCleanupLabel = previousTryCleanupLabel;
-        _currentTryScopeDepth = previousTryScopeDepth;
-        _currentTryFinallyBodyDepth = previousTryFinallyBodyDepth;
+        WithAsyncTryCapture(caughtExceptionLocal, exceptionPresentLocal, afterTryBodyLabel,
+            () => EmitScopedTryBodyWithSuspensions(t.TryBlock, caughtExceptionLocal, exceptionPresentLocal, afterTryBodyLabel));
         _inHandlerBody = previousInHandler;
 
         _il.MarkLabel(afterTryBodyLabel);
@@ -493,6 +473,28 @@ public partial class AsyncGeneratorMoveNextEmitter
         }
 
         _il.MarkLabel(afterTryCatchLabel);
+    }
+
+    /// <summary>Routes errors from a resumable region to its local handler.</summary>
+    private void WithAsyncTryCapture(LocalBuilder caughtExceptionLocal, LocalBuilder exceptionPresentLocal,
+        Label failureLabel, Action emit)
+    {
+        var previousTryExceptionLocal = _currentTryExceptionLocal;
+        var previousTryExceptionPresentLocal = _currentTryExceptionPresentLocal;
+        var previousTryCleanupLabel = _currentTryCleanupLabel;
+        var previousTryScopeDepth = _currentTryScopeDepth;
+        int previousTryFinallyBodyDepth = _currentTryFinallyBodyDepth;
+        _currentTryExceptionLocal = caughtExceptionLocal;
+        _currentTryExceptionPresentLocal = exceptionPresentLocal;
+        _currentTryCleanupLabel = failureLabel;
+        _currentTryScopeDepth = _exitScopes.Count;
+        _currentTryFinallyBodyDepth = _finallyBodyDepth;
+        emit();
+        _currentTryExceptionLocal = previousTryExceptionLocal;
+        _currentTryExceptionPresentLocal = previousTryExceptionPresentLocal;
+        _currentTryCleanupLabel = previousTryCleanupLabel;
+        _currentTryScopeDepth = previousTryScopeDepth;
+        _currentTryFinallyBodyDepth = previousTryFinallyBodyDepth;
     }
 
     /// <summary>

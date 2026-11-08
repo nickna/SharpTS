@@ -43,4 +43,37 @@ public sealed class AsyncGeneratorForAwaitTests
 
         Assert.Equal("iterator true\nnext true\n1\nclose true\nafter\n", TestHarness.RunUnchecked(source, mode));
     }
+
+    [Theory, ModeData]
+    public void BodyRejectionClosesIteratorAndKeepsOriginalReason(ExecutionMode mode)
+    {
+        const string source = """
+            async function* source() {
+                try { yield 1; }
+                finally {
+                    await new Promise(resolve => setTimeout(resolve, 1));
+                    console.log("closed");
+                    throw "close error";
+                }
+            }
+            async function* inspect() {
+                try {
+                    for await (const value of source()) {
+                        yield value;
+                        await Promise.reject("body error");
+                    }
+                } catch (error) {
+                    yield error;
+                }
+            }
+            async function run() {
+                const generator = inspect();
+                console.log((await generator.next()).value);
+                console.log((await generator.next()).value);
+            }
+            run();
+            """;
+
+        Assert.Equal("1\nclosed\nbody error\n", TestHarness.RunUnchecked(source, mode));
+    }
 }

@@ -211,8 +211,6 @@ public partial class AsyncGeneratorMoveNextEmitter
         var cleanupLabel = _il.DefineLabel();
         var continueLabel = _il.DefineLabel();
 
-        EnterLoop(cleanupLabel, continueLabel);
-
         _il.MarkLabel(startLabel);
 
         // The protocol call can throw synchronously, before the await.
@@ -248,21 +246,93 @@ public partial class AsyncGeneratorMoveNextEmitter
             _il.Emit(OpCodes.Stloc, varLocal);
         }
 
-        EmitStatement(f.Body);
+        // Only an abrupt completion of the body closes the iterator. A
+        // failing next()/done/value access belongs to iteration itself.
+        var closeFrame = new FinallyScope { CleanupLabel = cleanupLabel };
+        _exitScopes.Add(closeFrame);
+        EnterLoop(cleanupLabel, continueLabel);
+        var bodyError = _il.DeclareLocal(_types.Object);
+        var bodyFailed = _il.DeclareLocal(_types.Boolean);
+        _il.Emit(OpCodes.Ldc_I4_0);
+        _il.Emit(OpCodes.Stloc, bodyFailed);
+        var bodyThrew = _il.DefineLabel();
+        var bodyErrorField = DefineStateMachineField($"<>aiterBodyError{loopId}", _types.Object);
+        var bodyFailedField = DefineStateMachineField($"<>aiterBodyFailed{loopId}", _types.Boolean);
 
+        bool previousInHandler = _inHandlerBody;
+        _inHandlerBody = true;
+        WithAsyncTryCapture(bodyError, bodyFailed, bodyThrew, () =>
+        {
+            if (f.Body is Stmt.Block block)
+            {
+                Ctx.Locals.EnterScope();
+                EmitScopedTryBodyWithSuspensions(block.Statements, bodyError, bodyFailed, bodyThrew);
+                Ctx.Locals.ExitScope();
+            }
+            else
+            {
+                EmitTryBodyWithSuspensions([f.Body], bodyError, bodyFailed, bodyThrew);
+            }
+        });
+        _inHandlerBody = previousInHandler;
+        ExitLoop();
+        _exitScopes.RemoveAt(_exitScopes.Count - 1);
+
+        _il.Emit(OpCodes.Ldloc, bodyFailed);
+        _il.Emit(OpCodes.Brtrue, bodyThrew);
         _il.MarkLabel(continueLabel);
         _il.Emit(OpCodes.Br, startLabel);
 
+        _il.MarkLabel(bodyThrew);
+        _il.Emit(OpCodes.Ldarg_0);
+        _il.Emit(OpCodes.Ldloc, bodyError);
+        _il.Emit(OpCodes.Stfld, bodyErrorField);
+        _il.Emit(OpCodes.Ldarg_0);
+        _il.Emit(OpCodes.Ldc_I4_1);
+        _il.Emit(OpCodes.Stfld, bodyFailedField);
+
         int returnState = _currentSuspensionState++;
         _il.MarkLabel(cleanupLabel);
-        EmitCaptureTryOperation(() => EmitProduceAsyncStep(stepLocal, iteratorField, isCustomField, isReturn: true));
-        _il.Emit(OpCodes.Ldloc, stepLocal);
-        SetStackUnknown();
-        EmitAwaitFromValueOnStack(returnState);
-        _il.Emit(OpCodes.Pop);
+        var closeError = _il.DeclareLocal(_types.Object);
+        var closeFailed = _il.DeclareLocal(_types.Boolean);
+        _il.Emit(OpCodes.Ldc_I4_0);
+        _il.Emit(OpCodes.Stloc, closeFailed);
+        var afterClose = _il.DefineLabel();
+        WithAsyncTryCapture(closeError, closeFailed, afterClose, () =>
+        {
+            EmitCaptureTryOperation(() => EmitProduceAsyncStep(stepLocal, iteratorField, isCustomField, isReturn: true));
+            _il.Emit(OpCodes.Ldloc, stepLocal);
+            SetStackUnknown();
+            EmitAwaitFromValueOnStack(returnState);
+            _il.Emit(OpCodes.Pop);
+        });
+        _il.MarkLabel(afterClose);
 
+        // A throw from the body takes precedence over an error closing it.
+        var noBodyFailure = _il.DefineLabel();
+        _il.Emit(OpCodes.Ldarg_0);
+        _il.Emit(OpCodes.Ldfld, bodyFailedField);
+        _il.Emit(OpCodes.Brfalse, noBodyFailure);
+        _il.Emit(OpCodes.Ldarg_0);
+        _il.Emit(OpCodes.Ldfld, bodyErrorField);
+        _il.Emit(OpCodes.Stloc, bodyError);
+        _il.Emit(OpCodes.Ldarg_0);
+        _il.Emit(OpCodes.Ldnull);
+        _il.Emit(OpCodes.Stfld, bodyErrorField);
+        _il.Emit(OpCodes.Ldarg_0);
+        _il.Emit(OpCodes.Ldc_I4_0);
+        _il.Emit(OpCodes.Stfld, bodyFailedField);
+        EmitRouteCapturedException(() => _il.Emit(OpCodes.Ldloc, bodyError));
+
+        _il.MarkLabel(noBodyFailure);
+        var closeSucceeded = _il.DefineLabel();
+        _il.Emit(OpCodes.Ldloc, closeFailed);
+        _il.Emit(OpCodes.Brfalse, closeSucceeded);
+        EmitRouteCapturedException(() => _il.Emit(OpCodes.Ldloc, closeError));
+
+        _il.MarkLabel(closeSucceeded);
+        EmitFinallyDispatch(closeFrame);
         _il.MarkLabel(endLabel);
-        ExitLoop();
     }
 
     // EmitPrint, EmitDoWhile, EmitForIn, EmitSwitch:
