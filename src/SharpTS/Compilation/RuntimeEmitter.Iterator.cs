@@ -27,6 +27,7 @@ public partial class RuntimeEmitter
 
     private readonly record struct ArrayIteratorInputs(
         EmittedArgumentsRuntime Arguments,
+        MethodInfo GetProperty,
         MethodInfo GetIndex,
         EmittedNumericCoercionRuntime NumericCoercion
     );
@@ -175,15 +176,14 @@ public partial class RuntimeEmitter
         il.Emit(OpCodes.Ldc_I4_1);
         il.Emit(OpCodes.Add);
         il.Emit(OpCodes.Stloc, nextIndex);
-        // Array iterators observe length on every next() call. $Arguments has
-        // an independent JS-visible length slot that may be truncated without
-        // shrinking its List backing store.
+        // Arguments length is an ordinary property, read on every next() call.
         il.Emit(OpCodes.Ldarg_0);
         il.Emit(OpCodes.Ldfld, arrayField);
         il.Emit(OpCodes.Isinst, inputs.Arguments.Type);
         il.Emit(OpCodes.Dup);
         il.Emit(OpCodes.Brfalse, useListCount);
-        il.Emit(OpCodes.Ldfld, inputs.Arguments.LengthField);
+        il.Emit(OpCodes.Ldstr, "length");
+        il.Emit(OpCodes.Call, inputs.GetProperty);
         il.Emit(OpCodes.Call, inputs.NumericCoercion.ToNumber);
         il.Emit(OpCodes.Conv_I4);
         il.Emit(OpCodes.Stloc, liveLength);

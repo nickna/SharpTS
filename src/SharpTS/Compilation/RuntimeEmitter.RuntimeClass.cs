@@ -1815,7 +1815,8 @@ public partial class RuntimeEmitter
         );
         runtime.IteratorWrappers.CompleteEmission();
         EmitArrayIteratorType(moduleBuilder, runtime.ArrayOperations,
-            new ArrayIteratorInputs(runtime.Arguments, runtime.ObjectRead.Index, runtime.NumericCoercion));
+            new ArrayIteratorInputs(runtime.Arguments, runtime.ObjectRead.Property, runtime.ObjectRead.Index,
+                runtime.NumericCoercion));
         if (runtime.Map is not null)
             EmitMapCollectionIteratorType(moduleBuilder, runtime.CollectionKeys, runtime.RequireMap());
         if (runtime.Set is not null)
