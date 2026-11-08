@@ -74,32 +74,25 @@ public class SharpTSGeneratorFunction : ISharpTSGeneratorFunctionValue, IReceive
         // The resolver places a class receiver scope between a method and its
         // enclosing closure. PrivateOwner also identifies public class methods.
         bool isClassMethod = PrivateOwner != null || _declaration.IsStatic;
-        bool ownsStrictThis = isClassMethod || _declaration.IsPrivate;
+        bool hasStrictDirective = DirectivePrologue.HasUseStrict(_declaration.Body);
         RuntimeEnvironment closure = isClassMethod
             ? new RuntimeEnvironment(_closure, strictMode: true) : _closure;
         RuntimeEnvironment environment = new(closure,
-            strictMode: ownsStrictThis ? true : null)
+            strictMode: isClassMethod || _declaration.IsPrivate || hasStrictDirective ? true : null)
             { PrivateClass = PrivateOwner, StaticSuper = _declaration.IsStatic };
         environment.NewTarget = RuntimeValue.Undefined;
         environment.ConstructionFrame = null;
-        // #775: a generator expression / object generator method binds its own dynamic `this`. The bound
-        // receiver (or globalThis for a plain call) is defined in the generator's invocation environment —
-        // NOT a new parent scope inserted above the closure — so a captured enclosing-function local keeps
-        // its lexical scope distance and still resolves. A plain call defaults `this` to undefined
-        // (strict-mode function-expression semantics) rather than leaving it unbound.
+        // Every generator declaration binds its own receiver without changing the closure chain.
         if (_thisBound)
         {
             environment.Define("this", _boundThis);
             if (_boundSuper != null)
                 environment.Define("super", _boundSuper);
         }
-        else if (ownsStrictThis)
+        else
         {
-            environment.Define("this", SharpTSUndefined.Instance);
-        }
-        else if (_declaration.HasDynamicThis)
-        {
-            environment.Define("this", interpreter.GlobalThis); // sloppy-mode `this` = globalThis (#775)
+            environment.Define("this",
+                environment.IsStrictMode ? SharpTSUndefined.Instance : (object?)interpreter.GlobalThis);
         }
         // Capture at invocation, before defaults and before the lazy body can suspend.
         if (ArgumentsUsage.UsesArguments(_declaration))
