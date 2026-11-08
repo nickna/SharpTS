@@ -1776,7 +1776,8 @@ public partial class ILCompiler
         foreach (var module in modules)
         {
             _modules.CurrentPath = NormalizeToEmissionPath(module.Path);
-            CollectArrowsFromStatementsInCurrentModule(module.Statements);
+            CollectArrowsFromStatementsInCurrentModule(
+                module.Statements, implicitStrict: !module.IsScript && !module.IsCommonJs);
         }
         _modules.CurrentPath = null;
 

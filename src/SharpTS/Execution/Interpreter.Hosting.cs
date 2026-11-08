@@ -116,7 +116,7 @@ public partial class Interpreter
             if (InitializeHostedSpecialModule(module, moduleInstance))
                 return;
 
-            var moduleEnvironment = new RuntimeEnvironment(_environment);
+            var moduleEnvironment = new RuntimeEnvironment(_environment, strictMode: true);
             BindModuleImports(module, moduleEnvironment);
 
             using (PushModuleContext(moduleEnvironment, module, moduleInstance))
