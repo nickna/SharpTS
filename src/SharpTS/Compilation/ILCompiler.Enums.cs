@@ -102,6 +102,8 @@ public partial class ILCompiler
         if (enumStmt.IsConst)
         {
             _enums.ConstEnums.Add(qualifiedEnumName);
+            if (_typeMap.GetValueBinding(enumStmt.Name) is { } binding)
+                _enums.ConstBindingNames[binding] = qualifiedEnumName;
         }
     }
 

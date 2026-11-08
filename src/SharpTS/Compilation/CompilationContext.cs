@@ -237,6 +237,8 @@ public partial class CompilationContext
     /// </summary>
     public Dictionary<string, Dictionary<string, object>>? EnumMembers { get; set; }
 
+    internal IReadOnlyDictionary<BindingSymbol, string>? ConstEnumBindingNames { get; set; }
+
     /// <summary>
     /// Enum reverse mapping from enum name to value to member name (only numeric values).
     /// </summary>

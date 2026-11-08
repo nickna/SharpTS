@@ -74,6 +74,7 @@ public partial class ILCompiler
                     : null,
             // Enum tables
             EnumMembers = _enums.Members,
+            ConstEnumBindingNames = _enums.ConstBindingNames,
             EnumReverse = _enums.Reverse,
             EnumValueFields = _enums.ValueFields,
             EnumKinds = _enums.Kinds,
@@ -299,6 +300,7 @@ public partial class ILCompiler
             DisplayClassFields = parentCtx.DisplayClassFields,
             DisplayClassConstructors = parentCtx.DisplayClassConstructors,
             EnumMembers = parentCtx.EnumMembers,
+            ConstEnumBindingNames = parentCtx.ConstEnumBindingNames,
             EnumReverse = parentCtx.EnumReverse,
             EnumValueFields = parentCtx.EnumValueFields,
             EnumKinds = parentCtx.EnumKinds,

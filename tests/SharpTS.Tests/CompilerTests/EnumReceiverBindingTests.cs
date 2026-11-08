@@ -51,4 +51,23 @@ public sealed class EnumReceiverBindingTests
 
         Assert.Equal("9 3 3\n", TestHarness.RunModules(files, "main.ts", ExecutionMode.Compiled));
     }
+
+    [Fact]
+    public void ConstEnumImportsUseTheirDeclaringBindings()
+    {
+        var files = new Dictionary<string, string>
+        {
+            ["def.ts"] = "export const enum E { A = 3 }",
+            ["def-other.ts"] = "const enum E { A = 7 } export const other = E.A;",
+            ["barrel.ts"] = "export { E as Public } from './def';",
+            ["main.ts"] = """
+                import { E, E as Alias } from './def';
+                import { other } from './def-other';
+                import { Public } from './barrel';
+                console.log(E.A, other, Alias["A"], Public.A);
+                """,
+        };
+
+        Assert.Equal("3 7 3 3\n", TestHarness.RunModules(files, "main.ts", ExecutionMode.Compiled));
+    }
 }
