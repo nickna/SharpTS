@@ -243,7 +243,12 @@ public class SharpTSAsyncGenerator : ITypeCategorized, ISharpTSOwnPropertyObject
             if (result.Type == ExecutionResult.ResultType.Return)
                 completionValue = result.Value.ToObject();
             else if (result.Type == ExecutionResult.ResultType.Throw)
-                pendingException = ThrowException.FromResult(result.Value.ToObject());
+            {
+                object? reason = result.Value.ToObject();
+                if (!result.FromGuestThrow)
+                    reason = _interpreter.CoerceCaughtValueForBinding(reason);
+                pendingException = new ThrowException(reason);
+            }
         }
         catch (GeneratorReturnException grex)
         {
@@ -252,8 +257,12 @@ public class SharpTSAsyncGenerator : ITypeCategorized, ISharpTSOwnPropertyObject
         }
         catch (Exception ex) when (ex is not YieldException)
         {
-            // A rejected await, or a guest throw surfaced as a host exception: reject the driving request.
-            pendingException = ex;
+            // Preserve guest throws and existing rejection reasons, including strings that look like errors.
+            // Host failures need the same guest error conversion as a catch binding.
+            pendingException = ex is ThrowException or SharpTSPromiseRejectedException
+                or AggregateException { InnerException: SharpTSPromiseRejectedException }
+                ? ex
+                : new ThrowException(_interpreter.CoerceCaughtValueForBinding(_interpreter.TranslateException(ex)));
         }
         finally
         {
