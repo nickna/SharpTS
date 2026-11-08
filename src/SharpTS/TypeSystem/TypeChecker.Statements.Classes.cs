@@ -866,7 +866,8 @@ public partial class TypeChecker
                 classTypeForBody = PublishInitialClassType(classStmt, mutableClass, classTypeParams);
             }
 
-            ValidateDeclaredClassInterfaces(classStmt, classTypeForBody, classTypeParams);
+            if (fieldsWithUnresolvedGetters is null)
+                ValidateDeclaredClassInterfaces(classStmt, classTypeForBody, classTypeParams);
 
             ValidateDeclaredClassMembers(classStmt, classTypeForBody, classTypeParams, classTypeEnv);
 
@@ -922,6 +923,8 @@ public partial class TypeChecker
             // it held at the string-index check earlier (ValidateClassPropertiesAgainstIndex).
             mutableClass.ResetFrozenCache();
             var resolvedClass = mutableClass.Freeze();
+            if (fieldsWithUnresolvedGetters is not null)
+                ValidateDeclaredClassInterfaces(classStmt, resolvedClass, classTypeParams);
             ValidateClassMembersAgainstSymbolIndex(classStmt, resolvedClass);
             ValidateStaticOverrideCompatibility(classStmt, resolvedClass);
             PublishForwardClassConstructor(mutableClass,

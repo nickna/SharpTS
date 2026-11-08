@@ -37,4 +37,22 @@ public sealed class PublicGetterFieldInferenceTests
             TestHarness.ParseOrThrow($"{declaration} const wrong: string = {access};")));
         Assert.Equal("TS2322", error.Diagnostic.TsCode);
     }
+
+    [Theory]
+    [InlineData("class C")]
+    [InlineData("const C = class")]
+    public void InterfaceValidationUsesTheRetriedFieldType(string declaration)
+    {
+        string implementation = $$"""
+            {{declaration}} implements I {
+                get x() { this.y; return 1; }
+                y = this.x;
+            }
+            """;
+        new TypeChecker(strictNullChecks: true).Check(
+            TestHarness.ParseOrThrow("interface I { y: number; }\n" + implementation));
+        var error = Assert.ThrowsAny<TypeCheckException>(() => new TypeChecker(strictNullChecks: true).Check(
+            TestHarness.ParseOrThrow("interface I { y: string; }\n" + implementation)));
+        Assert.Equal("TS2416", error.Diagnostic.TsCode);
+    }
 }

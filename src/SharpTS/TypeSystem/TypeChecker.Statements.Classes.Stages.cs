@@ -130,8 +130,7 @@ public partial class TypeChecker
         return classTypeForBody;
     }
 
-    // Runs in the outer declaration environment before other member checks.
-    // Keeps interface resolution, source diagnostics, and generic deferral in their original order.
+    // Resolves implemented interfaces in the outer declaration environment.
     private void ValidateDeclaredClassInterfaces(
         Stmt.Class classStmt,
         TypeInfo.Class classTypeForBody,
