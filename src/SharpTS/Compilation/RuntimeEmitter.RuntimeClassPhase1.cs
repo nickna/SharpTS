@@ -25,8 +25,6 @@ public partial class RuntimeEmitter
             _types.Object
         );
         runtime.RuntimeClass.Type = typeBuilder;
-        runtime.Arguments.DefineLength = typeBuilder.DefineMethod("DefineArgumentsLength",
-            MethodAttributes.Assembly | MethodAttributes.Static, _types.Void, [_types.Object, _types.Double]);
         runtime.Arguments.Initialize = typeBuilder.DefineMethod("InitializeArguments",
             MethodAttributes.Public | MethodAttributes.Static, _types.Void, [_types.Object, _types.Boolean, _types.Object]);
 
@@ -345,5 +343,10 @@ public partial class RuntimeEmitter
             ? typeBuilder.DefineMethod("StructuredCloneGuest", MethodAttributes.Assembly | MethodAttributes.Static,
                 _types.Object, [_types.Object, _types.Object])
             : runtime.StructuredClone.Clone;
+
+        // Both arguments initialization and the array-like snapshot builder
+        // define an ordinary length property through this helper.
+        runtime.Arguments.DefineLength = typeBuilder.DefineMethod("DefineArgumentsLength",
+            MethodAttributes.Assembly | MethodAttributes.Static, _types.Void, [_types.Object, _types.Double]);
     }
 }

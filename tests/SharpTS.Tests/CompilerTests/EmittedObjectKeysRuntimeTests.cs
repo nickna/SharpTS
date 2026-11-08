@@ -158,6 +158,7 @@ public sealed class EmittedObjectKeysRuntimeTests
             if (name is "ProxyDescriptor" or "ProxyOwnKeys" or "OwnPrototype") return MakeInputs(parameter.ParameterType, runtime, overrides);
             return name switch
             {
+                "ArgumentsType" => runtime.Arguments.Type,
                 "OwnKeys" => runtime.ObjectKeys.Ordinary,
                 "CreateList" => runtime.ObjectKeys.CreateProxyList,
                 "GetOwnPropertyDescriptor" => runtime.ObjectDescriptors.GetOwnPropertyDescriptor,

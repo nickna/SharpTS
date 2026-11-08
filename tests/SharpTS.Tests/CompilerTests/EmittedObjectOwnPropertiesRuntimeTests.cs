@@ -164,6 +164,7 @@ public sealed class EmittedObjectOwnPropertiesRuntimeTests
             if (name == "NativeStaticMemberPresence") return runtime.ClassInitialization.NativeStaticMemberPresence;
             return name switch
             {
+                "ArgumentsType" => runtime.Arguments.Type,
                 "GetOwnPropertyDescriptor" => runtime.ObjectDescriptors.GetOwnPropertyDescriptor,
                 "IsExtensible" => runtime.ObjectState.IsExtensible,
                 "GetProperty" => runtime.ObjectRead.Property,

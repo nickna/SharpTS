@@ -218,6 +218,12 @@ public class EmitterSyncTests
             "EmitForAwaitOf",       // #430/#645: async-generator consumer keeps its own error-propagating lowering instead of the shared base one
             "EmitYield",            // Core: yield value + suspend
             "EmitAwait",            // Core: suspend/resume state machine
+            // #3565: capture synchronous failures in stack-empty CLR try regions while
+            // leaving suspension resume labels reachable by the state-machine dispatch.
+            "EmitBinary",           // Guard operands and coercion around a suspending operand
+            "EmitPreparedStaticCall", // Spill prepared CLR arguments before guarding the invocation
+            "EmitCallCompletion",   // Guard callable-value invocation after suspending argument evaluation
+            "SpillAwaitSafeArgument", // Guard a synchronous argument evaluated alongside suspending ones
             "EmitArrowFunction",    // Display class in async generator context
             // #1105: EmitSuper is NO LONGER overridden — the old override pushed `null`, silently
             // miscompiling `super.x` in an async generator body. The base (hoisted-this +
