@@ -30,10 +30,32 @@ public sealed class CliArraySubclassTests
         Assert.Equal(result.StandardOutput, TestHarness.RunCompiled(source));
     }
 
+    [Fact]
+    public void DeclarationLibrariesPreserveGenericArrayClassExpressionHeritage()
+    {
+        const string source = """
+            const Child = class extends Array<number> {};
+            const value = new Child();
+            value.push(7);
+            const item: number = value[0];
+            for (const element of value) {
+                const typed: number = element;
+                console.log(typed, item, Array.isArray(value));
+            }
+            """;
+        using var directory = CliTestHelper.CreateTempDirectory();
+        var path = directory.CreateFile("main.ts", source);
+        var result = CliTestHelper.RunCli($"--no-tsconfig --strict \"{path}\"", directory.Path);
+        Assert.True(result.ExitCode == 0, result.StandardOutput + result.StandardError);
+        Assert.Equal("7 7 true\n", result.StandardOutput);
+    }
+
     [Theory]
     [InlineData("function check() { const Array = 1; class Values extends Array {} }", "Superclass must be a class")]
     [InlineData("class Array {} class Values extends Array<number> {}", "Cannot use type arguments")]
     [InlineData("class Values extends Array<number, string> {}", "No base constructor")]
+    [InlineData("class Array {} const Values = class extends Array<number> {};", "Cannot use type arguments")]
+    [InlineData("const Values = class extends Array<number, string> {};", "No base constructor")]
     public void LoadedArrayBridgePreservesShadowingAndTypeArgumentChecks(string source, string diagnostic)
     {
         using var directory = CliTestHelper.CreateTempDirectory();
