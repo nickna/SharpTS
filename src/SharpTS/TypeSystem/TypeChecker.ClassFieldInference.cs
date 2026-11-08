@@ -61,6 +61,7 @@ public partial class TypeChecker
         public HashSet<Stmt.Field> ActiveFields { get; } = new(ReferenceEqualityComparer.Instance);
         public HashSet<Stmt.Field>? FieldsWithUnresolvedGetters { get; private set; }
         public int DeferredReadDepth { get; set; }
+        public bool IsRetryingFields { get; set; }
 
         public void DeferActiveFields()
         {
@@ -193,9 +194,8 @@ public partial class TypeChecker
             if (dependency is not null) dependency.HasUnresolvedDependency = true;
         }
         if (!scope.PendingFields.Contains((isStatic, name))) return;
-        // A getter body is checked without executing it. Infer any forward
-        // field type it needs in the same isolated flow used for deferred reads.
-        if ((_classFieldDeferredReadDepth > scope.DeferredReadDepth || dependency is not null) &&
+        // Deferred reads and the retry pass can infer pending dependencies in isolated flow.
+        if ((scope.IsRetryingFields || _classFieldDeferredReadDepth > scope.DeferredReadDepth || dependency is not null) &&
             !scope.ActiveFields.Contains(field))
         {
             InferDeferredClassFieldDependency(scope, field);

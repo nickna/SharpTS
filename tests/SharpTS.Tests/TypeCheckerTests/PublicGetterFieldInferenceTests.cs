@@ -25,6 +25,7 @@ public sealed class PublicGetterFieldInferenceTests
     [InlineData("const C = class { get x() { this.y; return 1; } y = this.x; };", "new C().y")]
     [InlineData("class C { static get x() { C.y; return 1; } static y = C.x; }", "C.y")]
     [InlineData("class C { get x() { this.y; return 1; } y = this.x; z = this.y; }", "new C().z")]
+    [InlineData("class C { a = this.x; z = () => this.y; y = this.x; get x() { this.z; return 1; } }", "new C().z()")]
     public void AGetterWithACompletedReturnTypeCanResolveCyclicFields(string declaration, string access)
     {
         new TypeChecker(strictNullChecks: true).Check(

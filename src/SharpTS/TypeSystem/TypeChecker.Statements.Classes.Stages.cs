@@ -331,7 +331,8 @@ public partial class TypeChecker
             _identityCompatibilityCache = null;
             getterScope.Getters.Clear();
             getterScope.PrivateGetters.Clear();
-            getterScope.PendingFields.Clear();
+            getterScope.PendingFields.RemoveWhere(key => !retryFields.Contains(getterScope.Fields[key]));
+            getterScope.IsRetryingFields = true;
         }
         _fieldGetterScope = getterScope;
         try
