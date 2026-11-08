@@ -516,20 +516,22 @@ public class ArraySortTests
             function sort(first, second) {
                 let reads = 0;
                 let length = 1;
-                Object.defineProperty(arguments, 'length', { get() { reads++; return length; } });
-                Object.defineProperty(arguments, '1', { get() { throw 'outside length'; } });
+                const args = arguments;
+                Object.defineProperty(args, 'length', { get() { reads++; return length; } });
+                Object.defineProperty(args, '0', { get() { return this === args ? 7 : 99; } });
+                Object.defineProperty(args, '1', { get() { throw 'outside length'; } });
                 const sortCopy = Array.prototype.toSorted;
-                console.log(sortCopy.apply(arguments, []).join(','), reads);
-                console.log(Reflect.apply(sortCopy, arguments, [undefined]).join(','), reads);
-                try { sortCopy.call(arguments, null); }
+                console.log(sortCopy.apply(args, []).join(','), reads);
+                console.log(Reflect.apply(sortCopy, args, [undefined]).join(','), reads);
+                try { sortCopy.call(args, null); }
                 catch (error) { console.log(error instanceof TypeError, reads); }
                 length = Infinity;
-                try { sortCopy.call(arguments); }
+                try { sortCopy.call(args); }
                 catch (error) { console.log(error instanceof RangeError, reads); }
             }
             sort(2, 1);
             """;
-        Assert.Equal("2 1\n2 2\ntrue 2\ntrue 3\n", TestHarness.RunUnchecked(source, mode));
+        Assert.Equal("7 1\n7 2\ntrue 2\ntrue 3\n", TestHarness.RunUnchecked(source, mode));
     }
 
     [Theory, ModeData]

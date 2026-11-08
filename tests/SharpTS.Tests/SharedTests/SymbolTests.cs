@@ -575,11 +575,11 @@ public class SymbolTests
             const cast = String;
             console.log(cast(Symbol('alias')), Reflect.apply(cast, null, [Symbol()]));
             console.log([Symbol('callback')].map(cast).join(','));
-            console.log(cast().length, cast(undefined));
+            console.log(cast() === '', cast(undefined));
             try { new cast(Symbol('constructor')); }
             catch (error) { console.log(error instanceof TypeError); }
             """;
-        Assert.Equal("Symbol(alias) Symbol()\nSymbol(callback)\n0 undefined\ntrue\n",
+        Assert.Equal("Symbol(alias) Symbol()\nSymbol(callback)\ntrue undefined\ntrue\n",
             TestHarness.RunUnchecked(source, mode));
     }
 

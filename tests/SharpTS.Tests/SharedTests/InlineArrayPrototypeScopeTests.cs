@@ -6,9 +6,12 @@ namespace SharpTS.Tests.SharedTests;
 public sealed class InlineArrayPrototypeScopeTests
 {
     [Theory]
-    [InlineData("[10, 20]", "[1, 2]")]
-    [InlineData("arguments", "arguments")]
-    public void NestedAbruptCallRestoresReceiverAndThisArgument(string innerReceiver, string outerReceiver)
+    [InlineData("[10, 20]", "[1, 2]", ExecutionMode.Interpreted)]
+    [InlineData("[10, 20]", "[1, 2]", ExecutionMode.Compiled)]
+    [InlineData("arguments", "arguments", ExecutionMode.Interpreted)]
+    [InlineData("arguments", "arguments", ExecutionMode.Compiled)]
+    public void NestedAbruptCallRestoresReceiverAndThisArgument(
+        string innerReceiver, string outerReceiver, ExecutionMode mode)
     {
         var source = $$"""
             const failure = {};
@@ -34,6 +37,6 @@ public sealed class InlineArrayPrototypeScopeTests
             """;
 
         Assert.Equal("true\ntrue\n1:true:true,2:true:true\n",
-            TestHarness.RunUnchecked(source, ExecutionMode.Compiled));
+            TestHarness.RunUnchecked(source, mode));
     }
 }

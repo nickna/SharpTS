@@ -1,14 +1,16 @@
 using SharpTS.Tests.Infrastructure;
 using Xunit;
 
-namespace SharpTS.Tests.CompilerTests;
+namespace SharpTS.Tests.SharedTests;
 
 public sealed class RuntimePrivateClassExpressionHeritageTests
 {
     [Theory]
-    [InlineData("#value = 1;")]
-    [InlineData("#value() {}")]
-    public void UncheckedRuntimeParentCanDeclarePrivateElements(string element)
+    [InlineData("#value = 1;", ExecutionMode.Interpreted)]
+    [InlineData("#value = 1;", ExecutionMode.Compiled)]
+    [InlineData("#value() {}", ExecutionMode.Interpreted)]
+    [InlineData("#value() {}", ExecutionMode.Compiled)]
+    public void UncheckedRuntimeParentCanDeclarePrivateElements(string element, ExecutionMode mode)
     {
         var source = $$"""
             function make() { return class { {{element}} }; }
@@ -17,11 +19,11 @@ public sealed class RuntimePrivateClassExpressionHeritageTests
             console.log(new Child() instanceof Base);
             """;
 
-        Assert.Equal("true\n", TestHarness.RunUnchecked(source, ExecutionMode.Compiled));
+        Assert.Equal("true\n", TestHarness.RunUnchecked(source, mode));
     }
 
-    [Fact]
-    public void RuntimeParentBrandsBelongToTheEvaluatedClassDefinition()
+    [Theory, ModeData]
+    public void RuntimeParentBrandsBelongToTheEvaluatedClassDefinition(ExecutionMode mode)
     {
         const string source = """
             function make(value) {
@@ -38,6 +40,6 @@ public sealed class RuntimePrivateClassExpressionHeritageTests
             console.log(value instanceof A, value instanceof Child, A.has(value), B.has(value), value.read());
             """;
 
-        Assert.Equal("true true true false 7\n", TestHarness.RunUnchecked(source, ExecutionMode.Compiled));
+        Assert.Equal("true true true false 7\n", TestHarness.RunUnchecked(source, mode));
     }
 }
