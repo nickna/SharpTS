@@ -1671,13 +1671,16 @@ public partial class RuntimeEmitter
         il.Emit(OpCodes.Ldc_I4_0);
         il.Emit(OpCodes.Blt, loopEnd);
 
-        EmitCallbackArgsAndInvoke(il, indexLocal, runtime, isLazyLocal, argsLocal, skipIndexBoxLocal);
+        var element = il.DeclareLocal(_types.Object);
+        EmitLoadElementUnholed(il, indexLocal, runtime, isLazyLocal);
+        il.Emit(OpCodes.Stloc, element);
+        EmitCallbackArgsAndInvoke(il, indexLocal, runtime, isLazyLocal, argsLocal, skipIndexBoxLocal, element);
 
-        // if (IsTruthy(result)) return list[i] (unholed).
+        // Return the value passed to the predicate, which may have changed the slot.
         il.Emit(OpCodes.Call, runtime.Booleans.IsTruthy);
         var notFound = il.DefineLabel();
         il.Emit(OpCodes.Brfalse, notFound);
-        EmitLoadElementUnholed(il, indexLocal, runtime, isLazyLocal);
+        il.Emit(OpCodes.Ldloc, element);
         il.Emit(OpCodes.Ret);
 
         il.MarkLabel(notFound);
