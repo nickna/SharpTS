@@ -159,9 +159,19 @@ public partial class ILEmitter
             }
             return;
         }
-        if (v.IsVar && v.Initializer is null
-            && _ctx.InitializedParameterNames?.Contains(v.Name.Lexeme) == true)
+        if (v.IsVar && _ctx.InitializedParameterNames?.Contains(v.Name.Lexeme) == true)
+        {
+            // The declaration reuses the existing binding, including when
+            // the parameter lives in an argument slot or a closure field.
+            if (v.Initializer is not null)
+            {
+                EmitExpression(v.Initializer);
+                EmitBoxIfNeeded(v.Initializer);
+                EmitObservePublishedPromiseValue();
+                EmitStoreAssignmentBindingValue(v.Name.Lexeme);
+            }
             return;
+        }
         // The callable-body hoisting pass already initialized this shared
         // binding. A declaration without an initializer performs no assignment.
         if (v.IsVar && v.Initializer is null

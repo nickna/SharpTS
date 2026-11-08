@@ -532,12 +532,17 @@ public partial class ILEmitter
         }
         if (TryEmitStoreClassDefinitionCapture(name)) return;
 
+        EmitStoreAssignmentBindingValue(name);
+    }
+
+    private void EmitStoreAssignmentBindingValue(string name)
+    {
         var dcName = _ctx.ResolveFunctionDCFieldName(name);
         FieldBuilder? dcField = null;
         if (_ctx.CapturedFunctionLocals?.Contains(dcName) == true)
             _ctx.FunctionDisplayClassFields?.TryGetValue(dcName, out dcField);
-        // Iterator values are boxed already. The ordinary store leaves an assignment result;
-        // a loop head is a statement, so discard exactly that result after committing the owner.
+        // The input is already boxed. Discard the expression result after
+        // storing the value in the binding's existing home.
         SetStackUnknown();
         EmitAssignmentValueFromStack(name, dcField, () => { });
         IL.Emit(OpCodes.Pop);
