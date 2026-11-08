@@ -461,8 +461,8 @@ public partial class TypeChecker
             // String literal index - look up specific property
             if (getIndex.Index is Expr.Literal { Value: string propName })
             {
-                if (objType is TypeInfo.Enum enumType && enumType.Members.ContainsKey(propName))
-                    return enumType;
+                if (objType is TypeInfo.Enum enumType && GetEnumMemberType(enumType, propName) is { } enumMember)
+                    return enumMember;
                 if (objType is TypeInfo.Namespace namespaceType)
                 {
                     if (namespaceType.Values.TryGetValue(propName, out TypeInfo? namespaceValue))
@@ -1712,8 +1712,8 @@ public partial class TypeChecker
         {
             if (getIndex.Index is Expr.Literal { Value: string propName })
             {
-                if (objType is TypeInfo.Enum enumType && enumType.Members.ContainsKey(propName))
-                    return enumType;
+                if (objType is TypeInfo.Enum enumType && GetEnumMemberType(enumType, propName) is { } enumMember)
+                    return enumMember;
                 if (objType is TypeInfo.Record rec && rec.Fields.TryGetValue(propName, out var fieldType))
                     return WithOptionalPropertyUndefined(fieldType, rec.IsFieldOptional(propName));
                 if (objType is TypeInfo.Interface itf && itf.Members.TryGetValue(propName, out var memberType))

@@ -1249,7 +1249,10 @@ public partial class Interpreter
 
         if (index is string enumMember)
         {
-            if (obj is SharpTSEnum enumValue) return enumValue.GetMemberRV(enumMember);
+            if (obj is SharpTSEnum enumValue)
+                return enumValue.HasMember(enumMember)
+                    ? enumValue.GetMemberRV(enumMember)
+                    : RuntimeValue.FromBoxed(GetPropertyValue(GetObjectPrototype(), enumMember, enumValue));
             if (obj is ConstEnumValues constEnum) return constEnum.GetMemberRV(enumMember);
         }
 
