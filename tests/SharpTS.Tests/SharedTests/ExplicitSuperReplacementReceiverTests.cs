@@ -5,6 +5,7 @@ namespace SharpTS.Tests.SharedTests;
 
 public sealed class ExplicitSuperReplacementReceiverTests
 {
+    // The compiler API tests exercise receiver selection with an empty TypeMap.
     [Theory]
     [InlineData("class Child extends Middle", "constructor() { super(); }")]
     [InlineData("class Child extends Middle", "constructor() { const initialize = () => super(); initialize(); }")]
@@ -43,6 +44,28 @@ public sealed class ExplicitSuperReplacementReceiverTests
                 };
             }
             const Child = make();
+            const result = new Child();
+            console.log(result === replacement, result.field, result.getReceiver() === result);
+            """;
+
+        Assert.Equal("true 7 true\n", TestHarness.RunUnchecked(source, ExecutionMode.Compiled));
+    }
+
+    [Fact]
+    public void CompilerApiBindsRuntimeParentFieldArrowsToTheReplacement()
+    {
+        const string source = """
+            const replacement = {};
+            class Base { constructor() { return replacement; } }
+            function make(Parent) {
+                class Child extends Parent {
+                    field = 7;
+                    getReceiver = () => this;
+                    constructor() { super(); }
+                }
+                return Child;
+            }
+            const Child = make(Base);
             const result = new Child();
             console.log(result === replacement, result.field, result.getReceiver() === result);
             """;

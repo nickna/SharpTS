@@ -254,7 +254,8 @@ public partial class ILCompiler
         DeclareLexicalSuperElementInitializer(classExpr, typeBuilder);
         if (_typeMap.GetClassExprType(classExpr) is { } checkedClass)
             _classes.CheckedDeclarationNames[checkedClass.Core.DeclarationId] = className;
-        else if (!_lexicalSuperElementInitializers.ContainsKey(classExpr) && NominalClassMayReplaceReceiver(typeBuilder))
+        else if (!_lexicalSuperElementInitializers.ContainsKey(classExpr)
+            && (HasRuntimeParent(classExpr) || NominalClassMayReplaceReceiver(typeBuilder)))
             MarkCollectedClassExpressionReceiverArrows(classExpr);
     }
 

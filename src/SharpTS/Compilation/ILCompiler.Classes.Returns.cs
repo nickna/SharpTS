@@ -86,12 +86,14 @@ public partial class ILCompiler
             : _runtimeClassDeclarations.FirstOrDefault(entry => ReferenceEquals(entry.Value, expression)).Key;
         var type = expression is not null ? _typeMap.GetClassExprType(expression)
             : source is not null ? _typeMap.GetClassType(source) : _typeMap.GetClassType(name);
+        var owner = expression is null ? _classes.Builders.GetValueOrDefault(name)
+            : _classExprs.Builders.GetValueOrDefault(expression);
         // Capture analysis precedes registration of receiver-based templates.
         // The source construction policy already proves that these arrows must
         // retain the mutable this cell, including under unchecked JS compilation.
         return _typeMapper.IsDynamicClassInstance(type)
-            || (type is null && NominalClassMayReplaceReceiver(expression is null
-                ? _classes.Builders.GetValueOrDefault(name) : _classExprs.Builders.GetValueOrDefault(expression)))
+            || (type is null && owner is not null && (NominalClassMayReplaceReceiver(owner)
+                || expression is not null && HasRuntimeParent(expression)))
             || source is not null && UsesReceiverConstruction(source)
             || expression != null && _lexicalSuperElementInitializers.ContainsKey(expression)
             || expression?.SuperclassExpr is Expr.ClassExpr && _features?.UsesClassPrototypeMutation == true;
