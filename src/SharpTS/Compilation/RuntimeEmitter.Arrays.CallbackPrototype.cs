@@ -62,6 +62,7 @@ public partial class RuntimeEmitter
 
         il.Emit(OpCodes.Ldarg_0);
         il.Emit(shortCircuits ? OpCodes.Ldc_I4_1 : OpCodes.Ldc_I4_0);
+        il.Emit(OpCodes.Ldc_I4_0);
         il.Emit(OpCodes.Call, runtime.ArrayOperations.MaterializeForIteration);
 
         if (isReducer)

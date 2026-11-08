@@ -282,9 +282,97 @@ public sealed class MappedArgumentsTests
 
         var runtime = assembly.GetType("$Runtime", throwOnError: true)!;
         var snapshot = runtime.GetMethod("ArrayLikeMaterializeForIteration")!
-            .Invoke(null, [receiver, true]);
+            .Invoke(null, [receiver, true, false]);
         Assert.Empty(Assert.IsAssignableFrom<List<object>>(snapshot));
         Assert.Equal(65_536, length.GetValue(snapshot));
+    }
+
+    [Fact]
+    public void CompiledArgumentsWithValidatesTheIndexBeforeCopying()
+    {
+        const string source = """
+            function visit(first, second) {
+                const args = arguments;
+                const trace = [];
+                Object.defineProperty(args, "length", {
+                    get() { trace.push("length"); return 3; }
+                });
+                Object.defineProperty(args, "0", {
+                    get() { trace.push("get0"); return 7; }
+                });
+                Object.defineProperty(args, "1", {
+                    get() { trace.push("get1"); return 8; }
+                });
+                const invalid = { valueOf() { trace.push("index"); return 3; } };
+                const valid = { valueOf() { trace.push("index"); return 0; } };
+                try { Array.prototype.with.call(args, invalid, 99); }
+                catch (error) { trace.push(error instanceof RangeError ? "range" : "error"); }
+                console.log(trace.join(","));
+                trace.length = 0;
+                console.log(Array.prototype.with.call(args, valid, 99).join(","), trace.join(","));
+                trace.length = 0;
+                const copyWith = Array.prototype.with;
+                console.log(copyWith.apply(args, [2, 99]).join(","), trace.join(","));
+            }
+            visit(1, 2);
+
+            function invalidLength(first) {
+                Object.defineProperty(arguments, "length", { value: 4294967296 });
+                const index = { valueOf() { throw "index threw"; } };
+                try { Array.prototype.with.call(arguments, index, 99); }
+                catch (error) { console.log(error); }
+            }
+            invalidLength(1);
+            """;
+        Assert.Equal(
+            "length,index,range\n99,8, length,index,get1\n7,8,99 length,get0,get1\nindex threw\n",
+            TestHarness.RunUnchecked(source, ExecutionMode.Compiled));
+    }
+
+    [Fact]
+    public void CompiledArgumentsCopyingMethodsReadLengthOnce()
+    {
+        const string source = """
+            function visit(first, second) {
+                const args = arguments;
+                let reads = 0;
+                Object.defineProperty(args, "length", { get() { reads++; return 2; } });
+                console.log(Array.prototype.toReversed.call(args).join(","), reads);
+                reads = 0;
+                const reverse = Array.prototype.toReversed;
+                console.log(reverse.apply(args, []).join(","), reads);
+                reads = 0;
+                console.log(Array.prototype.map.call(args, v => v + 1).join(","), reads);
+                reads = 0;
+                console.log(Array.prototype.filter.call(args, v => v > 1).join(","), reads);
+                reads = 0;
+                console.log(Array.prototype.flat.call(args).join(","), reads);
+            }
+            visit(2, 1);
+            function mapOversized(first) {
+                let reads = 0;
+                Object.defineProperty(arguments, "length", { get() { reads++; return 4294967296; } });
+                try { Array.prototype.map.call(arguments, v => v); }
+                catch (error) { console.log(error instanceof RangeError, reads); }
+            }
+            mapOversized(1);
+            function nestedFailure(first) {
+                const args = arguments;
+                Object.defineProperty(args, "length", { get() { throw "bad length"; } });
+                const values = [4, 5];
+                const result = Array.prototype.map.call(values, (value, index) => {
+                    if (index === 0) {
+                        try { Array.prototype.filter.call(args, () => true); }
+                        catch (error) { console.log(error); }
+                    }
+                    return value;
+                });
+                console.log(result.join(","));
+            }
+            nestedFailure(1);
+            """;
+        Assert.Equal("1,2 1\n1,2 1\n3,2 1\n2 1\n2,1 1\ntrue 1\nbad length\n4,5\n",
+            TestHarness.RunUnchecked(source, ExecutionMode.Compiled));
     }
 
     public static IEnumerable<object[]> ModeCases() => Cases()

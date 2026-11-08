@@ -706,9 +706,26 @@ public partial class ILEmitter
         bool createsNewArrayPre = methodGet.Name.Lexeme is "map" or "filter"
             or "splice" or "with" or "flat"
             or "toReversed" or "toSorted";
+        bool usesArguments = _ctx.RuntimeFeatures?.UsesArguments != false;
+        bool copiesArgumentsDirectly = usesArguments && methodName is "with" or "toReversed";
+        bool readsArgumentsLengthInHelper = copiesArgumentsDirectly
+            || (usesArguments && methodName is "map" or "filter" or "flat");
+        LocalBuilder? argumentsReceiver = null;
+        if (readsArgumentsLengthInHelper)
+        {
+            argumentsReceiver = IL.DeclareLocal(runtime.Arguments.Type);
+            IL.Emit(OpCodes.Ldloc, receiverLocal);
+            IL.Emit(OpCodes.Isinst, runtime.Arguments.Type);
+            IL.Emit(OpCodes.Stloc, argumentsReceiver);
+        }
         if (createsNewArrayPre)
         {
             var lengthOkLabel = IL.DefineLabel();
+            if (argumentsReceiver is not null)
+            {
+                IL.Emit(OpCodes.Ldloc, argumentsReceiver);
+                IL.Emit(OpCodes.Brtrue, lengthOkLabel);
+            }
             IL.Emit(OpCodes.Ldloc, receiverLocal);
             IL.Emit(OpCodes.Ldstr, "length");
             IL.Emit(OpCodes.Call, runtime.ObjectRead.Property);
@@ -734,9 +751,18 @@ public partial class ILEmitter
         // fires later at materialization, before the callback ever reads this).
         // Materialization below keeps using the raw receiver, observationally
         // identical to O for every shape this path supports. (#454)
+        var receiverScopeReady = IL.DefineLabel();
+        if (argumentsReceiver is not null)
+        {
+            // Leave the surrounding scope alone while reading arguments
+            // length, which may throw. Direct copies need no scope at all.
+            IL.Emit(OpCodes.Ldloc, argumentsReceiver);
+            IL.Emit(OpCodes.Brtrue, receiverScopeReady);
+        }
         IL.Emit(OpCodes.Ldloc, receiverLocal);
         IL.Emit(OpCodes.Call, runtime.BoxedPrimitives.ToObject);
         IL.Emit(OpCodes.Stsfld, runtime.ArrayOperations.CurrentReceiverField);
+        IL.MarkLabel(receiverScopeReady);
 
         var methodArgs = c.Arguments.Skip(1).ToList();
 
@@ -844,10 +870,22 @@ public partial class ILEmitter
         {
             if (useLazyMaterializer)
             {
+                var materialized = IL.DefineLabel();
+                if (copiesArgumentsDirectly)
+                {
+                    var copyReceiver = IL.DefineLabel();
+                    IL.Emit(OpCodes.Ldloc, argumentsReceiver!);
+                    IL.Emit(OpCodes.Brfalse, copyReceiver);
+                    IL.Emit(OpCodes.Castclass, _ctx.Types.ListOfObject);
+                    IL.Emit(OpCodes.Br, materialized);
+                    IL.MarkLabel(copyReceiver);
+                }
                 bool shortCircuits = methodName is "some" or "every" or "find" or "findIndex"
                     or "findLast" or "findLastIndex";
                 IL.Emit(shortCircuits ? OpCodes.Ldc_I4_1 : OpCodes.Ldc_I4_0);
+                IL.Emit(usesArguments && methodName == "map" ? OpCodes.Ldc_I4_1 : OpCodes.Ldc_I4_0);
                 IL.Emit(OpCodes.Call, runtime.ArrayOperations.MaterializeForIteration);
+                IL.MarkLabel(materialized);
             }
             else
             {
@@ -938,6 +976,15 @@ public partial class ILEmitter
                 break;
         }
 
+        if (argumentsReceiver is not null && !copiesArgumentsDirectly)
+        {
+            var scopeReady = IL.DefineLabel();
+            IL.Emit(OpCodes.Ldloc, argumentsReceiver);
+            IL.Emit(OpCodes.Brfalse, scopeReady);
+            IL.Emit(OpCodes.Ldloc, argumentsReceiver);
+            IL.Emit(OpCodes.Stsfld, runtime.ArrayOperations.CurrentReceiverField);
+            IL.MarkLabel(scopeReady);
+        }
         IL.Emit(OpCodes.Call, runtimeMethod);
 
         // Box numeric returns to match expression-as-value conventions.
