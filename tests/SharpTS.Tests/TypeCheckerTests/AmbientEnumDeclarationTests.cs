@@ -2,6 +2,7 @@ using SharpTS.Diagnostics;
 using SharpTS.Modules;
 using SharpTS.Parsing;
 using SharpTS.TypeSystem;
+using SharpTS.TypeSystem.Exceptions;
 using Xunit;
 
 namespace SharpTS.Tests.TypeCheckerTests;
@@ -63,9 +64,8 @@ public sealed class AmbientEnumDeclarationTests
         var result = new Parser(new Lexer(source).ScanTokens(), DecoratorMode.None).Parse();
         Assert.Empty(result.Errors);
         var checker = new TypeChecker(strictNullChecks: true);
-        checker.Check(result.Statements);
-        var diagnostic = Assert.Single(checker.GetDiagnostics(), d => d.Severity == DiagnosticSeverity.Error);
-        Assert.Equal(expectedCode, diagnostic.TsCode);
+        var error = Assert.Throws<TypeCheckException>(() => checker.Check(result.Statements));
+        Assert.Equal(expectedCode, error.Diagnostic.TsCode);
     }
 
     [Fact]
