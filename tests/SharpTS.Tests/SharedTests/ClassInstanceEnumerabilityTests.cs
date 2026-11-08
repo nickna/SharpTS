@@ -47,4 +47,19 @@ public sealed class ClassInstanceEnumerabilityTests
             """;
         Assert.Equal("first,visible,last\n", TestHarness.RunUnchecked(source, ExecutionMode.Interpreted));
     }
+
+    [Theory]
+    [InlineData(ExecutionMode.Interpreted)]
+    [InlineData(ExecutionMode.Compiled)]
+    public void JsonStringifyIncludesHiddenFieldsOnlyWhenTheReplacerSelectsThem(ExecutionMode mode)
+    {
+        const string source = """
+            class Box { visible = 1; }
+            const box = new Box();
+            Object.defineProperty(box, 'hidden', { value: 2 });
+            console.log(JSON.stringify(box));
+            console.log(JSON.stringify(box, ['hidden', 'visible']));
+            """;
+        Assert.Equal("{\"visible\":1}\n{\"hidden\":2,\"visible\":1}\n", TestHarness.RunUnchecked(source, mode));
+    }
 }

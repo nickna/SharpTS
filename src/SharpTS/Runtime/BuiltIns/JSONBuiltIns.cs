@@ -729,7 +729,7 @@ public static class JSONBuiltIns
 
     private static void StringifyInstance(Interpreter interp, SharpTSInstance inst,
         ISharpTSCallable? replacer, IReadOnlyList<string>? allowedKeys, string indentStr, int depth, StringBuilder sb, List<object> seen) =>
-        StringifyJsonObject(interp, inst, inst.GetFieldNames(),
+        StringifyJsonObject(interp, inst, inst.OwnEnumerableKeys(),
             replacer, allowedKeys, indentStr, depth, sb, seen);
 
     private static object? ReadJsonProperty(Interpreter interp, object node, string key)
