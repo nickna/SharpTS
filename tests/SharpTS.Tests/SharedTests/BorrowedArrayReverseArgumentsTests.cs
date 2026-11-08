@@ -8,6 +8,26 @@ public sealed class BorrowedArrayReverseArgumentsTests
     [Theory]
     [InlineData(ExecutionMode.Interpreted)]
     [InlineData(ExecutionMode.Compiled)]
+    public void TypedArrayAliasReadsArgumentsLengthWithoutCoercion(ExecutionMode mode)
+    {
+        const string source = """
+            function run() {
+                const alias: any[] = arguments as any;
+                const length = { valueOf() { console.log("coerce"); return 2; } };
+                (alias as any).length = length;
+                console.log(alias.length === (length as any), typeof alias.length);
+                for (let i = 0; i < 1; i++) console.log(alias.length === (length as any));
+                console.log(Array.prototype.findLastIndex.call(alias, () => true));
+            }
+            run();
+            """;
+
+        Assert.Equal("true object\ntrue\ncoerce\n1\n", TestHarness.Run(source, mode));
+    }
+
+    [Theory]
+    [InlineData(ExecutionMode.Interpreted)]
+    [InlineData(ExecutionMode.Compiled)]
     public void ReversePredicatesPreserveLargeArgumentsLengths(ExecutionMode mode)
     {
         const string source = """
