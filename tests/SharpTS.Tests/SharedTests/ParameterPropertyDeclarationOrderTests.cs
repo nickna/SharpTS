@@ -5,10 +5,9 @@ namespace SharpTS.Tests.SharedTests;
 
 public sealed class ParameterPropertyDeclarationOrderTests
 {
-    [Fact]
-    public void AConstructorBetweenFieldsDoesNotResetEarlierFieldWrites()
+    [Theory, ModeData]
+    public void AConstructorBetweenFieldsDoesNotResetEarlierFieldWrites(ExecutionMode mode)
     {
-        // The compiler's separate synthesized field reset is tracked in #3521.
         const string source = """
             class Item {
               first = (this.value = 7);
@@ -17,8 +16,16 @@ public sealed class ParameterPropertyDeclarationOrderTests
             }
             const item = new Item();
             console.log(item.first, item.last, item.value, Object.keys(item).join(','));
+            const Expression = class {
+              first = (this.value = "before");
+              constructor(public value: string = "after") {}
+              last = this.value;
+            };
+            const expression = new Expression();
+            console.log(expression.first, expression.last, expression.value, Object.keys(expression).join(','));
             """;
-        Assert.Equal("7 7 1 value,first,last\n", TestHarness.RunUnchecked(source, ExecutionMode.Interpreted));
+        Assert.Equal("7 7 1 value,first,last\nbefore before after value,first,last\n",
+            TestHarness.RunUnchecked(source, mode));
     }
 
     [Fact]

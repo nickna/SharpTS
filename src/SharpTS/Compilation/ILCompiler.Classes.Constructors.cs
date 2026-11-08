@@ -388,9 +388,9 @@ public partial class ILCompiler
 
         void EmitOrderedFieldInitializersCore()
         {
+            var parameterFieldTokens = GetParameterPropertyFieldTokens(constructor);
             if (_observableFieldOwners.Contains(typeBuilder))
             {
-                EmitUninitializedParameterProperties(il, typeBuilder, constructor);
                 ctx.FieldsField = fieldsField;
                 ctx.IsInstanceMethod = true;
                 var previousReceiver = ctx.ClassConstructorReceiver;
@@ -403,7 +403,7 @@ public partial class ILCompiler
                     _typedInterop.PropertyBackingFields.GetValueOrDefault(className),
                     _typedInterop.PropertyTypes.GetValueOrDefault(className),
                     field => il.Emit(OpCodes.Ldsfld, _classes.DeferredDefinitions.RequireFieldKey(field)),
-                    classStmt.AutoAccessors);
+                    classStmt.AutoAccessors, leadingFields: parameterFieldTokens);
                 ctx.ClassConstructorReceiver = previousReceiver;
                 return;
             }
@@ -419,14 +419,17 @@ public partial class ILCompiler
                 EmitEffectiveClassElements(ctx, classStmt.Fields,
                     _typedInterop.PropertyBackingFields.GetValueOrDefault(className),
                     _typedInterop.PropertyTypes.GetValueOrDefault(className),
-                    field => il.Emit(OpCodes.Ldsfld, _classes.DeferredDefinitions.RequireFieldKey(field)));
+                    field => il.Emit(OpCodes.Ldsfld, _classes.DeferredDefinitions.RequireFieldKey(field)),
+                    leadingFields: parameterFieldTokens);
                 ctx.ClassConstructorReceiver = previousReceiver;
                 il.Emit(OpCodes.Br, nativeDone.Value); il.MarkLabel(legacy);
             }
             EmitUninitializedParameterProperties(il, typeBuilder, constructor);
-            // Note: Declare fields are excluded - they have no initialization
+            // Parameter properties already have their leading declaration.
+            // Do not reset a write from an earlier initializer.
             var instanceFieldsWithInit = classStmt.Fields.Where(f =>
                 !f.IsStatic && !f.IsDeclare &&
+                parameterFieldTokens?.Contains(f.Name) != true &&
                 (f.IsPrivate || f.Initializer != null || f.ComputedKey != null || f.TypeAnnotation == null
                     || GetClassRegistry().TryGetOwnGuestDataField(typeBuilder, f.Name.Lexeme, out var slot)
                         && ReferenceEquals(slot.Source, f) && slot.BackingField == null)).ToList();
