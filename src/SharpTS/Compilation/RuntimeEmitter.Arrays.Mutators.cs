@@ -2240,6 +2240,7 @@ public partial class RuntimeEmitter
         il.Emit(OpCodes.Ldloc, receiver);
         il.Emit(OpCodes.Stsfld, runtime.ArrayOperations.CurrentReceiverField);
         il.Emit(OpCodes.Ldloc, receiver);
+        il.Emit(OpCodes.Ldc_I4_0);
         il.Emit(OpCodes.Call, runtime.ArrayOperations.MaterializeForIteration);
         il.Emit(OpCodes.Stloc, materialized);
         il.Emit(OpCodes.Ldloc, materialized);

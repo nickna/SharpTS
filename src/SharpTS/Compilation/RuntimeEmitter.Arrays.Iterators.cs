@@ -5,6 +5,30 @@ namespace SharpTS.Compilation;
 
 public partial class RuntimeEmitter
 {
+    private void EmitShortCircuitIterationLength(ILGenerator il, EmittedRuntime runtime)
+    {
+        if (!_features.UsesArguments)
+        {
+            il.Emit(OpCodes.Ldarg_0);
+            il.Emit(OpCodes.Callvirt, _types.GetPropertyGetter(_types.ListOfObject, "Count"));
+            return;
+        }
+
+        var useListCount = il.DefineLabel();
+        var done = il.DefineLabel();
+        il.Emit(OpCodes.Ldarg_0);
+        il.Emit(OpCodes.Isinst, runtime.Arguments.Type);
+        il.Emit(OpCodes.Dup);
+        il.Emit(OpCodes.Brfalse, useListCount);
+        il.Emit(OpCodes.Ldfld, runtime.Arguments.LengthField);
+        il.Emit(OpCodes.Br, done);
+        il.MarkLabel(useListCount);
+        il.Emit(OpCodes.Pop);
+        il.Emit(OpCodes.Ldarg_0);
+        il.Emit(OpCodes.Callvirt, _types.GetPropertyGetter(_types.ListOfObject, "Count"));
+        il.MarkLabel(done);
+    }
+
     /// <summary>
     /// Emits the hoisted lazy-mode preamble at the top of an iterator helper.
     /// Reads <c>_currentArrayLikeReceiver</c> once into a local and computes
@@ -1403,8 +1427,7 @@ public partial class RuntimeEmitter
 
         // ECMA-262 §23.1.3.10 step 2: cache len.
         var lenLocalFind = il.DeclareLocal(_types.Int32);
-        il.Emit(OpCodes.Ldarg_0);
-        il.Emit(OpCodes.Callvirt, _types.GetProperty(_types.ListOfObject, "Count").GetGetMethod()!);
+        EmitShortCircuitIterationLength(il, runtime);
         il.Emit(OpCodes.Stloc, lenLocalFind);
 
         var loopStart = il.DefineLabel();
@@ -1461,8 +1484,7 @@ public partial class RuntimeEmitter
 
         // ECMA-262 §23.1.3.11 step 2: cache len.
         var lenLocalFI = il.DeclareLocal(_types.Int32);
-        il.Emit(OpCodes.Ldarg_0);
-        il.Emit(OpCodes.Callvirt, _types.GetProperty(_types.ListOfObject, "Count").GetGetMethod()!);
+        EmitShortCircuitIterationLength(il, runtime);
         il.Emit(OpCodes.Stloc, lenLocalFI);
 
         var loopStart = il.DefineLabel();
@@ -1519,8 +1541,7 @@ public partial class RuntimeEmitter
 
         // ECMA-262 §23.1.3.29 step 2: cache len.
         var lenLocalSome = il.DeclareLocal(_types.Int32);
-        il.Emit(OpCodes.Ldarg_0);
-        il.Emit(OpCodes.Callvirt, _types.GetProperty(_types.ListOfObject, "Count").GetGetMethod()!);
+        EmitShortCircuitIterationLength(il, runtime);
         il.Emit(OpCodes.Stloc, lenLocalSome);
 
         var loopStart = il.DefineLabel();
@@ -1580,8 +1601,7 @@ public partial class RuntimeEmitter
         // that mutate list.Count (e.g. arr[1000]=v adding a new element) must
         // NOT cause iteration past the original len.
         var lenLocal = il.DeclareLocal(_types.Int32);
-        il.Emit(OpCodes.Ldarg_0);
-        il.Emit(OpCodes.Callvirt, _types.GetProperty(_types.ListOfObject, "Count").GetGetMethod()!);
+        EmitShortCircuitIterationLength(il, runtime);
         il.Emit(OpCodes.Stloc, lenLocal);
 
         var loopStart = il.DefineLabel();
@@ -1636,8 +1656,7 @@ public partial class RuntimeEmitter
 
         // int i = list.Count - 1
         var indexLocal = il.DeclareLocal(_types.Int32);
-        il.Emit(OpCodes.Ldarg_0);
-        il.Emit(OpCodes.Callvirt, _types.GetProperty(_types.ListOfObject, "Count").GetGetMethod()!);
+        EmitShortCircuitIterationLength(il, runtime);
         il.Emit(OpCodes.Ldc_I4_1);
         il.Emit(OpCodes.Sub);
         il.Emit(OpCodes.Stloc, indexLocal);
@@ -1693,8 +1712,7 @@ public partial class RuntimeEmitter
 
         // int i = list.Count - 1
         var indexLocal = il.DeclareLocal(_types.Int32);
-        il.Emit(OpCodes.Ldarg_0);
-        il.Emit(OpCodes.Callvirt, _types.GetProperty(_types.ListOfObject, "Count").GetGetMethod()!);
+        EmitShortCircuitIterationLength(il, runtime);
         il.Emit(OpCodes.Ldc_I4_1);
         il.Emit(OpCodes.Sub);
         il.Emit(OpCodes.Stloc, indexLocal);

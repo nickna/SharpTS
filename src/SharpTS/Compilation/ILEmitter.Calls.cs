@@ -842,9 +842,17 @@ public partial class ILEmitter
             or "indexOf" or "lastIndexOf" or "slice" or "toSpliced";
         if (methodName != "concat" && !usesOriginalReceiver)
         {
-            IL.Emit(OpCodes.Call, useLazyMaterializer
-                ? runtime.ArrayOperations.MaterializeForIteration
-                : runtime.ArrayOperations.Materialize);
+            if (useLazyMaterializer)
+            {
+                bool shortCircuits = methodName is "some" or "every" or "find" or "findIndex"
+                    or "findLast" or "findLastIndex";
+                IL.Emit(shortCircuits ? OpCodes.Ldc_I4_1 : OpCodes.Ldc_I4_0);
+                IL.Emit(OpCodes.Call, runtime.ArrayOperations.MaterializeForIteration);
+            }
+            else
+            {
+                IL.Emit(OpCodes.Call, runtime.ArrayOperations.Materialize);
+            }
         }
 
         // For iterator methods that accept thisArg (callbackfn, thisArg) per

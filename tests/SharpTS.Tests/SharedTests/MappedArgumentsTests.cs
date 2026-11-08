@@ -1,3 +1,4 @@
+using System.Reflection;
 using SharpTS.Tests.Infrastructure;
 using Xunit;
 
@@ -256,13 +257,34 @@ public sealed class MappedArgumentsTests
     public void CompiledArgumentsIterationKeepsTheIndependentLength()
     {
         const string source = """
-            function last() {
-                arguments.length = 1048577;
-                console.log(Array.prototype.findLastIndex.call(arguments, () => true));
+            function visit(value) {
+                const args = arguments;
+                args.length = 1048577;
+                console.log(Array.prototype.some.call(args, v => v === value));
+                const some = Array.prototype.some;
+                console.log(some.apply(args, [v => v === value]));
+                console.log(Array.prototype.findLastIndex.call(args, () => true));
             }
-            last();
+            visit(1);
             """;
-        Assert.Equal("1048576\n", TestHarness.RunUnchecked(source, ExecutionMode.Compiled));
+        Assert.Equal("true\ntrue\n1048576\n", TestHarness.RunUnchecked(source, ExecutionMode.Compiled));
+    }
+
+    [Fact]
+    public void ShortCircuitArgumentsSnapshotDoesNotAllocateIndexedStorage()
+    {
+        var assembly = Assembly.Load(TestHarness.CompileUncheckedAndVerify(
+            "function args() { return arguments; } console.log(args(1).length);"));
+        var argumentsType = assembly.GetType("$Arguments", throwOnError: true)!;
+        var length = argumentsType.GetField("_length")!;
+        var receiver = Activator.CreateInstance(argumentsType);
+        length.SetValue(receiver, 65_536);
+
+        var runtime = assembly.GetType("$Runtime", throwOnError: true)!;
+        var snapshot = runtime.GetMethod("ArrayLikeMaterializeForIteration")!
+            .Invoke(null, [receiver, true]);
+        Assert.Empty(Assert.IsAssignableFrom<List<object>>(snapshot));
+        Assert.Equal(65_536, length.GetValue(snapshot));
     }
 
     public static IEnumerable<object[]> ModeCases() => Cases()

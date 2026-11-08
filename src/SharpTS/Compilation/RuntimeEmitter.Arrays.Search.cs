@@ -1782,10 +1782,11 @@ public partial class RuntimeEmitter
     }
 
     /// <summary>
-    /// Emits <c>$Runtime.LikeMaterializeForIteration(object receiver) -&gt; List&lt;object&gt;</c>.
+    /// Emits a length snapshot for array-like iterator helpers.
     /// Iterator-helper companion to <see cref="DeclareArrayLikeMaterialize"/>:
     /// for dictionary, object and arguments receivers, returns a placeholder
-    /// list with the snapshotted length. The
+    /// list with the snapshotted length. Short-circuit helpers carry the
+    /// arguments length in an empty arguments object. The
     /// dispatch site has already stored the receiver in
     /// <c>_currentArrayLikeReceiver</c>; iterator helpers calling
     /// <see cref="EmitLoadArrayLikeElement"/> re-read each slot via
@@ -1800,7 +1801,7 @@ public partial class RuntimeEmitter
             "ArrayLikeMaterializeForIteration",
             MethodAttributes.Public | MethodAttributes.Static,
             _types.ListOfObject,
-            [_types.Object]
+            [_types.Object, _types.Boolean]
         );
     }
 
@@ -1932,6 +1933,7 @@ public partial class RuntimeEmitter
         // Arrays, arguments, strings, and primitive wrappers have bounded CLR
         // storage and retain the established materialization behavior.
         il.Emit(OpCodes.Ldarg_0);
+        il.Emit(OpCodes.Ldc_I4_0);
         il.Emit(OpCodes.Call, runtime.ArrayOperations.MaterializeForIteration);
         il.Emit(OpCodes.Ret);
     }
@@ -2008,6 +2010,24 @@ public partial class RuntimeEmitter
 
         EmitClampMaterializedLength(il, runtime, dLocal, lenLocal, afterLen, allowArgumentsLength);
         il.MarkLabel(afterLen);
+
+        if (_features.UsesArguments && allowArgumentsLength)
+        {
+            // Short-circuit helpers need a stable length but may visit only
+            // one index. Carry the length in an empty Arguments snapshot.
+            var materializeSlots = il.DefineLabel();
+            il.Emit(OpCodes.Ldarg_1);
+            il.Emit(OpCodes.Brfalse, materializeSlots);
+            il.Emit(OpCodes.Ldarg_0);
+            il.Emit(OpCodes.Isinst, runtime.Arguments.Type);
+            il.Emit(OpCodes.Brfalse, materializeSlots);
+            il.Emit(OpCodes.Newobj, runtime.Arguments.DefaultCtor);
+            il.Emit(OpCodes.Dup);
+            il.Emit(OpCodes.Ldloc, lenLocal);
+            il.Emit(OpCodes.Stfld, runtime.Arguments.LengthField);
+            il.Emit(OpCodes.Ret);
+            il.MarkLabel(materializeSlots);
+        }
 
         // list = new List<object>(len)
         il.Emit(OpCodes.Ldloc, lenLocal);
