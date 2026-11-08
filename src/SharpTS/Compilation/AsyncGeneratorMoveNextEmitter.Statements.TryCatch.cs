@@ -33,20 +33,23 @@ public partial class AsyncGeneratorMoveNextEmitter
     private int _finallyBodyDepth;
     private int _currentTryFinallyBodyDepth;
 
-    // A protocol call or awaiter result cannot span a suspension. Capture
-    // failures in a short protected segment and use the active guest handler.
+    // Protect synchronous work around a suspension without placing a resume target in the IL try.
     private void EmitCaptureTryOperation(Action emit)
     {
-        if (_currentTryExceptionLocal is null)
+        if (_currentTryExceptionLocal is null && !_inHandlerBody)
         {
             emit();
             return;
         }
+
+        var caught = _il.DeclareLocal(typeof(object));
+        var routeException = _il.DefineLabel();
+        var completed = _il.DefineLabel();
         _il.BeginExceptionBlock();
         emit();
         _il.BeginCatchBlock(typeof(Exception));
         _il.Emit(OpCodes.Call, _ctx!.Runtime!.Errors.WrapException);
-        _il.Emit(OpCodes.Stloc, _currentTryExceptionLocal);
+        _il.Emit(OpCodes.Stloc, caught);
         // A failed delegated step ends yield*. A handler can suspend at an
         // ordinary yield next, which must not still look like delegation.
         if (_builder.DelegatedAsyncEnumeratorField is { } delegation)
@@ -55,10 +58,12 @@ public partial class AsyncGeneratorMoveNextEmitter
             _il.Emit(OpCodes.Ldnull);
             _il.Emit(OpCodes.Stfld, delegation);
         }
-        _il.Emit(OpCodes.Ldc_I4_1);
-        _il.Emit(OpCodes.Stloc, _currentTryExceptionPresentLocal!);
-        _il.Emit(OpCodes.Leave, _currentTryCleanupLabel);
+        _il.Emit(OpCodes.Leave, routeException);
         _il.EndExceptionBlock();
+        _il.Emit(OpCodes.Br, completed);
+        _il.MarkLabel(routeException);
+        EmitRouteCapturedException(() => _il.Emit(OpCodes.Ldloc, caught));
+        _il.MarkLabel(completed);
     }
 
     private void EmitInjectedYieldThrow()
@@ -576,7 +581,7 @@ public partial class AsyncGeneratorMoveNextEmitter
     /// mini IL try/catch segments (<see cref="EmitSyncSegmentInTry"/>) that record a thrown exception
     /// into a handler-local flag, while suspension points and non-local exits stay at the top level so
     /// their resume labels / branches remain legal. After the body, a captured exception is propagated by
-    /// <see cref="EmitRouteCapturedHandlerException"/>. A lexical <c>throw</c> reached at the handler's
+    /// <see cref="EmitRouteCapturedException"/>. A lexical <c>throw</c> reached at the handler's
     /// top level (e.g. after a yield/await, outside any segment) is still routed directly by
     /// <see cref="EmitThrow"/>; this method only adds coverage for exceptions that arrive already in
     /// flight, which no <c>throw</c> statement intercepts. Caller sets <c>_inHandlerBody</c>.</para>
@@ -629,18 +634,15 @@ public partial class AsyncGeneratorMoveNextEmitter
         var noHandlerException = _il.DefineLabel();
         _il.Emit(OpCodes.Ldloc, handlerPresent);
         _il.Emit(OpCodes.Brfalse, noHandlerException);
-        EmitRouteCapturedHandlerException(() => _il.Emit(OpCodes.Ldloc, handlerCaught));
+        EmitRouteCapturedException(() => _il.Emit(OpCodes.Ldloc, handlerCaught));
         _il.MarkLabel(noHandlerException);
     }
 
     /// <summary>
-    /// Propagates an exception captured in a <c>catch</c>/<c>finally</c> body
-    /// (<see cref="EmitHandlerBodyWithCapture"/>): to the enclosing flag-based try's catch when one is
-    /// open (running the finally(s) inside it first), else through the active finally(s) and out, else
-    /// mark the generator done and throw out of MoveNextAsync. This is the in-flight-exception analog of
-    /// the handler-body arm of <see cref="EmitThrow"/>, which handles a lexical handler <c>throw</c>.
+    /// Routes a captured exception through the active guest finally blocks to its catch or out of
+    /// MoveNextAsync. The exception has already left its CLR protected region.
     /// </summary>
-    private void EmitRouteCapturedHandlerException(Action loadValue)
+    private void EmitRouteCapturedException(Action loadValue)
     {
         if (_currentTryExceptionLocal != null)
         {
