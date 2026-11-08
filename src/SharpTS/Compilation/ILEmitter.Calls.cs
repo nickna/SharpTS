@@ -707,9 +707,9 @@ public partial class ILEmitter
             or "splice" or "with" or "flat"
             or "toReversed" or "toSorted";
         bool usesArguments = _ctx.RuntimeFeatures?.UsesArguments != false;
-        bool copiesArgumentsDirectly = usesArguments && methodName is "with" or "toReversed";
+        bool copiesArgumentsDirectly = usesArguments && methodName is "with" or "toReversed" or "flat";
         bool readsArgumentsLengthInHelper = copiesArgumentsDirectly
-            || (usesArguments && methodName is "map" or "filter" or "flat");
+            || (usesArguments && methodName is "map" or "filter");
         LocalBuilder? argumentsReceiver = null;
         if (readsArgumentsLengthInHelper)
         {
@@ -819,15 +819,25 @@ public partial class ILEmitter
         // side effect did NOT fire. Read length + ToJsString first (spec
         // wants this access AND any toString side effects on the returned
         // value), then throw without invoking element getters.
+        LocalBuilder? mapCallback = null;
         if (needsCallableFirstArg && methodArgs.Count >= 1)
         {
             var cbLocal = IL.DeclareLocal(_ctx.Types.Object);
+            if (methodName == "map" && argumentsReceiver is not null)
+                mapCallback = cbLocal;
             EmitExpression(methodArgs[0]);
             EmitBoxIfNeeded(methodArgs[0]);
             IL.Emit(OpCodes.Stloc, cbLocal);
 
             var throwPath = IL.DefineLabel();
             var cbValid = IL.DefineLabel();
+            if (mapCallback is not null)
+            {
+                // Arguments map validates after evaluating thisArg and
+                // reading length, including for nullish callbacks.
+                IL.Emit(OpCodes.Ldloc, argumentsReceiver!);
+                IL.Emit(OpCodes.Brtrue, cbValid);
+            }
             // null → throw
             IL.Emit(OpCodes.Ldloc, cbLocal);
             IL.Emit(OpCodes.Brfalse, throwPath);
@@ -843,10 +853,7 @@ public partial class ILEmitter
             GuestErrorEmitter.ThrowTypeError(IL, runtime, "undefined is not a function");
 
             IL.MarkLabel(cbValid);
-            // The callback expression is re-emitted later when methodArgs
-            // are materialized into the call. This is a benign double-eval
-            // (callbacks are typically bare identifiers / literals); we
-            // tolerate it to avoid a methodArgs rewrite.
+            // Arguments map reuses this value for validation and invocation.
         }
 
         // list = ArrayLikeMaterializeForIteration(receiver) for iterator helpers
@@ -868,29 +875,29 @@ public partial class ILEmitter
             or "indexOf" or "lastIndexOf" or "slice" or "toSpliced";
         if (methodName != "concat" && !usesOriginalReceiver)
         {
+            var materialized = IL.DefineLabel();
+            if (copiesArgumentsDirectly || mapCallback is not null)
+            {
+                var copyReceiver = IL.DefineLabel();
+                IL.Emit(OpCodes.Ldloc, argumentsReceiver!);
+                IL.Emit(OpCodes.Brfalse, copyReceiver);
+                IL.Emit(OpCodes.Castclass, _ctx.Types.ListOfObject);
+                IL.Emit(OpCodes.Br, materialized);
+                IL.MarkLabel(copyReceiver);
+            }
             if (useLazyMaterializer)
             {
-                var materialized = IL.DefineLabel();
-                if (copiesArgumentsDirectly)
-                {
-                    var copyReceiver = IL.DefineLabel();
-                    IL.Emit(OpCodes.Ldloc, argumentsReceiver!);
-                    IL.Emit(OpCodes.Brfalse, copyReceiver);
-                    IL.Emit(OpCodes.Castclass, _ctx.Types.ListOfObject);
-                    IL.Emit(OpCodes.Br, materialized);
-                    IL.MarkLabel(copyReceiver);
-                }
-                bool shortCircuits = methodName is "some" or "every" or "find" or "findIndex"
-                    or "findLast" or "findLastIndex";
-                IL.Emit(shortCircuits ? OpCodes.Ldc_I4_1 : OpCodes.Ldc_I4_0);
-                IL.Emit(usesArguments && methodName == "map" ? OpCodes.Ldc_I4_1 : OpCodes.Ldc_I4_0);
+                bool usesVirtualArgumentsLength = methodName is "some" or "every" or "find" or "findIndex"
+                    or "findLast" or "findLastIndex" or "filter";
+                IL.Emit(usesVirtualArgumentsLength ? OpCodes.Ldc_I4_1 : OpCodes.Ldc_I4_0);
+                IL.Emit(OpCodes.Ldnull);
                 IL.Emit(OpCodes.Call, runtime.ArrayOperations.MaterializeForIteration);
-                IL.MarkLabel(materialized);
             }
             else
             {
                 IL.Emit(OpCodes.Call, runtime.ArrayOperations.Materialize);
             }
+            IL.MarkLabel(materialized);
         }
 
         // For iterator methods that accept thisArg (callbackfn, thisArg) per
@@ -915,13 +922,49 @@ public partial class ILEmitter
             {
                 IL.Emit(OpCodes.Ldsfld, runtime.Sentinels.UndefinedInstance);
             }
+            if (mapCallback is not null)
+            {
+                var thisArg = IL.DeclareLocal(_ctx.Types.Object);
+                var mapMaterialized = IL.DefineLabel();
+                var validationCallbackReady = IL.DefineLabel();
+                IL.Emit(OpCodes.Stloc, thisArg);
+                IL.Emit(OpCodes.Ldloc, argumentsReceiver!);
+                IL.Emit(OpCodes.Brfalse, mapMaterialized);
+
+                // Both method argument expressions have now been evaluated.
+                // Materialize the raw receiver and validate without changing
+                // the enclosing callback's thread-static scopes on failure.
+                IL.Emit(OpCodes.Ldc_I4_0);
+                IL.Emit(OpCodes.Ldloc, mapCallback);
+                IL.Emit(OpCodes.Dup);
+                IL.Emit(OpCodes.Brtrue, validationCallbackReady);
+                IL.Emit(OpCodes.Pop);
+                IL.Emit(OpCodes.Ldsfld, runtime.Sentinels.UndefinedInstance);
+                IL.MarkLabel(validationCallbackReady);
+                IL.Emit(OpCodes.Call, runtime.ArrayOperations.MaterializeForIteration);
+                IL.MarkLabel(mapMaterialized);
+                IL.Emit(OpCodes.Ldloc, thisArg);
+            }
             IL.Emit(OpCodes.Stsfld, runtime.ArrayOperations.CallbackThisArgField);
         }
 
         switch (kind)
         {
             case "single":
-                if (methodArgs.Count > 0)
+                if (mapCallback is not null)
+                {
+                    var evaluateCallback = IL.DefineLabel();
+                    var callbackReady = IL.DefineLabel();
+                    IL.Emit(OpCodes.Ldloc, argumentsReceiver!);
+                    IL.Emit(OpCodes.Brfalse, evaluateCallback);
+                    IL.Emit(OpCodes.Ldloc, mapCallback);
+                    IL.Emit(OpCodes.Br, callbackReady);
+                    IL.MarkLabel(evaluateCallback);
+                    EmitExpression(methodArgs[0]);
+                    EmitBoxIfNeeded(methodArgs[0]);
+                    IL.MarkLabel(callbackReady);
+                }
+                else if (methodArgs.Count > 0)
                 {
                     EmitExpression(methodArgs[0]);
                     EmitBoxIfNeeded(methodArgs[0]);
@@ -930,7 +973,7 @@ public partial class ILEmitter
                 {
                     if (methodName is "indexOf" or "lastIndexOf")
                         IL.Emit(OpCodes.Ldsfld, runtime.ArrayStorage.HoleInstance);
-                    else if (methodName == "join")
+                    else if (methodName is "join" or "flat")
                         IL.Emit(OpCodes.Ldsfld, runtime.Sentinels.UndefinedInstance);
                     else
                         IL.Emit(OpCodes.Ldnull);

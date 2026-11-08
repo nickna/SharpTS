@@ -1,3 +1,4 @@
+using System.Globalization;
 using System.Reflection;
 using System.Reflection.Emit;
 
@@ -1582,8 +1583,9 @@ public partial class RuntimeEmitter
         il.Emit(OpCodes.Ret);
     }
 
-    private void EmitArrayFlat(TypeBuilder typeBuilder, EmittedArrayOperationsRuntime arrays)
+    private void EmitArrayFlat(TypeBuilder typeBuilder, EmittedRuntime runtime)
     {
+        var arrays = runtime.ArrayOperations;
         // ArrayFlat(List<object> list, object? depthArg) -> List<object>
         var method = typeBuilder.DefineMethod(
             "ArrayFlat",
@@ -1592,17 +1594,34 @@ public partial class RuntimeEmitter
             [_types.ListOfObject, _types.Object]
         );
         arrays.Flat = method;
+        if (_features.UsesArguments)
+            method.SetCustomAttribute(runtime.FunctionAttributes.PadUndefinedCtor, CustomAttributeEncoder.EmptyBlob);
 
         var il = method.GetILGenerator();
+        if (_features.UsesArguments)
+        {
+            var ordinaryArray = il.DefineLabel();
+            il.Emit(OpCodes.Ldarg_0);
+            il.Emit(OpCodes.Isinst, runtime.Arguments.Type);
+            il.Emit(OpCodes.Brfalse, ordinaryArray);
+            EmitArrayFlatArguments(il, runtime);
+            il.MarkLabel(ordinaryArray);
+        }
 
         // Parse depth: default 1, Infinity -> int.MaxValue
         var depthLocal = il.DeclareLocal(_types.Int32);
         var resultLocal = il.DeclareLocal(_types.ListOfObject);
 
-        // if (depthArg == null) depth = 1
+        // The typed entry point passes null for omission; prototype calls can
+        // pass the guest undefined sentinel.
+        var defaultDepth = il.DefineLabel();
         var depthNotNull = il.DefineLabel();
         il.Emit(OpCodes.Ldarg_1);
+        il.Emit(OpCodes.Isinst, runtime.Sentinels.UndefinedType);
+        il.Emit(OpCodes.Brtrue, defaultDepth);
+        il.Emit(OpCodes.Ldarg_1);
         il.Emit(OpCodes.Brtrue, depthNotNull);
+        il.MarkLabel(defaultDepth);
         il.Emit(OpCodes.Ldc_I4_1);
         il.Emit(OpCodes.Stloc, depthLocal);
         var depthDone = il.DefineLabel();
@@ -1639,6 +1658,96 @@ public partial class RuntimeEmitter
 
         // return result
         il.Emit(OpCodes.Ldloc, resultLocal);
+        il.Emit(OpCodes.Ret);
+    }
+
+    private void EmitArrayFlatArguments(ILGenerator il, EmittedRuntime runtime)
+    {
+        // Snapshot only length. Source indices are independent of the backing
+        // List and can change while depth is coerced or an earlier getter runs.
+        var (receiver, length) = EmitGenericArrayReceiverAndLength(il, runtime);
+        var depth = il.DeclareLocal(_types.Double);
+        var coerceDepth = il.DefineLabel();
+        var depthReady = il.DefineLabel();
+        il.Emit(OpCodes.Ldarg_1);
+        il.Emit(OpCodes.Isinst, runtime.Sentinels.UndefinedType);
+        il.Emit(OpCodes.Brfalse, coerceDepth);
+        il.Emit(OpCodes.Ldc_R8, 1.0);
+        il.Emit(OpCodes.Br, depthReady);
+        il.MarkLabel(coerceDepth);
+        il.Emit(OpCodes.Ldarg_1);
+        il.Emit(OpCodes.Call, runtime.NumericCoercion.ToNumber);
+        il.MarkLabel(depthReady);
+        il.Emit(OpCodes.Stloc, depth);
+
+        var result = il.DeclareLocal(_types.ListOfObject);
+        var count = il.DeclareLocal(_types.Int64);
+        var index = il.DeclareLocal(_types.Int64);
+        var key = il.DeclareLocal(_types.String);
+        var item = il.DeclareLocal(_types.Object);
+        var nested = il.DeclareLocal(_types.ListOfObject);
+        il.Emit(OpCodes.Newobj, _types.GetConstructor(_types.ListOfObject, _types.EmptyTypes));
+        il.Emit(OpCodes.Stloc, result);
+        il.Emit(OpCodes.Ldloc, length);
+        il.Emit(OpCodes.Conv_I8);
+        il.Emit(OpCodes.Stloc, count);
+
+        var loop = il.DefineLabel();
+        var condition = il.DefineLabel();
+        var next = il.DefineLabel();
+        var addItem = il.DefineLabel();
+        il.Emit(OpCodes.Br, condition);
+        il.MarkLabel(loop);
+        il.Emit(OpCodes.Ldloca, index);
+        il.Emit(OpCodes.Call, _types.GetPropertyGetter(typeof(CultureInfo), nameof(CultureInfo.InvariantCulture)));
+        il.Emit(OpCodes.Call, _types.GetMethod(_types.Int64, "ToString", typeof(IFormatProvider)));
+        il.Emit(OpCodes.Stloc, key);
+        il.Emit(OpCodes.Ldloc, receiver);
+        il.Emit(OpCodes.Ldloc, key);
+        il.Emit(OpCodes.Call, runtime.ArrayOperations.HasArrayLikeProperty);
+        il.Emit(OpCodes.Brfalse, next);
+        il.Emit(OpCodes.Ldloc, receiver);
+        il.Emit(OpCodes.Ldloc, key);
+        il.Emit(OpCodes.Call, runtime.ObjectRead.Property);
+        il.Emit(OpCodes.Stloc, item);
+
+        il.Emit(OpCodes.Ldloc, depth);
+        il.Emit(OpCodes.Ldc_R8, 1.0);
+        il.Emit(OpCodes.Blt_Un, addItem); // NaN and depths that truncate to zero.
+        il.Emit(OpCodes.Ldloc, item);
+        il.Emit(OpCodes.Isinst, runtime.Arguments.Type);
+        il.Emit(OpCodes.Brtrue, addItem);
+        il.Emit(OpCodes.Ldloc, item);
+        il.Emit(OpCodes.Isinst, _types.ListOfObject);
+        il.Emit(OpCodes.Dup);
+        il.Emit(OpCodes.Stloc, nested);
+        il.Emit(OpCodes.Brfalse, addItem);
+        EmitDeoptIfNumericArray(il, runtime, () => il.Emit(OpCodes.Ldloc, nested));
+        il.Emit(OpCodes.Ldloc, nested);
+        il.Emit(OpCodes.Ldloc, result);
+        il.Emit(OpCodes.Ldloc, depth);
+        il.Emit(OpCodes.Ldc_R8, (double)int.MaxValue);
+        il.Emit(OpCodes.Call, _types.GetMethod(_types.Math, "Min", _types.Double, _types.Double));
+        il.Emit(OpCodes.Conv_I4);
+        il.Emit(OpCodes.Ldc_I4_1);
+        il.Emit(OpCodes.Sub);
+        il.Emit(OpCodes.Call, runtime.ArrayOperations.FlatHelper);
+        il.Emit(OpCodes.Br, next);
+
+        il.MarkLabel(addItem);
+        il.Emit(OpCodes.Ldloc, result);
+        il.Emit(OpCodes.Ldloc, item);
+        il.Emit(OpCodes.Callvirt, _types.GetMethod(_types.ListOfObject, "Add", _types.Object));
+        il.MarkLabel(next);
+        il.Emit(OpCodes.Ldloc, index);
+        il.Emit(OpCodes.Ldc_I8, 1L);
+        il.Emit(OpCodes.Add);
+        il.Emit(OpCodes.Stloc, index);
+        il.MarkLabel(condition);
+        il.Emit(OpCodes.Ldloc, index);
+        il.Emit(OpCodes.Ldloc, count);
+        il.Emit(OpCodes.Blt, loop);
+        il.Emit(OpCodes.Ldloc, result);
         il.Emit(OpCodes.Ret);
     }
 
@@ -2249,7 +2358,7 @@ public partial class RuntimeEmitter
         il.Emit(OpCodes.Stsfld, runtime.ArrayOperations.CurrentReceiverField);
         il.Emit(OpCodes.Ldloc, receiver);
         il.Emit(OpCodes.Ldc_I4_0);
-        il.Emit(OpCodes.Ldc_I4_0);
+        il.Emit(OpCodes.Ldnull);
         il.Emit(OpCodes.Call, runtime.ArrayOperations.MaterializeForIteration);
         il.Emit(OpCodes.Stloc, materialized);
         il.Emit(OpCodes.Ldloc, materialized);

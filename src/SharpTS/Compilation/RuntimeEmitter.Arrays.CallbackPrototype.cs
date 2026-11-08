@@ -60,15 +60,10 @@ public partial class RuntimeEmitter
         }
         il.Emit(OpCodes.Stsfld, runtime.ArrayOperations.CallbackThisArgField);
 
-        il.Emit(OpCodes.Ldarg_0);
-        il.Emit(shortCircuits ? OpCodes.Ldc_I4_1 : OpCodes.Ldc_I4_0);
-        il.Emit(OpCodes.Ldc_I4_0);
-        il.Emit(OpCodes.Call, runtime.ArrayOperations.MaterializeForIteration);
-
-        if (isReducer)
-            il.Emit(OpCodes.Ldarg_1);
-        else
+        LocalBuilder? callback = null;
+        if (!isReducer)
         {
+            callback = il.DeclareLocal(_types.Object);
             var explicitCallback = il.DefineLabel();
             var callbackReady = il.DefineLabel();
             il.Emit(OpCodes.Ldarg_1);
@@ -81,7 +76,34 @@ public partial class RuntimeEmitter
             il.Emit(OpCodes.Ldc_I4_0);
             il.Emit(OpCodes.Ldelem_Ref);
             il.MarkLabel(callbackReady);
+            il.Emit(OpCodes.Stloc, callback);
         }
+
+        il.Emit(OpCodes.Ldarg_0);
+        bool usesVirtualArgumentsLength = shortCircuits || helper == runtime.ArrayOperations.Filter;
+        il.Emit(usesVirtualArgumentsLength ? OpCodes.Ldc_I4_1 : OpCodes.Ldc_I4_0);
+        if (_features.UsesArguments && helper == runtime.ArrayOperations.Map)
+        {
+            // Null disables map validation in the materializer. A guest null
+            // callback is invalid just like undefined, so pass that sentinel.
+            var validationCallbackReady = il.DefineLabel();
+            il.Emit(OpCodes.Ldloc, callback!);
+            il.Emit(OpCodes.Dup);
+            il.Emit(OpCodes.Brtrue, validationCallbackReady);
+            il.Emit(OpCodes.Pop);
+            il.Emit(OpCodes.Ldsfld, runtime.Sentinels.UndefinedInstance);
+            il.MarkLabel(validationCallbackReady);
+        }
+        else
+        {
+            il.Emit(OpCodes.Ldnull);
+        }
+        il.Emit(OpCodes.Call, runtime.ArrayOperations.MaterializeForIteration);
+
+        if (callback is null)
+            il.Emit(OpCodes.Ldarg_1);
+        else
+            il.Emit(OpCodes.Ldloc, callback);
         il.Emit(OpCodes.Call, helper);
         if (helper.ReturnType == _types.Void)
             il.Emit(OpCodes.Ldsfld, runtime.Sentinels.UndefinedInstance);

@@ -5,7 +5,7 @@ namespace SharpTS.Compilation;
 
 public partial class RuntimeEmitter
 {
-    private void EmitShortCircuitIterationLength(ILGenerator il, EmittedRuntime runtime)
+    private void EmitArrayIterationLength(ILGenerator il, EmittedRuntime runtime)
     {
         if (!_features.UsesArguments)
         {
@@ -1305,8 +1305,7 @@ public partial class RuntimeEmitter
 
         // ECMA-262 §23.1.3.8 step 2: cache len ONCE before the loop.
         var lenLocalFilter = il.DeclareLocal(_types.Int32);
-        il.Emit(OpCodes.Ldarg_0);
-        il.Emit(OpCodes.Callvirt, _types.GetProperty(_types.ListOfObject, "Count").GetGetMethod()!);
+        EmitArrayIterationLength(il, runtime);
         il.Emit(OpCodes.Stloc, lenLocalFilter);
 
         var loopStart = il.DefineLabel();
@@ -1427,7 +1426,7 @@ public partial class RuntimeEmitter
 
         // ECMA-262 §23.1.3.10 step 2: cache len.
         var lenLocalFind = il.DeclareLocal(_types.Int32);
-        EmitShortCircuitIterationLength(il, runtime);
+        EmitArrayIterationLength(il, runtime);
         il.Emit(OpCodes.Stloc, lenLocalFind);
 
         var loopStart = il.DefineLabel();
@@ -1484,7 +1483,7 @@ public partial class RuntimeEmitter
 
         // ECMA-262 §23.1.3.11 step 2: cache len.
         var lenLocalFI = il.DeclareLocal(_types.Int32);
-        EmitShortCircuitIterationLength(il, runtime);
+        EmitArrayIterationLength(il, runtime);
         il.Emit(OpCodes.Stloc, lenLocalFI);
 
         var loopStart = il.DefineLabel();
@@ -1541,7 +1540,7 @@ public partial class RuntimeEmitter
 
         // ECMA-262 §23.1.3.29 step 2: cache len.
         var lenLocalSome = il.DeclareLocal(_types.Int32);
-        EmitShortCircuitIterationLength(il, runtime);
+        EmitArrayIterationLength(il, runtime);
         il.Emit(OpCodes.Stloc, lenLocalSome);
 
         var loopStart = il.DefineLabel();
@@ -1601,7 +1600,7 @@ public partial class RuntimeEmitter
         // that mutate list.Count (e.g. arr[1000]=v adding a new element) must
         // NOT cause iteration past the original len.
         var lenLocal = il.DeclareLocal(_types.Int32);
-        EmitShortCircuitIterationLength(il, runtime);
+        EmitArrayIterationLength(il, runtime);
         il.Emit(OpCodes.Stloc, lenLocal);
 
         var loopStart = il.DefineLabel();
@@ -1656,7 +1655,7 @@ public partial class RuntimeEmitter
 
         // int i = list.Count - 1
         var indexLocal = il.DeclareLocal(_types.Int32);
-        EmitShortCircuitIterationLength(il, runtime);
+        EmitArrayIterationLength(il, runtime);
         il.Emit(OpCodes.Ldc_I4_1);
         il.Emit(OpCodes.Sub);
         il.Emit(OpCodes.Stloc, indexLocal);
@@ -1712,7 +1711,7 @@ public partial class RuntimeEmitter
 
         // int i = list.Count - 1
         var indexLocal = il.DeclareLocal(_types.Int32);
-        EmitShortCircuitIterationLength(il, runtime);
+        EmitArrayIterationLength(il, runtime);
         il.Emit(OpCodes.Ldc_I4_1);
         il.Emit(OpCodes.Sub);
         il.Emit(OpCodes.Stloc, indexLocal);

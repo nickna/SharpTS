@@ -282,9 +282,49 @@ public sealed class MappedArgumentsTests
 
         var runtime = assembly.GetType("$Runtime", throwOnError: true)!;
         var snapshot = runtime.GetMethod("ArrayLikeMaterializeForIteration")!
-            .Invoke(null, [receiver, true, false]);
+            .Invoke(null, [receiver, true, null]);
         Assert.Empty(Assert.IsAssignableFrom<List<object>>(snapshot));
         Assert.Equal(65_536, length.GetValue(snapshot));
+    }
+
+    [Fact]
+    public void CompiledArgumentsMapValidatesTheCallbackBeforeResultCapacity()
+    {
+        const string source = """
+            function verify(size, callback) {
+                const args = arguments;
+                const trace = [];
+                Object.defineProperty(args, "length", {
+                    get() { trace.push("length"); return size; }
+                });
+                const map = Array.prototype.map;
+                try {
+                    Array.prototype.map.call(args, (trace.push("callback argument"), callback),
+                        (trace.push("this argument"), undefined));
+                }
+                catch (error) { trace.push(error.name); }
+                console.log(trace.join(","));
+                trace.length = 0;
+                try { map.call(args, callback); }
+                catch (error) { trace.push(error.name); }
+                console.log(trace.join(","));
+            }
+            verify(2147483647, 1);
+            verify(4294967296, null);
+            verify(Infinity, () => { throw "callback must not run"; });
+
+            function successful(first, second) {
+                let evaluations = 0;
+                const result = Array.prototype.map.call(arguments, (evaluations++, value => value + 1));
+                console.log(result.join(","), evaluations);
+            }
+            successful(1, 2);
+            """;
+        Assert.Equal(
+            "callback argument,this argument,length,TypeError\nlength,TypeError\n" +
+            "callback argument,this argument,length,TypeError\nlength,TypeError\n" +
+            "callback argument,this argument,length,RangeError\nlength,RangeError\n2,3 1\n",
+            TestHarness.RunUnchecked(source, ExecutionMode.Compiled));
     }
 
     [Fact]

@@ -1801,7 +1801,7 @@ public partial class RuntimeEmitter
             "ArrayLikeMaterializeForIteration",
             MethodAttributes.Public | MethodAttributes.Static,
             _types.ListOfObject,
-            [_types.Object, _types.Boolean, _types.Boolean]
+            [_types.Object, _types.Boolean, _types.Object]
         );
     }
 
@@ -1934,7 +1934,7 @@ public partial class RuntimeEmitter
         // storage and retain the established materialization behavior.
         il.Emit(OpCodes.Ldarg_0);
         il.Emit(OpCodes.Ldc_I4_0);
-        il.Emit(OpCodes.Ldc_I4_0);
+        il.Emit(OpCodes.Ldnull);
         il.Emit(OpCodes.Call, runtime.ArrayOperations.MaterializeForIteration);
         il.Emit(OpCodes.Ret);
     }
@@ -1979,14 +1979,15 @@ public partial class RuntimeEmitter
 
         if (_features.UsesArguments && allowArgumentsLength)
         {
-            // map allocates a result of the source length. Use the single
-            // observable length read to validate its CLR result capacity.
+            // map allocates a result of the source length. After the single
+            // observable length read, validate the callback before capacity.
             var supported = il.DefineLabel();
             il.Emit(OpCodes.Ldarg_2);
             il.Emit(OpCodes.Brfalse, supported);
             il.Emit(OpCodes.Ldarg_0);
             il.Emit(OpCodes.Isinst, runtime.Arguments.Type);
             il.Emit(OpCodes.Brfalse, supported);
+            EmitThrowIfCallbackNotCallable(il, runtime, 2, "Array.prototype.map");
             il.Emit(OpCodes.Ldloc, dLocal);
             il.Emit(OpCodes.Call, _types.GetMethod(_types.Math, "Truncate", _types.Double));
             il.Emit(OpCodes.Ldc_R8, (double)Array.MaxLength);

@@ -2732,7 +2732,7 @@ public partial class RuntimeEmitter
         EmitArrayReverse(typeBuilder, runtime);
         EmitArrayReverseProto(typeBuilder, runtime);
         EmitArrayFlatHelper(typeBuilder, runtime); // Must be before EmitArrayFlat
-        EmitArrayFlat(typeBuilder, runtime.ArrayOperations);
+        EmitArrayFlat(typeBuilder, runtime);
         EmitArrayFlatMap(typeBuilder, runtime);
         EmitArrayFrom(typeBuilder, runtime);
         EmitArrayOf(typeBuilder, runtime);
