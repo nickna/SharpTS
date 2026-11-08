@@ -750,7 +750,7 @@ public partial class TypeChecker
             throw new TypeCheckException($" A const enum member can only be accessed using its name, not by index. Cannot use reverse mapping on const enum '{enumType.Name}'.", tsCode: "TS2476");
         if (enumType.Kind == EnumKind.String)
             throw new TypeCheckException($" Reverse mapping is not supported for string enum '{enumType.Name}'.", tsCode: "TS2476");
-        return TypeInfo.String.Shared;
+        return WithUncheckedUndefined(TypeInfo.String.Shared);
     }
 
     private bool TryEvaluateConcreteKeyOfDomain(TypeInfo.KeyOf keyOf, out TypeInfo domain)
