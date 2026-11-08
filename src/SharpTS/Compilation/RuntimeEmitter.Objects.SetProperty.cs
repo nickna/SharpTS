@@ -855,6 +855,7 @@ public partial class RuntimeEmitter
         var nullLabel = il.DefineLabel();
         var dictLabel = il.DefineLabel();
         var tsObjectLabel = il.DefineLabel();
+        var listSetNamedProperty = il.DefineLabel();
 
         // null check
         il.Emit(OpCodes.Ldarg_0);
@@ -865,9 +866,9 @@ public partial class RuntimeEmitter
             new GlobalThisSetRedirectInputs(inputs.GlobalThisSetProperty, inputs.GlobalThisSingletonField)
         );
 
-        // $Arguments has a JS-visible length slot independent from its List
-        // backing store. Writes must update that live slot so an already-
-        // created ArrayIterator observes truncation on its next() call.
+        // The default arguments length is independent of the backing List.
+        // Once an explicit descriptor exists, use ordinary named-property
+        // assignment, including accessors and read-only data properties.
         var notArgumentsLengthLabel = il.DefineLabel();
         il.Emit(OpCodes.Ldarg_0);
         il.Emit(OpCodes.Isinst, inputs.ArgumentsType);
@@ -877,6 +878,10 @@ public partial class RuntimeEmitter
         il.Emit(OpCodes.Call, _types.GetMethod(
             _types.String, "op_Equality", _types.String, _types.String));
         il.Emit(OpCodes.Brfalse, notArgumentsLengthLabel);
+        il.Emit(OpCodes.Ldarg_0);
+        il.Emit(OpCodes.Ldarg_1);
+        il.Emit(OpCodes.Call, inputs.DescriptorStorage.GetPropertyDescriptor);
+        il.Emit(OpCodes.Brtrue, listSetNamedProperty);
         il.Emit(OpCodes.Ldarg_0);
         il.Emit(OpCodes.Castclass, inputs.ArgumentsType);
         il.Emit(OpCodes.Ldarg_2);
@@ -1177,6 +1182,7 @@ public partial class RuntimeEmitter
             il.Emit(OpCodes.Ldstr, "length");
             il.Emit(OpCodes.Call, _types.GetMethod(_types.String, "op_Equality", _types.String, _types.String));
             il.Emit(OpCodes.Brtrue, listSetIsLengthLabel);
+            il.MarkLabel(listSetNamedProperty);
             // Frozen guard.
             var listSetNotFrozenLabel = il.DefineLabel();
             il.Emit(OpCodes.Ldarg_0);
