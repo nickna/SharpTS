@@ -13,6 +13,9 @@ public sealed class ArrayPrototypeReflectDeleteTests
         yield return ["coercion-once", "const p:any=Array.prototype;Object.defineProperty(p,'probe',{value:3,configurable:true});let calls=0;const key:any={toString(){calls++;return 'probe'}};console.log(Reflect.deleteProperty(p,key),Object.hasOwn(p,'probe'),calls);", "true false 1\n"];
         yield return ["getter-not-invoked", "const p:any=Array.prototype;let calls=0;Object.defineProperty(p,'probe',{get(){calls++;return 3},configurable:true});console.log(Reflect.deleteProperty(p,'probe'),Object.hasOwn(p,'probe'),calls);", "true false 0\n"];
         yield return ["nonconfigurable-length", "const p:any=Array.prototype;console.log(Reflect.deleteProperty(p,'length'),Object.hasOwn(p,'length'),p.length);", "false true 0\n"];
+        yield return ["array-index", "const a=[1];console.log(Reflect.deleteProperty(a,'0'),Object.hasOwn(a,'0'),a.length,Reflect.deleteProperty(a,'0'));", "true false 1 true\n"];
+        yield return ["array-protected", "const a=Object.freeze([1]);console.log(Reflect.deleteProperty(a,0),Object.hasOwn(a,'0'),Reflect.deleteProperty(a,'length'));", "false true false\n"];
+        yield return ["array-accessor", "const a:number[]=[];let calls=0;Object.defineProperty(a,'0',{get(){calls++;return 3},configurable:true});console.log(Reflect.deleteProperty(a,'0'),Object.hasOwn(a,'0'),a.length,calls);", "true false 1 0\n"];
     }
 
     public static IEnumerable<object[]> Modes() => Cases().SelectMany(row =>

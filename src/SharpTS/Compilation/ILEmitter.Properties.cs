@@ -1131,8 +1131,12 @@ public partial class ILEmitter
     {
         if (receiver is not Expr.Variable variable) return null;
         string name = variable.Name.Lexeme;
-        string enumName = _ctx.ResolveEnumName(name);
         var checkedType = _ctx.TypeMap?.Get(variable);
+        // Checked aliases and re-exports share the declaring enum's binding.
+        string enumName = checkedType is TypeInfo.Enum { IsConst: true }
+            && _ctx.TypeMap?.GetValueBinding(variable.Name) is { } binding
+            && _ctx.ConstEnumBindingNames?.TryGetValue(binding, out var boundName) == true
+            ? boundName : _ctx.ResolveEnumName(name);
         if (_ctx.EnumMembers?.ContainsKey(enumName) != true || _ctx.HasLoopBodyBindingAccess(name)
             || HasClassDefinitionCaptureShadow(name) || TryGetClassDefinitionCaptureSlot(name, out _)
             || _ctx.InnerFunctionMethodsByName?.ContainsKey(name) == true

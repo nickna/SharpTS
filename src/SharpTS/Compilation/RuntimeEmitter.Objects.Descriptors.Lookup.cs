@@ -1255,6 +1255,7 @@ public partial class RuntimeEmitter
         ILGenerator il,
         EmittedArrayStorageRuntime arrayStorage,
         EmittedArgumentsRuntime arguments,
+        EmittedDescriptorStorageRuntime descriptorStorage,
         LocalBuilder propNameLocal,
         LocalBuilder resultDictLocal,
         Label returnNullLabel,
@@ -1270,6 +1271,8 @@ public partial class RuntimeEmitter
         var indexLocal = il.DeclareLocal(_types.Int32);
         var arrayIndexLocal = il.DeclareLocal(_types.UInt32);
         var elementValueLocal = il.DeclareLocal(_types.Object);
+        var argumentsReceiver = _features.UsesArguments ? il.DeclareLocal(arguments.Type) : null;
+        var argumentsLength = argumentsReceiver is not null ? il.DeclareLocal(_types.Boolean) : null;
         il.Emit(OpCodes.Ldarg_0);
         il.Emit(OpCodes.Isinst, arrayStorage.Type);
         il.Emit(OpCodes.Brfalse, checkListLabel);
@@ -1301,23 +1304,28 @@ public partial class RuntimeEmitter
         il.Emit(OpCodes.Br, elementDescriptorLabel);
 
         il.MarkLabel(checkListLabel);
-        var notArgumentsLength = il.DefineLabel();
-        il.Emit(OpCodes.Ldarg_0);
-        il.Emit(OpCodes.Isinst, arguments.Type);
-        il.Emit(OpCodes.Brfalse, notArgumentsLength);
-        il.Emit(OpCodes.Ldloc, propNameLocal);
-        il.Emit(OpCodes.Ldstr, "length");
-        il.Emit(OpCodes.Call, _types.GetMethod(_types.String, "op_Equality", _types.String, _types.String));
-        il.Emit(OpCodes.Brfalse, notArgumentsLength);
-        EmitBuiltinDataDescriptor(il, resultDictLocal, endLabel, () =>
+        if (argumentsReceiver is not null)
         {
+            var notArgumentsLength = il.DefineLabel();
             il.Emit(OpCodes.Ldarg_0);
-            il.Emit(OpCodes.Castclass, arguments.Type);
+            il.Emit(OpCodes.Isinst, arguments.Type);
+            il.Emit(OpCodes.Stloc, argumentsReceiver);
+            il.Emit(OpCodes.Ldloc, argumentsReceiver);
+            il.Emit(OpCodes.Brfalse, notArgumentsLength);
+            il.Emit(OpCodes.Ldloc, propNameLocal);
+            il.Emit(OpCodes.Ldstr, "length");
+            il.Emit(OpCodes.Call, _types.StringOpEquality);
+            il.Emit(OpCodes.Brfalse, notArgumentsLength);
+            il.Emit(OpCodes.Ldloc, argumentsReceiver);
             il.Emit(OpCodes.Ldfld, arguments.LengthField);
             il.Emit(OpCodes.Conv_R8);
             il.Emit(OpCodes.Box, _types.Double);
-        }, writable: true, configurable: true);
-        il.MarkLabel(notArgumentsLength);
+            il.Emit(OpCodes.Stloc, elementValueLocal);
+            il.Emit(OpCodes.Ldc_I4_1);
+            il.Emit(OpCodes.Stloc, argumentsLength!);
+            il.Emit(OpCodes.Br, elementDescriptorLabel);
+            il.MarkLabel(notArgumentsLength);
+        }
 
         // Arguments and legacy List carriers retain their dense semantics.
         il.Emit(OpCodes.Ldarg_0);
@@ -1420,26 +1428,35 @@ public partial class RuntimeEmitter
         il.Emit(OpCodes.Ldloc, elementValueLocal);
         il.Emit(OpCodes.Callvirt, _types.GetMethod(_types.DictionaryStringObject, "set_Item"));
 
-        // writable = true
-        il.Emit(OpCodes.Ldloc, resultDictLocal);
-        il.Emit(OpCodes.Ldstr, "writable");
-        il.Emit(OpCodes.Ldc_I4_1);
-        il.Emit(OpCodes.Box, _types.Boolean);
-        il.Emit(OpCodes.Callvirt, _types.GetMethod(_types.DictionaryStringObject, "set_Item"));
-
-        // enumerable = true
-        il.Emit(OpCodes.Ldloc, resultDictLocal);
-        il.Emit(OpCodes.Ldstr, "enumerable");
-        il.Emit(OpCodes.Ldc_I4_1);
-        il.Emit(OpCodes.Box, _types.Boolean);
-        il.Emit(OpCodes.Callvirt, _types.GetMethod(_types.DictionaryStringObject, "set_Item"));
-
-        // configurable = true
-        il.Emit(OpCodes.Ldloc, resultDictLocal);
-        il.Emit(OpCodes.Ldstr, "configurable");
-        il.Emit(OpCodes.Ldc_I4_1);
-        il.Emit(OpCodes.Box, _types.Boolean);
-        il.Emit(OpCodes.Callvirt, _types.GetMethod(_types.DictionaryStringObject, "set_Item"));
+        var defaultFlags = il.DefineLabel();
+        var flagsDone = il.DefineLabel();
+        if (argumentsReceiver is not null)
+        {
+            il.Emit(OpCodes.Ldloc, argumentsReceiver);
+            il.Emit(OpCodes.Brfalse, defaultFlags);
+            // The backing list has no per-index descriptors. Read its
+            // receiver's integrity state when synthesizing these flags.
+            EmitFlag("writable", () =>
+            {
+                il.Emit(OpCodes.Ldloc, argumentsReceiver);
+                il.Emit(OpCodes.Call, descriptorStorage.IsFrozen);
+            });
+            EmitFlag("enumerable", () => il.Emit(OpCodes.Ldloc, argumentsLength!));
+            EmitFlag("configurable", () =>
+            {
+                il.Emit(OpCodes.Ldloc, argumentsReceiver);
+                il.Emit(OpCodes.Call, descriptorStorage.IsFrozen);
+                il.Emit(OpCodes.Ldloc, argumentsReceiver);
+                il.Emit(OpCodes.Call, descriptorStorage.IsSealed);
+                il.Emit(OpCodes.Or);
+            });
+            il.Emit(OpCodes.Br, flagsDone);
+        }
+        il.MarkLabel(defaultFlags);
+        EmitDescriptorBoolField(il, resultDictLocal, "writable", true);
+        EmitDescriptorBoolField(il, resultDictLocal, "enumerable", true);
+        EmitDescriptorBoolField(il, resultDictLocal, "configurable", true);
+        il.MarkLabel(flagsDone);
 
         il.Emit(OpCodes.Ldloc, resultDictLocal);
         il.Emit(OpCodes.Br, endLabel);
@@ -1449,6 +1466,17 @@ public partial class RuntimeEmitter
         il.Emit(OpCodes.Br, returnNullLabel);
 
         il.MarkLabel(notListLabel);
+
+        void EmitFlag(string name, Action emitNegatedFlag)
+        {
+            il.Emit(OpCodes.Ldloc, resultDictLocal);
+            il.Emit(OpCodes.Ldstr, name);
+            emitNegatedFlag();
+            il.Emit(OpCodes.Ldc_I4_0);
+            il.Emit(OpCodes.Ceq);
+            il.Emit(OpCodes.Box, _types.Boolean);
+            il.Emit(OpCodes.Callvirt, _types.GetMethod(_types.DictionaryStringObject, "set_Item"));
+        }
     }
 
     // Requires an empty entry stack. Unhandled receivers fall through empty; matches

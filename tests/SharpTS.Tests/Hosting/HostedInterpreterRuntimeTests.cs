@@ -44,6 +44,20 @@ public sealed class HostedInterpreterRuntimeTests
     }
 
     [Fact]
+    public void CompiledHostedTopLevelAwaitRunsInStrictMode()
+    {
+        const string source = """
+            export {};
+            const value: any = "x";
+            await Promise.resolve();
+            try { console.log("delete", delete value.length); }
+            catch (error) { console.log("caught", error instanceof TypeError); }
+            """;
+        AssertCompiledHostedEnumOutput(
+            new Dictionary<string, string> { ["main.ts"] = source }, "caught true\n");
+    }
+
+    [Fact]
     public void CompiledHostedTopLevelAwait_InitializesEnumObjectsInDeclarationOrder()
     {
         const string source = """

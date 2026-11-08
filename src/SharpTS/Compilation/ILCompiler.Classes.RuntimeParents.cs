@@ -202,15 +202,16 @@ public partial class ILCompiler
         return false;
     }
 
-    private static bool SupportsReceiverInitialization(Stmt.Class declaration, bool allowGenericOwner = false)
+    private static bool SupportsReceiverInitialization(Stmt.Class declaration,
+        bool allowGenericOwner = false, bool allowPrivateElements = false)
     {
         // The finite runtime-parent path supports ordinary fields, synchronous
         // methods (including generators) and accessors through guest-receiver adapters.
         // Other templates keep their existing CLR construction path.
         if ((!allowGenericOwner && declaration.TypeParams is { Count: > 0 })
             || declaration.AutoAccessors is { Count: > 0 }
-            || declaration.Fields.Any(field => field.IsPrivate || field.ComputedKey != null)
-            || declaration.Methods.Any(method => method.IsPrivate || method.IsAsync
+            || declaration.Fields.Any(field => (!allowPrivateElements && field.IsPrivate) || field.ComputedKey != null)
+            || declaration.Methods.Any(method => (!allowPrivateElements && method.IsPrivate) || method.IsAsync
                 || method.TypeParams is { Count: > 0 } || method.ComputedKey != null)) return false;
         return true;
     }
@@ -449,7 +450,8 @@ public partial class ILCompiler
             }
             else
                 EmitEffectiveClassElements(ctx, declaration.Fields, null, null,
-                    _ => throw new InvalidOperationException("Runtime receiver initializer cannot have computed fields."));
+                    _ => throw new InvalidOperationException("Runtime receiver initializer cannot have computed fields."),
+                    leadingFields: GetParameterPropertyFieldTokens(constructor));
             var parameterEmitter = new ILEmitter(ctx);
             foreach (var assignment in parameterProperties)
             {

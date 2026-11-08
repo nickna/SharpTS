@@ -358,8 +358,8 @@ public partial class TypeChecker
         // Keep the declaring enum identity while narrowing a heterogeneous
         // member to the primitive kind it can be assigned to.
         return enumType.Kind == EnumKind.Heterogeneous
-            ? enumType with { Kind = value is string ? EnumKind.String : EnumKind.Numeric }
-            : enumType;
+            ? enumType with { Facet = EnumFacet.Scalar, Kind = value is string ? EnumKind.String : EnumKind.Numeric }
+            : enumType with { Facet = EnumFacet.Scalar };
     }
 
     /// <summary>
@@ -551,6 +551,8 @@ public partial class TypeChecker
             while (currentSuper != null)
             {
                 fieldSubstitutions = ComposeInheritedFieldSubstitutions(currentSuper, fieldSubstitutions);
+                if (ResolveArraySuperclassMember(currentSuper, memberName, fieldSubstitutions) is { } arrayMember)
+                    return arrayMember;
                 var superMethods = GetMethods(currentSuper);
                 var superFields = GetFieldTypes(currentSuper);
                 if (superMethods != null && superMethods.TryGetValue(memberName, out var superMethod))
@@ -632,6 +634,8 @@ public partial class TypeChecker
 
         while (current != null)
         {
+            if (ResolveArraySuperclassMember(current, memberNameStr, fieldSubstitutions) is { } arrayMember)
+                return arrayMember;
             // Built-in globals resolve to `any` in value position, so an `extends Error` /
             // `extends Promise<T>` clause is represented by a name-only MutableClass placeholder.
             // Preserve the real built-in member surface at that point in the hierarchy while still
@@ -752,6 +756,13 @@ public partial class TypeChecker
         }
     }
 
+    private TypeInfo? ResolveArraySuperclassMember(TypeInfo superclass, string memberName,
+        Dictionary<string, TypeInfo> substitutions)
+        => superclass is TypeInfo.MutableClass { IsBuiltInArraySuperclass: true } placeholder
+            ? BuiltInTypes.GetArrayMemberType(memberName,
+                SubstituteConstructorMember(GetArrayPlaceholderElement(placeholder), substitutions))
+            : null;
+
     private static TypeInfo? ResolveBuiltInSuperclassMember(string className, string memberName)
     {
         if (BuiltInNames.IsErrorTypeName(className))
@@ -776,8 +787,6 @@ public partial class TypeChecker
         if (builtIn is not null)
             return BuiltInTypes.GetInstanceMemberType(builtIn, memberName);
 
-        if (className is BuiltInNames.Array or "ReadonlyArray")
-            return BuiltInTypes.GetArrayMemberType(memberName, TypeInfo.Any.Shared);
         return BuiltInNames.IsTypedArrayName(className) ? TypeInfo.Any.Shared : null;
     }
 }

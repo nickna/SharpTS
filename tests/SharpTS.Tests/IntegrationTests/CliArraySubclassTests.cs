@@ -30,10 +30,83 @@ public sealed class CliArraySubclassTests
         Assert.Equal(result.StandardOutput, TestHarness.RunCompiled(source));
     }
 
+    [Fact]
+    public void DeclarationLibrariesPreserveGenericArrayClassExpressionHeritage()
+    {
+        const string source = """
+            const Child = class extends Array<number> {};
+            const value = new Child();
+            value.push(7);
+            const item: number = value[0];
+            for (const element of value) {
+                const typed: number = element;
+                console.log(typed, item, Array.isArray(value));
+            }
+            """;
+        using var directory = CliTestHelper.CreateTempDirectory();
+        var path = directory.CreateFile("main.ts", source);
+        var result = CliTestHelper.RunCli($"--no-tsconfig --strict \"{path}\"", directory.Path);
+        Assert.True(result.ExitCode == 0, result.StandardOutput + result.StandardError);
+        Assert.Equal("7 7 true\n", result.StandardOutput);
+    }
+
+    [Theory]
+    [InlineData("const Child = class extends Array<number> {}; const value = new Child();")]
+    [InlineData("const Child = class<T> extends Array<T> {}; const value = new Child<number>();")]
+    public void DeclarationLibrariesKeepTheElementTypeInInheritedArrayMethods(string declaration)
+    {
+        using var directory = CliTestHelper.CreateTempDirectory();
+        var validPath = directory.CreateFile("valid.ts",
+            $"{declaration} const length: number = value.push(); value.push(7);");
+        var valid = CliTestHelper.RunCli($"--no-tsconfig --strict --noEmit \"{validPath}\"", directory.Path);
+        Assert.True(valid.ExitCode == 0, valid.StandardOutput + valid.StandardError);
+
+        var path = directory.CreateFile("main.ts", $"{declaration} value.push(7); value.push(\"wrong\");");
+        var result = CliTestHelper.RunCli($"--no-tsconfig --strict --noEmit \"{path}\"", directory.Path);
+        Assert.NotEqual(0, result.ExitCode);
+        Assert.Contains("Argument 1 expected type 'number' but got", result.StandardOutput + result.StandardError);
+    }
+
+    [Fact]
+    public void AShadowingArrayClassKeepsItsDeclaredMembers()
+    {
+        const string source = """
+            function check() {
+                class Array { push(value: string): string { return value; } }
+                const Child = class extends Array {};
+                const right: string = new Child().push("value");
+                const wrong: number = new Child().push("value");
+            }
+            """;
+        using var directory = CliTestHelper.CreateTempDirectory();
+        var path = directory.CreateFile("main.ts", source);
+        var result = CliTestHelper.RunCli($"--no-tsconfig --strict --noEmit \"{path}\"", directory.Path);
+        Assert.NotEqual(0, result.ExitCode);
+        Assert.Contains("not assignable to type 'number'", result.StandardOutput + result.StandardError);
+    }
+
+    [Fact]
+    public void QualifiedAnyArraySuperclassKeepsUnknownMembers()
+    {
+        const string source = """
+            const X: any = { Array: class {} };
+            class Child<T> extends X.Array {}
+            const value = new Child<number>();
+            const length: string = value.length;
+            value.push("value");
+            """;
+        using var directory = CliTestHelper.CreateTempDirectory();
+        var path = directory.CreateFile("main.ts", source);
+        var result = CliTestHelper.RunCli($"--no-tsconfig --strict --noEmit \"{path}\"", directory.Path);
+        Assert.True(result.ExitCode == 0, result.StandardOutput + result.StandardError);
+    }
+
     [Theory]
     [InlineData("function check() { const Array = 1; class Values extends Array {} }", "Superclass must be a class")]
     [InlineData("class Array {} class Values extends Array<number> {}", "Cannot use type arguments")]
     [InlineData("class Values extends Array<number, string> {}", "No base constructor")]
+    [InlineData("class Array {} const Values = class extends Array<number> {};", "Cannot use type arguments")]
+    [InlineData("const Values = class extends Array<number, string> {};", "No base constructor")]
     public void LoadedArrayBridgePreservesShadowingAndTypeArgumentChecks(string source, string diagnostic)
     {
         using var directory = CliTestHelper.CreateTempDirectory();

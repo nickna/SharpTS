@@ -569,6 +569,21 @@ public class SymbolTests
     }
 
     [Theory, ModeData]
+    public void Symbol_IndirectStringCallsUseExplicitConversion(ExecutionMode mode)
+    {
+        const string source = """
+            const cast = String;
+            console.log(cast(Symbol('alias')), Reflect.apply(cast, null, [Symbol()]));
+            console.log([Symbol('callback')].map(cast).join(','));
+            console.log(cast() === '', cast(undefined) === 'undefined');
+            try { new cast(Symbol('constructor')); }
+            catch (error) { console.log(error instanceof TypeError); }
+            """;
+        Assert.Equal("Symbol(alias) Symbol()\nSymbol(callback)\ntrue true\ntrue\n",
+            TestHarness.RunUnchecked(source, mode));
+    }
+
+    [Theory, ModeData]
     public void Symbol_AnyTyped_PrototypeMembers_Work(ExecutionMode mode)
     {
         // Dynamic-dispatch path (receiver statically `any`) must resolve the

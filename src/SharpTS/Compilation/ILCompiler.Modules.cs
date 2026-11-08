@@ -731,7 +731,7 @@ public partial class ILCompiler
         _modules.CurrentPath = module.Path;
         var ctx = CreateModuleTopLevelContext(il, initMethod);
         _modules.CurrentPath = savedPath;
-        ctx.IsStrictMode = Parsing.DirectivePrologue.HasUseStrict(module.Statements);
+        ctx.IsStrictMode = true;
         ctx.CurrentModulePath = module.Path;
         ctx.ModuleExportFields = _modules.ExportFields;
         ctx.ModuleTypes = _modules.Types;
@@ -1240,6 +1240,8 @@ public partial class ILCompiler
             Body: body,
             ReturnType: null,
             IsAsync: true);
+        if (!module.IsScript && !module.IsCommonJs)
+            _strictFunctions.Add(runner);
         DefineFunction(runner);
         string key = GetDefinitionContext().GetQualifiedFunctionName(name);
         _hostedModuleRunnerKeys[module.Path] = key;
@@ -1495,7 +1497,7 @@ public partial class ILCompiler
         _modules.CurrentPath = module.Path;
         CompilationContext ctx = CreateModuleTopLevelContext(il, method);
         _modules.CurrentPath = savedPath;
-        ctx.IsStrictMode = Parsing.DirectivePrologue.HasUseStrict(module.Statements);
+        ctx.IsStrictMode = true;
         ctx.CurrentModulePath = module.Path;
         ctx.ModuleExportFields = _modules.ExportFields;
         ctx.ModuleTypes = _modules.Types;

@@ -308,7 +308,8 @@ internal static class ParameterBinder
         => GetBodyBindings(body).Declarations;
 
     internal static (List<Stmt> Statements, RuntimeEnvironment Environment) PrepareBody(
-        List<Stmt.Parameter> parameters, List<Stmt>? body, RuntimeEnvironment parameterEnvironment)
+        List<Stmt.Parameter> parameters, List<Stmt>? body, RuntimeEnvironment parameterEnvironment,
+        Interpreter interpreter)
     {
         var bindings = GetBodyBindings(body);
         if (bindings.HasUseStrict)
@@ -322,6 +323,13 @@ internal static class ParameterBinder
         var parameterNames = parameters.Select(parameter => parameter.Name.Lexeme).ToHashSet(StringComparer.Ordinal);
         if (parameterEnvironment.IsDefinedLocally("arguments")) parameterNames.Add("arguments");
         foreach (var name in bindings.DestructuredNames) parameterNames.Add(name.Lexeme);
+
+        // Replace a shared parameter binding before the body executes. An
+        // arguments map still observes this same environment slot.
+        if (!separateBody && bindings.FunctionNames.Overlaps(parameterNames))
+            foreach (var function in statements.OfType<Stmt.Function>())
+                if (function.Body is not null && parameterNames.Contains(function.Name.Lexeme))
+                    environment.Define(function.Name.Lexeme, interpreter.CreateHoistedFunction(function, environment));
 
         foreach (var (name, isFunction) in bindings.Declarations)
         {

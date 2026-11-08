@@ -90,10 +90,10 @@ public partial class ILCompiler
     /// calls this once per module (with <c>_modules.CurrentPath</c> set);
     /// single-file compilation calls it once with the path unset.
     /// </summary>
-    private void CollectArrowsFromStatementsInCurrentModule(List<Stmt> statements)
+    private void CollectArrowsFromStatementsInCurrentModule(List<Stmt> statements, bool implicitStrict = false)
     {
         var previousStrict = _currentCollectStrict;
-        _currentCollectStrict = previousStrict || DirectivePrologue.HasUseStrict(statements);
+        _currentCollectStrict = previousStrict || implicitStrict || DirectivePrologue.HasUseStrict(statements);
         try
         {
             foreach (var stmt in statements)

@@ -5,10 +5,9 @@ namespace SharpTS.Tests.SharedTests;
 
 public sealed class ParameterPropertyDeclarationOrderTests
 {
-    [Fact]
-    public void AConstructorBetweenFieldsDoesNotResetEarlierFieldWrites()
+    [Theory, ModeData]
+    public void AConstructorBetweenFieldsDoesNotResetEarlierFieldWrites(ExecutionMode mode)
     {
-        // The compiler's separate synthesized field reset is tracked in #3521.
         const string source = """
             class Item {
               first = (this.value = 7);
@@ -17,8 +16,16 @@ public sealed class ParameterPropertyDeclarationOrderTests
             }
             const item = new Item();
             console.log(item.first, item.last, item.value, Object.keys(item).join(','));
+            const Expression = class {
+              first = (this.value = "before");
+              constructor(public value: string = "after") {}
+              last = this.value;
+            };
+            const expression = new Expression();
+            console.log(expression.first, expression.last, expression.value, Object.keys(expression).join(','));
             """;
-        Assert.Equal("7 7 1 value,first,last\n", TestHarness.RunUnchecked(source, ExecutionMode.Interpreted));
+        Assert.Equal("7 7 1 value,first,last\nbefore before after value,first,last\n",
+            TestHarness.RunUnchecked(source, mode));
     }
 
     [Fact]
@@ -46,11 +53,7 @@ public sealed class ParameterPropertyDeclarationOrderTests
             TestHarness.RunUnchecked(source, ExecutionMode.Interpreted));
     }
 
-    [Fact]
-    public void AbruptInitializerLeavesTheDeclarationOnAnEscapedReplacementReceiver()
-    {
-        // Compiled replacement receivers have a separate declaration gap (#3514).
-        const string source = """
+    internal const string AbruptReplacementSource = """
             const receiver = Object.create({ set value(input) { throw 'setter'; } });
             let escaped;
             class Base { constructor() { return receiver; } }
@@ -65,7 +68,10 @@ public sealed class ParameterPropertyDeclarationOrderTests
             const descriptor = Object.getOwnPropertyDescriptor(escaped, 'value');
             console.log(descriptor.writable, descriptor.configurable);
             """;
-        Assert.Equal("initializer\ntrue true true\nvalue,earlier\ntrue true\n",
-            TestHarness.RunUnchecked(source, ExecutionMode.Interpreted));
-    }
+
+    internal const string AbruptReplacementOutput = "initializer\ntrue true true\nvalue,earlier\ntrue true\n";
+
+    [Fact]
+    public void AbruptInitializerLeavesTheDeclarationOnAnEscapedReplacementReceiver()
+        => Assert.Equal(AbruptReplacementOutput, TestHarness.RunUnchecked(AbruptReplacementSource, ExecutionMode.Interpreted));
 }

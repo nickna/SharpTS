@@ -1929,10 +1929,7 @@ public partial class Interpreter : IDisposable
         }
 
         // Create module-scoped environment
-        var moduleEnv = new RuntimeEnvironment(_environment)
-        {
-            RequiresUnmappedArguments = true
-        };
+        var moduleEnv = new RuntimeEnvironment(_environment, strictMode: true);
 
         // Bind imports from dependencies
         BindModuleImports(module, moduleEnv);
@@ -2346,26 +2343,19 @@ public partial class Interpreter : IDisposable
                 if (_environment.IsDefinedLocally(funcStmt.Name.Lexeme))
                     continue;
 
-                // Create the appropriate function type and define it
-                if (funcStmt.IsGenerator && funcStmt.IsAsync)
-                {
-                    _environment.Define(funcStmt.Name.Lexeme, new SharpTSAsyncGeneratorFunction(funcStmt, _environment, creationRealm: this));
-                }
-                else if (funcStmt.IsGenerator)
-                {
-                    _environment.Define(funcStmt.Name.Lexeme, new SharpTSGeneratorFunction(funcStmt, _environment, creationRealm: this));
-                }
-                else if (funcStmt.IsAsync)
-                {
-                    _environment.Define(funcStmt.Name.Lexeme, new SharpTSAsyncFunction(funcStmt, _environment));
-                }
-                else
-                {
-                    _environment.Define(funcStmt.Name.Lexeme, new SharpTSFunction(funcStmt, _environment));
-                }
+                _environment.Define(funcStmt.Name.Lexeme, CreateHoistedFunction(funcStmt, _environment));
             }
         }
     }
+
+    internal object CreateHoistedFunction(Stmt.Function function, RuntimeEnvironment environment)
+        => (function.IsGenerator, function.IsAsync) switch
+        {
+            (true, true) => new SharpTSAsyncGeneratorFunction(function, environment, creationRealm: this),
+            (true, false) => new SharpTSGeneratorFunction(function, environment, creationRealm: this),
+            (false, true) => new SharpTSAsyncFunction(function, environment),
+            _ => new SharpTSFunction(function, environment)
+        };
 
     /// <summary>
     /// Creates top-level <c>var</c> bindings with the initial value undefined before

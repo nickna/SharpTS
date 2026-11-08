@@ -510,6 +510,41 @@ public class ArraySortTests
     #region ToSorted
 
     [Theory, ModeData]
+    public void Array_ToSorted_AliasedCallReadsArgumentsLengthOnce(ExecutionMode mode)
+    {
+        const string source = """
+            function sort(first, second) {
+                let reads = 0;
+                let length = 1;
+                const args = arguments;
+                Object.defineProperty(args, 'length', { get() { reads++; return length; } });
+                Object.defineProperty(args, '0', { get() { return this === args ? 7 : 99; } });
+                Object.defineProperty(args, '1', { get() {
+                    if (length === 2) return 2;
+                    throw 'outside length';
+                } });
+                const sortCopy = Array.prototype.toSorted;
+                console.log(sortCopy.apply(args, []).join(','), reads);
+                console.log(Reflect.apply(sortCopy, args, [undefined]).join(','), reads);
+                const result = sortCopy.call(args);
+                console.log(Array.isArray(result), result !== args, result.join(','), reads);
+                try { sortCopy.call(args, null); }
+                catch (error) { console.log(error instanceof TypeError, reads); }
+                length = Infinity;
+                try { sortCopy.call(args); }
+                catch (error) { console.log(error instanceof RangeError, reads); }
+                length = 2;
+                const descending = (left, right) => right - left;
+                console.log(sortCopy.apply(args, [descending]).join(','), reads);
+                console.log(Reflect.apply(sortCopy, args, [descending]).join(','), reads);
+            }
+            sort(2, 1);
+            """;
+        Assert.Equal("7 1\n7 2\ntrue true 7 3\ntrue 3\ntrue 4\n7,2 5\n7,2 6\n",
+            TestHarness.RunUnchecked(source, mode));
+    }
+
+    [Theory, ModeData]
     public void Array_ToSorted_ReturnsNewArray(ExecutionMode mode)
     {
         var source = """

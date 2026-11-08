@@ -266,7 +266,7 @@ public class SharpTSFunction : ISharpTSCallable, ITypeCategorized
                 environment, _declaration.Parameters, _declaration.Body));
         }
         ParameterBinder.Bind(_declaration.Parameters, arguments, environment, interpreter, _declaration.Body);
-        var prepared = ParameterBinder.PrepareBody(_declaration.Parameters, _declaration.Body, environment);
+        var prepared = ParameterBinder.PrepareBody(_declaration.Parameters, _declaration.Body, environment, interpreter);
 
         List<Stmt> body = prepared.Statements;
         if (constructionFrame?.Owner.Superclass is not null)
@@ -422,7 +422,7 @@ public class SharpTSFunction : ISharpTSCallable, ITypeCategorized
                 environment, _declaration.Parameters, _declaration.Body));
         }
         ParameterBinder.BindRV(_declaration.Parameters, arguments, environment, interpreter, _declaration.Body);
-        var prepared = ParameterBinder.PrepareBody(_declaration.Parameters, _declaration.Body, environment);
+        var prepared = ParameterBinder.PrepareBody(_declaration.Parameters, _declaration.Body, environment, interpreter);
 
         using var debugFrame = interpreter.EnterDebugFrame(
             _declaration.Name.Lexeme, prepared.Environment, _declaration);
@@ -764,7 +764,7 @@ public class SharpTSArrowFunction : ISharpTSCallable, ITypeCategorized
                 functionStrict ? SharpTSUndefined.Instance : (object?)interpreter.GlobalThis);
         }
         ParameterBinder.Bind(_declaration.Parameters, arguments, environment, interpreter, _declaration.BlockBody);
-        var prepared = ParameterBinder.PrepareBody(_declaration.Parameters, _declaration.BlockBody, environment);
+        var prepared = ParameterBinder.PrepareBody(_declaration.Parameters, _declaration.BlockBody, environment, interpreter);
 
         using var debugFrame = interpreter.EnterDebugFrame(
             _declaration.Name?.Lexeme ?? "<arrow>", prepared.Environment, _declaration);
@@ -841,7 +841,7 @@ public class SharpTSArrowFunction : ISharpTSCallable, ITypeCategorized
                 functionStrict ? SharpTSUndefined.Instance : (object?)interpreter.GlobalThis);
         }
         ParameterBinder.BindRV(_declaration.Parameters, arguments, environment, interpreter, _declaration.BlockBody);
-        var prepared = ParameterBinder.PrepareBody(_declaration.Parameters, _declaration.BlockBody, environment);
+        var prepared = ParameterBinder.PrepareBody(_declaration.Parameters, _declaration.BlockBody, environment, interpreter);
 
         using var debugFrame = interpreter.EnterDebugFrame(
             _declaration.Name?.Lexeme ?? "<arrow>", prepared.Environment, _declaration);

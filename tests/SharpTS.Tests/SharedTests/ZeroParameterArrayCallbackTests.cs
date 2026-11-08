@@ -49,6 +49,13 @@ public sealed class ZeroParameterArrayCallbackTests
             console.log([1, 2].map(() => 7).join(','), [1, 2].filter(() => true).join(','));
             console.log([1, 2].find(() => true), [1, 2].some(() => true), [1, 2].every(() => true));
             """, "7,7 1,2\n1 true true\n"];
+        yield return ["long-arguments-find-last-index", """
+            function run() {
+                arguments.length = 1048577;
+                console.log(Array.prototype.findLastIndex.call(arguments, () => true));
+            }
+            run();
+            """, "1048576\n"];
         yield return ["one-parameter-control", """
             const state = { sum: 0 };
             [1, 2, 3].forEach((value: any) => { state.sum += value; });
@@ -74,5 +81,21 @@ public sealed class ZeroParameterArrayCallbackTests
         {
             Assert.Equal(expected, TestHarness.Run(source, mode));
         }
+    }
+
+    [Fact]
+    public void InterpretedReverseSearchUsesTheFullArrayLikeLength()
+    {
+        const string source = """
+            const last = '9007199254740990';
+            const input = { length: 9007199254740991, [last]: 'end' };
+            console.log(Array.prototype.findLast.call(input, () => true));
+            console.log(Array.prototype.findLastIndex.call(input, (value, index, receiver) => {
+                console.log(value, index, receiver === input);
+                return true;
+            }));
+            """;
+        Assert.Equal("end\nend 9007199254740990 true\n9007199254740990\n",
+            TestHarness.RunUnchecked(source, ExecutionMode.Interpreted));
     }
 }

@@ -798,9 +798,9 @@ public partial class TypeChecker
         // here so they fall through to false).
         if (expected is TypeInfo.Enum expectedEnum)
         {
-            // Same enum type is compatible
+            // The enum's runtime object and its member values are distinct facets.
             if (actual is TypeInfo.Enum actualEnum && expectedEnum.Name == actualEnum.Name)
-                return true;
+                return expectedEnum.IsScalar == actualEnum.IsScalar;
 
             // Numeric enum accepts (widened) number
             if (expectedEnum.Kind == EnumKind.Numeric &&

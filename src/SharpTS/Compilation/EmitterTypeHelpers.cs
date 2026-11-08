@@ -194,7 +194,7 @@ internal static class EmitterTypeHelpers
         return SubstituteBaseTypeArguments(parameter, replacements);
     }
 
-    private static Type? GetInstantiatedBaseType(Type type)
+    internal static Type? GetInstantiatedBaseType(Type type)
     {
         if (!type.IsConstructedGenericType) return type.BaseType;
         var definition = type.GetGenericTypeDefinition();

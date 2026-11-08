@@ -597,7 +597,10 @@ public partial class ILCompiler
         EmitLexicalSuperElementInitializer(classExpr, typeBuilder);
         if (_usesRuntimeParents && !_classes.ErrorSubclasses.Contains(className)
             && !_classes.PromiseSubclasses.Contains(className)
-            && (SupportsReceiverInitialization(ClassExpressionDeclaration(classExpr), allowGenericOwner: true)
+            // Managed class definitions already transport evaluated private
+            // storage to the explicit receiver. Native admission stays finite.
+            && (SupportsReceiverInitialization(ClassExpressionDeclaration(classExpr), allowGenericOwner: true,
+                    allowPrivateElements: !_nativeAotProjectOutput)
                 || _lexicalSuperElementInitializers.ContainsKey(classExpr)))
             EmitReceiverInitializer(typeBuilder, ClassExpressionDeclaration(classExpr), classExpr);
 
@@ -796,7 +799,7 @@ public partial class ILCompiler
                         il.Emit(OpCodes.Ldfld, _runtime.ClassDefinitions.Keys);
                         il.Emit(OpCodes.Ldc_I4, index);
                         il.Emit(OpCodes.Ldelem_Ref);
-                    }, classExpr.AutoAccessors);
+                    }, classExpr.AutoAccessors, leadingFields: GetParameterPropertyFieldTokens(constructor));
                 var parameterEmitter = new ILEmitter(ctx);
                 foreach (var assignment in parameterProperties) parameterEmitter.EmitConstructorParameterProperty(assignment);
             });
@@ -991,7 +994,7 @@ public partial class ILCompiler
                     il.Emit(OpCodes.Ldfld, _runtime.ClassDefinitions.Keys);
                     il.Emit(OpCodes.Ldc_I4, index);
                     il.Emit(OpCodes.Ldelem_Ref);
-                }, classExpr.AutoAccessors);
+                }, classExpr.AutoAccessors, leadingFields: GetParameterPropertyFieldTokens(constructor));
             ctx.ClassConstructorReceiver = previousReceiver;
         }
     }

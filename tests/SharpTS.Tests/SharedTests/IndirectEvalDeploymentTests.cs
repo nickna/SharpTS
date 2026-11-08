@@ -45,6 +45,22 @@ public sealed class IndirectEvalDeploymentTests
         Assert.Equal(expected, TestHarness.Run(source, ExecutionMode.Compiled));
     }
 
+    [Theory, ModeData]
+    public void IndirectLiteralEvalPreservesArrayCallbackReceiverAndThis(ExecutionMode mode)
+    {
+        const string source = """
+            const values = [1];
+            const receiver = {};
+            function inspect(value, index, array) {
+                console.log(array === values, this === receiver);
+            }
+            (0, eval)("Array.prototype.forEach.call(values, inspect, receiver)");
+            const evaluate = eval;
+            evaluate("Array.prototype.forEach.call(values, inspect, receiver)");
+            """;
+        Assert.Equal("true true\ntrue true\n", TestHarness.RunUnchecked(source, mode));
+    }
+
     public static IEnumerable<object[]> StandaloneCases()
     {
         yield return new object[] { "non-string", """

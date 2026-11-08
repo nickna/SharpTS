@@ -392,6 +392,7 @@ public partial class ILCompiler
         public Dictionary<string, FieldBuilder> ValueFields { get; } = [];
         public Dictionary<string, EnumKind> Kinds { get; } = [];
         public HashSet<string> ConstEnums { get; } = [];
+        public Dictionary<BindingSymbol, string> ConstBindingNames { get; } = [];
     }
 
     /// <summary>

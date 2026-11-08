@@ -90,6 +90,7 @@ public partial class AsyncArrowMoveNextEmitter
             // Per-iteration cell capture (#650): snapshot the StrongBox REFERENCE, not its
             // value (LoadVariableForCapture would deref the cell). The closure body derefs.
             if (TryEmitPrivateSelfCapture(af, capturedVar)) { }
+            else if (capturedVar == "this" && Resolver.TryLoadThisBindingCell()) { }
             else if (capturedVar == CompilationContext.NewTargetCaptureName) EmitNewTargetValue();
             else if (capturedVar == CompilationContext.SuperOwnerCaptureName && TryEmitOwnedClassDefinition()) { }
             else if (LexicalEnvironmentCellAccess.TryEmitCaptureReference(_il, _ctx, af, capturedVar)) { }
@@ -175,6 +176,7 @@ public partial class AsyncArrowMoveNextEmitter
                     _il.Emit(OpCodes.Ldc_I4, i);
                     var name = captureOrder[i];
                     if (TryEmitPrivateSelfCapture(af, name)) { }
+                    else if (name == "this" && Resolver.TryLoadThisBindingCell()) { }
                     else if (name == CompilationContext.NewTargetCaptureName) EmitNewTargetValue();
                     else if (name == CompilationContext.SuperOwnerCaptureName && TryEmitOwnedClassDefinition()) { }
                     else if (LexicalEnvironmentCellAccess.TryEmitCaptureReference(_il, _ctx!, af, name)) { }

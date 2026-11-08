@@ -414,7 +414,7 @@ public partial class Interpreter
             obj = inputView.Original;
             inputView = null;
         }
-        bool arrayReferenceKey = UsesArrayRawIndexReference(obj, index);
+        bool arrayReferenceKey = UsesArrayUpdateReference(obj, index);
         var globalTarget = ResolveGlobalIndexTarget(obj, index);
         var typedArrayStringTarget = index is string or double || RuntimeValue.FromBoxed(index).IsObject
             ? obj as SharpTSTypedArray : null;

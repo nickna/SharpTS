@@ -2700,12 +2700,15 @@ public partial class TypeChecker
         {
             TypeInfo superType = CheckExpr(classExpr.SuperclassExpr);
             superType = ProjectDefaultLibraryErrorHeritage(classExpr.SuperclassExpr, superType);
+            bool defaultLibraryArray = IsDefaultLibraryArrayHeritage(classExpr.SuperclassExpr, superType);
             TypeInfo.Class? promiseBase;
             using (new EnvironmentScope(this, classTypeEnv))
                 promiseBase = ProjectDefaultLibraryPromiseHeritage(classExpr.SuperclassExpr, superType,
                     classExpr.SuperclassTypeArgs, classExpr.SuperclassTypeArgNodes);
             if (promiseBase is not null)
                 superType = promiseBase;
+            else if (defaultLibraryArray)
+                ValidateArrayHeritageTypeArgumentCount(classExpr.SuperclassTypeArgs);
             else if (classExpr.SuperclassTypeArgs is { Count: > 0 })
             {
                 if (superType is TypeInfo.GenericClass genericSuperclass)
@@ -2733,24 +2736,29 @@ public partial class TypeChecker
             else if (superType is TypeInfo.InstantiatedGeneric
                      { GenericDefinition: TypeInfo.GenericClass })
                 superclass = superType;
-            else if (superType is TypeInfo.Any)
+            else if (superType is TypeInfo.Any || defaultLibraryArray)
             {
                 // Extending an `any`-typed expression (e.g. CJS-imported
                 // class `orig.Minimatch`). Use a placeholder MutableClass as
                 // the superclass so that `super(...)` calls inside this
                 // class body type-check as `any` instead of erroring with
                 // "does not have a superclass".
-                bool isNativeFallback = !_hasDefaultLibraries &&
+                bool useBuiltInPlaceholder = defaultLibraryArray || !_hasDefaultLibraries &&
                     classExpr.SuperclassExpr is Expr.Variable nativeBase &&
                     (nativeBase.Name.Lexeme is "Array" or "Promise" || BuiltInNames.IsErrorTypeName(nativeBase.Name.Lexeme)) &&
                     _environment.Get(nativeBase.Name.Lexeme) is null &&
                     _currentMergedNamespace?.Values.ContainsKey(nativeBase.Name.Lexeme) != true;
-                var placeholder = new TypeInfo.MutableClass(isNativeFallback
+                string placeholderName = useBuiltInPlaceholder
                     ? ((Expr.Variable)classExpr.SuperclassExpr).Name.Lexeme
-                    : "$AnySuperclass") { IsDynamicSuperclass = true };
-                if (isNativeFallback)
+                    : "$AnySuperclass";
+                var placeholder = new TypeInfo.MutableClass(placeholderName)
                 {
-                    // Match native-fallback declaration heritage without changing
+                    IsDynamicSuperclass = true,
+                    IsBuiltInArraySuperclass = placeholderName == BuiltInNames.Array
+                };
+                if (useBuiltInPlaceholder)
+                {
+                    // Match built-in declaration heritage without changing
                     // the constructor policy of other Any-typed expression bases.
                     using (new EnvironmentScope(this, classTypeEnv))
                     {

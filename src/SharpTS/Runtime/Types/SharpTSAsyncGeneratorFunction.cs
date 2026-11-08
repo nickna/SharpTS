@@ -101,7 +101,7 @@ public class SharpTSAsyncGeneratorFunction : ISharpTSGeneratorFunctionValue, IRe
                 environment, _declaration.Parameters, _declaration.Body));
         // Bind parameters to arguments
         ParameterBinder.Bind(_declaration.Parameters ?? [], arguments, environment, interpreter, _declaration.Body);
-        var prepared = ParameterBinder.PrepareBody(_declaration.Parameters ?? [], _declaration.Body, environment);
+        var prepared = ParameterBinder.PrepareBody(_declaration.Parameters ?? [], _declaration.Body, environment, interpreter);
 
         // Return the async generator object (not yet started). It drives the same SharpTSAsyncGenerator
         // as a function expression — only the body and captured environment differ.
@@ -209,7 +209,7 @@ public class SharpTSAsyncArrowGeneratorFunction : ISharpTSGeneratorFunctionValue
             environment.Define("arguments", SharpTSArguments.Create(arguments, interpreter,
                 environment, _declaration.Parameters, _declaration.BlockBody));
         ParameterBinder.Bind(_declaration.Parameters, arguments, environment, interpreter, _declaration.BlockBody);
-        var prepared = ParameterBinder.PrepareBody(_declaration.Parameters, _declaration.BlockBody, environment);
+        var prepared = ParameterBinder.PrepareBody(_declaration.Parameters, _declaration.BlockBody, environment, interpreter);
 
         // Generator expressions always have a block body (the parser never produces an
         // expression-bodied generator).

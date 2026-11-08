@@ -1247,8 +1247,7 @@ public partial class ILCompiler
                 EmitGetPropertyBaseFallthrough(il, parent);
                 il.MarkLabel(next);
             }
-            parent = definition.BaseType is { } nextParent
-                ? ResolveInheritedConstructorSlot(nextParent, parent) : null;
+            parent = EmitterTypeHelpers.GetInstantiatedBaseType(parent);
         }
     }
 

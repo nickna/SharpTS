@@ -6,6 +6,51 @@ namespace SharpTS.Tests.SharedTests;
 public class ModuleStrictCallbackTests
 {
     [Theory, ModeData]
+    public void EsModuleCodeAndNestedCallablesAreImplicitlyStrict(ExecutionMode mode)
+    {
+        var files = new Dictionary<string, string>
+        {
+            ["classic.ts"] = """
+                function removeClassic(value: any) { console.log("classic", delete value.length); }
+                removeClassic("x");
+                """,
+            ["main.mjs"] = """
+                /// <reference path="./classic.ts" />
+                export const marker = 1;
+                const value = "x";
+                try { console.log("module", delete value.length); }
+                catch (error) { console.log("module", error instanceof TypeError); }
+                function remove(value) {
+                    try { console.log("function", delete value.length); }
+                    catch (error) { console.log("function", error instanceof TypeError); }
+                }
+                const arrow = value => {
+                    try { console.log("arrow", delete value.length); }
+                    catch (error) { console.log("arrow", error instanceof TypeError); }
+                };
+                remove(value);
+                arrow(value);
+                [1].find(function() { console.log("callback", this === undefined); return false; });
+                async function* removeAsync(value) {
+                    console.log("async generator deleting");
+                    yield delete value.length;
+                }
+                removeAsync(value).next().then(
+                    result => console.log("async generator", result.value),
+                    error => {
+                        const message = String(error);
+                        console.log("async generator rejected",
+                            message.startsWith("TypeError: Cannot delete") && message.includes("'length'"));
+                    });
+                """
+        };
+
+        Assert.Equal("classic false\nmodule true\nfunction true\narrow true\ncallback true\n" +
+            "async generator deleting\nasync generator rejected true\n",
+            TestHarness.RunModules(files, "main.mjs", mode, allowTypeErrors: true));
+    }
+
+    [Theory, ModeData]
     public void StrictScriptCallbacksInheritTheOwningScriptsDirective(ExecutionMode mode)
     {
         var files = new Dictionary<string, string>

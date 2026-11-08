@@ -216,12 +216,14 @@ public class SuperConstructorHandler : ICallHandler
     private static bool TryEmitLexicalReceiverConstruction(IEmitterContext emitter, Expr.Call call)
     {
         var ctx = emitter.Context;
+        var captures = emitter is AsyncArrowMoveNextEmitter arrow
+            ? arrow.StandaloneCaptureFields : ctx.CapturedFields;
         // Bind the shared receiver, then run the same class-owned element
         // operation used by direct super.
         if (!ctx.CapturesConstructorThisCell || ctx.CurrentClassExpr is not { } expression
-            || ctx.CapturedFields?.TryGetValue("this", out var thisCell) != true
-            || ctx.CapturedFields.TryGetValue(CompilationContext.SuperOwnerCaptureName, out var owner) != true
-            || ctx.CapturedFields.TryGetValue(CompilationContext.NewTargetCaptureName, out var newTarget) != true)
+            || captures?.TryGetValue("this", out var thisCell) != true
+            || !captures.TryGetValue(CompilationContext.SuperOwnerCaptureName, out var owner)
+            || !captures.TryGetValue(CompilationContext.NewTargetCaptureName, out var newTarget))
             return false;
         MethodBuilder? elements = null;
         if ((expression.Fields.Any(field => !field.IsStatic && !field.IsDeclare)
@@ -240,7 +242,15 @@ public class SuperConstructorHandler : ICallHandler
             ? ctx.ClassExprFactories![expression].Template : null;
         if (closedOwner != null)
             ConstructorReceiverEmitter.CloseNominalSuperTarget(il, ctx, closedOwner.BaseType);
+        var parent = emitter.ArgsContainSuspension(call.Arguments) ? emitter.SpillStackToObjectLocal() : null;
         emitter.EmitArgsArrayWithSpread(call.Arguments);
+        if (parent != null)
+        {
+            var arguments = il.DeclareLocal(ctx.Types.ObjectArray);
+            il.Emit(OpCodes.Stloc, arguments);
+            il.Emit(OpCodes.Ldloc, parent);
+            il.Emit(OpCodes.Ldloc, arguments);
+        }
         il.Emit(OpCodes.Ldarg_0); il.Emit(OpCodes.Ldfld, newTarget);
         il.Emit(OpCodes.Call, ctx.Runtime.DynamicConstruction.ConstructWithNewTarget);
         il.Emit(OpCodes.Stloc, result);
@@ -265,7 +275,7 @@ public class SuperConstructorHandler : ICallHandler
                 {
                     il.Emit(OpCodes.Dup); il.Emit(OpCodes.Ldc_I4, index);
                     il.Emit(OpCodes.Ldarg_0);
-                    il.Emit(OpCodes.Ldfld, ctx.CapturedFields[CompilationContext.ConstructorParameterCaptureName(parameters[index].Name.Lexeme)]);
+                    il.Emit(OpCodes.Ldfld, captures[CompilationContext.ConstructorParameterCaptureName(parameters[index].Name.Lexeme)]);
                     il.Emit(OpCodes.Stelem_Ref);
                 }
             }

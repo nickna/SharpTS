@@ -12,6 +12,15 @@ public partial class ILCompiler
             && constructor?.Parameters.Any(parameter => parameter.IsParameterProperty
                 && ReferenceEquals(parameter.Name, set.Name) && ReferenceEquals(parameter.Name, value.Name)) == true;
 
+    private static IReadOnlySet<Token>? GetParameterPropertyFieldTokens(Stmt.Function? constructor)
+    {
+        HashSet<Token>? fields = null;
+        foreach (var parameter in constructor?.Parameters ?? [])
+            if (parameter.IsParameterProperty)
+                (fields ??= new(ReferenceEqualityComparer.Instance)).Add(parameter.Name);
+        return fields;
+    }
+
     private void EmitEffectiveClassElements(CompilationContext context, IEnumerable<Stmt.Field> fields,
         IReadOnlyDictionary<string, FieldBuilder>? backingFields, IReadOnlyDictionary<string, Type>? propertyTypes,
         Action<Stmt.Field> loadComputedKey, IEnumerable<Stmt.AutoAccessor>? autoAccessors = null,

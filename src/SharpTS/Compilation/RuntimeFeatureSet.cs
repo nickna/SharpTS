@@ -199,6 +199,9 @@ public sealed class RuntimeFeatureSet
     // Typed array helpers scope their receiver during nested calls. Keep these
     // adapters only when the source can select a method using that transport.
     public bool UsesArrayReceiverScopes { get; set; } = true;
+    // Inline prototype calls carry their original receiver alongside the
+    // materialized elements, requiring a separate receiver-scope adapter.
+    internal bool UsesInlineArrayPrototypeScopes { get; set; } = true;
     // Number prototype mutation makes typed number instance methods observable
     // through ordinary property lookup. Direct formatting requires this false.
     public bool UsesNumberPrototypeMutation { get; set; } = true;
