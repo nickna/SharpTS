@@ -121,7 +121,8 @@ public partial class ILCompiler
                 EmitEffectiveClassElements(ctx, classStmt.Fields,
                     _typedInterop.PropertyBackingFields.GetValueOrDefault(className),
                     _typedInterop.PropertyTypes.GetValueOrDefault(className),
-                    field => il.Emit(OpCodes.Ldsfld, _classes.DeferredDefinitions.RequireFieldKey(field)), classStmt.AutoAccessors);
+                    field => il.Emit(OpCodes.Ldsfld, _classes.DeferredDefinitions.RequireFieldKey(field)), classStmt.AutoAccessors,
+                    leadingFields: GetParameterPropertyFieldTokens(constructor));
                 var parameterEmitter = new ILEmitter(ctx);
                 foreach (var assignment in parameterProperties) parameterEmitter.EmitConstructorParameterProperty(assignment);
             });

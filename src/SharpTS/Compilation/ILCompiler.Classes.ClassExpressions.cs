@@ -799,7 +799,7 @@ public partial class ILCompiler
                         il.Emit(OpCodes.Ldfld, _runtime.ClassDefinitions.Keys);
                         il.Emit(OpCodes.Ldc_I4, index);
                         il.Emit(OpCodes.Ldelem_Ref);
-                    }, classExpr.AutoAccessors);
+                    }, classExpr.AutoAccessors, leadingFields: GetParameterPropertyFieldTokens(constructor));
                 var parameterEmitter = new ILEmitter(ctx);
                 foreach (var assignment in parameterProperties) parameterEmitter.EmitConstructorParameterProperty(assignment);
             });

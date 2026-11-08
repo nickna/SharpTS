@@ -450,7 +450,8 @@ public partial class ILCompiler
             }
             else
                 EmitEffectiveClassElements(ctx, declaration.Fields, null, null,
-                    _ => throw new InvalidOperationException("Runtime receiver initializer cannot have computed fields."));
+                    _ => throw new InvalidOperationException("Runtime receiver initializer cannot have computed fields."),
+                    leadingFields: GetParameterPropertyFieldTokens(constructor));
             var parameterEmitter = new ILEmitter(ctx);
             foreach (var assignment in parameterProperties)
             {

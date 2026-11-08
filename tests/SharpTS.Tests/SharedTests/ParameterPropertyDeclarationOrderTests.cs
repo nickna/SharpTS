@@ -46,11 +46,7 @@ public sealed class ParameterPropertyDeclarationOrderTests
             TestHarness.RunUnchecked(source, ExecutionMode.Interpreted));
     }
 
-    [Fact]
-    public void AbruptInitializerLeavesTheDeclarationOnAnEscapedReplacementReceiver()
-    {
-        // Compiled replacement receivers have a separate declaration gap (#3514).
-        const string source = """
+    internal const string AbruptReplacementSource = """
             const receiver = Object.create({ set value(input) { throw 'setter'; } });
             let escaped;
             class Base { constructor() { return receiver; } }
@@ -65,7 +61,10 @@ public sealed class ParameterPropertyDeclarationOrderTests
             const descriptor = Object.getOwnPropertyDescriptor(escaped, 'value');
             console.log(descriptor.writable, descriptor.configurable);
             """;
-        Assert.Equal("initializer\ntrue true true\nvalue,earlier\ntrue true\n",
-            TestHarness.RunUnchecked(source, ExecutionMode.Interpreted));
-    }
+
+    internal const string AbruptReplacementOutput = "initializer\ntrue true true\nvalue,earlier\ntrue true\n";
+
+    [Fact]
+    public void AbruptInitializerLeavesTheDeclarationOnAnEscapedReplacementReceiver()
+        => Assert.Equal(AbruptReplacementOutput, TestHarness.RunUnchecked(AbruptReplacementSource, ExecutionMode.Interpreted));
 }
