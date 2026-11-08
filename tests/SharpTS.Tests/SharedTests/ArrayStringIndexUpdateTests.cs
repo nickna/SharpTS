@@ -41,4 +41,31 @@ public sealed class ArrayStringIndexUpdateTests
         Assert.Equal("0 2 2 0 0\ntrue\ntrue\n3 4\ntrue\ntrue 8\n8 false\ntrue true\n4 4\ntrue\n",
             TestHarness.RunUnchecked(source, mode));
     }
+
+    [Theory, ModeData]
+    public void LogicalAssignmentsShortCircuitAndWriteThroughStringIndices(ExecutionMode mode)
+    {
+        const string source = """
+            const values = [0, , 1];
+            console.log(values['0'] ||= 5, values[0], values['1'] ??= 6, values[1], values['2'] &&= 7, values[2]);
+
+            const trace = [];
+            const own = [];
+            let stored = 0;
+            Object.defineProperty(own, '0', {
+                get() { trace.push(this === own ? 'get' : 'wrong getter'); return stored; },
+                set(value) { trace.push(this === own ? 'set' : 'wrong setter'); stored = value; }
+            });
+            function key() { trace.push('key'); return '0'; }
+            function rhs() { trace.push('rhs'); return 8; }
+            console.log(own[key()] ||= rhs(), own[key()] ||= rhs(), trace.join(','));
+
+            const frozen = Object.freeze([0]);
+            console.log(frozen['0'] ||= 9, frozen[0]);
+            try { (function () { 'use strict'; frozen['0'] ||= 9; })(); }
+            catch (error) { console.log(error instanceof TypeError); }
+            """;
+        Assert.Equal("5 5 6 6 7 7\n8 8 key,get,rhs,set,key,get\n9 0\ntrue\n",
+            TestHarness.RunUnchecked(source, mode));
+    }
 }
