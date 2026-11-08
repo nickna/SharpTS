@@ -13,8 +13,10 @@ public partial class RuntimeEmitter
         // executable and persisted assemblies use the same adapter emission.
         Scope([
             arrays.Map, arrays.Filter, arrays.ForEach, arrays.Find, arrays.FindIndex,
-            arrays.FindLast, arrays.FindLastIndex, arrays.Some, arrays.Every, arrays.FlatMap
+            arrays.Some, arrays.Every, arrays.FlatMap
         ], [_types.ListOfObject, _types.Object], stagesThisArg: true, prototypeCalls: true);
+        Scope([arrays.FindLast, arrays.FindLastIndex],
+            [_types.ListOfObject, _types.Object], stagesThisArg: true);
 
         Scope([
             arrays.MapDirect, arrays.FilterDirect, arrays.ForEachDirect, arrays.FindDirect,

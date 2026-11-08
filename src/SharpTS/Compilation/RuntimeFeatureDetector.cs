@@ -1304,6 +1304,7 @@ public sealed partial class RuntimeFeatureDetector
 
             case Expr.Call c:
                 if (c.Callee is Expr.Get { Name.Lexeme: "call", Object: Expr.Get method }
+                    && method.Name.Lexeme is not ("findLast" or "findLastIndex")
                     && UsesArrayReceiverScope(method.Name.Lexeme))
                     _set.UsesInlineArrayPrototypeScopes = true;
                 if (c.Arguments.Count > 0 && IsGlobalObject(c.Arguments[0]) && c.Callee is Expr.Get

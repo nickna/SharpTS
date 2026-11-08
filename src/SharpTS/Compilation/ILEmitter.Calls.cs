@@ -550,14 +550,12 @@ public partial class ILEmitter
             return false;
 
         var methodName = methodGet.Name.Lexeme;
-        // Arguments length can exceed the materialized list's index range.
-        // The prototype's reverse-predicate adapter walks the receiver directly.
-        if (_ctx.RuntimeFeatures?.UsesArguments != false && methodName is "findLast" or "findLastIndex")
-            return false;
         var runtime = _ctx.Runtime!;
         // Map method name → runtime MethodBuilder + calling convention.
         // singleArg = one JS arg passed as `object`; argsArray = all JS args
         // packaged into an `object[]`. boxes describes the return-type boxing.
+        // Reverse predicates use the prototype function adapter to search the
+        // original receiver with safe-integer indices.
         (MethodInfo Method, string Kind, Type Box)? sig = methodName switch
         {
             "every"         => (runtime.ArrayOperations.Every,      "single",    _ctx.Types.Boolean),
@@ -567,8 +565,6 @@ public partial class ILEmitter
             "forEach"       => (runtime.ArrayOperations.ForEach,    "single",    _ctx.Types.Object),
             "find"          => (runtime.ArrayOperations.Find,       "single",    _ctx.Types.Object),
             "findIndex"     => (runtime.ArrayOperations.FindIndex,  "single",    _ctx.Types.Double),
-            "findLast"      => (runtime.ArrayOperations.FindLast,   "single",    _ctx.Types.Object),
-            "findLastIndex" => (runtime.ArrayOperations.FindLastIndex,"single",  _ctx.Types.Double),
             "includes"      => (runtime.ArrayOperations.Includes,   "search",    _ctx.Types.Boolean),
             "join"          => (runtime.ArrayOperations.Join,       "single",    _ctx.Types.Object),
             "concat"        => (runtime.ArrayOperations.Concat,     "argsArray", _ctx.Types.Object),
@@ -756,8 +752,7 @@ public partial class ILEmitter
         // includes/join/concat/flat/at take other arg shapes and don't throw
         // when called with no args.
         bool needsCallableFirstArg = methodName is "every" or "some" or "filter"
-            or "map" or "forEach" or "find" or "findIndex" or "findLast"
-            or "findLastIndex" or "flatMap" or "reduce" or "reduceRight";
+            or "map" or "forEach" or "find" or "findIndex" or "flatMap" or "reduce" or "reduceRight";
 
         // Helper: emit IL that fires length-side-effects without iterating
         // elements. ECMA-262 LengthOfArrayLike calls Get(O, "length") then
@@ -842,8 +837,7 @@ public partial class ILEmitter
         // would see null placeholders under lazy mode. The Dup'd receiver is
         // on the stack.
         bool useLazyMaterializer = methodName is "every" or "some" or "filter"
-            or "map" or "forEach" or "find" or "findIndex" or "findLast"
-            or "findLastIndex" or "flatMap" or "reduce" or "reduceRight"
+            or "map" or "forEach" or "find" or "findIndex" or "flatMap" or "reduce" or "reduceRight"
             or "at" or "includes" or "indexOf" or "lastIndexOf"
             or "toReversed" or "toSpliced" or "with";
         // concat itself performs IsConcatSpreadable before consulting length;
@@ -867,7 +861,7 @@ public partial class ILEmitter
             if (useLazyMaterializer)
             {
                 bool usesVirtualArgumentsLength = methodName is "some" or "every" or "find" or "findIndex"
-                    or "findLast" or "findLastIndex" or "filter";
+                    or "filter";
                 IL.Emit(usesVirtualArgumentsLength ? OpCodes.Ldc_I4_1 : OpCodes.Ldc_I4_0);
                 IL.Emit(OpCodes.Ldnull);
                 IL.Emit(OpCodes.Call, runtime.ArrayOperations.MaterializeForIteration);
@@ -881,8 +875,7 @@ public partial class ILEmitter
 
         // Evaluate thisArg before entering the runtime receiver scope.
         bool hasThisArgSlot = methodName is "every" or "some" or "filter" or "map"
-            or "forEach" or "find" or "findIndex" or "findLast" or "findLastIndex"
-            or "flatMap";
+            or "forEach" or "find" or "findIndex" or "flatMap";
         LocalBuilder? callbackThisArg = null;
         if (hasThisArgSlot)
         {
