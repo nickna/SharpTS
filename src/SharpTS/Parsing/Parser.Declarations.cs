@@ -1154,7 +1154,7 @@ public partial class Parser
             // export namespace Foo { }
             if (Match(TokenType.NAMESPACE))
             {
-                var ns = NamespaceDeclaration(isExported: true);
+                var ns = NamespaceDeclaration(isExported: true, isAmbient: true);
                 return new Stmt.Export(exportKeyword, ns, null, null, null, false);
             }
 
@@ -1202,7 +1202,7 @@ public partial class Parser
 
         if (Match(TokenType.NAMESPACE))
         {
-            return NamespaceDeclaration();
+            return NamespaceDeclaration(isAmbient: true);
         }
 
         throw new Exception($"Parse Error at line {Peek().Line}: Expected declaration in declare block.");

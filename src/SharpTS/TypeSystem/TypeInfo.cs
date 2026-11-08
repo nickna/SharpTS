@@ -1014,21 +1014,22 @@ public abstract record TypeInfo
         /// </summary>
         public bool IsGetterOnly(string name) => GetterOnlyFields?.Contains(name) ?? false;
 
-        public override string ToString()
+        public override string ToString() => Render(static type => type.ToString());
+
+        internal override string CacheKey() => Render(static type => type.CacheKey());
+
+        private string Render(Func<TypeInfo, string> renderType)
         {
             var prefix = IsReadonly ? "readonly " : "";
             // Method-ness must be rendered: under strictFunctionTypes a method member and a
-            // property member of the same function type differ in assignability, and ToString is
-            // the compatibility-cache key.
+            // property member of the same function type differ in assignability.
             var parts = Fields.Select(f =>
-                $"{(ReadonlyFields?.Contains(f.Key) == true ? "readonly " : "")}{f.Key}{(IsMethodMember(f.Key) ? "#m" : "")}{(IsFieldOptional(f.Key) ? "?" : "")}: {f.Value}").ToList();
-            if (CallSignatures != null) parts.InsertRange(0, CallSignatures.Select(s => s.ToString()));
-            if (ConstructorSignatures != null) parts.InsertRange(0, ConstructorSignatures.Select(s => s.ToString()));
-            // Index signatures must be rendered so distinct index types don't collapse to the same
-            // string — ToString is used as the structural key for the compatibility cache.
-            if (StringIndexType != null) parts.Add($"[x: string]: {StringIndexType}");
-            if (NumberIndexType != null) parts.Add($"[x: number]: {NumberIndexType}");
-            if (SymbolIndexType != null) parts.Add($"[x: symbol]: {SymbolIndexType}");
+                $"{(ReadonlyFields?.Contains(f.Key) == true ? "readonly " : "")}{f.Key}{(IsMethodMember(f.Key) ? "#m" : "")}{(IsFieldOptional(f.Key) ? "?" : "")}: {renderType(f.Value)}").ToList();
+            if (CallSignatures != null) parts.InsertRange(0, CallSignatures.Select(renderType));
+            if (ConstructorSignatures != null) parts.InsertRange(0, ConstructorSignatures.Select(renderType));
+            if (StringIndexType != null) parts.Add($"[x: string]: {renderType(StringIndexType)}");
+            if (NumberIndexType != null) parts.Add($"[x: number]: {renderType(NumberIndexType)}");
+            if (SymbolIndexType != null) parts.Add($"[x: symbol]: {renderType(SymbolIndexType)}");
             return $"{prefix}{{ {string.Join(", ", parts)} }}";
         }
 

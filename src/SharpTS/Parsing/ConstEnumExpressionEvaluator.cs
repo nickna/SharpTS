@@ -57,15 +57,14 @@ internal static class ConstEnumExpressionEvaluator
         }
     }
 
-    public static double EvaluateKnownNumericMember(
-        Expr expression, IReadOnlyDictionary<string, object> resolvedMembers, string enumName)
+    public static object EvaluateKnownMember(
+        Expr expression, IReadOnlyDictionary<string, object> resolvedMembers, string enumName, bool isConst)
     {
         try
         {
-            return Evaluate(expression, resolvedMembers, enumName,
-                static _ => new NonConstantInitializerException(), regularEnum: true) is double number
-                ? number
-                : double.NaN;
+            var value = Evaluate(expression, resolvedMembers, enumName,
+                static _ => new NonConstantInitializerException(), regularEnum: !isConst);
+            return value is double or string ? value : double.NaN;
         }
         catch (NonConstantInitializerException)
         {

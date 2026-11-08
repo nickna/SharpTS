@@ -1803,7 +1803,7 @@ public partial class TypeChecker
 
     /// <summary>
     /// Pre-registers an enum before function hoisting.
-    /// Creates a basic enum type with placeholder values. Full validation happens in CheckEnumDeclaration.
+    /// Collects known enum values for signatures that are resolved before the declaration is checked.
     /// </summary>
     private void PreRegisterEnum(Stmt.Enum enumStmt)
     {
@@ -1811,21 +1811,23 @@ public partial class TypeChecker
         if (_environment.IsDefinedLocally(enumStmt.Name.Lexeme))
             return;
 
-        // Create a basic enum with member names (values will be computed during full check)
         Dictionary<string, object> members = [];
-        double value = 0;
+        double nextValue = 0;
+        bool opaqueImplicitMembers = enumStmt.IsAmbient && !enumStmt.IsConst;
 
         foreach (var member in enumStmt.Members)
         {
-            // During pre-registration, just assign sequential numeric values as placeholders
-            // The full check will compute actual values
-            members[member.Name.Lexeme] = value++;
+            object value = member.Value is { } initializer
+                ? ConstEnumExpressionEvaluator.EvaluateKnownMember(initializer, members, enumStmt.Name.Lexeme, enumStmt.IsConst)
+                : opaqueImplicitMembers ? double.NaN : nextValue;
+            members[member.Name.Lexeme] = value;
+            nextValue = value is double number ? number + 1 : double.NaN;
         }
 
         var enumType = new TypeInfo.Enum(
             enumStmt.Name.Lexeme,
             members.ToFrozenDictionary(),
-            EnumKind.Numeric,
+            ClassifyEnumMembers(members.Values.Any(value => value is double), members.Values.Any(value => value is string)),
             enumStmt.IsConst
         ) { DeclarationBinding = RegisterValueDeclaration(enumStmt.Name) };
         DeclareValue(enumStmt.Name, enumType, mergeWithLocal: true);

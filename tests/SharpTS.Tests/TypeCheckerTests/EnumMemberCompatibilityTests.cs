@@ -1,3 +1,4 @@
+using SharpTS.Parsing;
 using SharpTS.Tests.Infrastructure;
 using SharpTS.TypeSystem;
 using Xunit;
@@ -83,5 +84,60 @@ public sealed class EnumMemberCompatibilityTests
             """);
 
         Assert.Empty(new TypeChecker(TypeCheckerOptions.Strict).CheckWithRecovery(statements).Diagnostics);
+    }
+
+    [Fact]
+    public void RecordCompatibilityCacheDistinguishesSameNamedEnumFields()
+    {
+        var statements = TestHarness.ParseOrThrow("""
+            namespace First { export enum E { A = 1 } }
+            namespace Same { export enum E { A = 1 } }
+            namespace Different { export enum E { A = 2 } }
+            declare function take(x: { value: First.E }): void;
+            declare const same: { value: Same.E };
+            declare const different: { value: Different.E };
+            take(same);
+            take(different);
+            """);
+
+        var diagnostic = Assert.Single(
+            new TypeChecker(TypeCheckerOptions.Strict).CheckWithRecovery(statements).Diagnostics);
+        Assert.Equal(8, diagnostic.Line);
+        Assert.Equal("TS2345", diagnostic.TsCode);
+    }
+
+    [Fact]
+    public void HoistedFunctionSignatureRetainsKnownEnumValues()
+    {
+        var statements = TestHarness.ParseOrThrow("""
+            enum E { A = 1 }
+            namespace Same { export enum E { A = 1 } }
+            namespace Different { export enum E { A = 2 } }
+            function take(value: E): E { return value; }
+            take(Same.E.A);
+            take(Different.E.A);
+            """);
+
+        var diagnostic = Assert.Single(
+            new TypeChecker(TypeCheckerOptions.Strict).CheckWithRecovery(statements).Diagnostics);
+        Assert.Equal(6, diagnostic.Line);
+        Assert.Equal("TS2345", diagnostic.TsCode);
+    }
+
+    [Fact]
+    public void NamespacesInAmbientBlocksKeepEnumMembersAmbient()
+    {
+        var statements = TestHarness.ParseOrThrow("""
+            declare module "ambient" { export namespace A { enum E { Unknown } } }
+            declare global { namespace B { enum E { Unknown } } }
+            """);
+
+        var module = Assert.IsType<Stmt.DeclareModule>(statements[0]);
+        var exported = Assert.IsType<Stmt.Export>(Assert.Single(module.Members));
+        var moduleNamespace = Assert.IsType<Stmt.Namespace>(exported.Declaration);
+        var global = Assert.IsType<Stmt.DeclareGlobal>(statements[1]);
+        var globalNamespace = Assert.IsType<Stmt.Namespace>(Assert.Single(global.Members));
+        Assert.True(Assert.IsType<Stmt.Enum>(Assert.Single(moduleNamespace.Members)).IsAmbient);
+        Assert.True(Assert.IsType<Stmt.Enum>(Assert.Single(globalNamespace.Members)).IsAmbient);
     }
 }
