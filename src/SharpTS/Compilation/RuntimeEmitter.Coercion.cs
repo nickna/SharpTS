@@ -621,17 +621,9 @@ public partial class RuntimeEmitter
     // function. Identical to ToJsString except that Symbol arguments return
     // SymbolDescriptiveString instead of throwing: the String() call form is the
     // single coercion site the spec exempts from ToString's Symbol TypeError.
-    private void EmitStringFromValue(TypeBuilder typeBuilder, EmittedStringCoercionRuntime coercion,
-        Type symbolType)
+    private void EmitStringFromValue(EmittedStringCoercionRuntime coercion, Type symbolType)
     {
-        var method = typeBuilder.DefineMethod(
-            "StringFromValue",
-            MethodAttributes.Public | MethodAttributes.Static,
-            _types.String,
-            [_types.Object]);
-        coercion.FromValue = method;
-
-        var il = method.GetILGenerator();
+        var il = coercion.FromValue.GetILGenerator();
 
         // if (value is $TSSymbol) return value.ToString();  // "Symbol(desc)"
         var notSymbolLabel = il.DefineLabel();

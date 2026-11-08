@@ -219,6 +219,13 @@ public partial class RuntimeEmitter
             MethodAttributes.Public | MethodAttributes.Static,
             _types.String,
             [_types.Object]);
+        // Dynamic invocation needs the explicit String(value) conversion
+        // before the property and coercion bodies can be filled.
+        runtime.StringCoercion.FromValue = typeBuilder.DefineMethod(
+            "StringFromValue",
+            MethodAttributes.Public | MethodAttributes.Static,
+            _types.String,
+            [_types.Object]);
 
         // $TSFunction is finalized before runtime bodies. Reserve its exact
         // coercion callees under their existing owners so it can call directly.

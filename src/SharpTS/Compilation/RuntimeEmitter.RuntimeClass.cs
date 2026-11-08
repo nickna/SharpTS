@@ -1407,7 +1407,7 @@ public partial class RuntimeEmitter
             runtime.RegExps.Implementation is not null ? runtime.RegExps.RequireImplementation().Type : null);
         // StringFromValue (String(x) call form) wraps ToJsString with the
         // §22.1.1.1 Symbol exemption; emit right after it.
-        EmitStringFromValue(typeBuilder, runtime.StringCoercion, runtime.Symbols.Type);
+        EmitStringFromValue(runtime.StringCoercion, runtime.Symbols.Type);
         // StringifyCoerce (implicit-coercion sites) wraps Stringify with the
         // §7.1.17 Symbol TypeError; the body needs TSSymbolType/TSTypeErrorCtor,
         // both bound by this point (ToJsString's Symbol arm uses them too).

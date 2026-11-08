@@ -45,7 +45,7 @@ public class EmittedStringCoercionRuntimeTests
     }
 
     [Fact]
-    public void ThreeForwardDeclarationsRemainReadableBeforeBodiesAndLaterHelpers()
+    public void ConversionForwardDeclarationsRemainReadableBeforeBodies()
     {
         var assembly = new PersistedAssemblyBuilder(new AssemblyName("coercion_staged"), typeof(object).Assembly);
         var module = assembly.DefineDynamicModule("main");
@@ -54,20 +54,20 @@ public class EmittedStringCoercionRuntimeTests
         typeof(RuntimeEmitter).GetMethod("DefineRuntimeClassPhase1", BindingFlags.NonPublic | BindingFlags.Instance)!
             .Invoke(new RuntimeEmitter(TypeProvider.Runtime), [module, runtime]);
         var coercion = runtime.StringCoercion;
-        foreach (var method in new[] { coercion.Stringify, coercion.ToJsString, coercion.StringifyCoerce })
+        foreach (var method in new[] { coercion.Stringify, coercion.ToJsString, coercion.FromValue, coercion.StringifyCoerce })
         {
             Assert.Same(runtime.RuntimeClass.Type, method.DeclaringType);
             Assert.Equal(0, method.GetILGenerator().ILOffset);
         }
         Assert.NotSame(coercion.Stringify, coercion.ToJsString);
+        Assert.NotSame(coercion.ToJsString, coercion.FromValue);
         Assert.NotSame(coercion.ToJsString, coercion.StringifyCoerce);
         var caller = runtime.RuntimeClass.Type.DefineMethod("ForwardCaller", MethodAttributes.Public | MethodAttributes.Static,
             typeof(string), [typeof(object)]);
         caller.GetILGenerator().Emit(OpCodes.Ldarg_0);
-        caller.GetILGenerator().Emit(OpCodes.Call, coercion.ToJsString);
+        caller.GetILGenerator().Emit(OpCodes.Call, coercion.FromValue);
         caller.GetILGenerator().Emit(OpCodes.Ret);
         Assert.True(caller.GetILGenerator().ILOffset > 0);
-        Assert.Throws<InvalidOperationException>(() => coercion.FromValue);
         Assert.Throws<InvalidOperationException>(() => coercion.ConcatInt64);
         Assert.Throws<InvalidOperationException>(coercion.CompleteEmission);
         Assert.False(coercion.IsComplete);
