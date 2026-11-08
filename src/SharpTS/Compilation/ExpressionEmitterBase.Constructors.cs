@@ -531,16 +531,7 @@ public abstract partial class ExpressionEmitterBase
             // which handles: 0 args → []; 1 numeric arg → length-n nulls; 1
             // non-numeric arg → [arg]; N args → [a, b, c, …].
             case "Array":
-                IL.Emit(OpCodes.Ldc_I4, arguments.Count);
-                IL.Emit(OpCodes.Newarr, Ctx.Types.Object);
-                for (int i = 0; i < arguments.Count; i++)
-                {
-                    IL.Emit(OpCodes.Dup);
-                    IL.Emit(OpCodes.Ldc_I4, i);
-                    EmitExpression(arguments[i]);
-                    EnsureBoxed();
-                    IL.Emit(OpCodes.Stelem_Ref);
-                }
+                EmitArgsArrayWithSpread(arguments);
                 IL.Emit(OpCodes.Call, Ctx.Runtime!.ArrayOperations.Constructor);
                 SetStackUnknown();
                 return true;

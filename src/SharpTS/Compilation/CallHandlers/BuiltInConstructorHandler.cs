@@ -108,16 +108,7 @@ public class BuiltInConstructorHandler : ICallHandler
         var il = emitter.IL;
         var ctx = emitter.Context;
 
-        il.Emit(OpCodes.Ldc_I4, call.Arguments.Count);
-        il.Emit(OpCodes.Newarr, ctx.Types.Object);
-        for (int i = 0; i < call.Arguments.Count; i++)
-        {
-            il.Emit(OpCodes.Dup);
-            il.Emit(OpCodes.Ldc_I4, i);
-            emitter.EmitExpression(call.Arguments[i]);
-            emitter.EmitBoxIfNeeded(call.Arguments[i]);
-            il.Emit(OpCodes.Stelem_Ref);
-        }
+        emitter.EmitArgsArrayWithSpread(call.Arguments);
         il.Emit(OpCodes.Call, ctx.Runtime!.ArrayOperations.Constructor);
         emitter.SetStackUnknown();
         return true;
