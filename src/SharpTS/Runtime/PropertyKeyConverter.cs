@@ -27,6 +27,10 @@ namespace SharpTS.Runtime;
 /// </remarks>
 public static class PropertyKeyConverter
 {
+    internal static bool TryParseCanonicalNumericKey(string key, out double number)
+        => double.TryParse(key, NumberStyles.Float, CultureInfo.InvariantCulture, out number)
+           && ToPropertyKeyString(number) == key;
+
     /// <summary>
     /// Coerces <paramref name="value"/> to a property key. Returns either a
     /// <see cref="string"/> (for non-Symbol values) or a <see cref="SharpTSSymbol"/>

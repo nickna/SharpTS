@@ -37,6 +37,10 @@ public class SharpTSEnum(string name, Dictionary<string, object> members, EnumKi
         : throw new Exception($"Runtime Error: Value {value} not in enum '{Name}'. " +
                               "Note: Reverse mapping only works for numeric enum members.");
 
+    internal string? FindReverseProperty(string key)
+        => PropertyKeyConverter.TryParseCanonicalNumericKey(key, out double number)
+            ? _reverse.GetValueOrDefault(number) : null;
+
     public bool HasMember(string name) => _members.ContainsKey(name);
 
     public bool HasReverseMapping => Kind == EnumKind.Numeric || Kind == EnumKind.Heterogeneous;

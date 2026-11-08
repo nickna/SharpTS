@@ -9,6 +9,8 @@ namespace SharpTS.TypeSystem;
 /// </summary>
 public enum EnumKind { Numeric, String, Heterogeneous }
 
+internal enum EnumFacet { Declaration, Object, Scalar }
+
 /// <summary>
 /// Accessibility origin of a member that an interface inherited from a class (via
 /// <c>interface I extends SomeClass</c>). TypeScript relates such members nominally: a
@@ -731,11 +733,15 @@ public abstract record TypeInfo
 
     public record Enum(string Name, FrozenDictionary<string, object> Members, EnumKind Kind, bool IsConst = false) : TypeInfo
     {
+        internal EnumFacet Facet { get; init; }
+        internal bool IsScalar => Facet == EnumFacet.Scalar;
+
         // Only create reverse mapping for numeric members (not available for const enums)
         public Dictionary<double, string> ReverseMembers =>
             Members.Where(kvp => kvp.Value is double)
                    .ToDictionary(kvp => (double)kvp.Value, kvp => kvp.Key);
         public override string ToString() => IsConst ? $"const enum {Name}" : $"enum {Name}";
+        internal override string CacheKey() => IsScalar ? $"{ToString()}#value" : base.CacheKey();
     }
 
     /// <summary>

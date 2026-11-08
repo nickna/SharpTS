@@ -455,14 +455,15 @@ public partial class TypeChecker
             ReadArrayStringKeys(stringIndexedArray, indexType) is { } arrayStringMember)
             return arrayStringMember;
 
+        if (objType is TypeInfo.Enum enumType && ReadEnumIndex(enumType, indexType, getIndex.Index) is { } enumIndex)
+            return enumIndex;
+
         // Handle string index on objects/interfaces
         if (IsString(indexType) || indexType is TypeInfo.StringLiteral)
         {
             // String literal index - look up specific property
             if (getIndex.Index is Expr.Literal { Value: string propName })
             {
-                if (objType is TypeInfo.Enum enumType && GetEnumMemberType(enumType, propName) is { } enumMember)
-                    return enumMember;
                 if (objType is TypeInfo.Namespace namespaceType)
                 {
                     if (namespaceType.Values.TryGetValue(propName, out TypeInfo? namespaceValue))
@@ -545,21 +546,6 @@ public partial class TypeChecker
             if (objType is TypeInfo.Buffer)
             {
                 return WithUncheckedUndefined(new TypeInfo.Primitive(Parsing.TokenType.TYPE_NUMBER));
-            }
-
-            // Enum reverse mapping: Direction[0] returns "Up" (only for numeric enums)
-            if (objType is TypeInfo.Enum enumType)
-            {
-                // Const enums cannot use reverse mapping
-                if (enumType.IsConst)
-                {
-                    throw new TypeCheckException($" A const enum member can only be accessed using its name, not by index. Cannot use reverse mapping on const enum '{enumType.Name}'.", tsCode: "TS2476");
-                }
-                if (enumType.Kind == EnumKind.String)
-                {
-                    throw new TypeCheckException($" Reverse mapping is not supported for string enum '{enumType.Name}'.", tsCode: "TS2476");
-                }
-                return TypeInfo.String.Shared;
             }
 
             // Number index signature on interface/record
@@ -734,9 +720,37 @@ public partial class TypeChecker
     private bool IsNumericConstructorIndex(TypeInfo indexType) =>
         IsNumber(indexType) || indexType is TypeInfo.NumberLiteral ||
         indexType is TypeInfo.StringLiteral literal &&
-        double.TryParse(literal.Value, System.Globalization.NumberStyles.Float,
-            System.Globalization.CultureInfo.InvariantCulture, out double numericKey) &&
-        Runtime.PropertyKeyConverter.ToPropertyKeyString(numericKey) == literal.Value;
+        Runtime.PropertyKeyConverter.TryParseCanonicalNumericKey(literal.Value, out _);
+
+    private TypeInfo? ReadEnumIndex(TypeInfo.Enum enumType, TypeInfo indexType, Expr index)
+    {
+        if (indexType is TypeInfo.Union union)
+        {
+            List<TypeInfo> memberTypes = [];
+            foreach (var key in union.FlattenedTypes)
+            {
+                if (ReadEnumIndex(enumType, key, index) is not { } member) return null;
+                memberTypes.Add(member);
+            }
+            return CollapseOrCreateUnion(memberTypes);
+        }
+
+        if (indexType is TypeInfo.StringLiteral text)
+        {
+            if (enumType.IsConst && index is not Expr.Literal { Value: string }) return null;
+            if (GetEnumMemberType(enumType, text.Value) is { } member) return member;
+            // Numeric reverse entries have the exact spelling of the number's
+            // property key, including negative and fractional values.
+            return !enumType.IsConst && !enumType.IsScalar && enumType.Kind != EnumKind.String && IsNumericConstructorIndex(indexType)
+                ? TypeInfo.String.Shared : null;
+        }
+        if (!IsNumber(indexType) && indexType is not TypeInfo.NumberLiteral) return null;
+        if (enumType.IsConst)
+            throw new TypeCheckException($" A const enum member can only be accessed using its name, not by index. Cannot use reverse mapping on const enum '{enumType.Name}'.", tsCode: "TS2476");
+        if (enumType.Kind == EnumKind.String)
+            throw new TypeCheckException($" Reverse mapping is not supported for string enum '{enumType.Name}'.", tsCode: "TS2476");
+        return TypeInfo.String.Shared;
+    }
 
     private bool TryEvaluateConcreteKeyOfDomain(TypeInfo.KeyOf keyOf, out TypeInfo domain)
     {
@@ -1707,13 +1721,14 @@ public partial class TypeChecker
             ReadArrayStringKeys(stringIndexedArray, indexType) is { } arrayStringMember)
             return arrayStringMember;
 
+        if (objType is TypeInfo.Enum enumType && ReadEnumIndex(enumType, indexType, getIndex.Index) is { } enumIndex)
+            return enumIndex;
+
         // Handle string index
         if (IsString(indexType) || indexType is TypeInfo.StringLiteral)
         {
             if (getIndex.Index is Expr.Literal { Value: string propName })
             {
-                if (objType is TypeInfo.Enum enumType && GetEnumMemberType(enumType, propName) is { } enumMember)
-                    return enumMember;
                 if (objType is TypeInfo.Record rec && rec.Fields.TryGetValue(propName, out var fieldType))
                     return WithOptionalPropertyUndefined(fieldType, rec.IsFieldOptional(propName));
                 if (objType is TypeInfo.Interface itf && itf.Members.TryGetValue(propName, out var memberType))

@@ -212,6 +212,7 @@ public partial class TypeChecker
                 {
                     TypeInfo.Class cls => new TypeInfo.Instance(cls),
                     TypeInfo.MutableClass mutable => new TypeInfo.Instance(mutable),
+                    TypeInfo.Enum { Facet: EnumFacet.Declaration } qualifiedEnum => qualifiedEnum with { Facet = EnumFacet.Scalar },
                     _ => current,
                 };
             }
@@ -234,6 +235,7 @@ public partial class TypeChecker
             {
                 TypeInfo.MutableClass loadedMutableClass => new TypeInfo.Instance(loadedMutableClass),
                 TypeInfo.Class loadedClass => new TypeInfo.Instance(loadedClass),
+                TypeInfo.Enum { Facet: EnumFacet.Declaration } declaredEnum => declaredEnum with { Facet = EnumFacet.Scalar },
                 _ => declaredType,
             };
         }
@@ -307,7 +309,9 @@ public partial class TypeChecker
         }
         if (type is TypeInfo.Enum enumType)
         {
-            return enumType;
+            return enumType.Facet == EnumFacet.Declaration
+                ? enumType with { Facet = EnumFacet.Scalar }
+                : enumType;
         }
 
         if (typeName != "any") MarkEditorUnprovenTypeName();
@@ -676,7 +680,7 @@ public partial class TypeChecker
                 throw new TypeCheckException($"Cannot access '{accessor.Name}' on type in typeof.", tsCode: "TS2339");
         }
 
-        return currentType;
+        return ResolveEnumTypeQuery(currentType);
     }
 
     private TypeInfo EvaluateImportTypeOf(string path)
@@ -732,8 +736,14 @@ public partial class TypeChecker
             } ?? TypeInfo.Any.Shared;
         }
 
-        return currentType;
+        return ResolveEnumTypeQuery(currentType);
     }
+
+    // A type query captures the enum object even when exported as a type alias.
+    private static TypeInfo ResolveEnumTypeQuery(TypeInfo type) =>
+        type is TypeInfo.Enum { Facet: EnumFacet.Declaration } enumType
+            ? enumType with { Facet = EnumFacet.Object }
+            : type;
 
     /// <summary>
     /// Parses a typeof path into a list of accessors.
