@@ -1259,8 +1259,8 @@ public partial class RuntimeEmitter
     }
 
     /// <summary>
-    /// Dictionary&lt;string,object&gt; (plain object) arm: Object.prototype method wrappers, then a
-    /// PDS getter, then own dict entry (binding $TSFunction values to the dict as `this`), then the
+    /// Dictionary&lt;string,object&gt; (plain object) arm: PDS descriptor and own dict entry
+    /// (binding $TSFunction values to the dict as `this`), then Object.prototype wrappers and the
     /// $AbortSignal duck-typed surface, then a prototype-chain walk (recursing through
     /// <paramref name="method"/>), finally the Object.prototype singleton. Falls through to
     /// <paramref name="notMatch"/> on a miss.
@@ -1302,9 +1302,6 @@ public partial class RuntimeEmitter
             il.Emit(OpCodes.Ret);
             il.MarkLabel(skip);
         }
-        EmitObjProtoMethodCheck("hasOwnProperty", inputs.ObjectOwnProperties.HasOwnProperty, 1);
-        EmitObjProtoMethodCheck("isPrototypeOf",  inputs.ObjectPrototypes.IsPrototypeOf, 1);
-
         // Retrieve the descriptor once: querying TryGetGetter first repeated the
         // descriptor weak-table lookup for every ordinary dictionary property.
         var getterLocal = il.DeclareLocal(_types.Object);
@@ -1367,6 +1364,9 @@ public partial class RuntimeEmitter
         il.Emit(OpCodes.Callvirt, _types.GetMethod(_types.DictionaryStringObject, "TryGetValue"));
         var foundLabel = il.DefineLabel();
         il.Emit(OpCodes.Brtrue, foundLabel);
+
+        EmitObjProtoMethodCheck("hasOwnProperty", inputs.ObjectOwnProperties.HasOwnProperty, 1);
+        EmitObjProtoMethodCheck("isPrototypeOf", inputs.ObjectPrototypes.IsPrototypeOf, 1);
 
         // Alias/value construction returns the same native controller carrier
         // as direct construction. Expose its computed surface for any-typed

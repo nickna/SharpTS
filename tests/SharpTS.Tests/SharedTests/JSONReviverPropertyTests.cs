@@ -52,4 +52,39 @@ public sealed class JSONReviverPropertyTests
             """;
         Assert.Equal("7\n7 2\n", TestHarness.RunUnchecked(source, mode));
     }
+
+    [Theory, ModeData]
+    public void ReviverReadsOwnValuesThatShadowObjectPrototypeMethods(ExecutionMode mode)
+    {
+        const string source = """
+            const result = JSON.parse('{"hasOwnProperty":7,"isPrototypeOf":8}', function (key, value) {
+                if (key) console.log(key, value);
+                return value;
+            });
+            console.log(JSON.stringify(result));
+            """;
+        Assert.Equal("hasOwnProperty 7\nisPrototypeOf 8\n{\"hasOwnProperty\":7,\"isPrototypeOf\":8}\n",
+            TestHarness.RunUnchecked(source, mode));
+    }
+
+    [Theory, ModeData]
+    public void ReviverDoesNotRestoreADeletedKeyOnANonExtensibleHolder(ExecutionMode mode)
+    {
+        const string source = """
+            const result = JSON.parse('{"a":1,"b":2,"c":3}', function (key, value) {
+                if (key === 'a') {
+                    delete this.b;
+                    this.c = undefined;
+                    Object.preventExtensions(this);
+                }
+                if (key === 'b' || key === 'c') {
+                    console.log(key, value === undefined);
+                    return 8;
+                }
+                return value;
+            });
+            console.log(Object.hasOwn(result, 'b'), result.c);
+            """;
+        Assert.Equal("b true\nc true\nfalse 8\n", TestHarness.RunUnchecked(source, mode));
+    }
 }
