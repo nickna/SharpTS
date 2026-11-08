@@ -479,6 +479,9 @@ public partial class ILCompiler
             il.Emit(OpCodes.Ldarg_1);
             il.Emit(OpCodes.Newobj, _runtime.Arguments.EnumerableCtor);
             il.Emit(OpCodes.Stloc, arguments);
+            il.Emit(OpCodes.Ldloc, arguments);
+            il.Emit(OpCodes.Ldc_I4_1);
+            il.Emit(OpCodes.Call, _runtime.Arguments.Initialize);
             SeedCapturedLocal("arguments", arguments);
         }
         foreach (var (parameter, index) in (constructor?.Parameters ?? []).Select((parameter, index) => (parameter, index)))

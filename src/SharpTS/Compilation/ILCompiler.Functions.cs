@@ -1107,6 +1107,9 @@ public partial class ILCompiler
             il.Emit(OpCodes.Box, ctx.Types.Double);
             il.Emit(OpCodes.Stfld, argsLengthField);
             il.Emit(OpCodes.Ldloc, argsLocal);
+            bool unmapped = ctx.IsStrictMode || parameters.Any(parameter =>
+                parameter.IsRest || parameter.DefaultValue is not null || parameter.DestructuredProperties is not null);
+            il.Emit(unmapped ? OpCodes.Ldc_I4_1 : OpCodes.Ldc_I4_0);
             il.Emit(OpCodes.Call, ctx.Runtime.Arguments.Initialize);
             il.MarkLabel(skipLengthSetLabel);
         }

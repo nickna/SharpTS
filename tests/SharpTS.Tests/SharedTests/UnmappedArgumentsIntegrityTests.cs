@@ -5,6 +5,42 @@ namespace SharpTS.Tests.SharedTests;
 
 public sealed class UnmappedArgumentsIntegrityTests
 {
+    [Fact]
+    public void CompiledUnmappedArgumentsOwnTheProtectedCalleeAccessor()
+    {
+        const string source = """
+            function inspect(args) {
+                "use strict";
+                const descriptor = Object.getOwnPropertyDescriptor(args, "callee");
+                console.log(typeof descriptor.get, descriptor.get === descriptor.set,
+                    descriptor.enumerable, descriptor.configurable);
+                Object.seal(args);
+                try { delete args["callee"]; }
+                catch (error) { console.log(error instanceof TypeError); }
+                try { console.log(args["callee"]); }
+                catch (error) { console.log(error instanceof TypeError); }
+                try { args["callee"] = 1; }
+                catch (error) { console.log(error instanceof TypeError); }
+            }
+
+            function strict() { "use strict"; inspect(arguments); }
+            function rest(...values) { inspect(arguments); }
+            function derived(parent) {
+                class Derived extends parent {
+                    constructor() { super(); inspect(arguments); }
+                }
+                return Derived;
+            }
+            strict();
+            rest();
+            const Derived = derived(class {});
+            new Derived();
+            """;
+
+        const string expected = "function true false false\ntrue\ntrue\ntrue\n";
+        Assert.Equal(expected + expected + expected, TestHarness.RunUnchecked(source, ExecutionMode.Compiled));
+    }
+
     [Theory]
     [InlineData(ExecutionMode.Interpreted)]
     [InlineData(ExecutionMode.Compiled)]

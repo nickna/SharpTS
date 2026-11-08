@@ -30,6 +30,46 @@ public partial class RuntimeEmitter
         il.Emit(OpCodes.Ldsfld, runtime.Symbols.Iterator);
         il.Emit(OpCodes.Ldloc, descriptor);
         il.Emit(OpCodes.Callvirt, _types.GetMethod(_types.DictionaryObjectObject, "set_Item"));
+
+        if (_features.UsesArguments)
+        {
+            // The unmapped arguments object owns a non-configurable callee
+            // accessor. Its getter and setter are the same throwing function.
+            var thrower = runtime.RuntimeClass.Type.DefineMethod("ArgumentsCalleeThrower",
+                MethodAttributes.Private | MethodAttributes.Static, _types.Object, Type.EmptyTypes);
+            GuestErrorEmitter.ThrowTypeError(thrower.GetILGenerator(), runtime,
+                "Cannot access 'callee' on an unmapped arguments object");
+
+            var done = il.DefineLabel();
+            var accessor = il.DeclareLocal(_types.Object);
+            il.Emit(OpCodes.Ldarg_1);
+            il.Emit(OpCodes.Brfalse, done);
+            _types.EmitLoadMethodInfo(il, thrower);
+            il.Emit(OpCodes.Ldstr, "");
+            il.Emit(OpCodes.Ldc_I4_0);
+            il.Emit(OpCodes.Call, runtime.FunctionConstruction.GetOrCreate);
+            il.Emit(OpCodes.Stloc, accessor);
+            il.Emit(OpCodes.Newobj, runtime.DescriptorStorage.DescriptorConstructor);
+            il.Emit(OpCodes.Stloc, descriptor);
+            il.Emit(OpCodes.Ldloc, descriptor);
+            il.Emit(OpCodes.Ldloc, accessor);
+            il.Emit(OpCodes.Callvirt, runtime.DescriptorStorage.DescriptorGetter.GetSetMethod()!);
+            il.Emit(OpCodes.Ldloc, descriptor);
+            il.Emit(OpCodes.Ldloc, accessor);
+            il.Emit(OpCodes.Callvirt, runtime.DescriptorStorage.DescriptorSetter.GetSetMethod()!);
+            il.Emit(OpCodes.Ldloc, descriptor);
+            il.Emit(OpCodes.Ldc_I4_0);
+            il.Emit(OpCodes.Callvirt, runtime.DescriptorStorage.DescriptorEnumerable.GetSetMethod()!);
+            il.Emit(OpCodes.Ldloc, descriptor);
+            il.Emit(OpCodes.Ldc_I4_0);
+            il.Emit(OpCodes.Callvirt, runtime.DescriptorStorage.DescriptorConfigurable.GetSetMethod()!);
+            il.Emit(OpCodes.Ldarg_0);
+            il.Emit(OpCodes.Ldstr, "callee");
+            il.Emit(OpCodes.Ldloc, descriptor);
+            il.Emit(OpCodes.Call, runtime.DescriptorStorage.DefineValidatedProperty);
+            il.Emit(OpCodes.Pop);
+            il.MarkLabel(done);
+        }
         il.Emit(OpCodes.Ret);
     }
 
