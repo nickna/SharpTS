@@ -20,7 +20,8 @@ public partial class RuntimeEmitter
         il.Emit(OpCodes.Isinst, runtime.Arguments.Type);
         il.Emit(OpCodes.Dup);
         il.Emit(OpCodes.Brfalse, useListCount);
-        il.Emit(OpCodes.Ldfld, runtime.Arguments.LengthField);
+        il.Emit(OpCodes.Ldstr, "length");
+        il.Emit(OpCodes.Call, runtime.ObjectRead.Property);
         il.Emit(OpCodes.Call, runtime.NumericCoercion.ToNumber);
         il.Emit(OpCodes.Conv_I4);
         il.Emit(OpCodes.Br, done);

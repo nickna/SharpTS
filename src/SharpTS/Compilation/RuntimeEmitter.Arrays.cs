@@ -9,7 +9,6 @@ public partial class RuntimeEmitter
     private readonly record struct ExpandCallArgsInputs(EmittedSymbolRuntime Symbols, MethodBuilder IterateToList);
 
     private readonly record struct GetLengthInputs(
-        FieldBuilder ArgumentsLengthField,
         TypeBuilder ArgumentsType,
         EmittedArrayStorageRuntime ArrayStorage,
         EmittedNumericCoercionRuntime NumericCoercion
@@ -38,6 +37,7 @@ public partial class RuntimeEmitter
     );
 
     private readonly record struct GetOwnPropertyNamesInputs(
+        Type ArgumentsType,
         EmittedArrayStorageRuntime ArrayStorage,
         EmittedBooleanRuntime Booleans,
         EmittedDescriptorStorageRuntime DescriptorStorage,
@@ -171,16 +171,14 @@ public partial class RuntimeEmitter
         var tsArrayLabel = il.DefineLabel();
         var stringLabel = il.DefineLabel();
 
-        // $Arguments — return _length (sloppy arguments object, ECMA-262 10.4.4).
-        // Must come before the List<object> check below since $Arguments inherits
-        // from List<object>.
+        // Arguments length is independent of the backing List's Count.
         var notArgumentsLabel = il.DefineLabel();
         il.Emit(OpCodes.Ldarg_0);
         il.Emit(OpCodes.Isinst, inputs.ArgumentsType);
         il.Emit(OpCodes.Brfalse, notArgumentsLabel);
         il.Emit(OpCodes.Ldarg_0);
-        il.Emit(OpCodes.Castclass, inputs.ArgumentsType);
-        il.Emit(OpCodes.Ldfld, inputs.ArgumentsLengthField);
+        il.Emit(OpCodes.Ldstr, "length");
+        il.Emit(OpCodes.Call, objectRead.Property);
         il.Emit(OpCodes.Call, inputs.NumericCoercion.ToNumber);
         il.Emit(OpCodes.Conv_I4);
         il.Emit(OpCodes.Ret);
@@ -1277,10 +1275,15 @@ public partial class RuntimeEmitter
         il.Emit(OpCodes.Callvirt, _types.GetPropertyGetter(_types.ListOfObject, "Count"));
         il.Emit(OpCodes.Blt, listLoopStart);
 
-        // names.Add("length")
+        // Arguments own keys, including length when present, come from PDS.
+        var skipListLength = il.DefineLabel();
+        il.Emit(OpCodes.Ldarg_0);
+        il.Emit(OpCodes.Isinst, inputs.ArgumentsType);
+        il.Emit(OpCodes.Brtrue, skipListLength);
         il.Emit(OpCodes.Ldloc, namesLocal);
         il.Emit(OpCodes.Ldstr, "length");
         il.Emit(OpCodes.Callvirt, _types.GetMethod(_types.ListOfObject, "Add", _types.Object));
+        il.MarkLabel(skipListLength);
 
         // Append PDS extras (named props installed via `arr.foo = X` or
         // Object.defineProperty(arr, "foo", ...)). Required for Test262

@@ -296,7 +296,6 @@ public partial class RuntimeEmitter
         EmittedClassDefinitionRuntime ClassDefinitions,
         EmittedClassInitializationRuntime ClassInitialization,
         EmittedAbortRuntime? Abort,
-        FieldBuilder ArgumentsLengthField,
         TypeBuilder ArgumentsType,
         EmittedArrayBufferRuntime? ArrayBuffer,
         EmittedArrayOperationsRuntime ArrayOperations,
@@ -399,8 +398,6 @@ public partial class RuntimeEmitter
     );
 
     private readonly record struct GetListPropertyInputs(
-        FieldBuilder ArgumentsLengthField,
-        TypeBuilder ArgumentsType,
         EmittedArrayOperationsRuntime ArrayOperations,
         bool ArrayPrototypeMutation,
         EmittedDescriptorStorageRuntime DescriptorStorage,
@@ -1544,20 +1541,8 @@ public partial class RuntimeEmitter
         il.Emit(OpCodes.Ldsfld, inputs.UndefinedInstance);
         il.Emit(OpCodes.Ret);
 
-        // length case: return (double)list.Count — except for $Arguments,
-        // which exposes its own _length field (sloppy arguments objects
-        // don't auto-update length on out-of-range indexed writes per
-        // ECMA-262 10.4.4).
+        // Length for legacy List carriers. Arguments reads use ordinary descriptors.
         il.MarkLabel(lengthLabel);
-        var notArgumentsLengthLabel = il.DefineLabel();
-        il.Emit(OpCodes.Ldarg_0);
-        il.Emit(OpCodes.Isinst, inputs.ArgumentsType);
-        il.Emit(OpCodes.Brfalse, notArgumentsLengthLabel);
-        il.Emit(OpCodes.Ldarg_0);
-        il.Emit(OpCodes.Castclass, inputs.ArgumentsType);
-        il.Emit(OpCodes.Ldfld, inputs.ArgumentsLengthField);
-        il.Emit(OpCodes.Ret);
-        il.MarkLabel(notArgumentsLengthLabel);
         il.Emit(OpCodes.Ldarg_0);
         il.Emit(OpCodes.Callvirt, _types.GetPropertyGetter(_types.ListOfObject, "Count"));
         il.Emit(OpCodes.Conv_R8);
@@ -1975,12 +1960,12 @@ public partial class RuntimeEmitter
             il,
             objectRead,
             new ListGetBranchInputs(
-                inputs.ArgumentsLengthField,
                 inputs.ArgumentsType,
                 inputs.ArrayStorage,
                 inputs.DescriptorStorage,
                 inputs.InvokeMethodValue,
                 inputs.ObjectPrototypes,
+                inputs.Reflect,
                 inputs.UndefinedInstance,
                 inputs.UndefinedType
             ),

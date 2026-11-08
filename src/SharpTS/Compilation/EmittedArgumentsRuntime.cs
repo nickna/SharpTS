@@ -37,13 +37,11 @@ public sealed class EmittedArgumentsRuntime
         internal set => SetHandle(ref _enumerableCtor, value);
     }
 
-    private FieldBuilder? _lengthField;
-    /// <summary>$Arguments._length — JS-visible length (per ECMA-262 sloppy
-    /// arguments, "length" doesn't auto-update on out-of-range indexed sets).</summary>
-    public FieldBuilder LengthField
+    private MethodBuilder? _defineLength;
+    public MethodBuilder DefineLength
     {
-        get => Require(_lengthField);
-        internal set => SetHandle(ref _lengthField, value);
+        get => Require(_defineLength);
+        internal set => SetHandle(ref _defineLength, value);
     }
 
     private FieldBuilder? _currentField;
@@ -87,7 +85,7 @@ public sealed class EmittedArgumentsRuntime
         _ = Initialize;
         _ = DefaultCtor;
         _ = EnumerableCtor;
-        _ = LengthField;
+        _ = DefineLength;
         _ = CurrentField;
         IsComplete = true;
     }

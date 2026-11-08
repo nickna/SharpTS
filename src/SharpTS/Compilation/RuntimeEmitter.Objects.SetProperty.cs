@@ -62,7 +62,6 @@ public partial class RuntimeEmitter
     private readonly record struct SetPropertyInputs(
         EmittedClassDefinitionRuntime ClassDefinitions,
         EmittedAbortRuntime? Abort,
-        FieldBuilder ArgumentsLengthField,
         TypeBuilder ArgumentsType,
         EmittedArrayStorageRuntime ArrayStorage,
         EmittedTypedArrayRuntime TypedArrays,
@@ -100,6 +99,7 @@ public partial class RuntimeEmitter
         EmittedClassDefinitionRuntime ClassDefinitions,
         EmittedArrayOperationsRuntime ArrayOperations,
         EmittedArrayStorageRuntime ArrayStorage,
+        Type ArgumentsType,
         EmittedTypedArrayRuntime TypedArrays,
         TypeBuilder BoundAnyFunctionType,
         TypeBuilder BoundTSFunctionType,
@@ -866,29 +866,6 @@ public partial class RuntimeEmitter
             new GlobalThisSetRedirectInputs(inputs.GlobalThisSetProperty, inputs.GlobalThisSingletonField)
         );
 
-        // The default arguments length is independent of the backing List.
-        // Once an explicit descriptor exists, use ordinary named-property
-        // assignment, including accessors and read-only data properties.
-        var notArgumentsLengthLabel = il.DefineLabel();
-        il.Emit(OpCodes.Ldarg_0);
-        il.Emit(OpCodes.Isinst, inputs.ArgumentsType);
-        il.Emit(OpCodes.Brfalse, notArgumentsLengthLabel);
-        il.Emit(OpCodes.Ldarg_1);
-        il.Emit(OpCodes.Ldstr, "length");
-        il.Emit(OpCodes.Call, _types.GetMethod(
-            _types.String, "op_Equality", _types.String, _types.String));
-        il.Emit(OpCodes.Brfalse, notArgumentsLengthLabel);
-        il.Emit(OpCodes.Ldarg_0);
-        il.Emit(OpCodes.Ldarg_1);
-        il.Emit(OpCodes.Call, inputs.DescriptorStorage.GetPropertyDescriptor);
-        il.Emit(OpCodes.Brtrue, listSetNamedProperty);
-        il.Emit(OpCodes.Ldarg_0);
-        il.Emit(OpCodes.Castclass, inputs.ArgumentsType);
-        il.Emit(OpCodes.Ldarg_2);
-        il.Emit(OpCodes.Stfld, inputs.ArgumentsLengthField);
-        il.Emit(OpCodes.Ret);
-        il.MarkLabel(notArgumentsLengthLabel);
-
         // Proxy dispatch is omitted entirely from assemblies that do not use
         // Proxy. Its receiver-aware ordinary-set helper is feature-gated too.
         if (inputs.ProxySelected)
@@ -1172,24 +1149,16 @@ public partial class RuntimeEmitter
         // List<object?> handler: same shape as $TSArray's non-length path.
         il.MarkLabel(listSetPropLabel);
         {
-            // Skip if key is "length" or a numeric index — those write paths
-            // belong to SetIndex (numeric) / a dedicated length path. Silent
-            // no-op for "length" matches current behavior; named numeric
-            // string falls through to PDS (close enough, integer-key writes
-            // through SetProperty are rare).
+            // Only legacy List arrays use a special length slot.
             var listSetIsLengthLabel = il.DefineLabel();
+            il.Emit(OpCodes.Ldarg_0);
+            il.Emit(OpCodes.Isinst, inputs.ArgumentsType);
+            il.Emit(OpCodes.Brtrue, listSetNamedProperty);
             il.Emit(OpCodes.Ldarg_1);
             il.Emit(OpCodes.Ldstr, "length");
             il.Emit(OpCodes.Call, _types.GetMethod(_types.String, "op_Equality", _types.String, _types.String));
             il.Emit(OpCodes.Brtrue, listSetIsLengthLabel);
             il.MarkLabel(listSetNamedProperty);
-            // Frozen guard.
-            var listSetNotFrozenLabel = il.DefineLabel();
-            il.Emit(OpCodes.Ldarg_0);
-            il.Emit(OpCodes.Call, inputs.DescriptorStorage.IsFrozen);
-            il.Emit(OpCodes.Brfalse, listSetNotFrozenLabel);
-            il.Emit(OpCodes.Ret);
-            il.MarkLabel(listSetNotFrozenLabel);
             // Accessor descriptors keep their setter semantics on List-backed
             // arrays/arguments. A present setter handles the write; getter-only
             // descriptors fall through to the non-writable no-op below.
@@ -1202,6 +1171,10 @@ public partial class RuntimeEmitter
             il.Emit(OpCodes.Brfalse, listSetNoPdsSetterLabel);
             EmitInvokePdsSetterWithValueAndReturn(il, inputs.InvokeMethodValue, listSetPdsSetterLocal);
             il.MarkLabel(listSetNoPdsSetterLabel);
+            // Freezing restricts data writes, while existing setters still run.
+            il.Emit(OpCodes.Ldarg_0);
+            il.Emit(OpCodes.Call, inputs.DescriptorStorage.IsFrozen);
+            il.Emit(OpCodes.Brtrue, listSetIsLengthLabel);
             // Existing-descriptor writable=false guard.
             var listSetExistingDescLocal = il.DeclareLocal(inputs.DescriptorStorage.DescriptorType);
             il.Emit(OpCodes.Ldarg_0);
@@ -3328,10 +3301,15 @@ public partial class RuntimeEmitter
                 arrayDescLocal, arrayCheckFrozenLabel, arrayRejectLabel);
             il.MarkLabel(arrayCheckInheritedLabel);
             // Array length is an intrinsic own slot even without a PDS entry.
+            var checkArrayInheritedProperty = il.DefineLabel();
+            il.Emit(OpCodes.Ldarg_0);
+            il.Emit(OpCodes.Isinst, inputs.ArgumentsType);
+            il.Emit(OpCodes.Brtrue, checkArrayInheritedProperty);
             il.Emit(OpCodes.Ldarg_1);
             il.Emit(OpCodes.Ldstr, "length");
             il.Emit(OpCodes.Call, _types.StringOpEquality);
             il.Emit(OpCodes.Brtrue, arrayCheckFrozenLabel);
+            il.MarkLabel(checkArrayInheritedProperty);
             EmitArrayIndexPrototypeSetPolicy(il,
                 new ArrayIndexPrototypeSetInputs(inputs.DescriptorStorage, inputs.InvokeMethodUnwrapped,
                     inputs.InvokeMethodValue, inputs.ObjectDescriptors, inputs.ObjectPrototypes,
@@ -3342,10 +3320,15 @@ public partial class RuntimeEmitter
             il.Emit(OpCodes.Ldarg_0);
             il.Emit(OpCodes.Call, inputs.DescriptorStorage.IsFrozen);
             il.Emit(OpCodes.Brtrue, arrayRejectLabel);
+            var checkArrayExtensibility = il.DefineLabel();
+            il.Emit(OpCodes.Ldarg_0);
+            il.Emit(OpCodes.Isinst, inputs.ArgumentsType);
+            il.Emit(OpCodes.Brtrue, checkArrayExtensibility);
             il.Emit(OpCodes.Ldarg_1);
             il.Emit(OpCodes.Ldstr, "length");
             il.Emit(OpCodes.Call, _types.StringOpEquality);
             il.Emit(OpCodes.Brtrue, arrayDoStoreLabel);
+            il.MarkLabel(checkArrayExtensibility);
             il.Emit(OpCodes.Ldarg_0);
             il.Emit(OpCodes.Ldarg_1);
             il.Emit(OpCodes.Call, inputs.DescriptorStorage.CanAddProperty);

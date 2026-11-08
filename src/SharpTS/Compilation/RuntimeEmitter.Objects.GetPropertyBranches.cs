@@ -37,12 +37,12 @@ public partial class RuntimeEmitter
     );
 
     private readonly record struct ListGetBranchInputs(
-        FieldBuilder ArgumentsLengthField,
         TypeBuilder ArgumentsType,
         EmittedArrayStorageRuntime ArrayStorage,
         EmittedDescriptorStorageRuntime DescriptorStorage,
         MethodBuilder InvokeMethodValue,
         EmittedObjectPrototypeRuntime ObjectPrototypes,
+        EmittedReflectRuntime Reflect,
         FieldInfo UndefinedInstance,
         Type UndefinedType
     );
@@ -517,16 +517,25 @@ public partial class RuntimeEmitter
         il.Emit(OpCodes.Call, _types.GetMethod(_types.String, "op_Equality", _types.String, _types.String));
         var notLengthLabel = il.DefineLabel();
         il.Emit(OpCodes.Brfalse, notLengthLabel);
-        // $Arguments is a List subclass whose observable length is an
-        // independent internal slot; out-of-range indexed writes grow the
-        // backing Count without changing `arguments.length`.
         var ordinaryListLengthLabel = il.DefineLabel();
         il.Emit(OpCodes.Ldarg_0);
         il.Emit(OpCodes.Isinst, inputs.ArgumentsType);
         il.Emit(OpCodes.Brfalse, ordinaryListLengthLabel);
+        // No own length: read through the actual prototype with the original receiver.
+        var lengthParent = il.DeclareLocal(_types.Object);
+        var noLengthParent = il.DefineLabel();
         il.Emit(OpCodes.Ldarg_0);
-        il.Emit(OpCodes.Castclass, inputs.ArgumentsType);
-        il.Emit(OpCodes.Ldfld, inputs.ArgumentsLengthField);
+        il.Emit(OpCodes.Call, inputs.ObjectPrototypes.GetPrototypeOf);
+        il.Emit(OpCodes.Stloc, lengthParent);
+        il.Emit(OpCodes.Ldloc, lengthParent);
+        il.Emit(OpCodes.Brfalse, noLengthParent);
+        il.Emit(OpCodes.Ldloc, lengthParent);
+        il.Emit(OpCodes.Ldarg_1);
+        il.Emit(OpCodes.Ldarg_0);
+        il.Emit(OpCodes.Call, inputs.Reflect.Get);
+        il.Emit(OpCodes.Ret);
+        il.MarkLabel(noLengthParent);
+        il.Emit(OpCodes.Ldsfld, inputs.UndefinedInstance);
         il.Emit(OpCodes.Ret);
         il.MarkLabel(ordinaryListLengthLabel);
         il.Emit(OpCodes.Ldarg_0);

@@ -25,6 +25,8 @@ public partial class RuntimeEmitter
             _types.Object
         );
         runtime.RuntimeClass.Type = typeBuilder;
+        runtime.Arguments.DefineLength = typeBuilder.DefineMethod("DefineArgumentsLength",
+            MethodAttributes.Assembly | MethodAttributes.Static, _types.Void, [_types.Object, _types.Double]);
         runtime.Arguments.Initialize = typeBuilder.DefineMethod("InitializeArguments",
             MethodAttributes.Public | MethodAttributes.Static, _types.Void, [_types.Object, _types.Boolean]);
 
