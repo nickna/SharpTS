@@ -57,9 +57,15 @@ public sealed class BorrowedArrayReverseSearchTests
             try { Array.prototype.findLastIndex.call(receiver, arg("predicate"), arg("thisArg"), arg("extra")); }
             catch (error) { console.log(error instanceof TypeError); }
             console.log(trace.join(","));
+
+            const empty = { length: 0 };
+            try { Array.prototype.findLast.call(empty, null); }
+            catch (error) { console.log(error instanceof TypeError); }
+            try { Array.prototype.findLastIndex.call(empty, null); }
+            catch (error) { console.log(error instanceof TypeError); }
             """;
 
-        Assert.Equal("true\npredicate,thisArg,extra,length getter,length valueOf\n",
+        Assert.Equal("true\npredicate,thisArg,extra,length getter,length valueOf\ntrue\ntrue\n",
             TestHarness.RunUnchecked(source, mode));
     }
 }
