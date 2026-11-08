@@ -739,31 +739,6 @@ public partial class ILEmitter
             IL.MarkLabel(lengthOkLabel);
         }
 
-        var prevReceiverLocal = IL.DeclareLocal(_ctx.Types.Object);
-        IL.Emit(OpCodes.Ldsfld, runtime.ArrayOperations.CurrentReceiverField);
-        IL.Emit(OpCodes.Stloc, prevReceiverLocal);
-        // ECMA-262 §23.1.3: O = ToObject(this value). The callback's final
-        // "array" argument is O, so a primitive receiver must surface as its
-        // wrapper object — `Array.prototype.forEach.call("ab", cb)` passes a
-        // String wrapper (`typeof obj === "object"`, `obj instanceof String`),
-        // not the bare string. ToObject is identity for objects/arrays and
-        // returns an empty object for null/undefined (the spec TypeError still
-        // fires later at materialization, before the callback ever reads this).
-        // Materialization below keeps using the raw receiver, observationally
-        // identical to O for every shape this path supports. (#454)
-        var receiverScopeReady = IL.DefineLabel();
-        if (argumentsReceiver is not null)
-        {
-            // Leave the surrounding scope alone while reading arguments
-            // length, which may throw. Direct copies need no scope at all.
-            IL.Emit(OpCodes.Ldloc, argumentsReceiver);
-            IL.Emit(OpCodes.Brtrue, receiverScopeReady);
-        }
-        IL.Emit(OpCodes.Ldloc, receiverLocal);
-        IL.Emit(OpCodes.Call, runtime.BoxedPrimitives.ToObject);
-        IL.Emit(OpCodes.Stsfld, runtime.ArrayOperations.CurrentReceiverField);
-        IL.MarkLabel(receiverScopeReady);
-
         var methodArgs = c.Arguments.Skip(1).ToList();
 
         // ECMA-262 lazy-iteration order: callback validation happens AFTER
@@ -900,19 +875,14 @@ public partial class ILEmitter
             IL.MarkLabel(materialized);
         }
 
-        // For iterator methods that accept thisArg (callbackfn, thisArg) per
-        // ECMA-262, save the previous _currentCallbackThisArg, stash methodArgs[1]
-        // (or undefined) into the thread-static, then restore after the call.
-        // EmitCallbackArgsAndInvoke reads it as the receiver to InvokeMethodValue.
+        // Evaluate thisArg before entering the runtime receiver scope.
         bool hasThisArgSlot = methodName is "every" or "some" or "filter" or "map"
             or "forEach" or "find" or "findIndex" or "findLast" or "findLastIndex"
             or "flatMap";
-        LocalBuilder? prevThisArgLocal = null;
+        LocalBuilder? callbackThisArg = null;
         if (hasThisArgSlot)
         {
-            prevThisArgLocal = IL.DeclareLocal(_ctx.Types.Object);
-            IL.Emit(OpCodes.Ldsfld, runtime.ArrayOperations.CallbackThisArgField);
-            IL.Emit(OpCodes.Stloc, prevThisArgLocal);
+            callbackThisArg = IL.DeclareLocal(_ctx.Types.Object);
             if (methodArgs.Count >= 2)
             {
                 EmitExpression(methodArgs[1]);
@@ -922,12 +892,11 @@ public partial class ILEmitter
             {
                 IL.Emit(OpCodes.Ldsfld, runtime.Sentinels.UndefinedInstance);
             }
+            IL.Emit(OpCodes.Stloc, callbackThisArg);
             if (mapCallback is not null)
             {
-                var thisArg = IL.DeclareLocal(_ctx.Types.Object);
                 var mapMaterialized = IL.DefineLabel();
                 var validationCallbackReady = IL.DefineLabel();
-                IL.Emit(OpCodes.Stloc, thisArg);
                 IL.Emit(OpCodes.Ldloc, argumentsReceiver!);
                 IL.Emit(OpCodes.Brfalse, mapMaterialized);
 
@@ -943,9 +912,7 @@ public partial class ILEmitter
                 IL.MarkLabel(validationCallbackReady);
                 IL.Emit(OpCodes.Call, runtime.ArrayOperations.MaterializeForIteration);
                 IL.MarkLabel(mapMaterialized);
-                IL.Emit(OpCodes.Ldloc, thisArg);
             }
-            IL.Emit(OpCodes.Stsfld, runtime.ArrayOperations.CallbackThisArgField);
         }
 
         switch (kind)
@@ -1019,16 +986,18 @@ public partial class ILEmitter
                 break;
         }
 
-        if (argumentsReceiver is not null && !copiesArgumentsDirectly)
+        if (runtimeMethod is MethodBuilder helper
+            && runtime.ArrayOperations.GetPrototypeReceiverScope(helper) is { } scoped)
         {
-            var scopeReady = IL.DefineLabel();
-            IL.Emit(OpCodes.Ldloc, argumentsReceiver);
-            IL.Emit(OpCodes.Brfalse, scopeReady);
-            IL.Emit(OpCodes.Ldloc, argumentsReceiver);
-            IL.Emit(OpCodes.Stsfld, runtime.ArrayOperations.CurrentReceiverField);
-            IL.MarkLabel(scopeReady);
+            if (callbackThisArg is not null)
+                IL.Emit(OpCodes.Ldloc, callbackThisArg);
+            IL.Emit(OpCodes.Ldloc, receiverLocal);
+            IL.Emit(OpCodes.Call, scoped);
         }
-        IL.Emit(OpCodes.Call, runtimeMethod);
+        else
+        {
+            IL.Emit(OpCodes.Call, runtimeMethod);
+        }
 
         // Box numeric returns to match expression-as-value conventions.
         // Void returns (forEach) need a Ldnull pushed so the caller has a
@@ -1049,19 +1018,6 @@ public partial class ILEmitter
         else if (rt == _ctx.Types.Boolean)
             IL.Emit(OpCodes.Box, _ctx.Types.Boolean);
         // else (already _types.Object / List<object> / etc.) → no boxing.
-
-        // Restore the thread-static so nested prototype.call contexts don't leak.
-        // Save result in temp, restore field, push result.
-        var resultTmp = IL.DeclareLocal(_ctx.Types.Object);
-        IL.Emit(OpCodes.Stloc, resultTmp);
-        IL.Emit(OpCodes.Ldloc, prevReceiverLocal);
-        IL.Emit(OpCodes.Stsfld, runtime.ArrayOperations.CurrentReceiverField);
-        if (prevThisArgLocal != null)
-        {
-            IL.Emit(OpCodes.Ldloc, prevThisArgLocal);
-            IL.Emit(OpCodes.Stsfld, runtime.ArrayOperations.CallbackThisArgField);
-        }
-        IL.Emit(OpCodes.Ldloc, resultTmp);
 
         SetStackUnknown();
         return true;

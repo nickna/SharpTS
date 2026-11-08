@@ -47,7 +47,8 @@ public sealed class ArrayReceiverScopeFeatureGatingTests
         var (assembly, output) = TestHarness.CompileAndRun("console.log(1);", DecoratorMode.None);
         Assert.Equal("1\n", output);
         Assert.DoesNotContain(RuntimeMethods(assembly), method =>
-            method.Name.EndsWith("WithReceiverScope", StringComparison.Ordinal));
+            method.Name.EndsWith("WithReceiverScope", StringComparison.Ordinal)
+            || method.Name.EndsWith("WithPrototypeReceiverScope", StringComparison.Ordinal));
         Assert.DoesNotContain(RuntimeMethods(assembly), method =>
             method.Name is "ArrayMapProto" or "ArrayFindProto"
                 or "ArrayIndexOfProto" or "ArrayLastIndexOfProto");
@@ -66,6 +67,8 @@ public sealed class ArrayReceiverScopeFeatureGatingTests
         Assert.Equal("20,20\n", output);
         Assert.Contains(RuntimeMethods(assembly), method =>
             method.Name == "ArrayFindDirectBoolWithReceiverScope");
+        Assert.DoesNotContain(RuntimeMethods(assembly), method =>
+            method.Name.EndsWith("WithPrototypeReceiverScope", StringComparison.Ordinal));
     }
 
     [Theory]

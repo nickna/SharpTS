@@ -14,15 +14,20 @@ public sealed class EmittedArrayOperationsRuntime
     public bool IsComplete { get; private set; }
 
     private readonly Dictionary<MethodBuilder, MethodBuilder> _receiverScopedMethods = [];
+    private readonly Dictionary<MethodBuilder, MethodBuilder> _prototypeReceiverScopedMethods = [];
 
     public MethodBuilder WithReceiverScope(MethodBuilder helper)
         => _receiverScopedMethods.GetValueOrDefault(helper, helper);
 
-    internal void RegisterReceiverScope(MethodBuilder helper, MethodBuilder scoped)
+    internal MethodBuilder? GetPrototypeReceiverScope(MethodBuilder helper)
+        => _prototypeReceiverScopedMethods.GetValueOrDefault(helper);
+
+    internal void RegisterReceiverScope(MethodBuilder helper, MethodBuilder scoped, bool explicitReceiver)
     {
         if (IsComplete)
             throw new InvalidOperationException("Array operation metadata is complete.");
-        _receiverScopedMethods.Add(helper, scoped);
+        var methods = explicitReceiver ? _prototypeReceiverScopedMethods : _receiverScopedMethods;
+        methods.Add(helper, scoped);
     }
 
     // Array methods

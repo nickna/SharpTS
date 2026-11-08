@@ -14,7 +14,7 @@ public partial class RuntimeEmitter
         Scope([
             arrays.Map, arrays.Filter, arrays.ForEach, arrays.Find, arrays.FindIndex,
             arrays.FindLast, arrays.FindLastIndex, arrays.Some, arrays.Every, arrays.FlatMap
-        ], [_types.ListOfObject, _types.Object], stagesThisArg: true);
+        ], [_types.ListOfObject, _types.Object], stagesThisArg: true, prototypeCalls: true);
 
         Scope([
             arrays.MapDirect, arrays.FilterDirect, arrays.ForEachDirect, arrays.FindDirect,
@@ -24,12 +24,14 @@ public partial class RuntimeEmitter
             arrays.FilterDirectBool, arrays.FindDirectBool, arrays.FindIndexDirectBool,
             arrays.SomeDirectBool, arrays.EveryDirectBool
         ], [_types.ListOfObject, typeof(Func<object, bool>)]);
-        Scope([arrays.Reduce, arrays.ReduceRight, arrays.With, arrays.ToSpliced],
-            [_types.ListOfObject, _types.ObjectArray]);
-        Scope([arrays.Flat, arrays.Sort, arrays.ToSorted, arrays.At],
+        Scope([arrays.Reduce, arrays.ReduceRight, arrays.With],
+            [_types.ListOfObject, _types.ObjectArray], prototypeCalls: true);
+        Scope([arrays.ToSpliced], [_types.ListOfObject, _types.ObjectArray]);
+        Scope([arrays.Flat, arrays.At], [_types.ListOfObject, _types.Object], prototypeCalls: true);
+        Scope([arrays.Sort, arrays.ToSorted],
             [_types.ListOfObject, _types.Object]);
-        Scope([arrays.Includes], [_types.ListOfObject, _types.Object, _types.Object]);
-        Scope([arrays.ToReversed], [_types.ListOfObject]);
+        Scope([arrays.Includes], [_types.ListOfObject, _types.Object, _types.Object], prototypeCalls: true);
+        Scope([arrays.ToReversed], [_types.ListOfObject], prototypeCalls: true);
         Scope([arrays.ReduceDirect],
             [_types.ListOfObject, typeof(Func<object, object, object>), _types.Object]);
         Scope([arrays.SortDirect], [_types.ListOfObject, typeof(Func<object, object, object>)]);
@@ -37,21 +39,30 @@ public partial class RuntimeEmitter
         Scope([arrays.SortNumeric],
             [_types.Object, typeof(Func<double, double, double>), typeof(Func<object, object, double>)]);
 
-        void Scope(MethodBuilder[] helpers, Type[] parameters, bool stagesThisArg = false)
+        void Scope(MethodBuilder[] helpers, Type[] parameters, bool stagesThisArg = false,
+            bool prototypeCalls = false)
         {
             foreach (var helper in helpers)
+            {
                 EmitArrayReceiverScopedAdapter(typeBuilder, runtime, helper, parameters, stagesThisArg);
+                if (prototypeCalls && _features.UsesInlineArrayPrototypeScopes)
+                    EmitArrayReceiverScopedAdapter(typeBuilder, runtime, helper, parameters,
+                        stagesThisArg, explicitReceiver: true);
+            }
         }
     }
 
     private void EmitArrayReceiverScopedAdapter(
         TypeBuilder typeBuilder, EmittedRuntime runtime, MethodBuilder helper,
-        Type[] helperParameters, bool stagesThisArg)
+        Type[] helperParameters, bool stagesThisArg, bool explicitReceiver = false)
     {
         Type[] parameters = stagesThisArg ? [.. helperParameters, _types.Object] : helperParameters;
-        var method = typeBuilder.DefineMethod(helper.Name + "WithReceiverScope",
+        if (explicitReceiver)
+            parameters = [.. parameters, _types.Object];
+        string suffix = explicitReceiver ? "WithPrototypeReceiverScope" : "WithReceiverScope";
+        var method = typeBuilder.DefineMethod(helper.Name + suffix,
             MethodAttributes.Public | MethodAttributes.Static, helper.ReturnType, parameters);
-        runtime.ArrayOperations.RegisterReceiverScope(helper, method);
+        runtime.ArrayOperations.RegisterReceiverScope(helper, method, explicitReceiver);
         var il = method.GetILGenerator();
         var savedReceiver = il.DeclareLocal(_types.Object);
         var savedThisArg = il.DeclareLocal(_types.Object);
@@ -67,7 +78,15 @@ public partial class RuntimeEmitter
         // Keep the scope in a runtime method so argument expressions execute
         // before staging and exception handling never crosses a caller's stack.
         il.BeginExceptionBlock();
-        il.Emit(OpCodes.Ldarg_0);
+        if (explicitReceiver)
+        {
+            il.Emit(OpCodes.Ldarg, parameters.Length - 1);
+            il.Emit(OpCodes.Call, runtime.BoxedPrimitives.ToObject);
+        }
+        else
+        {
+            il.Emit(OpCodes.Ldarg_0);
+        }
         il.Emit(OpCodes.Stsfld, runtime.ArrayOperations.CurrentReceiverField);
         if (stagesThisArg)
         {

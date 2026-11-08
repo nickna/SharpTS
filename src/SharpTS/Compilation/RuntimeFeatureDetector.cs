@@ -136,6 +136,7 @@ public sealed partial class RuntimeFeatureDetector
             UsesArrayPrototypeMutation = false,
             UsesArrayMethodValues = false,
             UsesArrayReceiverScopes = false,
+            UsesInlineArrayPrototypeScopes = false,
             UsesNumberPrototypeMutation = false,
             UsesStringPrototypeMutation = false,
             UsesMathMutation = false,
@@ -1300,6 +1301,9 @@ public sealed partial class RuntimeFeatureDetector
                 break;
 
             case Expr.Call c:
+                if (c.Callee is Expr.Get { Name.Lexeme: "call", Object: Expr.Get method }
+                    && UsesArrayReceiverScope(method.Name.Lexeme))
+                    _set.UsesInlineArrayPrototypeScopes = true;
                 if (c.Arguments.Count > 0 && IsGlobalObject(c.Arguments[0]) && c.Callee is Expr.Get
                     { Object: Expr.Variable { Name.Lexeme: "Object" or "Reflect" },
                       Name.Lexeme: "defineProperty" or "defineProperties" or "set" or "deleteProperty" or "assign" })
