@@ -53,6 +53,12 @@ public partial class Parser
                 }
                 break;
             case Stmt.Export { Declaration: { } exported }: RecordDeclarationNames(exported); break;
+            case Stmt.DeclareModule module:
+                foreach (var member in module.Members) RecordDeclarationNames(member);
+                break;
+            case Stmt.DeclareGlobal global:
+                foreach (var member in global.Members) RecordDeclarationNames(member);
+                break;
             case Stmt.Sequence sequence:
                 foreach (var part in sequence.Statements) RecordDeclarationNames(part);
                 break;

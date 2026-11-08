@@ -21,6 +21,33 @@ public sealed class EditorDeclarationSyntaxTests
         document.Text[record.Span.Start..record.Span.End];
 
     [Theory]
+    [InlineData("declare module \"fixture\" { export enum Status { \"not-ready\" = 4 } }")]
+    [InlineData("declare global { enum Status { \"not-ready\" = 4 } }")]
+    public void AmbientEnumNamesAndQuotedMemberSpansAreRecorded(string source)
+    {
+        var parsed = Parse(source);
+        var block = Assert.Single(parsed.Statements);
+        var member = block is Stmt.DeclareModule module ? Assert.Single(module.Members)
+            : Assert.Single(Assert.IsType<Stmt.DeclareGlobal>(block).Members);
+        if (member is Stmt.Export export) member = export.Declaration!;
+        var @enum = Assert.IsType<Stmt.Enum>(member);
+        var name = Assert.Single(parsed.Syntax.GetRecords(@enum), record => record.Role == EditorSyntaxRole.DeclarationName);
+        var memberName = Assert.Single(parsed.Syntax.GetRecords(Assert.Single(@enum.Members)), record => record.Role == EditorSyntaxRole.LiteralKey);
+        Assert.Equal("Status", Text(parsed.Document, name));
+        Assert.Equal("\"not-ready\"", Text(parsed.Document, memberName));
+    }
+
+    [Fact]
+    public void AmbientVariableNamesAreRecorded()
+    {
+        var parsed = Parse("declare module \"fixture\" { export const value: number; }");
+        var module = Assert.IsType<Stmt.DeclareModule>(Assert.Single(parsed.Statements));
+        var variable = Assert.IsType<Stmt.Var>(Assert.IsType<Stmt.Export>(Assert.Single(module.Members)).Declaration);
+        var name = Assert.Single(parsed.Syntax.GetRecords(variable), record => record.Role == EditorSyntaxRole.DeclarationName);
+        Assert.Equal("value", Text(parsed.Document, name));
+    }
+
+    [Theory]
     [InlineData("\n")]
     [InlineData("\r\n")]
     public void WrittenTypesKeepGroupingAndPartialGenericCloserRanges(string newline)
