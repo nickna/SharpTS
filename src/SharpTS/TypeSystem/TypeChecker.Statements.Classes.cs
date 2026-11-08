@@ -887,6 +887,8 @@ public partial class TypeChecker
             // when this is true the frozen class is rebuilt and re-published afterwards (#658/#661).
             bool anyInferredMethodReturnResolved = false;
 
+            var previousGetterScope = _fieldGetterScope;
+            _fieldGetterScope = CreatePrivateGetterBodyScope(classStmt.Methods, mutableClass, classEnv);
             try
             {
                 anyInferredMethodReturnResolved = CheckClassMethodBodies(
@@ -896,6 +898,7 @@ public partial class TypeChecker
             }
             finally
             {
+                _fieldGetterScope = previousGetterScope;
                 _environment = prevEnv;
                 _privateNameEnclosingClasses.Pop();
                 _currentClass = prevClass;

@@ -53,6 +53,7 @@ public class CliDeclarationEmitTests
                 get #value() { return 3; }
                 set #value(next) {}
                 static get #tag() { return "service"; }
+                read() { return this.#value; }
             }
             """);
         var result = CliTestHelper.RunCli(
@@ -63,6 +64,13 @@ public class CliDeclarationEmitTests
         Assert.Contains("get #value(): number;", declaration);
         Assert.Contains("set #value(next: number);", declaration);
         Assert.Contains("static get #tag(): string;", declaration);
+        dir.CreateFile("consumer.ts", """
+            import type { Service } from "./types/library";
+            declare const service: Service;
+            const value: number = service.read();
+            """);
+        var roundTrip = CliTestHelper.RunCli("--no-tsconfig --noLib --strict --noEmit consumer.ts", dir.Path);
+        Assert.Equal(0, roundTrip.ExitCode);
     }
 
     [Fact]

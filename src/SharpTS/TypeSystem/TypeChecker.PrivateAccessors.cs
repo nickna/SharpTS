@@ -51,7 +51,7 @@ public partial class TypeChecker
                 ? new TypeCheckException($"Cannot assign to '{name.Lexeme}' because it is a read-only property.", name.Line, tsCode: "TS2540")
                 : new TypeCheckException($"Private accessor '{name.Lexeme}' was defined without a getter.", name.Line, tsCode: "TS2806");
         if (!isWrite && facet is TypeInfo.Inferred)
-            facet = PendingPrivateAccessorType(ResolveFieldStagePrivateGetter(owner, isStatic, name.Lexeme, facet));
+            facet = PendingPrivateAccessorType(ResolvePendingPrivateGetter(owner, isStatic, name.Lexeme, facet));
         return InstantiatePrivateCompoundFieldType(facet, receiver, owner);
     }
 }

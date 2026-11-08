@@ -184,6 +184,19 @@ public sealed class PrivateAccessorTests
     [InlineData("class C { static value = C.#x; static get #x() { return 1; } }", "C.value")]
     public void FieldTypesUseInferredPrivateGetterReturns(string declaration, string access)
     {
+        new TypeChecker().Check(TestHarness.ParseOrThrow($"{declaration} const right: number = {access};"));
+        var statements = TestHarness.ParseOrThrow($"{declaration} const wrong: string = {access};");
+        var error = Assert.ThrowsAny<TypeCheckException>(() => new TypeChecker().Check(statements));
+        Assert.Equal("TS2322", error.Diagnostic.TsCode);
+    }
+
+    [Theory]
+    [InlineData("class C { get #first() { return this.#second; } get #second() { return 1; } read() { return this.#first; } }", "new C().read()")]
+    [InlineData("const C = class { get #first() { return this.#second; } get #second() { return 1; } read() { return this.#first; } };", "new C().read()")]
+    [InlineData("class C { static get #first() { return C.#second; } static get #second() { return 1; } static read() { return C.#first; } }", "C.read()")]
+    public void PrivateGetterReturnsInferFromLaterPrivateGetters(string declaration, string access)
+    {
+        new TypeChecker().Check(TestHarness.ParseOrThrow($"{declaration} const right: number = {access};"));
         var statements = TestHarness.ParseOrThrow($"{declaration} const wrong: string = {access};");
         var error = Assert.ThrowsAny<TypeCheckException>(() => new TypeChecker().Check(statements));
         Assert.Equal("TS2322", error.Diagnostic.TsCode);

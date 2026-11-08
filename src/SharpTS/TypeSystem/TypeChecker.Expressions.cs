@@ -3070,6 +3070,8 @@ public partial class TypeChecker
         // class-declaration path #658/#661).
         bool anyInferredMethodReturnResolved = false;
 
+        var previousGetterScope = _fieldGetterScope;
+        _fieldGetterScope = CreatePrivateGetterBodyScope(classExpr.Methods, mutableClass, classEnv);
         try
         {
             foreach (var method in ClassMethodsInCheckOrder(classExpr.Methods))
@@ -3273,6 +3275,7 @@ public partial class TypeChecker
         }
         finally
         {
+            _fieldGetterScope = previousGetterScope;
             _environment = prevEnv;
             _privateNameEnclosingClasses.Pop();
             _currentClass = prevClass;

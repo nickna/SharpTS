@@ -124,10 +124,7 @@ public partial class TypeChecker
             Expr.ClassExpr expression => expression.Methods,
             _ => []
         };
-        foreach (var method in methods)
-            if (method.PrivateAccessorName is { } name && method.Parameters.Count == 0 &&
-                method.ReturnType is null && method.ReturnTypeNode is null && method.Body is not null)
-                scope.PrivateGetters[(method.IsStatic, name.Lexeme)] = method;
+        RegisterPrivateGetterDependencies(scope, methods.Where(IsUnannotatedPrivateGetter));
 
         foreach (var field in fields)
             if (field.Initializer is not null && !field.IsDeclare &&
@@ -138,6 +135,30 @@ public partial class TypeChecker
                 scope.Fields[key] = field;
             }
         return scope;
+    }
+
+    private FieldGetterScope? CreatePrivateGetterBodyScope(IReadOnlyList<Stmt.Function> methods,
+        TypeInfo.MutableClass owner, TypeEnvironment environment)
+    {
+        var getters = methods.Where(IsUnannotatedPrivateGetter).ToArray();
+        if (getters.Length == 0) return _fieldGetterScope;
+
+        // All fields are complete here. The same dependency resolver can
+        // check a later private getter before publishing the current body.
+        var scope = new FieldGetterScope(owner, environment, _environment,
+            _privateNameEnclosingClasses.ToArray(), _fieldGetterScope);
+        RegisterPrivateGetterDependencies(scope, getters);
+        return scope;
+    }
+
+    private static bool IsUnannotatedPrivateGetter(Stmt.Function method)
+        => method.PrivateAccessorName is not null && method.Parameters.Count == 0 &&
+           method.ReturnType is null && method.ReturnTypeNode is null && method.Body is not null;
+
+    private static void RegisterPrivateGetterDependencies(FieldGetterScope scope, IEnumerable<Stmt.Function> getters)
+    {
+        foreach (var getter in getters)
+            scope.PrivateGetters[(getter.IsStatic, getter.PrivateAccessorName!.Lexeme)] = getter;
     }
 
     private string? ClassAccessorName(Stmt.Accessor accessor) => accessor.ComputedKey is not null
@@ -299,7 +320,7 @@ public partial class TypeChecker
         });
     }
 
-    private TypeInfo ResolveFieldStagePrivateGetter(TypeInfo owner, bool isStatic, string name, TypeInfo type)
+    private TypeInfo ResolvePendingPrivateGetter(TypeInfo owner, bool isStatic, string name, TypeInfo type)
     {
         if (FindFieldGetterScope(owner) is not { } scope ||
             !scope.PrivateGetters.TryGetValue((isStatic, name), out var getter)) return type;
