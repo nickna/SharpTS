@@ -1334,10 +1334,11 @@ public partial class Interpreter : IDisposable
 
         // Mutable global bindings live on the global object. Lexical bindings
         // above this lookup and immutable constants retain their existing paths.
+        if (GlobalThis.HasUserProperty(name.Lexeme))
+            return RuntimeValue.FromBoxed(GetPropertyValue(GlobalThis, name.Lexeme));
+
         if (IsMutableGlobalObjectBinding(name.Lexeme))
         {
-            if (GlobalThis.HasUserProperty(name.Lexeme))
-                return RuntimeValue.FromBoxed(GetPropertyValue(GlobalThis, name.Lexeme));
             if (GlobalThis.IsDeletedProperty(name.Lexeme))
             {
                 if (allowUnresolvable) return RuntimeValue.Undefined;
@@ -2256,7 +2257,8 @@ public partial class Interpreter : IDisposable
     /// Checks if a declaration is type-only (interface or type alias) with no runtime value.
     /// </summary>
     private bool IsTypeOnlyDeclaration(Stmt decl) =>
-        decl is Stmt.Interface or Stmt.TypeAlias or Stmt.Var { IsDeclare: true };
+        decl is Stmt.Interface or Stmt.TypeAlias or Stmt.Var { IsDeclare: true }
+            or Stmt.Enum { IsAmbient: true, IsConst: false };
 
     /// <summary>
     /// Executes a CommonJS-style require import: import x = require('path')

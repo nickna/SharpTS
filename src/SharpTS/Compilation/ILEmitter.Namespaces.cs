@@ -213,6 +213,9 @@ public partial class ILEmitter
     /// </summary>
     private void EmitEnumInNamespace(FieldBuilder nsField, Stmt.Enum enumStmt)
     {
+        if (enumStmt is { IsAmbient: true, IsConst: false })
+            return;
+
         // Get the qualified enum name and its members
         string qualifiedEnumName = _ctx.ResolveEnumName(enumStmt.Name.Lexeme);
         if (_ctx.EnumValueFields?.TryGetValue(qualifiedEnumName, out var valueField) == true)

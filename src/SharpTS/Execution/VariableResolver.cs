@@ -440,6 +440,9 @@ public class VariableResolver : AstVisitorBase
 
     protected override void VisitEnum(Stmt.Enum stmt)
     {
+        if (stmt is { IsAmbient: true, IsConst: false })
+            return;
+
         Declare(stmt.Name.Lexeme);
         Define(stmt.Name.Lexeme);
         if (stmt.IsConst)

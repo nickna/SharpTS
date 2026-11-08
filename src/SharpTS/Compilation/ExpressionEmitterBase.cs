@@ -894,14 +894,9 @@ public abstract partial class ExpressionEmitterBase : IEmitterContext
 
         if (TryEmitGlobalVariable(name, v)) return;
 
-        // An unresolved identifier is a ReferenceError in every execution
-        // context, including state-machine bodies.  Returning CLR null here
-        // made `yield missingName` silently yield null while the synchronous
-        // ILEmitter correctly threw.
+        // The global object can provide an identifier with no compiled binding.
         IL.Emit(OpCodes.Ldstr, name);
-        IL.Emit(OpCodes.Call, Ctx.Runtime!.Errors.ThrowUndefinedVariable);
-        // Unreachable stack value for verifier shape.
-        IL.Emit(OpCodes.Ldnull);
+        IL.Emit(OpCodes.Call, Ctx.Runtime!.GlobalObject.GetBinding);
         SetStackUnknown();
     }
 
@@ -2486,6 +2481,14 @@ public abstract partial class ExpressionEmitterBase : IEmitterContext
         return true;
     }
 
+    protected void EmitUnresolvedGlobalTypeOf(string name)
+    {
+        IL.Emit(OpCodes.Ldstr, name);
+        IL.Emit(OpCodes.Call, Ctx.Runtime!.GlobalObject.GetProperty);
+        IL.Emit(OpCodes.Call, Ctx.Runtime.Operators.TypeOf);
+        SetStackType(StackType.String);
+    }
+
     protected bool TryEmitIndirectEvalValue(string name)
     {
         if (name != "eval") return false;
@@ -3029,8 +3032,7 @@ public abstract partial class ExpressionEmitterBase : IEmitterContext
                 }
                 else if (u.Right is Expr.Variable tv && !IsKnownVariable(tv))
                 {
-                    _helpers.IL.Emit(OpCodes.Ldstr, "undefined");
-                    _helpers.SetStackUnknown();
+                    EmitUnresolvedGlobalTypeOf(tv.Name.Lexeme);
                 }
                 // Error constructors are functions
                 else if (u.Right is Expr.Variable ev
