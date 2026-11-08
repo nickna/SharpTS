@@ -12,13 +12,10 @@ public partial class ILCompiler
     private void DeclareLexicalSuperElementInitializer(Expr.ClassExpr expression, TypeBuilder owner)
     {
         var declaration = ClassExpressionDeclaration(expression);
-        bool ownElements = expression.Fields.Any(field => !field.IsStatic && !field.IsDeclare)
-            || expression.AutoAccessors?.Any(accessor => !accessor.IsStatic) == true
-            || expression.Methods.Any(method => !method.IsStatic && method.IsPrivate)
-            || expression.Accessors?.Any(accessor => !accessor.IsStatic && accessor.Name.Type == TokenType.PRIVATE_IDENTIFIER) == true;
         string? parentName = Expr.GetSuperclassLeafName(expression.SuperclassExpr);
         bool intrinsicArray = !_nativeAotProjectOutput && owner.BaseType == _runtime.ArrayStorage.Type;
-        if ((!ownElements && !intrinsicArray) || expression.SuperclassExpr == null
+        // Lexical super needs to bind the shared receiver even if there are no elements to initialize.
+        if (expression.SuperclassExpr == null
             || !ContainsLexicalSuper(expression.Methods)
             || (parentName == "Array" && !intrinsicArray)
             || parentName is "Promise" or "Map" or "Set" or "WeakMap" or "WeakSet" or "Date" or "RegExp" or "Buffer"

@@ -5,6 +5,26 @@ namespace SharpTS.Tests.CompilerTests;
 
 public sealed class AsyncLexicalSuperTests
 {
+    [Theory]
+    [InlineData("")]
+    [InlineData("async ")]
+    public void FieldFreeClassExpressionBindsReceiverFromArrow(string modifier)
+    {
+        string source = $$"""
+            const Base = class { constructor() { this.base = 3; } };
+            const C = class extends Base {
+                constructor() {
+                    const initialize = {{modifier}}() => super();
+                    initialize();
+                    console.log(this.base);
+                }
+            };
+            console.log(new C().base);
+            """;
+
+        Assert.Equal("3\n3\n", TestHarness.RunUnchecked(source, ExecutionMode.Compiled));
+    }
+
     [Fact]
     public void AsyncArrowBindsReceiverBeforeItsFirstSuspension()
     {
