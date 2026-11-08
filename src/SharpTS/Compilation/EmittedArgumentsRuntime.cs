@@ -60,6 +60,20 @@ public sealed class EmittedArgumentsRuntime
         internal set => SetHandle(ref _currentField, value);
     }
 
+    private FieldBuilder? _currentCallee;
+    public FieldBuilder CurrentCallee
+    {
+        get => Require(_currentCallee);
+        internal set => SetHandle(ref _currentCallee, value);
+    }
+
+    private MethodBuilder? _findCallee;
+    public MethodBuilder FindCallee
+    {
+        get => Require(_findCallee);
+        internal set => SetHandle(ref _findCallee, value);
+    }
+
     private static T Require<T>(T? handle, [CallerMemberName] string name = "") where T : class =>
         handle ?? throw new InvalidOperationException("Arguments metadata '" + name + "' has not been declared.");
 
@@ -87,6 +101,8 @@ public sealed class EmittedArgumentsRuntime
         _ = EnumerableCtor;
         _ = DefineLength;
         _ = CurrentField;
+        _ = CurrentCallee;
+        _ = FindCallee;
         IsComplete = true;
     }
 }

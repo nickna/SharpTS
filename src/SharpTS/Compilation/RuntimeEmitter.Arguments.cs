@@ -69,17 +69,18 @@ public partial class RuntimeEmitter
             GuestErrorEmitter.ThrowTypeError(thrower.GetILGenerator(), runtime,
                 "Cannot access 'callee' on an unmapped arguments object");
 
-            var done = il.DefineLabel();
+            var mapped = il.DefineLabel();
+            var install = il.DefineLabel();
             var accessor = il.DeclareLocal(_types.Object);
+            il.Emit(OpCodes.Newobj, runtime.DescriptorStorage.DescriptorConstructor);
+            il.Emit(OpCodes.Stloc, descriptor);
             il.Emit(OpCodes.Ldarg_1);
-            il.Emit(OpCodes.Brfalse, done);
+            il.Emit(OpCodes.Brfalse, mapped);
             _types.EmitLoadMethodInfo(il, thrower);
             il.Emit(OpCodes.Ldstr, "");
             il.Emit(OpCodes.Ldc_I4_0);
             il.Emit(OpCodes.Call, runtime.FunctionConstruction.GetOrCreate);
             il.Emit(OpCodes.Stloc, accessor);
-            il.Emit(OpCodes.Newobj, runtime.DescriptorStorage.DescriptorConstructor);
-            il.Emit(OpCodes.Stloc, descriptor);
             il.Emit(OpCodes.Ldloc, descriptor);
             il.Emit(OpCodes.Ldloc, accessor);
             il.Emit(OpCodes.Callvirt, runtime.DescriptorStorage.DescriptorGetter.GetSetMethod()!);
@@ -88,16 +89,23 @@ public partial class RuntimeEmitter
             il.Emit(OpCodes.Callvirt, runtime.DescriptorStorage.DescriptorSetter.GetSetMethod()!);
             il.Emit(OpCodes.Ldloc, descriptor);
             il.Emit(OpCodes.Ldc_I4_0);
-            il.Emit(OpCodes.Callvirt, runtime.DescriptorStorage.DescriptorEnumerable.GetSetMethod()!);
+            il.Emit(OpCodes.Callvirt, runtime.DescriptorStorage.DescriptorConfigurable.GetSetMethod()!);
+            il.Emit(OpCodes.Br, install);
+
+            il.MarkLabel(mapped);
+            il.Emit(OpCodes.Ldloc, descriptor);
+            il.Emit(OpCodes.Ldarg_2);
+            il.Emit(OpCodes.Callvirt, runtime.DescriptorStorage.DescriptorValue.GetSetMethod()!);
+
+            il.MarkLabel(install);
             il.Emit(OpCodes.Ldloc, descriptor);
             il.Emit(OpCodes.Ldc_I4_0);
-            il.Emit(OpCodes.Callvirt, runtime.DescriptorStorage.DescriptorConfigurable.GetSetMethod()!);
+            il.Emit(OpCodes.Callvirt, runtime.DescriptorStorage.DescriptorEnumerable.GetSetMethod()!);
             il.Emit(OpCodes.Ldarg_0);
             il.Emit(OpCodes.Ldstr, "callee");
             il.Emit(OpCodes.Ldloc, descriptor);
             il.Emit(OpCodes.Call, runtime.DescriptorStorage.DefineValidatedProperty);
             il.Emit(OpCodes.Pop);
-            il.MarkLabel(done);
         }
         il.Emit(OpCodes.Ret);
     }

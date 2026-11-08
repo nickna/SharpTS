@@ -883,8 +883,7 @@ public partial class ILCompiler
     {
         if (!ReferencesArgumentsIdentifier(function.Body, function.Parameters)) return;
         _functions.CapturingArguments.Add(name);
-        if (_runtime?.FunctionAttributes.CapturesArgumentsCtor != null)
-            method.SetCustomAttribute(_runtime.FunctionAttributes.CapturesArgumentsCtor, CustomAttributeEncoder.EmptyBlob);
+        MarkArgumentContextEntry(method);
     }
 
     /// <summary>
@@ -914,7 +913,8 @@ public partial class ILCompiler
                 parameters,
                 paramTypes,
                 argumentOffset,
-                publishedArgsLeadingSkip);
+                publishedArgsLeadingSkip,
+                body);
         }
 
         emitter.EmitDefaultParameters(parameters, argumentOffset, paramTypes, body,
@@ -953,7 +953,8 @@ public partial class ILCompiler
         List<Stmt.Parameter> parameters,
         Type[] paramTypes,
         int argBase,
-        int publishedArgsLeadingSkip = 0)
+        int publishedArgsLeadingSkip = 0,
+        List<Stmt>? body = null)
     {
         var listType = ctx.Types.ListOfObject;
         var argsLocal = il.DeclareLocal(listType);
@@ -1085,8 +1086,13 @@ public partial class ILCompiler
         {
             il.Emit(OpCodes.Ldloc, argsLocal);
             bool unmapped = ctx.IsStrictMode || parameters.Any(parameter =>
-                parameter.IsRest || parameter.DefaultValue is not null || parameter.DestructuredProperties is not null);
+                parameter.IsRest || parameter.DefaultValue is not null || parameter.DestructuredProperties is not null)
+                || Runtime.ParameterBinder.ParameterInitializers(body) is not null;
             il.Emit(unmapped ? OpCodes.Ldc_I4_1 : OpCodes.Ldc_I4_0);
+            if (unmapped)
+                il.Emit(OpCodes.Ldnull);
+            else
+                EmitArgumentsCallee(il, ctx, runtime);
             il.Emit(OpCodes.Call, runtime.Arguments.Initialize);
         }
 

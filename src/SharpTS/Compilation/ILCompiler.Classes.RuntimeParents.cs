@@ -480,6 +480,7 @@ public partial class ILCompiler
             il.Emit(OpCodes.Stloc, arguments);
             il.Emit(OpCodes.Ldloc, arguments);
             il.Emit(OpCodes.Ldc_I4_1);
+            il.Emit(OpCodes.Ldnull);
             il.Emit(OpCodes.Call, _runtime.Arguments.Initialize);
             SeedCapturedLocal("arguments", arguments);
         }

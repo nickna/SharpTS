@@ -90,7 +90,7 @@ public partial class ILCompiler
         LocalBuilder? arguments = null;
         if (ReferencesArgumentsIdentifier(info.FunctionShape.Body, source.Parameters))
             arguments = EmitArgumentsLocalPrologueCore(il, context, source.Parameters,
-                sourceTypes, argumentOffset, publishedArgsLeadingSkip: receiverSkip);
+                sourceTypes, argumentOffset, publishedArgsLeadingSkip: receiverSkip, body: source.BlockBody);
         new ILEmitter(context).EmitDefaultParameters(source.Parameters, argumentOffset, sourceTypes, source.BlockBody);
         EmitMappedArgumentsBindings(il, context, arguments, source.Parameters, source.BlockBody);
 
@@ -446,7 +446,8 @@ public partial class ILCompiler
         var types = method.GetParameters().Skip(receiverSkip).Select(parameter => parameter.ParameterType).ToArray();
         var il = method.GetILGenerator();
         context ??= CreateModuleMemberContext(il, method);
+        context.IsStrictMode |= IsStrictFunction(function);
         return EmitArgumentsLocalPrologueCore(il, context, parameters, types,
-            (isInstanceMethod ? 1 : 0) + receiverSkip, publishedArgsLeadingSkip: receiverSkip);
+            (isInstanceMethod ? 1 : 0) + receiverSkip, publishedArgsLeadingSkip: receiverSkip, body: function.Body);
     }
 }

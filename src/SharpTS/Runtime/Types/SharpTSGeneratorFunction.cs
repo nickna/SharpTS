@@ -20,6 +20,7 @@ public class SharpTSGeneratorFunction : ISharpTSGeneratorFunctionValue, IReceive
     GeneratorFunctionProperties ISharpTSGeneratorFunctionValue.FunctionProperties => _functionProperties;
     private readonly Stmt.Function _declaration;
     private readonly RuntimeEnvironment _closure;
+    private SharpTSGeneratorFunction? _selfReference;
     private readonly int _arity;
     internal bool IsStaticMethod => _declaration.IsStatic;
     internal SharpTSClass? PrivateOwner { get; set; }
@@ -96,7 +97,7 @@ public class SharpTSGeneratorFunction : ISharpTSGeneratorFunctionValue, IReceive
         }
         // Capture at invocation, before defaults and before the lazy body can suspend.
         if (ArgumentsUsage.UsesArguments(_declaration))
-            environment.Define("arguments", SharpTSArguments.Create(arguments, interpreter,
+            environment.Define("arguments", SharpTSArguments.Create(arguments, interpreter, _selfReference ?? this,
                 environment, _declaration.Parameters, _declaration.Body));
         ParameterBinder.Bind(_declaration.Parameters, arguments, environment, interpreter, _declaration.Body);
         var prepared = ParameterBinder.PrepareBody(_declaration.Parameters, _declaration.Body, environment, interpreter);
@@ -127,6 +128,7 @@ public class SharpTSGeneratorFunction : ISharpTSGeneratorFunctionValue, IReceive
 
     private SharpTSGeneratorFunction ShareObjectState(SharpTSGeneratorFunction bound)
     {
+        bound._selfReference = _selfReference ?? this;
         bound._functionProperties = _functionProperties;
         bound.PrivateOwner = PrivateOwner;
         bound._computedName = _computedName;
@@ -203,7 +205,7 @@ public class SharpTSArrowGeneratorFunction : ISharpTSGeneratorFunctionValue, IRe
         else if (HasOwnThis)
             environment.Define("this", interpreter.GlobalThis); // sloppy-mode `this` = globalThis (#775)
         if (HasOwnThis && ArgumentsUsage.UsesArguments(_declaration))
-            environment.Define("arguments", SharpTSArguments.Create(arguments, interpreter,
+            environment.Define("arguments", SharpTSArguments.Create(arguments, interpreter, _selfReference ?? this,
                 environment, _declaration.Parameters, _declaration.BlockBody));
         ParameterBinder.Bind(_declaration.Parameters, arguments, environment, interpreter, _declaration.BlockBody);
         var prepared = ParameterBinder.PrepareBody(_declaration.Parameters, _declaration.BlockBody, environment, interpreter);

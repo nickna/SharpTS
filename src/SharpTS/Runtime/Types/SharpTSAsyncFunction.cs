@@ -39,6 +39,7 @@ public class SharpTSAsyncFunction : ISharpTSAsyncCallable, ISharpTSFunctionObjec
     private readonly Stmt.Function _declaration;
     private readonly RuntimeEnvironment _closure;
     private readonly int _arity;
+    private readonly SharpTSAsyncFunction? _selfReference;
     internal bool IsStaticMethod => _declaration.IsStatic;
     internal SharpTSClass? PrivateOwner { get; set; }
     private readonly bool _receiverBound;
@@ -64,6 +65,7 @@ public class SharpTSAsyncFunction : ISharpTSAsyncCallable, ISharpTSFunctionObjec
 
     private SharpTSAsyncFunction(SharpTSAsyncFunction source, RuntimeEnvironment closure)
     {
+        _selfReference = source._selfReference ?? source;
         _declaration = source._declaration;
         _closure = closure;
         _arity = source._arity;
@@ -74,6 +76,7 @@ public class SharpTSAsyncFunction : ISharpTSAsyncCallable, ISharpTSFunctionObjec
 
     private SharpTSAsyncFunction(SharpTSAsyncFunction source, object? receiver)
     {
+        _selfReference = source._selfReference ?? source;
         _declaration = source._declaration;
         _closure = source._closure;
         _arity = source._arity;
@@ -186,7 +189,7 @@ public class SharpTSAsyncFunction : ISharpTSAsyncCallable, ISharpTSFunctionObjec
         }
         // Snapshot the caller values before defaults; this binding survives every await.
         if (ArgumentsUsage.UsesArguments(_declaration))
-            environment.Define("arguments", SharpTSArguments.Create(arguments, interpreter,
+            environment.Define("arguments", SharpTSArguments.Create(arguments, interpreter, _selfReference ?? this,
                 environment, _declaration.Parameters, _declaration.Body));
         await ParameterBinder.BindAsync(_declaration.Parameters, arguments, environment, interpreter, _declaration.Body);
         var prepared = ParameterBinder.PrepareBody(_declaration.Parameters, _declaration.Body, environment, interpreter);
@@ -360,7 +363,7 @@ public class SharpTSAsyncArrowFunction : ISharpTSAsyncCallable, ISharpTSFunction
             environment.Define("this", _boundThis);
         // Function expressions own arguments; true arrows retain the enclosing binding.
         if (HasOwnThis && ArgumentsUsage.UsesArguments(_declaration))
-            environment.Define("arguments", SharpTSArguments.Create(arguments, interpreter,
+            environment.Define("arguments", SharpTSArguments.Create(arguments, interpreter, _selfReference ?? this,
                 environment, _declaration.Parameters, _declaration.BlockBody));
         await ParameterBinder.BindAsync(_declaration.Parameters, arguments, environment, interpreter, _declaration.BlockBody);
         var prepared = ParameterBinder.PrepareBody(_declaration.Parameters, _declaration.BlockBody, environment, interpreter);

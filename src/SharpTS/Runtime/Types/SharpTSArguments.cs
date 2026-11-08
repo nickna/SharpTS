@@ -23,7 +23,7 @@ public sealed class SharpTSArguments : SharpTSArray
             (double)LongLength, writable: true, enumerable: false, configurable: true));
     }
 
-    internal static SharpTSArguments Create(IEnumerable<object?> arguments, Interpreter interpreter,
+    internal static SharpTSArguments Create(IEnumerable<object?> arguments, Interpreter interpreter, ISharpTSCallable callee,
         RuntimeEnvironment environment, List<Stmt.Parameter> parameters, List<Stmt>? body)
     {
         var result = new SharpTSArguments(arguments);
@@ -37,8 +37,10 @@ public sealed class SharpTSArguments : SharpTSArray
             var thrower = interpreter.GetArgumentsCalleeThrower();
             result.DefineProperty("callee", new SharpTSPropertyDescriptor(getter: thrower, setter: thrower));
         }
-        else if (body is not null)
+        else
         {
+            result.DefineProperty("callee", new SharpTSPropertyDescriptor(
+                callee, writable: true, enumerable: false, configurable: true));
             foreach (var (index, name) in ParameterBinder.MappedArgumentParameters(parameters, body))
             {
                 if (index >= result.LongLength) continue;

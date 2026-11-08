@@ -59,6 +59,7 @@ public class SharpTSFunction : ISharpTSCallable, ITypeCategorized
     private readonly Stmt.Function _declaration;
     private readonly RuntimeEnvironment _closure;
     private readonly int _arity;
+    private SharpTSFunction? _selfReference;
     internal bool IsConstructible { get; }
     internal bool IsStaticMethod => _declaration.IsStatic;
     internal IReadOnlyList<Stmt.Parameter> Parameters => _declaration.Parameters;
@@ -262,7 +263,7 @@ public class SharpTSFunction : ISharpTSCallable, ITypeCategorized
         // Materialized only when the body can observe it (ArgumentsUsage scan).
         if (ArgumentsUsage.UsesArguments(_declaration))
         {
-            environment.Define("arguments", SharpTSArguments.Create(arguments, interpreter,
+            environment.Define("arguments", SharpTSArguments.Create(arguments, interpreter, _selfReference ?? this,
                 environment, _declaration.Parameters, _declaration.Body));
         }
         ParameterBinder.Bind(_declaration.Parameters, arguments, environment, interpreter, _declaration.Body);
@@ -372,6 +373,7 @@ public class SharpTSFunction : ISharpTSCallable, ITypeCategorized
 
     private SharpTSFunction ShareObjectState(SharpTSFunction bound)
     {
+        bound._selfReference = _selfReference ?? this;
         bound._properties = _properties;
         bound.PrivateOwner = PrivateOwner;
         bound._hasReceiverScope = _hasReceiverScope;
@@ -420,7 +422,7 @@ public class SharpTSFunction : ISharpTSCallable, ITypeCategorized
         {
             var argsList = new List<object?>(arguments.Length);
             for (int i = 0; i < arguments.Length; i++) argsList.Add(arguments[i].ToObject());
-            environment.Define("arguments", SharpTSArguments.Create(argsList, interpreter,
+            environment.Define("arguments", SharpTSArguments.Create(argsList, interpreter, _selfReference ?? this,
                 environment, _declaration.Parameters, _declaration.Body));
         }
         ParameterBinder.BindRV(_declaration.Parameters, arguments, environment, interpreter, _declaration.Body);
@@ -740,7 +742,7 @@ public class SharpTSArrowFunction : ISharpTSCallable, ITypeCategorized
 
         // Defaults can observe their own arguments binding before the body runs.
         if (HasOwnThis && ArgumentsUsage.UsesArguments(_declaration))
-            environment.Define("arguments", SharpTSArguments.Create(arguments, interpreter,
+            environment.Define("arguments", SharpTSArguments.Create(arguments, interpreter, _selfReference ?? this,
                 environment, _declaration.Parameters, _declaration.BlockBody));
 
         // Receiver bound via Bind() is stored on the function itself, not in an
@@ -828,7 +830,7 @@ public class SharpTSArrowFunction : ISharpTSCallable, ITypeCategorized
         {
             var argsList = new List<object?>(arguments.Length);
             for (int i = 0; i < arguments.Length; i++) argsList.Add(arguments[i].ToObject());
-            environment.Define("arguments", SharpTSArguments.Create(argsList, interpreter,
+            environment.Define("arguments", SharpTSArguments.Create(argsList, interpreter, _selfReference ?? this,
                 environment, _declaration.Parameters, _declaration.BlockBody));
         }
         if (_hasBoundThis)

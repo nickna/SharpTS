@@ -6,7 +6,7 @@ namespace SharpTS.Compilation;
 public partial class RuntimeEmitter
 {
     private void EmitTSFunctionInvokeConstructed(TypeBuilder owner, EmittedFunctionValueRuntime functions,
-        EmittedFunctionAttributesRuntime attributes, FieldInfo? currentArguments, FieldBuilder methodField,
+        EmittedFunctionAttributesRuntime attributes, EmittedArgumentsRuntime arguments, FieldBuilder methodField,
         FieldBuilder targetField, FieldBuilder expectsThisField, FieldBuilder currentThisField,
         MethodBuilder adjustArguments, Action<ILGenerator, LocalBuilder> convertArguments,
         MethodInfo erasedInvokerTarget, MethodInfo? nativeGenericResolver, MethodInfo? nativeCoreLookup)
@@ -86,7 +86,7 @@ public partial class RuntimeEmitter
         il.Emit(OpCodes.Call, _types.GetMethod(_types.ArrayType, "Copy", _types.ArrayType, _types.ArrayType, _types.Int32));
         il.Emit(OpCodes.Ldloc, complete); il.Emit(OpCodes.Ldloc, adjusted); il.Emit(OpCodes.Ldlen); il.Emit(OpCodes.Conv_I4);
         il.Emit(OpCodes.Ldarg_3); il.Emit(OpCodes.Stelem_Ref);
-        if (currentArguments != null) { il.Emit(OpCodes.Ldloc, effective); il.Emit(OpCodes.Stsfld, currentArguments); }
+        il.Emit(OpCodes.Ldloc, effective); il.Emit(OpCodes.Stsfld, arguments.CurrentField);
         var target = il.DeclareLocal(_types.Object);
         var instance = il.DefineLabel(); var haveTarget = il.DefineLabel();
         il.Emit(OpCodes.Ldloc, core); il.Emit(OpCodes.Callvirt, _types.GetProperty(_types.MethodInfo, "IsStatic")!.GetGetMethod()!);
@@ -96,13 +96,16 @@ public partial class RuntimeEmitter
         var previousThis = il.DeclareLocal(_types.Object); var result = il.DeclareLocal(_types.Object);
         il.Emit(OpCodes.Ldsfld, currentThisField); il.Emit(OpCodes.Stloc, previousThis);
         il.Emit(OpCodes.Ldarg_1); il.Emit(OpCodes.Stsfld, currentThisField);
+        var previousCallee = EmitStageArgumentsCallee(il, arguments);
         il.BeginExceptionBlock();
         il.Emit(OpCodes.Ldloc, core); il.Emit(OpCodes.Call, _types.GetMethod(_types.MethodInvoker, "Create", _types.MethodBase));
         il.Emit(OpCodes.Ldloc, target); il.Emit(OpCodes.Ldloc, complete);
         var span = _types.MakeGenericType(typeof(Span<>), _types.Object);
         il.Emit(OpCodes.Newobj, _types.GetConstructor(span, _types.ObjectArray)!);
         il.Emit(OpCodes.Callvirt, _types.GetMethod(_types.MethodInvoker, "Invoke", _types.Object, span)); il.Emit(OpCodes.Stloc, result);
-        il.BeginFinallyBlock(); il.Emit(OpCodes.Ldloc, previousThis); il.Emit(OpCodes.Stsfld, currentThisField); il.EndExceptionBlock();
+        il.BeginFinallyBlock();
+        EmitRestoreArgumentsCallee(il, arguments, previousCallee);
+        il.Emit(OpCodes.Ldloc, previousThis); il.Emit(OpCodes.Stsfld, currentThisField); il.EndExceptionBlock();
         il.Emit(OpCodes.Ldloc, result); il.Emit(OpCodes.Ret);
         il.MarkLabel(ordinary);
         il.Emit(OpCodes.Ldarg_0); il.Emit(OpCodes.Ldarg_1); il.Emit(OpCodes.Ldarg_2);

@@ -51,6 +51,10 @@ public sealed class EmittedFunctionInvocationRuntimeTests
         owner.DefineLength = initializers.DefineMethod("DefineLength", MethodAttributes.Public | MethodAttributes.Static,
             typeof(void), [typeof(object), typeof(double)]);
         owner.DefineLength.GetILGenerator().Emit(OpCodes.Ret);
+        owner.FindCallee = initializers.DefineMethod("FindCallee", MethodAttributes.Public | MethodAttributes.Static,
+            typeof(object), [typeof(MethodInfo)]);
+        owner.FindCallee.GetILGenerator().Emit(OpCodes.Ldnull);
+        owner.FindCallee.GetILGenerator().Emit(OpCodes.Ret);
         owner.Initialize = initializers.DefineMethod("Initialize", MethodAttributes.Public | MethodAttributes.Static,
             typeof(void), [typeof(object)]);
         owner.Initialize.GetILGenerator().Emit(OpCodes.Ret);
