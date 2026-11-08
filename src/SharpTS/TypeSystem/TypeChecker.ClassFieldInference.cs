@@ -276,7 +276,7 @@ public partial class TypeChecker
         {
             // Restore the speculative flow so the ordinary initializer pass
             // retains source-order behavior.
-            if (CheckAndInferClassFieldInitializer(field, scope.Owner) && scope.IsRetryingFields)
+            if (CheckAndInferClassFieldInitializer(field, scope.Owner))
                 // An indexed read can infer this field before selecting its member from the class snapshot.
                 scope.Owner.Freeze();
             scope.PendingFields.Remove((field.IsStatic, GetFieldMemberName(field)));

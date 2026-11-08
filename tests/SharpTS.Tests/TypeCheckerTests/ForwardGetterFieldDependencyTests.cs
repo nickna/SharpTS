@@ -1,9 +1,28 @@
 using SharpTS.Parsing;
+using SharpTS.Tests.Infrastructure;
 using SharpTS.TypeSystem;
 using Xunit;
 namespace SharpTS.Tests.TypeCheckerTests;
 public class ForwardGetterFieldDependencyTests
 {
+    [Theory]
+    [InlineData("class C")]
+    [InlineData("const C = class")]
+    public void ArrowClosureResolvesLaterFieldThroughBracketAccess(string declaration)
+    {
+        var statements = TestHarness.ParseOrThrow($$"""
+            {{declaration}} {
+                read = () => this['value'];
+                value = 1;
+            }
+            const right: number = new C().read();
+            const wrong: string = new C().read();
+            """);
+        var diagnostic = Assert.Single(new TypeChecker(TypeCheckerOptions.Strict).CheckWithRecovery(statements).Diagnostics);
+        Assert.Equal(6, diagnostic.Line);
+        Assert.Equal("TS2322", diagnostic.TsCode);
+    }
+
     [Theory]
     [InlineData("class C { static get callback() { return () => C.later; } static copied = C.callback; static later = 7; }")]
     [InlineData("const C = class Named { static get callback() { return () => Named.later; } static copied = Named.callback; static later = 7; };")]
