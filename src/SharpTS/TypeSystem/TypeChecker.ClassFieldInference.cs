@@ -182,14 +182,11 @@ public partial class TypeChecker
         // A getter body is checked without executing it. Infer any forward
         // field type it needs in the same isolated flow used for deferred reads.
         var dependency = ActiveGetterDependency;
-        bool privateGetterRead = dependency?.Accessor is Stmt.Function;
-        if ((_classFieldDeferredReadDepth > scope.DeferredReadDepth || privateGetterRead) &&
-            scope.Fields.TryGetValue((isStatic, name), out var field))
+        if ((_classFieldDeferredReadDepth > scope.DeferredReadDepth || dependency is not null) &&
+            scope.Fields.TryGetValue((isStatic, name), out var field) &&
+            !scope.ActiveFields.Contains(field))
         {
-            if (privateGetterRead && scope.ActiveFields.Contains(field))
-                dependency!.HasUnresolvedDependency = true;
-            else
-                InferDeferredClassFieldDependency(scope, field);
+            InferDeferredClassFieldDependency(scope, field);
             return;
         }
         if (dependency is not null) dependency.HasUnresolvedDependency = true;
@@ -232,8 +229,8 @@ public partial class TypeChecker
         _classFieldBindingFlowBoundary = scope.InitializerFlowBoundary;
         try
         {
-            // Only a field requested by a deferred callback is inferred early. Restore
-            // flow effects so its ordinary initializer pass retains source-order behavior.
+            // Restore the speculative flow so the ordinary initializer pass
+            // retains source-order behavior.
             CheckAndInferClassFieldInitializer(field, scope.Owner);
             scope.PendingFields.Remove((field.IsStatic, GetFieldMemberName(field)));
         }
