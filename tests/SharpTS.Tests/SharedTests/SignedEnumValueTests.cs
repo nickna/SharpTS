@@ -5,6 +5,26 @@ namespace SharpTS.Tests.SharedTests;
 
 public sealed class SignedEnumValueTests
 {
+    [Theory, ModeData]
+    public void RegularNumericConstantExpressionStartsImplicitSequence(ExecutionMode mode)
+    {
+        const string source = """
+            enum E { A = 1 << 1, B, C }
+            console.log(E.B, E.C, E[3]);
+            """;
+        Assert.Equal("3 4 B\n", TestHarness.Run(source, mode));
+    }
+
+    [Theory, ModeData]
+    public void RegularNumericConstantMayEvaluateToNaN(ExecutionMode mode)
+    {
+        const string source = """
+            enum E { A = 0 / 0, B, C = B + 1, D }
+            console.log(E.A, E.B, E.C, E.D);
+            """;
+        Assert.Equal("NaN NaN NaN NaN\n", TestHarness.Run(source, mode));
+    }
+
     public static IEnumerable<object[]> Cases()
     {
         yield return new object[] { "negative_fraction", """
