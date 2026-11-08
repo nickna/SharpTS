@@ -638,11 +638,7 @@ public partial class TypeChecker
         {
             if (current is TypeInfo.MutableClass { Name: "Array" or "ReadonlyArray" } arrayBase)
             {
-                elementType = arrayBase.Methods.GetValueOrDefault("@@iterator") switch
-                {
-                    TypeInfo.Function { ReturnType: TypeInfo.Iterator iterator } => iterator.ElementType,
-                    _ => TypeInfo.Any.Shared,
-                };
+                elementType = GetArrayPlaceholderElement(arrayBase);
                 return true;
             }
             current = GetSuperclass(current);
@@ -650,6 +646,11 @@ public partial class TypeChecker
         elementType = null!;
         return false;
     }
+
+    private static TypeInfo GetArrayPlaceholderElement(TypeInfo.MutableClass arrayBase) =>
+        arrayBase.Methods.GetValueOrDefault("@@iterator") is
+            TypeInfo.Function { ReturnType: TypeInfo.Iterator iterator }
+            ? iterator.ElementType : TypeInfo.Any.Shared;
 
     private static bool ContainsGlobalThisType(TypeInfo type) =>
         type is TypeInfo.Interface { IsGlobalThisObject: true } ||
