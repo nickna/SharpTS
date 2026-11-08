@@ -742,6 +742,7 @@ public abstract record TypeInfo
 
         internal BindingSymbol? DeclarationBinding { get; init; }
         internal EnumFacet Facet { get; init; }
+        internal string? MemberName { get; init; }
         internal bool IsScalar => Facet == EnumFacet.Scalar;
         internal bool HasSameDeclaration(Enum other) => _cacheId == other._cacheId ||
             DeclarationBinding is not null && ReferenceEquals(DeclarationBinding, other.DeclarationBinding);
@@ -769,7 +770,9 @@ public abstract record TypeInfo
             }
         }
         public override string ToString() => IsConst ? $"const enum {Name}" : $"enum {Name}";
-        internal override string CacheKey() => IsScalar ? $"enum#{_cacheId}#value" : $"enum#{_cacheId}";
+        internal override string CacheKey() => MemberName is not null
+            ? $"enum#{_cacheId}#member:{MemberName.Length}:{MemberName}"
+            : IsScalar ? $"enum#{_cacheId}#value" : $"enum#{_cacheId}";
     }
 
     /// <summary>

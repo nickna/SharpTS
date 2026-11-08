@@ -472,6 +472,12 @@ public partial class TypeChecker
         // A scalar source can have fewer members, but an enum object must provide
         // every target member as a property as well.
         bool compareMemberSets = expected.IsScalar && expected.Members.Count > 1 && actual.Members.Count > 1;
+        // Whole enum unions can relate across an opaque numeric member. An individual
+        // member still needs a matching value (or the corresponding opaque member).
+        if (actual.MemberName is { } name &&
+            (!expected.Members.TryGetValue(name, out var expectedValue) || !Equals(expectedValue, actual.Members[name])))
+            return false;
+
         return (expected.IsScalar || expected.Members.Count == actual.Members.Count) &&
             actual.Members.All(member => expected.Members.TryGetValue(member.Key, out var value) &&
                 (Equals(member.Value, value) ||

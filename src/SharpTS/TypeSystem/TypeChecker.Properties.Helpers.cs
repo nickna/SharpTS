@@ -357,9 +357,12 @@ public partial class TypeChecker
 
         // Keep the declaring enum identity while narrowing a heterogeneous
         // member to the primitive kind it can be assigned to.
-        return enumType.Kind == EnumKind.Heterogeneous
-            ? enumType with { Facet = EnumFacet.Scalar, Kind = value is string ? EnumKind.String : EnumKind.Numeric }
-            : enumType with { Facet = EnumFacet.Scalar };
+        return enumType with
+        {
+            Facet = EnumFacet.Scalar,
+            MemberName = name,
+            Kind = value is string ? EnumKind.String : EnumKind.Numeric
+        };
     }
 
     /// <summary>
