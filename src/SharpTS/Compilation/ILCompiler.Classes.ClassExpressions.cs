@@ -597,7 +597,10 @@ public partial class ILCompiler
         EmitLexicalSuperElementInitializer(classExpr, typeBuilder);
         if (_usesRuntimeParents && !_classes.ErrorSubclasses.Contains(className)
             && !_classes.PromiseSubclasses.Contains(className)
-            && (SupportsReceiverInitialization(ClassExpressionDeclaration(classExpr), allowGenericOwner: true)
+            // Managed class definitions already transport evaluated private
+            // storage to the explicit receiver. Native admission stays finite.
+            && (SupportsReceiverInitialization(ClassExpressionDeclaration(classExpr), allowGenericOwner: true,
+                    allowPrivateElements: !_nativeAotProjectOutput)
                 || _lexicalSuperElementInitializers.ContainsKey(classExpr)))
             EmitReceiverInitializer(typeBuilder, ClassExpressionDeclaration(classExpr), classExpr);
 
