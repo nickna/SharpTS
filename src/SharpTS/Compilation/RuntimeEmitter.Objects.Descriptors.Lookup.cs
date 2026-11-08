@@ -1418,7 +1418,6 @@ public partial class RuntimeEmitter
         il.Emit(OpCodes.Callvirt, _types.GetMethod(_types.ListOfObject, "get_Item", _types.Int32));
         il.Emit(OpCodes.Stloc, elementValueLocal);
         il.MarkLabel(elementDescriptorLabel);
-        // Return element descriptor: { value: element, writable: true, enumerable: true, configurable: true }
         il.Emit(OpCodes.Newobj, _types.DictionaryStringObjectCtor);
         il.Emit(OpCodes.Stloc, resultDictLocal);
 
@@ -1428,35 +1427,24 @@ public partial class RuntimeEmitter
         il.Emit(OpCodes.Ldloc, elementValueLocal);
         il.Emit(OpCodes.Callvirt, _types.GetMethod(_types.DictionaryStringObject, "set_Item"));
 
-        var defaultFlags = il.DefineLabel();
-        var flagsDone = il.DefineLabel();
-        if (argumentsReceiver is not null)
+        // Unstored indexed descriptors inherit the receiver's integrity state.
+        EmitFlag("writable", () =>
         {
-            il.Emit(OpCodes.Ldloc, argumentsReceiver);
-            il.Emit(OpCodes.Brfalse, defaultFlags);
-            // The backing list has no per-index descriptors. Read its
-            // receiver's integrity state when synthesizing these flags.
-            EmitFlag("writable", () =>
-            {
-                il.Emit(OpCodes.Ldloc, argumentsReceiver);
-                il.Emit(OpCodes.Call, descriptorStorage.IsFrozen);
-            });
-            EmitFlag("enumerable", () => il.Emit(OpCodes.Ldloc, argumentsLength!));
-            EmitFlag("configurable", () =>
-            {
-                il.Emit(OpCodes.Ldloc, argumentsReceiver);
-                il.Emit(OpCodes.Call, descriptorStorage.IsFrozen);
-                il.Emit(OpCodes.Ldloc, argumentsReceiver);
-                il.Emit(OpCodes.Call, descriptorStorage.IsSealed);
-                il.Emit(OpCodes.Or);
-            });
-            il.Emit(OpCodes.Br, flagsDone);
-        }
-        il.MarkLabel(defaultFlags);
-        EmitDescriptorBoolField(il, resultDictLocal, "writable", true);
-        EmitDescriptorBoolField(il, resultDictLocal, "enumerable", true);
-        EmitDescriptorBoolField(il, resultDictLocal, "configurable", true);
-        il.MarkLabel(flagsDone);
+            il.Emit(OpCodes.Ldarg_0);
+            il.Emit(OpCodes.Call, descriptorStorage.IsFrozen);
+        });
+        if (argumentsLength is null)
+            EmitDescriptorBoolField(il, resultDictLocal, "enumerable", true);
+        else
+            EmitFlag("enumerable", () => il.Emit(OpCodes.Ldloc, argumentsLength));
+        EmitFlag("configurable", () =>
+        {
+            il.Emit(OpCodes.Ldarg_0);
+            il.Emit(OpCodes.Call, descriptorStorage.IsFrozen);
+            il.Emit(OpCodes.Ldarg_0);
+            il.Emit(OpCodes.Call, descriptorStorage.IsSealed);
+            il.Emit(OpCodes.Or);
+        });
 
         il.Emit(OpCodes.Ldloc, resultDictLocal);
         il.Emit(OpCodes.Br, endLabel);
