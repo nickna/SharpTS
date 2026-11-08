@@ -1522,9 +1522,7 @@ public class SharpTSArray : ITypeCategorized, IReadOnlyList<object?>
             bool descriptorIsAccessor = descriptor.HasGet || descriptor.HasSet;
             bool descriptorIsData = descriptor.HasValue || descriptor.HasWritable;
 
-            PropertyDescriptorFlags existingFlags = PropertyDescriptorFlags.Default;
-            if (hasExisting && _descriptors?.TryGetValue(name, out existingFlags) != true)
-                existingFlags = PropertyDescriptorFlags.Default;
+            var existingFlags = hasExisting ? GetIndexedPropertyFlags(name) : PropertyDescriptorFlags.Default;
 
             // ValidateAndApplyPropertyDescriptor (§10.1.6.3): a
             // non-configurable index cannot become configurable, change
@@ -1719,6 +1717,15 @@ public class SharpTSArray : ITypeCategorized, IReadOnlyList<object?>
         return true;
     }
 
+    private PropertyDescriptorFlags GetIndexedPropertyFlags(string name)
+    {
+        var flags = _descriptors?.TryGetValue(name, out var stored) == true
+            ? stored : PropertyDescriptorFlags.Default;
+        return this is SharpTSArguments && IsSealed
+            ? PropertyDescriptorFlags.ForDefineProperty(flags.Writable && !IsFrozen, flags.Enumerable, false)
+            : flags;
+    }
+
     /// <summary>
     /// Gets the property descriptor for the given property name.
     /// Returns null if the property doesn't exist.
@@ -1745,9 +1752,7 @@ public class SharpTSArray : ITypeCategorized, IReadOnlyList<object?>
             long index = uindex;
             if (TryGetIndexAccessor(index, out var getter, out var setter))
             {
-                PropertyDescriptorFlags accessorFlags = default;
-                if (_descriptors?.TryGetValue(name, out accessorFlags) != true)
-                    accessorFlags = PropertyDescriptorFlags.Default;
+                var accessorFlags = GetIndexedPropertyFlags(name);
                 return new SharpTSPropertyDescriptor
                 {
                     Get = getter,
@@ -1767,9 +1772,7 @@ public class SharpTSArray : ITypeCategorized, IReadOnlyList<object?>
             if (!HasIndex(index))
                 return null;
 
-            PropertyDescriptorFlags flags = default;
-            if (_descriptors?.TryGetValue(name, out flags) != true)
-                flags = PropertyDescriptorFlags.Default;
+            var flags = GetIndexedPropertyFlags(name);
 
             return new SharpTSPropertyDescriptor
             {

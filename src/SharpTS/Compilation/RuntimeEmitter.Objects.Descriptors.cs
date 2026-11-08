@@ -1538,6 +1538,7 @@ public partial class RuntimeEmitter
             il,
             inputs.ArrayStorage,
             inputs.Arguments,
+            inputs.DescriptorStorage,
             propNameLocal,
             resultDictLocal,
             returnNullLabel,
