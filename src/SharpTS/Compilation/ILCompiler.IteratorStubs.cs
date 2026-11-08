@@ -92,6 +92,7 @@ public partial class ILCompiler
             arguments = EmitArgumentsLocalPrologueCore(il, context, source.Parameters,
                 sourceTypes, argumentOffset, publishedArgsLeadingSkip: receiverSkip);
         new ILEmitter(context).EmitDefaultParameters(source.Parameters, argumentOffset, sourceTypes, source.BlockBody);
+        EmitMappedArgumentsBindings(il, context, arguments, source.Parameters, source.BlockBody);
 
         NativePrototypeFieldsLookup.EmitCarrierCreate(_nativePrototypeFields, il, iterator.Constructor);
         EmitIteratorArgumentsStore(il, iterator, arguments);
@@ -428,6 +429,7 @@ public partial class ILCompiler
 
         new ILEmitter(ctx).EmitDefaultParameters(function.Parameters, paramOffset,
             methodParams.Select(p => p.ParameterType).ToArray(), function.Body);
+        EmitMappedArgumentsBindings(methodBuilder.GetILGenerator(), ctx, arguments, function.Parameters, function.Body);
 
         return new(functionDCLocal, arguments, ctx);
     }

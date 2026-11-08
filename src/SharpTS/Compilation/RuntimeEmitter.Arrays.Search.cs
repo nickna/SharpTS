@@ -305,66 +305,15 @@ public partial class RuntimeEmitter
         il.Emit(OpCodes.Br, throwLabel);
         il.MarkLabel(notUndefined);
 
-        // $Arguments → take only the first `_length` elements per ECMA-262
-        // sloppy arguments semantics. `arguments[N] = v` for N >= length does
-        // NOT update length, so a materialized array-like view must not see
-        // those out-of-range slots. Without this slice, `every.call(arguments, cb)`
-        // visits the out-of-range index 2 in test patterns like
-        // `function(a, b) { arguments[2] = 9; ...every.call(arguments, ...) }`.
-        var notArguments = il.DefineLabel();
-        il.Emit(OpCodes.Ldarg_0);
-        il.Emit(OpCodes.Isinst, runtime.Arguments.Type);
-        il.Emit(OpCodes.Brfalse, notArguments);
-        // result = new List<object>(); for (i = 0; i < _length; i++) result.Add(args[i]);
-        var argsLocal = il.DeclareLocal(runtime.Arguments.Type);
-        var argsResultLocal = il.DeclareLocal(_types.ListOfObject);
-        var argsIdxLocal = il.DeclareLocal(_types.Int32);
-        var argsLenLocal = il.DeclareLocal(_types.Int32);
-        il.Emit(OpCodes.Ldarg_0);
-        il.Emit(OpCodes.Castclass, runtime.Arguments.Type);
-        il.Emit(OpCodes.Stloc, argsLocal);
-        il.Emit(OpCodes.Ldloc, argsLocal);
-        il.Emit(OpCodes.Ldfld, runtime.Arguments.LengthField);
-        il.Emit(OpCodes.Stloc, argsLenLocal);
-        il.Emit(OpCodes.Ldloc, argsLenLocal);
-        il.Emit(OpCodes.Newobj, _types.GetConstructor(_types.ListOfObject, _types.Int32));
-        il.Emit(OpCodes.Stloc, argsResultLocal);
-        il.Emit(OpCodes.Ldc_I4_0);
-        il.Emit(OpCodes.Stloc, argsIdxLocal);
-        var argsLoop = il.DefineLabel();
-        var argsLoopEnd = il.DefineLabel();
-        il.MarkLabel(argsLoop);
-        il.Emit(OpCodes.Ldloc, argsIdxLocal);
-        il.Emit(OpCodes.Ldloc, argsLenLocal);
-        il.Emit(OpCodes.Bge, argsLoopEnd);
-        // Bounds check against List.Count too — _length could in principle exceed Count
-        // if length was lifted programmatically; treat absent slots as undefined.
-        il.Emit(OpCodes.Ldloc, argsIdxLocal);
-        il.Emit(OpCodes.Ldloc, argsLocal);
-        il.Emit(OpCodes.Callvirt, _types.GetProperty(_types.ListOfObject, "Count").GetGetMethod()!);
-        var argsHaveLabel = il.DefineLabel();
-        var argsAfterAddLabel = il.DefineLabel();
-        il.Emit(OpCodes.Blt, argsHaveLabel);
-        il.Emit(OpCodes.Ldloc, argsResultLocal);
-        il.Emit(OpCodes.Ldsfld, runtime.Sentinels.UndefinedInstance);
-        il.Emit(OpCodes.Callvirt, _types.GetMethod(_types.ListOfObject, "Add", _types.Object));
-        il.Emit(OpCodes.Br, argsAfterAddLabel);
-        il.MarkLabel(argsHaveLabel);
-        il.Emit(OpCodes.Ldloc, argsResultLocal);
-        il.Emit(OpCodes.Ldloc, argsLocal);
-        il.Emit(OpCodes.Ldloc, argsIdxLocal);
-        il.Emit(OpCodes.Callvirt, _types.GetMethod(_types.ListOfObject, "get_Item", _types.Int32));
-        il.Emit(OpCodes.Callvirt, _types.GetMethod(_types.ListOfObject, "Add", _types.Object));
-        il.MarkLabel(argsAfterAddLabel);
-        il.Emit(OpCodes.Ldloc, argsIdxLocal);
-        il.Emit(OpCodes.Ldc_I4_1);
-        il.Emit(OpCodes.Add);
-        il.Emit(OpCodes.Stloc, argsIdxLocal);
-        il.Emit(OpCodes.Br, argsLoop);
-        il.MarkLabel(argsLoopEnd);
-        il.Emit(OpCodes.Ldloc, argsResultLocal);
-        il.Emit(OpCodes.Ret);
-        il.MarkLabel(notArguments);
+        // Arguments has an independent length and its mapped indices read
+        // the live parameter binding. Snapshot through ordinary properties.
+        var materializeProperties = il.DefineLabel();
+        if (_features.UsesArguments)
+        {
+            il.Emit(OpCodes.Ldarg_0);
+            il.Emit(OpCodes.Isinst, runtime.Arguments.Type);
+            il.Emit(OpCodes.Brtrue, materializeProperties);
+        }
 
         // List<object> → passthrough
         var notList = il.DefineLabel();
@@ -463,7 +412,8 @@ public partial class RuntimeEmitter
         // PDS-store fallback) and other receivers that expose length+indexed
         // properties. Receivers without length yield NaN → 0 → empty list,
         // matching the previous fallback's silent-empty behavior.
-        EmitMaterializeViaGetProperty(il, runtime);
+        il.MarkLabel(materializeProperties);
+        EmitMaterializeViaGetProperty(il, runtime, allowArgumentsLength: true);
         il.Emit(OpCodes.Ret);
 
         // null / undefined: ECMA-262 ToObject(null) / ToObject(undefined) throws
@@ -544,7 +494,8 @@ public partial class RuntimeEmitter
     /// public property pipeline (getters / accessors / chain). Stack-in: arg0
     /// holds the receiver. Stack-out: [List&lt;object&gt;].
     /// </summary>
-    private void EmitMaterializeViaGetProperty(ILGenerator il, EmittedRuntime runtime)
+    private void EmitMaterializeViaGetProperty(
+        ILGenerator il, EmittedRuntime runtime, bool allowArgumentsLength = false)
     {
         var lenLocal = il.DeclareLocal(_types.Int32);
         var listLocal = il.DeclareLocal(_types.ListOfObject);
@@ -592,25 +543,7 @@ public partial class RuntimeEmitter
         il.Emit(OpCodes.Br, afterLen);
         il.MarkLabel(notNegInf);
 
-        // Finite: clamp to [0, 1<<20]
-        il.Emit(OpCodes.Ldloc, dLocal);
-        il.Emit(OpCodes.Conv_I4);
-        il.Emit(OpCodes.Stloc, lenLocal);
-        il.Emit(OpCodes.Ldloc, lenLocal);
-        il.Emit(OpCodes.Ldc_I4_0);
-        var notNeg = il.DefineLabel();
-        il.Emit(OpCodes.Bge, notNeg);
-        il.Emit(OpCodes.Ldc_I4_0);
-        il.Emit(OpCodes.Stloc, lenLocal);
-        il.MarkLabel(notNeg);
-        il.Emit(OpCodes.Ldloc, lenLocal);
-        il.Emit(OpCodes.Ldc_I4, 1 << 20);
-        var notTooBig = il.DefineLabel();
-        il.Emit(OpCodes.Ble, notTooBig);
-        il.Emit(OpCodes.Ldc_I4, 1 << 20);
-        il.Emit(OpCodes.Stloc, lenLocal);
-        il.MarkLabel(notTooBig);
-
+        EmitClampMaterializedLength(il, runtime, dLocal, lenLocal, afterLen, allowArgumentsLength);
         il.MarkLabel(afterLen);
 
         // list = new List<object>(len)
@@ -1849,17 +1782,18 @@ public partial class RuntimeEmitter
     }
 
     /// <summary>
-    /// Emits <c>$Runtime.LikeMaterializeForIteration(object receiver) -&gt; List&lt;object&gt;</c>.
+    /// Emits a length snapshot for array-like iterator helpers.
     /// Iterator-helper companion to <see cref="DeclareArrayLikeMaterialize"/>:
-    /// for receivers that may carry descriptor side effects (Dictionary,
-    /// $Object), returns a placeholder list of <c>length</c> nulls. The
+    /// for dictionary, object and arguments receivers, returns a placeholder
+    /// list with the snapshotted length. Short-circuit helpers carry the
+    /// arguments length in an empty arguments object. The
     /// dispatch site has already stored the receiver in
     /// <c>_currentArrayLikeReceiver</c>; iterator helpers calling
     /// <see cref="EmitLoadArrayLikeElement"/> re-read each slot via
     /// <c>$Runtime.GetProperty</c> per iteration so that ECMA-262 23.1.3.*
     /// element-read ordering (getter at index N mutating index N+1 must be
-    /// observed) is honored. Eager-receiver branches (List, $Array, string,
-    /// $Arguments, ObjectArray, primitives) delegate to ArrayLikeMaterialize.
+    /// observed) is honored. Array storage supplies a length snapshot directly.
+    /// Strings and other eager receivers delegate to ArrayLikeMaterialize.
     /// </summary>
     internal void DeclareArrayLikeMaterializeForIteration(TypeBuilder typeBuilder, EmittedArrayOperationsRuntime arrays)
     {
@@ -1867,7 +1801,7 @@ public partial class RuntimeEmitter
             "ArrayLikeMaterializeForIteration",
             MethodAttributes.Public | MethodAttributes.Static,
             _types.ListOfObject,
-            [_types.Object]
+            [_types.Object, _types.Boolean, _types.Object]
         );
     }
 
@@ -1897,14 +1831,21 @@ public partial class RuntimeEmitter
         il.Emit(OpCodes.Callvirt, runtime.ArrayStorage.EnsureBoxed);
         il.MarkLabel(notPackedArray);
 
+        // Arguments inherits List<object>, but its length and indexed
+        // properties are independent of the backing list.
+        var lazyObject = il.DefineLabel();
+        if (_features.UsesArguments)
+        {
+            il.Emit(OpCodes.Ldarg_0);
+            il.Emit(OpCodes.Isinst, runtime.Arguments.Type);
+            il.Emit(OpCodes.Brtrue, lazyObject);
+        }
+
         // Array/List receivers can carry index accessors installed by
         // defineProperty and inherited indexed properties. Snapshot their raw
         // storage to preserve the iteration length while LoadArrayLikeElement re-reads observable
         // slots from the original receiver on each iteration.
         var notListReceiver = il.DefineLabel();
-        il.Emit(OpCodes.Ldarg_0);
-        il.Emit(OpCodes.Isinst, runtime.Arguments.Type);
-        il.Emit(OpCodes.Brtrue, delegateLabel);
         il.Emit(OpCodes.Ldarg_0);
         il.Emit(OpCodes.Isinst, _types.ListOfObject);
         il.Emit(OpCodes.Brfalse, notListReceiver);
@@ -1915,8 +1856,8 @@ public partial class RuntimeEmitter
         il.MarkLabel(notListReceiver);
 
         // Lazy-eligible: Dictionary<string, object> — pre-detect holes via
-        // ContainsKey (cheap, no getter fire) so EmitSkipIfHole's direct
-        // list[i] check works while values are still re-read at iteration.
+        // ContainsKey without invoking getters. Iteration still reads each
+        // indexed property live.
         var notDict = il.DefineLabel();
         il.Emit(OpCodes.Ldarg_0);
         il.Emit(OpCodes.Isinst, _types.DictionaryStringObject);
@@ -1925,15 +1866,14 @@ public partial class RuntimeEmitter
         il.Emit(OpCodes.Ret);
         il.MarkLabel(notDict);
 
-        // Lazy-eligible: $Object — placeholder is all-null. Holes aren't
-        // detected (matches baseline TSObject behavior, which always visits
-        // every index); element values are re-read at iteration so
-        // descriptor side effects (issue #90) propagate.
+        // $Object and $Arguments need only the length. Iterator helpers
+        // check indexed properties when they visit each slot.
         var notTSObject = il.DefineLabel();
         il.Emit(OpCodes.Ldarg_0);
         il.Emit(OpCodes.Isinst, runtime.ObjectStorage.Type);
         il.Emit(OpCodes.Brfalse, notTSObject);
-        EmitLazyMaterializePath(il, runtime, holeAware: false);
+        il.MarkLabel(lazyObject);
+        EmitLazyMaterializePath(il, runtime, holeAware: false, allowArgumentsLength: true);
         il.Emit(OpCodes.Ret);
         il.MarkLabel(notTSObject);
 
@@ -1949,11 +1889,8 @@ public partial class RuntimeEmitter
         il.Emit(OpCodes.Ret);
         il.MarkLabel(notCompactRecord);
 
-        // Eager paths (List, $Array, string, ObjectArray, $Arguments, primitives,
-        // null/undefined): defer to ArrayLikeMaterialize. The dispatch site's
-        // _currentArrayLikeReceiver still points at the original receiver, but
-        // LoadArrayLikeElement's type check will see it's NOT a Dict/$Object
-        // and use list[i] instead of GetProperty.
+        // Eager paths (strings, object arrays, primitives, null/undefined)
+        // defer to ArrayLikeMaterialize.
         il.MarkLabel(delegateLabel);
         il.Emit(OpCodes.Ldarg_0);
         il.Emit(OpCodes.Call, runtime.ArrayOperations.Materialize);
@@ -1996,27 +1933,24 @@ public partial class RuntimeEmitter
         // Arrays, arguments, strings, and primitive wrappers have bounded CLR
         // storage and retain the established materialization behavior.
         il.Emit(OpCodes.Ldarg_0);
+        il.Emit(OpCodes.Ldc_I4_0);
+        il.Emit(OpCodes.Ldnull);
         il.Emit(OpCodes.Call, runtime.ArrayOperations.MaterializeForIteration);
         il.Emit(OpCodes.Ret);
     }
 
     /// <summary>
-    /// Reads <c>length</c> from arg0 (with full ToNumber side effects), clamps
-    /// it to <c>[0, 1&lt;&lt;20]</c>, allocates a <c>List&lt;object&gt;</c> of
-    /// that size, and fills it. When <paramref name="holeAware"/> is true (Dict
-    /// path), each slot is checked via <c>ContainsKey</c>; absent slots get
-    /// <c>$ArrayHole.Instance</c> so <see cref="EmitSkipIfHole"/>'s direct
-    /// <c>list[idx]</c> check fires correctly. Present slots get null
-    /// placeholders that <see cref="EmitLoadArrayLikeElement"/> overrides via
-    /// <c>GetProperty</c> at iteration time. When false (TSObject path), all
-    /// slots are filled with null. The dispatch site already stored the
-    /// receiver in <c>_currentArrayLikeReceiver</c>.
+    /// Reads and coerces <c>length</c> from arg0, then allocates a list of
+    /// placeholders. The hole-aware dictionary path identifies missing
+    /// entries without invoking getters. The dispatch site stores the
+    /// receiver in <c>_currentArrayLikeReceiver</c> for live indexed reads.
     /// </summary>
     private void EmitLazyMaterializePath(
         ILGenerator il,
         EmittedRuntime runtime,
         bool holeAware,
-        bool rejectOverArrayLength = false)
+        bool rejectOverArrayLength = false,
+        bool allowArgumentsLength = false)
     {
         var lenLocal = il.DeclareLocal(_types.Int32);
         var listLocal = il.DeclareLocal(_types.ListOfObject);
@@ -2041,6 +1975,25 @@ public partial class RuntimeEmitter
             il.Emit(OpCodes.Ble_Un, withinArrayLimit);
             GuestErrorEmitter.ThrowRangeError(il, runtime, "Invalid array length");
             il.MarkLabel(withinArrayLimit);
+        }
+
+        if (_features.UsesArguments && allowArgumentsLength)
+        {
+            // map allocates a result of the source length. After the single
+            // observable length read, validate the callback before capacity.
+            var supported = il.DefineLabel();
+            il.Emit(OpCodes.Ldarg_2);
+            il.Emit(OpCodes.Brfalse, supported);
+            il.Emit(OpCodes.Ldarg_0);
+            il.Emit(OpCodes.Isinst, runtime.Arguments.Type);
+            il.Emit(OpCodes.Brfalse, supported);
+            EmitThrowIfCallbackNotCallable(il, runtime, 2, "Array.prototype.map");
+            il.Emit(OpCodes.Ldloc, dLocal);
+            il.Emit(OpCodes.Call, _types.GetMethod(_types.Math, "Truncate", _types.Double));
+            il.Emit(OpCodes.Ldc_R8, (double)Array.MaxLength);
+            il.Emit(OpCodes.Ble_Un, supported);
+            GuestErrorEmitter.ThrowRangeError(il, runtime, "Invalid array length");
+            il.MarkLabel(supported);
         }
 
         // NaN → 0
@@ -2075,26 +2028,26 @@ public partial class RuntimeEmitter
         il.Emit(OpCodes.Br, afterLen);
         il.MarkLabel(notNegInf);
 
-        // Finite: clamp [0, 1<<20]
-        il.Emit(OpCodes.Ldloc, dLocal);
-        il.Emit(OpCodes.Conv_I4);
-        il.Emit(OpCodes.Stloc, lenLocal);
-        il.Emit(OpCodes.Ldloc, lenLocal);
-        il.Emit(OpCodes.Ldc_I4_0);
-        var notNeg = il.DefineLabel();
-        il.Emit(OpCodes.Bge, notNeg);
-        il.Emit(OpCodes.Ldc_I4_0);
-        il.Emit(OpCodes.Stloc, lenLocal);
-        il.MarkLabel(notNeg);
-        il.Emit(OpCodes.Ldloc, lenLocal);
-        il.Emit(OpCodes.Ldc_I4, 1 << 20);
-        var notTooBig = il.DefineLabel();
-        il.Emit(OpCodes.Ble, notTooBig);
-        il.Emit(OpCodes.Ldc_I4, 1 << 20);
-        il.Emit(OpCodes.Stloc, lenLocal);
-        il.MarkLabel(notTooBig);
-
+        EmitClampMaterializedLength(il, runtime, dLocal, lenLocal, afterLen, allowArgumentsLength);
         il.MarkLabel(afterLen);
+
+        if (_features.UsesArguments && allowArgumentsLength)
+        {
+            // Short-circuit helpers need a stable length but may visit only
+            // one index. Carry the length in an empty Arguments snapshot.
+            var materializeSlots = il.DefineLabel();
+            il.Emit(OpCodes.Ldarg_1);
+            il.Emit(OpCodes.Brfalse, materializeSlots);
+            il.Emit(OpCodes.Ldarg_0);
+            il.Emit(OpCodes.Isinst, runtime.Arguments.Type);
+            il.Emit(OpCodes.Brfalse, materializeSlots);
+            il.Emit(OpCodes.Newobj, runtime.Arguments.DefaultCtor);
+            il.Emit(OpCodes.Dup);
+            il.Emit(OpCodes.Ldloc, lenLocal);
+            il.Emit(OpCodes.Stfld, runtime.Arguments.LengthField);
+            il.Emit(OpCodes.Ret);
+            il.MarkLabel(materializeSlots);
+        }
 
         // list = new List<object>(len)
         il.Emit(OpCodes.Ldloc, lenLocal);
@@ -2114,7 +2067,7 @@ public partial class RuntimeEmitter
             // Either is "present" — push null placeholder so
             // LoadArrayLikeElement re-reads via GetProperty (firing the
             // getter for accessors). Neither → push $ArrayHole so
-            // EmitSkipIfHole skips. Crucially, neither check fires the
+            // the iterator skips. Crucially, neither check fires the
             // getter, preserving lazy semantics (issue #90).
             var dictLocal = il.DeclareLocal(_types.DictionaryStringObject);
             il.Emit(OpCodes.Ldarg_0);
@@ -2195,6 +2148,36 @@ public partial class RuntimeEmitter
         il.Emit(OpCodes.Ldloc, listLocal);
     }
 
+    private void EmitClampMaterializedLength(
+        ILGenerator il, EmittedRuntime runtime, LocalBuilder numberLocal,
+        LocalBuilder lengthLocal, Label done, bool allowArgumentsLength)
+    {
+        il.Emit(OpCodes.Ldloc, numberLocal);
+        il.Emit(OpCodes.Conv_I4);
+        il.Emit(OpCodes.Stloc, lengthLocal);
+        il.Emit(OpCodes.Ldloc, lengthLocal);
+        il.Emit(OpCodes.Ldc_I4_0);
+        var nonnegative = il.DefineLabel();
+        il.Emit(OpCodes.Bge, nonnegative);
+        il.Emit(OpCodes.Ldc_I4_0);
+        il.Emit(OpCodes.Stloc, lengthLocal);
+        il.MarkLabel(nonnegative);
+
+        // Arguments previously materialized up to its full int length.
+        if (_features.UsesArguments && allowArgumentsLength)
+        {
+            il.Emit(OpCodes.Ldarg_0);
+            il.Emit(OpCodes.Isinst, runtime.Arguments.Type);
+            il.Emit(OpCodes.Brtrue, done);
+        }
+
+        il.Emit(OpCodes.Ldloc, lengthLocal);
+        il.Emit(OpCodes.Ldc_I4, 1 << 20);
+        il.Emit(OpCodes.Ble, done);
+        il.Emit(OpCodes.Ldc_I4, 1 << 20);
+        il.Emit(OpCodes.Stloc, lengthLocal);
+    }
+
     /// <summary>
     /// Emits <c>$Runtime.LoadArrayLikeElement(List&lt;object&gt; list, int idx) -&gt; object</c>.
     /// Replaces the direct <c>list[idx]</c> callvirt in iterator-helper IL.
@@ -2208,8 +2191,8 @@ public partial class RuntimeEmitter
     /// <c>_currentArrayLikeReceiver</c>: it's also read by
     /// <see cref="EmitCallbackArgsAndInvoke"/> as the callback's array-slot
     /// arg. We can't tell from the field alone whether dispatch chose the
-    /// lazy or the eager materializer. Strings, <c>$Arguments</c>, and other
-    /// non-lazy receivers are fully populated by the eager materializer, so
+    /// lazy or the eager materializer. Strings and other non-lazy receivers
+    /// are fully populated by the eager materializer, so
     /// falling through to <c>list[idx]</c> remains correct for them.
     /// </remarks>
     internal void DeclareLoadArrayLikeElement(TypeBuilder typeBuilder, EmittedArrayOperationsRuntime arrays)

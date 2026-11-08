@@ -37,9 +37,9 @@ public partial class TypeChecker
         return current;
     }
 
-    private sealed class FieldGetterDependency(Stmt.Accessor accessor)
+    private sealed class FieldGetterDependency(object accessor)
     {
-        public Stmt.Accessor Accessor { get; } = accessor;
+        public object Accessor { get; } = accessor;
         public bool HasUnresolvedDependency { get; set; }
     }
 
@@ -53,7 +53,8 @@ public partial class TypeChecker
         public TypeInfo.Class?[] EnclosingClasses { get; } = enclosingClasses;
         public FieldGetterScope? Previous { get; } = previous;
         public Dictionary<(bool IsStatic, string Name), Stmt.Accessor> Getters { get; } = [];
-        public Dictionary<Stmt.Accessor, TypeInfo> Resolved { get; } = new(ReferenceEqualityComparer.Instance);
+        public Dictionary<(bool IsStatic, string Name), Stmt.Function> PrivateGetters { get; } = [];
+        public Dictionary<object, TypeInfo> Resolved { get; } = new(ReferenceEqualityComparer.Instance);
         public List<FieldGetterDependency> Active { get; } = [];
         public HashSet<(bool IsStatic, string Name)> PendingFields { get; } = [];
         public Dictionary<(bool IsStatic, string Name), Stmt.Field> Fields { get; } = [];
@@ -62,6 +63,8 @@ public partial class TypeChecker
     }
 
     private FieldGetterScope? _fieldGetterScope;
+    private FieldGetterDependency? ActiveGetterDependency
+        => _fieldGetterScope is { Active.Count: > 0 } scope ? scope.Active[^1] : null;
     private int _classFieldDeferredReadDepth;
 
     private Narrowing.NarrowingContext[] PushIsolatedClassFieldNarrowingScope()
@@ -117,6 +120,14 @@ public partial class TypeChecker
                 if (type is TypeInfo.Inferred || pendingExpressionGetter)
                     scope.Getters[(accessor.IsStatic, name)] = accessor;
             }
+        IReadOnlyList<Stmt.Function> methods = sourceOwner switch
+        {
+            Stmt.Class declaration => declaration.Methods,
+            Expr.ClassExpr expression => expression.Methods,
+            _ => []
+        };
+        RegisterPrivateGetterDependencies(scope, methods.Where(IsUnannotatedPrivateGetter));
+
         foreach (var field in fields)
             if (field.Initializer is not null && !field.IsDeclare &&
                 field.TypeAnnotation is null && field.TypeAnnotationNode is null)
@@ -126,6 +137,30 @@ public partial class TypeChecker
                 scope.Fields[key] = field;
             }
         return scope;
+    }
+
+    private FieldGetterScope? CreatePrivateGetterBodyScope(IReadOnlyList<Stmt.Function> methods,
+        TypeInfo.MutableClass owner, TypeEnvironment environment)
+    {
+        var getters = methods.Where(IsUnannotatedPrivateGetter).ToArray();
+        if (getters.Length == 0 && ActiveGetterDependency is null) return _fieldGetterScope;
+
+        // All fields are complete here. The same dependency resolver can
+        // check a later private getter before publishing the current body.
+        var scope = new FieldGetterScope(owner, environment, _environment,
+            _privateNameEnclosingClasses.ToArray(), _fieldGetterScope);
+        RegisterPrivateGetterDependencies(scope, getters);
+        return scope;
+    }
+
+    private static bool IsUnannotatedPrivateGetter(Stmt.Function method)
+        => method.PrivateAccessorName is not null && method.Parameters.Count == 0 &&
+           method.ReturnType is null && method.ReturnTypeNode is null && method.Body is not null;
+
+    private static void RegisterPrivateGetterDependencies(FieldGetterScope scope, IEnumerable<Stmt.Function> getters)
+    {
+        foreach (var getter in getters)
+            scope.PrivateGetters[(getter.IsStatic, getter.PrivateAccessorName!.Lexeme)] = getter;
     }
 
     private string? ClassAccessorName(Stmt.Accessor accessor) => accessor.ComputedKey is not null
@@ -144,12 +179,20 @@ public partial class TypeChecker
     {
         if (FindFieldGetterScope(owner) is not { } scope ||
             !scope.PendingFields.Contains((isStatic, name))) return;
-        if (_classFieldDeferredReadDepth > scope.DeferredReadDepth && scope.Fields.TryGetValue((isStatic, name), out var field))
+        // A getter body is checked without executing it. Infer any forward
+        // field type it needs in the same isolated flow used for deferred reads.
+        var dependency = ActiveGetterDependency;
+        bool privateGetterRead = dependency?.Accessor is Stmt.Function;
+        if ((_classFieldDeferredReadDepth > scope.DeferredReadDepth || privateGetterRead) &&
+            scope.Fields.TryGetValue((isStatic, name), out var field))
         {
-            InferDeferredClassFieldDependency(scope, field);
+            if (privateGetterRead && scope.ActiveFields.Contains(field))
+                dependency!.HasUnresolvedDependency = true;
+            else
+                InferDeferredClassFieldDependency(scope, field);
             return;
         }
-        MarkFieldGetterDependenciesUnresolved();
+        if (dependency is not null) dependency.HasUnresolvedDependency = true;
     }
 
     private TypeInfo CompletedFieldDependencyType(TypeInfo owner, bool isStatic, string name, TypeInfo fallback)
@@ -213,12 +256,6 @@ public partial class TypeChecker
         }
     }
 
-    private void MarkFieldGetterDependenciesUnresolved()
-    {
-        for (var scope = _fieldGetterScope; scope is not null; scope = scope.Previous)
-            foreach (var dependency in scope.Active) dependency.HasUnresolvedDependency = true;
-    }
-
     private void ObservePendingGetterIndexRead(TypeInfo receiver, string name)
     {
         if (_fieldGetterScope is null) return;
@@ -244,32 +281,85 @@ public partial class TypeChecker
     {
         if (FindFieldGetterScope(owner) is not { } scope ||
             !scope.Getters.TryGetValue((isStatic, name), out var accessor)) return type;
-        if (scope.Resolved.TryGetValue(accessor, out var resolved))
+        return CheckFieldStageGetter(scope, accessor, dependency =>
         {
-            if (resolved is TypeInfo.Inferred) MarkFieldGetterDependenciesUnresolved();
-            return resolved;
-        }
-        if (scope.Active.Any(dependency => ReferenceEquals(dependency.Accessor, accessor)))
-        {
-            MarkFieldGetterDependenciesUnresolved();
+            var getters = isStatic ? scope.Owner.StaticGetters : scope.Owner.Getters;
+            var setters = isStatic ? scope.Owner.StaticSetters : scope.Owner.Setters;
+            TypeInfo originalGetter = getters[name];
+            bool hadSetter = setters.TryGetValue(name, out var originalSetter);
+            getters[name] = TypeInfo.Inferred.Shared;
+            scope.Owner.ResetFrozenCache();
+            _currentClass = scope.Owner.Freeze();
+            try
+            {
+                CheckClassAccessorBodies([accessor], scope.Owner, recoverComputedSymbolDiagnostics: false);
+                if (!dependency.HasUnresolvedDependency)
+                {
+                    _fieldStageInferredGetters.GetOrCreateValue(scope.Owner).Add(accessor);
+                    return getters[name];
+                }
+            }
+            catch
+            {
+                RestoreGetter();
+                throw;
+            }
+            // Do not publish a result that depended on an unchecked field placeholder.
+            RestoreGetter();
             return TypeInfo.Inferred.Shared;
-        }
 
-        var getters = isStatic ? scope.Owner.StaticGetters : scope.Owner.Getters;
-        var setters = isStatic ? scope.Owner.StaticSetters : scope.Owner.Setters;
-        TypeInfo originalGetter = getters[name];
-        bool hadSetter = setters.TryGetValue(name, out var originalSetter);
+            void RestoreGetter()
+            {
+                getters[name] = originalGetter;
+                if (hadSetter) setters[name] = originalSetter!;
+                PublishStaticAccessorTypes(scope.Owner);
+            }
+        });
+    }
+
+    private TypeInfo ResolvePendingPrivateGetter(TypeInfo owner, bool isStatic, string name, TypeInfo type)
+    {
+        if (FindFieldGetterScope(owner) is not { } scope ||
+            !scope.PrivateGetters.TryGetValue((isStatic, name), out var getter)) return type;
+        return CheckFieldStageGetter(scope, getter, dependency =>
+        {
+            var methods = isStatic ? scope.Owner.StaticPrivateMethods : scope.Owner.PrivateMethods;
+            string facet = getter.Name.Lexeme;
+            TypeInfo originalGetter = methods[facet];
+            _currentClass = scope.Owner.Freeze();
+            try
+            {
+                CheckClassMethodBodies([getter], isAmbient: false, _currentClass, scope.Owner, scope.Environment,
+                    recoverComputedSymbolDiagnostics: false, provisionalGetter: true);
+                return dependency.HasUnresolvedDependency ? TypeInfo.Inferred.Shared
+                    : ((TypeInfo.Function)methods[facet]).ReturnType;
+            }
+            finally
+            {
+                // The ordinary method-body pass resolves the signature using completed fields.
+                methods[facet] = originalGetter;
+            }
+        });
+    }
+
+    private TypeInfo CheckFieldStageGetter(FieldGetterScope scope, object accessor, Func<FieldGetterDependency, TypeInfo> check)
+    {
+        var caller = ActiveGetterDependency;
+        if (scope.Resolved.TryGetValue(accessor, out var resolved))
+            return ObserveResult(resolved);
+        if (scope.Active.Any(dependency => ReferenceEquals(dependency.Accessor, accessor)))
+            return ObserveResult(TypeInfo.Inferred.Shared);
+
         var dependency = new FieldGetterDependency(accessor);
+        var previousGetterScope = _fieldGetterScope;
         var previousEnvironment = _environment;
         var previousClass = _currentClass;
         var previousEnclosingClasses = _privateNameEnclosingClasses.ToArray();
         bool previousStaticBlock = _inStaticBlock;
         bool previousGlobalThis = _currentArrowCapturesScriptGlobalThis;
         scope.Active.Add(dependency);
-        getters[name] = TypeInfo.Inferred.Shared;
-        scope.Owner.ResetFrozenCache();
+        _fieldGetterScope = scope;
         _environment = scope.Environment;
-        _currentClass = scope.Owner.Freeze();
         _privateNameEnclosingClasses.Clear();
         foreach (var enclosingClass in scope.EnclosingClasses.Reverse())
             _privateNameEnclosingClasses.Push(enclosingClass);
@@ -277,36 +367,15 @@ public partial class TypeChecker
         _currentArrowCapturesScriptGlobalThis = false;
         try
         {
-            CheckClassAccessorBodies([accessor], scope.Owner, recoverComputedSymbolDiagnostics: false);
-            if (dependency.HasUnresolvedDependency)
-            {
-                // Do not turn an unchecked field's permissive placeholder into
-                // a callable/assignable getter result. Forward fields are not
-                // rechecked or evaluated by this dependency resolver.
-                getters[name] = originalGetter;
-                if (hadSetter) setters[name] = originalSetter!;
-                PublishStaticAccessorTypes(scope.Owner);
-                resolved = TypeInfo.Inferred.Shared;
-            }
-            else
-            {
-                resolved = getters[name];
-                _fieldStageInferredGetters.GetOrCreateValue(scope.Owner).Add(accessor);
-            }
+            resolved = check(dependency);
             scope.Resolved[accessor] = resolved;
-            return resolved;
-        }
-        catch
-        {
-            getters[name] = originalGetter;
-            if (hadSetter) setters[name] = originalSetter!;
-            PublishStaticAccessorTypes(scope.Owner);
-            throw;
+            return ObserveResult(resolved);
         }
         finally
         {
             scope.Active.RemoveAt(scope.Active.Count - 1);
             scope.Owner.ResetFrozenCache();
+            _fieldGetterScope = previousGetterScope;
             _environment = previousEnvironment;
             _currentClass = previousClass;
             _privateNameEnclosingClasses.Clear();
@@ -314,6 +383,14 @@ public partial class TypeChecker
                 _privateNameEnclosingClasses.Push(enclosingClass);
             _inStaticBlock = previousStaticBlock;
             _currentArrowCapturesScriptGlobalThis = previousGlobalThis;
+        }
+
+        // Propagate an unresolved read only to the getter that requested it.
+        // Checking a nested class can run its own independent inference.
+        TypeInfo ObserveResult(TypeInfo result)
+        {
+            if (result is TypeInfo.Inferred && caller is not null) caller.HasUnresolvedDependency = true;
+            return result;
         }
     }
 
@@ -539,7 +616,7 @@ public partial class TypeChecker
         if (arrow.ExpressionBody != null) returns.Add(arrow.ExpressionBody);
         else if (arrow.BlockBody != null)
         {
-            var collector = new ClassMemberReturnCollector(returns);
+            var collector = new ClassMemberReturnCollector(statement => returns.Add(statement.Value!));
             foreach (var statement in arrow.BlockBody) collector.Visit(statement);
         }
         if (returns.Count == 0) return type;
@@ -566,11 +643,11 @@ public partial class TypeChecker
         };
     }
 
-    private sealed class ClassMemberReturnCollector(List<Expr> returns) : AstVisitorBase
+    private sealed class ClassMemberReturnCollector(Action<Stmt.Return> add) : AstVisitorBase
     {
         protected override void VisitReturn(Stmt.Return statement)
         {
-            if (statement.Value != null) returns.Add(statement.Value);
+            if (statement.Value != null) add(statement);
         }
         protected override void VisitFunction(Stmt.Function statement) { }
         protected override void VisitArrowFunction(Expr.ArrowFunction expression) { }

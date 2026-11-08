@@ -68,7 +68,7 @@ public partial class TypeChecker
                 [new SourceMemberDeclaration(document, name, kind, declarationOwner)]));
         }
 
-        foreach (var group in methods.Where(method => method.ComputedKey is null)
+        foreach (var group in methods.Where(method => method.ComputedKey is null && method.PrivateAccessorName is null)
                      .GroupBy(method => (method.IsStatic, method.IsPrivate, method.Name.Lexeme)))
         {
             ThrowIfCancellationRequested();
@@ -80,6 +80,18 @@ public partial class TypeChecker
             if (declarations.Length != group.Count()) continue;
             candidates.Add(new(group.Key.Lexeme, GetSourceMemberFacet(group.Key.IsStatic, group.Key.IsPrivate),
                 SourceMemberKind.Method, declarations));
+        }
+
+        foreach (var group in methods.Where(method => method.PrivateAccessorName is not null)
+                     .GroupBy(method => (method.IsStatic, method.PrivateAccessorName!.Lexeme)))
+        {
+            ThrowIfCancellationRequested();
+            var declarations = group.Select(method => GetWrittenMemberName(document, method, method.PrivateAccessorName!) is { } name
+                    ? new SourceMemberDeclaration(document, name, SourceMemberKind.Accessor, method) : null)
+                .OfType<SourceMemberDeclaration>().ToArray();
+            if (declarations.Length == group.Count())
+                candidates.Add(new(group.Key.Lexeme, GetSourceMemberFacet(group.Key.IsStatic, true),
+                    SourceMemberKind.Accessor, declarations));
         }
 
         foreach (var group in (accessors ?? []).Where(accessor => accessor.ComputedKey is null)

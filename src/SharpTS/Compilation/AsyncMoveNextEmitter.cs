@@ -202,6 +202,7 @@ public partial class AsyncMoveNextEmitter : AsyncFunctionMoveNextEmitter, IEmitt
 
         // Emit state dispatch switch (includes lock state if needed)
         EmitStateSwitch();
+        MappedArgumentsEmitter.EmitStateMachinePrologue(ctx, _builder);
 
         // For @lock: emit lock acquisition prologue after state switch
         // This runs on initial entry (state -1) and handles reentrancy tracking

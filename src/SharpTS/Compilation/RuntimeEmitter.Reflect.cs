@@ -32,7 +32,7 @@ public partial class RuntimeEmitter
         MethodInfo DeleteProperty, MethodInfo DeleteIndex, MethodInfo IsSymbol,
         Type UndefinedType, MethodInfo GetProperty, MethodInfo TypeOf,
         MethodInfo CreateException, ConstructorInfo TypeErrorConstructor,
-        EmittedFunctionBindingRuntime FunctionBindings, MethodInfo? NativeProxyRejection);
+        EmittedFunctionBindingRuntime FunctionBindings, Type ArgumentsType, MethodInfo? NativeProxyRejection);
 
     private readonly record struct ReflectPreventExtensionsInputs(MethodInfo InvokeMethodUnwrapped,
         MethodInfo ObjectPreventExtensions, MethodInfo ObjectIsExtensible, MethodInfo GetProperty, MethodInfo? NativeProxyRejection);
@@ -420,11 +420,16 @@ public partial class RuntimeEmitter
         il.Emit(OpCodes.Ret);
 
         il.MarkLabel(notProxyLabel);
-        var symbolDelete = il.DefineLabel();
+        var indexedDelete = il.DefineLabel();
         var checkDeleteResult = il.DefineLabel();
         il.Emit(OpCodes.Ldloc, keyLocal);
         il.Emit(OpCodes.Call, inputs.IsSymbol);
-        il.Emit(OpCodes.Brtrue, symbolDelete);
+        il.Emit(OpCodes.Brtrue, indexedDelete);
+        // The arguments index path deletes both the mapped descriptor and
+        // the backing slot. The named object path has no List receiver arm.
+        il.Emit(OpCodes.Ldarg_0);
+        il.Emit(OpCodes.Isinst, inputs.ArgumentsType);
+        il.Emit(OpCodes.Brtrue, indexedDelete);
         il.Emit(OpCodes.Ldloc, keyLocal);
         il.Emit(OpCodes.Castclass, _types.String);
         il.Emit(OpCodes.Stloc, stringKeyLocal);
@@ -459,7 +464,7 @@ public partial class RuntimeEmitter
         il.Emit(OpCodes.Ldloc, stringKeyLocal);
         il.Emit(OpCodes.Call, inputs.DeleteProperty);
         il.Emit(OpCodes.Br, checkDeleteResult);
-        il.MarkLabel(symbolDelete);
+        il.MarkLabel(indexedDelete);
         il.Emit(OpCodes.Ldarg_0);
         il.Emit(OpCodes.Ldloc, keyLocal);
         il.Emit(OpCodes.Call, inputs.DeleteIndex);

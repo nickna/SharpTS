@@ -1443,6 +1443,13 @@ public partial class TypeChecker
             throw new TypeCheckException($" Private field '{fieldName}' does not exist on class '{_currentClass.Name}'.", tsCode: "TS2339");
 
         // Select the nearest lexical declaration before checking the member kind.
+        if (TryGetPrivateAccessorTypes(owner, fieldName, out bool isStatic, out var readType, out _))
+        {
+            var result = CheckPrivateAccessorFacet(objType, owner, isStatic, get.Name, readType);
+            ObservePrivateSourceMemberSelection(get.Name, objType, owner,
+                isStatic ? MemberFacet.PrivateStatic : MemberFacet.PrivateInstance);
+            return result;
+        }
         if (owner.PrivateFieldTypes.TryGetValue(fieldName, out var fieldType))
         {
             ValidatePrivateReceiver(objType, owner, isStatic: false, get.Name);
@@ -1504,7 +1511,13 @@ public partial class TypeChecker
 
         // An inner declaration shadows all enclosing declarations of the same name.
         TypeInfo? fieldType = null;
-        if (owner.PrivateFieldTypes.TryGetValue(fieldName, out var pf))
+        if (TryGetPrivateAccessorTypes(owner, fieldName, out bool isStatic, out _, out var writeType))
+        {
+            fieldType = CheckPrivateAccessorFacet(objType, owner, isStatic, set.Name, writeType, isWrite: true);
+            ObservePrivateSourceMemberSelection(set.Name, objType, owner,
+                isStatic ? MemberFacet.PrivateStatic : MemberFacet.PrivateInstance);
+        }
+        else if (owner.PrivateFieldTypes.TryGetValue(fieldName, out var pf))
         {
             ValidatePrivateReceiver(objType, owner, isStatic: false, set.Name);
             ObservePrivateSourceMemberSelection(set.Name, objType, owner, MemberFacet.PrivateInstance);
@@ -1559,7 +1572,12 @@ public partial class TypeChecker
         // Private names follow lexical nesting, never superclass lookup.
         TypeInfo? methodType = null;
         MemberFacet selectedFacet = MemberFacet.PrivateInstance;
-        if (owner.PrivateFieldTypes.TryGetValue(methodName, out var pf))
+        if (TryGetPrivateAccessorTypes(owner, methodName, out bool isStatic, out var readType, out _))
+        {
+            methodType = CheckPrivateAccessorFacet(objType, owner, isStatic, call.Name, readType);
+            selectedFacet = isStatic ? MemberFacet.PrivateStatic : MemberFacet.PrivateInstance;
+        }
+        else if (owner.PrivateFieldTypes.TryGetValue(methodName, out var pf))
         {
             ObservePendingGetterFieldRead(owner, isStatic: false, methodName);
             methodType = pf;

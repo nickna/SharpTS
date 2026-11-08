@@ -18,7 +18,9 @@ public partial class TypeChecker
             bool conflictingPrivateName = (isStatic ? receiverCores.Take(1) : receiverCores)
                 .Any(core => core.DeclarationId != owner.Core.DeclarationId && (isStatic
                     ? core.StaticPrivateFieldTypes.ContainsKey(name) || core.StaticPrivateMethodTypes.ContainsKey(name)
-                    : core.PrivateFieldTypes.ContainsKey(name) || core.PrivateMethodTypes.ContainsKey(name)));
+                        || PrivateAccessorNames.Contains(core.StaticPrivateMethodTypes, name)
+                    : core.PrivateFieldTypes.ContainsKey(name) || core.PrivateMethodTypes.ContainsKey(name)
+                        || PrivateAccessorNames.Contains(core.PrivateMethodTypes, name)));
             throw new TypeCheckException(conflictingPrivateName
                 ? $"Property '{name}' is not accessible on type '{invalidReceiver}' because it has a different private declaration."
                 : $"Property '{name}' does not exist on type '{invalidReceiver}'.",

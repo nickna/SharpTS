@@ -92,8 +92,13 @@ public partial class Interpreter
 
         bool isStatic = owner.HasStaticPrivateField(name);
         bool isMethod = owner.GetPrivateMethod(name) is not null || owner.GetStaticPrivateMethod(name) is not null;
+        bool isAccessor = owner.TryGetPrivateAccessor(name, out bool isStaticAccessor, out var getter, out var setter);
         RuntimeValue current;
-        if (isMethod)
+        if (isAccessor)
+        {
+            current = InvokePrivateAccessor(owner, receiver, name, isStaticAccessor, getter);
+        }
+        else if (isMethod)
         {
             current = GetPrivateCore(receiver, name);
         }
@@ -115,6 +120,8 @@ public partial class Interpreter
             ?? throw new InterpreterException($"Unknown compound operator: {compound.Operator.Type}");
         var binaryOperator = new Token(binaryType, compound.Operator.Lexeme[..^1], null, compound.Operator.Line, compound.Operator.Start);
         RuntimeValue result = EvaluateBinaryOperationRV(binaryOperator, current, right);
+        if (isAccessor)
+            return InvokePrivateAccessor(owner, receiver, name, isStaticAccessor, setter, result);
         if (isMethod)
             throw new ThrowException(new SharpTSTypeError($"Private method {name} is not writable"));
         if (isStatic)

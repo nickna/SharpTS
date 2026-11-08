@@ -6,6 +6,37 @@ namespace SharpTS.Tests.CompilerTests;
 public sealed class ArrayDescriptorIterationTests
 {
     [Fact]
+    public void Some_reads_each_visited_index_accessor_once()
+    {
+        const string source = """
+            const values = [1, 2];
+            const trace = [];
+            Object.defineProperty(values, "0", {
+                get() { trace.push("get0"); return 1; }
+            });
+            const result = Array.prototype.some.call(values, (value, index) => {
+                trace.push("callback" + index);
+                return value === 1;
+            });
+            console.log(result, trace.join(","));
+            """;
+
+        Assert.Equal("true get0,callback0\n", TestHarness.RunUnchecked(source, ExecutionMode.Compiled));
+    }
+
+    [Fact]
+    public void Object_keys_lists_an_enumerable_descriptor_index_once()
+    {
+        const string source = """
+            const values = [1, 2];
+            Object.defineProperty(values, "0", { value: 7, enumerable: true });
+            console.log(Object.keys(values).join(","));
+            """;
+
+        Assert.Equal("0,1\n", TestHarness.RunCompiled(source));
+    }
+
+    [Fact]
     public void Array_index_accessor_is_observed_by_get_and_reduce()
     {
         const string source = """

@@ -176,6 +176,7 @@ public partial class AsyncArrowMoveNextEmitter : AsyncFunctionMoveNextEmitter, I
 
         // State dispatch switch
         EmitStateDispatch();
+        MappedArgumentsEmitter.EmitStateMachinePrologue(ctx, _builder);
 
         // Follow-up to #838: instantiate this arrow's own function display class once, so a nested sync
         // arrow that writes one of the arrow's locals shares the reference cell. Null-guarded: a resume

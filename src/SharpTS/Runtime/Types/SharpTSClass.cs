@@ -129,6 +129,8 @@ public partial class SharpTSClass(
     private readonly Dictionary<string, object?> _staticPrivateFields = staticPrivateFields ?? [];
     private readonly HashSet<string> _installedStaticPrivateFields = new(StringComparer.Ordinal);
     private readonly FrozenDictionary<string, ISharpTSCallable> _staticPrivateMethods = staticPrivateMethods?.ToFrozenDictionary() ?? FrozenDictionary<string, ISharpTSCallable>.Empty;
+    private readonly bool _hasPrivateAccessors = privateMethods?.Keys.Any(PrivateAccessorNames.IsFacet) == true
+        || staticPrivateMethods?.Keys.Any(PrivateAccessorNames.IsFacet) == true;
 
     // Auto-accessor backing storage (TypeScript 4.9+)
     // Instance auto-accessor storage - ConditionalWeakTable for per-instance backing values
@@ -363,6 +365,20 @@ public partial class SharpTSClass(
                 throw new ThrowException(new SharpTSTypeError("Cannot initialize private methods twice on the same object"));
         }
 
+        // Parameter properties declare own fields before the ordinary initializers.
+        // Their assignments run later using the live constructor bindings.
+        HashSet<Token>? parameterPropertyFields = null;
+        if (FindOwnMethod("constructor") is SharpTSFunction constructor)
+        {
+            foreach (var parameter in constructor.Parameters)
+            {
+                if (!parameter.IsParameterProperty) continue;
+                (parameterPropertyFields ??= new(ReferenceEqualityComparer.Instance)).Add(parameter.Name);
+                ObjectBuiltIns.CreateDataPropertyOrThrow(interpreter, receiver, parameter.Name.Lexeme,
+                    SharpTSUndefined.Instance);
+            }
+        }
+
         var elements = (OrderedInstanceFields ?? _instanceFields.Concat(_instancePrivateFields).ToList()).Cast<Stmt>()
             .Concat(_instanceAutoAccessors)
             .OrderBy(element => element is Stmt.Field field ? field.Name.SourceOrderOffset : ((Stmt.AutoAccessor)element).Name.SourceOrderOffset);
@@ -374,6 +390,8 @@ public partial class SharpTSClass(
                 continue;
             }
             var field = (Stmt.Field)element;
+            // The checker field shares its declaration token with the parameter.
+            if (parameterPropertyFields?.Contains(field.Name) == true) continue;
             object? value = field.Initializer != null
                 ? interpreter.EvaluateClassInitializer(this, receiver, field.Initializer)
                 : SharpTSUndefined.Instance;
@@ -817,7 +835,19 @@ public partial class SharpTSClass(
     internal bool DeclaresPrivateName(string name)
         => _instancePrivateFields.Any(field => field.Name.Lexeme == name)
             || _privateMethods.ContainsKey(name) || _staticPrivateFields.ContainsKey(name)
-            || _staticPrivateMethods.ContainsKey(name);
+            || _staticPrivateMethods.ContainsKey(name)
+            || _hasPrivateAccessors &&
+                (PrivateAccessorNames.Contains(_privateMethods, name) || PrivateAccessorNames.Contains(_staticPrivateMethods, name));
+
+    internal bool TryGetPrivateAccessor(string name, out bool isStatic,
+        out ISharpTSCallable? getter, out ISharpTSCallable? setter)
+    {
+        if (_hasPrivateAccessors)
+            return PrivateAccessorNames.TryGet(_privateMethods, _staticPrivateMethods, name, out isStatic, out getter, out setter);
+        isStatic = false;
+        getter = setter = null;
+        return false;
+    }
 
     internal bool HasInstalledPrivateField(object receiver, string name)
         => _privateFieldStorage.TryGetValue(receiver, out var fields) && fields.ContainsKey(name);

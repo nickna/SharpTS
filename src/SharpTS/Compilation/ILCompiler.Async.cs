@@ -58,6 +58,7 @@ public partial class ILCompiler
             hasDynamicThis: analysis.UsesThis,
             hasAsyncArrows: hasAsyncArrows,
             hoistedParameterTypes: GetStableAsyncParameterFieldTypes(funcStmt));
+        DefineAsyncMappedParameterFields(smBuilder, funcStmt.Parameters, funcStmt.Body);
 
         // Define stub method (returns Task<object>).
         // A trailing rest parameter is typed List<object> so the indirect
@@ -465,9 +466,15 @@ public partial class ILCompiler
         bool loweredDeclaration = IsLoweredAsyncDeclaration(builder.Arrow);
         foreach (var name in builder.Captures)
         {
-            if (builder.ParameterFields.ContainsKey(name) || builder.LocalFields.ContainsKey(name)
-                || _closures.Analyzer.TryGetLoopBodyCellCapture(builder.Arrow, name, out _))
+            if (builder.ParameterFields.ContainsKey(name) || builder.LocalFields.ContainsKey(name))
                 continue;
+            if (_closures.Analyzer.TryGetLoopBodyCellCapture(builder.Arrow, name, out var declaration))
+            {
+                if (_closures.Analyzer.IsMappedArgumentParameter(declaration)
+                    && ResolveMappedParameterStorage(builder, declaration) is { } mapped)
+                    builder.CapturedLiveStorage[name] = mapped;
+                continue;
+            }
             var source = _closures.Analyzer.GetCaptureSource(builder.Arrow, name);
             // An async-arrow owner stores a newly promoted local only in its DC.
             // Sibling async expressions reading that same binding must follow it
@@ -515,6 +522,30 @@ public partial class ILCompiler
             }
             return null;
         }
+    }
+
+    private AsyncArrowStorageAccess? ResolveMappedParameterStorage(AsyncArrowStateMachineBuilder child, Token declaration)
+    {
+        var valueField = _debugLexicalCellStorages.GetValueOrDefault(declaration)?.ValueField
+            ?? _types.StrongBoxOfObjectValueField;
+        if (_async.ArrowParentBuilders.TryGetValue(child.Arrow, out var parent))
+        {
+            AsyncArrowStorageAccess? ownerStorage = null;
+            if (parent.MappedArgumentFields.TryGetValue(declaration, out var owned))
+                ownerStorage = AsyncArrowStorageAccess.OwnDisplayClassField(owned.Field, valueField);
+            else if (parent.StandaloneCellCaptureDeclarations.TryGetValue(declaration.Lexeme, out var captured)
+                && ReferenceEquals(captured, declaration))
+                ownerStorage = AsyncArrowStorageAccess.OwnDisplayClassField(
+                    parent.StandaloneCaptureFields[declaration.Lexeme], valueField);
+            else
+                ownerStorage = ResolveMappedParameterStorage(parent, declaration);
+            return ownerStorage?.ThroughOuterStateMachine(child);
+        }
+        if (_async.ArrowOuterBuilders.TryGetValue(child.Arrow, out var outer)
+            && outer.MappedArgumentFields.TryGetValue(declaration, out var field))
+            return AsyncArrowStorageAccess.OwnDisplayClassField(field.Field, valueField)
+                .ThroughOuterStateMachine(child);
+        return null;
     }
 
     private void DefineAsyncArrowStateMachines(
@@ -1312,6 +1343,11 @@ public partial class ILCompiler
 
         // Create a new context for arrow MoveNext emission
         var ctx = CreateNestedAsyncArrowContext(il, parentCtx, arrowBuilder.MoveNextMethod);
+        ctx.IsStrictMode |= _strictArrows.Contains(arrow) || BodyDeclaresUseStrict(arrow.BlockBody);
+        foreach (var (name, access) in arrowBuilder.CapturedLiveStorage)
+            if (_closures.Analyzer.TryGetLoopBodyCellCapture(arrow, name, out var declaration)
+                && _closures.Analyzer.IsMappedArgumentParameter(declaration))
+                (ctx.AsyncMappedParameterCaptures ??= new(ReferenceEqualityComparer.Instance))[declaration] = access;
         if (_arrowToNamespace.TryGetValue(arrow, out var arrowNamespace))
             ctx.CurrentNamespacePath = arrowNamespace;
         ctx.CapturesConstructorThisCell = _constructorReceiverArrows.Contains(arrow);
@@ -1925,6 +1961,7 @@ public partial class ILCompiler
 
             // Create context for MoveNext emission
             var ctx = CreateModuleMemberContext(il, arrowBuilder.MoveNextMethod);
+            ctx.IsStrictMode |= _strictArrows.Contains(arrow) || BodyDeclaresUseStrict(arrow.BlockBody);
             if (_arrowToNamespace.TryGetValue(arrow, out var arrowNamespace))
                 ctx.CurrentNamespacePath = arrowNamespace;
             ctx.AsyncArrowBuilders = _async.ArrowBuilders;

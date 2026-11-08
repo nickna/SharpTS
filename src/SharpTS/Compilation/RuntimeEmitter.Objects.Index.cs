@@ -10,6 +10,7 @@ public partial class RuntimeEmitter
         EmittedClassPrototypeRuntime ClassPrototypes,
         EmittedArrayOperationsRuntime ArrayOperations,
         EmittedArrayStorageRuntime ArrayStorage,
+        Type ArgumentsType,
         EmittedBufferRuntime? Buffer,
         EmittedDescriptorStorageRuntime DescriptorStorage,
         EmittedErrorRuntime Errors,
@@ -1780,12 +1781,22 @@ public partial class RuntimeEmitter
             // through SetProperty so writable/accessor semantics are shared
             // with dot-property writes instead of Convert.ToInt32 throwing.
             var listSetNumericKeyLabel = il.DefineLabel();
+            var listSetNamedKeyLabel = il.DefineLabel();
             var listSetParsedIndexLocal = il.DeclareLocal(_types.Int32);
             il.Emit(OpCodes.Ldloc, listSetKeyLocal);
             il.Emit(OpCodes.Ldloca, listSetParsedIndexLocal);
             il.Emit(OpCodes.Call, _types.GetMethod(
                 _types.Int32, "TryParse", _types.String, _types.Int32.MakeByRefType()));
+            il.Emit(OpCodes.Brfalse, listSetNamedKeyLabel);
+            il.Emit(OpCodes.Ldloc, listSetParsedIndexLocal);
+            il.Emit(OpCodes.Ldc_I4_0);
+            il.Emit(OpCodes.Blt, listSetNamedKeyLabel);
+            il.Emit(OpCodes.Ldloc, listSetKeyLocal);
+            il.Emit(OpCodes.Ldloca, listSetParsedIndexLocal);
+            il.Emit(OpCodes.Call, _types.GetMethodNoParams(_types.Int32, "ToString"));
+            il.Emit(OpCodes.Call, _types.StringOpEquality);
             il.Emit(OpCodes.Brtrue, listSetNumericKeyLabel);
+            il.MarkLabel(listSetNamedKeyLabel);
             il.Emit(OpCodes.Ldarg_0);
             il.Emit(OpCodes.Ldloc, listSetKeyLocal);
             il.Emit(OpCodes.Ldarg_2);
@@ -1833,6 +1844,16 @@ public partial class RuntimeEmitter
             il.Emit(OpCodes.Br, listSetRawStorage);
 
             il.MarkLabel(listSetCanCreate);
+            if (desc.Kind == ArrayElementsKind.Object && _features.UsesArguments)
+            {
+                var listCheckExtensible = il.DefineLabel();
+                EmitArgumentsIndexPrototypeSetPolicy(il, inputs.ArgumentsType, inputs.ObjectOwnProperties.HasOwnProperty,
+                    new ArrayIndexPrototypeSetInputs(inputs.DescriptorStorage, inputs.InvokeMethodUnwrapped,
+                        inputs.InvokeMethodValue, inputs.ObjectDescriptors, inputs.ObjectPrototypes, inputs.ObjectRead,
+                        inputs.ProxySelected, inputs.ReflectAssignment, inputs.UndefinedType, inputs.NativeProxyRejection),
+                    listSetKeyLocal, listCheckExtensible, nullLabel);
+                il.MarkLabel(listCheckExtensible);
+            }
             il.Emit(OpCodes.Ldarg_0);
             il.Emit(OpCodes.Ldloc, listSetKeyLocal);
             il.Emit(OpCodes.Call, inputs.DescriptorStorage.CanAddProperty);
@@ -1848,6 +1869,13 @@ public partial class RuntimeEmitter
                 il.Emit(OpCodes.Ldloca, listFrozenCheckLocal);
                 il.Emit(OpCodes.Callvirt, _types.GetMethod(_types.ConditionalWeakTable, "TryGetValue", _types.Object, _types.Object.MakeByRefType()));
                 il.Emit(OpCodes.Brtrue, nullLabel); // Frozen - silently return
+                var noStoredValue = il.DefineLabel();
+                il.Emit(OpCodes.Ldloc, listSetDescriptorLocal);
+                il.Emit(OpCodes.Brfalse, noStoredValue);
+                il.Emit(OpCodes.Ldloc, listSetDescriptorLocal);
+                il.Emit(OpCodes.Ldarg_2);
+                il.Emit(OpCodes.Callvirt, inputs.DescriptorStorage.DescriptorValue.GetSetMethod()!);
+                il.MarkLabel(noStoredValue);
                 // Use SetArrayElement for JS-spec auto-extend semantics (list[N] = v on
                 // an array with length < N must zero-pad up to N). Matches the typed-list
                 // branch below — direct set_Item throws ArgumentOutOfRangeException for
@@ -1855,8 +1883,7 @@ public partial class RuntimeEmitter
                 // `src[index] = value` where `index = R++` runs past the initial empty list).
                 il.Emit(OpCodes.Ldarg_0);
                 il.Emit(OpCodes.Castclass, listType);
-                il.Emit(OpCodes.Ldarg_1);
-                il.Emit(OpCodes.Call, _types.GetMethod(_types.Convert, "ToInt32", _types.Object));
+                il.Emit(OpCodes.Ldloc, listSetParsedIndexLocal);
                 il.Emit(OpCodes.Ldarg_2);
                 il.Emit(OpCodes.Call, desc.GetSetArrayElementMethod(inputs.ArrayOperations));
             }
@@ -2656,6 +2683,14 @@ public partial class RuntimeEmitter
             il.Emit(OpCodes.Ldloc, listDeleteKeyLocal);
             il.Emit(OpCodes.Ldloca, listDeleteIndexLocal);
             il.Emit(OpCodes.Call, _types.GetMethod(_types.Int32, "TryParse", _types.String, _types.Int32.MakeByRefType()));
+            il.Emit(OpCodes.Brfalse, listDeleteNotNumeric);
+            il.Emit(OpCodes.Ldloc, listDeleteIndexLocal);
+            il.Emit(OpCodes.Ldc_I4_0);
+            il.Emit(OpCodes.Blt, listDeleteNotNumeric);
+            il.Emit(OpCodes.Ldloc, listDeleteKeyLocal);
+            il.Emit(OpCodes.Ldloca, listDeleteIndexLocal);
+            il.Emit(OpCodes.Call, _types.GetMethodNoParams(_types.Int32, "ToString"));
+            il.Emit(OpCodes.Call, _types.StringOpEquality);
             il.Emit(OpCodes.Brfalse, listDeleteNotNumeric);
 
             var listDeleteDescriptorLocal = il.DeclareLocal(inputs.DescriptorStorage.DescriptorType);

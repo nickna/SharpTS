@@ -137,9 +137,9 @@ public partial class RuntimeEmitter
             || _features.UsesClassPrototypeMutation
             || _features.UsesSourceExecution;
 
-        void WireCallback(string jsName, MethodBuilder helper, bool isReducer = false)
+        void WireCallback(string jsName, MethodBuilder helper, bool isReducer = false, bool shortCircuits = false)
             => Wire(jsName, usesPrototypeAdapters
-                ? EmitArrayCallbackPrototypeAdapter(typeBuilder, runtime, helper, isReducer)
+                ? EmitArrayCallbackPrototypeAdapter(typeBuilder, runtime, helper, isReducer, shortCircuits)
                 : helper, 1);
 
         void WireSearch(string jsName, MethodBuilder helper)
@@ -150,12 +150,12 @@ public partial class RuntimeEmitter
         WireCallback("map",           runtime.ArrayOperations.Map);
         WireCallback("filter",        runtime.ArrayOperations.Filter);
         WireCallback("forEach",       runtime.ArrayOperations.ForEach);
-        WireCallback("find",          runtime.ArrayOperations.Find);
-        WireCallback("findIndex",     runtime.ArrayOperations.FindIndex);
-        WireCallback("findLast",      runtime.ArrayOperations.FindLast);
-        WireCallback("findLastIndex", runtime.ArrayOperations.FindLastIndex);
-        WireCallback("some",          runtime.ArrayOperations.Some);
-        WireCallback("every",         runtime.ArrayOperations.Every);
+        WireCallback("find",          runtime.ArrayOperations.Find, shortCircuits: true);
+        WireCallback("findIndex",     runtime.ArrayOperations.FindIndex, shortCircuits: true);
+        WireCallback("findLast",      runtime.ArrayOperations.FindLast, shortCircuits: true);
+        WireCallback("findLastIndex", runtime.ArrayOperations.FindLastIndex, shortCircuits: true);
+        WireCallback("some",          runtime.ArrayOperations.Some, shortCircuits: true);
+        WireCallback("every",         runtime.ArrayOperations.Every, shortCircuits: true);
         WireCallback("reduce",      runtime.ArrayOperations.Reduce,      isReducer: true);
         WireCallback("reduceRight", runtime.ArrayOperations.ReduceRight, isReducer: true);
         Wire("includes",       runtime.ArrayOperations.IncludesProto,  1);

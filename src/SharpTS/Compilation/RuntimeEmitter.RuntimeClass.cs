@@ -1697,6 +1697,7 @@ public partial class RuntimeEmitter
                 runtime.ClassPrototypes,
                 runtime.ArrayOperations,
                 runtime.ArrayStorage,
+                runtime.Arguments.Type,
                 runtime.Buffer,
                 runtime.DescriptorStorage,
                 runtime.Errors,
@@ -1733,6 +1734,8 @@ public partial class RuntimeEmitter
             new SetIndexStrictInputs(
                 runtime.ArrayOperations,
                 runtime.ArrayStorage,
+                runtime.Arguments.Type,
+                runtime.ObjectOwnProperties.HasOwnProperty,
                 runtime.DescriptorStorage,
                 runtime.Errors,
                 runtime.ReflectedMethods.InvokeUnwrapped,
@@ -2546,6 +2549,7 @@ public partial class RuntimeEmitter
                     runtime.Errors.CreateException,
                     runtime.Errors.TypeErrorConstructor,
                     runtime.FunctionBindings,
+                    runtime.Arguments.Type,
                     NativeProxyRejection: runtime.ReflectedMethods.NativeProxyRejection
                 )
             );
@@ -2728,7 +2732,7 @@ public partial class RuntimeEmitter
         EmitArrayReverse(typeBuilder, runtime);
         EmitArrayReverseProto(typeBuilder, runtime);
         EmitArrayFlatHelper(typeBuilder, runtime); // Must be before EmitArrayFlat
-        EmitArrayFlat(typeBuilder, runtime.ArrayOperations);
+        EmitArrayFlat(typeBuilder, runtime);
         EmitArrayFlatMap(typeBuilder, runtime);
         EmitArrayFrom(typeBuilder, runtime);
         EmitArrayOf(typeBuilder, runtime);

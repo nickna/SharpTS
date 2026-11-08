@@ -159,6 +159,8 @@ public static class ReflectBuiltIns
                     case SharpTSObject obj:
                         return RuntimeValue.FromBoolean(
                             obj.DeleteProperty(propertyKey));
+                    case SharpTSArguments arguments:
+                        return RuntimeValue.FromBoolean(arguments.DeletePropertyStrict(propertyKey, false));
                     case ISharpTSFunctionObject function:
                         var properties = FunctionObjectProperties.GetProperties(function, interpreter);
                         return RuntimeValue.FromBoolean(properties.GetOwnPropertyDescriptor(propertyKey) is null

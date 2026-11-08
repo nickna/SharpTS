@@ -4,12 +4,12 @@ namespace SharpTS.Compilation;
 
 internal static class ConstructorReceiverEmitter
 {
-    internal static void CloseNominalSuperTarget(ILGenerator il, CompilationContext context)
+    internal static void CloseNominalSuperTarget(ILGenerator il, CompilationContext context, Type? nominalParent = null)
     {
         // A guest generic constructor keeps its open Type identity. Its factory
         // must execute through the checked closed owner, but only while that
         // exact nominal constructor is still the selected live parent.
-        if (context.CurrentClassBuilder?.BaseType is not { IsConstructedGenericType: true } parent
+        if ((nominalParent ?? context.CurrentClassBuilder?.BaseType) is not { IsConstructedGenericType: true } parent
             || parent.ContainsGenericParameters
             || parent.GetGenericTypeDefinition() is not TypeBuilder definition
             || !context.Classes.Values.Any(owner => ReferenceEquals(owner, definition))) return;

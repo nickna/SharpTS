@@ -8,11 +8,12 @@ public partial class TypeChecker
     private TypeInfo CheckLogicalSetPrivate(Expr.LogicalSetPrivate logical)
     {
         using var lookup = BeginSourceMemberLookup(logical, logical.Name, MemberOperation.Read | MemberOperation.Write);
-        var (receiver, owner, isStatic, fieldType) = CheckWritablePrivateField(
+        var (receiver, owner, isStatic, fieldType, accessorWriteType) = CheckWritablePrivateField(
             logical, logical.Object, logical.Name, allowDynamicReceiver: true);
         TypeInfo right = CheckExpr(logical.Value);
-        if (!IsCompatible(fieldType, right))
-            throw new TypeCheckException($"Cannot assign '{right}' to private field '{logical.Name.Lexeme}' of type '{fieldType}'.",
+        TypeInfo writeType = accessorWriteType ?? fieldType;
+        if (!IsCompatible(writeType, right))
+            throw new TypeCheckException($"Cannot assign '{right}' to private field '{logical.Name.Lexeme}' of type '{writeType}'.",
                 logical.Operator.Line, tsCode: "TS2322");
         ObservePrivateSourceMemberSelection(logical.Name, receiver, owner,
             isStatic ? MemberFacet.PrivateStatic : MemberFacet.PrivateInstance);

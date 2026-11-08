@@ -3705,6 +3705,8 @@ public partial class Interpreter
     private RuntimeValue GetPrivateCore(object? obj, string fieldName)
     {
         var owner = _environment.FindPrivateClass(fieldName);
+        if (owner is not null && owner.TryGetPrivateAccessor(fieldName, out bool isStatic, out var getter, out _))
+            return InvokePrivateAccessor(owner, obj, fieldName, isStatic, getter);
         if (owner?.HasStaticPrivateField(fieldName) == true)
         {
             if (!ReferenceEquals(obj, owner)) throw new ThrowException(new SharpTSTypeError($"Cannot access private member {fieldName} from an object whose class did not declare it"));
@@ -3774,6 +3776,8 @@ public partial class Interpreter
     private RuntimeValue SetPrivateCore(object? obj, RuntimeValue value, string fieldName)
     {
         var owner = _environment.FindPrivateClass(fieldName);
+        if (owner is not null && owner.TryGetPrivateAccessor(fieldName, out bool isStatic, out _, out var setter))
+            return InvokePrivateAccessor(owner, obj, fieldName, isStatic, setter, value);
         if (owner is not null && owner.HasStaticPrivateField(fieldName))
         {
             if (!ReferenceEquals(obj, owner)) throw new ThrowException(new SharpTSTypeError($"Cannot access private member {fieldName} from an object whose class did not declare it"));
@@ -3814,6 +3818,21 @@ public partial class Interpreter
         }
 
         throw new InterpreterException($"Cannot write private field '{fieldName}' to non-class value.");
+    }
+
+    private RuntimeValue InvokePrivateAccessor(SharpTSClass owner, object? receiver, string name,
+        bool isStatic, ISharpTSCallable? accessor, RuntimeValue? assignedValue = null)
+    {
+        if (isStatic ? !ReferenceEquals(receiver, owner) : receiver is null || !owner.HasPrivateBrand(receiver))
+            throw new ThrowException(new SharpTSTypeError($"Cannot access private member {name} from an object whose class did not declare it"));
+        if (accessor is null)
+            throw new ThrowException(new SharpTSTypeError($"Private accessor {name} does not have a {(assignedValue.HasValue ? "setter" : "getter")}"));
+        if (assignedValue is { } value)
+        {
+            InvokePrivateCall(accessor, receiver, [value.ToObject()]);
+            return value;
+        }
+        return InvokePrivateCall(accessor, receiver, []);
     }
 
     /// <summary>

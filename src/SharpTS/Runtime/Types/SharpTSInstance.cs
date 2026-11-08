@@ -28,7 +28,9 @@ public class SharpTSInstance(SharpTSClass klass) : ISharpTSPropertyAccessor, ITy
 
     /// <inheritdoc />
     public TypeCategory RuntimeCategory => TypeCategory.Instance;
-    private Dictionary<string, object?> _fields = [];
+    private readonly Dictionary<string, object?> _fields = [];
+    // Data and accessor descriptors share one creation order.
+    private readonly OrderedDictionary<string, byte> _ownStringKeys = [];
     private Dictionary<string, ISharpTSCallable?>? _getters;
     private Dictionary<string, ISharpTSCallable?>? _setters;
     private SharpTSObject? _symbolProperties;
@@ -333,7 +335,7 @@ public class SharpTSInstance(SharpTSClass klass) : ISharpTSPropertyAccessor, ITy
             return;
         }
 
-        _fields[propName] = value;
+        StoreField(propName, value);
         // A successful own write can replace a cached miss or inherited method.
         // Re-resolve the name while preserving own accessor precedence.
         _lookupCache.Remove(propName);
@@ -407,7 +409,7 @@ public class SharpTSInstance(SharpTSClass klass) : ISharpTSPropertyAccessor, ITy
             return;
         }
 
-        _fields[propName] = value;
+        StoreField(propName, value);
         _lookupCache.Remove(propName);
     }
 
@@ -483,17 +485,11 @@ public class SharpTSInstance(SharpTSClass klass) : ISharpTSPropertyAccessor, ITy
     public bool HasField(string name) => _fields.ContainsKey(name);
 
     /// <summary>
-    /// Get all field names for Object.keys() support
+    /// Gets own string keys with array indices first in ascending order.
     /// </summary>
     public IEnumerable<string> GetFieldNames()
-        => _fields.Keys
-            // A deferred enumerator may retain an older store after deletion.
-            .Where(name => _fields.ContainsKey(name))
-            .Concat((_getters?.Keys as IEnumerable<string> ?? Enumerable.Empty<string>())
-                .Where(name => _getters?.ContainsKey(name) == true))
-            .Concat((_setters?.Keys as IEnumerable<string> ?? Enumerable.Empty<string>())
-                .Where(name => _setters?.ContainsKey(name) == true))
-            .Distinct();
+        => _ownStringKeys.Keys
+            .OrderBy(static name => PropertySemantics.TryGetArrayIndex(name, out uint index) ? index : uint.MaxValue);
 
     /// <summary>
     /// Enumerates own string keys whose descriptors are enumerable.
@@ -504,7 +500,7 @@ public class SharpTSInstance(SharpTSClass klass) : ISharpTSPropertyAccessor, ITy
     internal IEnumerable<string> OwnEnumerableKeys()
     {
         foreach (var key in GetFieldNames())
-            if (GetPropertyFlags(key).Enumerable)
+            if (_ownStringKeys.ContainsKey(key) && GetPropertyFlags(key).Enumerable)
                 yield return key;
     }
 
@@ -553,7 +549,7 @@ public class SharpTSInstance(SharpTSClass klass) : ISharpTSPropertyAccessor, ITy
             return;
         }
 
-        _fields[name] = value;
+        StoreField(name, value);
         // A base constructor can read this name before a derived field exists.
         // Re-resolve after the successful write, preserving own accessor precedence.
         _lookupCache.Remove(name);
@@ -595,8 +591,14 @@ public class SharpTSInstance(SharpTSClass klass) : ISharpTSPropertyAccessor, ITy
             return;
         }
 
-        _fields[name] = value;
+        StoreField(name, value);
         _lookupCache.Remove(name);
+    }
+
+    private void StoreField(string name, object? value)
+    {
+        _fields[name] = value;
+        _ownStringKeys.TryAdd(name, 0);
     }
 
     /// <summary>
@@ -627,31 +629,10 @@ public class SharpTSInstance(SharpTSClass klass) : ISharpTSPropertyAccessor, ITy
     /// <summary>Drops an own data/accessor property plus its descriptor flags and stale resolution-cache entry.</summary>
     private bool RemoveField(string name)
     {
-        bool removed = _fields.Remove(name);
-        if (removed)
-        {
-            // Dictionary reuses deleted slots; dense survivors make recreation append.
-            var fields = new Dictionary<string, object?>(_fields.Count, _fields.Comparer);
-            foreach (var field in _fields)
-                fields.Add(field.Key, field.Value);
-            _fields = fields;
-        }
-        if (_getters?.Remove(name) == true)
-        {
-            removed = true;
-            var getters = new Dictionary<string, ISharpTSCallable?>(_getters.Count, _getters.Comparer);
-            foreach (var getter in _getters)
-                getters.Add(getter.Key, getter.Value);
-            _getters = getters;
-        }
-        if (_setters?.Remove(name) == true)
-        {
-            removed = true;
-            var setters = new Dictionary<string, ISharpTSCallable?>(_setters.Count, _setters.Comparer);
-            foreach (var setter in _setters)
-                setters.Add(setter.Key, setter.Value);
-            _setters = setters;
-        }
+        bool removed = _ownStringKeys.Remove(name);
+        _fields.Remove(name);
+        _getters?.Remove(name);
+        _setters?.Remove(name);
         _descriptors?.Remove(name);
         _lookupCache.Remove(name);
         return removed;
@@ -809,6 +790,8 @@ public class SharpTSInstance(SharpTSClass klass) : ISharpTSPropertyAccessor, ITy
         {
             return false;
         }
+
+        _ownStringKeys.TryAdd(name, 0);
 
         // Store the descriptor flags
         _descriptors ??= new Dictionary<string, PropertyDescriptorFlags>();

@@ -83,6 +83,13 @@ public sealed class EmittedDescriptorStorageRuntime
         internal set => Set(ref _descriptorConstructor, value);
     }
 
+    private PropertyInfo? _descriptorParameterCell;
+    internal PropertyInfo? DescriptorParameterCell
+    {
+        get => _descriptorParameterCell;
+        set => Set(ref _descriptorParameterCell, value!);
+    }
+
     private PropertyInfo? _descriptorValue;
     public PropertyInfo DescriptorValue
     {

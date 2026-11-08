@@ -213,7 +213,7 @@ public partial class Interpreter
             value = inputView.Read(name);
             return true;
         }
-        if (UsesArrayRawIndexReference(obj, index))
+        if (UsesArrayUpdateReference(obj, index))
         {
             value = GetOwnPropertyObjectValue(obj!, ToPropertyKey(index));
             return true;
@@ -261,7 +261,7 @@ public partial class Interpreter
             PerformIndexSet(inputView, index, value);
             return true;
         }
-        if (UsesArrayRawIndexReference(obj, index))
+        if (UsesArrayUpdateReference(obj, index))
         {
             PerformIndexSet(obj, index, value);
             return true;
@@ -291,6 +291,10 @@ public partial class Interpreter
     // Raw numbers must become property keys before selecting physical storage.
     private static bool UsesArrayRawIndexReference(object? target, object? key)
         => target is SharpTSArray && (key is double || RuntimeValue.FromBoxed(key).IsObject);
+
+    private static bool UsesArrayUpdateReference(object? target, object? key)
+        => UsesArrayRawIndexReference(target, key)
+            || target is SharpTSArray && key is string name && PropertySemantics.TryGetArrayIndex(name, out _);
 
     private static bool HasArrayObjectKey(object? target, object? key)
         => target is SharpTSArray && RuntimeValue.FromBoxed(key).IsObject;

@@ -10,7 +10,9 @@ public partial class TypeChecker
     private TypeInfo.Class? FindLexicalPrivateOwner(string name) =>
         new[] { _currentClass }.Concat(_privateNameEnclosingClasses).FirstOrDefault(candidate => candidate is not null
             && (candidate.PrivateFieldTypes.ContainsKey(name) || candidate.StaticPrivateFieldTypes.ContainsKey(name)
-                || candidate.PrivateMethodTypes.ContainsKey(name) || candidate.StaticPrivateMethodTypes.ContainsKey(name)));
+                || candidate.PrivateMethodTypes.ContainsKey(name) || candidate.StaticPrivateMethodTypes.ContainsKey(name)
+                || PrivateAccessorNames.Contains(candidate.PrivateMethodTypes, name)
+                || PrivateAccessorNames.Contains(candidate.StaticPrivateMethodTypes, name)));
 
     internal TypeInfo VisitPrivateIn(Expr.PrivateIn expr)
     {
@@ -38,7 +40,8 @@ public partial class TypeChecker
             if (checkedOwner is not null)
             {
                 MemberFacet facet = checkedOwner.PrivateFieldTypes.ContainsKey(name) ||
-                    checkedOwner.PrivateMethodTypes.ContainsKey(name)
+                    checkedOwner.PrivateMethodTypes.ContainsKey(name) ||
+                    PrivateAccessorNames.Contains(checkedOwner.PrivateMethodTypes, name)
                     ? MemberFacet.PrivateInstance : MemberFacet.PrivateStatic;
                 Members.Bind(sourceDocument, writtenName,
                     Members.ResolveSelected(checkedOwner.Core.DeclarationId, facet, name),

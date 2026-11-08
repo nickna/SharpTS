@@ -52,9 +52,33 @@ public partial class ILCompiler
             il.Emit(OpCodes.Ldarg_1);
             il.Emit(OpCodes.Stfld, payload);
             il.Emit(OpCodes.Ret);
+            if (_closures.Analyzer.IsMappedArgumentParameter(binding.SourceToken))
+                ImplementMappedParameterCellInterface(cell, payload);
             _debugLexicalCellStorages.Add(binding.SourceToken,
                 new(cell, constructor, payload, symbols.DefineLexicalCellHolderName(binding.StorageName), symbols));
         }
+    }
+
+    private void ImplementMappedParameterCellInterface(TypeBuilder cell, FieldBuilder payload)
+    {
+        var contract = typeof(IStrongBox);
+        var value = contract.GetProperty(nameof(IStrongBox.Value))!;
+        cell.AddInterfaceImplementation(contract);
+        const MethodAttributes attributes = MethodAttributes.Private | MethodAttributes.Virtual
+            | MethodAttributes.Final | MethodAttributes.HideBySig | MethodAttributes.NewSlot | MethodAttributes.SpecialName;
+        var get = cell.DefineMethod("IStrongBox.get_Value", attributes, _types.Object, Type.EmptyTypes);
+        var il = get.GetILGenerator();
+        il.Emit(OpCodes.Ldarg_0);
+        il.Emit(OpCodes.Ldfld, payload);
+        il.Emit(OpCodes.Ret);
+        cell.DefineMethodOverride(get, value.GetGetMethod()!);
+        var set = cell.DefineMethod("IStrongBox.set_Value", attributes, _types.Void, [_types.Object]);
+        il = set.GetILGenerator();
+        il.Emit(OpCodes.Ldarg_0);
+        il.Emit(OpCodes.Ldarg_1);
+        il.Emit(OpCodes.Stfld, payload);
+        il.Emit(OpCodes.Ret);
+        cell.DefineMethodOverride(set, value.GetSetMethod()!);
     }
 
     private void FinalizeDebugLexicalCellTypes()

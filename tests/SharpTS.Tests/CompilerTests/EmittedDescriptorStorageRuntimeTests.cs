@@ -38,12 +38,27 @@ public class EmittedDescriptorStorageRuntimeTests
         var first = new EmittedRuntime().DescriptorStorage;
         Assert.NotSame(first, new EmittedRuntime().DescriptorStorage);
         Assert.False(first.IsComplete);
+        Assert.Null(first.DescriptorParameterCell);
         Assert.Equal(36, Handles.Length);
         Assert.Equal(3, Handles.Count(property => property.PropertyType == typeof(Type)));
         Assert.Equal(10, Handles.Count(property => property.PropertyType == typeof(PropertyInfo)));
         Assert.Single(Handles, property => property.PropertyType == typeof(ConstructorInfo));
         Assert.Equal(22, Handles.Count(property => property.PropertyType == typeof(MethodBuilder)));
         Assert.Null(typeof(EmittedRuntime).GetProperty(nameof(EmittedRuntime.DescriptorStorage))!.SetMethod);
+    }
+
+    [Theory]
+    [InlineData(false)]
+    [InlineData(true)]
+    public void OptionalParameterCellDoesNotChangeRequiredHandleLifecycle(bool includeCell)
+    {
+        var owner = CreateDeclarations(includeCell: includeCell);
+        Assert.Equal(includeCell, owner.DescriptorParameterCell is not null);
+        if (includeCell)
+            Assert.Equal(typeof(IStrongBox), owner.DescriptorParameterCell!.PropertyType);
+        owner.CompleteEmission();
+        AssertFrozen(owner);
+        Assert.Throws<InvalidOperationException>(() => owner.DescriptorParameterCell = null);
     }
 
     [Fact]
@@ -75,6 +90,7 @@ public class EmittedDescriptorStorageRuntimeTests
         }
         Assert.IsAssignableFrom<ConstructorBuilder>(owner.DescriptorConstructor);
         Assert.Same(owner.DescriptorType, owner.DescriptorConstructor.DeclaringType);
+        Assert.Equal(typeof(IStrongBox), owner.DescriptorParameterCell!.PropertyType);
         foreach (var property in Handles.Where(property => property.PropertyType == typeof(MethodBuilder)))
         {
             var error = Assert.Throws<TargetInvocationException>(() => property.GetValue(owner));
@@ -175,11 +191,17 @@ public class EmittedDescriptorStorageRuntimeTests
         var sharedReceiver = new object();
         var sharedSymbol = new object();
         // JSON reuse has an independent tracked cache-lifetime defect.
-        foreach (var source in new[] { "/x/;1n;new Date();", "const value=1;", "/x/;1n;new Date();" })
+        foreach (var (source, usesArguments) in new[]
+        {
+            ("/x/;1n;new Date();", false),
+            ("function f(value) { return arguments[0]; }", true),
+            ("/x/;1n;new Date();", false)
+        })
         {
             var runtime = EmitRuntime(source, emitter: emitter);
             Assert.DoesNotContain(runtime.DescriptorStorage, owners);
             owners.Add(runtime.DescriptorStorage);
+            Assert.Equal(usesArguments, runtime.DescriptorStorage.DescriptorParameterCell is not null);
             AssertFrozen(runtime.DescriptorStorage);
             using var bytes = Save(runtime);
             Verify(bytes);
@@ -306,7 +328,7 @@ public class EmittedDescriptorStorageRuntimeTests
         Assert.True(ReferenceEquals(symbolTable.GetOrCreateValue(sharedReceiver)[sharedSymbol], descriptor), "Mutable symbol table identity");
     }
 
-    private static EmittedDescriptorStorageRuntime CreateDeclarations(string? omission = null)
+    private static EmittedDescriptorStorageRuntime CreateDeclarations(string? omission = null, bool includeCell = false)
     {
         var assembly = new PersistedAssemblyBuilder(new AssemblyName($"descriptor_storage_declarations_{Guid.NewGuid():N}"), typeof(object).Assembly);
         var type = assembly.DefineDynamicModule("main").DefineType("DescriptorDeclarations");
@@ -324,6 +346,8 @@ public class EmittedDescriptorStorageRuntimeTests
                 value = type.DefineMethod(property.Name, MethodAttributes.Public, typeof(void), Type.EmptyTypes);
             property.SetValue(owner, value);
         }
+        if (includeCell)
+            owner.DescriptorParameterCell = type.DefineProperty("ParameterCell", PropertyAttributes.None, typeof(IStrongBox), Type.EmptyTypes);
         return owner;
     }
 
@@ -331,6 +355,8 @@ public class EmittedDescriptorStorageRuntimeTests
     {
         Assert.True(owner.IsComplete);
         Assert.Throws<InvalidOperationException>(owner.CompleteEmission);
+        if (owner.DescriptorParameterCell is { } parameterCell)
+            Assert.Throws<InvalidOperationException>(() => owner.DescriptorParameterCell = parameterCell);
         foreach (var property in Handles)
         {
             var value = property.GetValue(owner);

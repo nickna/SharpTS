@@ -23,9 +23,11 @@ internal static class ParameterBinder
         internal List<(Token Name, bool IsFunction)> Declarations { get; }
         internal HashSet<string> FunctionNames { get; }
         internal List<Token> DestructuredNames { get; }
+        internal bool HasUseStrict { get; }
 
         internal BodyBindings(List<Stmt> body)
         {
+            HasUseStrict = DirectivePrologue.HasUseStrict(body);
             foreach (var statement in body)
                 if (statement is Stmt.Sequence { ParameterName: { } parameterName } initializer)
                     (Initializers ??= new(StringComparer.Ordinal)).Add(parameterName.Lexeme, initializer);
@@ -227,6 +229,23 @@ internal static class ParameterBinder
     internal static bool HasParameterExpressions(IEnumerable<Stmt.Parameter> parameters)
         => parameters.Any(parameter => parameter.DefaultValue is not null || parameter.HasBindingExpressions);
 
+    internal static bool HasUseStrict(List<Stmt>? body) => GetBodyBindings(body).HasUseStrict;
+
+    internal static IEnumerable<(int Index, Token Name)> MappedArgumentParameters(
+        List<Stmt.Parameter> parameters, List<Stmt>? body)
+    {
+        if (parameters.Any(parameter => parameter.IsRest || parameter.DefaultValue is not null
+                || parameter.Name.Lexeme == "arguments") || ParameterInitializers(body) is not null)
+            yield break;
+
+        // A duplicate formal name belongs to its last occurrence even when
+        // the caller did not supply an argument at that occurrence.
+        var seen = new HashSet<string>(StringComparer.Ordinal);
+        for (int i = parameters.Count - 1; i >= 0; i--)
+            if (seen.Add(parameters[i].Name.Lexeme))
+                yield return (i, parameters[i].Name);
+    }
+
     private static void ReserveParameterBindings(List<Stmt.Parameter> parameters, List<Stmt>? body,
         RuntimeEnvironment environment)
     {
@@ -292,6 +311,8 @@ internal static class ParameterBinder
         List<Stmt.Parameter> parameters, List<Stmt>? body, RuntimeEnvironment parameterEnvironment)
     {
         var bindings = GetBodyBindings(body);
+        if (bindings.HasUseStrict)
+            parameterEnvironment.RequireUnmappedArguments();
         var statements = bindings.Statements;
         bool separateBody = HasParameterExpressions(parameters);
         var environment = separateBody

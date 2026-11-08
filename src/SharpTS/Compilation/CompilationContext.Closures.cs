@@ -303,6 +303,7 @@ public partial class CompilationContext
     internal HashSet<string>? PublishedCapturedParameterNames { get; set; }
 
     internal Dictionary<string, (Token Declaration, LocalBuilder Cell)> ParameterCaptureCells { get; } = new(StringComparer.Ordinal);
+    internal Dictionary<Token, AsyncArrowStorageAccess>? AsyncMappedParameterCaptures { get; set; }
 
     // Initialized parameter bindings survive initializer-free var redeclarations,
     // including receiver adapters whose parameters live in locals rather than args.

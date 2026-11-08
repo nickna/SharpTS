@@ -207,7 +207,9 @@ public partial class TypeChecker
             }
         }
 
-        // Type-check the member declarations to validate their types
+        // Ambient members can refer to each other without replacing bindings in
+        // the surrounding script. Module checking publishes the export surface.
+        using var scope = new EnvironmentScope(this, new TypeEnvironment(_environment));
         foreach (var member in declareModule.Members)
         {
             CheckDeclareBlockMember(member);
@@ -336,6 +338,10 @@ public partial class TypeChecker
 
             case Stmt.Class classStmt:
                 CheckClassDeclaration(classStmt);
+                break;
+
+            case Stmt.Enum enumStmt:
+                CheckEnumDeclaration(enumStmt);
                 break;
 
             case Stmt.TypeAlias typeAlias:

@@ -919,16 +919,11 @@ public partial class Interpreter
         }
         else if (spreadValue is SharpTSInstance inst)
         {
-            var stringKeys = inst.GetFieldNames().ToList();
-            var symbolKeys = inst.GetSymbolPropertyNames().ToList();
-            foreach (string key in stringKeys)
-            {
-                if (inst.GetOwnPropertyDescriptor(key)?.Enumerable != true)
-                    continue;
-                stringFields[key] = GetPropertyValue(inst, key);
-            }
-            foreach (SharpTSSymbol symbol in symbolKeys)
-                (symbolFields ??= [])[symbol] = GetSymbolPropertyValue(inst, symbol);
+            foreach (var entry in ObjectBuiltIns.EnumerateInstanceOwnEnumerable(this, inst))
+                if (entry.Key is SharpTSSymbol symbol)
+                    (symbolFields ??= [])[symbol] = entry.Value;
+                else
+                    stringFields[(string)entry.Key] = entry.Value;
         }
         else if (spreadValue is SharpTSProxy proxy)
         {
@@ -1250,6 +1245,15 @@ public partial class Interpreter
                 _ => index.ToString() ?? ""
             };
             ThrowCannotReadProperty(obj, key);
+        }
+
+        if (index is string enumMember)
+        {
+            if (obj is SharpTSEnum enumValue)
+                return enumValue.HasMember(enumMember)
+                    ? enumValue.GetMemberRV(enumMember)
+                    : RuntimeValue.FromBoxed(GetPropertyValue(GetObjectPrototype(), enumMember, enumValue));
+            if (obj is ConstEnumValues constEnum) return constEnum.GetMemberRV(enumMember);
         }
 
         if (HasArrayObjectKey(obj, index))
@@ -1972,55 +1976,10 @@ public partial class Interpreter
         switch (target)
         {
             case IndexTarget.Array t:
-                if (t.Target is not SharpTSArguments)
-                {
-                    // Simple writes share compound assignment's OrdinarySet
-                    // policy, including present-but-undefined accessors.
-                    string key = t.Index.ToString(
-                        System.Globalization.CultureInfo.InvariantCulture);
-                    SetOwnPropertyObjectValue(t.Target, key, value, strictMode);
-                    break;
-                }
-                if (t.Target is SharpTSArguments && t.Index >= t.Target.LongLength)
-                {
-                    t.Target.SetNamedProperty(t.Index.ToString(
-                        System.Globalization.CultureInfo.InvariantCulture), value);
-                    break;
-                }
-                if (!t.Target.HasIndex(t.Index)
-                    && t.Target.HasExplicitPrototype
-                    && t.Target.ExplicitPrototype is SharpTSProxy arrayPrototypeProxy)
-                {
-                    string propertyKey = t.Index.ToString(
-                        System.Globalization.CultureInfo.InvariantCulture);
-                    bool assigned = arrayPrototypeProxy.TrapSetProperty(
-                        propertyKey, value, this, t.Target);
-                    if (!assigned && strictMode)
-                        throw new ThrowException(new SharpTSTypeError(
-                            $"Proxy set trap rejected property '{propertyKey}'"));
-                    break;
-                }
-                if (t.Target.TryGetIndexAccessor(
-                    t.Index, out _, out var indexSetter))
-                {
-                    if (indexSetter != null)
-                    {
-                        BindAccessorToObject(indexSetter, t.Target).CallBoxed(this, [value]);
-                    }
-                    else if (strictMode)
-                    {
-                        throw new ThrowException(new SharpTSTypeError(
-                            $"Cannot set array index '{t.Index}' which has only a getter."));
-                    }
-                }
-                else if (strictMode)
-                {
-                    t.Target.SetStrict(t.Index, value, strictMode);
-                }
-                else
-                {
-                    t.Target.Set(t.Index, value);
-                }
+                // Indexed writes share OrdinarySet, including inherited
+                // setters and mapped arguments' own data descriptors.
+                string arrayKey = t.Index.ToString(System.Globalization.CultureInfo.InvariantCulture);
+                SetOwnPropertyObjectValue(t.Target, arrayKey, value, strictMode);
                 break;
 
             case IndexTarget.ArrayString t:

@@ -148,7 +148,7 @@ public static partial class ObjectBuiltIns
                 yield break;
             case SharpTSInstance inst:
                 foreach (var n in inst.OwnEnumerableKeys())
-                    yield return new(n, includeValues ? inst.GetRawField(n) : null);
+                    yield return new(n, includeValues ? interpreter.GetPropertyValue(inst, n) : null);
                 yield break;
             case IDictionary<string, object?> dict:
                 foreach (var kv in dict)
@@ -550,6 +550,16 @@ public static partial class ObjectBuiltIns
                 continue;
             }
 
+            if (args[i] is SharpTSInstance instance)
+            {
+                foreach (var entry in EnumerateInstanceOwnEnumerable(interpreter, instance))
+                    if (entry.Key is SharpTSSymbol symbol)
+                        SetAssignedSymbol(interpreter, target, symbol, entry.Value);
+                    else
+                        SetAssignedProperty(interpreter, target, (string)entry.Key, entry.Value);
+                continue;
+            }
+
             foreach (var entry in EnumerateOwnEnumerable(interpreter, args[i], "Object.assign"))
                 SetAssignedProperty(interpreter, target, entry.Key, entry.Value);
             switch (args[i])
@@ -571,10 +581,6 @@ public static partial class ObjectBuiltIns
                             interpreter, target, symbol,
                             interpreter.GetSymbolPropertyValue(source, symbol));
                     }
-                    break;
-                case SharpTSInstance source:
-                    foreach (var symbol in source.GetSymbolPropertyNames())
-                        SetAssignedSymbol(interpreter, target, symbol, source.GetBySymbol(symbol));
                     break;
             }
         }
@@ -2196,6 +2202,18 @@ public static partial class ObjectBuiltIns
             return prototypeRest;
         }
 
+        if (source is SharpTSInstance instance)
+        {
+            var excludedInstanceKeys = excludeKeys.Select(interpreter.ToPropertyKey).ToHashSet();
+            var instanceRest = new SharpTSObject([]);
+            foreach (var entry in EnumerateInstanceOwnEnumerable(interpreter, instance, excludedInstanceKeys))
+                if (entry.Key is SharpTSSymbol symbol)
+                    instanceRest.SetBySymbol(symbol, entry.Value);
+                else
+                    instanceRest.SetProperty((string)entry.Key, entry.Value);
+            return instanceRest;
+        }
+
         var properties = source switch
         {
             ISharpTSOwnPropertyObject carrier => carrier.OwnProperties,
@@ -2221,6 +2239,25 @@ public static partial class ObjectBuiltIns
                 result.SetProperty((string)key, interpreter.GetPropertyValue(source, (string)key));
         }
         return result;
+    }
+
+    internal static IEnumerable<KeyValuePair<object, object?>> EnumerateInstanceOwnEnumerable(
+        Interpreter interpreter, SharpTSInstance instance, HashSet<object>? excluded = null)
+    {
+        // Snapshot both key categories before any getter runs. Recheck each
+        // descriptor in case an earlier read changed or removed the property.
+        var keys = instance.GetFieldNames().Cast<object>().Concat(instance.GetSymbolPropertyNames()).ToList();
+        foreach (var key in keys)
+        {
+            if (excluded?.Contains(key) == true) continue;
+            if (key is SharpTSSymbol symbol)
+            {
+                if (instance.GetOwnPropertyDescriptor(symbol)?.Enumerable == true)
+                    yield return new(key, interpreter.GetSymbolPropertyValue(instance, symbol));
+            }
+            else if (instance.GetOwnPropertyDescriptor((string)key)?.Enumerable == true)
+                yield return new(key, interpreter.GetPropertyValue(instance, (string)key));
+        }
     }
 
     /// <summary>Copies data fields for callers without an interpreter context.</summary>

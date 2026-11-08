@@ -451,6 +451,22 @@ public static class SourceDeclarationEmitter
         private void EmitClassMethod(Stmt.Function method, TypeInfo? classType)
         {
             TypeInfo? resolved = GetClassMemberType(classType, method.Name.Lexeme, method.IsStatic, method.IsPrivate);
+            if (method.PrivateAccessorName is { } privateName)
+            {
+                var accessor = resolved as TypeInfo.Function;
+                string modifier = method.IsStatic ? "static " : "";
+                if (method.Parameters is [var parameter])
+                {
+                    string type = RenderAnnotation(parameter.Type, accessor?.ParamTypes[0]);
+                    WriteLine($"{modifier}set {privateName.Lexeme}({parameter.Name.Lexeme}: {type});");
+                }
+                else
+                {
+                    string type = RenderAnnotation(method.ReturnType, accessor?.ReturnType);
+                    WriteLine($"{modifier}get {privateName.Lexeme}(): {type};");
+                }
+                return;
+            }
             static (IReadOnlyList<TypeInfo>? Params, TypeInfo? Return, IReadOnlyList<TypeInfo.TypeParameter>? TypeParams)
                 Signature(
                     IReadOnlyList<TypeInfo>? parameters,
@@ -581,7 +597,8 @@ public static class SourceDeclarationEmitter
                     string? value = RenderConstantExpression(member.Value);
                     if (value is null && resolved?.Members.TryGetValue(member.Name.Lexeme, out object? checkedValue) == true)
                         value = RenderConstant(checkedValue);
-                    WriteLine($"{member.Name.Lexeme}{(value is null ? "" : $" = {value}")},");
+                    string name = member.Name.Type == TokenType.STRING ? Quote(member.Name.Lexeme) : member.Name.Lexeme;
+                    WriteLine($"{name}{(value is null ? "" : $" = {value}")},");
                 }
             });
             WriteLine("}");
@@ -882,15 +899,20 @@ public static class SourceDeclarationEmitter
             _ => null,
         };
 
-        private static string ExportPrefix(
+        private string ExportPrefix(
             ExportKind kind,
             bool ambient,
-            bool defaultAmbient = true) => kind switch
+            bool defaultAmbient = true)
         {
-            ExportKind.Default => ambient && defaultAmbient ? "export default declare " : "export default ",
-            ExportKind.Named => ambient ? "export declare " : "export ",
-            _ => ambient ? "declare " : "",
-        };
+            // Nested declarations are already inside an ambient module, global, or namespace body.
+            bool needsDeclare = ambient && _indent == 0;
+            return kind switch
+            {
+                ExportKind.Default => needsDeclare && defaultAmbient ? "export default declare " : "export default ",
+                ExportKind.Named => needsDeclare ? "export declare " : "export ",
+                _ => needsDeclare ? "declare " : "",
+            };
+        }
 
         private static string RenderAccess(AccessModifier access) => access switch
         {

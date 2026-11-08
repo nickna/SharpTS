@@ -798,6 +798,10 @@ public partial class RuntimeEmitter
             "Cannot define property on a non-extensible object");
         il.MarkLabel(descriptorStoredLabel);
 
+        if (inputs.DescriptorStorage.DescriptorParameterCell is { } parameterCell)
+            EmitMappedArgumentRedefinition(il, inputs.DescriptorStorage, parameterCell,
+                existingDescLocal, descriptorLocal, newIsAccessorOuter);
+
         EmitDefinePropertyArrayIndexLengthGrowth(il, inputs.ArrayStorage, propNameLocal);
 
         EmitDefinePropertyAccessorStorage(
@@ -837,6 +841,38 @@ public partial class RuntimeEmitter
         // Return the object
         il.Emit(OpCodes.Ldarg_0);
         il.Emit(OpCodes.Ret);
+    }
+
+    private static void EmitMappedArgumentRedefinition(ILGenerator il,
+        EmittedDescriptorStorageRuntime storage, PropertyInfo parameterCell, LocalBuilder previous,
+        LocalBuilder replacement, LocalBuilder isAccessor)
+    {
+        var done = il.DefineLabel();
+        var cell = il.DeclareLocal(typeof(System.Runtime.CompilerServices.IStrongBox));
+        il.Emit(OpCodes.Ldloc, previous);
+        il.Emit(OpCodes.Brfalse, done);
+        il.Emit(OpCodes.Ldloc, previous);
+        il.Emit(OpCodes.Callvirt, parameterCell.GetGetMethod()!);
+        il.Emit(OpCodes.Stloc, cell);
+        il.Emit(OpCodes.Ldloc, cell);
+        il.Emit(OpCodes.Brfalse, done);
+        il.Emit(OpCodes.Ldloc, isAccessor);
+        il.Emit(OpCodes.Brtrue, done);
+
+        // The merged descriptor already holds the current binding when
+        // value was omitted. An explicit value writes through even when
+        // writable:false severs the map immediately afterward.
+        il.Emit(OpCodes.Ldloc, previous);
+        il.Emit(OpCodes.Ldloc, replacement);
+        il.Emit(OpCodes.Callvirt, storage.DescriptorValue.GetGetMethod()!);
+        il.Emit(OpCodes.Callvirt, storage.DescriptorValue.GetSetMethod()!);
+        il.Emit(OpCodes.Ldloc, replacement);
+        il.Emit(OpCodes.Callvirt, storage.DescriptorWritable.GetGetMethod()!);
+        il.Emit(OpCodes.Brfalse, done);
+        il.Emit(OpCodes.Ldloc, replacement);
+        il.Emit(OpCodes.Ldloc, cell);
+        il.Emit(OpCodes.Callvirt, parameterCell.GetSetMethod()!);
+        il.MarkLabel(done);
     }
 
     // Reads receiver/descriptor arguments (0/2), with an empty stack on entry and fallthrough.

@@ -123,7 +123,7 @@ public partial class Parser
         if (!EditorSyntaxEnabled) return;
         RecordEditorRange(function, new SourceSpan(headerStart, body?.End ?? headerEnd), EditorSyntaxKind.Function);
         if (function.ComputedKey is null)
-            RecordEditorName(function.Name, function, function.IsPrivate ? EditorSyntaxRole.PrivateName :
+            RecordEditorName(function.PrivateAccessorName ?? function.Name, function, function.IsPrivate ? EditorSyntaxRole.PrivateName :
                 EditorSyntaxRole.DeclarationName);
         RecordEditorRange(function, new SourceSpan(headerStart, headerEnd),
             EditorSyntaxKind.Function, EditorSyntaxRole.Header);

@@ -19,6 +19,8 @@ public partial class Interpreter
             throw new ThrowException(new SharpTSTypeError("Right-hand side of private 'in' is not an object"));
         var owner = _environment.FindPrivateClass(name)
             ?? throw new InterpreterException("Private name has no lexical class owner");
+        if (owner.TryGetPrivateAccessor(name, out bool isStatic, out _, out _))
+            return RuntimeValue.FromBoolean(isStatic ? ReferenceEquals(receiver, owner) : owner.HasPrivateBrand(receiver));
         return RuntimeValue.FromBoolean(owner.HasStaticPrivateField(name)
             ? ReferenceEquals(receiver, owner) && owner.HasInstalledStaticPrivateField(name)
             : owner.GetStaticPrivateMethod(name) != null

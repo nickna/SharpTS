@@ -1,5 +1,6 @@
 using System.Reflection;
 using System.Reflection.Emit;
+using SharpTS.Parsing;
 
 namespace SharpTS.Compilation;
 
@@ -134,7 +135,8 @@ public partial class CompilationContext
     private bool DeclaresPrivateName(string owner, string name)
         => ClassRegistry?.GetPrivateElements(owner) is { } elements
             && (elements.FieldNames.Contains(name) || elements.StaticFields.ContainsKey(name)
-                || elements.Methods.ContainsKey(name) || elements.StaticMethods.ContainsKey(name));
+                || elements.Methods.ContainsKey(name) || elements.StaticMethods.ContainsKey(name)
+                || PrivateAccessorNames.Contains(elements.Methods, name) || PrivateAccessorNames.Contains(elements.StaticMethods, name));
 
     // ============================================
     // @lock Decorator Support: Thread-safe Method Execution

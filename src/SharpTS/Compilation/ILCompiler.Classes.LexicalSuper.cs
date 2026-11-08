@@ -12,18 +12,16 @@ public partial class ILCompiler
     private void DeclareLexicalSuperElementInitializer(Expr.ClassExpr expression, TypeBuilder owner)
     {
         var declaration = ClassExpressionDeclaration(expression);
-        var lexicalSuper = new LexicalSuperCallVisitor();
-        foreach (var statement in expression.Methods.FirstOrDefault(method =>
-            !method.IsStatic && method.Name.Lexeme == "constructor")?.Body ?? []) lexicalSuper.Visit(statement);
         bool ownElements = expression.Fields.Any(field => !field.IsStatic && !field.IsDeclare)
             || expression.AutoAccessors?.Any(accessor => !accessor.IsStatic) == true
             || expression.Methods.Any(method => !method.IsStatic && method.IsPrivate)
             || expression.Accessors?.Any(accessor => !accessor.IsStatic && accessor.Name.Type == TokenType.PRIVATE_IDENTIFIER) == true;
         string? parentName = Expr.GetSuperclassLeafName(expression.SuperclassExpr);
-        if (!ownElements || expression.SuperclassExpr == null
-            || !lexicalSuper.Found
-            || expression.TypeParams is { Count: > 0 }
-            || parentName is "Array" or "Promise" or "Map" or "Set" or "WeakMap" or "WeakSet" or "Date" or "RegExp" or "Buffer"
+        bool intrinsicArray = !_nativeAotProjectOutput && owner.BaseType == _runtime.ArrayStorage.Type;
+        if ((!ownElements && !intrinsicArray) || expression.SuperclassExpr == null
+            || !ContainsLexicalSuper(expression.Methods)
+            || (parentName == "Array" && !intrinsicArray)
+            || parentName is "Promise" or "Map" or "Set" or "WeakMap" or "WeakSet" or "Date" or "RegExp" or "Buffer"
             || Runtime.BuiltIns.BuiltInNames.IsErrorTypeName(parentName ?? "")
             || _nativeAotProjectOutput && (!SupportsReceiverInitialization(declaration)
                 || expression.Accessors?.Any(accessor => accessor.Name.Type == TokenType.PRIVATE_IDENTIFIER) == true)) return;
@@ -60,6 +58,8 @@ public partial class ILCompiler
         if (!_lexicalSuperElementInitializers.TryGetValue(expression, out var method)) return;
         var il = method.GetILGenerator();
         var context = CreateClassExpressionContext(il, expression, owner, null, method);
+        foreach (var parameter in _classes.GenericParameters.Require(owner))
+            context.GenericTypeParameters[parameter.Name] = parameter;
         context.HasGuestReceiver = true;
         context.GuestThisVariableName = CompilationContext.ThisParameterName;
         context.DefineParameter(CompilationContext.ThisParameterName, 0, _types.Object);
@@ -100,6 +100,15 @@ public partial class ILCompiler
             emitter.EmitConstructorParameterProperty(assignment, local);
         }
         il.Emit(OpCodes.Ret);
+    }
+
+    private static bool ContainsLexicalSuper(List<Stmt.Function> methods)
+    {
+        var visitor = new LexicalSuperCallVisitor();
+        foreach (var statement in methods.FirstOrDefault(method =>
+            !method.IsStatic && method.Name.Lexeme == "constructor" && method.Body != null)?.Body ?? [])
+            visitor.Visit(statement);
+        return visitor.Found;
     }
 
     private sealed class LexicalSuperCallVisitor : AstVisitorBase

@@ -13,9 +13,7 @@ public partial class ILCompiler
         ConstructorInfo target = NewTargetConstructor(constructor);
         if (builder.IsGenericTypeDefinition)
         {
-            var erased = expression.TypeParams!.Select(parameter => parameter.Constraint is { } constraint
-                ? ResolveConstraintType(constraint) : _types.Object).ToArray();
-            template = EmitGenerics.MakeGenericType(builder, erased);
+            template = CanonicalGenericClassOwner(builder);
             target = EmitterTypeHelpers.ResolveConstructor(template, NewTargetConstructor(constructor));
         }
         var method = _programType.DefineMethod("$Create_" + _classExprs.Names[expression],
@@ -23,7 +21,21 @@ public partial class ILCompiler
         var il = method.GetILGenerator();
         var sourceParameters = ResolveClassExpressionConstructorSourceParameters(expression);
         var emitter = new ILEmitter(CreateModuleMemberContext(il, method));
-        if (UsesReceiverConstruction(ClassExpressionDeclaration(expression)) && !builder.IsGenericTypeDefinition
+        if (builder.BaseType == _runtime.ArrayStorage.Type && _lexicalSuperElementInitializers.ContainsKey(expression))
+        {
+            // The intrinsic parent constructs the Array with the guest new.target.
+            // Use an ordinary carrier for the constructor completion, while the
+            // guest receiver stays unbound until super() returns that Array.
+            var receiverInitializer = DefineReceiverInitializer(builder);
+            il.Emit(OpCodes.Newobj, _types.ObjectDefaultCtor);
+            il.Emit(OpCodes.Ldarg_0);
+            il.Emit(OpCodes.Ldarg_1);
+            il.Emit(OpCodes.Ldarg_2);
+            il.Emit(OpCodes.Call, template == builder ? receiverInitializer
+                : EmitterTypeHelpers.ResolveMethod(template, receiverInitializer));
+            il.Emit(OpCodes.Ret);
+        }
+        else if (UsesReceiverConstruction(ClassExpressionDeclaration(expression)) && !builder.IsGenericTypeDefinition
             && !_classes.ErrorSubclasses.Contains(_classExprs.Names[expression])
             && !_classes.PromiseSubclasses.Contains(_classExprs.Names[expression]))
         {

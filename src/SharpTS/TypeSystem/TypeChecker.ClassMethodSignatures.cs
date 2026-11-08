@@ -1,4 +1,5 @@
 using SharpTS.Parsing;
+using SharpTS.TypeSystem.Exceptions;
 
 namespace SharpTS.TypeSystem;
 
@@ -33,6 +34,11 @@ public partial class TypeChecker
     private TypeInfo BuildClassMethodSignature(Stmt.Function method, bool preparatory = false,
         bool wrapGeneratorReturn = true, bool validateDefaults = true)
     {
+        if (!preparatory && method.PrivateAccessorName is not null &&
+            method.Parameters is [{ DefaultValue: not null } setterParameter])
+            throw new TypeCheckException("A 'set' accessor parameter cannot have an initializer.",
+                setterParameter.Name.Line, tsCode: "TS1052");
+
         var signatureEnvironment = new TypeEnvironment(_environment);
         using var scope = new EnvironmentScope(this, signatureEnvironment);
         if (!preparatory) ValidateCircularTypeParameterConstraints(method.TypeParams);
@@ -260,7 +266,7 @@ public partial class TypeChecker
         if (widened == null) return inferred;
 
         List<Expr> returns = [];
-        var collector = new ClassMemberReturnCollector(returns);
+        var collector = new ClassMemberReturnCollector(statement => returns.Add(statement.Value!));
         foreach (var statement in body) collector.Visit(statement);
         if (returns.Count == 0) return inferred;
         foreach (var expression in returns)

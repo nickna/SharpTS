@@ -98,6 +98,7 @@ public sealed partial class RuntimeFeatureDetector
             UsesReflect = false,
             UsesIteratorHelpers = false,
             UsesPromise = false,
+            UsesArguments = false,
             UsesExternalFieldReads = false,
             UsesUserClasses = false,
             UsesObjectDefinitionRuntime = false,
@@ -378,6 +379,9 @@ public sealed partial class RuntimeFeatureDetector
     {
         switch (name)
         {
+            case "arguments":
+                _set.UsesArguments = true;
+                break;
             case "structuredClone":
                 _set.UsesStructuredClone = true;
                 break;
@@ -403,6 +407,7 @@ public sealed partial class RuntimeFeatureDetector
                 _set.UsesObjectIntegrityMutation = true;
                 if (name is "eval" or "Function")
                 {
+                    _set.UsesArguments = true;
                     _set.UsesExternalFieldReads = true;
                     _set.UsesTimerFunctionValues = true;
                     _set.UsesMicrotaskFunctionValues = true;
@@ -2101,6 +2106,7 @@ public sealed partial class RuntimeFeatureDetector
 
     private void MarkOpaqueEvaluatorMutation()
     {
+        _set.UsesArguments = true;
         _set.UsesArrayConstructorMutation = true;
         _set.UsesObjectIntegrityMutation = true;
         _set.UsesClassPrototypeMutation = true;

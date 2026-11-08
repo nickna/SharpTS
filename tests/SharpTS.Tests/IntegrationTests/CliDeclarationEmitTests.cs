@@ -45,6 +45,56 @@ public class CliDeclarationEmitTests
     }
 
     [Fact]
+    public void DeclarationEmitKeepsPrivateAccessorSyntax()
+    {
+        using var dir = CliTestHelper.CreateTempDirectory();
+        dir.CreateFile("src/library.ts", """
+            export class Service {
+                get #value() { return 3; }
+                set #value(next) {}
+                static get #tag() { return "service"; }
+                read() { return this.#value; }
+            }
+            """);
+        var result = CliTestHelper.RunCli(
+            "--no-tsconfig --compile src/library.ts --emitDeclarationOnly --declarationDir types", dir.Path);
+
+        Assert.Equal(0, result.ExitCode);
+        string declaration = File.ReadAllText(dir.GetPath("types/library.d.ts"));
+        Assert.Contains("get #value(): number;", declaration);
+        Assert.Contains("set #value(next: number);", declaration);
+        Assert.Contains("static get #tag(): string;", declaration);
+        dir.CreateFile("consumer.ts", """
+            import type { Service } from "./types/library";
+            declare const service: Service;
+            const value: number = service.read();
+            """);
+        var roundTrip = CliTestHelper.RunCli("--no-tsconfig --noLib --strict --noEmit consumer.ts", dir.Path);
+        Assert.Equal(0, roundTrip.ExitCode);
+    }
+
+    [Fact]
+    public void DeclarationEmitRoundTripsAnAmbientModuleWithAQuotedEnumMember()
+    {
+        using var dir = CliTestHelper.CreateTempDirectory();
+        dir.CreateFile("src/library.ts", """
+            declare module "fixture" {
+                export enum Status { "remote-ready" = 4 }
+                export function read(): Status;
+            }
+            """);
+        var result = CliTestHelper.RunCli(
+            "--no-tsconfig --compile src/library.ts --emitDeclarationOnly --declarationDir types", dir.Path);
+
+        Assert.Equal(0, result.ExitCode);
+        string declaration = File.ReadAllText(dir.GetPath("types/library.d.ts"));
+        Assert.Contains("export enum Status", declaration);
+        Assert.Contains("\"remote-ready\" = 4", declaration);
+        Assert.Contains("export function read(): Status;", declaration);
+        Assert.Equal(0, CliTestHelper.RunCli("--no-tsconfig --noEmit types/library.d.ts", dir.Path).ExitCode);
+    }
+
+    [Fact]
     public void ProjectDeclarationEmitUsesRootDirAndDeclarationDir()
     {
         using var dir = CliTestHelper.CreateTempDirectory();

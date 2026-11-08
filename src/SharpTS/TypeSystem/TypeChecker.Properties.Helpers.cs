@@ -346,15 +346,20 @@ public partial class TypeChecker
     /// </summary>
     private TypeInfo CheckGetOnEnum(TypeInfo.Enum enumType, Token memberName)
     {
-        if (enumType.Members.ContainsKey(memberName.Lexeme))
-        {
-            // An enum member access is typed as the ENUM (tsc types `E.A` as the literal type
-            // `E.A`, assignable to `E` but not to other enums or from arbitrary numbers) — not as
-            // the member's underlying primitive. The enum-as-actual compatibility rules still let
-            // it flow into number/string positions.
-            return enumType;
-        }
+        if (GetEnumMemberType(enumType, memberName.Lexeme) is { } memberType)
+            return memberType;
         throw new TypeCheckException($" '{memberName.Lexeme}' does not exist on enum '{enumType.Name}'.", tsCode: "TS2339");
+    }
+
+    private static TypeInfo.Enum? GetEnumMemberType(TypeInfo.Enum enumType, string name)
+    {
+        if (!enumType.Members.TryGetValue(name, out var value)) return null;
+
+        // Keep the declaring enum identity while narrowing a heterogeneous
+        // member to the primitive kind it can be assigned to.
+        return enumType.Kind == EnumKind.Heterogeneous
+            ? enumType with { Kind = value is string ? EnumKind.String : EnumKind.Numeric }
+            : enumType;
     }
 
     /// <summary>

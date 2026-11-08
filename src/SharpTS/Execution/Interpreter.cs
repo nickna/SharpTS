@@ -1929,7 +1929,10 @@ public partial class Interpreter : IDisposable
         }
 
         // Create module-scoped environment
-        var moduleEnv = new RuntimeEnvironment(_environment);
+        var moduleEnv = new RuntimeEnvironment(_environment)
+        {
+            RequiresUnmappedArguments = true
+        };
 
         // Bind imports from dependencies
         BindModuleImports(module, moduleEnv);
