@@ -36,4 +36,21 @@ public sealed class AsyncGeneratorOperandExceptionTests
 
         Assert.Equal("cleanup\nplain delegated awaited handler\n", TestHarness.RunUnchecked(source, mode));
     }
+
+    [Theory, ModeData]
+    public void AwaitRejectionInCatchRunsFinallyBeforeRejecting(ExecutionMode mode)
+    {
+        const string source = """
+            async function* inspect() {
+                try { throw "enter"; }
+                catch { yield await Promise.resolve().then(() => { throw "awaited"; }); }
+                finally { console.log("cleanup"); }
+            }
+            inspect().next().then(
+                result => console.log("fulfilled", result.value),
+                error => console.log("rejected", error));
+            """;
+
+        Assert.Equal("cleanup\nrejected awaited\n", TestHarness.RunUnchecked(source, mode));
+    }
 }
