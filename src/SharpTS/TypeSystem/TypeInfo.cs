@@ -1,4 +1,5 @@
 using System.Collections.Frozen;
+using System.Runtime.CompilerServices;
 using System.Text;
 using SharpTS.Parsing;
 
@@ -985,6 +986,9 @@ public abstract record TypeInfo
         FrozenSet<string>? ReadonlyFields = null
     ) : TypeInfo
     {
+        private static readonly ConditionalWeakTable<Interface, string> _interfaceFieldKeys = new();
+        private static long _nextInterfaceFieldKey;
+
         /// <summary>True when the field was declared with method syntax (`m(x): T`), which keeps
         /// bivariant parameter relating under strictFunctionTypes (tsc's method exemption).</summary>
         public bool IsMethodMember(string name) => MethodMembers?.Contains(name) ?? false;
@@ -1016,7 +1020,12 @@ public abstract record TypeInfo
 
         public override string ToString() => Render(static type => type.ToString());
 
-        internal override string CacheKey() => Render(static type => type.CacheKey());
+        // Repeated interface fields share a compact identity instead of expanding the
+        // same member fingerprint once per field. Distinct interfaces still compare normally.
+        internal override string CacheKey() => Render(static type => type is Interface iface
+            ? _interfaceFieldKeys.GetValue(iface,
+                static _ => $"interface#{Interlocked.Increment(ref _nextInterfaceFieldKey)}")
+            : type.CacheKey());
 
         private string Render(Func<TypeInfo, string> renderType)
         {
