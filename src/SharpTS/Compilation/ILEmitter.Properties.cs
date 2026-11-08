@@ -123,8 +123,6 @@ public partial class ILEmitter
             IL.Emit(OpCodes.Ldloc, argsLocal);
             IL.Emit(OpCodes.Castclass, _ctx.Runtime!.Arguments.Type);
             IL.Emit(OpCodes.Ldfld, _ctx.Runtime!.Arguments.LengthField);
-            IL.Emit(OpCodes.Conv_R8);
-            IL.Emit(OpCodes.Box, _ctx.Types.Double);
             IL.Emit(OpCodes.Br, endLabel);
             IL.MarkLabel(notArgsTypeLabel);
             // Fallback: arg may have been overwritten by user code with a

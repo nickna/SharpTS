@@ -57,14 +57,11 @@ public partial class RuntimeEmitter
         );
         arguments.Type = typeBuilder;
 
-        // public int _length — JS-visible length (per ECMA-262 10.4.4 sloppy
-        // arguments objects use ordinary "length" property that does NOT
-        // auto-update when arguments[i] = v is set out-of-range). Independent
-        // from the underlying List.Count, which DOES grow on out-of-range
-        // writes (semver/uuid runtime behavior depends on this).
+        // Arguments length is an ordinary data property. Keep the assigned
+        // value intact and independent of the backing List.Count.
         var lengthField = typeBuilder.DefineField(
             "_length",
-            _types.Int32,
+            _types.Object,
             FieldAttributes.Public);
         arguments.LengthField = lengthField;
 
@@ -78,7 +75,8 @@ public partial class RuntimeEmitter
         defaultIL.Emit(OpCodes.Ldarg_0);
         defaultIL.Emit(OpCodes.Call, _types.GetDefaultConstructor(_types.ListOfObject));
         defaultIL.Emit(OpCodes.Ldarg_0);
-        defaultIL.Emit(OpCodes.Ldc_I4_0);
+        defaultIL.Emit(OpCodes.Ldc_R8, 0.0);
+        defaultIL.Emit(OpCodes.Box, _types.Double);
         defaultIL.Emit(OpCodes.Stfld, lengthField);
         defaultIL.Emit(OpCodes.Ret);
         arguments.DefaultCtor = defaultCtor;
@@ -94,7 +92,8 @@ public partial class RuntimeEmitter
         capIL.Emit(OpCodes.Ldarg_1);
         capIL.Emit(OpCodes.Call, _types.GetConstructor(_types.ListOfObject, _types.Int32));
         capIL.Emit(OpCodes.Ldarg_0);
-        capIL.Emit(OpCodes.Ldc_I4_0);
+        capIL.Emit(OpCodes.Ldc_R8, 0.0);
+        capIL.Emit(OpCodes.Box, _types.Double);
         capIL.Emit(OpCodes.Stfld, lengthField);
         capIL.Emit(OpCodes.Ret);
         _ = capacityCtor;
@@ -114,6 +113,8 @@ public partial class RuntimeEmitter
         enumIL.Emit(OpCodes.Ldarg_0);
         enumIL.Emit(OpCodes.Ldarg_0);
         enumIL.Emit(OpCodes.Callvirt, _types.GetPropertyGetter(_types.ListOfObject, "Count"));
+        enumIL.Emit(OpCodes.Conv_R8);
+        enumIL.Emit(OpCodes.Box, _types.Double);
         enumIL.Emit(OpCodes.Stfld, lengthField);
         enumIL.Emit(OpCodes.Ret);
         arguments.EnumerableCtor = enumCtor;

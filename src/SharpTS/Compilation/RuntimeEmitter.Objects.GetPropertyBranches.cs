@@ -520,7 +520,6 @@ public partial class RuntimeEmitter
         // $Arguments is a List subclass whose observable length is an
         // independent internal slot; out-of-range indexed writes grow the
         // backing Count without changing `arguments.length`.
-        var listLengthReadyLabel = il.DefineLabel();
         var ordinaryListLengthLabel = il.DefineLabel();
         il.Emit(OpCodes.Ldarg_0);
         il.Emit(OpCodes.Isinst, inputs.ArgumentsType);
@@ -528,12 +527,11 @@ public partial class RuntimeEmitter
         il.Emit(OpCodes.Ldarg_0);
         il.Emit(OpCodes.Castclass, inputs.ArgumentsType);
         il.Emit(OpCodes.Ldfld, inputs.ArgumentsLengthField);
-        il.Emit(OpCodes.Br, listLengthReadyLabel);
+        il.Emit(OpCodes.Ret);
         il.MarkLabel(ordinaryListLengthLabel);
         il.Emit(OpCodes.Ldarg_0);
         il.Emit(OpCodes.Castclass, _types.ListOfObject);
         il.Emit(OpCodes.Callvirt, _types.GetProperty(_types.ListOfObject, "Count").GetGetMethod()!);
-        il.MarkLabel(listLengthReadyLabel);
         il.Emit(OpCodes.Conv_R8);
         il.Emit(OpCodes.Box, _types.Double);
         il.Emit(OpCodes.Ret);

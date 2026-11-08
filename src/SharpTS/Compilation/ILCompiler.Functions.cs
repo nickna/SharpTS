@@ -1103,6 +1103,8 @@ public partial class ILCompiler
             il.Emit(OpCodes.Castclass, ctx.Runtime!.Arguments.Type);
             il.Emit(OpCodes.Ldloc, argsLocal);
             il.Emit(OpCodes.Callvirt, ctx.Types.GetPropertyGetter(ctx.Types.ListOfObject, "Count"));
+            il.Emit(OpCodes.Conv_R8);
+            il.Emit(OpCodes.Box, ctx.Types.Double);
             il.Emit(OpCodes.Stfld, argsLengthField);
             il.Emit(OpCodes.Ldloc, argsLocal);
             il.Emit(OpCodes.Call, ctx.Runtime.Arguments.Initialize);

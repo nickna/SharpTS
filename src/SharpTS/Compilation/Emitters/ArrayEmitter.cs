@@ -618,7 +618,7 @@ public sealed class ArrayEmitter : ITypeEmitterStrategy
                         il.Emit(OpCodes.Ldloc, h.TypedLocal);
                         il.Emit(OpCodes.Castclass, ctx.Runtime!.Arguments.Type);
                         il.Emit(OpCodes.Ldfld, ctx.Runtime!.Arguments.LengthField);
-                        il.Emit(OpCodes.Conv_R8);
+                        il.Emit(OpCodes.Call, ctx.Runtime.NumericCoercion.ToNumber);
                         il.Emit(OpCodes.Br, endLabel);
                         il.MarkLabel(notArgsLengthLabel);
                     }
@@ -678,7 +678,7 @@ public sealed class ArrayEmitter : ITypeEmitterStrategy
             il.Emit(OpCodes.Ldloc, objLocal);
             il.Emit(OpCodes.Castclass, ctx.Runtime!.Arguments.Type);
             il.Emit(OpCodes.Ldfld, ctx.Runtime!.Arguments.LengthField);
-            il.Emit(OpCodes.Conv_R8);
+            il.Emit(OpCodes.Call, ctx.Runtime.NumericCoercion.ToNumber);
             il.Emit(OpCodes.Br, endLabelNH);
             il.MarkLabel(notArgsLengthNH);
         }

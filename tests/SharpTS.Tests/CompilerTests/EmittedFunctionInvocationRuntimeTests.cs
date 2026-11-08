@@ -319,11 +319,11 @@ public sealed class EmittedFunctionInvocationRuntimeTests
     {
         var type = loaded.GetType("$Arguments")!;
         var empty = Assert.IsAssignableFrom<IList>(Activator.CreateInstance(type));
-        Assert.Empty(empty); Assert.Equal(0, type.GetField("_length")!.GetValue(empty));
+        Assert.Empty(empty); Assert.Equal(0.0, type.GetField("_length")!.GetValue(empty));
         object[] source = [1.0, "two"];
         var copied = Assert.IsAssignableFrom<IList>(Activator.CreateInstance(type, [source]));
         Assert.Equal(source, copied.Cast<object>()); source[0] = 9.0; Assert.Equal(1.0, copied[0]);
-        copied.Add(3.0); Assert.Equal(3, copied.Count); Assert.Equal(2, type.GetField("_length")!.GetValue(copied));
+        copied.Add(3.0); Assert.Equal(3, copied.Count); Assert.Equal(2.0, type.GetField("_length")!.GetValue(copied));
     }
     private static IEnumerable<PropertyInfo> Metadata(Type type) => type.GetProperties().Where(p => typeof(MemberInfo).IsAssignableFrom(p.PropertyType));
     private static bool IsComplete(object owner) => (bool)owner.GetType().GetProperty("IsComplete")!.GetValue(owner)!;

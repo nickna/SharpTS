@@ -1556,8 +1556,6 @@ public partial class RuntimeEmitter
         il.Emit(OpCodes.Ldarg_0);
         il.Emit(OpCodes.Castclass, inputs.ArgumentsType);
         il.Emit(OpCodes.Ldfld, inputs.ArgumentsLengthField);
-        il.Emit(OpCodes.Conv_R8);
-        il.Emit(OpCodes.Box, _types.Double);
         il.Emit(OpCodes.Ret);
         il.MarkLabel(notArgumentsLengthLabel);
         il.Emit(OpCodes.Ldarg_0);

@@ -11,7 +11,8 @@ public partial class RuntimeEmitter
     private readonly record struct GetLengthInputs(
         FieldBuilder ArgumentsLengthField,
         TypeBuilder ArgumentsType,
-        EmittedArrayStorageRuntime ArrayStorage
+        EmittedArrayStorageRuntime ArrayStorage,
+        EmittedNumericCoercionRuntime NumericCoercion
     );
 
     private readonly record struct GetElementInputs(EmittedArrayStorageRuntime ArrayStorage, FieldInfo UndefinedInstance);
@@ -180,6 +181,8 @@ public partial class RuntimeEmitter
         il.Emit(OpCodes.Ldarg_0);
         il.Emit(OpCodes.Castclass, inputs.ArgumentsType);
         il.Emit(OpCodes.Ldfld, inputs.ArgumentsLengthField);
+        il.Emit(OpCodes.Call, inputs.NumericCoercion.ToNumber);
+        il.Emit(OpCodes.Conv_I4);
         il.Emit(OpCodes.Ret);
         il.MarkLabel(notArgumentsLabel);
 

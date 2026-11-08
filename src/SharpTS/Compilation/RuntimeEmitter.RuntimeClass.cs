@@ -1814,7 +1814,8 @@ public partial class RuntimeEmitter
             new IteratorWrapperInputs(runtime.IteratorRecords, runtime.IteratorProtocol.Done, runtime.IteratorProtocol.Value, runtime.IteratorProtocol.Close)
         );
         runtime.IteratorWrappers.CompleteEmission();
-        EmitArrayIteratorType(moduleBuilder, runtime.ArrayOperations, new ArrayIteratorInputs(runtime.Arguments, runtime.ObjectRead.Index));
+        EmitArrayIteratorType(moduleBuilder, runtime.ArrayOperations,
+            new ArrayIteratorInputs(runtime.Arguments, runtime.ObjectRead.Index, runtime.NumericCoercion));
         if (runtime.Map is not null)
             EmitMapCollectionIteratorType(moduleBuilder, runtime.CollectionKeys, runtime.RequireMap());
         if (runtime.Set is not null)
@@ -1856,7 +1857,8 @@ public partial class RuntimeEmitter
         EmitGetLength(
             typeBuilder,
             runtime.ObjectRead,
-            new GetLengthInputs(runtime.Arguments.LengthField, runtime.Arguments.Type, runtime.ArrayStorage)
+            new GetLengthInputs(runtime.Arguments.LengthField, runtime.Arguments.Type,
+                runtime.ArrayStorage, runtime.NumericCoercion)
         );
         EmitGetElement(
             typeBuilder,

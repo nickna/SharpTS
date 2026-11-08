@@ -184,8 +184,6 @@ public partial class RuntimeEmitter
         il.Emit(OpCodes.Ldarg_0);
         il.Emit(OpCodes.Castclass, inputs.Arguments.Type);
         il.Emit(OpCodes.Ldfld, inputs.Arguments.LengthField);
-        il.Emit(OpCodes.Conv_R8);
-        il.Emit(OpCodes.Box, _types.Double);
         il.Emit(OpCodes.Callvirt, inputs.DescriptorStorage.DescriptorValue.GetSetMethod()!);
         il.Emit(OpCodes.Dup);
         il.Emit(OpCodes.Ldc_I4_0);

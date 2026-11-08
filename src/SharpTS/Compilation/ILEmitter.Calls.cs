@@ -550,6 +550,10 @@ public partial class ILEmitter
             return false;
 
         var methodName = methodGet.Name.Lexeme;
+        // Arguments length can exceed the materialized list's index range.
+        // The prototype's reverse-predicate adapter walks the receiver directly.
+        if (_ctx.RuntimeFeatures?.UsesArguments != false && methodName is "findLast" or "findLastIndex")
+            return false;
         var runtime = _ctx.Runtime!;
         // Map method name → runtime MethodBuilder + calling convention.
         // singleArg = one JS arg passed as `object`; argsArray = all JS args

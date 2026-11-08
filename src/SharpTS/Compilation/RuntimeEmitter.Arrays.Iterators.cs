@@ -21,6 +21,8 @@ public partial class RuntimeEmitter
         il.Emit(OpCodes.Dup);
         il.Emit(OpCodes.Brfalse, useListCount);
         il.Emit(OpCodes.Ldfld, runtime.Arguments.LengthField);
+        il.Emit(OpCodes.Call, runtime.NumericCoercion.ToNumber);
+        il.Emit(OpCodes.Conv_I4);
         il.Emit(OpCodes.Br, done);
         il.MarkLabel(useListCount);
         il.Emit(OpCodes.Pop);

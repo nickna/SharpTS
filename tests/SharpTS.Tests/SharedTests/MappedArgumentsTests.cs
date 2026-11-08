@@ -278,13 +278,13 @@ public sealed class MappedArgumentsTests
         var argumentsType = assembly.GetType("$Arguments", throwOnError: true)!;
         var length = argumentsType.GetField("_length")!;
         var receiver = Activator.CreateInstance(argumentsType);
-        length.SetValue(receiver, 65_536);
+        length.SetValue(receiver, 65_536.0);
 
         var runtime = assembly.GetType("$Runtime", throwOnError: true)!;
         var snapshot = runtime.GetMethod("ArrayLikeMaterializeForIteration")!
             .Invoke(null, [receiver, true, null]);
         Assert.Empty(Assert.IsAssignableFrom<List<object>>(snapshot));
-        Assert.Equal(65_536, length.GetValue(snapshot));
+        Assert.Equal(65_536.0, length.GetValue(snapshot));
     }
 
     [Fact]

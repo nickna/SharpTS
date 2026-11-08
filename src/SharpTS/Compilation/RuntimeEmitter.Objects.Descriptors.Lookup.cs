@@ -1318,8 +1318,6 @@ public partial class RuntimeEmitter
             il.Emit(OpCodes.Brfalse, notArgumentsLength);
             il.Emit(OpCodes.Ldloc, argumentsReceiver);
             il.Emit(OpCodes.Ldfld, arguments.LengthField);
-            il.Emit(OpCodes.Conv_R8);
-            il.Emit(OpCodes.Box, _types.Double);
             il.Emit(OpCodes.Stloc, elementValueLocal);
             il.Emit(OpCodes.Ldc_I4_1);
             il.Emit(OpCodes.Stloc, argumentsLength!);
