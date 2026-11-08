@@ -8,6 +8,7 @@ public sealed class ParameterPropertyDeclarationOrderTests
     [Fact]
     public void AConstructorBetweenFieldsDoesNotResetEarlierFieldWrites()
     {
+        // The compiler's separate synthesized field reset is tracked in #3521.
         const string source = """
             class Item {
               first = (this.value = 7);
@@ -61,8 +62,10 @@ public sealed class ParameterPropertyDeclarationOrderTests
             try { new Child(); } catch (error) { console.log(error); }
             console.log(escaped === receiver, Object.hasOwn(escaped, 'value'), escaped.value === undefined);
             console.log(Object.keys(escaped).join(','));
+            const descriptor = Object.getOwnPropertyDescriptor(escaped, 'value');
+            console.log(descriptor.writable, descriptor.configurable);
             """;
-        Assert.Equal("initializer\ntrue true true\nvalue,earlier\n",
+        Assert.Equal("initializer\ntrue true true\nvalue,earlier\ntrue true\n",
             TestHarness.RunUnchecked(source, ExecutionMode.Interpreted));
     }
 }
