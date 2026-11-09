@@ -7,6 +7,25 @@ namespace SharpTS.Tests.TypeCheckerTests;
 public class ClassBodyInferenceTests
 {
     [Theory]
+    [InlineData("class C", "leaf() { return 1; } read() { return this.leaf(); }", "new C().read()")]
+    [InlineData("class C", "read() { return this.middle(); } middle() { return this.leaf(); } leaf() { return 1; }", "new C().read()")]
+    [InlineData("const C = class", "read() { return this.#leaf(); } #leaf() { return 1; }", "new C().read()")]
+    [InlineData("class C", "static read() { return C.leaf(); } static leaf() { return 1; }", "C.read()")]
+    [InlineData("class C", "read() { return this.leaf(1); } leaf<T>(value: T) { return value; }", "new C().read()")]
+    public void InferredReturnTypesFlowThroughSiblingCalls(string declaration, string methods, string call)
+    {
+        var statements = new Parser(new Lexer($$"""
+            {{declaration}} { {{methods}} }
+            const correct: number = {{call}};
+            const wrong: string = {{call}};
+            """).ScanTokens()).ParseOrThrow();
+
+        var diagnostic = Assert.Single(new TypeChecker(TypeCheckerOptions.Strict).CheckWithRecovery(statements).Diagnostics);
+        Assert.Equal("TS2322", diagnostic.TsCode);
+        Assert.Equal(3, diagnostic.Line);
+    }
+
+    [Theory]
     [InlineData("value.method()")]
     [InlineData("value.property")]
     public void MethodAndGetterInference_AreBothPublished(string expression)

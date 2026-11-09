@@ -171,7 +171,8 @@ public partial class TypeChecker
                 if (enforceAccessibility)
                     EnforceStaticMemberAccess(current, lookupMember);
                 ObserveSourceMemberSelection(memberName, current, MemberFacet.Static);
-                return WithStaticMemberOptionality(current, lookupName, staticMethodType);
+                return WithStaticMemberOptionality(current, lookupName,
+                    ResolveSiblingClassMethod(current, MemberFacet.Static, lookupName, staticMethodType));
             }
             if (staticProps != null && staticProps.TryGetValue(lookupName, out var staticPropType))
             {
@@ -543,7 +544,8 @@ public partial class TypeChecker
         if (gc.Methods.TryGetValue(memberName, out var methodType))
         {
             ObserveSourceMemberSelection(memberToken, gc, MemberFacet.Instance);
-            return SubstituteMethodType(methodType, subs);
+            return SubstituteMethodType(
+                ResolveSiblingClassMethod(gc, MemberFacet.Instance, memberName, methodType), subs);
         }
 
         // Check superclass if any
@@ -713,7 +715,7 @@ public partial class TypeChecker
             if (methods != null && methods.TryGetValue(memberNameStr, out var methodType))
             {
                 ObserveSourceMemberSelection(memberName, current, MemberFacet.Instance);
-                return Sub(methodType);
+                return Sub(ResolveSiblingClassMethod(current, MemberFacet.Instance, memberNameStr, methodType));
             }
 
             // Check for field

@@ -3087,7 +3087,9 @@ public partial class TypeChecker
         _fieldGetterScope = CreatePrivateGetterBodyScope(classExpr.Methods, mutableClass, classEnv);
         try
         {
-            foreach (var method in ClassMethodsInCheckOrder(classExpr.Methods))
+            CheckClassMethodsInDependencyOrder(ClassMethodsInCheckOrder(classExpr.Methods), mutableClass, CheckMethod);
+
+            void CheckMethod(Stmt.Function method)
             {
                 ValidatePrivateSetterReturns(method);
                 TypeEnvironment methodEnv;
