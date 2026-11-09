@@ -180,6 +180,8 @@ public partial class TypeChecker
         };
         if (knownMembers.Count > 0)
             _knownEnumMembers.Add(enumType.Members, knownMembers);
+        if (enumStmt.IsConst)
+            _typeMap.SetDeclaredValueType(declarationBinding, enumType);
         DeclareValue(enumStmt.Name, enumType, mergeWithLocal: true);
         _environment.DefineType(enumStmt.Name.Lexeme, enumType);
 

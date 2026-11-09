@@ -617,6 +617,9 @@ public abstract partial class ExpressionEmitterBase : IEmitterContext
     /// </summary>
     protected virtual void EmitGetIndex(Expr.GetIndex gi)
     {
+        if (!gi.Optional && gi.Index is Expr.Literal { Value: string enumMemberName } && TryEmitConstEnumMember(gi.Object, enumMemberName))
+            return;
+
         if (gi.Object is Expr.Super { Method: null })
         {
             EmitComputedSuperGet(gi);
@@ -3267,6 +3270,7 @@ public abstract partial class ExpressionEmitterBase : IEmitterContext
 
     protected virtual void EmitGet(Expr.Get g)
     {
+        if (!g.Optional && TryEmitConstEnumMember(g.Object, g.Name.Lexeme)) return;
         if (TryEmitGuestThisGet(g)) return;
         if (StringEmitter.TryEmitPrimitiveStringLengthGet(this, g))
             return;

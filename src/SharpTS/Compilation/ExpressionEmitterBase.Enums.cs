@@ -1,10 +1,25 @@
 using System.Reflection.Emit;
 using SharpTS.Parsing;
+using SharpTS.TypeSystem;
 
 namespace SharpTS.Compilation;
 
 public abstract partial class ExpressionEmitterBase
 {
+    protected bool TryEmitConstEnumMember(Expr receiver, string name)
+    {
+        // Const enums have no local slot. Resolve the checked binding even when
+        // a different enum with the same name has a module-level runtime object.
+        if (receiver is not Expr.Variable variable
+            || Ctx.TypeMap?.GetDeclaredValueType(variable.Name) is not TypeInfo.Enum { IsConst: true } enumType
+            || !ReferenceEquals(enumType.DeclarationBinding, Ctx.TypeMap.GetValueBinding(variable.Name))
+            || !enumType.Members.TryGetValue(name, out var value))
+            return false;
+
+        EmitLiteral(new Expr.Literal(value));
+        return true;
+    }
+
     protected bool TryEmitEnumVariable(string name)
     {
         if (Ctx.EnumValueFields == null || !Ctx.EnumValueFields.TryGetValue(Ctx.ResolveEnumName(name), out var field))
