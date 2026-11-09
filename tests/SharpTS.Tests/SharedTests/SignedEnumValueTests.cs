@@ -6,6 +6,18 @@ namespace SharpTS.Tests.SharedTests;
 public sealed class SignedEnumValueTests
 {
     [Theory, ModeData]
+    public void RegularEnumUsesConstVariableValuesForImplicitMembers(ExecutionMode mode)
+    {
+        const string source = """
+            const base = 1 << 2;
+            const alias = base;
+            enum E { A = alias, B, C = base + B, D }
+            console.log(E.A, E.B, E.C, E.D, E[10]);
+            """;
+        Assert.Equal("4 5 9 10 D\n", TestHarness.Run(source, mode));
+    }
+
+    [Theory, ModeData]
     public void RegularNumericConstantExpressionStartsImplicitSequence(ExecutionMode mode)
     {
         const string source = """

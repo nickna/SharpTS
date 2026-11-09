@@ -209,7 +209,7 @@ public abstract partial class StatementEmitterBase
         }
     }
 
-    private static IEnumerable<(Stmt Declaration, Token Token)> DirectLexicalDeclarations(IEnumerable<Stmt> statements)
+    private IEnumerable<(Stmt Declaration, Token Token)> DirectLexicalDeclarations(IEnumerable<Stmt> statements)
     {
         foreach (var statement in statements)
         {
@@ -217,6 +217,10 @@ public abstract partial class StatementEmitterBase
             {
                 case Stmt.Var { IsVar: false, IsDeclare: false } variable: yield return (statement, variable.Name); break;
                 case Stmt.Const constant: yield return (statement, constant.Name); break;
+                case Stmt.Enum { IsAmbient: false, IsConst: false } @enum
+                    when Ctx.StaticEnumDeclarations?.Contains(@enum) != true:
+                    yield return (statement, @enum.Name);
+                    break;
                 case Stmt.Sequence sequence:
                     foreach (var item in DirectLexicalDeclarations(sequence.Statements)) yield return item;
                     break;

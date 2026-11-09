@@ -2,6 +2,7 @@ using System.Reflection.Emit;
 using SharpTS.Compilation.Emitters;
 using SharpTS.Compilation.Emitters.Modules;
 using SharpTS.Compilation.Registries;
+using SharpTS.Parsing;
 using SharpTS.TypeSystem;
 
 namespace SharpTS.Compilation;
@@ -246,6 +247,9 @@ public partial class CompilationContext
 
     /// <summary>Canonical runtime objects for ordinary enum declarations.</summary>
     public Dictionary<string, FieldBuilder>? EnumValueFields { get; set; }
+
+    /// <summary>Declaration identities for module and namespace enums with static storage.</summary>
+    internal IReadOnlySet<Stmt.Enum>? StaticEnumDeclarations { get; set; }
 
     /// <summary>
     /// Enum kinds mapping enum name to kind.

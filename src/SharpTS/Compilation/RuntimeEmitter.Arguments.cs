@@ -66,6 +66,7 @@ public partial class RuntimeEmitter
             // accessor. Its getter and setter are the same throwing function.
             var thrower = runtime.RuntimeClass.Type.DefineMethod("ArgumentsCalleeThrower",
                 MethodAttributes.Private | MethodAttributes.Static, _types.Object, Type.EmptyTypes);
+            thrower.SetCustomAttribute(runtime.FunctionAttributes.NonConstructibleCtor, CustomAttributeEncoder.EmptyBlob);
             GuestErrorEmitter.ThrowTypeError(thrower.GetILGenerator(), runtime,
                 "Cannot access 'callee' on an unmapped arguments object");
 
@@ -80,6 +81,7 @@ public partial class RuntimeEmitter
             il.Emit(OpCodes.Ldstr, "");
             il.Emit(OpCodes.Ldc_I4_0);
             il.Emit(OpCodes.Call, runtime.FunctionConstruction.GetOrCreate);
+            il.Emit(OpCodes.Call, runtime.ObjectState.Freeze);
             il.Emit(OpCodes.Stloc, accessor);
             il.Emit(OpCodes.Ldloc, descriptor);
             il.Emit(OpCodes.Ldloc, accessor);

@@ -5,6 +5,27 @@ namespace SharpTS.Tests.SharedTests;
 
 public sealed class UnmappedArgumentsIntegrityTests
 {
+    [Theory, ModeData]
+    public void CalleeThrowerHasFrozenFunctionMetadata(ExecutionMode mode)
+    {
+        const string source = """
+            function getThrower() {
+                'use strict';
+                return Object.getOwnPropertyDescriptor(arguments, 'callee').get;
+            }
+            const getter = getThrower();
+            const length = Object.getOwnPropertyDescriptor(getter, 'length');
+            const name = Object.getOwnPropertyDescriptor(getter, 'name');
+            console.log(getter === getThrower(), Object.isExtensible(getter), Object.isFrozen(getter));
+            console.log(length.value, length.writable, length.enumerable, length.configurable);
+            console.log(name.value === '', name.configurable, Object.hasOwn(getter, 'prototype'));
+            console.log(Reflect.deleteProperty(getter, 'length'), Reflect.defineProperty(getter, 'extra', { value: 1 }));
+            try { getter(); } catch (error) { console.log(error instanceof TypeError); }
+            """;
+        Assert.Equal("true false true\n0 false false false\ntrue false false\nfalse false\ntrue\n",
+            TestHarness.RunUnchecked(source, mode));
+    }
+
     [Theory]
     [InlineData(ExecutionMode.Interpreted)]
     [InlineData(ExecutionMode.Compiled)]

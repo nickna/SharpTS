@@ -18,6 +18,8 @@ public partial class ILCompiler
 
         // Get qualified enum name (module-prefixed in multi-module compilation)
         string qualifiedEnumName = ctx.GetQualifiedEnumName(enumStmt.Name.Lexeme);
+        if (!enumStmt.IsConst)
+            _enums.StaticDeclarations.Add(enumStmt);
         if (!enumStmt.IsConst && !_enums.ValueFields.ContainsKey(qualifiedEnumName))
         {
             _enums.ValueFields[qualifiedEnumName] = _programType!.DefineField(

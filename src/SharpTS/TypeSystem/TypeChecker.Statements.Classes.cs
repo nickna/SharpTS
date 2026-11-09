@@ -956,8 +956,19 @@ public partial class TypeChecker
         bool reinferReturn = false)
     {
         bool anyInferredMethodReturnResolved = false;
-        // Only check methods that have bodies (skip overload signatures)
-        foreach (var method in ClassMethodsInCheckOrder(methods))
+        // Only check methods that have bodies (skip overload signatures).
+        var ordered = ClassMethodsInCheckOrder(methods);
+        if (provisionalGetter || reinferReturn)
+        {
+            foreach (var method in ordered) CheckMethod(method);
+        }
+        else
+        {
+            CheckClassMethodsInDependencyOrder(ordered, mutableClass, CheckMethod);
+        }
+        return anyInferredMethodReturnResolved;
+
+        void CheckMethod(Stmt.Function method)
         {
             ValidatePrivateSetterReturns(method);
             // Check method decorators
@@ -1222,7 +1233,6 @@ public partial class TypeChecker
                     _activeLabels[kvp.Key] = kvp.Value;
             }
         }
-        return anyInferredMethodReturnResolved;
     }
 
     private bool CheckClassAccessorBodies(

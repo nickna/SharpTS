@@ -87,6 +87,7 @@ public partial class RuntimeEmitter
     {
         var require = typeBuilder.DefineMethod("RequireIteratorObject",
             MethodAttributes.Public | MethodAttributes.Static, _types.Object, [_types.Object]);
+        iteratorRecords.RequireObject = require;
         var il = require.GetILGenerator();
         var invalid = il.DefineLabel();
         il.Emit(OpCodes.Ldarg_0);

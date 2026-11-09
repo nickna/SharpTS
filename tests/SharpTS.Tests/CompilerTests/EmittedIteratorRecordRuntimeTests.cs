@@ -13,6 +13,7 @@ public sealed class EmittedIteratorRecordRuntimeTests
     private static PropertyInfo[] Slots => typeof(EmittedIteratorRecordRuntime).GetProperties().Where(p => typeof(MemberInfo).IsAssignableFrom(p.PropertyType)).ToArray();
 
     [Theory]
+    [InlineData(nameof(EmittedIteratorRecordRuntime.RequireObject))]
     [InlineData("NextMethod")]
     [InlineData("InvokeNext")]
     [InlineData("InvokeNextWithSent")]
@@ -80,9 +81,9 @@ public sealed class EmittedIteratorRecordRuntimeTests
     }
 
     [Fact]
-    public void CapturedHelperUsesScopedInputsAndUnusedStoreIsRemoved()
+    public void CapturedHelperUsesScopedInputsAndOwnedHandles()
     {
-        Assert.Equal(3, Slots.Length); Assert.Null(typeof(EmittedRuntime).GetProperty("RequireIteratorObject"));
+        Assert.Equal(4, Slots.Length); Assert.Null(typeof(EmittedRuntime).GetProperty("RequireIteratorObject"));
         var helper = typeof(RuntimeEmitter).GetMethod("EmitCapturedIteratorMethods", Members)!;
         Assert.Contains(helper.GetParameters(), p => p.ParameterType == typeof(EmittedIteratorRecordRuntime));
         Assert.DoesNotContain(helper.GetParameters(), p => p.ParameterType == typeof(EmittedRuntime) || p.ParameterType == typeof(RuntimeFeatureSet));

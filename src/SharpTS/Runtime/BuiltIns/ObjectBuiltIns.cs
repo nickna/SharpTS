@@ -2006,7 +2006,7 @@ public static partial class ObjectBuiltIns
             SharpTSInstance inst => inst.GetFieldNames().Cast<object?>().ToList(),
             SharpTSTypedArray typedArray => typedArray.OwnStringKeys().Cast<object?>()
                 .Concat(typedArray.GetSymbolPropertyNames()).ToList(),
-            SharpTSArray arr => GetOwnPropertyNamesFromArray(arr),
+            SharpTSArray arr => arr.OwnStringKeys().Cast<object?>().ToList(),
             SharpTSMath math => math.OwnStringKeys().Cast<object?>()
                 .Concat(math.GetSymbolPropertyNames().Cast<object?>()).ToList(),
             SharpTSDate date => date.OwnStringKeys().Cast<object?>()
@@ -2085,7 +2085,7 @@ public static partial class ObjectBuiltIns
                 .OfType<string>().Cast<object?>().ToList(),
             SharpTSInstance inst => inst.GetFieldNames().Select(k => (object?)k).ToList(),
             SharpTSTypedArray typedArray => typedArray.OwnStringKeys().Cast<object?>().ToList(),
-            SharpTSArray arr => GetOwnPropertyNamesFromArray(arr),
+            SharpTSArray arr => arr.OwnStringKeys().Cast<object?>().ToList(),
             SharpTSMath math => math.OwnStringKeys().Cast<object?>().ToList(),
             SharpTSJSON json => json.OwnStringKeys().Cast<object?>().ToList(),
             SharpTSDate date => date.OwnStringKeys().Cast<object?>().ToList(),
@@ -2108,28 +2108,6 @@ public static partial class ObjectBuiltIns
         => obj.OwnVisibleStringKeys()
             .Select(k => (object?)k)
             .ToList();
-
-    /// <summary>
-    /// Gets all own property names from a SharpTSArray (indices + length + any custom properties).
-    /// </summary>
-    private static List<object?> GetOwnPropertyNamesFromArray(SharpTSArray arr)
-    {
-        List<object?> names = [];
-
-        // Add numeric indices
-        for (int i = 0; i < arr.Length; i++)
-        {
-            if (arr.HasIndex(i)) names.Add(i.ToString());
-        }
-
-        // Add "length"
-        names.Add("length");
-
-        foreach (var name in arr.NamedPropertyNames)
-            names.Add(name);
-
-        return names;
-    }
 
     /// <summary>
     /// Creates a new object with all properties from source except those in excludeKeys.

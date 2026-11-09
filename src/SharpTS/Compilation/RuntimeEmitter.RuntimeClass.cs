@@ -3020,6 +3020,7 @@ public partial class RuntimeEmitter
                     runtime.Errors.ThrownValueType,
                     runtime.NumericCoercion,
                     runtime.ObjectDescriptors.DefineProperty,
+                    runtime.ArrayOperations.SetElement,
                     runtime.FunctionValues.InvokeWithThis,
                     runtime.FunctionValues.Type,
                     runtime.Sentinels.UndefinedType,

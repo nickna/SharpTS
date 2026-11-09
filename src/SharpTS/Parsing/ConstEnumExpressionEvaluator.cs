@@ -58,12 +58,13 @@ internal static class ConstEnumExpressionEvaluator
     }
 
     public static object? EvaluateKnownMember(
-        Expr expression, IReadOnlyDictionary<string, object> resolvedMembers, string enumName, bool isConst)
+        Expr expression, IReadOnlyDictionary<string, object> resolvedMembers, string enumName, bool isConst,
+        Func<Expr, object?>? resolveReference = null)
     {
         try
         {
             var value = Evaluate(expression, resolvedMembers, enumName,
-                static _ => new NonConstantInitializerException(), regularEnum: !isConst);
+                static _ => new NonConstantInitializerException(), regularEnum: !isConst, resolveReference);
             return value is double or string ? value : null;
         }
         catch (NonConstantInitializerException)
@@ -77,7 +78,8 @@ internal static class ConstEnumExpressionEvaluator
         IReadOnlyDictionary<string, object> resolvedMembers,
         string enumName,
         Func<ConstEnumError, Exception> error,
-        bool regularEnum = false)
+        bool regularEnum = false,
+        Func<Expr, object?>? resolveReference = null)
     {
         return expression switch
         {
@@ -88,14 +90,22 @@ internal static class ConstEnumExpressionEvaluator
             Expr.Get g when g.Object is Expr.Variable v && v.Name.Lexeme == enumName =>
                 ResolveMember(g.Name.Lexeme, resolvedMembers, error),
 
+            Expr.GetIndex { Object: Expr.Variable receiver, Index: Expr.Literal { Value: string key } }
+                when regularEnum && receiver.Name.Lexeme == enumName =>
+                ResolveMember(key, resolvedMembers, error),
+
             Expr.Variable variable when regularEnum =>
-                ResolveMember(variable.Name.Lexeme, resolvedMembers, error),
+                resolvedMembers.GetValueOrDefault(variable.Name.Lexeme) ?? resolveReference?.Invoke(variable) ??
+                throw error(new(ConstEnumErrorKind.ForwardReference,
+                    $"Const enum member '{variable.Name.Lexeme}' referenced before definition.")),
 
-            Expr.Grouping gr => Evaluate(gr.Expression, resolvedMembers, enumName, error, regularEnum),
+            Expr.Grouping gr => Evaluate(gr.Expression, resolvedMembers, enumName, error, regularEnum, resolveReference),
 
-            Expr.Unary u => EvaluateUnary(u, resolvedMembers, enumName, error, regularEnum),
+            Expr.Unary u => EvaluateUnary(u, resolvedMembers, enumName, error, regularEnum, resolveReference),
 
-            Expr.Binary b => EvaluateBinary(b, resolvedMembers, enumName, error, regularEnum),
+            Expr.Binary b => EvaluateBinary(b, resolvedMembers, enumName, error, regularEnum, resolveReference),
+
+            Expr.Get or Expr.GetIndex when regularEnum && resolveReference?.Invoke(expression) is { } value => value,
 
             _ => throw error(new(
                 ConstEnumErrorKind.DisallowedExpression,
@@ -118,9 +128,10 @@ internal static class ConstEnumExpressionEvaluator
         IReadOnlyDictionary<string, object> resolvedMembers,
         string enumName,
         Func<ConstEnumError, Exception> error,
-        bool regularEnum)
+        bool regularEnum,
+        Func<Expr, object?>? resolveReference)
     {
-        var operand = Evaluate(unary.Right, resolvedMembers, enumName, error, regularEnum);
+        var operand = Evaluate(unary.Right, resolvedMembers, enumName, error, regularEnum, resolveReference);
 
         return unary.Operator.Type switch
         {
@@ -138,10 +149,11 @@ internal static class ConstEnumExpressionEvaluator
         IReadOnlyDictionary<string, object> resolvedMembers,
         string enumName,
         Func<ConstEnumError, Exception> error,
-        bool regularEnum)
+        bool regularEnum,
+        Func<Expr, object?>? resolveReference)
     {
-        var left = Evaluate(binary.Left, resolvedMembers, enumName, error, regularEnum);
-        var right = Evaluate(binary.Right, resolvedMembers, enumName, error, regularEnum);
+        var left = Evaluate(binary.Left, resolvedMembers, enumName, error, regularEnum, resolveReference);
+        var right = Evaluate(binary.Right, resolvedMembers, enumName, error, regularEnum, resolveReference);
 
         if (left is double l && right is double r)
         {

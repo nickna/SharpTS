@@ -430,6 +430,9 @@ public partial class TypeChecker
             GetConstructorIndexType(objType, TokenType.TYPE_NUMBER) is { } constructorNumberIndex)
             return WithUncheckedUndefined(constructorNumberIndex);
 
+        if (ReadArraySubclassIndex(objType, indexType) is { } arraySubclassElement)
+            return arraySubclassElement;
+
         // Exclude<keyof T, symbol> remains a deferred conditional while T is open, but every
         // possible result is a string-or-number property key. Such a domain can safely read a
         // string index signature without inventing an implicit-any TS7053.
@@ -563,9 +566,6 @@ public partial class TypeChecker
                 return WithUncheckedUndefined(clsNum);
             if (GetClassIndexType(objType, TokenType.TYPE_STRING) is { } clsNumStr)
                 return WithUncheckedUndefined(clsNumStr);
-            if (objType is TypeInfo.Instance arraySubclass &&
-                TryGetBuiltInArraySubclassElement(arraySubclass, out TypeInfo arraySubclassElement))
-                return WithUncheckedUndefined(arraySubclassElement);
         }
 
         // Handle symbol index (Symbol and UniqueSymbol both qualify)
@@ -628,6 +628,16 @@ public partial class TypeChecker
                 ?? GetStaticProperties(current)?.GetValueOrDefault(name)) is { } member)
                 return member;
         return null;
+    }
+
+    private TypeInfo? ReadArraySubclassIndex(TypeInfo receiver, TypeInfo index)
+    {
+        if (receiver is not TypeInfo.Instance instance || !IsNumericConstructorIndex(index) ||
+            !TryGetBuiltInArraySubclassElement(instance, out var elementType))
+            return null;
+
+        return WithUncheckedUndefined(GetClassIndexType(instance, TokenType.TYPE_NUMBER)
+            ?? GetClassIndexType(instance, TokenType.TYPE_STRING) ?? elementType);
     }
 
     private bool TryGetBuiltInArraySubclassElement(
@@ -1705,11 +1715,8 @@ public partial class TypeChecker
         if (indexType is TypeInfo.Symbol or TypeInfo.UniqueSymbol &&
             GetConstructorIndexType(objType, TokenType.TYPE_SYMBOL) is { } constructorSymbolIndex)
             return WithUncheckedUndefined(constructorSymbolIndex);
-        if ((IsNumber(indexType) || indexType is TypeInfo.NumberLiteral) &&
-            objType is TypeInfo.Instance arraySubclass &&
-            TryGetBuiltInArraySubclassElement(arraySubclass, out var arraySubclassElement))
-            return WithUncheckedUndefined(GetClassIndexType(arraySubclass, TokenType.TYPE_NUMBER)
-                ?? GetClassIndexType(arraySubclass, TokenType.TYPE_STRING) ?? arraySubclassElement);
+        if (ReadArraySubclassIndex(objType, indexType) is { } arraySubclassElement)
+            return arraySubclassElement;
         if (IsStringOrNumberIndexDomain(indexType) && ReadStringIndexOf(objType) is { } domainIndex)
         {
             if (objType is TypeInfo.Class or TypeInfo.GenericClass or TypeInfo.InstantiatedGeneric { GenericDefinition: TypeInfo.GenericClass } &&

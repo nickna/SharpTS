@@ -1463,13 +1463,14 @@ public partial class TypeChecker
         {
             ValidatePrivateReceiver(objType, owner, isStatic: false, get.Name);
             ObservePrivateSourceMemberSelection(get.Name, objType, owner, MemberFacet.PrivateInstance);
-            return methodType;
+            return ResolveSiblingClassMethod(owner, MemberFacet.PrivateInstance, fieldName, methodType);
         }
         if (owner.StaticPrivateMethodTypes.TryGetValue(fieldName, out var staticMethodType))
         {
             ValidatePrivateReceiver(objType, owner, isStatic: true, get.Name);
             ObservePrivateSourceMemberSelection(get.Name, objType, owner, MemberFacet.PrivateStatic);
-            return objType is TypeInfo.Any ? TypeInfo.Any.Shared : staticMethodType;
+            return objType is TypeInfo.Any ? TypeInfo.Any.Shared :
+                ResolveSiblingClassMethod(owner, MemberFacet.PrivateStatic, fieldName, staticMethodType);
         }
 
         // Check static private fields if accessing on the class itself
@@ -1611,6 +1612,7 @@ public partial class TypeChecker
             return TypeInfo.Any.Shared;
         }
 
+        methodType = ResolveSiblingClassMethod(owner, selectedFacet, methodName, methodType);
         TypeInfo originalMethodType = methodType;
         if (methodType is TypeInfo.GenericFunction genericMethod)
         {

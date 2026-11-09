@@ -429,6 +429,8 @@ public class ClosureAnalyzer : AstVisitorBase
             }
             else if (stmt is Stmt.Class cl)
                 DeclareVariable(cl.Name.Lexeme, isPerIterationBinding: true);
+            else if (_currentFunction is not null && stmt is Stmt.Enum { IsAmbient: false, IsConst: false } e)
+                DeclareVariable(e.Name.Lexeme, isPerIterationBinding: true);
         }
     }
 
@@ -824,6 +826,13 @@ public class ClosureAnalyzer : AstVisitorBase
     {
         DeclareVariable(stmt.Name.Lexeme, isPerIterationBinding: true);
         base.VisitConst(stmt);
+    }
+
+    protected override void VisitEnum(Stmt.Enum stmt)
+    {
+        if (_currentFunction is not null && !stmt.IsAmbient && !stmt.IsConst)
+            DeclareVariable(stmt.Name.Lexeme, isPerIterationBinding: true);
+        base.VisitEnum(stmt);
     }
 
     protected override void VisitUsing(Stmt.Using stmt)

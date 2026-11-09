@@ -19,8 +19,18 @@ public class EnumTests
         Assert.Equal("3\n", TestHarness.Run(source, mode));
     }
 
-    [Fact]
-    public void InterpretedInitializerPreservesEnclosingLexicalBindings()
+    [Theory, ModeData]
+    public void RegularInitializerReadsEarlierMemberThroughEnumName(ExecutionMode mode)
+    {
+        const string source = """
+            enum E { A = 2, B = E.A + 1, C = E['B'] + 1 }
+            console.log(E.B, E.C, E[3]);
+            """;
+        Assert.Equal("3 4 B\n", TestHarness.RunUnchecked(source, mode));
+    }
+
+    [Theory, ModeData]
+    public void LocalInitializerPreservesEnclosingLexicalBindings(ExecutionMode mode)
     {
         const string source = """
             function run() {
@@ -31,7 +41,59 @@ public class EnumTests
             }
             run();
             """;
-        Assert.Equal("6 100\n", TestHarness.Run(source, ExecutionMode.Interpreted));
+        Assert.Equal("6 100\n", TestHarness.Run(source, mode));
+    }
+
+    [Theory, ModeData]
+    public void LocalEnumShadowsModuleEnumAndCapturesPerInvocation(ExecutionMode mode)
+    {
+        const string source = """
+            enum E { A = 42 }
+            function make() {
+                function get() { return E; }
+                enum E { A }
+                console.log(E.A, E[0]);
+                return get;
+            }
+            const first = make();
+            const second = make();
+            console.log(E.A, first() === first(), first() === second());
+            """;
+        Assert.Equal("0 A\n0 A\n42 true false\n", TestHarness.Run(source, mode));
+    }
+
+    [Theory, ModeData]
+    public void LocalEnumSurvivesGeneratorSuspension(ExecutionMode mode)
+    {
+        const string source = """
+            function* values() {
+                enum E { A, B }
+                yield E.A;
+                yield E[1];
+            }
+            const result = values();
+            console.log(result.next().value, result.next().value);
+            """;
+        Assert.Equal("0 B\n", TestHarness.Run(source, mode));
+    }
+
+    [Theory, ModeData]
+    public void LocalEnumSurvivesAwaitAndBlockShadowing(ExecutionMode mode)
+    {
+        const string source = """
+            async function read() {
+                enum E { A = 10 }
+                await Promise.resolve();
+                {
+                    enum E { A = 20 }
+                    await Promise.resolve();
+                    console.log(E.A);
+                }
+                console.log(E.A);
+            }
+            read();
+            """;
+        Assert.Equal("20\n10\n", TestHarness.Run(source, mode));
     }
 
     #region Numeric Enums

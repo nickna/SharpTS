@@ -875,7 +875,7 @@ internal sealed class NestedFunctionLifter
             liftedBody = withSelfAlias;
         }
 
-        var lifted = f with { Name = freshToken, Body = liftedBody };
+        var lifted = f with { Name = freshToken, Body = liftedBody, RuntimeName = f.RuntimeName ?? f.Name.Lexeme };
         _recordRewrite?.Invoke(f, lifted);
         _lifted.Add(lifted);
         return MakeAlias(f.Name, freshToken);
@@ -995,6 +995,7 @@ internal sealed class NestedFunctionLifter
             // function-DC pass routes its read-only forwarded captures through shared live storage.
             // Module-block/loop (#622) forwarders remain unmarked because they stay in place.
             IsLiftedForwarder = hoisted,
+            RuntimeName = f.RuntimeName ?? f.Name.Lexeme,
         };
         _recordRewrite?.Invoke(f, arrow);
         for (int index = 0; index < f.Parameters.Count; index++)

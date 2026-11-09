@@ -1,3 +1,5 @@
+using System.Collections.Frozen;
+using System.Runtime.CompilerServices;
 using SharpTS.TypeSystem.Exceptions;
 using SharpTS.Parsing;
 
@@ -8,6 +10,26 @@ namespace SharpTS.TypeSystem;
 /// </summary>
 public partial class TypeChecker
 {
+    private sealed record NumericEnumConstant(double Value);
+    private readonly ConditionalWeakTable<BindingSymbol, NumericEnumConstant> _numericEnumConstants = new();
+    private readonly ConditionalWeakTable<FrozenDictionary<string, object>, Dictionary<string, object>> _knownEnumMembers = new();
+
+    private void RecordNumericEnumConstant(Stmt.Const declaration, BindingSymbol binding)
+    {
+        if (declaration.TypeAnnotation is not null || declaration.TypeAnnotationNode is not null ||
+            declaration.Initializer is not (Expr.Literal { Value: double } or Expr.Variable or
+                Expr.Grouping or Expr.Unary or Expr.Binary))
+            return;
+
+        if (ConstEnumExpressionEvaluator.EvaluateKnownMember(declaration.Initializer,
+                FrozenDictionary<string, object>.Empty, "", isConst: false, ResolveNumericEnumConstant) is double value)
+            _numericEnumConstants.AddOrUpdate(binding, new(value));
+    }
+
+    private object? ResolveNumericEnumConstant(Expr expression) => expression is Expr.Variable variable &&
+        _environment.GetValueBinding(variable.Name.Lexeme) is { } binding &&
+        _numericEnumConstants.TryGetValue(binding, out var constant) ? constant.Value : null;
+
     private void CheckEnumDeclaration(Stmt.Enum enumStmt)
     {
         var declarationBinding = RegisterValueDeclaration(enumStmt.Name, mergeWithLocal: true);
@@ -105,7 +127,10 @@ public partial class TypeChecker
                     {
                         _suppressDiagnostics--;
                     }
-                    if (!IsNumber(computedType) && computedType is not TypeInfo.Any)
+                    var knownValue = ConstEnumExpressionEvaluator.EvaluateKnownMember(
+                        member.Value, knownMembers, enumStmt.Name.Lexeme, isConst: false, ResolveInitializerReference);
+                    if (knownValue is not double && !IsNumber(computedType) && computedType is not
+                        TypeInfo.Enum { IsScalar: true, Kind: EnumKind.Numeric })
                     {
                         throw new TypeCheckException(
                             $" Enum member '{member.Name.Lexeme}' must have a numeric computed value.",
@@ -113,8 +138,6 @@ public partial class TypeChecker
                             tsCode: "TS18033");
                     }
 
-                    var knownValue = ConstEnumExpressionEvaluator.EvaluateKnownMember(
-                        member.Value, knownMembers, enumStmt.Name.Lexeme, isConst: false);
                     double value = knownValue is double number ? number : double.NaN;
                     members[member.Name.Lexeme] = value;
                     isKnown = knownValue is double;
@@ -155,8 +178,40 @@ public partial class TypeChecker
         {
             DeclarationBinding = declarationBinding
         };
+        if (knownMembers.Count > 0)
+            _knownEnumMembers.Add(enumType.Members, knownMembers);
         DeclareValue(enumStmt.Name, enumType, mergeWithLocal: true);
         _environment.DefineType(enumStmt.Name.Lexeme, enumType);
+
+        object? ResolveInitializerReference(Expr expression)
+        {
+            if (expression is Expr.Variable variable && !members.ContainsKey(variable.Name.Lexeme))
+                return ResolveNumericEnumConstant(variable);
+            if (_typeMap.Get(expression) is TypeInfo.Enum { MemberName: { } name, Kind: EnumKind.Numeric } source &&
+                IsEnumDeclarationMemberReference(expression, source) &&
+                _knownEnumMembers.TryGetValue(source.Members, out var values) &&
+                values.GetValueOrDefault(name) is double number)
+                return number;
+            return null;
+        }
+    }
+
+    private bool IsEnumDeclarationMemberReference(Expr expression, TypeInfo.Enum source)
+    {
+        var receiver = expression switch
+        {
+            Expr.Get get => get.Object,
+            Expr.GetIndex { Index: Expr.Literal { Value: string } } index => index.Object,
+            _ => null,
+        };
+        BindingSymbol? binding = receiver switch
+        {
+            Expr.Variable variable => _environment.GetValueBinding(variable.Name.Lexeme),
+            Expr.Get member when _typeMap.Get(member.Object) is TypeInfo.Namespace ns =>
+                ns.GetValueBinding(member.Name.Lexeme),
+            _ => null,
+        };
+        return binding is not null && ReferenceEquals(binding, source.DeclarationBinding);
     }
 
     private static EnumKind ClassifyEnumMembers(bool hasNumeric, bool hasString) => (hasNumeric, hasString) switch

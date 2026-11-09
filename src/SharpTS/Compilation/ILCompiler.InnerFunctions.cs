@@ -555,6 +555,7 @@ public partial class ILCompiler
             // pad with the `undefined` sentinel (JS semantics), not CLR null. (#640)
             MarkPadsUndefined(_innerFunctionMethods[func]);
             MarkFunctionLength(_innerFunctionMethods[func], func.Parameters);
+            MarkFunctionName(_innerFunctionMethods[func], func.RuntimeName ?? func.Name.Lexeme);
             DefineNewTargetBody(_innerFunctionMethods[func]);
         }
     }
@@ -944,6 +945,9 @@ public partial class ILCompiler
                     break;
                 case Stmt.Var { IsVar: false } lexical:
                     lexicalTokens[lexical.Name.Lexeme] = lexical.Name;
+                    break;
+                case Stmt.Enum { IsAmbient: false, IsConst: false } @enum when !ctx.IsModuleTopLevel:
+                    lexicalTokens[@enum.Name.Lexeme] = @enum.Name;
                     break;
                 case Stmt.Class declaration when _runtimeClassDeclarations.ContainsKey(declaration):
                     lexicalTokens[declaration.Name.Lexeme] = declaration;

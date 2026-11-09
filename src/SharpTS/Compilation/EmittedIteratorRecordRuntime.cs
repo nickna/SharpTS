@@ -9,6 +9,13 @@ public sealed class EmittedIteratorRecordRuntime
     internal EmittedIteratorRecordRuntime() { }
     public bool IsComplete { get; private set; }
 
+    private MethodBuilder? _requireObject;
+    public MethodBuilder RequireObject
+    {
+        get => Require(_requireObject);
+        internal set => SetHandle(ref _requireObject, value);
+    }
+
     private MethodBuilder? _nextMethod;
     public MethodBuilder NextMethod
     {
@@ -51,6 +58,7 @@ public sealed class EmittedIteratorRecordRuntime
     internal void CompleteEmission()
     {
         EnsureMutable();
+        _ = RequireObject;
         _ = NextMethod;
         _ = InvokeNext;
         _ = InvokeNextWithSent;

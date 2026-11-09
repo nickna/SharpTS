@@ -104,6 +104,7 @@ public partial class AsyncStateAnalyzer : AstVisitorBase
     // Per-arrow capture-source pivot for renamed shadows captured by inner arrows (#767, async analog).
     private IReadOnlyDictionary<object, IReadOnlyDictionary<string, string>> _captureRenames =
         new Dictionary<object, IReadOnlyDictionary<string, string>>();
+    private IReadOnlySet<Stmt.Enum>? _staticEnums;
 
     /// <summary>
     /// Translates a declaration/reference node's source lexeme to its disambiguated storage name (#766),
@@ -119,10 +120,19 @@ public partial class AsyncStateAnalyzer : AstVisitorBase
         Stmt.Function func,
         IReadOnlySet<Expr.Await>? nonSuspendingAwaits = null,
         bool preserveDebugBindings = false,
+        ClosureAnalyzer? closureAnalyzer = null) =>
+        Analyze(func, null, nonSuspendingAwaits, preserveDebugBindings, closureAnalyzer);
+
+    internal AsyncFunctionAnalysis Analyze(
+        Stmt.Function func,
+        IReadOnlySet<Stmt.Enum>? staticEnums,
+        IReadOnlySet<Expr.Await>? nonSuspendingAwaits = null,
+        bool preserveDebugBindings = false,
         ClosureAnalyzer? closureAnalyzer = null)
     {
         Reset();
         _closureAnalyzer = closureAnalyzer;
+        _staticEnums = staticEnums;
         _analyzedFunction = func;
         _nonSuspendingAwaits = nonSuspendingAwaits;
 

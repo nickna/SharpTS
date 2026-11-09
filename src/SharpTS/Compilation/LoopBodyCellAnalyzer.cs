@@ -379,6 +379,9 @@ internal sealed class LoopBodyCellAnalyzer : AstVisitorBase
             case Stmt.Const constant: Lexical(constant.Name); break;
             case Stmt.Function function: Declare(function.Name, unsupportedShadow: true); break;
             case Stmt.Class @class: Declare(@class.Name, unsupportedShadow: true); break;
+            case Stmt.Enum { IsAmbient: false, IsConst: false } @enum when _owners.Count > 1:
+                Lexical(@enum.Name);
+                break;
             case Stmt.Enum @enum: Declare(@enum.Name, unsupportedShadow: true); break;
             case Stmt.Namespace @namespace: Declare(@namespace.Name, unsupportedShadow: true); break;
             case Stmt.Using resource:

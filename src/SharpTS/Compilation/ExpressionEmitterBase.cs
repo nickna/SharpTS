@@ -692,7 +692,7 @@ public abstract partial class ExpressionEmitterBase : IEmitterContext
         }
 
         // Spill the object so an await inside Index doesn't suspend with it on the stack.
-        var objLocal = SpillBoxed(gi.Object);
+        var objLocal = SpillAwaitSafeArgument(gi.Object);
 
         if (gi.Optional)
         {
@@ -709,10 +709,14 @@ public abstract partial class ExpressionEmitterBase : IEmitterContext
             IL.Emit(OpCodes.Brtrue, nullishLabel);
 
             // Not nullish — proceed with index access
-            var idxLocal = SpillBoxed(gi.Index);
-            IL.Emit(OpCodes.Ldloc, objLocal);
-            IL.Emit(OpCodes.Ldloc, idxLocal);
-            IL.Emit(OpCodes.Call, Ctx.Runtime!.ObjectRead.Index);
+            var idxLocal = SpillAwaitSafeArgument(gi.Index);
+            EmitIndexReadCompletion(gi, () =>
+            {
+                IL.Emit(OpCodes.Ldloc, objLocal);
+                IL.Emit(OpCodes.Ldloc, idxLocal);
+                IL.Emit(OpCodes.Call, Ctx.Runtime!.ObjectRead.Index);
+                SetStackUnknown();
+            });
             IL.Emit(OpCodes.Br, endLabel);
 
             IL.MarkLabel(nullishLabel);
@@ -723,19 +727,24 @@ public abstract partial class ExpressionEmitterBase : IEmitterContext
         }
         else
         {
-            var idxLocal = SpillBoxed(gi.Index);
+            var idxLocal = SpillAwaitSafeArgument(gi.Index);
             // RequireObjectCoercible: `undefined[k]` throws a guest TypeError instead
             // of silently yielding undefined (#701), and `null[k]` too now that sloppy
             // `this` is the globalThis sentinel (#735). Optional `o?.[k]` short-circuited
             // above. Null-placeholder globals (e.g. `process`) are exempt.
-            if (!IsNullPlaceholderGlobal(gi.Object))
-                EmitThrowIfUndefinedIndexReceiver(objLocal, idxLocal);
-            IL.Emit(OpCodes.Ldloc, objLocal);
-            IL.Emit(OpCodes.Ldloc, idxLocal);
-            IL.Emit(OpCodes.Call, Ctx.Runtime!.ObjectRead.Index);
-            SetStackUnknown();
+            EmitIndexReadCompletion(gi, () =>
+            {
+                if (!IsNullPlaceholderGlobal(gi.Object))
+                    EmitThrowIfUndefinedIndexReceiver(objLocal, idxLocal);
+                IL.Emit(OpCodes.Ldloc, objLocal);
+                IL.Emit(OpCodes.Ldloc, idxLocal);
+                IL.Emit(OpCodes.Call, Ctx.Runtime!.ObjectRead.Index);
+                SetStackUnknown();
+            });
         }
     }
+
+    protected virtual void EmitIndexReadCompletion(Expr.GetIndex read, Action emit) => emit();
 
     protected void EmitGlobalPropertyStore()
     {
@@ -3318,9 +3327,18 @@ public abstract partial class ExpressionEmitterBase : IEmitterContext
 
         if (TryEmitBuiltInModuleLivePropertyGet(g)) return;
 
-        // Dynamic property access fallback
-        EmitExpression(g.Object);
+        EmitDynamicPropertyRead(g);
+    }
+
+    protected virtual void EmitDynamicPropertyRead(Expr.Get read)
+    {
+        EmitExpression(read.Object);
         EnsureBoxed();
+        EmitDynamicPropertyReadFromStack(read);
+    }
+
+    protected void EmitDynamicPropertyReadFromStack(Expr.Get g)
+    {
         if (g.Optional)
         {
             // `o?.x`: short-circuit to undefined when the base is nullish. This base

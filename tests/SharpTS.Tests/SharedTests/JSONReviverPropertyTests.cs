@@ -6,6 +6,29 @@ namespace SharpTS.Tests.SharedTests;
 public sealed class JSONReviverPropertyTests
 {
     [Theory, ModeData]
+    public void ReviverVisitsTheOriginalArrayLength(ExecutionMode mode)
+    {
+        const string source = """
+            const keys = [];
+            const grown = JSON.parse('[1,2]', function (key, value) {
+                if (key === '0') this.push(3);
+                keys.push(key);
+                return value;
+            });
+            console.log(keys.join('|'), grown.join('|'));
+
+            const shrunk = JSON.parse('[1,2,3]', function (key, value) {
+                if (key === '0') { this.pop(); this.pop(); }
+                if (key === '1') console.log(value);
+                if (key === '2') return 9;
+                return value;
+            });
+            console.log(shrunk.join('|'));
+            """;
+        Assert.Equal("0|1| 1|2|3\nundefined\n1||9\n", TestHarness.RunUnchecked(source, mode));
+    }
+
+    [Theory, ModeData]
     public void ReviverPreservesTheDistinctionBetweenUndefinedAndNullInstanceFields(ExecutionMode mode)
     {
         const string source = """
