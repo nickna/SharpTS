@@ -82,6 +82,39 @@ public sealed class ClassFieldInitializationOrderTests
         Assert.Empty(new TypeChecker(TypeCheckerOptions.Strict).CheckWithRecovery(statements).Diagnostics);
     }
 
+    [Theory]
+    [InlineData(": any", "", true, true)]
+    [InlineData(": any", "static {}", true, false)]
+    [InlineData(": AnyField", "static {}", true, false)]
+    [InlineData(": unknown", "static {}", true, false)]
+    [InlineData(": number", "static {}", true, true)]
+    [InlineData(": undefined", "static { this.value = undefined; }", true, true)]
+    [InlineData("?: number", "", true, false)]
+    [InlineData(": number", "", false, true)]
+    [InlineData(": number", "static { this.value = 1; }", false, false)]
+    public void StaticBlockInitializationConsidersTheDeclaredType(
+        string annotation, string earlierBlock, bool strictNullChecks, bool reportsUninitializedRead)
+    {
+        var statements = TestHarness.ParseOrThrow($$"""
+            type AnyField = any;
+            class C {
+                static value{{annotation}};
+                {{earlierBlock}}
+                static read = this.value;
+            }
+            """);
+        var options = TypeCheckerOptions.Strict with
+        {
+            StrictNullChecks = strictNullChecks,
+            StrictPropertyInitialization = strictNullChecks
+        };
+        var diagnostics = new TypeChecker(options).CheckWithRecovery(statements).Diagnostics;
+        if (reportsUninitializedRead)
+            Assert.Equal("TS2729", Assert.Single(diagnostics).TsCode);
+        else
+            Assert.Empty(diagnostics);
+    }
+
     [Fact]
     public void ScriptStaticBlockAssignmentUsesTheClassReceiverWithDefaultLibraries()
     {

@@ -235,12 +235,26 @@ public partial class TypeChecker
         bool earlierUninitializedField = field.Name.Start < initializer.Name.Start &&
             field.Initializer is null && !field.HasDefiniteAssignmentAssertion &&
             (!field.IsStatic || initializer.IsStatic && target is Expr.This &&
-                scope.StaticFieldsAssignedInEarlierBlocks?.Contains(member.Lexeme) != true);
+                !IsStaticFieldInitializedByEarlierBlock(scope, member.Lexeme, isPrivate));
         if (!laterField && !earlierUninitializedField)
             return;
 
         throw new TypeCheckException($"Property '{member.Lexeme}' is used before its initialization.",
             member.Line, tsCode: "TS2729");
+    }
+
+    private static bool IsStaticFieldInitializedByEarlierBlock(
+        FieldGetterScope scope, string name, bool isPrivate)
+    {
+        if (scope.StaticFieldsAssignedInEarlierBlocks is not { } assigned)
+            return false;
+
+        var fieldTypes = isPrivate ? scope.Owner.StaticPrivateFields : scope.Owner.StaticProperties;
+        var type = fieldTypes.GetValueOrDefault(name);
+        // An earlier block starts with the declared type unioned with undefined.
+        // The top types absorb undefined, even if the block makes no assignment.
+        return type is TypeInfo.Any or TypeInfo.Unknown ||
+            type is not TypeInfo.Undefined && assigned.Contains(name);
     }
 
     private void ObservePendingGetterFieldRead(TypeInfo owner, bool isStatic, string name)
