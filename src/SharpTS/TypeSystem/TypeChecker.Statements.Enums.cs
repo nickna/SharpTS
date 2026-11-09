@@ -1,3 +1,5 @@
+using System.Collections.Frozen;
+using System.Runtime.CompilerServices;
 using SharpTS.TypeSystem.Exceptions;
 using SharpTS.Parsing;
 
@@ -8,6 +10,25 @@ namespace SharpTS.TypeSystem;
 /// </summary>
 public partial class TypeChecker
 {
+    private sealed record NumericEnumConstant(double Value);
+    private readonly ConditionalWeakTable<BindingSymbol, NumericEnumConstant> _numericEnumConstants = new();
+
+    private void RecordNumericEnumConstant(Stmt.Const declaration, BindingSymbol binding)
+    {
+        if (declaration.TypeAnnotation is not null || declaration.TypeAnnotationNode is not null ||
+            declaration.Initializer is not (Expr.Literal { Value: double } or Expr.Variable or
+                Expr.Grouping or Expr.Unary or Expr.Binary))
+            return;
+
+        if (ConstEnumExpressionEvaluator.EvaluateKnownMember(declaration.Initializer,
+                FrozenDictionary<string, object>.Empty, "", isConst: false, ResolveNumericEnumConstant) is double value)
+            _numericEnumConstants.AddOrUpdate(binding, new(value));
+    }
+
+    private object? ResolveNumericEnumConstant(Expr expression) => expression is Expr.Variable variable &&
+        _environment.GetValueBinding(variable.Name.Lexeme) is { } binding &&
+        _numericEnumConstants.TryGetValue(binding, out var constant) ? constant.Value : null;
+
     private void CheckEnumDeclaration(Stmt.Enum enumStmt)
     {
         var declarationBinding = RegisterValueDeclaration(enumStmt.Name, mergeWithLocal: true);
@@ -114,7 +135,9 @@ public partial class TypeChecker
                     }
 
                     var knownValue = ConstEnumExpressionEvaluator.EvaluateKnownMember(
-                        member.Value, knownMembers, enumStmt.Name.Lexeme, isConst: false);
+                        member.Value, knownMembers, enumStmt.Name.Lexeme, isConst: false,
+                        expression => expression is Expr.Variable variable && !members.ContainsKey(variable.Name.Lexeme)
+                            ? ResolveNumericEnumConstant(expression) : null);
                     double value = knownValue is double number ? number : double.NaN;
                     members[member.Name.Lexeme] = value;
                     isKnown = knownValue is double;

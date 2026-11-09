@@ -8,6 +8,21 @@ namespace SharpTS.Tests.TypeCheckerTests;
 public sealed class EnumMemberCompatibilityTests
 {
     [Fact]
+    public void AShadowingMutableVariableDoesNotStartAnImplicitSequence()
+    {
+        var statements = TestHarness.ParseOrThrow("""
+            const source = 4;
+            {
+                let source = 5;
+                enum E { A = source, B }
+            }
+            """);
+        var diagnostic = Assert.Single(
+            new TypeChecker(TypeCheckerOptions.Strict).CheckWithRecovery(statements).Diagnostics);
+        Assert.Equal("TS1061", diagnostic.TsCode);
+    }
+
+    [Fact]
     public void SameNamedEnumsCompareTheirMemberValuesAndDeclaration()
     {
         var statements = TestHarness.ParseOrThrow("""
