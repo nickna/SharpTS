@@ -7,45 +7,50 @@ public abstract partial class StateMachineExitRoutingEmitter
     /// <summary>Resolves the custom async iterator or adapts the synchronous iterable.</summary>
     protected void EmitResolveAsyncIterator(LocalBuilder iterableLocal, FieldBuilder iteratorField, FieldBuilder isCustomField, FieldBuilder nextField)
     {
-        var asyncIterFnLocal = IL.DeclareLocal(Types.Object);
-        IL.Emit(OpCodes.Ldloc, iterableLocal);
-        IL.Emit(OpCodes.Ldsfld, Ctx.Runtime!.Symbols.AsyncIterator);
-        IL.Emit(OpCodes.Call, Ctx.Runtime.IteratorProtocol.Function);
-        IL.Emit(OpCodes.Stloc, asyncIterFnLocal);
-
-        var customSetup = IL.DefineLabel();
-        var adaptSyncIteratorLabel = IL.DefineLabel();
+        EmitTryResolveCustomAsyncIterator(iterableLocal, iteratorField, isCustomField, nextField);
         var afterSetup = IL.DefineLabel();
-        IL.Emit(OpCodes.Ldloc, asyncIterFnLocal);
-        IL.Emit(OpCodes.Brfalse, adaptSyncIteratorLabel);
-        IL.Emit(OpCodes.Ldloc, asyncIterFnLocal);
-        IL.Emit(OpCodes.Isinst, Ctx.Runtime.Sentinels.UndefinedType);
-        IL.Emit(OpCodes.Brfalse, customSetup);
+        IL.Emit(OpCodes.Ldarg_0);
+        IL.Emit(OpCodes.Ldfld, isCustomField);
+        IL.Emit(OpCodes.Brtrue, afterSetup);
 
         // No async iterator: adapt any synchronous iterable per
         // CreateAsyncFromSyncIterator semantics (#1287).
-        IL.MarkLabel(adaptSyncIteratorLabel);
         IL.Emit(OpCodes.Ldarg_0);
         IL.Emit(OpCodes.Ldloc, iterableLocal);
-        IL.Emit(OpCodes.Call, Ctx.Runtime.RequireAsyncGenerators().RequireFromSync().Adapt);
+        IL.Emit(OpCodes.Call, Ctx.Runtime!.RequireAsyncGenerators().RequireFromSync().Adapt);
         IL.Emit(OpCodes.Stfld, iteratorField);
+        IL.MarkLabel(afterSetup);
+    }
+
+    protected void EmitTryResolveCustomAsyncIterator(
+        LocalBuilder iterableLocal, FieldBuilder iteratorField, FieldBuilder isCustomField, FieldBuilder nextField)
+    {
+        var runtime = Ctx.Runtime!;
+        var asyncIterFnLocal = IL.DeclareLocal(Types.Object);
+        IL.Emit(OpCodes.Ldloc, iterableLocal);
+        IL.Emit(OpCodes.Ldsfld, runtime.Symbols.AsyncIterator);
+        IL.Emit(OpCodes.Call, runtime.IteratorProtocol.Function);
+        IL.Emit(OpCodes.Stloc, asyncIterFnLocal);
+
         IL.Emit(OpCodes.Ldarg_0);
         IL.Emit(OpCodes.Ldc_I4_0);
         IL.Emit(OpCodes.Stfld, isCustomField);
-        IL.Emit(OpCodes.Br, afterSetup);
 
-        // iterator = iterable[Symbol.asyncIterator](); isCustom = true
-        IL.MarkLabel(customSetup);
+        var afterSetup = IL.DefineLabel();
+        IL.Emit(OpCodes.Ldloc, asyncIterFnLocal);
+        IL.Emit(OpCodes.Brfalse, afterSetup);
+        IL.Emit(OpCodes.Ldloc, asyncIterFnLocal);
+        IL.Emit(OpCodes.Isinst, runtime.Sentinels.UndefinedType);
+        IL.Emit(OpCodes.Brtrue, afterSetup);
+
         var iteratorTemp = IL.DeclareLocal(Types.Object);
         IL.Emit(OpCodes.Ldloc, iterableLocal);
         IL.Emit(OpCodes.Ldloc, asyncIterFnLocal);
-        IL.Emit(OpCodes.Ldc_I4_0);
-        IL.Emit(OpCodes.Newarr, Types.Object);
-        IL.Emit(OpCodes.Call, Ctx.Runtime.Invocation.Method);
+        IL.Emit(OpCodes.Call, runtime.Invocation.Method0);
         IL.Emit(OpCodes.Stloc, iteratorTemp);
         IL.Emit(OpCodes.Ldarg_0);
         IL.Emit(OpCodes.Ldloc, iteratorTemp);
-        IL.Emit(OpCodes.Call, Ctx.Runtime.IteratorRecords.NextMethod);
+        IL.Emit(OpCodes.Call, runtime.IteratorRecords.NextMethod);
         IL.Emit(OpCodes.Stfld, nextField);
         IL.Emit(OpCodes.Ldarg_0);
         IL.Emit(OpCodes.Ldloc, iteratorTemp);

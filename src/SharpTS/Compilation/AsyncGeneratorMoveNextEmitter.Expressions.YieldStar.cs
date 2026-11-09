@@ -17,8 +17,6 @@ public partial class AsyncGeneratorMoveNextEmitter
             return;
         }
 
-        // Check the type of the yield* expression to determine sync vs async
-        // For now, try async first (check if it's IAsyncEnumerator), fall back to sync
         EmitYieldStarWithTypeCheck(y, stateNumber, resumeLabel, delegatedField);
     }
 
@@ -33,7 +31,6 @@ public partial class AsyncGeneratorMoveNextEmitter
 
         var syncLoopLabel = _il.DefineLabel();
         var asyncLoopLabel = _il.DefineLabel();
-        var syncSetupLabel = _il.DefineLabel();
         var asyncSetupLabel = _il.DefineLabel();
         var endLabel = _il.DefineLabel();
         var completionValue = _il.DeclareLocal(typeof(object));
@@ -43,6 +40,11 @@ public partial class AsyncGeneratorMoveNextEmitter
         var delegatedReturn = _builder.StateMachineType.DefineField(
             _builder.DebugScaffoldingName($"<>yieldStarReturn{stateNumber}"),
             _types.Boolean, FieldAttributes.Private);
+
+        var isCustomField = _builder.DelegatedCustomIteratorField!;
+        var nextField = _builder.DelegatedNextMethodField!;
+        var missingThrow = DefineStateMachineField($"<>yieldStarMissingThrow{stateNumber}", _types.Boolean);
+        var runtime = Ctx.Runtime!;
 
         void ConsumeReturnRequest()
         {
@@ -73,13 +75,19 @@ public partial class AsyncGeneratorMoveNextEmitter
         // marked (the async arm is always emitted), so the state switch stays valid either way.
         int awaitState = _currentSuspensionState++;
 
-        // Check if it's IAsyncEnumerator<object> (async generators implement this)
+        // Prefer the guest async iterator protocol, then keep the native async
+        // generator and synchronous iterable paths.
+        EmitCaptureTryOperation(() =>
+            EmitTryResolveCustomAsyncIterator(iterableTemp, delegatedField, isCustomField, nextField));
+        _il.Emit(OpCodes.Ldarg_0);
+        _il.Emit(OpCodes.Ldfld, isCustomField);
+        _il.Emit(OpCodes.Brtrue, asyncLoopLabel);
+
         _il.Emit(OpCodes.Ldloc, iterableTemp);
         _il.Emit(OpCodes.Isinst, _types.IAsyncEnumeratorOfObject);
         _il.Emit(OpCodes.Brtrue, asyncSetupLabel);
 
         // Sync setup
-        _il.MarkLabel(syncSetupLabel);
         // Emitted typed arrays and Buffers are synchronous iterables but do not implement
         // IEnumerable. Materialize them before the existing sync setup cast (#1289).
         NormalizeYieldStarTypedArrayOrBuffer(iterableTemp);
@@ -126,6 +134,10 @@ public partial class AsyncGeneratorMoveNextEmitter
         _il.Emit(OpCodes.Ldarg_0);
         _il.Emit(OpCodes.Ldc_I4_M1);
         _il.Emit(OpCodes.Stfld, _builder.StateField);
+        _il.Emit(OpCodes.Ldarg_0);
+        _il.Emit(OpCodes.Ldfld, isCustomField);
+        _il.Emit(OpCodes.Brtrue, asyncLoopLabel);
+
         // Check field type to determine sync vs async
         _il.Emit(OpCodes.Ldarg_0);
         _il.Emit(OpCodes.Ldfld, delegatedField);
@@ -251,13 +263,7 @@ public partial class AsyncGeneratorMoveNextEmitter
         _il.Emit(OpCodes.Br, endLabel);
 
         // === Async loop ===
-        // Drive the delegated async iterator via its $IAsyncGenerator.next() — a Task<object> holding the
-        // { value, done } iterator result — and SUSPEND the enclosing async generator on it, rather than
-        // blocking on a synchronous ValueTask GetResult (which deadlocks a genuinely-async delegate the
-        // same way next() did before #631). next() maps directly onto the async-gen await mechanism; the
-        // reserved `awaitState` backs that suspension. Everything that reaches this arm
-        // (Isinst IAsyncEnumerator<object> succeeded) is an emitted async generator, which implements
-        // $IAsyncGenerator (#688).
+        // Suspend on both native and custom async protocol results.
         var asyncLoopEnd = _il.DefineLabel();
         _il.MarkLabel(asyncLoopLabel);
         ConsumeReturnRequest();
@@ -265,9 +271,20 @@ public partial class AsyncGeneratorMoveNextEmitter
         // Await exactly one protocol result, using the existing suspension state.
         // Both invocation failures and rejected results enter the enclosing handler.
         var delegatedTask = _il.DeclareLocal(typeof(object));
+        var missingReturn = _il.DeclareLocal(_types.Boolean);
         EmitCaptureTryOperation(() =>
         {
+            var customStep = _il.DefineLabel();
             var nextLabel = _il.DefineLabel();
+            _il.Emit(OpCodes.Ldarg_0);
+            _il.Emit(OpCodes.Ldc_I4_0);
+            _il.Emit(OpCodes.Stfld, missingThrow);
+            _il.Emit(OpCodes.Ldc_I4_0);
+            _il.Emit(OpCodes.Stloc, missingReturn);
+            _il.Emit(OpCodes.Ldarg_0);
+            _il.Emit(OpCodes.Ldfld, isCustomField);
+            _il.Emit(OpCodes.Brtrue, customStep);
+
             var returnOrNextLabel = _il.DefineLabel();
             var resultLabel = _il.DefineLabel();
             _il.Emit(OpCodes.Ldarg_0);
@@ -305,24 +322,59 @@ public partial class AsyncGeneratorMoveNextEmitter
             _il.Emit(OpCodes.Ldarg_0);
             _il.Emit(OpCodes.Ldfld, _builder.SentField);
             _il.Emit(OpCodes.Callvirt, _ctx.Runtime.RequireAsyncGenerators().Next);
+            _il.Emit(OpCodes.Br, resultLabel);
+
+            _il.MarkLabel(customStep);
+            EmitCustomAsyncDelegationStep(delegatedField, nextField, delegatedReturn, missingThrow, missingReturn);
+
             _il.MarkLabel(resultLabel);
             _il.Emit(OpCodes.Stloc, delegatedTask);
         });
+
+        var awaitStep = _il.DefineLabel();
+        _il.Emit(OpCodes.Ldloc, missingReturn);
+        _il.Emit(OpCodes.Brfalse, awaitStep);
+        _il.Emit(OpCodes.Ldarg_0);
+        _il.Emit(OpCodes.Ldfld, _builder.CurrentField);
+        _il.Emit(OpCodes.Stloc, completionValue);
+        _il.Emit(OpCodes.Br, endLabel);
+
+        _il.MarkLabel(awaitStep);
         _il.Emit(OpCodes.Ldloc, delegatedTask);
         SetStackUnknown();
         EmitAwaitFromValueOnStack(awaitState);
         var asyncResultLocal = _il.DeclareLocal(typeof(object));
         _il.Emit(OpCodes.Stloc, asyncResultLocal);
 
-        // if (result.done) the delegation is finished.
-        _il.Emit(OpCodes.Ldloc, asyncResultLocal);
-        _il.Emit(OpCodes.Call, _ctx.Runtime.IteratorProtocol.Done);
+        var asyncDone = _il.DeclareLocal(_types.Boolean);
+        var asyncValue = _il.DeclareLocal(_types.Object);
+        EmitCaptureTryOperation(() =>
+        {
+            _il.Emit(OpCodes.Ldloc, asyncResultLocal);
+            _il.Emit(OpCodes.Call, runtime.IteratorRecords.RequireObject);
+            _il.Emit(OpCodes.Pop);
+
+            // When throw was absent, the awaited result is from IteratorClose.
+            // Validate the result without reading done or value.
+            var readResult = _il.DefineLabel();
+            _il.Emit(OpCodes.Ldarg_0);
+            _il.Emit(OpCodes.Ldfld, missingThrow);
+            _il.Emit(OpCodes.Brfalse, readResult);
+            GuestErrorEmitter.ThrowTypeError(_il, runtime, "Async iterator does not provide a throw() method.");
+
+            _il.MarkLabel(readResult);
+            _il.Emit(OpCodes.Ldloc, asyncResultLocal);
+            _il.Emit(OpCodes.Call, runtime.IteratorProtocol.Done);
+            _il.Emit(OpCodes.Stloc, asyncDone);
+            _il.Emit(OpCodes.Ldloc, asyncResultLocal);
+            _il.Emit(OpCodes.Call, runtime.IteratorProtocol.Value);
+            _il.Emit(OpCodes.Stloc, asyncValue);
+        });
+        _il.Emit(OpCodes.Ldloc, asyncDone);
         _il.Emit(OpCodes.Brtrue, asyncLoopEnd);
 
-        // <>2__current = result.value
         _il.Emit(OpCodes.Ldarg_0);
-        _il.Emit(OpCodes.Ldloc, asyncResultLocal);
-        _il.Emit(OpCodes.Call, _ctx.Runtime.IteratorProtocol.Value);
+        _il.Emit(OpCodes.Ldloc, asyncValue);
         _il.Emit(OpCodes.Stfld, _builder.CurrentField);
         ClearReturnOperation();
 
@@ -333,8 +385,7 @@ public partial class AsyncGeneratorMoveNextEmitter
         EmitReturnValueTaskBool(true);
 
         _il.MarkLabel(asyncLoopEnd);
-        _il.Emit(OpCodes.Ldloc, asyncResultLocal);
-        _il.Emit(OpCodes.Call, _ctx.Runtime.IteratorProtocol.Value);
+        _il.Emit(OpCodes.Ldloc, asyncValue);
         _il.Emit(OpCodes.Stloc, completionValue);
 
         // === End/cleanup ===
@@ -342,6 +393,9 @@ public partial class AsyncGeneratorMoveNextEmitter
         _il.Emit(OpCodes.Ldarg_0);
         _il.Emit(OpCodes.Ldnull);
         _il.Emit(OpCodes.Stfld, delegatedField);
+        _il.Emit(OpCodes.Ldarg_0);
+        _il.Emit(OpCodes.Ldnull);
+        _il.Emit(OpCodes.Stfld, nextField);
 
         // Only an immediately completed return operation is an abrupt outer
         // return. A done:false cleanup yield consumed that request already;
@@ -362,6 +416,95 @@ public partial class AsyncGeneratorMoveNextEmitter
 
         _il.Emit(OpCodes.Ldloc, completionValue);
         SetStackUnknown();
+    }
+
+    private void EmitCustomAsyncDelegationStep(
+        FieldBuilder iterator, FieldBuilder next, FieldBuilder returning, FieldBuilder missingThrow, LocalBuilder missingReturn)
+    {
+        var runtime = Ctx.Runtime!;
+        var method = _il.DeclareLocal(_types.Object);
+        var argument = _il.DeclareLocal(_types.Object);
+        var onReturn = _il.DefineLabel();
+        var onNext = _il.DefineLabel();
+        var invoke = _il.DefineLabel();
+        var done = _il.DefineLabel();
+
+        void LoadField(FieldBuilder field)
+        {
+            _il.Emit(OpCodes.Ldarg_0);
+            _il.Emit(OpCodes.Ldfld, field);
+        }
+
+        void LookupMethod(string name, Label absent)
+        {
+            LoadField(iterator);
+            _il.Emit(OpCodes.Ldstr, name);
+            _il.Emit(OpCodes.Call, runtime.ObjectRead.Property);
+            _il.Emit(OpCodes.Stloc, method);
+            _il.Emit(OpCodes.Ldloc, method);
+            _il.Emit(OpCodes.Brfalse, absent);
+            _il.Emit(OpCodes.Ldloc, method);
+            _il.Emit(OpCodes.Isinst, runtime.Sentinels.UndefinedType);
+            _il.Emit(OpCodes.Brtrue, absent);
+        }
+
+        LoadField(_builder.ThrowRequestedField);
+        _il.Emit(OpCodes.Brfalse, onReturn);
+        _il.Emit(OpCodes.Ldarg_0);
+        _il.Emit(OpCodes.Ldc_I4_0);
+        _il.Emit(OpCodes.Stfld, _builder.ThrowRequestedField);
+        var close = _il.DefineLabel();
+        LookupMethod("throw", close);
+        LoadField(_builder.ThrowValueField);
+        _il.Emit(OpCodes.Stloc, argument);
+        _il.Emit(OpCodes.Br, invoke);
+
+        _il.MarkLabel(close);
+        var noClose = _il.DefineLabel();
+        LookupMethod("return", noClose);
+        _il.Emit(OpCodes.Ldarg_0);
+        _il.Emit(OpCodes.Ldc_I4_1);
+        _il.Emit(OpCodes.Stfld, missingThrow);
+        LoadField(iterator);
+        _il.Emit(OpCodes.Ldloc, method);
+        _il.Emit(OpCodes.Call, runtime.Invocation.Method0);
+        _il.Emit(OpCodes.Br, done);
+        _il.MarkLabel(noClose);
+        GuestErrorEmitter.ThrowTypeError(_il, runtime, "Async iterator does not provide a throw() method.");
+
+        _il.MarkLabel(onReturn);
+        LoadField(returning);
+        _il.Emit(OpCodes.Brfalse, onNext);
+        var noReturn = _il.DefineLabel();
+        LookupMethod("return", noReturn);
+        LoadField(_builder.CurrentField);
+        _il.Emit(OpCodes.Stloc, argument);
+        _il.Emit(OpCodes.Br, invoke);
+
+        _il.MarkLabel(noReturn);
+        _il.Emit(OpCodes.Ldc_I4_1);
+        _il.Emit(OpCodes.Stloc, missingReturn);
+        _il.Emit(OpCodes.Ldnull);
+        _il.Emit(OpCodes.Br, done);
+
+        _il.MarkLabel(onNext);
+        LoadField(next);
+        _il.Emit(OpCodes.Stloc, method);
+        LoadField(_builder.SentField);
+        _il.Emit(OpCodes.Stloc, argument);
+
+        _il.MarkLabel(invoke);
+        LoadField(iterator);
+        _il.Emit(OpCodes.Ldloc, method);
+        _il.Emit(OpCodes.Ldc_I4_1);
+        _il.Emit(OpCodes.Newarr, _types.Object);
+        _il.Emit(OpCodes.Dup);
+        _il.Emit(OpCodes.Ldc_I4_0);
+        _il.Emit(OpCodes.Ldloc, argument);
+        _il.Emit(OpCodes.Stelem_Ref);
+        _il.Emit(OpCodes.Call, runtime.Invocation.Method);
+
+        _il.MarkLabel(done);
     }
 
     private void EmitYieldStarSync(Expr.Yield y, int stateNumber, Label resumeLabel)

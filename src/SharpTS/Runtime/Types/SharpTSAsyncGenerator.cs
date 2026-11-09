@@ -360,6 +360,15 @@ public class SharpTSAsyncGenerator : ITypeCategorized, ISharpTSOwnPropertyObject
     /// </summary>
     private async Task<object?> DelegateYieldStarAsync(object? iterable)
     {
+        if (iterable is not SharpTSAsyncGenerator &&
+            _interpreter.TryGetAsyncIterator(iterable) is { } asyncIterator)
+        {
+            return await DelegateGeneratorAsync(
+                received => DriveCustomAsyncIterator(asyncIterator, received),
+                result => (RuntimeTypes.IsTruthy(_interpreter.GetPropertyValue(result, "done")),
+                    _interpreter.GetPropertyValue(result, "value")));
+        }
+
         if (iterable is SharpTSGenerator synchronous)
             return await DelegateGeneratorAsync(received => Task.FromResult<object?>(received.Kind switch
             {
@@ -408,14 +417,35 @@ public class SharpTSAsyncGenerator : ITypeCategorized, ISharpTSOwnPropertyObject
         return SharpTSUndefined.Instance;
     }
 
-    private async Task<object?> DelegateGeneratorAsync(Func<GeneratorResume, Task<object?>> drive)
+    private async Task<object?> DriveCustomAsyncIterator(Interpreter.AsyncIteratorRecord record, GeneratorResume received)
+    {
+        if (received.Kind == GeneratorResumeKind.Next)
+            return await _interpreter.AwaitAsyncIteratorStep(record.Iterator, record.Next, "next", [received.Value]);
+
+        string name = received.Kind == GeneratorResumeKind.Return ? "return" : "throw";
+        object? method = _interpreter.GetPropertyValue(record.Iterator, name);
+        if (method is null or SharpTSUndefined)
+        {
+            if (received.Kind == GeneratorResumeKind.Return)
+                throw new GeneratorReturnException(received.Value);
+
+            // A missing throw method closes the iterator before raising TypeError.
+            await _interpreter.CloseAsyncIteratorOnEarlyExit(record.Iterator, preserveThrow: false);
+            throw new ThrowException(new SharpTSTypeError("Async iterator does not provide a throw() method."));
+        }
+
+        return await _interpreter.AwaitAsyncIteratorStep(record.Iterator, method, name, [received.Value]);
+    }
+
+    private async Task<object?> DelegateGeneratorAsync(
+        Func<GeneratorResume, Task<object?>> drive, Func<object?, (bool Done, object? Value)>? readResult = null)
     {
         var received = new GeneratorResume(GeneratorResumeKind.Next, SharpTSUndefined.Instance);
         while (true)
         {
             // Preserve the outer environment while a delegate drives its own body.
             object? result = await _interpreter.AwaitPreservingEnvironment(drive(received));
-            (bool done, object? value) = ReadIteratorResult(result);
+            (bool done, object? value) = (readResult ?? ReadIteratorResult)(result);
             if (done)
             {
                 if (received.Kind == GeneratorResumeKind.Return)

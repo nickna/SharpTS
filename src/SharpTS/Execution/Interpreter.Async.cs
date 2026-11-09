@@ -315,21 +315,15 @@ public partial class Interpreter
             return CaptureAsyncIterator(new SharpTSReadableAsyncIterator(readable));
         }
 
-        var asyncIteratorFn = iterable switch
-        {
-            SharpTSClass klass => GetClassSymbolValue(klass, SharpTSSymbol.AsyncIterator),
-            SharpTSObject obj => obj.GetBySymbol(SharpTSSymbol.AsyncIterator),
-            SharpTSInstance instance => GetInstanceSymbolValue(instance, SharpTSSymbol.AsyncIterator),
-            _ => null
-        };
+        var asyncIteratorFn = iterable is null
+            ? null
+            : GetSymbolPropertyValue(iterable, SharpTSSymbol.AsyncIterator);
         // GetMethod permits the synchronous fallback only for an absent method.
         if (asyncIteratorFn is null or SharpTSUndefined)
             return null;
-        if (asyncIteratorFn is not ISharpTSCallable)
-            throw new ThrowException(new SharpTSTypeError(
-                "[Symbol.asyncIterator] must be a function"));
-        asyncIteratorFn = BindMemberCallReceiver(asyncIteratorFn, iterable);
-        return CaptureAsyncIterator(((ISharpTSCallable)asyncIteratorFn!).Call(this, []));
+        if (asyncIteratorFn is not ISharpTSCallable callable)
+            throw new ThrowException(new SharpTSTypeError("[Symbol.asyncIterator] must be a function"));
+        return CaptureAsyncIterator(FunctionBuiltIns.CallWithThis(this, callable, iterable, []));
     }
 
     private AsyncIteratorRecord CaptureAsyncIterator(object? iterator)
@@ -353,32 +347,10 @@ public partial class Interpreter
     {
         var completion = ExecutionResult.Success(RuntimeValue.Undefined);
         object asyncIterator = record.Iterator;
-        // The loop body must run in the for-await statement's own lexical scope, regardless of how the
-        // iterator's next() mutates the interpreter's ambient environment. The eager-drain async generator
-        // transiently repoints that environment at its own closure while draining, and a body shape whose
-        // await is nested in a delegated expression can leave it repointed across the suspension; without
-        // re-asserting the loop scope here, the body (and code after the loop) would resolve outer bindings
-        // against the wrong scope — "Undefined variable" (#689). Capturing once and restoring after each
-        // next() also hardens for-await against any custom async iterator with environment side effects.
-        RuntimeEnvironment hostEnv = _environment;
-        var hostGenerator = CurrentAsyncGenerator;
         while (true)
         {
             ThrowIfExecutionCancelled();
-            Task<object?> step;
-            try
-            {
-                step = ResolveAsyncIteratorResult(InvokeAsyncIteratorMethod(asyncIterator, record.Next, "next", []));
-            }
-            finally
-            {
-                _environment = hostEnv;
-                CurrentAsyncGenerator = hostGenerator;
-            }
-
-            var nextResult = await AwaitPreservingEnvironment(QueueNativeAwait(step));
-            if (!RuntimeValue.FromBoxed(nextResult).IsObject)
-                throw new ThrowException(new SharpTSTypeError("Async iterator.next must return an object."));
+            var nextResult = await AwaitAsyncIteratorStep(asyncIterator, record.Next, "next", []);
 
             if (IsTruthy(GetPropertyValue(nextResult, "done"))) break;
             object? value = GetPropertyValue(nextResult, "value");
@@ -427,7 +399,7 @@ public partial class Interpreter
     /// For other early exits, a failed return lookup/call/await or a nonobject
     /// result replaces the loop completion.
     /// </summary>
-    private async Task CloseAsyncIteratorOnEarlyExit(object asyncIterator, bool preserveThrow)
+    internal async Task CloseAsyncIteratorOnEarlyExit(object asyncIterator, bool preserveThrow)
     {
         var saved = _environment;
         var savedGen = CurrentAsyncGenerator;
@@ -467,6 +439,28 @@ public partial class Interpreter
             _environment = saved;
             CurrentAsyncGenerator = savedGen;
         }
+    }
+
+    internal async Task<object?> AwaitAsyncIteratorStep(object iterator, object? method, string name, List<object?> args)
+    {
+        // The caller's scope must survive starting another async generator (#689).
+        var saved = _environment;
+        var savedGen = CurrentAsyncGenerator;
+        Task<object?> step;
+        try
+        {
+            step = ResolveAsyncIteratorResult(InvokeAsyncIteratorMethod(iterator, method, name, args));
+        }
+        finally
+        {
+            _environment = saved;
+            CurrentAsyncGenerator = savedGen;
+        }
+
+        var result = await AwaitPreservingEnvironment(QueueNativeAwait(step));
+        if (!RuntimeValue.FromBoxed(result).IsObject)
+            throw new ThrowException(new SharpTSTypeError($"Async iterator.{name} must return an object."));
+        return result;
     }
 
     private Task<object?> ResolveAsyncIteratorResult(object? result)

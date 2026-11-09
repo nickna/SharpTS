@@ -50,6 +50,8 @@ public class AsyncGeneratorStateMachineBuilder : StateMachineBuilderBase, IItera
 
     // Delegated async enumerator field for yield* expressions
     public FieldBuilder? DelegatedAsyncEnumeratorField { get; private set; }
+    internal FieldBuilder? DelegatedCustomIteratorField { get; private set; }
+    internal FieldBuilder? DelegatedNextMethodField { get; private set; }
 
     // Flag set by return() to trigger finally blocks during MoveNextAsync resume
     public FieldBuilder ReturnRequestedField { get; private set; } = null!;
@@ -211,6 +213,10 @@ public class AsyncGeneratorStateMachineBuilder : StateMachineBuilderBase, IItera
                 _types.Object,
                 FieldAttributes.Private
             );
+            DelegatedCustomIteratorField = _stateMachineType.DefineField(
+                DebugScaffoldingName("<>yieldStarCustom"), _types.Boolean, FieldAttributes.Private);
+            DelegatedNextMethodField = _stateMachineType.DefineField(
+                DebugScaffoldingName("<>yieldStarNext"), _types.Object, FieldAttributes.Private);
         }
 
         // Define constructor
@@ -852,7 +858,7 @@ public class AsyncGeneratorStateMachineBuilder : StateMachineBuilderBase, IItera
         il.Emit(OpCodes.Ldfld, StateField);
         il.Emit(OpCodes.Ldc_I4_0);
         il.Emit(OpCodes.Blt, rejectWithoutResumeLabel);
-        // Native sync/async generator protocols consume forwarded throws.
+        // Custom async iterators and native generator protocols consume forwarded throws.
         // Keep plain enumerators on their existing unsupported path.
         if (DelegatedAsyncEnumeratorField is not null)
         {
@@ -860,6 +866,9 @@ public class AsyncGeneratorStateMachineBuilder : StateMachineBuilderBase, IItera
             il.Emit(OpCodes.Ldarg_0);
             il.Emit(OpCodes.Ldfld, DelegatedAsyncEnumeratorField);
             il.Emit(OpCodes.Brfalse, resumeThrowLabel);
+            il.Emit(OpCodes.Ldarg_0);
+            il.Emit(OpCodes.Ldfld, DelegatedCustomIteratorField!);
+            il.Emit(OpCodes.Brtrue, resumeThrowLabel);
             il.Emit(OpCodes.Ldarg_0);
             il.Emit(OpCodes.Ldfld, DelegatedAsyncEnumeratorField);
             il.Emit(OpCodes.Isinst, _runtime!.RequireAsyncGenerators().Type);

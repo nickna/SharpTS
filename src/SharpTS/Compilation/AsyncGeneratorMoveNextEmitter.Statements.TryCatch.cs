@@ -57,6 +57,9 @@ public partial class AsyncGeneratorMoveNextEmitter
             _il.Emit(OpCodes.Ldarg_0);
             _il.Emit(OpCodes.Ldnull);
             _il.Emit(OpCodes.Stfld, delegation);
+            _il.Emit(OpCodes.Ldarg_0);
+            _il.Emit(OpCodes.Ldnull);
+            _il.Emit(OpCodes.Stfld, _builder.DelegatedNextMethodField!);
         }
         _il.Emit(OpCodes.Leave, routeException);
         _il.EndExceptionBlock();
