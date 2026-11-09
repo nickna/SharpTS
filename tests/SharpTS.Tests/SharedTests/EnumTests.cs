@@ -19,6 +19,16 @@ public class EnumTests
         Assert.Equal("3\n", TestHarness.Run(source, mode));
     }
 
+    [Theory, ModeData]
+    public void RegularInitializerReadsEarlierMemberThroughEnumName(ExecutionMode mode)
+    {
+        const string source = """
+            enum E { A = 2, B = E.A + 1, C = E['B'] + 1 }
+            console.log(E.B, E.C, E[3]);
+            """;
+        Assert.Equal("3 4 B\n", TestHarness.RunUnchecked(source, mode));
+    }
+
     [Fact]
     public void InterpretedInitializerPreservesEnclosingLexicalBindings()
     {

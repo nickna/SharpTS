@@ -106,73 +106,59 @@ public partial class Interpreter
     /// <seealso href="https://www.typescriptlang.org/docs/handbook/enums.html">TypeScript Enums</seealso>
     private void ExecuteEnumDeclaration(Stmt.Enum enumStmt)
     {
-        Dictionary<string, object> members = [];
+        Dictionary<string, object>? constMembers = enumStmt.IsConst ? [] : null;
         var initializerScope = enumStmt.IsConst ? null : new RuntimeEnvironment(_environment);
+        var runtimeEnum = enumStmt.IsConst ? null : new SharpTSEnum(enumStmt.Name.Lexeme, [], EnumKind.Numeric);
+        if (runtimeEnum is not null)
+            _environment.Define(enumStmt.Name.Lexeme, runtimeEnum);
         double? currentNumericValue = null;
         bool hasNumeric = false;
         bool hasString = false;
 
         foreach (var member in enumStmt.Members)
         {
-            if (member.Value != null)
+            object? value = member.Value switch
             {
-                object? value;
-                if (member.Value is Expr.Literal)
-                {
-                    // Literal value - evaluate directly
-                    value = Evaluate(member.Value);
-                }
-                else if (enumStmt.IsConst)
-                {
-                    // Const enum computed expression - evaluate with resolved members
-                    value = EvaluateConstEnumExpression(member.Value, members, enumStmt.Name.Lexeme);
-                }
-                else
-                {
-                    value = EvaluateEnumInitializer(member.Value, initializerScope!);
-                }
+                null => currentNumericValue ?? 0,
+                Expr.Literal literal => Evaluate(literal),
+                var expression when constMembers is not null =>
+                    EvaluateConstEnumExpression(expression, constMembers, enumStmt.Name.Lexeme),
+                var expression => EvaluateEnumInitializer(expression, initializerScope!)
+            };
 
-                if (value is double d)
-                {
-                    members[member.Name.Lexeme] = d;
-                    currentNumericValue = d + 1;
-                    hasNumeric = true;
-                }
-                else if (value is string s)
-                {
-                    members[member.Name.Lexeme] = s;
-                    hasString = true;
-                }
+            if (value is double number)
+            {
+                currentNumericValue = number + 1;
+                hasNumeric = true;
+            }
+            else if (value is string)
+                hasString = true;
+            else
+                continue;
+
+            if (runtimeEnum is not null)
+            {
+                runtimeEnum.AddMember(member.Name.Lexeme, value);
+                initializerScope!.Define(member.Name.Lexeme, value);
             }
             else
-            {
-                // Auto-increment for numeric
-                currentNumericValue ??= 0;
-                members[member.Name.Lexeme] = currentNumericValue.Value;
-                hasNumeric = true;
-                currentNumericValue++;
-            }
-
-            if (initializerScope is not null && members.TryGetValue(member.Name.Lexeme, out var resolved))
-                initializerScope.Define(member.Name.Lexeme, resolved);
+                constMembers![member.Name.Lexeme] = value;
         }
 
         if (enumStmt.IsConst)
         {
             // Const enums use a simpler wrapper without reverse mapping support
-            _environment.Define(enumStmt.Name.Lexeme, new ConstEnumValues(enumStmt.Name.Lexeme, members));
+            _environment.Define(enumStmt.Name.Lexeme, new ConstEnumValues(enumStmt.Name.Lexeme, constMembers!));
         }
         else
         {
-            EnumKind kind = (hasNumeric, hasString) switch
+            runtimeEnum!.Kind = (hasNumeric, hasString) switch
             {
                 (true, false) => EnumKind.Numeric,
                 (false, true) => EnumKind.String,
                 (true, true) => EnumKind.Heterogeneous,
                 _ => EnumKind.Numeric
             };
-
-            _environment.Define(enumStmt.Name.Lexeme, new SharpTSEnum(enumStmt.Name.Lexeme, members, kind));
         }
     }
 

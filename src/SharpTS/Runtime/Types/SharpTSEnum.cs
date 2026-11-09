@@ -1,6 +1,5 @@
 using SharpTS.Runtime;
 using SharpTS.TypeSystem;
-using System.Collections.Frozen;
 
 namespace SharpTS.Runtime.Types;
 
@@ -18,12 +17,12 @@ public class SharpTSEnum(string name, Dictionary<string, object> members, EnumKi
     public TypeCategory RuntimeCategory => TypeCategory.Enum;
 
     public string Name { get; } = name;
-    public EnumKind Kind { get; } = kind;
-    private readonly FrozenDictionary<string, object> _members = members.ToFrozenDictionary();
+    public EnumKind Kind { get; internal set; } = kind;
+    private readonly Dictionary<string, object> _members = new(members);
 
-    private readonly FrozenDictionary<double, string> _reverse = BuildReverseMapping(members);
+    private readonly Dictionary<double, string> _reverse = BuildReverseMapping(members);
 
-    private static FrozenDictionary<double, string> BuildReverseMapping(Dictionary<string, object> members)
+    private static Dictionary<double, string> BuildReverseMapping(Dictionary<string, object> members)
     {
         var reverse = new Dictionary<double, string>();
         foreach (var (name, value) in members)
@@ -31,7 +30,14 @@ public class SharpTSEnum(string name, Dictionary<string, object> members, EnumKi
             if (value is double number)
                 reverse[number] = name;
         }
-        return reverse.ToFrozenDictionary();
+        return reverse;
+    }
+
+    internal void AddMember(string name, object value)
+    {
+        _members[name] = value;
+        if (value is double number)
+            _reverse[number] = name;
     }
 
     public object GetMember(string name) =>
