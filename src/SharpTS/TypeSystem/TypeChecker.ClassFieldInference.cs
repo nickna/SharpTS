@@ -227,7 +227,13 @@ public partial class TypeChecker
         var owner = receiver is TypeInfo.Instance instance ? instance.ResolvedClassType : receiver;
         if (SelectedSourceClassId(owner) != scope.Owner.DeclarationId ||
             !scope.Fields.TryGetValue((receiver is not TypeInfo.Instance, member.Lexeme), out var field) ||
-            field.IsOptional || field.IsPrivate != isPrivate || field.Name.Start <= initializer.Name.Start)
+            field.IsOptional || field.IsPrivate != isPrivate)
+            return;
+
+        bool laterField = field.Name.Start > initializer.Name.Start;
+        bool earlierUninitializedInstanceField = field.Name.Start < initializer.Name.Start &&
+            !field.IsStatic && field.Initializer is null && !field.HasDefiniteAssignmentAssertion;
+        if (!laterField && !earlierUninitializedInstanceField)
             return;
 
         throw new TypeCheckException($"Property '{member.Lexeme}' is used before its initialization.",

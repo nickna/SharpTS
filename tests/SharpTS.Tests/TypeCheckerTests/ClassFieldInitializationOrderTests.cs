@@ -26,6 +26,21 @@ public sealed class ClassFieldInitializationOrderTests
     }
 
     [Fact]
+    public void DirectReadOfEarlierConstructorAssignedFieldReportsAnInitializationError()
+    {
+        var statements = TestHarness.ParseOrThrow("""
+            class C {
+                y: number;
+                z = this.y;
+                constructor() { this.y = 1; }
+            }
+            """);
+        var diagnostic = Assert.Single(new TypeChecker(TypeCheckerOptions.Strict).CheckWithRecovery(statements).Diagnostics);
+        Assert.Equal("TS2729", diagnostic.TsCode);
+        Assert.Equal(3, diagnostic.Line);
+    }
+
+    [Fact]
     public void EarlierOptionalAndDeferredFieldsRemainReadable()
     {
         var statements = TestHarness.ParseOrThrow("""
@@ -34,6 +49,8 @@ public sealed class ClassFieldInitializationOrderTests
                 earlier = this.first;
                 deferred = () => this.later;
                 optional = this.maybe;
+                asserted!: number;
+                assumed = this.asserted;
                 nested = class { read() { return C.staticLater; } };
                 later = 2;
                 maybe?: number;
