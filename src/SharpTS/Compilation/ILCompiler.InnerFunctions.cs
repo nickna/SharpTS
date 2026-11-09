@@ -555,6 +555,7 @@ public partial class ILCompiler
             // pad with the `undefined` sentinel (JS semantics), not CLR null. (#640)
             MarkPadsUndefined(_innerFunctionMethods[func]);
             MarkFunctionLength(_innerFunctionMethods[func], func.Parameters);
+            MarkFunctionName(_innerFunctionMethods[func], func.RuntimeName ?? func.Name.Lexeme);
             DefineNewTargetBody(_innerFunctionMethods[func]);
         }
     }
