@@ -3106,6 +3106,7 @@ public abstract partial class ExpressionEmitterBase : IEmitterContext
         if (Ctx.Functions.ContainsKey(Ctx.ResolveFunctionName(name))) return true;
         if (Ctx.InnerFunctionMethodsByName?.ContainsKey(name) == true) return true;
         if (Ctx.NamespaceFields?.ContainsKey(name) == true) return true;
+        if (Ctx.EnumValueFields?.ContainsKey(Ctx.ResolveEnumName(name)) == true) return true;
         if (Runtime.BuiltIns.BuiltInNames.IsErrorTypeName(name)) return true;
         // Built-in constructor types (Array/Date/Map/Set/RegExp/Promise/Buffer/etc.) —
         // without this, `typeof Array` returns `"undefined"` in compiled mode even though
