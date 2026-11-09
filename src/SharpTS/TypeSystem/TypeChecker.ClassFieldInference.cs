@@ -64,6 +64,7 @@ public partial class TypeChecker
         public int DeferredReadDepth { get; set; }
         public bool IsRetryingFields { get; set; }
         public Stmt.Field? EagerInitializer { get; set; }
+        public HashSet<string>? StaticFieldsAssignedInEarlierBlocks { get; set; }
 
         public void DeferActiveFields()
         {
@@ -231,9 +232,11 @@ public partial class TypeChecker
             return;
 
         bool laterField = field.Name.Start > initializer.Name.Start;
-        bool earlierUninitializedInstanceField = field.Name.Start < initializer.Name.Start &&
-            !field.IsStatic && field.Initializer is null && !field.HasDefiniteAssignmentAssertion;
-        if (!laterField && !earlierUninitializedInstanceField)
+        bool earlierUninitializedField = field.Name.Start < initializer.Name.Start &&
+            field.Initializer is null && !field.HasDefiniteAssignmentAssertion &&
+            (!field.IsStatic || initializer.IsStatic && target is Expr.This &&
+                scope.StaticFieldsAssignedInEarlierBlocks?.Contains(member.Lexeme) != true);
+        if (!laterField && !earlierUninitializedField)
             return;
 
         throw new TypeCheckException($"Property '{member.Lexeme}' is used before its initialization.",
