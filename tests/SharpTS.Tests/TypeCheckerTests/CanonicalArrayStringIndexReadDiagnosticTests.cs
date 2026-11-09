@@ -25,6 +25,29 @@ public sealed class CanonicalArrayStringIndexReadDiagnosticTests
         Assert.Equal(4, diagnostic.Line);
     }
 
+    [Theory]
+    [InlineData("Child<number>", "number")]
+    [InlineData("Child<number> | Child<boolean>", "number | boolean")]
+    [InlineData("Explicit", "0 | 1")]
+    public void ArraySubclassRetainsItsElementTypeForAUnionOfCanonicalKeys(string receiver, string expectedType)
+    {
+        var statements = TestHarness.ParseOrThrow($$"""
+            class Child<T> extends Array<T> {}
+            class Explicit extends Array<number> {
+                0 = 0 as const;
+                1 = 1 as const;
+            }
+            function read(child: {{receiver}}, key: '0' | '1') {
+                const correct: {{expectedType}} = child[key];
+                const wrong: string = child[key];
+            }
+            """);
+
+        var diagnostic = Assert.Single(new TypeChecker(TypeCheckerOptions.Strict).CheckWithRecovery(statements).Diagnostics);
+        Assert.Equal("TS2322", diagnostic.TsCode);
+        Assert.Equal(8, diagnostic.Line);
+    }
+
     internal const string Source = """
         const numbers: number[] = [4, 8];
         const wrongNumber: string = numbers['0'];
