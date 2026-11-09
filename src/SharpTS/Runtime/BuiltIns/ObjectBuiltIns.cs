@@ -2006,7 +2006,8 @@ public static partial class ObjectBuiltIns
             SharpTSInstance inst => inst.GetFieldNames().Cast<object?>().ToList(),
             SharpTSTypedArray typedArray => typedArray.OwnStringKeys().Cast<object?>()
                 .Concat(typedArray.GetSymbolPropertyNames()).ToList(),
-            SharpTSArray arr => arr.OwnStringKeys().Cast<object?>().ToList(),
+            SharpTSArray arr => arr.OwnStringKeys().Cast<object?>()
+                .Concat(arr.GetSymbolPropertyNames()).ToList(),
             SharpTSMath math => math.OwnStringKeys().Cast<object?>()
                 .Concat(math.GetSymbolPropertyNames().Cast<object?>()).ToList(),
             SharpTSDate date => date.OwnStringKeys().Cast<object?>()
