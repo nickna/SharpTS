@@ -5,7 +5,7 @@ namespace SharpTS.Compilation;
 public abstract partial class StateMachineExitRoutingEmitter
 {
     /// <summary>Resolves the custom async iterator or adapts the synchronous iterable.</summary>
-    protected void EmitResolveAsyncIterator(LocalBuilder iterableLocal, FieldBuilder iteratorField, FieldBuilder isCustomField)
+    protected void EmitResolveAsyncIterator(LocalBuilder iterableLocal, FieldBuilder iteratorField, FieldBuilder isCustomField, FieldBuilder nextField)
     {
         var asyncIterFnLocal = IL.DeclareLocal(Types.Object);
         IL.Emit(OpCodes.Ldloc, iterableLocal);
@@ -45,6 +45,10 @@ public abstract partial class StateMachineExitRoutingEmitter
         IL.Emit(OpCodes.Stloc, iteratorTemp);
         IL.Emit(OpCodes.Ldarg_0);
         IL.Emit(OpCodes.Ldloc, iteratorTemp);
+        IL.Emit(OpCodes.Call, Ctx.Runtime.IteratorRecords.NextMethod);
+        IL.Emit(OpCodes.Stfld, nextField);
+        IL.Emit(OpCodes.Ldarg_0);
+        IL.Emit(OpCodes.Ldloc, iteratorTemp);
         IL.Emit(OpCodes.Stfld, iteratorField);
         IL.Emit(OpCodes.Ldarg_0);
         IL.Emit(OpCodes.Ldc_I4_1);
@@ -62,7 +66,7 @@ public abstract partial class StateMachineExitRoutingEmitter
     /// <c>undefined</c> (awaited as an already-resolved value), so the reserved return-await state is
     /// still consumed and its resume label stays marked.
     /// </summary>
-    protected void EmitProduceAsyncStep(LocalBuilder resultLocal, FieldBuilder iteratorField, FieldBuilder isCustomField, bool isReturn)
+    protected void EmitProduceAsyncStep(LocalBuilder resultLocal, FieldBuilder iteratorField, FieldBuilder isCustomField, FieldBuilder nextField, bool isReturn)
     {
         var customLabel = IL.DefineLabel();
         var doneLabel = IL.DefineLabel();
@@ -129,7 +133,9 @@ public abstract partial class StateMachineExitRoutingEmitter
         {
             IL.Emit(OpCodes.Ldarg_0);
             IL.Emit(OpCodes.Ldfld, iteratorField);
-            IL.Emit(OpCodes.Call, Ctx.Runtime.IteratorProtocol.InvokeNext);
+            IL.Emit(OpCodes.Ldarg_0);
+            IL.Emit(OpCodes.Ldfld, nextField);
+            IL.Emit(OpCodes.Call, Ctx.Runtime.Invocation.Method0);
             IL.Emit(OpCodes.Stloc, resultLocal);
         }
 
