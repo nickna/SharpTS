@@ -66,7 +66,8 @@ public partial class ILCompiler
             else if (enumStmt.IsConst && member.Value != null)
             {
                 // Const enums support computed expressions - evaluate at compile time
-                var computedValue = EvaluateConstEnumExpression(member.Value, members, enumStmt.Name.Lexeme);
+                var computedValue = _typeMap.GetConstantEnumInitializer(member.Value) ??
+                    EvaluateConstEnumExpression(member.Value, members, enumStmt.Name.Lexeme);
                 if (computedValue is double d)
                 {
                     members[member.Name.Lexeme] = d;

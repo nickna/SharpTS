@@ -10,6 +10,34 @@ namespace SharpTS.Tests.SharedTests;
 public class EnumTests
 {
     [Theory, ModeData]
+    public void ConstEnumInitializersReadLexicalNumericConstants(ExecutionMode mode)
+    {
+        const string source = """
+            const source = 4;
+            const offset = source + 2;
+            const enum E { A = offset, B }
+            function read() {
+                const source = 10;
+                const enum E { A = source, B = A + 2, C }
+                return E.C;
+            }
+            console.log(E.B, read());
+            """;
+        Assert.Equal("7 13\n", TestHarness.Run(source, mode));
+    }
+
+    [Theory]
+    [InlineData("let source = 4;")]
+    [InlineData("const source: number = 4;")]
+    [InlineData("const source = Math.random();")]
+    public void ConstEnumInitializersRejectNonConstantVariables(string declaration)
+    {
+        string source = declaration + "\nconst enum E { A = source }";
+        var error = Assert.Throws<TypeCheckException>(() => TestHarness.Run(source, ExecutionMode.Interpreted));
+        Assert.Contains("const enum initializer", error.Message);
+    }
+
+    [Theory, ModeData]
     public void RegularInitializerReadsEarlierMember(ExecutionMode mode)
     {
         const string source = """

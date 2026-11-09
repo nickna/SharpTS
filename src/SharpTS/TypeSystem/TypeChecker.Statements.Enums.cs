@@ -76,7 +76,9 @@ public partial class TypeChecker
                 else if (enumStmt.IsConst)
                 {
                     // Const enums support computed values (e.g., B = A * 2)
-                    var computedValue = EvaluateConstEnumExpression(member.Value, members, enumStmt.Name.Lexeme);
+                    var computedValue = EvaluateConstEnumExpression(
+                        member.Value, members, enumStmt.Name.Lexeme, ResolveConstInitializerReference);
+                    _typeMap.SetConstantEnumInitializer(member.Value, computedValue);
                     if (computedValue is double d)
                     {
                         members[member.Name.Lexeme] = d;
@@ -185,6 +187,10 @@ public partial class TypeChecker
         DeclareValue(enumStmt.Name, enumType, mergeWithLocal: true);
         _environment.DefineType(enumStmt.Name.Lexeme, enumType);
 
+        object? ResolveConstInitializerReference(Expr expression) =>
+            expression is Expr.Variable variable && ResolveNumericEnumConstant(variable) is double number &&
+            !enumStmt.Members.Any(member => member.Name.Lexeme == variable.Name.Lexeme) ? number : null;
+
         object? ResolveInitializerReference(Expr expression)
         {
             if (expression is Expr.Variable variable && !members.ContainsKey(variable.Name.Lexeme))
@@ -228,7 +234,8 @@ public partial class TypeChecker
     /// <see cref="ConstEnumExpressionEvaluator"/>, mapping failures onto TypeCheckExceptions
     /// with the TS code each error kind has always carried here.
     /// </summary>
-    private static object EvaluateConstEnumExpression(Expr expr, Dictionary<string, object> resolvedMembers, string enumName)
+    private static object EvaluateConstEnumExpression(
+        Expr expr, Dictionary<string, object> resolvedMembers, string enumName, Func<Expr, object?> resolveReference)
     {
         return ConstEnumExpressionEvaluator.Evaluate(expr, resolvedMembers, enumName, static e =>
             new TypeCheckException($" {e.Message}", tsCode: e.Kind switch
@@ -236,6 +243,6 @@ public partial class TypeChecker
                 ConstEnumErrorKind.ForwardReference => "TS2474",
                 ConstEnumErrorKind.InvalidOperandTypes => "TS2362",
                 _ => "TS2553",
-            }));
+            }), resolveReference: resolveReference);
     }
 }

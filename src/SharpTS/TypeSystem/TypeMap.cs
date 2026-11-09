@@ -25,6 +25,10 @@ public class TypeMap
     internal IEnumerable<KeyValuePair<Expr.ClassExpr, TypeInfo.Class>> ClassExpressions => _classExprTypes;
 
     private readonly Dictionary<Expr, TypeInfo> _types = new(ReferenceEqualityComparer.Instance);
+    private readonly Dictionary<Expr, object> _constantEnumInitializers = new(ReferenceEqualityComparer.Instance);
+    internal void SetConstantEnumInitializer(Expr initializer, object value) => _constantEnumInitializers[initializer] = value;
+    internal object? GetConstantEnumInitializer(Expr initializer) => _constantEnumInitializers.GetValueOrDefault(initializer);
+
     private readonly Dictionary<Token, TypeInfo.Class> _privateInOwners = new(ReferenceEqualityComparer.Instance);
 
     internal void SetPrivateInOwner(Token name, TypeInfo.Class owner) => _privateInOwners[name] = owner;
