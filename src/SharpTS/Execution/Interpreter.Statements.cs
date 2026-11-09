@@ -121,8 +121,8 @@ public partial class Interpreter
             {
                 null => currentNumericValue ?? 0,
                 Expr.Literal literal => Evaluate(literal),
+                var expression when _typeMap?.GetConstantEnumInitializer(expression) is { } constant => constant,
                 var expression when constMembers is not null =>
-                    _typeMap?.GetConstantEnumInitializer(expression) ??
                     EvaluateConstEnumExpression(expression, constMembers, enumStmt.Name.Lexeme),
                 var expression => EvaluateEnumInitializer(expression, initializerScope!)
             };

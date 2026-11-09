@@ -74,7 +74,15 @@ public abstract partial class ExpressionEmitterBase
         bool firstMember = true;
         foreach (var member in declaration.Members)
         {
-            if (member.Value != null)
+            var stringValue = member.Value switch
+            {
+                Expr.Literal { Value: string text } => text,
+                { } initializer => Ctx.TypeMap?.GetConstantEnumInitializer(initializer) as string,
+                _ => null,
+            };
+            if (stringValue is not null)
+                EmitStringConstant(stringValue);
+            else if (member.Value != null)
             {
                 EmitExpression(member.Value);
                 EnsureBoxed();
@@ -100,7 +108,7 @@ public abstract partial class ExpressionEmitterBase
 
             // String members have forward entries only. Numeric/computed members
             // also install the reverse entry, overwriting earlier duplicate values.
-            if (member.Value is not Expr.Literal { Value: string })
+            if (stringValue is null)
             {
                 loadObject();
                 IL.Emit(OpCodes.Ldloc, value);
