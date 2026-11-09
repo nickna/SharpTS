@@ -2998,6 +2998,7 @@ public partial class RuntimeEmitter
                 runtime.Json.RequireImplementation(),
                 new JsonParseInputs(
                     runtime.Errors.CreateException,
+                    runtime.ArrayStorage.LiteralCtor,
                     runtime.Records.RequireScalars().ArrayConstructor,
                     runtime.Records.ScalarInlineCtors,
                     runtime.Records.TypedScalarCtors,

@@ -9,6 +9,7 @@ namespace SharpTS.Compilation;
 public partial class RuntimeEmitter
 {
     private readonly record struct JsonAssociatedParseHelperInputs(
+        ConstructorBuilder ArrayCtor,
         IReadOnlyDictionary<string, ConstructorBuilder> JsonTypedScalarRecordCtors,
         IReadOnlyDictionary<string, FieldBuilder> JsonTypedScalarRecordShapeFields,
         IReadOnlyDictionary<string, JsonSerializationShape.Record> JsonScalarRecordShapes
@@ -272,8 +273,7 @@ public partial class RuntimeEmitter
                 parserIl.Emit(OpCodes.Ldc_I4_1);
                 parserIl.Emit(OpCodes.Ldelem_Ref);
                 parserIl.Emit(OpCodes.Stloc, elementDescriptor);
-                parserIl.Emit(OpCodes.Newobj,
-                    _types.GetDefaultConstructor(_types.ListOfObject));
+                EmitNewJsonArray(parserIl, inputs.ArrayCtor);
                 parserIl.Emit(OpCodes.Stloc, elements);
 
                 EmitLoadCurrentChar(parserIl);

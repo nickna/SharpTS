@@ -294,7 +294,9 @@ public sealed class JsonTypedScalarRecordTests
             FindFunction(assembly, "associatedArray").Invoke(null, null)!;
         Assert.StartsWith("$JsonTypedScalarRecord", associated.GetType().Name);
         Assert.IsType<Dictionary<string, object>>(copied);
-        Assert.IsType<List<object>>(associatedArray);
+        Assert.Equal("$Array", associatedArray.GetType().Name);
+        Assert.StartsWith("$JsonTypedScalarRecord",
+            Assert.Single(Assert.IsAssignableFrom<List<object>>(associatedArray)).GetType().Name);
     }
 
     [Fact]

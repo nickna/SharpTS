@@ -5,8 +5,16 @@ namespace SharpTS.Compilation;
 
 public partial class RuntimeEmitter
 {
+    private void EmitNewJsonArray(ILGenerator il, ConstructorBuilder arrayCtor)
+    {
+        // Public guest array operations reconcile length with these dense List.Add writes.
+        EmitEmptyArguments(il);
+        il.Emit(OpCodes.Newobj, arrayCtor);
+    }
+
     private readonly record struct JsonParseInputs(
         MethodBuilder CreateException,
+        ConstructorBuilder ArrayCtor,
         ConstructorBuilder JsonScalarRecordCtor,
         IReadOnlyDictionary<int, ConstructorBuilder> JsonScalarRecordInlineCtors,
         IReadOnlyDictionary<string, ConstructorBuilder> JsonTypedScalarRecordCtors,
@@ -17,6 +25,7 @@ public partial class RuntimeEmitter
     );
 
     private readonly record struct JsonParseHelperInputs(
+        ConstructorBuilder ArrayCtor,
         ConstructorBuilder JsonScalarRecordCtor,
         IReadOnlyDictionary<int, ConstructorBuilder> JsonScalarRecordInlineCtors,
         IReadOnlyDictionary<string, ConstructorBuilder> JsonTypedScalarRecordCtors,
@@ -25,6 +34,7 @@ public partial class RuntimeEmitter
     );
 
     private readonly record struct JsonParseStaticHelperInputs(
+        ConstructorBuilder ArrayCtor,
         ConstructorBuilder JsonScalarRecordCtor,
         IReadOnlyDictionary<int, ConstructorBuilder> JsonScalarRecordInlineCtors,
         IReadOnlyDictionary<string, ConstructorBuilder> JsonTypedScalarRecordCtors,
@@ -33,6 +43,7 @@ public partial class RuntimeEmitter
     );
 
     private readonly record struct ParseValueFromReaderHelperInputs(
+        ConstructorBuilder ArrayCtor,
         ConstructorBuilder JsonScalarRecordCtor,
         IReadOnlyDictionary<int, ConstructorBuilder> JsonScalarRecordInlineCtors,
         IReadOnlyDictionary<string, ConstructorBuilder> JsonTypedScalarRecordCtors,
@@ -65,6 +76,7 @@ public partial class RuntimeEmitter
             typeBuilder,
             json,
             new JsonParseHelperInputs(
+                inputs.ArrayCtor,
                 inputs.JsonScalarRecordCtor,
                 inputs.JsonScalarRecordInlineCtors,
                 inputs.JsonTypedScalarRecordCtors,
@@ -130,6 +142,7 @@ public partial class RuntimeEmitter
         il.Emit(OpCodes.Call, EmitJsonParseStaticHelper(
             typeBuilder,
             new JsonParseStaticHelperInputs(
+                inputs.ArrayCtor,
                 inputs.JsonScalarRecordCtor,
                 inputs.JsonScalarRecordInlineCtors,
                 inputs.JsonTypedScalarRecordCtors,
@@ -148,6 +161,7 @@ public partial class RuntimeEmitter
         var parseValue = EmitParseValueFromReaderHelper(
             typeBuilder,
             new ParseValueFromReaderHelperInputs(
+                inputs.ArrayCtor,
                 inputs.JsonScalarRecordCtor,
                 inputs.JsonScalarRecordInlineCtors,
                 inputs.JsonTypedScalarRecordCtors,
@@ -158,6 +172,7 @@ public partial class RuntimeEmitter
         var tryParseAssociated = EmitJsonAssociatedParseHelper(
             typeBuilder,
             new JsonAssociatedParseHelperInputs(
+                inputs.ArrayCtor,
                 inputs.JsonTypedScalarRecordCtors,
                 inputs.JsonTypedScalarRecordShapeFields,
                 inputs.JsonScalarRecordShapes
@@ -176,13 +191,13 @@ public partial class RuntimeEmitter
 
         // One-pass parse: transcode the text to UTF-8 and walk it with a
         // System.Text.Json.Utf8JsonReader straight into our runtime graph
-        // (Dictionary<string,object?> / List<object?> / boxed double|bool|string|null),
+        // (Dictionary<string,object?> / $Array / boxed double|bool|string|null),
         // instead of building a throwaway JsonDocument DOM and then re-walking it.
         // Skipping the intermediate DOM removes a full second pass over the data and
         // its allocations. Utf8JsonReader and Encoding live in the BCL, so the emitted
         // token references System.Text.Json / System.Private.CoreLib, never SharpTS.dll
         // — standalone DLLs stay standalone. The token decoders (GetString/GetDouble)
-        // are the SAME engine JsonDocument used, so the produced values are identical.
+        // are the same ones used by JsonDocument.
         var readerType = typeof(System.Text.Json.Utf8JsonReader);
         var encodingType = typeof(System.Text.Encoding);
         var bytePoolType = typeof(System.Buffers.ArrayPool<byte>);
@@ -484,12 +499,10 @@ public partial class RuntimeEmitter
     /// List&lt;string&gt; propertyNames)</c>: a recursive
     /// descent that consumes the value at the reader's current position and returns the
     /// runtime graph node for it — <c>Dictionary&lt;string,object?&gt;</c> for objects,
-    /// <c>List&lt;object?&gt;</c> for arrays, a boxed double / bool, a string, or null.
+    /// <c>$Array</c> for arrays, a boxed double / bool, a string, or null.
     /// On entry the reader is positioned ON the value's first token; on return it is
     /// positioned on the value's last token (the matching End for containers), so the
-    /// caller's next <c>Read()</c> advances past it. Mirrors the value kinds the old
-    /// JsonDocument walker produced, so the resulting graph (consumed by the reviver and
-    /// everything downstream) is byte-for-byte the same.
+    /// caller's next <c>Read()</c> advances past it.
     /// </summary>
     private MethodBuilder EmitParseValueFromReaderHelper(
         TypeBuilder typeBuilder,
@@ -794,7 +807,7 @@ public partial class RuntimeEmitter
         il.Emit(OpCodes.Ldelem_Ref);
         il.Emit(OpCodes.Stloc, childShapeLocal);
         il.MarkLabel(arrayShapeReady);
-        il.Emit(OpCodes.Newobj, _types.GetDefaultConstructor(_types.ListOfObject));
+        EmitNewJsonArray(il, inputs.ArrayCtor);
         il.Emit(OpCodes.Stloc, listLocal);
 
         var arrLoop = il.DefineLabel();
@@ -972,8 +985,7 @@ public partial class RuntimeEmitter
                         parserIl.Emit(OpCodes.Ldc_I4_1);
                         parserIl.Emit(OpCodes.Ldelem_Ref);
                         parserIl.Emit(OpCodes.Stloc, elementDescriptorLocal);
-                        parserIl.Emit(OpCodes.Newobj,
-                            _types.GetDefaultConstructor(_types.ListOfObject));
+                        EmitNewJsonArray(parserIl, inputs.ArrayCtor);
                         parserIl.Emit(OpCodes.Stloc, elementsLocal);
 
                         parserIl.MarkLabel(arrayLoop);
