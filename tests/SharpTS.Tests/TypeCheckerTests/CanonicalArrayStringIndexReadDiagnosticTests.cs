@@ -8,6 +8,23 @@ namespace SharpTS.Tests.TypeCheckerTests;
 
 public sealed class CanonicalArrayStringIndexReadDiagnosticTests
 {
+    [Theory]
+    [InlineData("new Child<number>()")]
+    [InlineData("null! as Child<number> | Child<boolean>")]
+    public void GenericArraySubclassRetainsItsElementType(string initializer)
+    {
+        var statements = TestHarness.ParseOrThrow($$"""
+            class Child<T> extends Array<T> {}
+            const value = {{initializer}};
+            const correct: number | boolean = value['0'];
+            const wrong: string = value['0'];
+            """);
+
+        var diagnostic = Assert.Single(new TypeChecker(TypeCheckerOptions.Strict).CheckWithRecovery(statements).Diagnostics);
+        Assert.Equal("TS2322", diagnostic.TsCode);
+        Assert.Equal(4, diagnostic.Line);
+    }
+
     internal const string Source = """
         const numbers: number[] = [4, 8];
         const wrongNumber: string = numbers['0'];
