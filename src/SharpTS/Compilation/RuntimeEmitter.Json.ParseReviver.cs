@@ -15,6 +15,7 @@ public partial class RuntimeEmitter
         Type ThrownValueType,
         EmittedNumericCoercionRuntime NumericCoercion,
         MethodBuilder ObjectDefineProperty,
+        MethodBuilder SetArrayElement,
         MethodBuilder TSFunctionInvokeWithThis,
         TypeBuilder TSFunctionType,
         Type UndefinedType,
@@ -437,7 +438,14 @@ public partial class RuntimeEmitter
         il.Emit(OpCodes.Castclass, _types.ListOfObject);
         il.Emit(OpCodes.Stloc, listLocal);
 
-        // for (int i = 0; i < list.Count; i++)
+        // The reviver can change the array length while traversal is in progress.
+        var getCount = _types.GetPropertyGetter(_types.ListOfObject, "Count");
+        var lengthLocal = il.DeclareLocal(_types.Int32);
+        il.Emit(OpCodes.Ldloc, listLocal);
+        il.Emit(OpCodes.Callvirt, getCount);
+        il.Emit(OpCodes.Stloc, lengthLocal);
+
+        // for (int i = 0; i < length; i++)
         var iLocal = il.DeclareLocal(_types.Int32);
         il.Emit(OpCodes.Ldc_I4_0);
         il.Emit(OpCodes.Stloc, iLocal);
@@ -446,8 +454,7 @@ public partial class RuntimeEmitter
         var loopEnd = il.DefineLabel();
         il.MarkLabel(loopStart);
         il.Emit(OpCodes.Ldloc, iLocal);
-        il.Emit(OpCodes.Ldloc, listLocal);
-        il.Emit(OpCodes.Callvirt, _types.GetProperty(_types.ListOfObject, "Count").GetGetMethod()!);
+        il.Emit(OpCodes.Ldloc, lengthLocal);
         il.Emit(OpCodes.Bge, loopEnd);
 
         // prop = i.ToString(InvariantCulture) — spec: Internalize uses ToString(F(I))
@@ -488,7 +495,7 @@ public partial class RuntimeEmitter
         il.Emit(OpCodes.Ldloc, listLocal);
         il.Emit(OpCodes.Ldloc, iLocal);
         il.Emit(OpCodes.Ldloc, newElemLocal);
-        il.Emit(OpCodes.Callvirt, _types.GetMethod(_types.ListOfObject, "set_Item", [_types.Int32, _types.Object]));
+        il.Emit(OpCodes.Call, inputs.SetArrayElement);
         il.Emit(OpCodes.Br, afterSetLabel);
 
         il.MarkLabel(defineLabel);
