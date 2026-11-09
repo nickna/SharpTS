@@ -6,6 +6,31 @@ namespace SharpTS.Tests.SharedTests;
 public sealed class AsyncGeneratorForAwaitTests
 {
     [Theory, ModeData]
+    public void AsyncNextReceivesTheIterator(ExecutionMode mode)
+    {
+        const string source = """
+            const iterable = {
+                [Symbol.asyncIterator]() {
+                    const iterator = {
+                        async next() {
+                            await new Promise(resolve => setTimeout(resolve, 1));
+                            console.log("receiver", this === iterator);
+                            return { value: 1, done: false };
+                        }
+                    };
+                    return iterator;
+                }
+            };
+            async function* values() {
+                for await (const value of iterable) yield value;
+            }
+            values().next().then(result => console.log(result.value));
+            """;
+
+        Assert.Equal("receiver true\n1\n", TestHarness.RunUnchecked(source, mode));
+    }
+
+    [Theory, ModeData]
     public void UsesCustomAsyncIteratorAndAwaitsEarlyClose(ExecutionMode mode)
     {
         const string source = """

@@ -487,14 +487,8 @@ public partial class Interpreter
     {
         if (target is SharpTSObject obj)
         {
-            var method = obj.GetProperty(methodName);
-            if (method != null)
-            {
-                if (method is SharpTSArrowFunction arrowFunc)
-                    method = arrowFunc.Bind(obj);
-                if (method is ISharpTSCallable callable)
-                    return callable.Call(this, args);
-            }
+            if (obj.GetProperty(methodName) is ISharpTSCallable callable)
+                return FunctionBuiltIns.CallWithThis(this, callable, obj, args);
         }
         else if (target is SharpTSInstance inst)
         {
