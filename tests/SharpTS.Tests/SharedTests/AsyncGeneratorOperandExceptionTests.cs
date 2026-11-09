@@ -107,4 +107,33 @@ public sealed class AsyncGeneratorOperandExceptionTests
 
         Assert.Equal("direct\nalias\nargument\n", TestHarness.RunUnchecked(source, mode));
     }
+
+    [Theory, ModeData]
+    public void PropertyReadsReachCatchAfterSuspension(ExecutionMode mode)
+    {
+        const string source = """
+            async function* inspect() {
+                try {
+                    const value = (await new Promise(resolve => setTimeout(() => resolve(null), 1))).name;
+                    yield value;
+                } catch (error) {
+                    yield error.name;
+                }
+                try { yield null[await Promise.resolve("name")]; }
+                catch (error) { yield error.name; }
+                try {
+                    const receiver = { get name() { throw "getter"; } };
+                    yield receiver?.[await Promise.resolve("name")];
+                } catch (error) { yield error; }
+                yield (await Promise.resolve(null))?.name;
+            }
+            async function run() {
+                const iterator = inspect();
+                for (let i = 0; i < 4; i++) console.log((await iterator.next()).value);
+            }
+            run();
+            """;
+
+        Assert.Equal("TypeError\nTypeError\ngetter\nundefined\n", TestHarness.RunUnchecked(source, mode));
+    }
 }

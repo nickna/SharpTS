@@ -223,6 +223,8 @@ public class EmitterSyncTests
             "EmitBinary",           // Guard operands and coercion around a suspending operand
             "EmitPreparedStaticCall", // Spill prepared CLR arguments before guarding the invocation
             "EmitCallCompletion",   // Guard callable-value invocation after suspending argument evaluation
+            "EmitDynamicPropertyRead", // #3606: guard the property read after receiver evaluation resumes
+            "EmitIndexReadCompletion", // #3606: guard the index read after receiver and key evaluation resume
             "SpillAwaitSafeArgument", // Guard a synchronous argument evaluated alongside suspending ones
             "EmitArrowFunction",    // Display class in async generator context
             // #1105: EmitSuper is NO LONGER overridden — the old override pushed `null`, silently

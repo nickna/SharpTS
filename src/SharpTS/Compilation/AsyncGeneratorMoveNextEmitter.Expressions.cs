@@ -52,6 +52,30 @@ public partial class AsyncGeneratorMoveNextEmitter
             emit();
     }
 
+    protected override void EmitDynamicPropertyRead(Expr.Get read)
+    {
+        if (!NeedsExpressionCapture(read))
+        {
+            base.EmitDynamicPropertyRead(read);
+            return;
+        }
+
+        var receiver = SpillAwaitSafeArgument(read.Object);
+        EmitGuardedExpressionResult(() =>
+        {
+            _il.Emit(OpCodes.Ldloc, receiver);
+            EmitDynamicPropertyReadFromStack(read);
+        });
+    }
+
+    protected override void EmitIndexReadCompletion(Expr.GetIndex read, Action emit)
+    {
+        if (NeedsExpressionCapture(read))
+            EmitGuardedExpressionResult(emit);
+        else
+            base.EmitIndexReadCompletion(read, emit);
+    }
+
     protected override LocalBuilder SpillAwaitSafeArgument(Expr argument, Action? emitBoxed = null)
     {
         if (!CanCaptureExpressionException || ExprContainsSuspension(argument))
