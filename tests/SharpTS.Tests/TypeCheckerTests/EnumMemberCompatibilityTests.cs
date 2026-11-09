@@ -8,6 +8,47 @@ namespace SharpTS.Tests.TypeCheckerTests;
 public sealed class EnumMemberCompatibilityTests
 {
     [Fact]
+    public void AnEnumObjectVariableDoesNotSupplyAConstantMemberReference()
+    {
+        var statements = TestHarness.ParseOrThrow("""
+            enum Base { A = 4 }
+            const alias = Base;
+            enum Other { A = alias.A, B }
+            """);
+        var diagnostic = Assert.Single(
+            new TypeChecker(TypeCheckerOptions.Strict).CheckWithRecovery(statements).Diagnostics);
+        Assert.Equal("TS1061", diagnostic.TsCode);
+    }
+
+    [Fact]
+    public void NumericMemberReferencesStartImplicitSequences()
+    {
+        var statements = TestHarness.ParseOrThrow("""
+            enum Base { A = 4 }
+            enum Other { A = Base.A, B }
+            enum Self { Initial = 4, A = Self.Initial, B, C = Self['B'], D }
+            enum EmptyOne {}
+            enum EmptyTwo {}
+            const external: Other = Other.B;
+            const internalValue: Self = Self.D;
+            """);
+        var result = new TypeChecker(TypeCheckerOptions.Strict).CheckWithRecovery(statements);
+        Assert.Empty(result.Diagnostics);
+    }
+
+    [Fact]
+    public void OpaqueNumericMemberReferenceRequiresExplicitFollowingValue()
+    {
+        var statements = TestHarness.ParseOrThrow("""
+            enum Base { A = Math.random() }
+            enum Other { A = Base.A, B }
+            """);
+        var diagnostic = Assert.Single(
+            new TypeChecker(TypeCheckerOptions.Strict).CheckWithRecovery(statements).Diagnostics);
+        Assert.Equal("TS1061", diagnostic.TsCode);
+    }
+
+    [Fact]
     public void AShadowingMutableVariableDoesNotStartAnImplicitSequence()
     {
         var statements = TestHarness.ParseOrThrow("""

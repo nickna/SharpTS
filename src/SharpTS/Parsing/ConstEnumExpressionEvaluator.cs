@@ -90,6 +90,10 @@ internal static class ConstEnumExpressionEvaluator
             Expr.Get g when g.Object is Expr.Variable v && v.Name.Lexeme == enumName =>
                 ResolveMember(g.Name.Lexeme, resolvedMembers, error),
 
+            Expr.GetIndex { Object: Expr.Variable receiver, Index: Expr.Literal { Value: string key } }
+                when regularEnum && receiver.Name.Lexeme == enumName =>
+                ResolveMember(key, resolvedMembers, error),
+
             Expr.Variable variable when regularEnum =>
                 resolvedMembers.GetValueOrDefault(variable.Name.Lexeme) ?? resolveReference?.Invoke(variable) ??
                 throw error(new(ConstEnumErrorKind.ForwardReference,
@@ -100,6 +104,8 @@ internal static class ConstEnumExpressionEvaluator
             Expr.Unary u => EvaluateUnary(u, resolvedMembers, enumName, error, regularEnum, resolveReference),
 
             Expr.Binary b => EvaluateBinary(b, resolvedMembers, enumName, error, regularEnum, resolveReference),
+
+            Expr.Get or Expr.GetIndex when regularEnum && resolveReference?.Invoke(expression) is { } value => value,
 
             _ => throw error(new(
                 ConstEnumErrorKind.DisallowedExpression,
