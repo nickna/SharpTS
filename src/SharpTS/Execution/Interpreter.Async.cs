@@ -344,20 +344,24 @@ public partial class Interpreter
         // against the wrong scope — "Undefined variable" (#689). Capturing once and restoring after each
         // next() also hardens for-await against any custom async iterator with environment side effects.
         RuntimeEnvironment hostEnv = _environment;
+        var hostGenerator = CurrentAsyncGenerator;
         while (true)
         {
             ThrowIfExecutionCancelled();
-            // Call iterator.next()
-            var nextResult = CallMethodOnObject(asyncIterator, "next", []);
+            Task<object?> step;
+            try
+            {
+                step = ResolveAsyncIteratorResult(CallMethodOnObject(asyncIterator, "next", []));
+            }
+            finally
+            {
+                _environment = hostEnv;
+                CurrentAsyncGenerator = hostGenerator;
+            }
 
-            // Await the result if it's a promise/task
-            if (nextResult is SharpTSPromise promise)
-                nextResult = await AwaitPreservingEnvironment(NormalizePromiseForAwait(promise));
-            else if (nextResult is Task<object?> task)
-                nextResult = await AwaitPreservingEnvironment(task);
-
-            // Re-assert the loop's lexical scope (see above) before consuming the result or running the body.
-            _environment = hostEnv;
+            var nextResult = await AwaitPreservingEnvironment(QueueNativeAwait(step));
+            if (!RuntimeValue.FromBoxed(nextResult).IsObject)
+                throw new ThrowException(new SharpTSTypeError("Async iterator.next must return an object."));
 
             // Check if the result is an iterator result object
             bool done = false;
@@ -449,17 +453,7 @@ public partial class Interpreter
             // its cleanup. Await and its continuation belong to the loop owner.
             _environment = saved;
             CurrentAsyncGenerator = savedGen;
-            Task<object?> task;
-            if (result is SharpTSPromise promise)
-                task = NormalizePromiseForAwait(promise);
-            else if (result is Task<object?> nativeTask)
-                task = nativeTask;
-            else
-            {
-                var completion = new TaskCompletionSource<object?>();
-                PromiseBuiltIns.ResolveThenableIntoCapability(this, completion, result);
-                task = completion.Task;
-            }
+            var task = ResolveAsyncIteratorResult(result);
             _environment = saved;
             CurrentAsyncGenerator = savedGen;
             result = await AwaitPreservingEnvironment(QueueNativeAwait(task));
@@ -478,6 +472,18 @@ public partial class Interpreter
             _environment = saved;
             CurrentAsyncGenerator = savedGen;
         }
+    }
+
+    private Task<object?> ResolveAsyncIteratorResult(object? result)
+    {
+        if (result is SharpTSPromise promise)
+            return NormalizePromiseForAwait(promise);
+        if (result is Task<object?> task)
+            return task;
+
+        var completion = new TaskCompletionSource<object?>();
+        PromiseBuiltIns.ResolveThenableIntoCapability(this, completion, result);
+        return completion.Task;
     }
 
     /// <summary>

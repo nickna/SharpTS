@@ -100,6 +100,60 @@ public class AsyncIteratorEdgeCaseTests
     #region Error Handling
 
     [Theory, ModeData]
+    public void ForAwaitOf_RejectsPrimitiveNextResultsWithoutClosing(ExecutionMode mode)
+    {
+        const string source = """
+            function iterable(next) {
+                return {
+                    [Symbol.asyncIterator]() {
+                        return {
+                            next,
+                            return() { console.log("unexpected close"); return { done: true }; }
+                        };
+                    }
+                };
+            }
+            async function run() {
+                try {
+                    for await (const value of iterable(() => Promise.resolve(1))) {
+                        console.log("unexpected value", value);
+                        break;
+                    }
+                } catch (error) { console.log("function", error.name); }
+            }
+            const arrow = async () => {
+                try {
+                    for await (const value of iterable(() => ({
+                        then(resolve) {
+                            resolve({ then(resolveInner) { resolveInner(undefined); } });
+                        }
+                    }))) {
+                        console.log("unexpected value", value);
+                        break;
+                    }
+                } catch (error) { console.log("arrow", error.name); }
+            };
+            async function* generator() {
+                try {
+                    for await (const value of iterable(() => null)) {
+                        yield value;
+                        break;
+                    }
+                } catch (error) { yield error.name; }
+            }
+            async function main() {
+                await run();
+                await arrow();
+                console.log("generator", (await generator().next()).value);
+            }
+            main();
+            """;
+
+        Assert.Equal("function TypeError\narrow TypeError\ngenerator TypeError\n",
+            TestHarness.RunUnchecked(source, mode));
+    }
+
+    [Theory, ModeData]
     public void AsyncIterator_RejectedPromiseInNext_PropagatesError(ExecutionMode mode)
     {
         var source = """

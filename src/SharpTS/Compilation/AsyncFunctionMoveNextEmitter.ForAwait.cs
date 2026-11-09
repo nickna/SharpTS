@@ -109,13 +109,21 @@ public abstract partial class AsyncFunctionMoveNextEmitter
         IL.Emit(OpCodes.Stloc, resultLocal);
 
         // if (result.done) exit without calling return()
-        IL.Emit(OpCodes.Ldloc, resultLocal);
-        IL.Emit(OpCodes.Call, Ctx.Runtime!.IteratorProtocol.Done);
+        var runtime = Ctx.Runtime!;
+        var doneLocal = IL.DeclareLocal(Types.Boolean);
+        EmitGuardedSyncSegment(() =>
+        {
+            IL.Emit(OpCodes.Ldloc, resultLocal);
+            IL.Emit(OpCodes.Call, runtime.IteratorRecords.RequireObject);
+            IL.Emit(OpCodes.Call, runtime.IteratorProtocol.Done);
+            IL.Emit(OpCodes.Stloc, doneLocal);
+        });
+        IL.Emit(OpCodes.Ldloc, doneLocal);
         IL.Emit(OpCodes.Brtrue, endLabel);
 
         // loopVar = result.value
         IL.Emit(OpCodes.Ldloc, resultLocal);
-        IL.Emit(OpCodes.Call, Ctx.Runtime.IteratorProtocol.Value);
+        IL.Emit(OpCodes.Call, runtime.IteratorProtocol.Value);
         if (!f.IsDeclaration || f.IsVar)
         {
             SetStackUnknown();

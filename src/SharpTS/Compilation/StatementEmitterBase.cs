@@ -1359,6 +1359,7 @@ public abstract partial class StatementEmitterBase : ExpressionEmitterBase
 
             // Check if done: use GetIteratorDone
             il.Emit(OpCodes.Ldloc, resultLocal);
+            il.Emit(OpCodes.Call, runtime.IteratorRecords.RequireObject);
             il.Emit(OpCodes.Call, runtime.IteratorProtocol.Done);
             il.Emit(OpCodes.Brtrue, endLabel);
 

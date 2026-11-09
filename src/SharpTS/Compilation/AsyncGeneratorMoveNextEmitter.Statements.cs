@@ -223,13 +223,21 @@ public partial class AsyncGeneratorMoveNextEmitter
         _il.Emit(OpCodes.Stloc, resultLocal);
 
         // if (result.done) exit without calling return().
-        _il.Emit(OpCodes.Ldloc, resultLocal);
-        _il.Emit(OpCodes.Call, Ctx.Runtime!.IteratorProtocol.Done);
+        var runtime = Ctx.Runtime!;
+        var doneLocal = _il.DeclareLocal(_types.Boolean);
+        EmitCaptureTryOperation(() =>
+        {
+            _il.Emit(OpCodes.Ldloc, resultLocal);
+            _il.Emit(OpCodes.Call, runtime.IteratorRecords.RequireObject);
+            _il.Emit(OpCodes.Call, runtime.IteratorProtocol.Done);
+            _il.Emit(OpCodes.Stloc, doneLocal);
+        });
+        _il.Emit(OpCodes.Ldloc, doneLocal);
         _il.Emit(OpCodes.Brtrue, endLabel);
 
         // loopVar = result.value
         _il.Emit(OpCodes.Ldloc, resultLocal);
-        _il.Emit(OpCodes.Call, Ctx.Runtime!.IteratorProtocol.Value);
+        _il.Emit(OpCodes.Call, runtime.IteratorProtocol.Value);
         if (TryInitializeLexicalCell(f.Variable, fresh: true)) { }
         else if (varField != null)
         {
