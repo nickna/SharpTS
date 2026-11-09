@@ -1440,15 +1440,15 @@ public class StateMachineEmitHelpers
             case "log":
             case "info":
             case "debug":
-                EmitConsoleOutputMethod(call, emitArgumentBoxed, emitArgumentsWithSpread, console.Log, console.LogMultiple, toError: false);
+                EmitConsoleOutputMethod(call, emitArgumentBoxed, emitArgumentsWithSpread, console.Log, console.LogMultiple);
                 return true;
 
             case "error":
-                EmitConsoleOutputMethod(call, emitArgumentBoxed, emitArgumentsWithSpread, console.Error, console.ErrorMultiple, toError: true);
+                EmitConsoleOutputMethod(call, emitArgumentBoxed, emitArgumentsWithSpread, console.Error, console.ErrorMultiple);
                 return true;
 
             case "warn":
-                EmitConsoleOutputMethod(call, emitArgumentBoxed, emitArgumentsWithSpread, console.Warn, console.WarnMultiple, toError: true);
+                EmitConsoleOutputMethod(call, emitArgumentBoxed, emitArgumentsWithSpread, console.Warn, console.WarnMultiple);
                 return true;
 
             case "clear":
@@ -1697,32 +1697,19 @@ public class StateMachineEmitHelpers
     }
 
     /// <summary>
-    /// Emits a variadic console output method, preserving the direct zero- and one-argument paths.
+    /// Emits a variadic console output method, preserving the direct one-argument path.
     /// </summary>
     private void EmitConsoleOutputMethod(
         SharpTS.Parsing.Expr.Call call,
         Action<SharpTS.Parsing.Expr> emitArgumentBoxed,
         Action<IReadOnlyList<SharpTS.Parsing.Expr>> emitArgumentsWithSpread,
         MethodInfo singleArgMethod,
-        MethodInfo multipleArgMethod,
-        bool toError)
+        MethodInfo multipleArgMethod)
     {
-        if (call.Arguments.Any(argument => argument is SharpTS.Parsing.Expr.Spread))
+        if (call.Arguments.Count == 0 || call.Arguments.Any(argument => argument is SharpTS.Parsing.Expr.Spread))
         {
             emitArgumentsWithSpread(call.Arguments);
             _il.Emit(OpCodes.Call, multipleArgMethod);
-        }
-        else if (call.Arguments.Count == 0)
-        {
-            if (toError)
-            {
-                _il.Emit(OpCodes.Call, _types.GetProperty(_types.Console, "Error").GetMethod!);
-                _il.Emit(OpCodes.Callvirt, _types.GetMethodNoParams(_types.TextWriter, "WriteLine"));
-            }
-            else
-            {
-                _il.Emit(OpCodes.Call, _types.GetMethodNoParams(_types.Console, "WriteLine"));
-            }
         }
         else if (call.Arguments.Count == 1)
         {

@@ -448,6 +448,18 @@ public class ConsoleTests
     #region Group
 
     [Theory, ModeData]
+    public void Console_Group_IndentsEmptyLogCalls(ExecutionMode mode)
+    {
+        const string source = """
+            console.group('group');
+            console.log();
+            console.log(...[]);
+            console.groupEnd();
+            """;
+        Assert.Equal("group\n  \n  \n", TestHarness.RunUnchecked(source, mode));
+    }
+
+    [Theory, ModeData]
     public void Console_Group_IncreasesIndentation(ExecutionMode mode)
     {
         var source = """
