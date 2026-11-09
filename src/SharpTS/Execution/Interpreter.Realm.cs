@@ -656,10 +656,16 @@ public partial class Interpreter
         {
             RealmConstructor = _globalConstants[BuiltInNames.Symbol],
         };
-    internal BuiltInMethod GetArgumentsCalleeThrower() =>
-        _argumentsCalleeThrower ??= new BuiltInMethod("", 0, int.MaxValue, static (_, _, _) =>
+    internal BuiltInMethod GetArgumentsCalleeThrower()
+    {
+        if (_argumentsCalleeThrower is { } existing) return existing;
+
+        var thrower = new BuiltInMethod("", 0, int.MaxValue, static (_, _, _) =>
             throw new ThrowException(new SharpTSTypeError(
-                "Cannot access 'callee' on an unmapped arguments object"))).AsNonConstructor();
+                "Cannot access 'callee' on an unmapped arguments object"))).AsNonConstructor().MarkRealmOwned();
+        thrower.OwnPropertyStorage.Freeze();
+        return _argumentsCalleeThrower = thrower;
+    }
 
     internal Runtime.Types.SharpTSArrayPrototype GetArrayPrototype()
     {
