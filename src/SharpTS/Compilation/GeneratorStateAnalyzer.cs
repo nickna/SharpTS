@@ -330,7 +330,15 @@ public class GeneratorStateAnalyzer : AstVisitorBase
     }
     protected override void VisitInterface(Stmt.Interface stmt) { }
     protected override void VisitTypeAlias(Stmt.TypeAlias stmt) { }
-    protected override void VisitEnum(Stmt.Enum stmt) { }
+    protected override void VisitEnum(Stmt.Enum stmt)
+    {
+        if (stmt.IsAmbient || stmt.IsConst) return;
+        string name = StorageName(stmt, stmt.Name.Lexeme);
+        _declaredVariables.Add(name);
+        if (!_seenYield)
+            _variablesDeclaredBeforeYield.Add(name);
+        base.VisitEnum(stmt);
+    }
     protected override void VisitNamespace(Stmt.Namespace stmt) { }
 
     #endregion

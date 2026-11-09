@@ -249,7 +249,7 @@ internal sealed class GeneratorBlockScopeRenamer : AstVisitorBase
         {
             CurrentScope[name] = name;
         }
-        if (_loopBodyDepth > 0 && node is Stmt.Const or Stmt.Var)
+        if (_loopBodyDepth > 0 && node is Stmt.Const or Stmt.Var or Stmt.Enum)
             _loopBodyStorageNames.Add(CurrentScope[name]);
     }
 
@@ -333,6 +333,13 @@ internal sealed class GeneratorBlockScopeRenamer : AstVisitorBase
         }
     }
 
+    protected override void VisitEnum(Stmt.Enum stmt)
+    {
+        if (stmt.IsAmbient || stmt.IsConst) return;
+        PredeclareBlockBinding(stmt);
+        base.VisitEnum(stmt);
+    }
+
     #endregion
 
     #region References
@@ -413,6 +420,7 @@ internal sealed class GeneratorBlockScopeRenamer : AstVisitorBase
         {
             Stmt.Var { IsVar: false } variable => variable.Name.Lexeme,
             Stmt.Const constant => constant.Name.Lexeme,
+            Stmt.Enum { IsAmbient: false, IsConst: false } @enum => @enum.Name.Lexeme,
             Stmt.Class @class => @class.Name.Lexeme,
             Stmt.Function function => function.Name.Lexeme,
             _ => null

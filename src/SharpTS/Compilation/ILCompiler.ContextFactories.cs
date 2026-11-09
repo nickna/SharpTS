@@ -77,6 +77,7 @@ public partial class ILCompiler
             ConstEnumBindingNames = _enums.ConstBindingNames,
             EnumReverse = _enums.Reverse,
             EnumValueFields = _enums.ValueFields,
+            StaticEnumDeclarations = _enums.StaticDeclarations,
             EnumKinds = _enums.Kinds,
             // Compilation-wide services
             Runtime = _runtime,
@@ -303,6 +304,7 @@ public partial class ILCompiler
             ConstEnumBindingNames = parentCtx.ConstEnumBindingNames,
             EnumReverse = parentCtx.EnumReverse,
             EnumValueFields = parentCtx.EnumValueFields,
+            StaticEnumDeclarations = parentCtx.StaticEnumDeclarations,
             EnumKinds = parentCtx.EnumKinds,
             TopLevelStaticVars = parentCtx.TopLevelStaticVars,
             TopLevelNumericConstantValues = parentCtx.TopLevelNumericConstantValues,

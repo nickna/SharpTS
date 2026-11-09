@@ -22,7 +22,7 @@ public partial class ILCompiler
     {
         // Analyze the async function for await points and hoisted variables
         var analysis = _async.Analyzer.Analyze(funcStmt, preserveDebugBindings: EmitDebugSymbols,
-            closureAnalyzer: _closures.Analyzer);
+            closureAnalyzer: _closures.Analyzer, staticEnums: _enums.StaticDeclarations);
 
         // Module-qualify the stub/registry keys (#418) so two modules that each declare a
         // same-named async function don't clobber each other. Single-file compilation returns

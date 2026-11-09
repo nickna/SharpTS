@@ -53,6 +53,29 @@ public abstract partial class StatementEmitterBase : ExpressionEmitterBase
 
     protected virtual string GetBindingStorageName(object declaration, string sourceName) => sourceName;
 
+    protected void EmitEnumDeclaration(Stmt.Enum declaration)
+    {
+        if (declaration.IsConst || declaration.IsAmbient) return;
+        if (Ctx.StaticEnumDeclarations?.Contains(declaration) == true)
+        {
+            EmitStaticEnumDeclaration(declaration);
+            return;
+        }
+
+        Token source = declaration.Name;
+        string name = GetBindingStorageName(declaration, source.Lexeme);
+        Token storage = name == source.Lexeme ? source
+            : new Token(source.Type, name, source.Literal, source.Line, source.Start);
+        // Ordinary local declaration emission routes the binding to its local, closure cell,
+        // or state-machine field. Keep the source token when the cell has a separate storage name.
+        Token binding = Ctx.LexicalCellStorageNames.ContainsKey(source) ? source : storage;
+        EmitVarDeclaration(new Stmt.Var(binding, TypeAnnotation: null, Initializer: new Expr.ObjectLiteral([])));
+
+        var enumObject = SpillBoxed(new Expr.Variable(storage));
+        EmitEnumMembers(declaration, () => IL.Emit(OpCodes.Ldloc, enumObject));
+        _helpers.ReleaseSpill(enumObject);
+    }
+
     // GetHoistedVariableField moved to ExpressionEmitterBase for EmitStoreVariable access.
 
     /// <summary>

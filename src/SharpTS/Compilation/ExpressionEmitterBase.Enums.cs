@@ -22,14 +22,11 @@ public abstract partial class ExpressionEmitterBase
         return true;
     }
 
-    private FieldBuilder? _enumInitializerField;
+    private Action? _loadEnumInitializerObject;
     private HashSet<string>? _enumInitializerMembers;
 
-    protected void EmitEnumDeclaration(Stmt.Enum declaration)
+    protected void EmitStaticEnumDeclaration(Stmt.Enum declaration)
     {
-        if (declaration is { IsAmbient: true, IsConst: false })
-            return;
-
         if (Ctx.EnumValueFields == null || !Ctx.EnumValueFields.TryGetValue(Ctx.ResolveEnumName(declaration.Name.Lexeme), out var field))
             return;
 
@@ -42,9 +39,21 @@ public abstract partial class ExpressionEmitterBase
         IL.Emit(OpCodes.Stsfld, field);
         IL.MarkLabel(initialized);
 
-        var previousField = _enumInitializerField;
+        EmitEnumMembers(declaration, () => IL.Emit(OpCodes.Ldsfld, field));
+        if (Ctx.CurrentModulePath is { } modulePath &&
+            Ctx.ModuleExportFields?.TryGetValue(modulePath, out var exports) == true &&
+            exports.TryGetValue(declaration.Name.Lexeme, out var exportField))
+        {
+            IL.Emit(OpCodes.Ldsfld, field);
+            IL.Emit(OpCodes.Stsfld, exportField);
+        }
+    }
+
+    protected void EmitEnumMembers(Stmt.Enum declaration, Action loadObject)
+    {
+        var previousLoadObject = _loadEnumInitializerObject;
         var previousMembers = _enumInitializerMembers;
-        _enumInitializerField = field;
+        _loadEnumInitializerObject = loadObject;
         _enumInitializerMembers = [];
         var value = IL.DeclareLocal(Types.Object);
         bool firstMember = true;
@@ -69,7 +78,7 @@ public abstract partial class ExpressionEmitterBase
                 IL.Emit(OpCodes.Box, Types.Double);
             }
             IL.Emit(OpCodes.Stloc, value);
-            IL.Emit(OpCodes.Ldsfld, field);
+            loadObject();
             IL.Emit(OpCodes.Ldstr, member.Name.Lexeme);
             IL.Emit(OpCodes.Ldloc, value);
             IL.Emit(OpCodes.Call, Ctx.Runtime!.ObjectWrite.Property);
@@ -78,7 +87,7 @@ public abstract partial class ExpressionEmitterBase
             // also install the reverse entry, overwriting earlier duplicate values.
             if (member.Value is not Expr.Literal { Value: string })
             {
-                IL.Emit(OpCodes.Ldsfld, field);
+                loadObject();
                 IL.Emit(OpCodes.Ldloc, value);
                 IL.Emit(OpCodes.Call, Ctx.Runtime.StringCoercion.ToJsString);
                 IL.Emit(OpCodes.Ldstr, member.Name.Lexeme);
@@ -87,23 +96,16 @@ public abstract partial class ExpressionEmitterBase
             _enumInitializerMembers.Add(member.Name.Lexeme);
             firstMember = false;
         }
-        _enumInitializerField = previousField;
+        _loadEnumInitializerObject = previousLoadObject;
         _enumInitializerMembers = previousMembers;
-        if (Ctx.CurrentModulePath is { } modulePath &&
-            Ctx.ModuleExportFields?.TryGetValue(modulePath, out var exports) == true &&
-            exports.TryGetValue(declaration.Name.Lexeme, out var exportField))
-        {
-            IL.Emit(OpCodes.Ldsfld, field);
-            IL.Emit(OpCodes.Stsfld, exportField);
-        }
         SetStackUnknown();
     }
 
     protected bool TryEmitEnumInitializerMember(string name)
     {
-        if (_enumInitializerField == null || _enumInitializerMembers?.Contains(name) != true)
+        if (_loadEnumInitializerObject == null || _enumInitializerMembers?.Contains(name) != true)
             return false;
-        IL.Emit(OpCodes.Ldsfld, _enumInitializerField);
+        _loadEnumInitializerObject();
         IL.Emit(OpCodes.Ldstr, name);
         IL.Emit(OpCodes.Call, Ctx.Runtime!.ObjectRead.Property);
         SetStackUnknown();

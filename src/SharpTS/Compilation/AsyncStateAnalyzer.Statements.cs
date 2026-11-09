@@ -230,7 +230,13 @@ public partial class AsyncStateAnalyzer
 
     protected override void VisitInterface(Stmt.Interface stmt) { }
     protected override void VisitTypeAlias(Stmt.TypeAlias stmt) { }
-    protected override void VisitEnum(Stmt.Enum stmt) { }
+    protected override void VisitEnum(Stmt.Enum stmt)
+    {
+        if (stmt.IsAmbient || stmt.IsConst) return;
+        if (_staticEnums?.Contains(stmt) != true && _closureAnalyzer?.IsLoopBodyCellDeclaration(stmt.Name) != true)
+            _declaredVariables.Add(StorageName(stmt, stmt.Name.Lexeme));
+        base.VisitEnum(stmt);
+    }
     protected override void VisitNamespace(Stmt.Namespace stmt) { }
 
     #endregion

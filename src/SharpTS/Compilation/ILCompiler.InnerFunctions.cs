@@ -946,6 +946,9 @@ public partial class ILCompiler
                 case Stmt.Var { IsVar: false } lexical:
                     lexicalTokens[lexical.Name.Lexeme] = lexical.Name;
                     break;
+                case Stmt.Enum { IsAmbient: false, IsConst: false } @enum when !ctx.IsModuleTopLevel:
+                    lexicalTokens[@enum.Name.Lexeme] = @enum.Name;
+                    break;
                 case Stmt.Class declaration when _runtimeClassDeclarations.ContainsKey(declaration):
                     lexicalTokens[declaration.Name.Lexeme] = declaration;
                     break;

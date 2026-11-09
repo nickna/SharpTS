@@ -3435,6 +3435,9 @@ public partial class ILEmitter
                 case Stmt.Var { IsVar: false, IsDeclare: false } lexical:
                     names.Add(lexical.Name.Lexeme);
                     break;
+                case Stmt.Enum { IsAmbient: false, IsConst: false } @enum when !_ctx.IsModuleTopLevel:
+                    names.Add(@enum.Name.Lexeme);
+                    break;
                 case Stmt.Class declaration when _ctx.RuntimeClassDeclarations?.ContainsKey(declaration) == true
                     && !_ctx.RuntimeClassLexicalShadows.Contains(declaration):
                     names.Add(declaration.Name.Lexeme);
