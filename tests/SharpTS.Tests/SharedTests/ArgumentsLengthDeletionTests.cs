@@ -30,17 +30,21 @@ public sealed class ArgumentsLengthDeletionTests
             TestHarness.RunUnchecked(source, mode));
     }
 
-    [Fact]
-    public void CompiledOwnNamesOmitTheDeletedLength()
+    [Theory, ModeData]
+    public void OwnNamesReflectThePresenceOfLength(ExecutionMode mode)
     {
         const string source = """
             function inspect() {
+                "use strict";
+                console.log(Object.getOwnPropertyNames(arguments).filter(k => k === "length").length);
                 delete arguments["length"];
-                console.log(Object.getOwnPropertyNames(arguments).includes("length"));
+                console.log(Object.hasOwn(arguments, "length"), Object.getOwnPropertyNames(arguments).includes("length"));
+                arguments.length = 2;
+                console.log(Object.getOwnPropertyNames(arguments).filter(k => k === "length").length);
             }
             inspect(1);
             """;
 
-        Assert.Equal("false\n", TestHarness.RunUnchecked(source, ExecutionMode.Compiled));
+        Assert.Equal("1\nfalse false\n1\n", TestHarness.RunUnchecked(source, mode));
     }
 }
