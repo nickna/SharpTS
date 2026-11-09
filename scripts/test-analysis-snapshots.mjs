@@ -83,7 +83,17 @@ async function diagnosticsAfter(client, start, predicate, { document = "main.ts"
   throw new Error(`Expected diagnostics were not published: ${JSON.stringify(client.notifications.slice(start))}`);
 }
 
+async function closeClient(client, phase, succeeded) {
+  try {
+    await client.close({ force: !succeeded });
+  } catch (error) {
+    if (succeeded) throw error;
+    console.error(`${phase} cleanup after test failure:`, error);
+  }
+}
+
 const full = new LspStdioClient("dotnet", [server, "--language-features", "full", "--diagnostics", "all"], { cwd: workspace });
+let fullSucceeded = false;
 try {
   const caps = await initialize(full);
   assert.ok(caps.definitionProvider && caps.referencesProvider && caps.renameProvider);
@@ -172,7 +182,8 @@ try {
     renameEdits: 3, closedDiskErrors: errors.length, dirtyOverlayAndClose: "passed", watching: "registered",
     members: { concurrentDefinitions: 4, inheritedFieldAndMethod: "passed", utf16CrLfRanges: "passed", refusedAnyAndStructural: "passed",
       dirtyVersions: [1, 2, 3], removedMemberRefused: true, closeRestoredDisk: true, cancelSent, cancellationOutcome, freshAfterCancellation: true } };
-} finally { await full.close(); }
+  fullSucceeded = true;
+} finally { await closeClient(full, "Full language", fullSucceeded); }
 
 const traceInterop = process.platform === "win32";
 const interop = new LspStdioClient("dotnet", [server, "--language-features", "interop-only"], {
@@ -180,7 +191,7 @@ const interop = new LspStdioClient("dotnet", [server, "--language-features", "in
   trace: traceInterop,
   env: traceInterop ? { ...process.env, SHARPTS_LSP_HOVER_TRACE: "1" } : undefined,
 });
-let hoverTimedOut = false;
+let interopSucceeded = false;
 try {
   const caps = await initialize(interop);
   for (const key of ["definitionProvider", "referencesProvider", "renameProvider", "documentSymbolProvider"])
@@ -196,9 +207,9 @@ try {
   assert.equal(refusedMember.error?.code, -32601);
   assert.ok(!interop.registeredMethods.some((method) => /formatting/i.test(method)));
   report.interopOnly = { generalCapabilitiesAbsent: true, clrHover: "passed", definitionError: -32601, memberDefinitionError: -32601 };
+  interopSucceeded = true;
 } catch (error) {
   if (traceInterop && error instanceof LspRequestTimeoutError && error.method === "textDocument/hover") {
-    hoverTimedOut = true;
     try {
       // Capture the live server before cleanup. The request has already failed its deadline.
       const stack = await captureLspTimeoutStack(interop.livePid);
@@ -217,6 +228,6 @@ try {
     }
   }
   throw error;
-} finally { await interop.close({ force: hoverTimedOut }); }
+} finally { await closeClient(interop, "Interop only", interopSucceeded); }
 await writeFile(join(workspace, "result.json"), JSON.stringify(report, null, 2) + "\n");
 console.log(JSON.stringify(report, null, 2));
