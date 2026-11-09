@@ -363,30 +363,8 @@ public partial class Interpreter
             if (!RuntimeValue.FromBoxed(nextResult).IsObject)
                 throw new ThrowException(new SharpTSTypeError("Async iterator.next must return an object."));
 
-            // Check if the result is an iterator result object
-            bool done = false;
-            object? value = null;
-
-            if (nextResult is SharpTSObject resultObj)
-            {
-                var doneVal = resultObj.GetProperty("done");
-                done = IsTruthy(doneVal);
-                value = resultObj.GetProperty("value");
-            }
-            else if (nextResult is SharpTSIteratorResult iterResult)
-            {
-                done = iterResult.Done;
-                value = iterResult.Value;
-            }
-            // Plain Dictionary<string, object?> — used by runtime helpers like
-            // Web Streams iterator results returned from ReadableStream.read().
-            else if (nextResult is IDictionary<string, object?> dict)
-            {
-                if (dict.TryGetValue("done", out var d)) done = IsTruthy(d);
-                if (dict.TryGetValue("value", out var v)) value = v;
-            }
-
-            if (done) break;
+            if (IsTruthy(GetPropertyValue(nextResult, "done"))) break;
+            object? value = GetPropertyValue(nextResult, "value");
 
             ExecutionResult result;
             try

@@ -97,6 +97,36 @@ public class AsyncIteratorEdgeCaseTests
 
     #endregion
 
+    [Theory, ModeData]
+    public void ForAwaitOf_ReadsResultAccessorsInOrder(ExecutionMode mode)
+    {
+        const string source = """
+            let count = 0;
+            const resultPrototype = {
+                get done() { console.log("done"); return (this as any).step > 1; },
+                get value() { console.log("value"); return (this as any).step + 41; }
+            };
+            const iterable: any = {
+                [Symbol.asyncIterator]() {
+                    return {
+                        next() {
+                            if (count > 1) return Promise.resolve({ done: true });
+                            const result = Object.create(resultPrototype);
+                            result.step = ++count;
+                            return Promise.resolve(result);
+                        }
+                    };
+                }
+            };
+            async function run() {
+                for await (const value of iterable) console.log(value);
+            }
+            run();
+            """;
+
+        Assert.Equal("done\nvalue\n42\ndone\n", TestHarness.RunUnchecked(source, mode));
+    }
+
     #region Error Handling
 
     [Theory, ModeData]
