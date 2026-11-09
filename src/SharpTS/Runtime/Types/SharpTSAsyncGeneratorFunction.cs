@@ -19,6 +19,7 @@ public class SharpTSAsyncGeneratorFunction : ISharpTSGeneratorFunctionValue, IRe
     GeneratorFunctionProperties ISharpTSGeneratorFunctionValue.FunctionProperties => _functionProperties;
     private readonly Stmt.Function _declaration;
     private readonly RuntimeEnvironment _closure;
+    private SharpTSAsyncGeneratorFunction? _selfReference;
     private readonly int _arity;
     internal bool IsStaticMethod => _declaration.IsStatic;
     internal SharpTSClass? PrivateOwner { get; set; }
@@ -68,37 +69,31 @@ public class SharpTSAsyncGeneratorFunction : ISharpTSGeneratorFunctionValue, IRe
         // Match the resolver's one class receiver scope without adding a
         // parent scope to ordinary or lifted object generator declarations.
         bool isClassMethod = PrivateOwner != null || _declaration.IsStatic;
-        bool ownsStrictThis = isClassMethod || _declaration.IsPrivate;
-        bool hasStrictDirective = _declaration.Body != null && DirectivePrologue.HasUseStrict(_declaration.Body);
+        bool hasStrictDirective = DirectivePrologue.HasUseStrict(_declaration.Body);
         RuntimeEnvironment closure = isClassMethod
             ? new RuntimeEnvironment(_closure, strictMode: true) : _closure;
         RuntimeEnvironment environment = new(closure,
-            strictMode: ownsStrictThis || hasStrictDirective ? true : null)
+            strictMode: isClassMethod || _declaration.IsPrivate || hasStrictDirective ? true : null)
             { PrivateClass = PrivateOwner, StaticSuper = _declaration.IsStatic };
         environment.NewTarget = RuntimeValue.Undefined;
         environment.ConstructionFrame = null;
 
-        // #775: an async generator expression / object method binds its own dynamic `this`. The bound
-        // receiver (or globalThis for a plain call) is defined in the generator's invocation environment,
-        // NOT a parent scope, so a captured enclosing-function local keeps its lexical scope distance.
+        // Every generator declaration binds its own receiver without changing the closure chain.
         if (_thisBound)
         {
             environment.Define("this", _boundThis);
             if (_boundSuper != null)
                 environment.Define("super", _boundSuper);
         }
-        else if (ownsStrictThis || hasStrictDirective)
+        else
         {
-            environment.Define("this", SharpTSUndefined.Instance);
-        }
-        else if (_declaration.HasDynamicThis)
-        {
-            environment.Define("this", interpreter.GlobalThis); // sloppy-mode `this` = globalThis (#775)
+            environment.Define("this",
+                environment.IsStrictMode ? SharpTSUndefined.Instance : (object?)interpreter.GlobalThis);
         }
 
         // Snapshot before defaults and before the lazy async generator is returned.
         if (ArgumentsUsage.UsesArguments(_declaration))
-            environment.Define("arguments", SharpTSArguments.Create(arguments, interpreter,
+            environment.Define("arguments", SharpTSArguments.Create(arguments, interpreter, _selfReference ?? this,
                 environment, _declaration.Parameters, _declaration.Body));
         // Bind parameters to arguments
         ParameterBinder.Bind(_declaration.Parameters ?? [], arguments, environment, interpreter, _declaration.Body);
@@ -128,6 +123,7 @@ public class SharpTSAsyncGeneratorFunction : ISharpTSGeneratorFunctionValue, IRe
 
     private SharpTSAsyncGeneratorFunction ShareObjectState(SharpTSAsyncGeneratorFunction bound)
     {
+        bound._selfReference = _selfReference ?? this;
         bound._functionProperties = _functionProperties;
         bound.PrivateOwner = PrivateOwner;
         bound._computedName = _computedName;
@@ -207,7 +203,7 @@ public class SharpTSAsyncArrowGeneratorFunction : ISharpTSGeneratorFunctionValue
         else if (HasOwnThis)
             environment.Define("this", interpreter.GlobalThis); // sloppy-mode `this` = globalThis (#775)
         if (HasOwnThis && ArgumentsUsage.UsesArguments(_declaration))
-            environment.Define("arguments", SharpTSArguments.Create(arguments, interpreter,
+            environment.Define("arguments", SharpTSArguments.Create(arguments, interpreter, _selfReference ?? this,
                 environment, _declaration.Parameters, _declaration.BlockBody));
         ParameterBinder.Bind(_declaration.Parameters, arguments, environment, interpreter, _declaration.BlockBody);
         var prepared = ParameterBinder.PrepareBody(_declaration.Parameters, _declaration.BlockBody, environment, interpreter);

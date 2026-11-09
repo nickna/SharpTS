@@ -6,6 +6,49 @@ namespace SharpTS.Tests.SharedTests;
 public sealed class JSONReviverPropertyTests
 {
     [Theory, ModeData]
+    public void ReviverPreservesTheDistinctionBetweenUndefinedAndNullInstanceFields(ExecutionMode mode)
+    {
+        const string source = """
+            class Replacement { missing = undefined; present = null; }
+            const result = JSON.parse('{"first":0,"last":{}}', function (key, value) {
+                if (key === 'first') this.last = new Replacement();
+                if (key === 'missing' || key === 'present')
+                    console.log(key, value === undefined, value === null);
+                return value;
+            });
+            console.log(Object.hasOwn(result.last, 'missing'), Object.hasOwn(result.last, 'present'));
+            """;
+        Assert.Equal("missing true false\npresent false true\nfalse true\n", TestHarness.RunUnchecked(source, mode));
+    }
+
+    [Theory, ModeData]
+    public void ReviverReadsAndReplacesAnInjectedArrayIndexGetter(ExecutionMode mode)
+    {
+        const string source = """
+            let reads = 0;
+            let writes = 0;
+            const result = JSON.parse('[1,2]', function (key, value) {
+                if (key === '0') {
+                    const holder = this;
+                    Object.defineProperty(this, '1', {
+                        get() { reads++; return this === holder ? 7 : 99; },
+                        set() { writes++; },
+                        configurable: true, enumerable: true
+                    });
+                }
+                if (key === '1') {
+                    console.log(value);
+                    return 8;
+                }
+                return value;
+            });
+            const descriptor = Object.getOwnPropertyDescriptor(result, '1');
+            console.log(reads, writes, result[1], descriptor.value);
+            """;
+        Assert.Equal("7\n1 0 8 8\n", TestHarness.RunUnchecked(source, mode));
+    }
+
+    [Theory, ModeData]
     public void ReviverReadsAndReplacesAnInjectedGetter(ExecutionMode mode)
     {
         const string source = """

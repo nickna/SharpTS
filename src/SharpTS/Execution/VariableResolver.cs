@@ -440,14 +440,23 @@ public class VariableResolver : AstVisitorBase
 
     protected override void VisitEnum(Stmt.Enum stmt)
     {
+        if (stmt is { IsAmbient: true, IsConst: false })
+            return;
+
         Declare(stmt.Name.Lexeme);
         Define(stmt.Name.Lexeme);
-        // Visit member initializers
+        if (stmt.IsConst)
+            return;
+
+        BeginScope();
         foreach (var member in stmt.Members)
         {
             if (member.Value != null)
                 Visit(member.Value);
+            Declare(member.Name.Lexeme);
+            Define(member.Name.Lexeme);
         }
+        EndScope();
     }
 
     protected override void VisitNamespace(Stmt.Namespace stmt)

@@ -117,6 +117,31 @@ public sealed class CliArraySubclassTests
     }
 
     [Theory]
+    [InlineData("0", false)]
+    [InlineData("'0'", true)]
+    [InlineData("index", true)]
+    public void GenericArraySubclassChecksNumericWrites(string index, bool noLib)
+    {
+        string source = $$"""
+            class Parent<T> extends Array<T> {}
+            class Child<U> extends Parent<U> {}
+            declare const index: number;
+            const value = new Child<number>();
+            value[{{index}}] = 42;
+            """;
+        using var directory = CliTestHelper.CreateTempDirectory();
+        string options = $"--no-tsconfig --strict --noEmit {(noLib ? "--noLib" : "")}";
+        var path = directory.CreateFile("valid.ts", source);
+        var result = CliTestHelper.RunCli($"{options} \"{path}\"", directory.Path);
+        Assert.True(result.ExitCode == 0, result.StandardOutput + result.StandardError);
+
+        var invalid = directory.CreateFile("invalid.ts", source + $"\nvalue[{index}] = 'wrong';");
+        result = CliTestHelper.RunCli($"{options} \"{invalid}\"", directory.Path);
+        Assert.NotEqual(0, result.ExitCode);
+        Assert.Contains("array element type 'number'", result.StandardOutput + result.StandardError);
+    }
+
+    [Theory]
     [InlineData("const Child = class extends Array<number> {}; const value = new Child();")]
     [InlineData("const Child = class<T> extends Array<T> {}; const value = new Child<number>();")]
     public void DeclarationLibrariesKeepTheElementTypeInInheritedArrayMethods(string declaration)

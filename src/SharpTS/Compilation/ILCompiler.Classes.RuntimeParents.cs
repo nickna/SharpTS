@@ -130,8 +130,7 @@ public partial class ILCompiler
             : _classes.Builders.GetValueOrDefault(GetDefinitionContext().ResolveClassName(leaf));
         bool needsLexicalSuper = !_nativeAotProjectOutput && !expressionOwnedParent
             && ((leaf == "Array" && nominalParent is null)
-                || (_typeMap.GetClassType(declaration) is null && declaration.SuperclassExpr is Expr.Variable
-                    && NominalClassMayReplaceReceiver(nominalParent)))
+                || (declaration.SuperclassExpr is Expr.Variable && nominalParent is not null))
             && declaration.Decorators is not { Count: > 0 }
             && !declaration.Methods.Any(method => method.Decorators is { Count: > 0 }
                 || method.Parameters.Any(parameter => parameter.Decorators is { Count: > 0 }))
@@ -481,6 +480,7 @@ public partial class ILCompiler
             il.Emit(OpCodes.Stloc, arguments);
             il.Emit(OpCodes.Ldloc, arguments);
             il.Emit(OpCodes.Ldc_I4_1);
+            il.Emit(OpCodes.Ldnull);
             il.Emit(OpCodes.Call, _runtime.Arguments.Initialize);
             SeedCapturedLocal("arguments", arguments);
         }

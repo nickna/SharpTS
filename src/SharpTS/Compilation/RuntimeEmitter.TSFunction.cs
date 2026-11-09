@@ -47,7 +47,75 @@ public partial class RuntimeEmitter
         var threadStaticCtor = typeof(ThreadStaticAttribute).GetConstructor(Type.EmptyTypes)!;
         field.SetCustomAttribute(threadStaticCtor, CustomAttributeEncoder.EmptyBlob);
         arguments.CurrentField = field;
+        var callee = typeBuilder.DefineField("_currentCallee", _types.Object,
+            FieldAttributes.Assembly | FieldAttributes.Static);
+        callee.SetCustomAttribute(threadStaticCtor, CustomAttributeEncoder.EmptyBlob);
+        arguments.CurrentCallee = callee;
         typeBuilder.CreateType();
+    }
+
+    private void EmitFindArgumentsCallee(TypeBuilder typeBuilder, EmittedArgumentsRuntime arguments, FieldBuilder methodField)
+    {
+        var method = typeBuilder.DefineMethod("FindArgumentsCallee",
+            MethodAttributes.Assembly | MethodAttributes.Static, _types.Object, [_types.MethodInfo]);
+        arguments.FindCallee = method;
+        var il = method.GetILGenerator();
+        var current = il.DeclareLocal(typeBuilder);
+        var absent = il.DefineLabel();
+        il.Emit(OpCodes.Ldsfld, arguments.CurrentCallee);
+        il.Emit(OpCodes.Castclass, typeBuilder);
+        il.Emit(OpCodes.Stloc, current);
+        il.Emit(OpCodes.Ldloc, current);
+        il.Emit(OpCodes.Brfalse, absent);
+        // A reflected invocation can make direct calls of its own. Only the
+        // wrapper for this method is the current function's callee.
+        il.Emit(OpCodes.Ldloc, current);
+        il.Emit(OpCodes.Ldfld, methodField);
+        il.Emit(OpCodes.Ldarg_0);
+        il.Emit(OpCodes.Callvirt, _types.GetMethod(_types.Object, "Equals", _types.Object));
+        il.Emit(OpCodes.Brfalse, absent);
+        il.Emit(OpCodes.Ldloc, current);
+        il.Emit(OpCodes.Ret);
+        il.MarkLabel(absent);
+        il.Emit(OpCodes.Ldnull);
+        il.Emit(OpCodes.Ret);
+    }
+
+    private LocalBuilder? EmitStageArgumentsCallee(ILGenerator il, EmittedArgumentsRuntime arguments)
+    {
+        if (!_features.UsesArguments) return null;
+        var previous = il.DeclareLocal(_types.Object);
+        il.Emit(OpCodes.Ldsfld, arguments.CurrentCallee);
+        il.Emit(OpCodes.Stloc, previous);
+        il.Emit(OpCodes.Ldarg_0);
+        il.Emit(OpCodes.Stsfld, arguments.CurrentCallee);
+        return previous;
+    }
+
+    private static void EmitRestoreArgumentsCallee(ILGenerator il, EmittedArgumentsRuntime arguments, LocalBuilder? previous)
+    {
+        if (previous is null) return;
+        il.Emit(OpCodes.Ldloc, previous);
+        il.Emit(OpCodes.Stsfld, arguments.CurrentCallee);
+    }
+
+    private void EmitCalleeScopedInvocation(ILGenerator il, EmittedArgumentsRuntime arguments, Action invoke)
+    {
+        var previous = EmitStageArgumentsCallee(il, arguments);
+        if (previous is null)
+        {
+            invoke();
+            return;
+        }
+
+        var result = il.DeclareLocal(_types.Object);
+        il.BeginExceptionBlock();
+        invoke();
+        il.Emit(OpCodes.Stloc, result);
+        il.BeginFinallyBlock();
+        EmitRestoreArgumentsCallee(il, arguments, previous);
+        il.EndExceptionBlock();
+        il.Emit(OpCodes.Ldloc, result);
     }
 
     /// <summary>
@@ -245,6 +313,7 @@ public partial class RuntimeEmitter
         // Fields
         var targetField = typeBuilder.DefineField("_target", _types.Object, FieldAttributes.Private);
         var methodField = typeBuilder.DefineField("_method", _types.MethodInfo, FieldAttributes.Private);
+        EmitFindArgumentsCallee(typeBuilder, inputs.Arguments, methodField);
         // Expression evaluation can supply a distinct function property identity.
         // Declaration views retain the existing MethodInfo identity when unset.
         functionValues.PropertyIdentityField = typeBuilder.DefineField(
@@ -900,12 +969,15 @@ public partial class RuntimeEmitter
         var spanCtorFromArray = _types.GetConstructor(spanOfObject, [typeof(object[])])!;
         var invokerInvokeSpan = _types.GetMethod(_types.MethodInvoker, "Invoke", [_types.Object, spanOfObject])!;
 
-        invokeIL.Emit(OpCodes.Ldarg_0);
-        invokeIL.Emit(OpCodes.Ldfld, invokerField);
-        invokeIL.Emit(OpCodes.Ldloc, invokeTargetLocal);
-        invokeIL.Emit(OpCodes.Ldloc, adjustedArgsLocal);
-        invokeIL.Emit(OpCodes.Newobj, spanCtorFromArray);
-        invokeIL.Emit(OpCodes.Callvirt, invokerInvokeSpan);
+        EmitCalleeScopedInvocation(invokeIL, inputs.Arguments, () =>
+        {
+            invokeIL.Emit(OpCodes.Ldarg_0);
+            invokeIL.Emit(OpCodes.Ldfld, invokerField);
+            invokeIL.Emit(OpCodes.Ldloc, invokeTargetLocal);
+            invokeIL.Emit(OpCodes.Ldloc, adjustedArgsLocal);
+            invokeIL.Emit(OpCodes.Newobj, spanCtorFromArray);
+            invokeIL.Emit(OpCodes.Callvirt, invokerInvokeSpan);
+        });
         EmitNormalizeTSFunctionReturn(invokeIL, returnsVoidField, inputs.UndefinedInstance);
         invokeIL.Emit(OpCodes.Ret);
 
@@ -1112,17 +1184,20 @@ public partial class RuntimeEmitter
         var iwtSpanOfObject = _types.MakeGenericType(typeof(Span<>), typeof(object));
         var iwtSpanCtor = _types.GetConstructor(iwtSpanOfObject, [typeof(object[])])!;
         var iwtInvokerInvokeSpan = _types.GetMethod(_types.MethodInvoker, "Invoke", [_types.Object, iwtSpanOfObject])!;
-        iwt.Emit(OpCodes.Ldarg_0);
-        iwt.Emit(OpCodes.Ldfld, invokerField);
-        iwt.Emit(OpCodes.Ldloc, iwtInvokeTargetLocal);
-        iwt.Emit(OpCodes.Ldloc, iwtAdjustedArgsLocal);
-        iwt.Emit(OpCodes.Newobj, iwtSpanCtor);
-        iwt.Emit(OpCodes.Callvirt, iwtInvokerInvokeSpan);
+        EmitCalleeScopedInvocation(iwt, inputs.Arguments, () =>
+        {
+            iwt.Emit(OpCodes.Ldarg_0);
+            iwt.Emit(OpCodes.Ldfld, invokerField);
+            iwt.Emit(OpCodes.Ldloc, iwtInvokeTargetLocal);
+            iwt.Emit(OpCodes.Ldloc, iwtAdjustedArgsLocal);
+            iwt.Emit(OpCodes.Newobj, iwtSpanCtor);
+            iwt.Emit(OpCodes.Callvirt, iwtInvokerInvokeSpan);
+        });
         EmitNormalizeTSFunctionReturn(iwt, returnsVoidField, inputs.UndefinedInstance);
         iwt.Emit(OpCodes.Ret);
 
         EmitTSFunctionInvokeConstructed(typeBuilder, functionValues, inputs.FunctionAttributes,
-            inputs.Arguments.CurrentField, methodField, targetField, expectsThisField, currentThisField,
+            inputs.Arguments, methodField, targetField, expectsThisField, currentThisField,
             adjustArgsMethod, EmitConvertArguments, erasedInvokerTarget, inputs.Policy.NativeConstructedGenericResolver,
             inputs.Policy.NativeConstructedBodies?.FindCore);
 

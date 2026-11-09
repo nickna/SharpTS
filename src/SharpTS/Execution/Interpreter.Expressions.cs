@@ -1247,9 +1247,13 @@ public partial class Interpreter
             ThrowCannotReadProperty(obj, key);
         }
 
-        if (obj is SharpTSEnum enumValue && index is string or double)
+        if (obj is SharpTSEnum enumValue)
         {
-            string key = index as string ?? ToPropertyKeyString(index);
+            object propertyKey = ToPropertyKey(index);
+            if (propertyKey is SharpTSSymbol symbol)
+                return RuntimeValue.FromBoxed(GetSymbolPropertyValue(GetObjectPrototype(), symbol, enumValue));
+
+            string key = (string)propertyKey;
             return enumValue.HasMember(key)
                 ? enumValue.GetMemberRV(key)
                 : RuntimeValue.FromBoxed(enumValue.FindReverseProperty(key)

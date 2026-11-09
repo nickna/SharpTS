@@ -1012,6 +1012,19 @@ public class ArrayMethodTests
     #region ES2023 FindLast/FindLastIndex
 
     [Theory, ModeData]
+    public void Array_FindLast_ReturnsValuePassedToMutatingPredicate(ExecutionMode mode)
+    {
+        const string source = """
+            const array = [1];
+            console.log(array.findLast((value, index) => {
+                array[index] = 2;
+                return true;
+            }), array[0]);
+            """;
+        Assert.Equal("1 2\n", TestHarness.RunUnchecked(source, mode));
+    }
+
+    [Theory, ModeData]
     public void Array_FindLast_ReturnsLastMatchingElement(ExecutionMode mode)
     {
         var source = """

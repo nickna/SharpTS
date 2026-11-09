@@ -1271,8 +1271,6 @@ public partial class RuntimeEmitter
         var indexLocal = il.DeclareLocal(_types.Int32);
         var arrayIndexLocal = il.DeclareLocal(_types.UInt32);
         var elementValueLocal = il.DeclareLocal(_types.Object);
-        var argumentsReceiver = _features.UsesArguments ? il.DeclareLocal(arguments.Type) : null;
-        var argumentsLength = argumentsReceiver is not null ? il.DeclareLocal(_types.Boolean) : null;
         il.Emit(OpCodes.Ldarg_0);
         il.Emit(OpCodes.Isinst, arrayStorage.Type);
         il.Emit(OpCodes.Brfalse, checkListLabel);
@@ -1304,27 +1302,6 @@ public partial class RuntimeEmitter
         il.Emit(OpCodes.Br, elementDescriptorLabel);
 
         il.MarkLabel(checkListLabel);
-        if (argumentsReceiver is not null)
-        {
-            var notArgumentsLength = il.DefineLabel();
-            il.Emit(OpCodes.Ldarg_0);
-            il.Emit(OpCodes.Isinst, arguments.Type);
-            il.Emit(OpCodes.Stloc, argumentsReceiver);
-            il.Emit(OpCodes.Ldloc, argumentsReceiver);
-            il.Emit(OpCodes.Brfalse, notArgumentsLength);
-            il.Emit(OpCodes.Ldloc, propNameLocal);
-            il.Emit(OpCodes.Ldstr, "length");
-            il.Emit(OpCodes.Call, _types.StringOpEquality);
-            il.Emit(OpCodes.Brfalse, notArgumentsLength);
-            il.Emit(OpCodes.Ldloc, argumentsReceiver);
-            il.Emit(OpCodes.Ldfld, arguments.LengthField);
-            il.Emit(OpCodes.Stloc, elementValueLocal);
-            il.Emit(OpCodes.Ldc_I4_1);
-            il.Emit(OpCodes.Stloc, argumentsLength!);
-            il.Emit(OpCodes.Br, elementDescriptorLabel);
-            il.MarkLabel(notArgumentsLength);
-        }
-
         // Arguments and legacy List carriers retain their dense semantics.
         il.Emit(OpCodes.Ldarg_0);
         il.Emit(OpCodes.Isinst, _types.ListOfObject);
@@ -1338,6 +1315,11 @@ public partial class RuntimeEmitter
         il.Emit(OpCodes.Ldstr, "length");
         il.Emit(OpCodes.Call, _types.GetMethod(_types.String, "op_Equality", _types.String, _types.String));
         il.Emit(OpCodes.Brfalse, notLengthLabel);
+
+        // An arguments object without a stored length descriptor has no own length.
+        il.Emit(OpCodes.Ldarg_0);
+        il.Emit(OpCodes.Isinst, arguments.Type);
+        il.Emit(OpCodes.Brtrue, returnNullLabel);
 
         // Return length descriptor: { value: length, writable: true, enumerable: false, configurable: false }
         il.Emit(OpCodes.Newobj, _types.DictionaryStringObjectCtor);
@@ -1431,10 +1413,7 @@ public partial class RuntimeEmitter
             il.Emit(OpCodes.Ldarg_0);
             il.Emit(OpCodes.Call, descriptorStorage.IsFrozen);
         });
-        if (argumentsLength is null)
-            EmitDescriptorBoolField(il, resultDictLocal, "enumerable", true);
-        else
-            EmitFlag("enumerable", () => il.Emit(OpCodes.Ldloc, argumentsLength));
+        EmitDescriptorBoolField(il, resultDictLocal, "enumerable", true);
         EmitFlag("configurable", () =>
         {
             il.Emit(OpCodes.Ldarg_0);

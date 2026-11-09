@@ -112,6 +112,7 @@ public partial class Interpreter
         Stmt.TryCatch s => VisitTryCatch(s),
         Stmt.Throw s => VisitThrow(s),
         Stmt.TypeAlias s => VisitTypeAlias(s),
+        Stmt.Enum { IsAmbient: true, IsConst: false } => ExecutionResult.Success(),
         Stmt.Enum s => VisitEnum(s),
         Stmt.Namespace s => VisitNamespace(s),
         Stmt.ImportAlias s => VisitImportAlias(s),

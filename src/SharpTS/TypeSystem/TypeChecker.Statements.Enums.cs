@@ -1,5 +1,4 @@
 using SharpTS.TypeSystem.Exceptions;
-using System.Collections.Frozen;
 using SharpTS.Parsing;
 
 namespace SharpTS.TypeSystem;
@@ -14,6 +13,7 @@ public partial class TypeChecker
         var declarationBinding = RegisterValueDeclaration(enumStmt.Name, mergeWithLocal: true);
 
         Dictionary<string, object> members = [];
+        Dictionary<string, object> knownMembers = [];
         double? currentNumericValue = null;
         bool hasNumeric = false;
         bool hasString = false;
@@ -21,6 +21,7 @@ public partial class TypeChecker
 
         foreach (var member in enumStmt.Members)
         {
+            bool isKnown = true;
             if (member.Value != null)
             {
                 // For literals, do normal type checking
@@ -74,10 +75,8 @@ public partial class TypeChecker
                 }
                 else
                 {
-                    // Non-const enums may use arbitrary computed numeric expressions. Their value
-                    // is produced at runtime, so the checker only needs to validate the expression
-                    // type and remember that subsequent initializer-free members cannot continue a
-                    // compile-time numeric sequence.
+                    // Non-const enums may use arbitrary computed numeric expressions, but
+                    // only a known constant can start an implicit numeric sequence.
                     // An enum initializer is still visited for its resulting type, but failures in
                     // a subexpression (for example an arbitrary string index that resolves to
                     // `any`) are not themselves enum-declaration diagnostics. Treat those as any
@@ -115,25 +114,28 @@ public partial class TypeChecker
                     }
 
                     var knownValue = ConstEnumExpressionEvaluator.EvaluateKnownMember(
-                        member.Value, members, enumStmt.Name.Lexeme, isConst: false);
-                    members[member.Name.Lexeme] = knownValue is double number ? number : double.NaN;
-                    currentNumericValue = null;
+                        member.Value, knownMembers, enumStmt.Name.Lexeme, isConst: false);
+                    double value = knownValue is double number ? number : double.NaN;
+                    members[member.Name.Lexeme] = value;
+                    isKnown = knownValue is double;
+                    autoIncrementActive = isKnown;
+                    currentNumericValue = autoIncrementActive ? value + 1 : null;
                     hasNumeric = true;
-                    autoIncrementActive = false;
                 }
             }
             else if (enumStmt.IsAmbient && !enumStmt.IsConst)
             {
                 members[member.Name.Lexeme] = double.NaN;
                 hasNumeric = true;
+                isKnown = false;
             }
             else
             {
                 // No initializer - use auto-increment if active
                 if (!autoIncrementActive)
                 {
-                    throw new TypeCheckException($" Enum member '{member.Name.Lexeme}' must have an initializer " +
-                                        "(string enum members cannot use auto-increment).", tsCode: "TS1061");
+                    throw new TypeCheckException(
+                        $" Enum member '{member.Name.Lexeme}' must have an initializer.", tsCode: "TS1061");
                 }
 
                 currentNumericValue ??= 0;
@@ -141,12 +143,15 @@ public partial class TypeChecker
                 hasNumeric = true;
                 currentNumericValue++;
             }
+
+            if (isKnown)
+                knownMembers[member.Name.Lexeme] = members[member.Name.Lexeme];
         }
 
         // Determine enum kind
         EnumKind kind = ClassifyEnumMembers(hasNumeric, hasString);
 
-        var enumType = new TypeInfo.Enum(enumStmt.Name.Lexeme, members.ToFrozenDictionary(), kind, enumStmt.IsConst)
+        var enumType = new TypeInfo.Enum(enumStmt.Name.Lexeme, members, kind, enumStmt.IsConst)
         {
             DeclarationBinding = declarationBinding
         };

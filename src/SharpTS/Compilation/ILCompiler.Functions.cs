@@ -883,8 +883,7 @@ public partial class ILCompiler
     {
         if (!ReferencesArgumentsIdentifier(function.Body, function.Parameters)) return;
         _functions.CapturingArguments.Add(name);
-        if (_runtime?.FunctionAttributes.CapturesArgumentsCtor != null)
-            method.SetCustomAttribute(_runtime.FunctionAttributes.CapturesArgumentsCtor, CustomAttributeEncoder.EmptyBlob);
+        MarkArgumentContextEntry(method);
     }
 
     /// <summary>
@@ -914,7 +913,8 @@ public partial class ILCompiler
                 parameters,
                 paramTypes,
                 argumentOffset,
-                publishedArgsLeadingSkip);
+                publishedArgsLeadingSkip,
+                body);
         }
 
         emitter.EmitDefaultParameters(parameters, argumentOffset, paramTypes, body,
@@ -953,7 +953,8 @@ public partial class ILCompiler
         List<Stmt.Parameter> parameters,
         Type[] paramTypes,
         int argBase,
-        int publishedArgsLeadingSkip = 0)
+        int publishedArgsLeadingSkip = 0,
+        List<Stmt>? body = null)
     {
         var listType = ctx.Types.ListOfObject;
         var argsLocal = il.DeclareLocal(listType);
@@ -1081,37 +1082,18 @@ public partial class ILCompiler
 
         il.MarkLabel(doneLabel);
 
-        // Snapshot the JS-visible length on $Arguments after population. The
-        // enumerable ctor already does this (sets _length = base.Count), but
-        // the declared-params and slow-path branches above call the empty
-        // ctor and then push elements via Add — we need to update _length to
-        // match the post-population Count. Set it now so subsequent
-        // arguments[N] = v writes (which DO extend list.Count) don't move the
-        // JS-visible length per ECMA-262 sloppy-arguments spec.
-        var argsLengthField = ctx.Runtime?.Arguments.LengthField;
-        if (argsLengthField != null)
+        if (ctx.Runtime is { } runtime)
         {
-            // Only $Arguments has _length — use Isinst to skip the field set
-            // when argsLocal happens to be plain List<object> (e.g., during
-            // tests where ArgumentsType isn't wired). Defensive; in production
-            // the local is always $Arguments-typed.
-            var skipLengthSetLabel = il.DefineLabel();
-            il.Emit(OpCodes.Ldloc, argsLocal);
-            il.Emit(OpCodes.Isinst, ctx.Runtime!.Arguments.Type);
-            il.Emit(OpCodes.Brfalse, skipLengthSetLabel);
-            il.Emit(OpCodes.Ldloc, argsLocal);
-            il.Emit(OpCodes.Castclass, ctx.Runtime!.Arguments.Type);
-            il.Emit(OpCodes.Ldloc, argsLocal);
-            il.Emit(OpCodes.Callvirt, ctx.Types.GetPropertyGetter(ctx.Types.ListOfObject, "Count"));
-            il.Emit(OpCodes.Conv_R8);
-            il.Emit(OpCodes.Box, ctx.Types.Double);
-            il.Emit(OpCodes.Stfld, argsLengthField);
             il.Emit(OpCodes.Ldloc, argsLocal);
             bool unmapped = ctx.IsStrictMode || parameters.Any(parameter =>
-                parameter.IsRest || parameter.DefaultValue is not null || parameter.DestructuredProperties is not null);
+                parameter.IsRest || parameter.DefaultValue is not null || parameter.DestructuredProperties is not null)
+                || Runtime.ParameterBinder.ParameterInitializers(body) is not null;
             il.Emit(unmapped ? OpCodes.Ldc_I4_1 : OpCodes.Ldc_I4_0);
-            il.Emit(OpCodes.Call, ctx.Runtime.Arguments.Initialize);
-            il.MarkLabel(skipLengthSetLabel);
+            if (unmapped)
+                il.Emit(OpCodes.Ldnull);
+            else
+                EmitArgumentsCallee(il, ctx, runtime);
+            il.Emit(OpCodes.Call, runtime.Arguments.Initialize);
         }
 
         ctx.Locals.RegisterLocal("arguments", argsLocal);

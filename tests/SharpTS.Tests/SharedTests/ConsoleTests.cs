@@ -37,6 +37,19 @@ public class ConsoleTests
     }
 
     [Theory, ModeData]
+    public void Console_Log_ExpandsSpreadArguments(ExecutionMode mode)
+    {
+        const string source = """
+            const values = ["a", "b"];
+            console.log(...values);
+            console.log("first", ..."xy", ...values, "last");
+            console.log(...[]);
+            """;
+
+        Assert.Equal("a b\nfirst x y a b last\n\n", TestHarness.RunUnchecked(source, mode));
+    }
+
+    [Theory, ModeData]
     public void Console_Log_NoArguments_PrintsNewline(ExecutionMode mode)
     {
         var source = """

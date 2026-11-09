@@ -12,6 +12,19 @@ namespace SharpTS.Tests.SharedTests;
 public class StringRelationalComparisonTests
 {
     [Theory, ModeData]
+    public void RelationalComparisonsConvertObjectsInSourceOrder(ExecutionMode mode)
+    {
+        const string source = """
+            const object = { valueOf() { console.log('convert'); return 2; } };
+            console.log(1 < object);
+            const left = { valueOf() { console.log('left'); return '2'; } };
+            const right = { valueOf() { console.log('right'); return '10'; } };
+            console.log(left > right);
+            """;
+        Assert.Equal("convert\ntrue\nleft\nright\ntrue\n", TestHarness.RunUnchecked(source, mode));
+    }
+
+    [Theory, ModeData]
     public void LessThan_Strings(ExecutionMode mode)
     {
         var source = """

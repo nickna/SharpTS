@@ -6,6 +6,7 @@ namespace SharpTS.Compilation;
 public partial class RuntimeEmitter
 {
     private readonly record struct HasOwnPropertyHelperInputs(
+        Type ArgumentsType,
         EmittedArrayStorageRuntime ArrayStorage,
         EmittedDescriptorStorageRuntime DescriptorStorage,
         EmittedErrorRuntime Errors,
@@ -441,10 +442,15 @@ public partial class RuntimeEmitter
         il.Emit(OpCodes.Ldarg_0);
         il.Emit(OpCodes.Isinst, _types.ListOfObject);
         il.Emit(OpCodes.Brfalse, notList);
+        var checkListIndex = il.DefineLabel();
+        il.Emit(OpCodes.Ldarg_0);
+        il.Emit(OpCodes.Isinst, inputs.ArgumentsType);
+        il.Emit(OpCodes.Brtrue, checkListIndex);
         il.Emit(OpCodes.Ldloc, nameLocal);
         il.Emit(OpCodes.Ldstr, "length");
         il.Emit(OpCodes.Call, _types.GetMethod(_types.String, "op_Equality", _types.String, _types.String));
         il.Emit(OpCodes.Brtrue, trueLabel);
+        il.MarkLabel(checkListIndex);
         var listNotIndexLabel = il.DefineLabel();
         var listReceiverIsPlain = il.DefineLabel();
         il.Emit(OpCodes.Ldarg_0);

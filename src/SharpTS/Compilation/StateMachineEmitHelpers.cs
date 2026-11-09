@@ -1428,6 +1428,7 @@ public class StateMachineEmitHelpers
     public bool TryEmitConsoleMethod(
         SharpTS.Parsing.Expr.Call call,
         Action<SharpTS.Parsing.Expr> emitArgumentBoxed,
+        Action<IReadOnlyList<SharpTS.Parsing.Expr>> emitArgumentsWithSpread,
         EmittedConsoleRuntime console)
     {
         var methodName = GetConsoleMethodName(call);
@@ -1439,16 +1440,15 @@ public class StateMachineEmitHelpers
             case "log":
             case "info":
             case "debug":
-                // info and debug are aliases for log - emit inline since TryEmitConsoleLog only checks for "log"
-                EmitConsoleLogInline(call, emitArgumentBoxed, console.Log, console.LogMultiple);
+                EmitConsoleOutputMethod(call, emitArgumentBoxed, emitArgumentsWithSpread, console.Log, console.LogMultiple, toError: false);
                 return true;
 
             case "error":
-                EmitConsoleOutputMethod(call, emitArgumentBoxed, console.Error, console.ErrorMultiple);
+                EmitConsoleOutputMethod(call, emitArgumentBoxed, emitArgumentsWithSpread, console.Error, console.ErrorMultiple, toError: true);
                 return true;
 
             case "warn":
-                EmitConsoleOutputMethod(call, emitArgumentBoxed, console.Warn, console.WarnMultiple);
+                EmitConsoleOutputMethod(call, emitArgumentBoxed, emitArgumentsWithSpread, console.Warn, console.WarnMultiple, toError: true);
                 return true;
 
             case "clear":
@@ -1697,49 +1697,32 @@ public class StateMachineEmitHelpers
     }
 
     /// <summary>
-    /// Helper to emit console output methods (error, warn) with single/multiple argument support.
+    /// Emits a variadic console output method, preserving the direct zero- and one-argument paths.
     /// </summary>
     private void EmitConsoleOutputMethod(
         SharpTS.Parsing.Expr.Call call,
         Action<SharpTS.Parsing.Expr> emitArgumentBoxed,
+        Action<IReadOnlyList<SharpTS.Parsing.Expr>> emitArgumentsWithSpread,
         MethodInfo singleArgMethod,
-        MethodInfo multipleArgMethod)
+        MethodInfo multipleArgMethod,
+        bool toError)
     {
-        if (call.Arguments.Count == 0)
+        if (call.Arguments.Any(argument => argument is SharpTS.Parsing.Expr.Spread))
         {
-            // No arguments - just print newline to stderr
-            _il.Emit(OpCodes.Call, _types.GetProperty(_types.Console, "Error").GetMethod!);
-            _il.Emit(OpCodes.Callvirt, _types.GetMethodNoParams(_types.TextWriter, "WriteLine"));
-        }
-        else if (call.Arguments.Count == 1)
-        {
-            emitArgumentBoxed(call.Arguments[0]);
-            _il.Emit(OpCodes.Call, singleArgMethod);
-        }
-        else
-        {
-            // Multiple arguments (spilled for await-safety)
-            EmitArgsArrayFromLocals(SpillArgumentsToLocals(call, emitArgumentBoxed));
+            emitArgumentsWithSpread(call.Arguments);
             _il.Emit(OpCodes.Call, multipleArgMethod);
         }
-
-        _il.Emit(OpCodes.Ldnull);
-        SetStackUnknown();
-    }
-
-    /// <summary>
-    /// Helper to emit console.log/info/debug calls directly.
-    /// </summary>
-    private void EmitConsoleLogInline(
-        SharpTS.Parsing.Expr.Call call,
-        Action<SharpTS.Parsing.Expr> emitArgumentBoxed,
-        MethodInfo singleArgMethod,
-        MethodInfo multipleArgMethod)
-    {
-        if (call.Arguments.Count == 0)
+        else if (call.Arguments.Count == 0)
         {
-            // No arguments - just print newline
-            _il.Emit(OpCodes.Call, _types.GetMethodNoParams(_types.Console, "WriteLine"));
+            if (toError)
+            {
+                _il.Emit(OpCodes.Call, _types.GetProperty(_types.Console, "Error").GetMethod!);
+                _il.Emit(OpCodes.Callvirt, _types.GetMethodNoParams(_types.TextWriter, "WriteLine"));
+            }
+            else
+            {
+                _il.Emit(OpCodes.Call, _types.GetMethodNoParams(_types.Console, "WriteLine"));
+            }
         }
         else if (call.Arguments.Count == 1)
         {
@@ -1748,7 +1731,6 @@ public class StateMachineEmitHelpers
         }
         else
         {
-            // Multiple arguments (spilled for await-safety)
             EmitArgsArrayFromLocals(SpillArgumentsToLocals(call, emitArgumentBoxed));
             _il.Emit(OpCodes.Call, multipleArgMethod);
         }

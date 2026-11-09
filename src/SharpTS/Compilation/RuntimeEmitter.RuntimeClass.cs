@@ -922,6 +922,7 @@ public partial class RuntimeEmitter
             typeBuilder,
             runtime.ObjectOwnProperties,
             new HasOwnPropertyHelperInputs(
+                runtime.Arguments.Type,
                 runtime.ArrayStorage,
                 runtime.DescriptorStorage,
                 runtime.Errors,
@@ -1168,8 +1169,6 @@ public partial class RuntimeEmitter
             typeBuilder,
             runtime.ObjectRead,
             new GetListPropertyInputs(
-                runtime.Arguments.LengthField,
-                runtime.Arguments.Type,
                 runtime.ArrayOperations,
                 _features.UsesArrayPrototypeMutation,
                 runtime.DescriptorStorage,
@@ -1312,7 +1311,6 @@ public partial class RuntimeEmitter
                 runtime.ClassDefinitions,
                 runtime.ClassInitialization,
                 runtime.Abort,
-                runtime.Arguments.LengthField,
                 runtime.Arguments.Type,
                 runtime.ArrayBuffer,
                 runtime.ArrayOperations,
@@ -1435,7 +1433,6 @@ public partial class RuntimeEmitter
             new SetPropertyInputs(
                 runtime.ClassDefinitions,
                 runtime.Abort,
-                runtime.Arguments.LengthField,
                 runtime.Arguments.Type,
                 runtime.ArrayStorage,
                 runtime.TypedArrays,
@@ -1476,6 +1473,7 @@ public partial class RuntimeEmitter
                 runtime.ClassDefinitions,
                 runtime.ArrayOperations,
                 runtime.ArrayStorage,
+                runtime.Arguments.Type,
                 runtime.TypedArrays,
                 runtime.FunctionBindings.AnyType,
                 runtime.FunctionBindings.BoundType,
@@ -1815,7 +1813,8 @@ public partial class RuntimeEmitter
         );
         runtime.IteratorWrappers.CompleteEmission();
         EmitArrayIteratorType(moduleBuilder, runtime.ArrayOperations,
-            new ArrayIteratorInputs(runtime.Arguments, runtime.ObjectRead.Index, runtime.NumericCoercion));
+            new ArrayIteratorInputs(runtime.Arguments, runtime.ObjectRead.Property, runtime.ObjectRead.Index,
+                runtime.NumericCoercion));
         if (runtime.Map is not null)
             EmitMapCollectionIteratorType(moduleBuilder, runtime.CollectionKeys, runtime.RequireMap());
         if (runtime.Set is not null)
@@ -1857,7 +1856,7 @@ public partial class RuntimeEmitter
         EmitGetLength(
             typeBuilder,
             runtime.ObjectRead,
-            new GetLengthInputs(runtime.Arguments.LengthField, runtime.Arguments.Type,
+            new GetLengthInputs(runtime.Arguments.Type,
                 runtime.ArrayStorage, runtime.NumericCoercion)
         );
         EmitGetElement(
@@ -1881,6 +1880,7 @@ public partial class RuntimeEmitter
             typeBuilder,
             runtime.ObjectKeys,
             new GetOwnPropertyNamesInputs(
+                runtime.Arguments.Type,
                 runtime.ArrayStorage,
                 runtime.Booleans,
                 runtime.DescriptorStorage,
@@ -2771,6 +2771,7 @@ public partial class RuntimeEmitter
         // helpers above. Must come AFTER all the Array* MethodBuilders are
         // defined.
         EmitArrayPrototypePopulate(typeBuilder, runtime);
+        EmitArgumentsLength(runtime);
         EmitArgumentsInitializer(runtime);
         // Object.prototype populate body — uses HasOwnPropertyHelper +
         // IsPrototypeOfHelper which are emitted before GetFunctionMethod above.

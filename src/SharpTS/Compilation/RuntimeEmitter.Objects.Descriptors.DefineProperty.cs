@@ -13,7 +13,6 @@ public partial class RuntimeEmitter
 
     private readonly record struct DefinePropertyExistingDescriptorInputs(
         EmittedArrayStorageRuntime ArrayStorage,
-        EmittedArgumentsRuntime Arguments,
         EmittedDescriptorStorageRuntime DescriptorStorage,
         MethodBuilder GetOwnPropertyDescriptor,
         MethodBuilder GetProperty,
@@ -170,27 +169,6 @@ public partial class RuntimeEmitter
             existingDescLocal,
             skipSynthExistingLabel
         );
-
-        var notArgumentsLength = il.DefineLabel();
-        il.Emit(OpCodes.Ldarg_0);
-        il.Emit(OpCodes.Isinst, inputs.Arguments.Type);
-        il.Emit(OpCodes.Brfalse, notArgumentsLength);
-        il.Emit(OpCodes.Ldloc, propNameLocal);
-        il.Emit(OpCodes.Ldstr, "length");
-        il.Emit(OpCodes.Call, _types.GetMethod(_types.String, "op_Equality", _types.String, _types.String));
-        il.Emit(OpCodes.Brfalse, notArgumentsLength);
-        il.Emit(OpCodes.Newobj, inputs.DescriptorStorage.DescriptorConstructor);
-        il.Emit(OpCodes.Dup);
-        il.Emit(OpCodes.Ldarg_0);
-        il.Emit(OpCodes.Castclass, inputs.Arguments.Type);
-        il.Emit(OpCodes.Ldfld, inputs.Arguments.LengthField);
-        il.Emit(OpCodes.Callvirt, inputs.DescriptorStorage.DescriptorValue.GetSetMethod()!);
-        il.Emit(OpCodes.Dup);
-        il.Emit(OpCodes.Ldc_I4_0);
-        il.Emit(OpCodes.Callvirt, inputs.DescriptorStorage.DescriptorEnumerable.GetSetMethod()!);
-        il.Emit(OpCodes.Stloc, existingDescLocal);
-        il.Emit(OpCodes.Br, skipSynthExistingLabel);
-        il.MarkLabel(notArgumentsLength);
 
         EmitDefinePropertyExistingFunctionPrototype(
             il,

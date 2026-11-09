@@ -2,6 +2,7 @@ using SharpTS.Modules;
 using SharpTS.Parsing;
 using SharpTS.Runtime;
 using SharpTS.Runtime.BuiltIns;
+using SharpTS.Runtime.Exceptions;
 using SharpTS.Runtime.Types;
 using System.Collections.Frozen;
 
@@ -615,6 +616,7 @@ public partial class Interpreter
     private Runtime.Types.SharpTSBigIntPrototype? _bigIntPrototype;
     private Runtime.Types.SharpTSSymbolPrototype? _symbolPrototype;
     private Runtime.Types.SharpTSArrayPrototype? _arrayPrototype;
+    private BuiltInMethod? _argumentsCalleeThrower;
     private Runtime.Types.SharpTSObject? _arrayBufferPrototype;
     private Runtime.Types.SharpTSFunctionPrototype? _functionPrototype;
     private Runtime.Types.SharpTSObjectPrototype? _objectPrototype;
@@ -654,6 +656,11 @@ public partial class Interpreter
         {
             RealmConstructor = _globalConstants[BuiltInNames.Symbol],
         };
+    internal BuiltInMethod GetArgumentsCalleeThrower() =>
+        _argumentsCalleeThrower ??= new BuiltInMethod("", 0, int.MaxValue, static (_, _, _) =>
+            throw new ThrowException(new SharpTSTypeError(
+                "Cannot access 'callee' on an unmapped arguments object"))).AsNonConstructor();
+
     internal Runtime.Types.SharpTSArrayPrototype GetArrayPrototype()
     {
         if (_arrayPrototype is null)

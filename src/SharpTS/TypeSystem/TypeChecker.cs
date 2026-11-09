@@ -1812,21 +1812,24 @@ public partial class TypeChecker
             return;
 
         Dictionary<string, object> members = [];
-        double nextValue = 0;
+        Dictionary<string, object> knownMembers = [];
+        double? nextValue = 0;
         bool opaqueImplicitMembers = enumStmt.IsAmbient && !enumStmt.IsConst;
 
         foreach (var member in enumStmt.Members)
         {
-            object value = member.Value is { } initializer
-                ? ConstEnumExpressionEvaluator.EvaluateKnownMember(initializer, members, enumStmt.Name.Lexeme, enumStmt.IsConst)
-                : opaqueImplicitMembers ? double.NaN : nextValue;
-            members[member.Name.Lexeme] = value;
-            nextValue = value is double number ? number + 1 : double.NaN;
+            object? value = member.Value is { } initializer
+                ? ConstEnumExpressionEvaluator.EvaluateKnownMember(initializer, knownMembers, enumStmt.Name.Lexeme, enumStmt.IsConst)
+                : opaqueImplicitMembers ? null : nextValue;
+            members[member.Name.Lexeme] = value ?? double.NaN;
+            if (value is not null)
+                knownMembers[member.Name.Lexeme] = value;
+            nextValue = value is double number ? number + 1 : null;
         }
 
         var enumType = new TypeInfo.Enum(
             enumStmt.Name.Lexeme,
-            members.ToFrozenDictionary(),
+            members,
             ClassifyEnumMembers(members.Values.Any(value => value is double), members.Values.Any(value => value is string)),
             enumStmt.IsConst
         ) { DeclarationBinding = RegisterValueDeclaration(enumStmt.Name) };

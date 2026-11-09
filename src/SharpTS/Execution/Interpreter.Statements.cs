@@ -107,6 +107,7 @@ public partial class Interpreter
     private void ExecuteEnumDeclaration(Stmt.Enum enumStmt)
     {
         Dictionary<string, object> members = [];
+        var initializerScope = enumStmt.IsConst ? null : new RuntimeEnvironment(_environment);
         double? currentNumericValue = null;
         bool hasNumeric = false;
         bool hasString = false;
@@ -128,8 +129,7 @@ public partial class Interpreter
                 }
                 else
                 {
-                    // Regular enum - evaluate normally
-                    value = Evaluate(member.Value);
+                    value = EvaluateEnumInitializer(member.Value, initializerScope!);
                 }
 
                 if (value is double d)
@@ -152,6 +152,9 @@ public partial class Interpreter
                 hasNumeric = true;
                 currentNumericValue++;
             }
+
+            if (initializerScope is not null && members.TryGetValue(member.Name.Lexeme, out var resolved))
+                initializerScope.Define(member.Name.Lexeme, resolved);
         }
 
         if (enumStmt.IsConst)
@@ -171,6 +174,11 @@ public partial class Interpreter
 
             _environment.Define(enumStmt.Name.Lexeme, new SharpTSEnum(enumStmt.Name.Lexeme, members, kind));
         }
+    }
+
+    private object? EvaluateEnumInitializer(Expr initializer, RuntimeEnvironment scope)
+    {
+        using (PushScope(scope)) return Evaluate(initializer);
     }
 
     /// <summary>

@@ -1040,15 +1040,16 @@ public class ModuleResolver
                     if (refModule.IsDeclarationFile)
                         RegisterAmbientModuleDeclarations([refModule]);
 
-                    bool isSourceModule = !refModule.IsScript && !refModule.IsDeclarationFile;
-                    if (isSourceModule && (refModule.IsCommonJs || !HasExplicitEsModuleExtension(refPath) ||
+                    // An earlier import can give a marker-free file module scope.
+                    // Validate the reference against the source itself.
+                    if (!refModule.IsDeclarationFile && (refModule.IsCommonJs ||
                         !ScriptDetector.IsScriptFile(refModule.Statements)))
                     {
                         throw new Exception($"Type Error: /// <reference path=\"{pathRef.Value}\"> cannot reference a module file. Referenced file '{refPath}' contains import/export statements.");
                     }
 
                     module.PathReferences.Add(pathRef);
-                    AddTypeDependency(module, refModule, referenceOnly: isSourceModule);
+                    AddTypeDependency(module, refModule, referenceOnly: !refModule.IsDeclarationFile);
                 }
             }
 

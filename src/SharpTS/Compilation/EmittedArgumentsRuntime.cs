@@ -37,13 +37,11 @@ public sealed class EmittedArgumentsRuntime
         internal set => SetHandle(ref _enumerableCtor, value);
     }
 
-    private FieldBuilder? _lengthField;
-    /// <summary>$Arguments._length — JS-visible length (per ECMA-262 sloppy
-    /// arguments, "length" doesn't auto-update on out-of-range indexed sets).</summary>
-    public FieldBuilder LengthField
+    private MethodBuilder? _defineLength;
+    public MethodBuilder DefineLength
     {
-        get => Require(_lengthField);
-        internal set => SetHandle(ref _lengthField, value);
+        get => Require(_defineLength);
+        internal set => SetHandle(ref _defineLength, value);
     }
 
     private FieldBuilder? _currentField;
@@ -60,6 +58,20 @@ public sealed class EmittedArgumentsRuntime
     {
         get => Require(_currentField);
         internal set => SetHandle(ref _currentField, value);
+    }
+
+    private FieldBuilder? _currentCallee;
+    public FieldBuilder CurrentCallee
+    {
+        get => Require(_currentCallee);
+        internal set => SetHandle(ref _currentCallee, value);
+    }
+
+    private MethodBuilder? _findCallee;
+    public MethodBuilder FindCallee
+    {
+        get => Require(_findCallee);
+        internal set => SetHandle(ref _findCallee, value);
     }
 
     private static T Require<T>(T? handle, [CallerMemberName] string name = "") where T : class =>
@@ -87,8 +99,10 @@ public sealed class EmittedArgumentsRuntime
         _ = Initialize;
         _ = DefaultCtor;
         _ = EnumerableCtor;
-        _ = LengthField;
+        _ = DefineLength;
         _ = CurrentField;
+        _ = CurrentCallee;
+        _ = FindCallee;
         IsComplete = true;
     }
 }

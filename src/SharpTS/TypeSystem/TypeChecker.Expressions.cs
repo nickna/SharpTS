@@ -3295,8 +3295,14 @@ public partial class TypeChecker
         }
 
         if (anyInferredMethodReturnResolved && fieldsWithUnresolvedGetters is { Count: > 0 })
-            anyInferredFieldTypeResolved |= RevalidateClassFieldInitializers(
+        {
+            bool resolvedFields = RevalidateClassFieldInitializers(
                 classExpr, classExpr.Fields, mutableClass, classTypeEnv, classTypeParams, fieldsWithUnresolvedGetters);
+            anyInferredFieldTypeResolved |= resolvedFields;
+            if (resolvedFields)
+                RecheckInferredClassMethodReturns(classExpr.Methods, mutableClass, classEnv, classExpr.Name,
+                    classTypeParams, recoverComputedSymbolDiagnostics: false);
+        }
 
         // Publish method return types inferred during the body pass. The class was frozen with
         // <inferred> placeholders before the body could be checked, so the frozen Class the binding

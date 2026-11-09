@@ -764,7 +764,8 @@ public partial class Interpreter
         // instanceof/in are valid with any operand — fall through to the normal path below
         // so a bigint operand gets unboxed to object and reaches EvaluateInstanceof/EvaluateIn.
         // Numeric operators must convert both operands before selecting their kind.
-        if (!numericOperator && op.Type is not (TokenType.INSTANCEOF or TokenType.IN))
+        if (!numericOperator && desc is not OperatorDescriptor.Comparison
+            && op.Type is not (TokenType.INSTANCEOF or TokenType.IN))
         {
             // Check for BigInt (Kind == BigInt, not Object)
             System.Numerics.BigInteger? leftBigInt = leftRV.IsBigInt ? leftRV.AsBigInt().Value : null;
@@ -806,16 +807,53 @@ public partial class Interpreter
             OperatorDescriptor.Plus or OperatorDescriptor.Arithmetic or OperatorDescriptor.Power
                 or OperatorDescriptor.Bitwise or OperatorDescriptor.BitwiseShift
                 or OperatorDescriptor.UnsignedRightShift => EvaluateNumericBinaryRV(op.Type, leftRV, rightRV),
-            // JS AbstractRelationalComparison: string vs string → lexicographic.
-            OperatorDescriptor.Comparison =>
-                left is string ls && right is string rs
-                    ? RuntimeValue.FromBoolean(EvaluateStringComparison(op.Type, ls, rs))
-                    : RuntimeValue.FromBoolean(EvaluateComparison(op.Type, CoerceToNumber(left), CoerceToNumber(right))),
+            OperatorDescriptor.Comparison => EvaluateRelationalComparison(op.Type, left, right),
             OperatorDescriptor.Equality eq => RuntimeValue.FromBoolean(EvaluateEquality(left, right, eq.IsStrict, eq.IsNegated)),
             OperatorDescriptor.In => RuntimeValue.FromBoxed(EvaluateIn(left, right)),
             OperatorDescriptor.InstanceOf => RuntimeValue.FromBoxed(EvaluateInstanceof(left, right)),
             _ => RuntimeValue.Undefined
         };
+    }
+
+    private RuntimeValue EvaluateRelationalComparison(TokenType op, object? left, object? right)
+    {
+        // Relational operators convert both operands in source order, even for > and <=.
+        left = ToPrimitive(left, PrimitiveHint.Number);
+        right = ToPrimitive(right, PrimitiveHint.Number);
+        if (left is string leftText && right is string rightText)
+            return RuntimeValue.FromBoolean(EvaluateStringComparison(op, leftText, rightText));
+
+        var leftValue = RuntimeValue.FromBoxed(left);
+        var rightValue = RuntimeValue.FromBoxed(right);
+        if (leftValue.IsBigInt && rightValue.IsBigInt)
+            return BigIntOperatorHelper.EvaluateBinaryRV(
+                op, leftValue.AsBigInt().Value, rightValue.AsBigInt().Value);
+        if (leftValue.IsBigInt || rightValue.IsBigInt)
+        {
+            var bigint = leftValue.IsBigInt ? leftValue.AsBigInt().Value : rightValue.AsBigInt().Value;
+            var other = leftValue.IsBigInt ? rightValue : leftValue;
+            int? comparison;
+            if (other.IsString)
+            {
+                try
+                {
+                    comparison = bigint.CompareTo(BigIntBuiltIns.ParseBigIntString(other.AsString()));
+                }
+                catch (ThrowException)
+                {
+                    return RuntimeValue.False;
+                }
+            }
+            else
+            {
+                comparison = CompareBigIntAndNumber(bigint, CoerceToNumber(other));
+            }
+            return comparison is int order
+                ? RuntimeValue.FromBoolean(EvaluateComparison(op, leftValue.IsBigInt ? order : -order, 0))
+                : RuntimeValue.False;
+        }
+
+        return RuntimeValue.FromBoolean(EvaluateComparison(op, CoerceToNumber(leftValue), CoerceToNumber(rightValue)));
     }
 
     private static string ConcatStringAndNumber(
@@ -966,28 +1004,6 @@ public partial class Interpreter
                 equal = LooseEqualsBigInt(bi, other);
             }
             return RuntimeValue.FromBoolean(isNegated ? !equal : equal);
-        }
-
-        // Relational comparison permits a BigInt/Number pair. Compare their
-        // mathematical values without converting the BigInt to double (which
-        // would lose precision above 2^53). Mixed arithmetic remains invalid.
-        if (BigIntOperatorHelper.IsComparisonOperator(op)
-            && leftBi.HasValue != rightBi.HasValue)
-        {
-            double number = leftBi.HasValue ? rightRV.AsNumber() : leftRV.AsNumber();
-            int? comparison = CompareBigIntAndNumber(
-                leftBi ?? rightBi!.Value, number);
-            if (comparison is null)
-                return RuntimeValue.False;
-            int ordered = leftBi.HasValue ? comparison.Value : -comparison.Value;
-            return RuntimeValue.FromBoolean(op switch
-            {
-                TokenType.LESS => ordered < 0,
-                TokenType.LESS_EQUAL => ordered <= 0,
-                TokenType.GREATER => ordered > 0,
-                TokenType.GREATER_EQUAL => ordered >= 0,
-                _ => false,
-            });
         }
 
         // All other operators require both to be bigint.

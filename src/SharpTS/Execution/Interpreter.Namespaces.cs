@@ -112,7 +112,7 @@ public partial class Interpreter
                 Stmt.Class c => c.Name.Lexeme,
                 Stmt.Var { IsDeclare: false } v => v.Name.Lexeme,
                 Stmt.Const ct => ct.Name.Lexeme,  // namespace-scoped const (#467)
-                Stmt.Enum e => e.Name.Lexeme,
+                Stmt.Enum e when !e.IsAmbient || e.IsConst => e.Name.Lexeme,
                 Stmt.Namespace n => n.Name.Lexeme,
                 Stmt.Interface => null,  // Type-only, no runtime value
                 Stmt.TypeAlias => null,  // Type-only, no runtime value

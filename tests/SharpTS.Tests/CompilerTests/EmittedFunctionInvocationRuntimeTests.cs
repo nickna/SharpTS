@@ -48,6 +48,13 @@ public sealed class EmittedFunctionInvocationRuntimeTests
         Assert.False(owner.IsComplete); Assert.Throws<InvalidOperationException>(owner.CompleteEmission);
         emitter.EmitArgumentsTypeDefinition(module, owner);
         var initializers = module.DefineType("ArgumentInitialization");
+        owner.DefineLength = initializers.DefineMethod("DefineLength", MethodAttributes.Public | MethodAttributes.Static,
+            typeof(void), [typeof(object), typeof(double)]);
+        owner.DefineLength.GetILGenerator().Emit(OpCodes.Ret);
+        owner.FindCallee = initializers.DefineMethod("FindCallee", MethodAttributes.Public | MethodAttributes.Static,
+            typeof(object), [typeof(MethodInfo)]);
+        owner.FindCallee.GetILGenerator().Emit(OpCodes.Ldnull);
+        owner.FindCallee.GetILGenerator().Emit(OpCodes.Ret);
         owner.Initialize = initializers.DefineMethod("Initialize", MethodAttributes.Public | MethodAttributes.Static,
             typeof(void), [typeof(object)]);
         owner.Initialize.GetILGenerator().Emit(OpCodes.Ret);
@@ -319,11 +326,11 @@ public sealed class EmittedFunctionInvocationRuntimeTests
     {
         var type = loaded.GetType("$Arguments")!;
         var empty = Assert.IsAssignableFrom<IList>(Activator.CreateInstance(type));
-        Assert.Empty(empty); Assert.Equal(0.0, type.GetField("_length")!.GetValue(empty));
+        Assert.Empty(empty);
         object[] source = [1.0, "two"];
         var copied = Assert.IsAssignableFrom<IList>(Activator.CreateInstance(type, [source]));
         Assert.Equal(source, copied.Cast<object>()); source[0] = 9.0; Assert.Equal(1.0, copied[0]);
-        copied.Add(3.0); Assert.Equal(3, copied.Count); Assert.Equal(2.0, type.GetField("_length")!.GetValue(copied));
+        copied.Add(3.0); Assert.Equal(3, copied.Count);
     }
     private static IEnumerable<PropertyInfo> Metadata(Type type) => type.GetProperties().Where(p => typeof(MemberInfo).IsAssignableFrom(p.PropertyType));
     private static bool IsComplete(object owner) => (bool)owner.GetType().GetProperty("IsComplete")!.GetValue(owner)!;

@@ -38,6 +38,7 @@ public abstract partial class ExpressionEmitterBase : IEmitterContext
         return _helpers.TryEmitConsoleMethod(
             call,
             arg => { EmitExpression(arg); EnsureBoxed(); },
+            EmitArgsArrayWithSpread,
             Ctx.Runtime!.Console);
     }
 
@@ -495,19 +496,24 @@ public abstract partial class ExpressionEmitterBase : IEmitterContext
         if (TryEmitStableNumericLocalComparison(b))
             return;
 
-        // Numeric binary operations select Number or BigInt only after both
-        // values are evaluated and each ordered ToNumeric completes.
-        if (IsNumericBinaryOp(b.Operator.Type))
-        {
-            EmitDynamicNumericBinary(b);
-            return;
-        }
-
         // Spill operands so an await inside Right doesn't suspend with Left on the stack.
         var leftLocal = SpillBoxed(b.Left);
         var rightLocal = SpillBoxed(b.Right);
+        EmitSpilledBinaryOperation(b, leftLocal, rightLocal);
+    }
+
+    protected void EmitSpilledBinaryOperation(Expr.Binary b, LocalBuilder leftLocal, LocalBuilder rightLocal)
+    {
         IL.Emit(OpCodes.Ldloc, leftLocal);
         IL.Emit(OpCodes.Ldloc, rightLocal);
+
+        if (IsNumericBinaryOp(b.Operator.Type))
+        {
+            IL.Emit(OpCodes.Ldc_I4, (int)b.Operator.Type);
+            IL.Emit(OpCodes.Call, Ctx.Runtime!.Operators.NumericBinary);
+            SetStackUnknown();
+            return;
+        }
 
         // `in` and `instanceof` are binary operators not covered by TryEmitBinaryOperator.
         switch (b.Operator.Type)
@@ -602,11 +608,7 @@ public abstract partial class ExpressionEmitterBase : IEmitterContext
     {
         var leftLocal = SpillBoxed(b.Left);
         var rightLocal = SpillBoxed(b.Right);
-        IL.Emit(OpCodes.Ldloc, leftLocal);
-        IL.Emit(OpCodes.Ldloc, rightLocal);
-        IL.Emit(OpCodes.Ldc_I4, (int)b.Operator.Type);
-        IL.Emit(OpCodes.Call, Ctx.Runtime!.Operators.NumericBinary);
-        SetStackUnknown();
+        EmitSpilledBinaryOperation(b, leftLocal, rightLocal);
     }
 
     /// <summary>
@@ -894,14 +896,9 @@ public abstract partial class ExpressionEmitterBase : IEmitterContext
 
         if (TryEmitGlobalVariable(name, v)) return;
 
-        // An unresolved identifier is a ReferenceError in every execution
-        // context, including state-machine bodies.  Returning CLR null here
-        // made `yield missingName` silently yield null while the synchronous
-        // ILEmitter correctly threw.
+        // The global object can provide an identifier with no compiled binding.
         IL.Emit(OpCodes.Ldstr, name);
-        IL.Emit(OpCodes.Call, Ctx.Runtime!.Errors.ThrowUndefinedVariable);
-        // Unreachable stack value for verifier shape.
-        IL.Emit(OpCodes.Ldnull);
+        IL.Emit(OpCodes.Call, Ctx.Runtime!.GlobalObject.GetBinding);
         SetStackUnknown();
     }
 
@@ -2486,6 +2483,14 @@ public abstract partial class ExpressionEmitterBase : IEmitterContext
         return true;
     }
 
+    protected void EmitUnresolvedGlobalTypeOf(string name)
+    {
+        IL.Emit(OpCodes.Ldstr, name);
+        IL.Emit(OpCodes.Call, Ctx.Runtime!.GlobalObject.GetProperty);
+        IL.Emit(OpCodes.Call, Ctx.Runtime.Operators.TypeOf);
+        SetStackType(StackType.String);
+    }
+
     protected bool TryEmitIndirectEvalValue(string name)
     {
         if (name != "eval") return false;
@@ -3029,8 +3034,7 @@ public abstract partial class ExpressionEmitterBase : IEmitterContext
                 }
                 else if (u.Right is Expr.Variable tv && !IsKnownVariable(tv))
                 {
-                    _helpers.IL.Emit(OpCodes.Ldstr, "undefined");
-                    _helpers.SetStackUnknown();
+                    EmitUnresolvedGlobalTypeOf(tv.Name.Lexeme);
                 }
                 // Error constructors are functions
                 else if (u.Right is Expr.Variable ev

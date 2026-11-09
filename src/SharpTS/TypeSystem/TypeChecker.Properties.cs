@@ -401,6 +401,7 @@ public partial class TypeChecker
     /// </summary>
     private TypeInfo ResolveMemberType(Expr.Get get, TypeInfo objType)
     {
+        CheckEagerClassFieldRead(get.Object, objType, get.Name);
         if (objType is TypeInfo.Unknown)
         {
             throw new TypeCheckException(
@@ -1453,6 +1454,7 @@ public partial class TypeChecker
         if (owner.PrivateFieldTypes.TryGetValue(fieldName, out var fieldType))
         {
             ValidatePrivateReceiver(objType, owner, isStatic: false, get.Name);
+            CheckEagerClassFieldRead(get.Object, objType, get.Name, isPrivate: true);
             ObservePendingGetterFieldRead(owner, isStatic: false, fieldName);
             ObservePrivateSourceMemberSelection(get.Name, objType, owner, MemberFacet.PrivateInstance);
             return CompletedFieldDependencyType(owner, false, fieldName, fieldType);
@@ -1474,6 +1476,7 @@ public partial class TypeChecker
         if (owner.StaticPrivateFieldTypes.TryGetValue(fieldName, out var staticFieldType))
         {
             ValidatePrivateReceiver(objType, owner, isStatic: true, get.Name);
+            CheckEagerClassFieldRead(get.Object, objType, get.Name, isPrivate: true);
             ObservePendingGetterFieldRead(owner, isStatic: true, fieldName);
             ObservePrivateSourceMemberSelection(get.Name, objType, owner, MemberFacet.PrivateStatic);
             return objType is TypeInfo.Any ? TypeInfo.Any.Shared : CompletedFieldDependencyType(owner, true, fieldName, staticFieldType);

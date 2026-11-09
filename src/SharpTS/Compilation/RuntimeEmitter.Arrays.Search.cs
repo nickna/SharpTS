@@ -2059,8 +2059,7 @@ public partial class RuntimeEmitter
             il.Emit(OpCodes.Dup);
             il.Emit(OpCodes.Ldloc, lenLocal);
             il.Emit(OpCodes.Conv_R8);
-            il.Emit(OpCodes.Box, _types.Double);
-            il.Emit(OpCodes.Stfld, runtime.Arguments.LengthField);
+            il.Emit(OpCodes.Call, runtime.Arguments.DefineLength);
             il.Emit(OpCodes.Ret);
             il.MarkLabel(materializeSlots);
         }

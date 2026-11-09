@@ -55,7 +55,6 @@ internal static class ObjectReadTestSupport
                 "TSFunctionCtor" => runtime.FunctionConstruction.Constructor,
                 "TSFunctionCtorWithCache" => runtime.FunctionConstruction.CachedConstructor,
                 "TSFunctionGetOrCreate" => runtime.FunctionConstruction.GetOrCreate,
-                "ArgumentsLengthField" => runtime.Arguments.LengthField,
                 "ArgumentsType" => runtime.Arguments.Type,
                 "BoundAnyFunctionType" => runtime.FunctionBindings.AnyType,
                 "BoundTSFunctionType" => runtime.FunctionBindings.BoundType,

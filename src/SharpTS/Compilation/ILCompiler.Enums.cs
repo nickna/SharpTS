@@ -11,6 +11,9 @@ public partial class ILCompiler
 {
     private void DefineEnum(Stmt.Enum enumStmt)
     {
+        if (enumStmt is { IsAmbient: true, IsConst: false })
+            return;
+
         var ctx = GetDefinitionContext();
 
         // Get qualified enum name (module-prefixed in multi-module compilation)

@@ -57,18 +57,18 @@ internal static class ConstEnumExpressionEvaluator
         }
     }
 
-    public static object EvaluateKnownMember(
+    public static object? EvaluateKnownMember(
         Expr expression, IReadOnlyDictionary<string, object> resolvedMembers, string enumName, bool isConst)
     {
         try
         {
             var value = Evaluate(expression, resolvedMembers, enumName,
                 static _ => new NonConstantInitializerException(), regularEnum: !isConst);
-            return value is double or string ? value : double.NaN;
+            return value is double or string ? value : null;
         }
         catch (NonConstantInitializerException)
         {
-            return double.NaN;
+            return null;
         }
     }
 
@@ -86,10 +86,10 @@ internal static class ConstEnumExpressionEvaluator
                 "Const enum expression cannot be null.")),
 
             Expr.Get g when g.Object is Expr.Variable v && v.Name.Lexeme == enumName =>
-                ResolveMember(g.Name.Lexeme, resolvedMembers, error, regularEnum),
+                ResolveMember(g.Name.Lexeme, resolvedMembers, error),
 
             Expr.Variable variable when regularEnum =>
-                ResolveMember(variable.Name.Lexeme, resolvedMembers, error, regularEnum),
+                ResolveMember(variable.Name.Lexeme, resolvedMembers, error),
 
             Expr.Grouping gr => Evaluate(gr.Expression, resolvedMembers, enumName, error, regularEnum),
 
@@ -104,10 +104,9 @@ internal static class ConstEnumExpressionEvaluator
     }
 
     private static object ResolveMember(string name, IReadOnlyDictionary<string, object> resolvedMembers,
-        Func<ConstEnumError, Exception> error, bool regularEnum)
+        Func<ConstEnumError, Exception> error)
     {
-        if (resolvedMembers.TryGetValue(name, out var value) &&
-            !(regularEnum && value is double number && double.IsNaN(number)))
+        if (resolvedMembers.TryGetValue(name, out var value))
             return value;
 
         throw error(new(ConstEnumErrorKind.ForwardReference,

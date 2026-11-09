@@ -15,6 +15,25 @@ public class AsyncGeneratorTests
     #region Basic Async Generator Tests
 
     [Theory, ModeData]
+    public void ArrayConstructionArgumentsCanSuspend(ExecutionMode mode)
+    {
+        const string source = """
+            async function* inspect() {
+                yield new Array(await 1).length;
+                yield Array("first", await "second", "third").join(" ");
+            }
+            async function run() {
+                const iterator = inspect();
+                console.log((await iterator.next()).value);
+                console.log((await iterator.next()).value);
+            }
+            run();
+            """;
+
+        Assert.Equal("1\nfirst second third\n", TestHarness.RunUnchecked(source, mode));
+    }
+
+    [Theory, ModeData]
     public void AsyncGenerator_BasicYield_ReturnsValues(ExecutionMode mode)
     {
         var source = """

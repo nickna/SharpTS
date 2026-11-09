@@ -27,6 +27,9 @@ public abstract partial class ExpressionEmitterBase
 
     protected void EmitEnumDeclaration(Stmt.Enum declaration)
     {
+        if (declaration is { IsAmbient: true, IsConst: false })
+            return;
+
         if (Ctx.EnumValueFields == null || !Ctx.EnumValueFields.TryGetValue(Ctx.ResolveEnumName(declaration.Name.Lexeme), out var field))
             return;
 

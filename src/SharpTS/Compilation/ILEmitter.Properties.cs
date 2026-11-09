@@ -98,40 +98,15 @@ public partial class ILEmitter
         if (TryEmitExactCompactRecordParameterGet(g))
             return;
 
-        // Syntactic shortcut: `arguments.length` → load $Arguments._length
-        // directly. The static-type-driven dispatch path emits .NET
-        // List<object>.Count (via a helper that bypasses GetProperty),
-        // missing the JS-visible length per ECMA-262 sloppy arguments.
-        // Catches direct uses inside the function body — the most common
-        // pattern in test262's "applied to Arguments object" cluster.
+        // The implicit arguments binding has an ordinary length descriptor.
         if (g.Name.Lexeme == "length"
-            && _ctx.RuntimeFeatures?.UsesDynamicPropertyDescriptors != true
-            && g.Object is Expr.Variable argsVar
-            && argsVar.Name.Lexeme == "arguments"
-            && _ctx.Runtime?.Arguments.Type != null
-            && _ctx.Runtime?.Arguments.LengthField != null)
+            && g.Object is Expr.Variable { Name.Lexeme: "arguments" }
+            && _ctx.Runtime is { } argumentsRuntime)
         {
             EmitExpression(g.Object);
             EmitBoxIfNeeded(g.Object);
-            var argsLocal = IL.DeclareLocal(_ctx.Types.Object);
-            IL.Emit(OpCodes.Stloc, argsLocal);
-            var notArgsTypeLabel = IL.DefineLabel();
-            var endLabel = IL.DefineLabel();
-            IL.Emit(OpCodes.Ldloc, argsLocal);
-            IL.Emit(OpCodes.Isinst, _ctx.Runtime!.Arguments.Type);
-            IL.Emit(OpCodes.Brfalse, notArgsTypeLabel);
-            IL.Emit(OpCodes.Ldloc, argsLocal);
-            IL.Emit(OpCodes.Castclass, _ctx.Runtime!.Arguments.Type);
-            IL.Emit(OpCodes.Ldfld, _ctx.Runtime!.Arguments.LengthField);
-            IL.Emit(OpCodes.Br, endLabel);
-            IL.MarkLabel(notArgsTypeLabel);
-            // Fallback: arg may have been overwritten by user code with a
-            // non-$Arguments value (`arguments = ...`). Use GetLength.
-            IL.Emit(OpCodes.Ldloc, argsLocal);
-            IL.Emit(OpCodes.Call, _ctx.Runtime!.ObjectRead.Length);
-            IL.Emit(OpCodes.Conv_R8);
-            IL.Emit(OpCodes.Box, _ctx.Types.Double);
-            IL.MarkLabel(endLabel);
+            IL.Emit(OpCodes.Ldstr, "length");
+            IL.Emit(OpCodes.Call, argumentsRuntime.ObjectRead.Property);
             SetStackUnknown();
             return;
         }

@@ -849,7 +849,19 @@ public partial class ILEmitter
         if (methodName != "concat" && !usesOriginalReceiver)
         {
             var materialized = IL.DefineLabel();
-            if (copiesArgumentsDirectly || mapCallback is not null)
+            if (usesArguments && methodName is "entries" or "keys" or "values")
+            {
+                // The iterator can retain the actual arguments object. Its
+                // length and indexed values are observed on next(), not here.
+                var materializeOtherReceiver = IL.DefineLabel();
+                IL.Emit(OpCodes.Ldloc, receiverLocal);
+                IL.Emit(OpCodes.Isinst, runtime.Arguments.Type);
+                IL.Emit(OpCodes.Brfalse, materializeOtherReceiver);
+                IL.Emit(OpCodes.Castclass, _ctx.Types.ListOfObject);
+                IL.Emit(OpCodes.Br, materialized);
+                IL.MarkLabel(materializeOtherReceiver);
+            }
+            else if (copiesArgumentsDirectly || mapCallback is not null)
             {
                 var copyReceiver = IL.DefineLabel();
                 IL.Emit(OpCodes.Ldloc, argumentsReceiver!);

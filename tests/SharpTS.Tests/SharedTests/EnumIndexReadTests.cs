@@ -7,6 +7,19 @@ namespace SharpTS.Tests.SharedTests;
 
 public sealed class EnumIndexReadTests
 {
+    [Theory, ModeData]
+    public void EnumIndexReadsCoerceToAPropertyKeyExactlyOnce(ExecutionMode mode)
+    {
+        const string source = """
+            enum E { A = 2 }
+            let conversions = 0;
+            const key = { toString() { conversions++; return '2'; } };
+            const name = { toString() { conversions++; return 'A'; } };
+            console.log(E[key], E[2n], E[name], E[Symbol('2')], conversions);
+            """;
+        Assert.Equal("A A 2 undefined 2\n", TestHarness.RunUnchecked(source, mode));
+    }
+
     [Theory]
     [InlineData(ExecutionMode.Interpreted)]
     [InlineData(ExecutionMode.Compiled)]

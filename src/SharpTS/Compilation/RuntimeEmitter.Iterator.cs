@@ -27,6 +27,7 @@ public partial class RuntimeEmitter
 
     private readonly record struct ArrayIteratorInputs(
         EmittedArgumentsRuntime Arguments,
+        MethodInfo GetProperty,
         MethodInfo GetIndex,
         EmittedNumericCoercionRuntime NumericCoercion
     );
@@ -92,7 +93,7 @@ public partial class RuntimeEmitter
         var kindField = typeBuilder.DefineField(
             "_kind", _types.Int32, FieldAttributes.Private | FieldAttributes.InitOnly);
         var indexField = typeBuilder.DefineField(
-            "_index", _types.Int32, FieldAttributes.Private);
+            "_index", _types.Double, FieldAttributes.Private);
         var currentField = typeBuilder.DefineField(
             "_current", _types.Object, FieldAttributes.Private);
         var completedField = typeBuilder.DefineField(
@@ -113,7 +114,7 @@ public partial class RuntimeEmitter
         ctorIl.Emit(OpCodes.Ldarg_2);
         ctorIl.Emit(OpCodes.Stfld, kindField);
         ctorIl.Emit(OpCodes.Ldarg_0);
-        ctorIl.Emit(OpCodes.Ldc_I4_M1);
+        ctorIl.Emit(OpCodes.Ldc_R8, -1.0);
         ctorIl.Emit(OpCodes.Stfld, indexField);
         ctorIl.Emit(OpCodes.Ret);
 
@@ -152,7 +153,7 @@ public partial class RuntimeEmitter
             _types.Boolean,
             Type.EmptyTypes);
         var il = moveNext.GetILGenerator();
-        var nextIndex = il.DeclareLocal(_types.Int32);
+        var nextIndex = il.DeclareLocal(_types.Double);
         var value = il.DeclareLocal(_types.Object);
         var haveElement = il.DefineLabel();
         var emitValue = il.DefineLabel();
@@ -160,7 +161,7 @@ public partial class RuntimeEmitter
         var storeCurrent = il.DefineLabel();
         var useListCount = il.DefineLabel();
         var haveLiveLength = il.DefineLabel();
-        var liveLength = il.DeclareLocal(_types.Int32);
+        var liveLength = il.DeclareLocal(_types.Double);
 
         il.Emit(OpCodes.Ldarg_0);
         il.Emit(OpCodes.Ldfld, completedField);
@@ -172,20 +173,23 @@ public partial class RuntimeEmitter
         var indexInRange = il.DefineLabel();
         il.Emit(OpCodes.Ldarg_0);
         il.Emit(OpCodes.Ldfld, indexField);
-        il.Emit(OpCodes.Ldc_I4_1);
+        il.Emit(OpCodes.Ldc_R8, 1.0);
         il.Emit(OpCodes.Add);
         il.Emit(OpCodes.Stloc, nextIndex);
-        // Array iterators observe length on every next() call. $Arguments has
-        // an independent JS-visible length slot that may be truncated without
-        // shrinking its List backing store.
+        // Arguments length is an ordinary property, read on every next() call.
         il.Emit(OpCodes.Ldarg_0);
         il.Emit(OpCodes.Ldfld, arrayField);
         il.Emit(OpCodes.Isinst, inputs.Arguments.Type);
         il.Emit(OpCodes.Dup);
         il.Emit(OpCodes.Brfalse, useListCount);
-        il.Emit(OpCodes.Ldfld, inputs.Arguments.LengthField);
+        il.Emit(OpCodes.Ldstr, "length");
+        il.Emit(OpCodes.Call, inputs.GetProperty);
         il.Emit(OpCodes.Call, inputs.NumericCoercion.ToNumber);
-        il.Emit(OpCodes.Conv_I4);
+        // Keep the full ToLength range. NaN remains unordered and ends iteration.
+        il.Emit(OpCodes.Ldc_R8, 0.0);
+        il.Emit(OpCodes.Ldc_R8, 9007199254740991.0);
+        il.Emit(OpCodes.Call, _types.GetMethod(_types.Math, "Clamp", _types.Double, _types.Double, _types.Double));
+        il.Emit(OpCodes.Call, _types.GetMethod(_types.Math, "Truncate", _types.Double));
         il.Emit(OpCodes.Stloc, liveLength);
         il.Emit(OpCodes.Br, haveLiveLength);
         il.MarkLabel(useListCount);
@@ -194,6 +198,7 @@ public partial class RuntimeEmitter
         il.Emit(OpCodes.Ldfld, arrayField);
         il.Emit(OpCodes.Callvirt, _types.GetProperty(
             _types.ListOfObject, "Count").GetGetMethod()!);
+        il.Emit(OpCodes.Conv_R8);
         il.Emit(OpCodes.Stloc, liveLength);
         il.MarkLabel(haveLiveLength);
         il.Emit(OpCodes.Ldloc, nextIndex);
@@ -224,7 +229,6 @@ public partial class RuntimeEmitter
 
         // keys(): current = index
         il.Emit(OpCodes.Ldloc, nextIndex);
-        il.Emit(OpCodes.Conv_R8);
         il.Emit(OpCodes.Box, _types.Double);
         il.Emit(OpCodes.Stloc, value);
         il.Emit(OpCodes.Br, storeCurrent);
@@ -234,7 +238,6 @@ public partial class RuntimeEmitter
         il.Emit(OpCodes.Ldarg_0);
         il.Emit(OpCodes.Ldfld, arrayField);
         il.Emit(OpCodes.Ldloc, nextIndex);
-        il.Emit(OpCodes.Conv_R8);
         il.Emit(OpCodes.Box, _types.Double);
         il.Emit(OpCodes.Call, inputs.GetIndex);
         il.Emit(OpCodes.Stloc, value);
@@ -248,7 +251,6 @@ public partial class RuntimeEmitter
         il.Emit(OpCodes.Stloc, pair);
         il.Emit(OpCodes.Ldloc, pair);
         il.Emit(OpCodes.Ldloc, nextIndex);
-        il.Emit(OpCodes.Conv_R8);
         il.Emit(OpCodes.Box, _types.Double);
         il.Emit(OpCodes.Callvirt, _types.GetMethod(
             _types.ListOfObject, "Add", [_types.Object])!);
@@ -256,7 +258,6 @@ public partial class RuntimeEmitter
         il.Emit(OpCodes.Ldarg_0);
         il.Emit(OpCodes.Ldfld, arrayField);
         il.Emit(OpCodes.Ldloc, nextIndex);
-        il.Emit(OpCodes.Conv_R8);
         il.Emit(OpCodes.Box, _types.Double);
         il.Emit(OpCodes.Call, inputs.GetIndex);
         il.Emit(OpCodes.Callvirt, _types.GetMethod(

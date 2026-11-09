@@ -690,7 +690,7 @@ public partial class ILEmitter
                 }
                 else if (u.Right is Expr.Variable tv && !IsKnownVariable(tv))
                 {
-                    IL.Emit(OpCodes.Ldstr, "undefined");
+                    EmitUnresolvedGlobalTypeOf(tv.Name.Lexeme);
                 }
                 else if (IsTypeofOnBuiltInMethod(u.Right))
                 {

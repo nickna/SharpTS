@@ -39,6 +39,47 @@ public sealed class PublicGetterFieldInferenceTests
     }
 
     [Theory]
+    [InlineData("class C", "", "this", "new C()")]
+    [InlineData("const C = class", "", "this", "new C()")]
+    [InlineData("class C", "static ", "C", "C")]
+    [InlineData("const C = class Named", "static ", "Named", "C")]
+    public void MethodsUseFieldTypesResolvedAfterCyclicGetterInference(
+        string declaration, string modifier, string receiver, string use)
+    {
+        var statements = TestHarness.ParseOrThrow($$"""
+            {{declaration}} {
+                {{modifier}}get x() { {{receiver}}.y; return 1; }
+                {{modifier}}y = {{receiver}}.x;
+                {{modifier}}read() { return {{receiver}}.y; }
+            }
+            const right: number = {{use}}.read();
+            const wrong: string = {{use}}.read();
+            """);
+        var diagnostic = Assert.Single(new TypeChecker(TypeCheckerOptions.Strict).CheckWithRecovery(statements).Diagnostics);
+        Assert.Equal(7, diagnostic.Line);
+        Assert.Equal("TS2322", diagnostic.TsCode);
+    }
+
+    [Fact]
+    public void RecheckingInferredMethodsDoesNotDuplicateDiagnostics()
+    {
+        var statements = TestHarness.ParseOrThrow("""
+            class C {
+                get x() { this.y; return 1; }
+                y = this.x;
+                read() {
+                    const wrong: number = "wrong";
+                    return this.y;
+                }
+            }
+            const wrong: string = new C().read();
+            """);
+        var diagnostics = new TypeChecker(TypeCheckerOptions.Strict).CheckWithRecovery(statements).Diagnostics;
+        Assert.Equal(new[] { 5, 9 }, diagnostics.Select(diagnostic => diagnostic.Line));
+        Assert.All(diagnostics, diagnostic => Assert.Equal("TS2322", diagnostic.TsCode));
+    }
+
+    [Theory]
     [InlineData("class C")]
     [InlineData("const C = class")]
     public void InterfaceValidationUsesTheRetriedFieldType(string declaration)

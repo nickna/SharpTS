@@ -68,9 +68,19 @@ public sealed class EnumMemberCompatibilityTests
             declare let known: Known.E;
             ambient = known;
             known = ambient;
+            declare function takeKnown(value: Known.E): void;
+            declare function takeAmbient(value: Ambient.E): void;
+            takeKnown(Ambient.E.B);
+            takeKnown(Ambient.E.A);
+            takeAmbient(Known.E.B);
+            takeAmbient(Known.E.A);
+            takeAmbient(Ambient.E.A);
+            takeKnown(Ambient.E['A']);
             """);
 
-        Assert.Empty(new TypeChecker(TypeCheckerOptions.Strict).CheckWithRecovery(statements).Diagnostics);
+        var diagnostics = new TypeChecker(TypeCheckerOptions.Strict).CheckWithRecovery(statements).Diagnostics;
+        Assert.Equal(new[] { 10, 12, 14 }, diagnostics.Select(diagnostic => diagnostic.Line));
+        Assert.All(diagnostics, diagnostic => Assert.Equal("TS2345", diagnostic.TsCode));
     }
 
     [Fact]

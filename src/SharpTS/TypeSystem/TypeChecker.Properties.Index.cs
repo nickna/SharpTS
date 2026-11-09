@@ -1152,6 +1152,9 @@ public partial class TypeChecker
             return valueType;
         }
 
+        if (TryCheckArraySubclassIndexWrite(objType, indexType, valueType, setIndex))
+            return valueType;
+
         // Handle string index on objects/interfaces
         if (IsString(indexType) || indexType is TypeInfo.StringLiteral)
         {
@@ -1940,6 +1943,9 @@ public partial class TypeChecker
             return valueType;
         }
 
+        if (TryCheckArraySubclassIndexWrite(objType, indexType, valueType, setIndex))
+            return valueType;
+
         // Handle string index
         if (IsString(indexType) || indexType is TypeInfo.StringLiteral)
         {
@@ -2024,6 +2030,20 @@ public partial class TypeChecker
         }
 
         return null;
+    }
+
+    private bool TryCheckArraySubclassIndexWrite(TypeInfo receiver, TypeInfo index, TypeInfo value, Expr.SetIndex syntax)
+    {
+        if (!IsNumericConstructorIndex(index) || receiver is not TypeInfo.Instance instance ||
+            !TryGetBuiltInArraySubclassElement(instance, out var elementType))
+            return false;
+
+        var target = GetClassIndexType(instance, TokenType.TYPE_NUMBER)
+            ?? GetClassIndexType(instance, TokenType.TYPE_STRING) ?? elementType;
+        if (!IsCompatible(target, value))
+            throw new TypeCheckException($" Cannot assign '{value}' to array element type '{target}'.",
+                TryGetExprLine(syntax.Value), tsCode: "TS2322");
+        return true;
     }
 
     /// <summary>

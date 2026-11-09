@@ -426,11 +426,10 @@ public partial class ILEmitter
             return;
         }
 
-        // Unknown variable - throw ReferenceError at runtime
+        // Unresolved identifiers may be supplied by the global object at runtime.
         IL.Emit(OpCodes.Ldstr, name);
-        IL.Emit(OpCodes.Call, _ctx.Runtime!.Errors.ThrowUndefinedVariable);
-        // Emit unreachable null to satisfy IL verification (method never returns but stack must balance)
-        EmitNullConstant();
+        IL.Emit(OpCodes.Call, _ctx.Runtime!.GlobalObject.GetBinding);
+        SetStackUnknown();
     }
 
     // TryEmitBuiltInClassType and TryEmitErrorTypeToken are inherited from

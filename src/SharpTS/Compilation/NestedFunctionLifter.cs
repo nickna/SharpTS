@@ -761,10 +761,10 @@ internal sealed class NestedFunctionLifter
             {
                 if (_safeCandidates.Contains(f))
                 {
-                    // Async declarations need one function value per activation even without
-                    // captures; a relocated helper alias would reuse its global cached value.
+                    // Keep state-machine declarations in their lexical strictness context and
+                    // give each activation its own function value.
                     aliases ??= new List<Stmt>();
-                    aliases.Add(f.IsAsync && !f.IsGenerator
+                    aliases.Add(f.IsAsync || f.IsGenerator
                         ? MakeLiveFunctionClosure(f)
                         : LiftCandidate(f));
                     result ??= new List<Stmt>(body.GetRange(0, i));
@@ -841,7 +841,15 @@ internal sealed class NestedFunctionLifter
         }
 
         if (result == null) return body;
-        if (aliases != null) result.InsertRange(0, aliases);
+        if (aliases != null)
+        {
+            // The hoisted bindings execute immediately after the source directive prologue.
+            int afterDirectives = 0;
+            while (afterDirectives < result.Count
+                && result[afterDirectives] is Stmt.Directive or Stmt.Expression { Expr: Expr.Literal { Value: string } })
+                afterDirectives++;
+            result.InsertRange(afterDirectives, aliases);
+        }
         return result;
     }
 

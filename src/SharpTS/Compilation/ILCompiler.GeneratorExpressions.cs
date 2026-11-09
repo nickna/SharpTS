@@ -99,8 +99,7 @@ public partial class ILCompiler
             if (ReferencesArgumentsIdentifier(shape.Body, shape.Parameters))
             {
                 _functions.MethodsCapturingArguments.Add(kickoff);
-                if (_runtime.FunctionAttributes.CapturesArgumentsCtor != null)
-                    kickoff.SetCustomAttribute(_runtime.FunctionAttributes.CapturesArgumentsCtor, CustomAttributeEncoder.EmptyBlob);
+                MarkArgumentContextEntry(kickoff);
             }
         }
     }

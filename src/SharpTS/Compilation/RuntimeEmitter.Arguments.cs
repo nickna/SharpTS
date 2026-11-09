@@ -5,6 +5,28 @@ namespace SharpTS.Compilation;
 
 public partial class RuntimeEmitter
 {
+    private void EmitArgumentsLength(EmittedRuntime runtime)
+    {
+        var il = runtime.Arguments.DefineLength.GetILGenerator();
+        var storage = runtime.DescriptorStorage;
+        var descriptor = il.DeclareLocal(storage.DescriptorType);
+        il.Emit(OpCodes.Newobj, storage.DescriptorConstructor);
+        il.Emit(OpCodes.Stloc, descriptor);
+        il.Emit(OpCodes.Ldloc, descriptor);
+        il.Emit(OpCodes.Ldarg_1);
+        il.Emit(OpCodes.Box, _types.Double);
+        il.Emit(OpCodes.Callvirt, storage.DescriptorValue.GetSetMethod()!);
+        il.Emit(OpCodes.Ldloc, descriptor);
+        il.Emit(OpCodes.Ldc_I4_0);
+        il.Emit(OpCodes.Callvirt, storage.DescriptorEnumerable.GetSetMethod()!);
+        il.Emit(OpCodes.Ldarg_0);
+        il.Emit(OpCodes.Ldstr, "length");
+        il.Emit(OpCodes.Ldloc, descriptor);
+        il.Emit(OpCodes.Call, storage.DefineValidatedProperty);
+        il.Emit(OpCodes.Pop);
+        il.Emit(OpCodes.Ret);
+    }
+
     private void EmitArgumentsInitializer(EmittedRuntime runtime)
     {
         var il = runtime.Arguments.Initialize.GetILGenerator();
@@ -12,6 +34,13 @@ public partial class RuntimeEmitter
         il.Emit(OpCodes.Ldarg_0);
         il.Emit(OpCodes.Ldsfld, runtime.ObjectPrototypes.Prototype);
         il.Emit(OpCodes.Call, runtime.DescriptorStorage.SetPrototype);
+
+        il.Emit(OpCodes.Ldarg_0);
+        il.Emit(OpCodes.Ldarg_0);
+        il.Emit(OpCodes.Castclass, _types.ListOfObject);
+        il.Emit(OpCodes.Callvirt, _types.GetPropertyGetter(_types.ListOfObject, "Count"));
+        il.Emit(OpCodes.Conv_R8);
+        il.Emit(OpCodes.Call, runtime.Arguments.DefineLength);
 
         var descriptor = il.DeclareLocal(runtime.DescriptorStorage.DescriptorType);
         il.Emit(OpCodes.Newobj, runtime.DescriptorStorage.DescriptorConstructor);
@@ -40,17 +69,18 @@ public partial class RuntimeEmitter
             GuestErrorEmitter.ThrowTypeError(thrower.GetILGenerator(), runtime,
                 "Cannot access 'callee' on an unmapped arguments object");
 
-            var done = il.DefineLabel();
+            var mapped = il.DefineLabel();
+            var install = il.DefineLabel();
             var accessor = il.DeclareLocal(_types.Object);
+            il.Emit(OpCodes.Newobj, runtime.DescriptorStorage.DescriptorConstructor);
+            il.Emit(OpCodes.Stloc, descriptor);
             il.Emit(OpCodes.Ldarg_1);
-            il.Emit(OpCodes.Brfalse, done);
+            il.Emit(OpCodes.Brfalse, mapped);
             _types.EmitLoadMethodInfo(il, thrower);
             il.Emit(OpCodes.Ldstr, "");
             il.Emit(OpCodes.Ldc_I4_0);
             il.Emit(OpCodes.Call, runtime.FunctionConstruction.GetOrCreate);
             il.Emit(OpCodes.Stloc, accessor);
-            il.Emit(OpCodes.Newobj, runtime.DescriptorStorage.DescriptorConstructor);
-            il.Emit(OpCodes.Stloc, descriptor);
             il.Emit(OpCodes.Ldloc, descriptor);
             il.Emit(OpCodes.Ldloc, accessor);
             il.Emit(OpCodes.Callvirt, runtime.DescriptorStorage.DescriptorGetter.GetSetMethod()!);
@@ -59,16 +89,23 @@ public partial class RuntimeEmitter
             il.Emit(OpCodes.Callvirt, runtime.DescriptorStorage.DescriptorSetter.GetSetMethod()!);
             il.Emit(OpCodes.Ldloc, descriptor);
             il.Emit(OpCodes.Ldc_I4_0);
-            il.Emit(OpCodes.Callvirt, runtime.DescriptorStorage.DescriptorEnumerable.GetSetMethod()!);
+            il.Emit(OpCodes.Callvirt, runtime.DescriptorStorage.DescriptorConfigurable.GetSetMethod()!);
+            il.Emit(OpCodes.Br, install);
+
+            il.MarkLabel(mapped);
+            il.Emit(OpCodes.Ldloc, descriptor);
+            il.Emit(OpCodes.Ldarg_2);
+            il.Emit(OpCodes.Callvirt, runtime.DescriptorStorage.DescriptorValue.GetSetMethod()!);
+
+            il.MarkLabel(install);
             il.Emit(OpCodes.Ldloc, descriptor);
             il.Emit(OpCodes.Ldc_I4_0);
-            il.Emit(OpCodes.Callvirt, runtime.DescriptorStorage.DescriptorConfigurable.GetSetMethod()!);
+            il.Emit(OpCodes.Callvirt, runtime.DescriptorStorage.DescriptorEnumerable.GetSetMethod()!);
             il.Emit(OpCodes.Ldarg_0);
             il.Emit(OpCodes.Ldstr, "callee");
             il.Emit(OpCodes.Ldloc, descriptor);
             il.Emit(OpCodes.Call, runtime.DescriptorStorage.DefineValidatedProperty);
             il.Emit(OpCodes.Pop);
-            il.MarkLabel(done);
         }
         il.Emit(OpCodes.Ret);
     }
@@ -97,15 +134,7 @@ public partial class RuntimeEmitter
         );
         arguments.Type = typeBuilder;
 
-        // Arguments length is an ordinary data property. Keep the assigned
-        // value intact and independent of the backing List.Count.
-        var lengthField = typeBuilder.DefineField(
-            "_length",
-            _types.Object,
-            FieldAttributes.Public);
-        arguments.LengthField = lengthField;
-
-        // Ctor: public $Arguments() : base() { _length = 0; }
+        // Ctor: public $Arguments() : base() { }
         var defaultCtor = typeBuilder.DefineConstructor(
             MethodAttributes.Public,
             CallingConventions.Standard,
@@ -114,33 +143,10 @@ public partial class RuntimeEmitter
         var defaultIL = defaultCtor.GetILGenerator();
         defaultIL.Emit(OpCodes.Ldarg_0);
         defaultIL.Emit(OpCodes.Call, _types.GetDefaultConstructor(_types.ListOfObject));
-        defaultIL.Emit(OpCodes.Ldarg_0);
-        defaultIL.Emit(OpCodes.Ldc_R8, 0.0);
-        defaultIL.Emit(OpCodes.Box, _types.Double);
-        defaultIL.Emit(OpCodes.Stfld, lengthField);
         defaultIL.Emit(OpCodes.Ret);
         arguments.DefaultCtor = defaultCtor;
 
-        // Ctor: public $Arguments(int capacity) : base(capacity) { _length = 0; }
-        var capacityCtor = typeBuilder.DefineConstructor(
-            MethodAttributes.Public,
-            CallingConventions.Standard,
-            [_types.Int32]
-        );
-        var capIL = capacityCtor.GetILGenerator();
-        capIL.Emit(OpCodes.Ldarg_0);
-        capIL.Emit(OpCodes.Ldarg_1);
-        capIL.Emit(OpCodes.Call, _types.GetConstructor(_types.ListOfObject, _types.Int32));
-        capIL.Emit(OpCodes.Ldarg_0);
-        capIL.Emit(OpCodes.Ldc_R8, 0.0);
-        capIL.Emit(OpCodes.Box, _types.Double);
-        capIL.Emit(OpCodes.Stfld, lengthField);
-        capIL.Emit(OpCodes.Ret);
-        _ = capacityCtor;
-
-        // Ctor: public $Arguments(IEnumerable<object> source) : base(source)
-        // { _length = base.Count; }  — copies the source and snapshots the
-        // count as the JS-visible length.
+        // Ctor: public $Arguments(IEnumerable<object> source) : base(source) { }
         var enumCtor = typeBuilder.DefineConstructor(
             MethodAttributes.Public,
             CallingConventions.Standard,
@@ -150,12 +156,6 @@ public partial class RuntimeEmitter
         enumIL.Emit(OpCodes.Ldarg_0);
         enumIL.Emit(OpCodes.Ldarg_1);
         enumIL.Emit(OpCodes.Call, _types.GetConstructor(_types.ListOfObject, _types.IEnumerableOfObject));
-        enumIL.Emit(OpCodes.Ldarg_0);
-        enumIL.Emit(OpCodes.Ldarg_0);
-        enumIL.Emit(OpCodes.Callvirt, _types.GetPropertyGetter(_types.ListOfObject, "Count"));
-        enumIL.Emit(OpCodes.Conv_R8);
-        enumIL.Emit(OpCodes.Box, _types.Double);
-        enumIL.Emit(OpCodes.Stfld, lengthField);
         enumIL.Emit(OpCodes.Ret);
         arguments.EnumerableCtor = enumCtor;
 

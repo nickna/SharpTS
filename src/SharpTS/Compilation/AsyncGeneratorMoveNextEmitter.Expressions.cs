@@ -6,7 +6,79 @@ namespace SharpTS.Compilation;
 
 public partial class AsyncGeneratorMoveNextEmitter
 {
-    // EmitExpression dispatch is inherited from ExpressionEmitterBase
+    protected override void EmitBinary(Expr.Binary binary)
+    {
+        if (_protectedRegionDepth != 0 || (_currentTryExceptionLocal is null && !_inHandlerBody)
+            || !ExprContainsSuspension(binary))
+        {
+            base.EmitBinary(binary);
+            return;
+        }
+
+        // Protect each stack-empty synchronous segment, leaving nested
+        // suspension resume labels outside the protected regions.
+        var left = SpillAwaitSafeArgument(binary.Left);
+        var right = SpillAwaitSafeArgument(binary.Right);
+        EmitGuardedExpressionResult(() => EmitSpilledBinaryOperation(binary, left, right));
+    }
+
+    protected override void EmitPreparedStaticCall(Expr.Call call, MethodInfo target)
+    {
+        if (!NeedsExpressionCapture(call))
+        {
+            base.EmitPreparedStaticCall(call, target);
+            return;
+        }
+
+        // Move the prepared typed arguments off the stack before entering the
+        // exception region. This also covers direct rest and arguments calls.
+        var arguments = target.GetParameters()
+            .Select(parameter => _il.DeclareLocal(parameter.ParameterType)).ToArray();
+        for (int i = arguments.Length - 1; i >= 0; i--)
+            _il.Emit(OpCodes.Stloc, arguments[i]);
+        EmitGuardedExpressionResult(() =>
+        {
+            foreach (var argument in arguments)
+                _il.Emit(OpCodes.Ldloc, argument);
+            base.EmitPreparedStaticCall(call, target);
+        });
+    }
+
+    protected override void EmitCallCompletion(Expr.Call call, Action emit)
+    {
+        if (NeedsExpressionCapture(call))
+            EmitGuardedExpressionResult(emit);
+        else
+            emit();
+    }
+
+    protected override LocalBuilder SpillAwaitSafeArgument(Expr argument, Action? emitBoxed = null)
+    {
+        if (!CanCaptureExpressionException || ExprContainsSuspension(argument))
+            return base.SpillAwaitSafeArgument(argument, emitBoxed);
+
+        EmitGuardedExpressionResult(emitBoxed ?? (() => EmitExpression(argument)));
+        return _helpers.SpillStoreObject();
+    }
+
+    private bool CanCaptureExpressionException
+        => _protectedRegionDepth == 0 && (_currentTryExceptionLocal != null || _inHandlerBody);
+
+    private bool NeedsExpressionCapture(Expr expression)
+        => CanCaptureExpressionException && ExprContainsSuspension(expression);
+
+    private void EmitGuardedExpressionResult(Action emit)
+    {
+        var result = _il.DeclareLocal(_types.Object);
+        EmitCaptureTryOperation(() =>
+        {
+            emit();
+            EnsureBoxed();
+            _il.Emit(OpCodes.Stloc, result);
+        });
+        _il.Emit(OpCodes.Ldloc, result);
+        SetStackUnknown();
+    }
 
     #region Yield Expressions
 

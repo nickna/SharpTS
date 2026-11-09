@@ -730,7 +730,6 @@ public partial class RuntimeEmitter
             il,
             new DefinePropertyExistingDescriptorInputs(
                 inputs.ArrayStorage,
-                inputs.Arguments,
                 inputs.DescriptorStorage,
                 descriptors.GetOwnPropertyDescriptor,
                 inputs.GetProperty,

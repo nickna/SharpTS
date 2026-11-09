@@ -5,8 +5,10 @@ namespace SharpTS.Tests.SharedTests;
 
 public sealed class UnmappedArgumentsIntegrityTests
 {
-    [Fact]
-    public void CompiledUnmappedArgumentsOwnTheProtectedCalleeAccessor()
+    [Theory]
+    [InlineData(ExecutionMode.Interpreted)]
+    [InlineData(ExecutionMode.Compiled)]
+    public void UnmappedArgumentsOwnTheProtectedCalleeAccessor(ExecutionMode mode)
     {
         const string source = """
             function inspect(args) {
@@ -45,7 +47,7 @@ public sealed class UnmappedArgumentsIntegrityTests
 
         const string expected = "function true false false\ntrue\ntrue\ntrue\ntrue\n";
         Assert.Equal(string.Concat(Enumerable.Repeat(expected, 5)),
-            TestHarness.RunUnchecked(source, ExecutionMode.Compiled));
+            TestHarness.RunUnchecked(source, mode));
     }
 
     [Theory]

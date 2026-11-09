@@ -2666,6 +2666,27 @@ public partial class RuntimeEmitter
             il.Emit(OpCodes.Call, inputs.StringCoercion.ToJsString);
             il.Emit(OpCodes.Stloc, listDeleteKeyLocal);
 
+            // Length may be synthesized. Use the complete own-property descriptor
+            // just as dot deletion does, including the ordinary arguments case.
+            var listDeleteOtherKey = il.DefineLabel();
+            il.Emit(OpCodes.Ldloc, listDeleteKeyLocal);
+            il.Emit(OpCodes.Ldstr, "length");
+            il.Emit(OpCodes.Call, _types.StringOpEquality);
+            il.Emit(OpCodes.Brfalse, listDeleteOtherKey);
+            il.Emit(OpCodes.Ldarg_0);
+            il.Emit(OpCodes.Ldloc, listDeleteKeyLocal);
+            if (strict)
+            {
+                il.Emit(OpCodes.Ldarg_2);
+                il.Emit(OpCodes.Call, objectDeletion.PropertyStrict);
+            }
+            else
+            {
+                il.Emit(OpCodes.Call, objectDeletion.Property);
+            }
+            il.Emit(OpCodes.Ret);
+            il.MarkLabel(listDeleteOtherKey);
+
             il.Emit(OpCodes.Ldloc, listDeleteKeyLocal);
             il.Emit(OpCodes.Ldloca, listDeleteIndexLocal);
             il.Emit(OpCodes.Call, _types.GetMethod(_types.Int32, "TryParse", _types.String, _types.Int32.MakeByRefType()));
@@ -2702,11 +2723,6 @@ public partial class RuntimeEmitter
             il.Emit(OpCodes.Ldloc, listDeleteDescriptorLocal);
             il.Emit(OpCodes.Brtrue, listDeleteCheckIntegrity);
             il.Emit(OpCodes.Ldloc, listDeleteLiveSlot);
-            il.Emit(OpCodes.Brtrue, listDeleteCheckIntegrity);
-            // Length is synthesized even when no stored descriptor exists.
-            il.Emit(OpCodes.Ldloc, listDeleteKeyLocal);
-            il.Emit(OpCodes.Ldstr, "length");
-            il.Emit(OpCodes.Call, _types.StringOpEquality);
             il.Emit(OpCodes.Brfalse, trueLabel);
 
             il.MarkLabel(listDeleteCheckIntegrity);

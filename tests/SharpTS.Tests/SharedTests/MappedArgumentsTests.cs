@@ -276,15 +276,13 @@ public sealed class MappedArgumentsTests
         var assembly = Assembly.Load(TestHarness.CompileUncheckedAndVerify(
             "function args() { return arguments; } console.log(args(1).length);"));
         var argumentsType = assembly.GetType("$Arguments", throwOnError: true)!;
-        var length = argumentsType.GetField("_length")!;
         var receiver = Activator.CreateInstance(argumentsType);
-        length.SetValue(receiver, 65_536.0);
-
         var runtime = assembly.GetType("$Runtime", throwOnError: true)!;
+        runtime.GetMethod("SetProperty")!.Invoke(null, [receiver, "length", 65_536.0]);
         var snapshot = runtime.GetMethod("ArrayLikeMaterializeForIteration")!
             .Invoke(null, [receiver, true, null]);
         Assert.Empty(Assert.IsAssignableFrom<List<object>>(snapshot));
-        Assert.Equal(65_536.0, length.GetValue(snapshot));
+        Assert.Equal(65_536.0, runtime.GetMethod("GetProperty")!.Invoke(null, [snapshot, "length"]));
     }
 
     [Fact]
