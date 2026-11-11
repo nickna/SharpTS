@@ -883,6 +883,8 @@ public partial class TypeChecker
             ValidateDeclaredClassMembers(classStmt, classTypeForBody, classTypeParams, classTypeEnv);
 
             CheckClassStaticBlocks(classStmt, classTypeForBody);
+            if (classStmt.StaticInitializers?.Any(initializer => initializer is Stmt.StaticBlock) == true)
+                RevalidateClassFieldInitializers(classStmt, classStmt.Fields, mutableClass, classTypeEnv, classTypeParams);
             var staticBlockExit = classStmt.StaticInitializers?.Any(initializer => initializer is Stmt.StaticBlock) == true
                 ? CaptureValueFlow() : null;
 

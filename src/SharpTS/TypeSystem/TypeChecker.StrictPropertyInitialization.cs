@@ -102,7 +102,8 @@ public partial class TypeChecker
     private InitializationFlow AnalyzeInitializationStatements(
         IEnumerable<Stmt> statements,
         HashSet<string> incoming,
-        List<HashSet<string>> exits)
+        List<HashSet<string>> exits,
+        Func<string, Expr, bool>? assignmentProvesInitialization = null)
     {
         var state = new InitializationFlow(
             new HashSet<string>(incoming, StringComparer.Ordinal), true);
@@ -111,7 +112,7 @@ public partial class TypeChecker
         {
             if (!state.Reachable)
                 break;
-            state = AnalyzeInitializationStatement(statement, state.Assigned, exits);
+            state = AnalyzeInitializationStatement(statement, state.Assigned, exits, assignmentProvesInitialization);
         }
         return state;
     }
@@ -119,35 +120,36 @@ public partial class TypeChecker
     private InitializationFlow AnalyzeInitializationStatement(
         Stmt statement,
         HashSet<string> incoming,
-        List<HashSet<string>> exits)
+        List<HashSet<string>> exits,
+        Func<string, Expr, bool>? assignmentProvesInitialization = null)
     {
         switch (statement)
         {
             case Stmt.Expression expression:
                 return new InitializationFlow(
-                    AnalyzeInitializationExpression(expression.Expr, incoming), true);
+                    AnalyzeInitializationExpression(expression.Expr, incoming, assignmentProvesInitialization), true);
 
             case Stmt.Block block:
-                return AnalyzeInitializationStatements(block.Statements, incoming, exits);
+                return AnalyzeInitializationStatements(block.Statements, incoming, exits, assignmentProvesInitialization);
 
             case Stmt.Sequence sequence:
-                return AnalyzeInitializationStatements(sequence.Statements, incoming, exits);
+                return AnalyzeInitializationStatements(sequence.Statements, incoming, exits, assignmentProvesInitialization);
 
             case Stmt.If conditional:
             {
                 var afterCondition = AnalyzeInitializationExpression(
-                    conditional.Condition, incoming);
+                    conditional.Condition, incoming, assignmentProvesInitialization);
                 if (conditional.Condition is Expr.Literal { Value: bool condition })
                 {
                     var branch = condition ? conditional.ThenBranch : conditional.ElseBranch;
                     return branch is null ? new InitializationFlow(afterCondition, true) :
-                        AnalyzeInitializationStatement(branch, afterCondition, exits);
+                        AnalyzeInitializationStatement(branch, afterCondition, exits, assignmentProvesInitialization);
                 }
                 var thenFlow = AnalyzeInitializationStatement(
-                    conditional.ThenBranch, afterCondition, exits);
+                    conditional.ThenBranch, afterCondition, exits, assignmentProvesInitialization);
                 var elseFlow = conditional.ElseBranch != null
                     ? AnalyzeInitializationStatement(
-                        conditional.ElseBranch, afterCondition, exits)
+                        conditional.ElseBranch, afterCondition, exits, assignmentProvesInitialization)
                     : new InitializationFlow(
                         new HashSet<string>(afterCondition, StringComparer.Ordinal), true);
 
@@ -169,10 +171,10 @@ public partial class TypeChecker
             // A do/while body does execute once, so its body can contribute.
             case Stmt.DoWhile doWhile:
             {
-                var body = AnalyzeInitializationStatement(doWhile.Body, incoming, exits);
+                var body = AnalyzeInitializationStatement(doWhile.Body, incoming, exits, assignmentProvesInitialization);
                 return body.Reachable
                     ? new InitializationFlow(
-                        AnalyzeInitializationExpression(doWhile.Condition, body.Assigned), true)
+                        AnalyzeInitializationExpression(doWhile.Condition, body.Assigned, assignmentProvesInitialization), true)
                     : body;
             }
 
@@ -184,69 +186,78 @@ public partial class TypeChecker
 
     private HashSet<string> AnalyzeInitializationExpression(
         Expr expression,
-        HashSet<string> incoming)
+        HashSet<string> incoming,
+        Func<string, Expr, bool>? assignmentProvesInitialization = null)
     {
         var assigned = new HashSet<string>(incoming, StringComparer.Ordinal);
         switch (expression)
         {
             case Expr.AssertedAssignment assignment:
-                assigned = AnalyzeInitializationExpression(assignment.LoweredAssignment, assigned);
+                assigned = AnalyzeInitializationExpression(assignment.LoweredAssignment, assigned, assignmentProvesInitialization);
                 break;
             case Expr.Set { Object: Expr.This, Name: var name, Value: var value }:
-                assigned = AnalyzeInitializationExpression(value, assigned);
-                assigned.Add(name.Lexeme);
+                assigned = AnalyzeInitializationExpression(value, assigned, assignmentProvesInitialization);
+                RecordAssignment(name.Lexeme);
                 break;
             case Expr.SetPrivate { Object: Expr.This, Name: var name, Value: var value }:
-                assigned = AnalyzeInitializationExpression(value, assigned);
-                assigned.Add(name.Lexeme);
+                assigned = AnalyzeInitializationExpression(value, assigned, assignmentProvesInitialization);
+                RecordAssignment(name.Lexeme);
                 break;
             case Expr.SetSuper setSuper:
-                assigned = AnalyzeInitializationExpression(setSuper.Value, assigned);
+                assigned = AnalyzeInitializationExpression(setSuper.Value, assigned, assignmentProvesInitialization);
                 break;
             case Expr.CompoundSet { Object: Expr.This, Name: var compoundName, Value: var compoundValue }:
-                assigned = AnalyzeInitializationExpression(compoundValue, assigned);
-                assigned.Add(compoundName.Lexeme);
+                assigned = AnalyzeInitializationExpression(compoundValue, assigned, assignmentProvesInitialization);
+                RecordAssignment(compoundName.Lexeme);
                 break;
             case Expr.CompoundSetPrivate compound:
                 // The initial private read requires an installed field; this write
                 // cannot establish definite initialization of its own target.
-                assigned = AnalyzeInitializationExpression(compound.Object, assigned);
-                assigned = AnalyzeInitializationExpression(compound.Value, assigned);
+                assigned = AnalyzeInitializationExpression(compound.Object, assigned, assignmentProvesInitialization);
+                assigned = AnalyzeInitializationExpression(compound.Value, assigned, assignmentProvesInitialization);
                 break;
             case Expr.LogicalSetPrivate logicalPrivate:
                 // The RHS may be skipped, so only receiver assignments are definite.
-                assigned = AnalyzeInitializationExpression(logicalPrivate.Object, assigned);
+                assigned = AnalyzeInitializationExpression(logicalPrivate.Object, assigned, assignmentProvesInitialization);
                 break;
             case Expr.LogicalSet { Object: Expr.This, Name: var logicalName, Value: var logicalValue }:
-                assigned = AnalyzeInitializationExpression(logicalValue, assigned);
-                assigned.Add(logicalName.Lexeme);
+                assigned = AnalyzeInitializationExpression(logicalValue, assigned, assignmentProvesInitialization);
+                RecordAssignment(logicalName.Lexeme);
                 break;
             case Expr.Comma comma:
-                assigned = AnalyzeInitializationExpression(comma.Left, assigned);
-                assigned = AnalyzeInitializationExpression(comma.Right, assigned);
+                assigned = AnalyzeInitializationExpression(comma.Left, assigned, assignmentProvesInitialization);
+                assigned = AnalyzeInitializationExpression(comma.Right, assigned, assignmentProvesInitialization);
                 break;
             case Expr.Instantiation instantiation:
-                assigned = AnalyzeInitializationExpression(instantiation.Expression, assigned);
+                assigned = AnalyzeInitializationExpression(instantiation.Expression, assigned, assignmentProvesInitialization);
                 break;
             case Expr.Grouping grouping:
-                assigned = AnalyzeInitializationExpression(grouping.Expression, assigned);
+                assigned = AnalyzeInitializationExpression(grouping.Expression, assigned, assignmentProvesInitialization);
                 break;
             case Expr.PrivateIn presence:
-                assigned = AnalyzeInitializationExpression(presence.Object, assigned);
+                assigned = AnalyzeInitializationExpression(presence.Object, assigned, assignmentProvesInitialization);
                 break;
             case Expr.Ternary ternary:
             {
                 var afterCondition = AnalyzeInitializationExpression(
-                    ternary.Condition, assigned);
+                    ternary.Condition, assigned, assignmentProvesInitialization);
                 var thenAssigned = AnalyzeInitializationExpression(
-                    ternary.ThenBranch, afterCondition);
+                    ternary.ThenBranch, afterCondition, assignmentProvesInitialization);
                 var elseAssigned = AnalyzeInitializationExpression(
-                    ternary.ElseBranch, afterCondition);
+                    ternary.ElseBranch, afterCondition, assignmentProvesInitialization);
                 thenAssigned.IntersectWith(elseAssigned);
                 assigned = thenAssigned;
                 break;
             }
         }
         return assigned;
+
+        void RecordAssignment(string name)
+        {
+            if (assignmentProvesInitialization?.Invoke(name, expression) != false)
+                assigned.Add(name);
+            else
+                assigned.Remove(name);
+        }
     }
 }

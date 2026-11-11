@@ -3351,6 +3351,8 @@ public partial class TypeChecker
 
         using (new EnvironmentScope(this, classEnv))
             CheckClassStaticBlocks(declarationView, indexValidatedClass);
+        if (classExpr.StaticInitializers?.Any(initializer => initializer is Stmt.StaticBlock) == true)
+            RevalidateClassFieldInitializers(classExpr, classExpr.Fields, mutableClass, classTypeEnv, classTypeParams);
 
         // Return the class type (not an instance). For a generic class expression this is the
         // GenericClass so callers (e.g. `new`) can instantiate/infer its type arguments (#291).

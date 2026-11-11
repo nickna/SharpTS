@@ -357,9 +357,10 @@ public partial class TypeChecker
                     if (ReferenceEquals(preceding, field)) break;
                     if (preceding is Stmt.StaticBlock block)
                     {
-                        var flow = AnalyzeInitializationStatements(block.Body, [], []);
-                        (getterScope.StaticFieldsAssignedInEarlierBlocks ??= new(StringComparer.Ordinal))
-                            .UnionWith(flow.Assigned);
+                        var flow = AnalyzeInitializationStatements(block.Body,
+                            getterScope.StaticFieldsAssignedInEarlierBlocks ?? [], [],
+                            (name, assignment) => StaticAssignmentProvesInitialization(getterScope, name, assignment));
+                        getterScope.StaticFieldsAssignedInEarlierBlocks = flow.Assigned;
                     }
                 }
 
