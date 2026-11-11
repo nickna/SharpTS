@@ -1,3 +1,4 @@
+using SharpTS.TypeSystem;
 using SharpTS.TypeSystem.Exceptions;
 using SharpTS.Tests.Infrastructure;
 using Xunit;
@@ -37,7 +38,7 @@ public class EnumTests
             const value = "value" + 5;
             enum E { A = value, B }
             """;
-        var error = Assert.Throws<TypeCheckException>(() => TestHarness.Run(source, ExecutionMode.Interpreted));
+        var error = Assert.Throws<TypeCheckException>(() => new TypeChecker().Check(TestHarness.ParseOrThrow(source)));
         Assert.Contains("must have an initializer", error.Message);
     }
 
@@ -68,7 +69,7 @@ public class EnumTests
     [InlineData("const enum Source { A = 4 } function read() { const Source = { A: 8 }; const enum Result { A = Source.A } }")]
     public void ConstEnumInitializersRejectNonConstantQualifiedMembers(string source)
     {
-        Assert.Throws<TypeCheckException>(() => TestHarness.Run(source, ExecutionMode.Interpreted));
+        Assert.Throws<TypeCheckException>(() => new TypeChecker().Check(TestHarness.ParseOrThrow(source)));
     }
 
     [Theory, ModeData]
