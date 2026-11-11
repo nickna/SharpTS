@@ -10,6 +10,36 @@ namespace SharpTS.Tests.SharedTests;
 public class EnumTests
 {
     [Theory, ModeData]
+    public void ConstEnumInitializersReadQualifiedEnumMembers(ExecutionMode mode)
+    {
+        const string source = """
+            const enum First { A = 4, Word = "value" }
+            enum Regular { A = 8 }
+            const enum Second { A = First.A, B = First["A"] + 2, C = Regular.A, Word = First.Word, D = Second["B"] }
+            namespace Values {
+                export const enum Source { A = 12 }
+            }
+            const enum Third { A = Values.Source.A }
+            function read() {
+                const enum First { A = 20 }
+                const enum Local { A = First.A + 1 }
+                return Local.A;
+            }
+            console.log(Second.A, Second.B, Second.C, Second.Word, Second.D, Third.A, read());
+            """;
+        Assert.Equal("4 6 8 value 6 12 21\n", TestHarness.Run(source, mode));
+    }
+
+    [Theory]
+    [InlineData("const Source = { A: 4 }; const enum Result { A = Source.A }")]
+    [InlineData("enum Source { A = Math.random() } const enum Result { A = Source.A }")]
+    [InlineData("const enum Source { A = 4 } function read() { const Source = { A: 8 }; const enum Result { A = Source.A } }")]
+    public void ConstEnumInitializersRejectNonConstantQualifiedMembers(string source)
+    {
+        Assert.Throws<TypeCheckException>(() => TestHarness.Run(source, ExecutionMode.Interpreted));
+    }
+
+    [Theory, ModeData]
     public void RegularEnumInitializersReadStringConstantsWithoutReverseMapping(ExecutionMode mode)
     {
         const string source = """
