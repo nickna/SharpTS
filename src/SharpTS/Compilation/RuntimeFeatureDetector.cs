@@ -119,6 +119,7 @@ public sealed partial class RuntimeFeatureDetector
             UsesDynamicImport = false,
             UsesModuleNamespaces = false,
             UsesAsyncGenerator = false,
+            UsesYieldStar = false,
             UsesForAwaitOf = false,
             UsesWeakRef = false,
             UsesWeakMap = false,
@@ -1902,6 +1903,7 @@ public sealed partial class RuntimeFeatureDetector
                     HandleModulePath(p);
                 break;
             case Expr.Yield y:
+                if (y.IsDelegating) _set.UsesYieldStar = true;
                 if (y.Value is not null) VisitExpr(y.Value);
                 break;
             case Expr.NonNullAssertion nn:

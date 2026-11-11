@@ -6,7 +6,7 @@ namespace SharpTS.Compilation;
 
 /// <summary>
 /// Emits the async-from-sync adapter used by compiled <c>for await...of</c>
-/// loops when a value has no <c>Symbol.asyncIterator</c>.
+/// loops and async-generator delegation without <c>Symbol.asyncIterator</c>.
 /// </summary>
 public partial class RuntimeEmitter
 {
@@ -19,6 +19,7 @@ public partial class RuntimeEmitter
         MethodBuilder GetIteratorValue,
         EmittedInvocationRuntime Invocation,
         MethodBuilder InvokeCapturedIteratorNext,
+        MethodBuilder InvokeCapturedIteratorNextWithSent,
         MethodBuilder IterateToList,
         MethodBuilder NormalizeToEnumerator,
         EmittedObjectReadRuntime ObjectRead,
@@ -36,12 +37,14 @@ public partial class RuntimeEmitter
         MethodBuilder GetIteratorNextMethod,
         EmittedInvocationRuntime Invocation,
         MethodBuilder InvokeCapturedIteratorNext,
+        MethodBuilder InvokeCapturedIteratorNextWithSent,
         EmittedObjectReadRuntime ObjectRead,
         FieldInfo UndefinedInstance,
         Type UndefinedType
     );
 
-    private readonly record struct AsyncFromSyncNextInputs(MethodBuilder InvokeCapturedIteratorNext, FieldInfo UndefinedInstance);
+    private readonly record struct AsyncFromSyncNextInputs(
+        MethodBuilder InvokeCapturedIteratorNext, MethodBuilder InvokeCapturedIteratorNextWithSent, FieldInfo UndefinedInstance);
 
     private readonly record struct AsyncFromSyncReturnInputs(
         EmittedGeneratorRuntime Generators,
@@ -97,6 +100,7 @@ public partial class RuntimeEmitter
                 inputs.GetIteratorNextMethod,
                 inputs.Invocation,
                 inputs.InvokeCapturedIteratorNext,
+                inputs.InvokeCapturedIteratorNextWithSent,
                 inputs.ObjectRead,
                 inputs.UndefinedInstance,
                 inputs.UndefinedType
@@ -249,11 +253,14 @@ public partial class RuntimeEmitter
         var iteratorField = typeBuilder.DefineField("_iterator", _types.Object, FieldAttributes.Private);
         var nextField = typeBuilder.DefineField("_next", _types.Object, FieldAttributes.Private);
         var isProtocolField = typeBuilder.DefineField("_isProtocol", _types.Boolean, FieldAttributes.Private);
+        // yield* forwards one argument to next, while for-await calls next
+        // without arguments; guest code can observe arguments.length.
+        var forwardSentField = typeBuilder.DefineField("_forwardSent", _types.Boolean, FieldAttributes.Private);
 
         var ctor = typeBuilder.DefineConstructor(
             MethodAttributes.Public,
             CallingConventions.Standard,
-            [_types.Object, _types.Boolean]);
+            [_types.Object, _types.Boolean, _types.Boolean]);
         fromSync.Ctor = ctor;
         var ctorIl = ctor.GetILGenerator();
         ctorIl.Emit(OpCodes.Ldarg_0);
@@ -264,6 +271,9 @@ public partial class RuntimeEmitter
         ctorIl.Emit(OpCodes.Ldarg_0);
         ctorIl.Emit(OpCodes.Ldarg_2);
         ctorIl.Emit(OpCodes.Stfld, isProtocolField);
+        ctorIl.Emit(OpCodes.Ldarg_0);
+        ctorIl.Emit(OpCodes.Ldarg_3);
+        ctorIl.Emit(OpCodes.Stfld, forwardSentField);
         var initialized = ctorIl.DefineLabel();
         ctorIl.Emit(OpCodes.Ldarg_2);
         ctorIl.Emit(OpCodes.Brfalse, initialized);
@@ -278,10 +288,11 @@ public partial class RuntimeEmitter
             typeBuilder,
             asyncGenerators,
             fromSync,
-            new AsyncFromSyncNextInputs(inputs.InvokeCapturedIteratorNext, inputs.UndefinedInstance),
+            new AsyncFromSyncNextInputs(inputs.InvokeCapturedIteratorNext, inputs.InvokeCapturedIteratorNextWithSent, inputs.UndefinedInstance),
             iteratorField,
             isProtocolField,
-            nextField
+            nextField,
+            forwardSentField
         );
         EmitAsyncFromSyncReturn(
             typeBuilder,
@@ -321,7 +332,8 @@ public partial class RuntimeEmitter
         AsyncFromSyncNextInputs inputs,
         FieldBuilder iteratorField,
         FieldBuilder isProtocolField,
-        FieldBuilder nextField
+        FieldBuilder nextField,
+        FieldBuilder forwardSentField
     )
     {
         var method = typeBuilder.DefineMethod(
@@ -347,6 +359,20 @@ public partial class RuntimeEmitter
         il.Emit(OpCodes.Ldfld, isProtocolField);
         il.Emit(OpCodes.Brfalse, clrIterator);
 
+        var noSent = il.DefineLabel();
+        il.Emit(OpCodes.Ldarg_0);
+        il.Emit(OpCodes.Ldfld, forwardSentField);
+        il.Emit(OpCodes.Brfalse, noSent);
+        il.Emit(OpCodes.Ldarg_0);
+        il.Emit(OpCodes.Ldfld, iteratorField);
+        il.Emit(OpCodes.Ldarg_0);
+        il.Emit(OpCodes.Ldfld, nextField);
+        il.Emit(OpCodes.Ldarg_1);
+        il.Emit(OpCodes.Call, inputs.InvokeCapturedIteratorNextWithSent);
+        il.Emit(OpCodes.Stloc, stepLocal);
+        il.Emit(OpCodes.Br, haveStep);
+
+        il.MarkLabel(noSent);
         il.Emit(OpCodes.Ldarg_0);
         il.Emit(OpCodes.Ldfld, iteratorField);
         il.Emit(OpCodes.Ldarg_0);
@@ -695,6 +721,7 @@ public partial class RuntimeEmitter
         il.Emit(OpCodes.Newarr, _types.Object);
         il.Emit(OpCodes.Call, inputs.Invocation.Method);
         il.Emit(OpCodes.Ldc_I4_1);
+        il.Emit(OpCodes.Ldc_I4_0);
         il.Emit(OpCodes.Newobj, fromSync.Ctor);
         il.Emit(OpCodes.Ret);
 
@@ -738,6 +765,7 @@ public partial class RuntimeEmitter
 
         il.MarkLabel(constructClr);
         il.Emit(OpCodes.Ldloc, iteratorLocal);
+        il.Emit(OpCodes.Ldc_I4_0);
         il.Emit(OpCodes.Ldc_I4_0);
         il.Emit(OpCodes.Newobj, fromSync.Ctor);
         il.Emit(OpCodes.Ret);

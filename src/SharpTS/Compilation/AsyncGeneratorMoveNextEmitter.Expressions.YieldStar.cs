@@ -83,6 +83,33 @@ public partial class AsyncGeneratorMoveNextEmitter
         _il.Emit(OpCodes.Ldfld, isCustomField);
         _il.Emit(OpCodes.Brtrue, asyncLoopLabel);
 
+        // Async delegation falls back to the guest synchronous protocol before
+        // considering CLR enumeration. The adapter captures next once, forwards
+        // resume requests and adopts each synchronous iterator result's value.
+        EmitCaptureTryOperation(() =>
+        {
+            var syncIteratorMethod = _il.DeclareLocal(_types.Object);
+            var noSyncMethod = _il.DefineLabel();
+            _il.Emit(OpCodes.Ldloc, iterableTemp);
+            _il.Emit(OpCodes.Ldsfld, runtime.Symbols.Iterator);
+            _il.Emit(OpCodes.Call, runtime.IteratorProtocol.Function);
+            _il.Emit(OpCodes.Stloc, syncIteratorMethod);
+            _il.Emit(OpCodes.Ldloc, syncIteratorMethod);
+            _il.Emit(OpCodes.Brfalse, noSyncMethod);
+            _il.Emit(OpCodes.Ldloc, syncIteratorMethod);
+            _il.Emit(OpCodes.Isinst, runtime.Sentinels.UndefinedType);
+            _il.Emit(OpCodes.Brtrue, noSyncMethod);
+
+            _il.Emit(OpCodes.Ldloc, iterableTemp);
+            _il.Emit(OpCodes.Ldloc, syncIteratorMethod);
+            _il.Emit(OpCodes.Call, runtime.Invocation.Method0);
+            _il.Emit(OpCodes.Ldc_I4_1);
+            _il.Emit(OpCodes.Ldc_I4_1);
+            _il.Emit(OpCodes.Newobj, runtime.RequireAsyncGenerators().RequireFromSync().Ctor);
+            _il.Emit(OpCodes.Stloc, iterableTemp);
+            _il.MarkLabel(noSyncMethod);
+        });
+
         _il.Emit(OpCodes.Ldloc, iterableTemp);
         _il.Emit(OpCodes.Isinst, _types.IAsyncEnumeratorOfObject);
         _il.Emit(OpCodes.Brtrue, asyncSetupLabel);
