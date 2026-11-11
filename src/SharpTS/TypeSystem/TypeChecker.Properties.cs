@@ -801,7 +801,7 @@ public partial class TypeChecker
         return result;
     }
 
-    private TypeInfo CheckSetCore(Expr.Set set)
+    private TypeInfo CheckSetCore(Expr.Set set, TypeInfo? checkedObjectType = null, bool isLiteralIndex = false)
     {
         bool directGlobalObject = set.Object is Expr.Variable { Name.Lexeme: "globalThis" } ||
             set.Object is Expr.This && _currentClass is null && _currentFunctionReturnType is null;
@@ -822,7 +822,8 @@ public partial class TypeChecker
                 tsCode: "TS7017");
         }
 
-        TypeInfo objType = DeclaredTypedArrayReceiver(RefreshCompletedInterfaceBinding(CheckExpr(set.Object)));
+        TypeInfo objType = checkedObjectType ??
+            DeclaredTypedArrayReceiver(RefreshCompletedInterfaceBinding(CheckExpr(set.Object)));
         EnsureWritableClassIndex(objType, new TypeInfo.StringLiteral(set.Name.Lexeme),
             new Expr.Literal(set.Name.Lexeme));
         EnsureWritableInterfaceIndex(objType, new TypeInfo.StringLiteral(set.Name.Lexeme),
@@ -846,7 +847,8 @@ public partial class TypeChecker
         {
             objType = declaredUnion;
         }
-        ExpectSourceMemberReceiver(objType);
+        if (!isLiteralIndex)
+            ExpectSourceMemberReceiver(objType);
 
         if (objType is TypeInfo.Undefined && set.Object is Expr.This)
         {
@@ -932,7 +934,8 @@ public partial class TypeChecker
         }
 
         // Generic class values expose the same checked static property metadata.
-        if (objType is TypeInfo.Class or TypeInfo.GenericClass)
+        if (objType is TypeInfo.Class or TypeInfo.GenericClass or
+            TypeInfo.InstantiatedGeneric { GenericDefinition: TypeInfo.GenericClass })
         {
             TypeInfo? current = objType;
             while (current != null)
@@ -940,8 +943,11 @@ public partial class TypeChecker
                 var staticMethods = GetStaticMethods(current);
                 if (staticMethods != null && staticMethods.TryGetValue(set.Name.Lexeme, out var staticMethodType))
                 {
-                    EnforceStaticMemberAccess(current, set.Name);
-                    ObserveSourceMemberSelection(set.Name, current, MemberFacet.Static);
+                    if (!isLiteralIndex)
+                    {
+                        EnforceStaticMemberAccess(current, set.Name);
+                        ObserveSourceMemberSelection(set.Name, current, MemberFacet.Static);
+                    }
                     TypeInfo methodValueType = CheckExpr(set.Value);
                     if (!IsCompatible(staticMethodType, methodValueType))
                         throw new TypeCheckException($" Cannot assign '{methodValueType}' to static method '{set.Name.Lexeme}' of type '{staticMethodType}'.", tsCode: "TS2322");
@@ -951,15 +957,20 @@ public partial class TypeChecker
                 if (staticProps != null && staticProps.TryGetValue(set.Name.Lexeme, out var staticPropType))
                 {
                     var setterType = GetStaticSetters(current)?.GetValueOrDefault(set.Name.Lexeme);
-                    if (setterType is not null)
-                        EnforceAccessorAccess(current, objType, set.Name, isStatic: true, isWrite: true);
-                    else if (TryGetAccessorSetterAccess(current, isStatic: true, set.Name.Lexeme, out _))
-                        EnforceAccessorAccess(current, objType, set.Name, isStatic: true, isWrite: false);
-                    else
-                        EnforceStaticMemberAccess(current, set.Name);
+                    // Literal bracket access is TypeScript's escape hatch for soft private members.
+                    if (!isLiteralIndex)
+                    {
+                        if (setterType is not null)
+                            EnforceAccessorAccess(current, objType, set.Name, isStatic: true, isWrite: true);
+                        else if (TryGetAccessorSetterAccess(current, isStatic: true, set.Name.Lexeme, out _))
+                            EnforceAccessorAccess(current, objType, set.Name, isStatic: true, isWrite: false);
+                        else
+                            EnforceStaticMemberAccess(current, set.Name);
+                    }
                     if (ClassInfoAccessor.Get(current, c => c.Core.StaticReadonlyFields, gc => gc.Core.StaticReadonlyFields)?.Contains(set.Name.Lexeme) == true)
                         throw new TypeCheckException($" Cannot assign to '{set.Name.Lexeme}' because it is a read-only property.", tsCode: "TS2540");
-                    ObserveSourceMemberSelection(set.Name, current, MemberFacet.Static);
+                    if (!isLiteralIndex)
+                        ObserveSourceMemberSelection(set.Name, current, MemberFacet.Static);
                     TypeInfo writeType = setterType ?? ClassFieldWriteType(current, set.Name.Lexeme, staticPropType, isStatic: true);
                     TypeInfo valueType = CheckExpr(set.Value);
                     if (!IsCompatible(writeType, valueType))

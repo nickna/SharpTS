@@ -619,7 +619,8 @@ public partial class TypeChecker
 
     private TypeInfo? GetSymbolIndexedMemberType(TypeInfo receiver, string name)
     {
-        if (receiver is not (TypeInfo.Class or TypeInfo.GenericClass))
+        if (receiver is not (TypeInfo.Class or TypeInfo.GenericClass or
+            TypeInfo.InstantiatedGeneric { GenericDefinition: TypeInfo.GenericClass }))
             return GetMemberType(receiver, name);
 
         TypeInfo? current = receiver;
@@ -922,6 +923,16 @@ public partial class TypeChecker
     {
         TypeInfo objType = DeclaredTypedArrayReceiver(CheckExpr(setIndex.Object));
         TypeInfo indexType = CheckExpr(setIndex.Index);
+        if (objType is TypeInfo.Class or TypeInfo.GenericClass or
+                TypeInfo.InstantiatedGeneric { GenericDefinition: TypeInfo.GenericClass } &&
+            indexType is TypeInfo.StringLiteral literal &&
+            GetSymbolIndexedMemberType(objType, literal.Value) is not null)
+        {
+            var name = new Token(TokenType.IDENTIFIER, literal.Value, null,
+                TryGetExprLine(setIndex.Index) ?? _currentStatementLine ?? 0);
+            return CheckSetCore(new Expr.Set(setIndex.Object, name, setIndex.Value), objType, isLiteralIndex: true);
+        }
+
         TypeInfo? intersectionWriteContext = null;
         if (objType is TypeInfo.Intersection intersection && TryGetLiteralPropertyKeys(indexType, out var writeKeys))
         {
