@@ -469,6 +469,8 @@ public partial class TypeChecker
                  environment = environment.Enclosing)
                 environments.Add(environment, environment.SnapshotLocalValueTypes());
 
+        bool previousDuplicateSuppression = _diagnostics.SuppressDuplicates;
+        _diagnostics.SuppressDuplicates = true;
         PushNarrowingScope();
         try
         {
@@ -477,6 +479,7 @@ public partial class TypeChecker
         }
         finally
         {
+            _diagnostics.SuppressDuplicates = previousDuplicateSuppression;
             PopNarrowingScope();
             RestoreDefiniteAssignmentState(assignmentState);
             _variableAliases.Clear();
