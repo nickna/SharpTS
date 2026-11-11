@@ -10,6 +10,15 @@ public sealed class ClassExpressionStaticBlockStorageTests
 {
     public static IEnumerable<object[]> Cases()
     {
+        yield return ["static-block-typed-array-callback-runtime", """
+            const callback = (value: number): number => value + 1;
+            const Holder = class {
+                static {
+                    const callback = (value: number): number => value + 100;
+                    console.log([1, 2].map(callback).join(','));
+                }
+            };
+            """ + "\n", "101,102\n"];
         yield return ["anonymous-static-block-var-capture-issue", """
             let result = "";
             const C = class {

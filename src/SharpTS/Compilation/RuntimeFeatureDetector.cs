@@ -1933,6 +1933,9 @@ public sealed partial class RuntimeFeatureDetector
                 if (ce.Accessors is not null)
                     foreach (var a in ce.Accessors)
                         foreach (var s in a.Body) VisitStmt(s);
+                if (ce.StaticInitializers is not null)
+                    foreach (var block in ce.StaticInitializers.OfType<Stmt.StaticBlock>())
+                        VisitStmt(block);
                 break;
 
             case Expr.RegexLiteral:
