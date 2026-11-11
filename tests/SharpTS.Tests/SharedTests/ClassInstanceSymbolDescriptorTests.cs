@@ -6,6 +6,43 @@ namespace SharpTS.Tests.SharedTests;
 public sealed class ClassInstanceSymbolDescriptorTests
 {
     [Theory, ModeData]
+    public void AllOwnDescriptorsIncludeSymbolsWithoutCallingAccessors(ExecutionMode mode)
+    {
+        const string source = """
+            const own = Symbol('own'), hidden = Symbol('hidden'), accessor = Symbol('accessor');
+            const inherited = Symbol('inherited'), removed = Symbol('removed');
+            class Example { plain = 3; [inherited]() {} }
+            const instance: any = new Example();
+            instance[own] = 7;
+            Object.defineProperty(instance, hidden, { value: 8 });
+            let calls = 0;
+            const get = function () { calls++; return 9; };
+            Object.defineProperty(instance, accessor, { get, configurable: true });
+            instance[removed] = 10;
+            delete instance[removed];
+            const descriptors: any = Object.getOwnPropertyDescriptors(instance);
+            console.log(Object.hasOwn(instance, own), Object.hasOwn(descriptors, own));
+            console.log(Object.getOwnPropertySymbols(descriptors).map(s => s.description).join(','));
+            console.log(descriptors[own].value, descriptors[hidden].value, descriptors.plain.value);
+            console.log(descriptors[own].writable, descriptors[own].enumerable, descriptors[own].configurable);
+            console.log(descriptors[hidden].writable, descriptors[hidden].enumerable, descriptors[hidden].configurable);
+            console.log(descriptors[accessor].get === get, calls);
+            console.log(Object.hasOwn(descriptors, inherited), Object.hasOwn(descriptors, removed));
+            """;
+        const string expected = "true true\nown,hidden,accessor\n7 8 3\ntrue true true\nfalse false false\ntrue 0\nfalse false\n";
+        if (mode == ExecutionMode.Compiled)
+        {
+            var (errors, output) = TestHarness.CompileVerifyAndRun(source);
+            Assert.Empty(errors);
+            Assert.Equal(expected, output);
+        }
+        else
+        {
+            Assert.Equal(expected, TestHarness.Run(source, mode));
+        }
+    }
+
+    [Theory, ModeData]
     public void ExplicitAttributesControlSymbolWritesAndDeletion(ExecutionMode mode)
     {
         const string source = """
