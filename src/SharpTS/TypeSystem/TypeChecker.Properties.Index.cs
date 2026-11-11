@@ -634,16 +634,31 @@ public partial class TypeChecker
     {
         var keys = (index as TypeInfo.Union)?.FlattenedTypes;
         if (receiver is not TypeInfo.Instance instance ||
-            !(keys is null ? IsNumericConstructorIndex(index) : keys.Count > 0 && keys.All(IsNumericConstructorIndex)) ||
+            (keys is null && !IsNumericConstructorIndex(index)) ||
             !TryGetBuiltInArraySubclassElement(instance, out var elementType))
             return null;
 
         TypeInfo indexedElement = WithUncheckedUndefined(GetClassIndexType(instance, TokenType.TYPE_NUMBER)
             ?? GetClassIndexType(instance, TokenType.TYPE_STRING) ?? elementType);
-        return keys is null ? indexedElement : CollapseOrCreateUnion(keys
-            .Select(key => TryReadKnownIndexedInstanceMember(instance, key, syntax) ?? indexedElement)
-            .Distinct(TypeInfoEqualityComparer.Instance)
-            .ToList());
+        if (keys is null) return indexedElement;
+
+        List<TypeInfo> members = [];
+        foreach (var key in keys)
+        {
+            if (TryReadKnownIndexedInstanceMember(instance, key, syntax) is { } member)
+                members.Add(member);
+            else if (IsNumericConstructorIndex(key))
+                members.Add(indexedElement);
+            else if (key is TypeInfo.StringLiteral text &&
+                GetMemberType(new TypeInfo.Array(elementType), text.Value) is { } arrayMember)
+                members.Add(arrayMember);
+            else if (IsStringOrNumberIndexDomain(key) && ReadStringIndexOf(instance) is { } stringIndex)
+                members.Add(WithUncheckedUndefined(stringIndex));
+            else
+                return null;
+        }
+        return members.Count == 0 ? null : CollapseOrCreateUnion(members
+            .Distinct(TypeInfoEqualityComparer.Instance).ToList());
     }
 
     private bool TryGetBuiltInArraySubclassElement(

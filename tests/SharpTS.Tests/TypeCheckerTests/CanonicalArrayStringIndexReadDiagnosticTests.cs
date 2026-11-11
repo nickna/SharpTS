@@ -48,6 +48,47 @@ public sealed class CanonicalArrayStringIndexReadDiagnosticTests
         Assert.Equal(8, diagnostic.Line);
     }
 
+    [Theory]
+    [InlineData("Child<string>", "'0' | 'length'", "string | number")]
+    [InlineData("Child<string>", "number | 'length'", "string | number")]
+    [InlineData("Child<string>", "'0' | 'label'", "string | 'tag'")]
+    [InlineData("Child<string> | Child<number>", "'0' | 'length'", "string | number")]
+    [InlineData("Explicit", "'0' | 'length'", "'first' | number")]
+    public void ArraySubclassCombinesElementAndNamedPropertyTypes(string receiver, string key, string expectedType)
+    {
+        var statements = TestHarness.ParseOrThrow($$"""
+            class Child<T> extends Array<T> { label = 'tag' as const; }
+            class Explicit extends Array<string> { 0 = 'first' as const; }
+            function read(child: {{receiver}}, key: {{key}}) {
+                const correct: {{expectedType}} = child[key];
+                const wrong: boolean = child[key];
+            }
+            """);
+
+        var diagnostic = Assert.Single(new TypeChecker(TypeCheckerOptions.Strict).CheckWithRecovery(statements).Diagnostics);
+        Assert.Equal("TS2322", diagnostic.TsCode);
+        Assert.Equal(5, diagnostic.Line);
+    }
+
+    [Fact]
+    public void MixedArraySubclassKeysRetainUncheckedElementUndefined()
+    {
+        var statements = TestHarness.ParseOrThrow("""
+            class Child extends Array<string> {}
+            function read(child: Child, key: '0' | 'length') {
+                const correct: string | number | undefined = child[key];
+                const wrong: string | number = child[key];
+            }
+            """);
+
+        var diagnostic = Assert.Single(new TypeChecker(TypeCheckerOptions.Strict with
+        {
+            NoUncheckedIndexedAccess = true
+        }).CheckWithRecovery(statements).Diagnostics);
+        Assert.Equal("TS2322", diagnostic.TsCode);
+        Assert.Equal(4, diagnostic.Line);
+    }
+
     internal const string Source = """
         const numbers: number[] = [4, 8];
         const wrongNumber: string = numbers['0'];
