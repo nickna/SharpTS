@@ -743,6 +743,7 @@ public partial class TypeChecker
 
                     try
                     {
+                        HoistVarDeclarations(block.Body);
                         CheckBlock(block.Body, staticBlockEnv);
                     }
                     finally
