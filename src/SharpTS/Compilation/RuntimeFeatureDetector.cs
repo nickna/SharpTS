@@ -2609,6 +2609,19 @@ public sealed partial class RuntimeFeatureDetector
         {
             Add(stmt.Name.Lexeme);
             base.VisitClass(stmt);
+            if (stmt.StaticInitializers is not null)
+                foreach (var block in stmt.StaticInitializers.OfType<Stmt.StaticBlock>())
+                    Visit(block);
+        }
+
+        protected override void VisitClassExpr(Expr.ClassExpr expr)
+        {
+            if (expr.Name is not null)
+                Add(expr.Name.Lexeme);
+            base.VisitClassExpr(expr);
+            if (expr.StaticInitializers is not null)
+                foreach (var block in expr.StaticInitializers.OfType<Stmt.StaticBlock>())
+                    Visit(block);
         }
 
         protected override void VisitEnum(Stmt.Enum stmt)

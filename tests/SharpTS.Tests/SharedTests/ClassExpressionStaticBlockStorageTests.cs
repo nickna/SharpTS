@@ -19,6 +19,28 @@ public sealed class ClassExpressionStaticBlockStorageTests
                 }
             };
             """ + "\n", "101,102\n"];
+        foreach (var (kind, declaration) in new[]
+        {
+            ("declaration", "class Holder"),
+            ("anonymous", "const Holder = class"),
+            ("named", "const Holder = class Owner")
+        })
+        {
+            yield return ["static-block-shadowed-record-mutator-" + kind, $$"""
+                type Item = { count: number; values: number[] };
+                type Update = { extra: number; count: number };
+                function touch(target: Item, update: Update): void {}
+                function read(item: Item): number { return item.count; }
+                const item: Item = { count: 1, values: [1] };
+                {{declaration}} {
+                    static {
+                        const touch: (target: Item, update: Update) => Item = Object.assign;
+                        touch(item, { extra: 2, count: 9 });
+                    }
+                };
+                console.log(read(item), item.count);
+                """ + "\n", "9 9\n"];
+        }
         yield return ["anonymous-static-block-var-capture-issue", """
             let result = "";
             const C = class {
