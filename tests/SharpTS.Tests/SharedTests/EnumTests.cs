@@ -10,6 +10,38 @@ namespace SharpTS.Tests.SharedTests;
 public class EnumTests
 {
     [Theory, ModeData]
+    public void EnumInitializersConcatenateStringAndNumericConstants(ExecutionMode mode)
+    {
+        const string source = """
+            const prefix = "value" + 5;
+            const suffix = 6 + "value";
+            enum E {
+                A = prefix,
+                B = suffix,
+                Decimal = "d" + 1.5,
+                Exponent = "e" + 1e21,
+                Zero = "z" + -0
+            }
+            const enum F { A = "const" + 2, B = 3 + "const" }
+            console.log(E.A, E.B, E.Decimal, E.Exponent, E.Zero, F.A, F.B);
+            console.log((E as any)[prefix], (E as any)[suffix], (E as any)["d1.5"]);
+            """;
+        Assert.Equal("value5 6value d1.5 e1e+21 z0 const2 3const\nundefined undefined undefined\n",
+            TestHarness.Run(source, mode));
+    }
+
+    [Fact]
+    public void MixedConcatenationEnumMemberDisablesImplicitIncrement()
+    {
+        const string source = """
+            const value = "value" + 5;
+            enum E { A = value, B }
+            """;
+        var error = Assert.Throws<TypeCheckException>(() => TestHarness.Run(source, ExecutionMode.Interpreted));
+        Assert.Contains("must have an initializer", error.Message);
+    }
+
+    [Theory, ModeData]
     public void ConstEnumInitializersReadQualifiedEnumMembers(ExecutionMode mode)
     {
         const string source = """

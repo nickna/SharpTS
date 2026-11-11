@@ -182,9 +182,17 @@ internal static class ConstEnumExpressionEvaluator
             };
         }
 
-        if (left is string ls && right is string rs && binary.Operator.Type == TokenType.PLUS)
+        if (binary.Operator.Type == TokenType.PLUS)
         {
-            return ls + rs;
+            string? concatenated = (left, right) switch
+            {
+                (string ls, string rs) => ls + rs,
+                (string text, double number) => text + Compilation.RuntimeTypes.FormatNumber(number),
+                (double number, string text) => Compilation.RuntimeTypes.FormatNumber(number) + text,
+                _ => null,
+            };
+            if (concatenated is not null)
+                return concatenated;
         }
 
         throw error(new(
