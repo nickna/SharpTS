@@ -2889,7 +2889,7 @@ public partial class TypeChecker
                 TypeInfo fieldType = ResolveAnnotation(field.TypeAnnotation, field.TypeAnnotationNode, field)
                     ?? TypeInfo.Any.Shared;
 
-                ValidateClassFieldComputedKey(field);
+                ValidateClassFieldSyntax(field);
 
                 if (field.IsPrivate)
                 {
