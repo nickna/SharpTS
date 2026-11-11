@@ -66,6 +66,22 @@ internal static class StableFunctionBindingAnalyzer
         public HashSet<string> Names { get; } = [];
         public bool MayWriteUnknownBinding { get; private set; }
 
+        protected override void VisitClass(Stmt.Class stmt)
+        {
+            base.VisitClass(stmt);
+            if (stmt.StaticInitializers is not null)
+                foreach (var block in stmt.StaticInitializers.OfType<Stmt.StaticBlock>())
+                    Visit(block);
+        }
+
+        protected override void VisitClassExpr(Expr.ClassExpr expr)
+        {
+            base.VisitClassExpr(expr);
+            if (expr.StaticInitializers is not null)
+                foreach (var block in expr.StaticInitializers.OfType<Stmt.StaticBlock>())
+                    Visit(block);
+        }
+
         protected override void VisitCall(Expr.Call expr)
         {
             // A direct eval executes in the current lexical environment and can replace a

@@ -19,6 +19,23 @@ public sealed class ClassExpressionStaticBlockStorageTests
                 }
             };
             """ + "\n", "101,102\n"];
+        yield return ["static-block-captured-function-typed-parameter", """
+            function joinParts(parts: string[]): string { return parts.join(','); }
+            const Holder = class {
+                static { console.log(joinParts(['a', 'b'])); }
+            };
+            """ + "\n", "a,b\n"];
+        yield return ["static-block-captured-function-numeric-array-parameter", """
+            function total(values: number[]): number { return values[0] + values[1]; }
+            const Holder = class {
+                static { console.log(total([2, 3])); }
+            };
+            """ + "\n", "5\n"];
+        foreach (var (bindingKind, binding) in new[]
+        {
+            ("shadowed", "const touch: (target: Item, update: Update) => Item = Object.assign;"),
+            ("reassigned", "touch = Object.assign;")
+        })
         foreach (var (kind, declaration) in new[]
         {
             ("declaration", "class Holder"),
@@ -26,7 +43,10 @@ public sealed class ClassExpressionStaticBlockStorageTests
             ("named", "const Holder = class Owner")
         })
         {
-            yield return ["static-block-shadowed-record-mutator-" + kind, $$"""
+            // Class-declaration function-value dispatch is tracked separately in #3653.
+            if (bindingKind == "reassigned" && kind == "declaration")
+                continue;
+            yield return ["static-block-" + bindingKind + "-record-mutator-" + kind, $$"""
                 type Item = { count: number; values: number[] };
                 type Update = { extra: number; count: number };
                 function touch(target: Item, update: Update): void {}
@@ -34,7 +54,7 @@ public sealed class ClassExpressionStaticBlockStorageTests
                 const item: Item = { count: 1, values: [1] };
                 {{declaration}} {
                     static {
-                        const touch: (target: Item, update: Update) => Item = Object.assign;
+                        {{binding}}
                         touch(item, { extra: 2, count: 9 });
                     }
                 };

@@ -141,7 +141,8 @@ public abstract partial class ExpressionEmitterBase
             // `h()` would silently hit the top-level `h` instead of the in-scope `h`. Defer to
             // the inner-function direct call (below) or the function-value call (fallback),
             // both of which honor the resolver's precedence.
-            bool shadowedByLocalBinding = Resolver.HasVariable(funcVar.Name.Lexeme);
+            bool shadowedByLocalBinding = Resolver.HasVariable(funcVar.Name.Lexeme)
+                || TryGetClassDefinitionCaptureSlot(funcVar.Name.Lexeme, out _);
 
             // Resolver.HasVariable intentionally includes TopLevelStaticVars for ordinary variable
             // reads, so a live export field makes it report true even when there is no more-local
