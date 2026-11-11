@@ -124,9 +124,9 @@ public partial class Interpreter
         if (forOf.IsAsync)
         {
             var asyncIterator = TryGetAsyncIterator(iterable);
-            if (asyncIterator != null)
+            if (asyncIterator is { } record)
             {
-                return await IterateAsyncIterator(asyncIterator, forOf, labels);
+                return await IterateAsyncIterator(record, forOf, labels);
             }
             // Fall through to sync iterator with async unwrap
         }
@@ -280,16 +280,18 @@ public partial class Interpreter
         }
     }
 
+    internal readonly record struct AsyncIteratorRecord(object Iterator, object? Next);
+
     /// <summary>
     /// Tries to get an async iterator from an object via Symbol.asyncIterator.
     /// Async generators are their own async iterators.
     /// </summary>
-    private object? TryGetAsyncIterator(object? iterable)
+    internal AsyncIteratorRecord? TryGetAsyncIterator(object? iterable)
     {
         // Async generators are their own async iterators
         if (iterable is SharpTSAsyncGenerator asyncGen)
         {
-            return asyncGen;
+            return CaptureAsyncIterator(asyncGen);
         }
 
         // Web Streams ReadableStream: wrap in an async iterator that
@@ -303,90 +305,55 @@ public partial class Interpreter
             }
             var reader = new SharpTSReadableStreamDefaultReader(rs);
             rs.Reader = reader;
-            return new SharpTSReadableStreamAsyncIterator(rs, reader);
+            return CaptureAsyncIterator(new SharpTSReadableStreamAsyncIterator(rs, reader));
         }
 
         // node:stream Readable (incl. Duplex/Transform/PassThrough) — wrap in an async
         // iterator that pulls buffered chunks and parks on a slow producer (#1024).
         if (iterable is SharpTSReadable readable)
         {
-            return new SharpTSReadableAsyncIterator(readable);
+            return CaptureAsyncIterator(new SharpTSReadableAsyncIterator(readable));
         }
 
-        var asyncIteratorFn = iterable switch
-        {
-            SharpTSClass klass => GetClassSymbolValue(klass, SharpTSSymbol.AsyncIterator),
-            SharpTSObject obj => obj.GetBySymbol(SharpTSSymbol.AsyncIterator),
-            SharpTSInstance instance => GetInstanceSymbolValue(instance, SharpTSSymbol.AsyncIterator),
-            _ => null
-        };
+        var asyncIteratorFn = iterable is null
+            ? null
+            : GetSymbolPropertyValue(iterable, SharpTSSymbol.AsyncIterator);
         // GetMethod permits the synchronous fallback only for an absent method.
         if (asyncIteratorFn is null or SharpTSUndefined)
             return null;
-        if (asyncIteratorFn is not ISharpTSCallable)
-            throw new ThrowException(new SharpTSTypeError(
-                "[Symbol.asyncIterator] must be a function"));
-        asyncIteratorFn = BindMemberCallReceiver(asyncIteratorFn, iterable);
-        return ((ISharpTSCallable)asyncIteratorFn!).Call(this, []);
+        if (asyncIteratorFn is not ISharpTSCallable callable)
+            throw new ThrowException(new SharpTSTypeError("[Symbol.asyncIterator] must be a function"));
+        return CaptureAsyncIterator(FunctionBuiltIns.CallWithThis(this, callable, iterable, []));
+    }
+
+    private AsyncIteratorRecord CaptureAsyncIterator(object? iterator)
+    {
+        if (!RuntimeValue.FromBoxed(iterator).IsObject)
+            throw new ThrowException(new SharpTSTypeError("Symbol.asyncIterator must return an object."));
+        return new(iterator!, GetPropertyValue(iterator, "next"));
+    }
+
+    internal object? InvokeAsyncIteratorMethod(object iterator, object? method, string name, List<object?> args)
+    {
+        if (method is not ISharpTSCallable callable)
+            throw new ThrowException(new SharpTSTypeError($"Async iterator.{name} must be a function."));
+        return FunctionBuiltIns.CallWithThis(this, callable, iterator, args);
     }
 
     /// <summary>
     /// Iterates an async iterator by repeatedly calling .next() and awaiting results.
     /// </summary>
-    private async Task<ExecutionResult> IterateAsyncIterator(object asyncIterator, Stmt.ForOf forOf, IReadOnlyList<string>? labels = null)
+    private async Task<ExecutionResult> IterateAsyncIterator(AsyncIteratorRecord record, Stmt.ForOf forOf, IReadOnlyList<string>? labels = null)
     {
         var completion = ExecutionResult.Success(RuntimeValue.Undefined);
-        // The loop body must run in the for-await statement's own lexical scope, regardless of how the
-        // iterator's next() mutates the interpreter's ambient environment. The eager-drain async generator
-        // transiently repoints that environment at its own closure while draining, and a body shape whose
-        // await is nested in a delegated expression can leave it repointed across the suspension; without
-        // re-asserting the loop scope here, the body (and code after the loop) would resolve outer bindings
-        // against the wrong scope — "Undefined variable" (#689). Capturing once and restoring after each
-        // next() also hardens for-await against any custom async iterator with environment side effects.
-        RuntimeEnvironment hostEnv = _environment;
-        var hostGenerator = CurrentAsyncGenerator;
+        object asyncIterator = record.Iterator;
         while (true)
         {
             ThrowIfExecutionCancelled();
-            Task<object?> step;
-            try
-            {
-                step = ResolveAsyncIteratorResult(CallMethodOnObject(asyncIterator, "next", []));
-            }
-            finally
-            {
-                _environment = hostEnv;
-                CurrentAsyncGenerator = hostGenerator;
-            }
+            var nextResult = await AwaitAsyncIteratorStep(asyncIterator, record.Next, "next", []);
 
-            var nextResult = await AwaitPreservingEnvironment(QueueNativeAwait(step));
-            if (!RuntimeValue.FromBoxed(nextResult).IsObject)
-                throw new ThrowException(new SharpTSTypeError("Async iterator.next must return an object."));
-
-            // Check if the result is an iterator result object
-            bool done = false;
-            object? value = null;
-
-            if (nextResult is SharpTSObject resultObj)
-            {
-                var doneVal = resultObj.GetProperty("done");
-                done = IsTruthy(doneVal);
-                value = resultObj.GetProperty("value");
-            }
-            else if (nextResult is SharpTSIteratorResult iterResult)
-            {
-                done = iterResult.Done;
-                value = iterResult.Value;
-            }
-            // Plain Dictionary<string, object?> — used by runtime helpers like
-            // Web Streams iterator results returned from ReadableStream.read().
-            else if (nextResult is IDictionary<string, object?> dict)
-            {
-                if (dict.TryGetValue("done", out var d)) done = IsTruthy(d);
-                if (dict.TryGetValue("value", out var v)) value = v;
-            }
-
-            if (done) break;
+            if (IsTruthy(GetPropertyValue(nextResult, "done"))) break;
+            object? value = GetPropertyValue(nextResult, "value");
 
             ExecutionResult result;
             try
@@ -432,7 +399,7 @@ public partial class Interpreter
     /// For other early exits, a failed return lookup/call/await or a nonobject
     /// result replaces the loop completion.
     /// </summary>
-    private async Task CloseAsyncIteratorOnEarlyExit(object asyncIterator, bool preserveThrow)
+    internal async Task CloseAsyncIteratorOnEarlyExit(object asyncIterator, bool preserveThrow)
     {
         var saved = _environment;
         var savedGen = CurrentAsyncGenerator;
@@ -474,6 +441,28 @@ public partial class Interpreter
         }
     }
 
+    internal async Task<object?> AwaitAsyncIteratorStep(object iterator, object? method, string name, List<object?> args)
+    {
+        // The caller's scope must survive starting another async generator (#689).
+        var saved = _environment;
+        var savedGen = CurrentAsyncGenerator;
+        Task<object?> step;
+        try
+        {
+            step = ResolveAsyncIteratorResult(InvokeAsyncIteratorMethod(iterator, method, name, args));
+        }
+        finally
+        {
+            _environment = saved;
+            CurrentAsyncGenerator = savedGen;
+        }
+
+        var result = await AwaitPreservingEnvironment(QueueNativeAwait(step));
+        if (!RuntimeValue.FromBoxed(result).IsObject)
+            throw new ThrowException(new SharpTSTypeError($"Async iterator.{name} must return an object."));
+        return result;
+    }
+
     private Task<object?> ResolveAsyncIteratorResult(object? result)
     {
         if (result is SharpTSPromise promise)
@@ -484,52 +473,6 @@ public partial class Interpreter
         var completion = new TaskCompletionSource<object?>();
         PromiseBuiltIns.ResolveThenableIntoCapability(this, completion, result);
         return completion.Task;
-    }
-
-    /// <summary>
-    /// Calls a method on an object by name.
-    /// </summary>
-    private object? CallMethodOnObject(object target, string methodName, List<object?> args)
-    {
-        if (target is SharpTSObject obj)
-        {
-            if (obj.GetProperty(methodName) is ISharpTSCallable callable)
-                return FunctionBuiltIns.CallWithThis(this, callable, obj, args);
-        }
-        else if (target is SharpTSInstance inst)
-        {
-            // Try to find the method in the class
-            var method = inst.GetClass().FindMethod(methodName);
-            if (method != null)
-            {
-                var bound = SharpTSClass.BindMethod(method, inst);
-                return bound.Call(this, args);
-            }
-        }
-        else if (target is SharpTSGenerator gen)
-        {
-            // Handle generator methods
-            return methodName switch
-            {
-                "next" => gen.Next(args.Count > 0 ? args[0] : SharpTSUndefined.Instance),
-                "return" => gen.Return(args.Count > 0 ? args[0] : null),
-                "throw" => gen.Throw(args.Count > 0 ? args[0] : null),
-                _ => throw new InterpreterException($"Generator does not have method '{methodName}'.")
-            };
-        }
-        else if (target is SharpTSAsyncGenerator asyncGen)
-        {
-            // Handle async generator methods
-            return methodName switch
-            {
-                "next" => asyncGen.Next(),
-                "return" => asyncGen.Return(args.Count > 0 ? args[0] : null),
-                "throw" => asyncGen.Throw(args.Count > 0 ? args[0] : null),
-                _ => throw new InterpreterException($"AsyncGenerator does not have method '{methodName}'.")
-            };
-        }
-
-        throw new InterpreterException($"Cannot call method '{methodName}' on {target?.GetType().Name ?? "null"}.");
     }
 
     private async Task<ExecutionResult> ExecuteForInAsync(Stmt.ForIn forIn)

@@ -25,6 +25,7 @@ public partial class ILEmitter
                 Equals(fact.Receiver, factReceiver) &&
                 fact.Getter.Name == "get_" + NamingConventions.ToPascalCase(g.Name.Lexeme)))
             _nativePrimitiveFieldFacts.Clear();
+        if (!g.Optional && TryEmitConstEnumMember(g.Object, g.Name.Lexeme)) return;
         if (TryEmitGuestThisGet(g)) return;
         if (TryEmitEventEmitterFacadeGet(g)) return;
         if (TryEmitStableRecordDestructureGet(g))
@@ -1156,6 +1157,9 @@ public partial class ILEmitter
 
     protected override void EmitGetIndex(Expr.GetIndex gi)
     {
+        if (!gi.Optional && gi.Index is Expr.Literal { Value: string enumMemberName } && TryEmitConstEnumMember(gi.Object, enumMemberName))
+            return;
+
         if (gi.Object is Expr.Super { Method: null })
         {
             EmitComputedSuperGet(gi);

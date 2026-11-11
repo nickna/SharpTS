@@ -87,6 +87,22 @@ public class JSONTests
     }
 
     [Theory, ModeData]
+    public void JSON_Parse_ArrayLengthAssignment(ExecutionMode mode)
+    {
+        const string source = """
+            const arr = JSON.parse('[1,2,3]');
+            arr.length = 1;
+            console.log(arr.length, arr.join('|'), Object.hasOwn(arr, '1'));
+            const nested = JSON.parse('{"items":[1,2,3]}').items;
+            nested.length = 1;
+            nested.length = 3;
+            console.log(nested.length, nested.join('|'), Object.hasOwn(nested, '1'));
+            """;
+
+        Assert.Equal("1 1 false\n3 1|| false\n", TestHarness.Run(source, mode));
+    }
+
+    [Theory, ModeData]
     public void JSON_Parse_NestedObject(ExecutionMode mode)
     {
         var source = """

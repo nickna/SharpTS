@@ -804,7 +804,7 @@ public partial class TypeChecker
     private TypeInfo CheckSetCore(Expr.Set set)
     {
         bool directGlobalObject = set.Object is Expr.Variable { Name.Lexeme: "globalThis" } ||
-            set.Object is Expr.This && _currentFunctionReturnType is null;
+            set.Object is Expr.This && _currentClass is null && _currentFunctionReturnType is null;
         if (_hasDefaultLibraries && directGlobalObject &&
             !GetGlobalThisType().Members.ContainsKey(set.Name.Lexeme))
         {

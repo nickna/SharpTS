@@ -94,8 +94,12 @@ internal static class ConstEnumExpressionEvaluator
                 when regularEnum && receiver.Name.Lexeme == enumName =>
                 ResolveMember(key, resolvedMembers, error),
 
+            Expr.Variable variable when resolvedMembers.TryGetValue(variable.Name.Lexeme, out var memberValue) =>
+                memberValue,
+
+            Expr.Variable variable when resolveReference?.Invoke(variable) is { } constant => constant,
+
             Expr.Variable variable when regularEnum =>
-                resolvedMembers.GetValueOrDefault(variable.Name.Lexeme) ?? resolveReference?.Invoke(variable) ??
                 throw error(new(ConstEnumErrorKind.ForwardReference,
                     $"Const enum member '{variable.Name.Lexeme}' referenced before definition.")),
 

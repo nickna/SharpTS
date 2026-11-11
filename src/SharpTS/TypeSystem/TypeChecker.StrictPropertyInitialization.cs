@@ -137,6 +137,12 @@ public partial class TypeChecker
             {
                 var afterCondition = AnalyzeInitializationExpression(
                     conditional.Condition, incoming);
+                if (conditional.Condition is Expr.Literal { Value: bool condition })
+                {
+                    var branch = condition ? conditional.ThenBranch : conditional.ElseBranch;
+                    return branch is null ? new InitializationFlow(afterCondition, true) :
+                        AnalyzeInitializationStatement(branch, afterCondition, exits);
+                }
                 var thenFlow = AnalyzeInitializationStatement(
                     conditional.ThenBranch, afterCondition, exits);
                 var elseFlow = conditional.ElseBranch != null

@@ -617,6 +617,9 @@ public abstract partial class ExpressionEmitterBase : IEmitterContext
     /// </summary>
     protected virtual void EmitGetIndex(Expr.GetIndex gi)
     {
+        if (!gi.Optional && gi.Index is Expr.Literal { Value: string enumMemberName } && TryEmitConstEnumMember(gi.Object, enumMemberName))
+            return;
+
         if (gi.Object is Expr.Super { Method: null })
         {
             EmitComputedSuperGet(gi);
@@ -3106,6 +3109,7 @@ public abstract partial class ExpressionEmitterBase : IEmitterContext
         if (Ctx.Functions.ContainsKey(Ctx.ResolveFunctionName(name))) return true;
         if (Ctx.InnerFunctionMethodsByName?.ContainsKey(name) == true) return true;
         if (Ctx.NamespaceFields?.ContainsKey(name) == true) return true;
+        if (Ctx.EnumValueFields?.ContainsKey(Ctx.ResolveEnumName(name)) == true) return true;
         if (Runtime.BuiltIns.BuiltInNames.IsErrorTypeName(name)) return true;
         // Built-in constructor types (Array/Date/Map/Set/RegExp/Promise/Buffer/etc.) —
         // without this, `typeof Array` returns `"undefined"` in compiled mode even though
@@ -3266,6 +3270,7 @@ public abstract partial class ExpressionEmitterBase : IEmitterContext
 
     protected virtual void EmitGet(Expr.Get g)
     {
+        if (!g.Optional && TryEmitConstEnumMember(g.Object, g.Name.Lexeme)) return;
         if (TryEmitGuestThisGet(g)) return;
         if (StringEmitter.TryEmitPrimitiveStringLengthGet(this, g))
             return;

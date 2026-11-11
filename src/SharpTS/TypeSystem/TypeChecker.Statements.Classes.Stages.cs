@@ -320,6 +320,13 @@ public partial class TypeChecker
             Expr.ClassExpr expression => expression.Name?.Lexeme,
             _ => null
         };
+        var staticInitializers = sourceOwner switch
+        {
+            Stmt.Class declaration => declaration.StaticInitializers,
+            Expr.ClassExpr expression => expression.StaticInitializers,
+            _ => null
+        };
+        int nextStaticInitializer = 0;
 
         var getterScope = CreateFieldGetterScope(sourceOwner, fields, mutableClass, instanceEnvironment);
         if (retryFields != null)
@@ -340,6 +347,21 @@ public partial class TypeChecker
             {
                 if (field.Initializer == null || field.IsDeclare ||
                     (retryFields != null && !retryFields.Contains(field))) continue;
+
+                // The ordinary block checks run after field inference. Walk the ordered
+                // initializers here to learn which blocks initialize fields before this read.
+                while (field.IsStatic && staticInitializers is not null &&
+                    nextStaticInitializer < staticInitializers.Count)
+                {
+                    var preceding = staticInitializers[nextStaticInitializer++];
+                    if (ReferenceEquals(preceding, field)) break;
+                    if (preceding is Stmt.StaticBlock block)
+                    {
+                        var flow = AnalyzeInitializationStatements(block.Body, [], []);
+                        (getterScope.StaticFieldsAssignedInEarlierBlocks ??= new(StringComparer.Ordinal))
+                            .UnionWith(flow.Assigned);
+                    }
+                }
 
                 TypeInfo.Class currentClass = mutableClass.Freeze();
                 RefreshSelfBindings(currentClass);

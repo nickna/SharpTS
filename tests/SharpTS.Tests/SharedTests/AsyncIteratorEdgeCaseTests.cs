@@ -97,6 +97,86 @@ public class AsyncIteratorEdgeCaseTests
 
     #endregion
 
+    [Theory, ModeData]
+    public void ForAwaitOf_ReadsResultAccessorsInOrder(ExecutionMode mode)
+    {
+        const string source = """
+            let count = 0;
+            const resultPrototype = {
+                get done() { console.log("done"); return (this as any).step > 1; },
+                get value() { console.log("value"); return (this as any).step + 41; }
+            };
+            const iterable: any = {
+                [Symbol.asyncIterator]() {
+                    return {
+                        next() {
+                            if (count > 1) return Promise.resolve({ done: true });
+                            const result = Object.create(resultPrototype);
+                            result.step = ++count;
+                            return Promise.resolve(result);
+                        }
+                    };
+                }
+            };
+            async function run() {
+                for await (const value of iterable) console.log(value);
+            }
+            run();
+            """;
+
+        Assert.Equal("done\nvalue\n42\ndone\n", TestHarness.RunUnchecked(source, mode));
+    }
+
+    [Theory, ModeData]
+    public void ForAwaitOf_CapturesNextOnceWithIteratorReceiver(ExecutionMode mode)
+    {
+        const string source = """
+            function makeIterable() {
+                return {
+                    [Symbol.asyncIterator]() {
+                        const iterator: any = {
+                            count: 0,
+                            get next() {
+                                console.log("lookup");
+                                return function (this: any) {
+                                    if (this !== iterator) throw new Error("wrong receiver");
+                                    const value = ++this.count;
+                                    Object.defineProperty(this, "next", {
+                                        value() { throw new Error("re-read next"); },
+                                        configurable: true
+                                    });
+                                    return Promise.resolve({ value, done: value > 2 });
+                                };
+                            }
+                        };
+                        return iterator;
+                    }
+                };
+            }
+            async function run() {
+                for await (const value of makeIterable()) console.log(value);
+            }
+            const arrow = async () => {
+                for await (const value of makeIterable()) console.log(value);
+            };
+            async function* generate() {
+                for await (const value of makeIterable()) yield value;
+            }
+            async function main() {
+                await run();
+                await arrow();
+                const generator = generate();
+                console.log((await generator.next()).value);
+                console.log((await generator.next()).value);
+                console.log((await generator.next()).done);
+            }
+            main();
+            """;
+
+        Assert.Equal("lookup\n1\n2\nlookup\n1\n2\nlookup\n1\n2\ntrue\n",
+            TestHarness.RunUnchecked(source, mode));
+    }
+
     #region Error Handling
 
     [Theory, ModeData]

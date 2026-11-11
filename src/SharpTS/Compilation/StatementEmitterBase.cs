@@ -1314,6 +1314,10 @@ public abstract partial class StatementEmitterBase : ExpressionEmitterBase
 
             var asyncIteratorLocal = il.DeclareLocal(types.Object);
             il.Emit(OpCodes.Stloc, asyncIteratorLocal);
+            var nextLocal = il.DeclareLocal(types.Object);
+            il.Emit(OpCodes.Ldloc, asyncIteratorLocal);
+            il.Emit(OpCodes.Call, runtime.IteratorRecords.NextMethod);
+            il.Emit(OpCodes.Stloc, nextLocal);
 
             var startLabel = il.DefineLabel();
             var endLabel = il.DefineLabel();
@@ -1325,9 +1329,10 @@ public abstract partial class StatementEmitterBase : ExpressionEmitterBase
 
             il.MarkLabel(startLabel);
 
-            // Call InvokeIteratorNext(asyncIterator) which returns a Promise/Task
+            // Call the captured next method with the iterator as receiver.
             il.Emit(OpCodes.Ldloc, asyncIteratorLocal);
-            il.Emit(OpCodes.Call, runtime.IteratorProtocol.InvokeNext);
+            il.Emit(OpCodes.Ldloc, nextLocal);
+            il.Emit(OpCodes.Call, runtime.Invocation.Method0);
 
             // The result should be a Task/Promise - await it.
             // Store as object first, then check if it's a $TSPromise or Task.

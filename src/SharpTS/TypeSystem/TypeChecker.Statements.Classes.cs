@@ -726,11 +726,15 @@ public partial class TypeChecker
                     using var _ = new EnvironmentScope(this, staticBlockEnv);
                     bool previousInStaticBlock = _inStaticBlock;
                     bool previousInStaticMethod = _inStaticMethod;
+                    bool previousGlobalThis = _currentArrowCapturesScriptGlobalThis;
                     var previousClass = _currentClass;
+                    var previousThisType = _currentFunctionThisType;
                     _inStaticBlock = true;
                     _inStaticMethod = true;
+                    _currentArrowCapturesScriptGlobalThis = false;
                     _privateNameEnclosingClasses.Push(previousClass);
                     _currentClass = classTypeForBody;
+                    _currentFunctionThisType = classTypeForBody;
 
                     try
                     {
@@ -740,8 +744,10 @@ public partial class TypeChecker
                     {
                         _inStaticBlock = previousInStaticBlock;
                         _inStaticMethod = previousInStaticMethod;
+                        _currentArrowCapturesScriptGlobalThis = previousGlobalThis;
                         _privateNameEnclosingClasses.Pop();
                         _currentClass = previousClass;
+                        _currentFunctionThisType = previousThisType;
                     }
                 }
             }

@@ -5,6 +5,18 @@ namespace SharpTS.Tests.SharedTests;
 
 public sealed class EnumValueBindingTests
 {
+    [Theory, ModeData]
+    public void TypeOfReadsInitializedModuleEnum(ExecutionMode mode)
+    {
+        const string source = """
+            enum Direction { Up }
+            function* read() { yield typeof Direction; }
+            console.log(Direction.Up, typeof Direction, read().next().value);
+            """;
+
+        Assert.Equal("0 object object\n", TestHarness.Run(source, mode));
+    }
+
     public static IEnumerable<object[]> Cases()
     {
         yield return new object[] { "computed", """

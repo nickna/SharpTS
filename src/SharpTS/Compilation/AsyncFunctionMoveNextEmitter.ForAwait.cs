@@ -52,8 +52,10 @@ public abstract partial class AsyncFunctionMoveNextEmitter
         var iteratorField = AsyncBuilder.StateMachineType.DefineField($"<>7__aiter{loopId}", Types.Object, FieldAttributes.Private);
         var isCustomField = AsyncBuilder.StateMachineType.DefineField($"<>7__aiterCustom{loopId}", Types.Boolean, FieldAttributes.Private);
 
+        var nextField = AsyncBuilder.StateMachineType.DefineField($"<>7__aiterNext{loopId}", Types.Object, FieldAttributes.Private);
+
         // Synchronous prelude: evaluate the iterable and resolve the iterator + protocol kind:
-        //   isCustom == true  → iterable[Symbol.asyncIterator]() ; step via InvokeIteratorNext / "return".
+        //   isCustom == true  → iterable[Symbol.asyncIterator]() ; step via the captured next method or a live "return".
         //   isCustom == false → an $IAsyncGenerator, including the emitted async-from-sync adapter.
         // Evaluating the iterable, or calling its [Symbol.asyncIterator], can throw synchronously (e.g. a
         // pre-aborted signal) — guarded below so that throw reaches an enclosing try's catch.
@@ -63,7 +65,7 @@ public abstract partial class AsyncFunctionMoveNextEmitter
             EnsureBoxed();
             IL.Emit(OpCodes.Stloc, iterableLocal);
 
-            EmitResolveAsyncIterator(iterableLocal, iteratorField, isCustomField);
+            EmitResolveAsyncIterator(iterableLocal, iteratorField, isCustomField, nextField);
         }
 
         // The prelude is await-free unless the iterable expression itself awaits; only then can it not
@@ -101,7 +103,7 @@ public abstract partial class AsyncFunctionMoveNextEmitter
 
         // result = await iterator.next()
         var stepLocal = IL.DeclareLocal(Types.Object);
-        EmitAsyncStep(stepLocal, iteratorField, isCustomField, isReturn: false);
+        EmitAsyncStep(stepLocal, iteratorField, isCustomField, nextField, isReturn: false);
         IL.Emit(OpCodes.Ldloc, stepLocal);
         SetStackUnknown();
         EmitAwaitFromValueOnStack(nextState);
@@ -167,7 +169,7 @@ public abstract partial class AsyncFunctionMoveNextEmitter
         void EmitClose()
         {
             var returnStepLocal = IL.DeclareLocal(Types.Object);
-            EmitAsyncStep(returnStepLocal, iteratorField, isCustomField, isReturn: true);
+            EmitAsyncStep(returnStepLocal, iteratorField, isCustomField, nextField, isReturn: true);
             IL.Emit(OpCodes.Ldloc, returnStepLocal);
             SetStackUnknown();
             EmitAwaitFromValueOnStack(returnState);
@@ -430,7 +432,7 @@ public abstract partial class AsyncFunctionMoveNextEmitter
     /// so when inside a try-with-awaits it must be captured into the try's exception local and routed to
     /// the catch (otherwise it escapes the state machine). Outside a try, it propagates normally. (#631)
     /// </summary>
-    private void EmitAsyncStep(LocalBuilder resultLocal, FieldBuilder iteratorField, FieldBuilder isCustomField, bool isReturn)
-        => EmitGuardedSyncSegment(() => EmitProduceAsyncStep(resultLocal, iteratorField, isCustomField, isReturn));
+    private void EmitAsyncStep(LocalBuilder resultLocal, FieldBuilder iteratorField, FieldBuilder isCustomField, FieldBuilder nextField, bool isReturn)
+        => EmitGuardedSyncSegment(() => EmitProduceAsyncStep(resultLocal, iteratorField, isCustomField, nextField, isReturn));
 
 }

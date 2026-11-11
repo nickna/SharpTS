@@ -430,7 +430,7 @@ public partial class TypeChecker
             GetConstructorIndexType(objType, TokenType.TYPE_NUMBER) is { } constructorNumberIndex)
             return WithUncheckedUndefined(constructorNumberIndex);
 
-        if (ReadArraySubclassIndex(objType, indexType) is { } arraySubclassElement)
+        if (ReadArraySubclassIndex(objType, indexType, getIndex) is { } arraySubclassElement)
             return arraySubclassElement;
 
         // Exclude<keyof T, symbol> remains a deferred conditional while T is open, but every
@@ -630,14 +630,20 @@ public partial class TypeChecker
         return null;
     }
 
-    private TypeInfo? ReadArraySubclassIndex(TypeInfo receiver, TypeInfo index)
+    private TypeInfo? ReadArraySubclassIndex(TypeInfo receiver, TypeInfo index, Expr.GetIndex syntax)
     {
-        if (receiver is not TypeInfo.Instance instance || !IsNumericConstructorIndex(index) ||
+        var keys = (index as TypeInfo.Union)?.FlattenedTypes;
+        if (receiver is not TypeInfo.Instance instance ||
+            !(keys is null ? IsNumericConstructorIndex(index) : keys.Count > 0 && keys.All(IsNumericConstructorIndex)) ||
             !TryGetBuiltInArraySubclassElement(instance, out var elementType))
             return null;
 
-        return WithUncheckedUndefined(GetClassIndexType(instance, TokenType.TYPE_NUMBER)
+        TypeInfo indexedElement = WithUncheckedUndefined(GetClassIndexType(instance, TokenType.TYPE_NUMBER)
             ?? GetClassIndexType(instance, TokenType.TYPE_STRING) ?? elementType);
+        return keys is null ? indexedElement : CollapseOrCreateUnion(keys
+            .Select(key => TryReadKnownIndexedInstanceMember(instance, key, syntax) ?? indexedElement)
+            .Distinct(TypeInfoEqualityComparer.Instance)
+            .ToList());
     }
 
     private bool TryGetBuiltInArraySubclassElement(
@@ -1715,7 +1721,7 @@ public partial class TypeChecker
         if (indexType is TypeInfo.Symbol or TypeInfo.UniqueSymbol &&
             GetConstructorIndexType(objType, TokenType.TYPE_SYMBOL) is { } constructorSymbolIndex)
             return WithUncheckedUndefined(constructorSymbolIndex);
-        if (ReadArraySubclassIndex(objType, indexType) is { } arraySubclassElement)
+        if (ReadArraySubclassIndex(objType, indexType, getIndex) is { } arraySubclassElement)
             return arraySubclassElement;
         if (IsStringOrNumberIndexDomain(indexType) && ReadStringIndexOf(objType) is { } domainIndex)
         {

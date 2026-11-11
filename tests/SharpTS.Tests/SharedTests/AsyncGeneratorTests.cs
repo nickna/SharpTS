@@ -638,6 +638,80 @@ public class AsyncGeneratorTests
     #region yield* Delegation Tests
 
     [Theory, ModeData]
+    public void AsyncGenerator_YieldStar_DelegatesToCustomAsyncIterator(ExecutionMode mode)
+    {
+        const string source = """
+            function pause(result: any) {
+                return new Promise(resolve => setTimeout(() => resolve(result), 1));
+            }
+            function iterable(throwMethod: any, badStep = false) {
+                return {
+                    [Symbol.iterator]() { throw new Error("used sync iterator"); },
+                    [Symbol.asyncIterator]() {
+                        const iterator: any = {
+                            calls: 0,
+                            get next() {
+                                console.log("lookup");
+                                return function (this: any, sent: any) {
+                                    if (this !== iterator) throw new Error("wrong receiver");
+                                    if (badStep) return pause(1);
+                                    if (++this.calls === 1) return pause({
+                                        get done() { return false; },
+                                        get value() { return pause(7); }
+                                    });
+                                    return pause({ value: sent, done: true });
+                                };
+                            },
+                            return(value: any) {
+                                console.log("close", value);
+                                return pause({ value: value + 1, done: true });
+                            }
+                        };
+                        if (throwMethod) iterator.throw = throwMethod;
+                        return iterator;
+                    }
+                };
+            }
+            async function* outer(source: any) {
+                try {
+                    const result = yield* source;
+                    return "complete:" + result;
+                } catch (error) {
+                    yield error.name;
+                }
+            }
+            async function show(result: any) { console.log(await result.value, result.done); }
+            async function main() {
+                let generator = outer(iterable(undefined));
+                const first = await generator.next();
+                console.log(first.value instanceof Promise);
+                await show(first);
+                await show(await generator.next(8));
+                generator = outer(iterable(undefined));
+                await show(await generator.next());
+                await show(await generator.return(10));
+                generator = outer(iterable(undefined));
+                await show(await generator.next());
+                await show(await generator.throw("error"));
+                generator = outer(iterable(function (this: any, error: any) {
+                    return pause({ value: this.calls + ":" + error, done: false });
+                }));
+                await show(await generator.next());
+                await show(await generator.throw("forwarded"));
+                await show(await generator.next(12));
+                await show(await outer(iterable(undefined, true)).next());
+            }
+            main();
+            """;
+
+        Assert.Equal(
+            "lookup\ntrue\n7 false\ncomplete:8 true\nlookup\n7 false\nclose 10\n11 true\n" +
+            "lookup\n7 false\nclose undefined\nTypeError false\n" +
+            "lookup\n7 false\n1:forwarded false\ncomplete:12 true\nlookup\nTypeError false\n",
+            TestHarness.RunUnchecked(source, mode));
+    }
+
+    [Theory, ModeData]
     public void AsyncGenerator_YieldStar_DelegatesToSyncIterable(ExecutionMode mode)
     {
         var source = """

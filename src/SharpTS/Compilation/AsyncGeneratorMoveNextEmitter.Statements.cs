@@ -202,7 +202,10 @@ public partial class AsyncGeneratorMoveNextEmitter
             $"<>7__aiterCustom{loopId}", _types.Boolean, FieldAttributes.Private);
         var iterableLocal = _il.DeclareLocal(_types.Object);
         EmitSuspensionOperand(f.Iterable, iterableLocal);
-        EmitCaptureTryOperation(() => EmitResolveAsyncIterator(iterableLocal, iteratorField, isCustomField));
+        var nextField = _builder.StateMachineType.DefineField(
+            _builder.DebugScaffoldingName($"<>7__aiterNext{loopId}"), Types.Object, FieldAttributes.Private);
+
+        EmitCaptureTryOperation(() => EmitResolveAsyncIterator(iterableLocal, iteratorField, isCustomField, nextField));
 
         int nextState = _currentSuspensionState++;   // iterator.next() await (reused each iteration)
 
@@ -215,7 +218,7 @@ public partial class AsyncGeneratorMoveNextEmitter
 
         // The protocol call can throw synchronously, before the await.
         var stepLocal = _il.DeclareLocal(_types.Object);
-        EmitCaptureTryOperation(() => EmitProduceAsyncStep(stepLocal, iteratorField, isCustomField, isReturn: false));
+        EmitCaptureTryOperation(() => EmitProduceAsyncStep(stepLocal, iteratorField, isCustomField, nextField, isReturn: false));
         _il.Emit(OpCodes.Ldloc, stepLocal);
         SetStackUnknown();
         EmitAwaitFromValueOnStack(nextState);
@@ -308,7 +311,7 @@ public partial class AsyncGeneratorMoveNextEmitter
         var afterClose = _il.DefineLabel();
         WithAsyncTryCapture(closeError, closeFailed, afterClose, () =>
         {
-            EmitCaptureTryOperation(() => EmitProduceAsyncStep(stepLocal, iteratorField, isCustomField, isReturn: true));
+            EmitCaptureTryOperation(() => EmitProduceAsyncStep(stepLocal, iteratorField, isCustomField, nextField, isReturn: true));
             _il.Emit(OpCodes.Ldloc, stepLocal);
             SetStackUnknown();
             EmitAwaitFromValueOnStack(returnState);

@@ -6,6 +6,45 @@ namespace SharpTS.Tests.CompilerTests;
 public sealed class EnumReceiverBindingTests
 {
     [Fact]
+    public void LocalConstEnumsInlineMembersFromTheLexicalDeclaration()
+    {
+        const string source = """
+            enum E { A = 40 }
+            function read() {
+                const enum E { A = 5 }
+                console.log(E.A, E["A"]);
+                {
+                    const enum E { A = "nested" }
+                    console.log(E.A);
+                }
+                return () => E.A;
+            }
+            console.log(read()(), E.A);
+            """;
+
+        var (errors, output) = TestHarness.CompileVerifyAndRun(source);
+        Assert.Empty(errors);
+        Assert.Equal("5 5\nnested\n5 40\n", output);
+    }
+
+    [Fact]
+    public void AsyncFunctionInlinesLocalConstEnumMembersAcrossAwait()
+    {
+        const string source = """
+            async function read() {
+                const enum E { A = 5 }
+                await Promise.resolve();
+                console.log(E.A, E["A"]);
+            }
+            read();
+            """;
+
+        var (errors, output) = TestHarness.CompileVerifyAndRun(source);
+        Assert.Empty(errors);
+        Assert.Equal("5 5\n", output);
+    }
+
+    [Fact]
     public void TypedParameterShadowsConstEnumForDotAndIndexReads()
     {
         const string source = """

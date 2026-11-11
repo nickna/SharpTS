@@ -1,10 +1,25 @@
 using System.Reflection.Emit;
 using SharpTS.Parsing;
+using SharpTS.TypeSystem;
 
 namespace SharpTS.Compilation;
 
 public abstract partial class ExpressionEmitterBase
 {
+    protected bool TryEmitConstEnumMember(Expr receiver, string name)
+    {
+        // Const enums have no local slot. Resolve the checked binding even when
+        // a different enum with the same name has a module-level runtime object.
+        if (receiver is not Expr.Variable variable
+            || Ctx.TypeMap?.GetDeclaredValueType(variable.Name) is not TypeInfo.Enum { IsConst: true } enumType
+            || !ReferenceEquals(enumType.DeclarationBinding, Ctx.TypeMap.GetValueBinding(variable.Name))
+            || !enumType.Members.TryGetValue(name, out var value))
+            return false;
+
+        EmitLiteral(new Expr.Literal(value));
+        return true;
+    }
+
     protected bool TryEmitEnumVariable(string name)
     {
         if (Ctx.EnumValueFields == null || !Ctx.EnumValueFields.TryGetValue(Ctx.ResolveEnumName(name), out var field))
@@ -59,7 +74,15 @@ public abstract partial class ExpressionEmitterBase
         bool firstMember = true;
         foreach (var member in declaration.Members)
         {
-            if (member.Value != null)
+            var stringValue = member.Value switch
+            {
+                Expr.Literal { Value: string text } => text,
+                { } initializer => Ctx.TypeMap?.GetConstantEnumInitializer(initializer) as string,
+                _ => null,
+            };
+            if (stringValue is not null)
+                EmitStringConstant(stringValue);
+            else if (member.Value != null)
             {
                 EmitExpression(member.Value);
                 EnsureBoxed();
@@ -85,7 +108,7 @@ public abstract partial class ExpressionEmitterBase
 
             // String members have forward entries only. Numeric/computed members
             // also install the reverse entry, overwriting earlier duplicate values.
-            if (member.Value is not Expr.Literal { Value: string })
+            if (stringValue is null)
             {
                 loadObject();
                 IL.Emit(OpCodes.Ldloc, value);

@@ -10,25 +10,25 @@ namespace SharpTS.TypeSystem;
 /// </summary>
 public partial class TypeChecker
 {
-    private sealed record NumericEnumConstant(double Value);
-    private readonly ConditionalWeakTable<BindingSymbol, NumericEnumConstant> _numericEnumConstants = new();
+    private sealed record EnumConstant(object Value);
+    private readonly ConditionalWeakTable<BindingSymbol, EnumConstant> _enumConstants = new();
     private readonly ConditionalWeakTable<FrozenDictionary<string, object>, Dictionary<string, object>> _knownEnumMembers = new();
 
-    private void RecordNumericEnumConstant(Stmt.Const declaration, BindingSymbol binding)
+    private void RecordEnumConstant(Stmt.Const declaration, BindingSymbol binding)
     {
         if (declaration.TypeAnnotation is not null || declaration.TypeAnnotationNode is not null ||
-            declaration.Initializer is not (Expr.Literal { Value: double } or Expr.Variable or
+            declaration.Initializer is not (Expr.Literal { Value: double or string } or Expr.Variable or
                 Expr.Grouping or Expr.Unary or Expr.Binary))
             return;
 
         if (ConstEnumExpressionEvaluator.EvaluateKnownMember(declaration.Initializer,
-                FrozenDictionary<string, object>.Empty, "", isConst: false, ResolveNumericEnumConstant) is double value)
-            _numericEnumConstants.AddOrUpdate(binding, new(value));
+                FrozenDictionary<string, object>.Empty, "", isConst: false, ResolveEnumConstant) is { } value)
+            _enumConstants.AddOrUpdate(binding, new(value));
     }
 
-    private object? ResolveNumericEnumConstant(Expr expression) => expression is Expr.Variable variable &&
+    private object? ResolveEnumConstant(Expr expression) => expression is Expr.Variable variable &&
         _environment.GetValueBinding(variable.Name.Lexeme) is { } binding &&
-        _numericEnumConstants.TryGetValue(binding, out var constant) ? constant.Value : null;
+        _enumConstants.TryGetValue(binding, out var constant) ? constant.Value : null;
 
     private void CheckEnumDeclaration(Stmt.Enum enumStmt)
     {
@@ -76,7 +76,9 @@ public partial class TypeChecker
                 else if (enumStmt.IsConst)
                 {
                     // Const enums support computed values (e.g., B = A * 2)
-                    var computedValue = EvaluateConstEnumExpression(member.Value, members, enumStmt.Name.Lexeme);
+                    var computedValue = EvaluateConstEnumExpression(
+                        member.Value, members, enumStmt.Name.Lexeme, ResolveConstInitializerReference);
+                    _typeMap.SetConstantEnumInitializer(member.Value, computedValue);
                     if (computedValue is double d)
                     {
                         members[member.Name.Lexeme] = d;
@@ -129,21 +131,31 @@ public partial class TypeChecker
                     }
                     var knownValue = ConstEnumExpressionEvaluator.EvaluateKnownMember(
                         member.Value, knownMembers, enumStmt.Name.Lexeme, isConst: false, ResolveInitializerReference);
-                    if (knownValue is not double && !IsNumber(computedType) && computedType is not
-                        TypeInfo.Enum { IsScalar: true, Kind: EnumKind.Numeric })
+                    if (knownValue is string text)
                     {
-                        throw new TypeCheckException(
-                            $" Enum member '{member.Name.Lexeme}' must have a numeric computed value.",
-                            member.Name.Line,
-                            tsCode: "TS18033");
+                        members[member.Name.Lexeme] = text;
+                        _typeMap.SetConstantEnumInitializer(member.Value, text);
+                        hasString = true;
+                        autoIncrementActive = false;
                     }
+                    else
+                    {
+                        if (knownValue is not double && !IsNumber(computedType) && computedType is not
+                            TypeInfo.Enum { IsScalar: true, Kind: EnumKind.Numeric })
+                        {
+                            throw new TypeCheckException(
+                                $" Enum member '{member.Name.Lexeme}' must have a numeric computed value.",
+                                member.Name.Line,
+                                tsCode: "TS18033");
+                        }
 
-                    double value = knownValue is double number ? number : double.NaN;
-                    members[member.Name.Lexeme] = value;
-                    isKnown = knownValue is double;
-                    autoIncrementActive = isKnown;
-                    currentNumericValue = autoIncrementActive ? value + 1 : null;
-                    hasNumeric = true;
+                        double value = knownValue is double number ? number : double.NaN;
+                        members[member.Name.Lexeme] = value;
+                        isKnown = knownValue is double;
+                        autoIncrementActive = isKnown;
+                        currentNumericValue = autoIncrementActive ? value + 1 : null;
+                        hasNumeric = true;
+                    }
                 }
             }
             else if (enumStmt.IsAmbient && !enumStmt.IsConst)
@@ -180,13 +192,19 @@ public partial class TypeChecker
         };
         if (knownMembers.Count > 0)
             _knownEnumMembers.Add(enumType.Members, knownMembers);
+        if (enumStmt.IsConst)
+            _typeMap.SetDeclaredValueType(declarationBinding, enumType);
         DeclareValue(enumStmt.Name, enumType, mergeWithLocal: true);
         _environment.DefineType(enumStmt.Name.Lexeme, enumType);
+
+        object? ResolveConstInitializerReference(Expr expression) =>
+            expression is Expr.Variable variable && ResolveEnumConstant(variable) is { } constant &&
+            !enumStmt.Members.Any(member => member.Name.Lexeme == variable.Name.Lexeme) ? constant : null;
 
         object? ResolveInitializerReference(Expr expression)
         {
             if (expression is Expr.Variable variable && !members.ContainsKey(variable.Name.Lexeme))
-                return ResolveNumericEnumConstant(variable);
+                return ResolveEnumConstant(variable);
             if (_typeMap.Get(expression) is TypeInfo.Enum { MemberName: { } name, Kind: EnumKind.Numeric } source &&
                 IsEnumDeclarationMemberReference(expression, source) &&
                 _knownEnumMembers.TryGetValue(source.Members, out var values) &&
@@ -226,7 +244,8 @@ public partial class TypeChecker
     /// <see cref="ConstEnumExpressionEvaluator"/>, mapping failures onto TypeCheckExceptions
     /// with the TS code each error kind has always carried here.
     /// </summary>
-    private static object EvaluateConstEnumExpression(Expr expr, Dictionary<string, object> resolvedMembers, string enumName)
+    private static object EvaluateConstEnumExpression(
+        Expr expr, Dictionary<string, object> resolvedMembers, string enumName, Func<Expr, object?> resolveReference)
     {
         return ConstEnumExpressionEvaluator.Evaluate(expr, resolvedMembers, enumName, static e =>
             new TypeCheckException($" {e.Message}", tsCode: e.Kind switch
@@ -234,6 +253,6 @@ public partial class TypeChecker
                 ConstEnumErrorKind.ForwardReference => "TS2474",
                 ConstEnumErrorKind.InvalidOperandTypes => "TS2362",
                 _ => "TS2553",
-            }));
+            }), resolveReference: resolveReference);
     }
 }
