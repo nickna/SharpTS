@@ -49,19 +49,20 @@ public sealed class CanonicalArrayStringIndexReadDiagnosticTests
     }
 
     [Theory]
-    [InlineData("Child<string>", "'0' | 'length'", "string | number")]
-    [InlineData("Child<string>", "number | 'length'", "string | number")]
-    [InlineData("Child<string>", "'0' | 'label'", "string | 'tag'")]
-    [InlineData("Child<string> | Child<number>", "'0' | 'length'", "string | number")]
-    [InlineData("Explicit", "'0' | 'length'", "'first' | number")]
-    public void ArraySubclassCombinesElementAndNamedPropertyTypes(string receiver, string key, string expectedType)
+    [InlineData("Child<string>", "'0' | 'length'", "string | number", "boolean")]
+    [InlineData("Child<string>", "number | 'length'", "string | number", "boolean")]
+    [InlineData("Child<string>", "'0' | 'label'", "string | 42", "string")]
+    [InlineData("Child<string> | Child<number>", "'0' | 'length'", "string | number", "boolean")]
+    [InlineData("Explicit", "'0' | 'length'", "'first' | number", "boolean")]
+    public void ArraySubclassCombinesElementAndNamedPropertyTypes(
+        string receiver, string key, string expectedType, string rejectedType)
     {
         var statements = TestHarness.ParseOrThrow($$"""
-            class Child<T> extends Array<T> { label = 'tag' as const; }
+            class Child<T> extends Array<T> { label = 42 as const; }
             class Explicit extends Array<string> { 0 = 'first' as const; }
             function read(child: {{receiver}}, key: {{key}}) {
                 const correct: {{expectedType}} = child[key];
-                const wrong: boolean = child[key];
+                const wrong: {{rejectedType}} = child[key];
             }
             """);
 
