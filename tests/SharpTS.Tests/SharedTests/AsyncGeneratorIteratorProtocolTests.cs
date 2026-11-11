@@ -38,5 +38,36 @@ public class AsyncGeneratorIteratorProtocolTests
     {
         Assert.Equal("step\nafter catch\ntrue\n", TestHarness.RunUnchecked(ValueGetterFailureSource, mode));
     }
+
+    public const string AsyncIteratorOverrideSource = """
+        async function* source() { console.log("unexpected source"); yield 1; }
+        const generator = source();
+        Object.defineProperty(generator, Symbol.asyncIterator, {
+            get() {
+                console.log("lookup", this === generator);
+                return function () {
+                    console.log("call", this === generator);
+                    let done = false;
+                    return {
+                        next() {
+                            if (done) return { done };
+                            done = true;
+                            return { done: false, value: 7 };
+                        }
+                    };
+                };
+            }
+        });
+        async function main() {
+            for await (const value of generator) console.log(value);
+        }
+        main();
+        """;
+
+    [Theory, ModeData]
+    public void ForAwaitAsyncGenerator_UsesOwnAsyncIteratorGetter(ExecutionMode mode)
+    {
+        Assert.Equal("lookup true\ncall true\n7\n", TestHarness.RunUnchecked(AsyncIteratorOverrideSource, mode));
+    }
 }
 
