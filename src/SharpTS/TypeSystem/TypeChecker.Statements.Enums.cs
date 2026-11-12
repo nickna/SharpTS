@@ -18,7 +18,8 @@ public partial class TypeChecker
     {
         if (declaration.TypeAnnotation is not null || declaration.TypeAnnotationNode is not null ||
             declaration.Initializer is not (Expr.Literal { Value: double or string } or Expr.Variable or
-                Expr.Grouping or Expr.Unary or Expr.Binary))
+                Expr.Grouping or Expr.Unary or Expr.Binary or Expr.Get or
+                Expr.GetIndex { Index: Expr.Literal { Value: string } }))
             return;
 
         if (ConstEnumExpressionEvaluator.EvaluateKnownMember(declaration.Initializer,
@@ -26,9 +27,19 @@ public partial class TypeChecker
             _enumConstants.AddOrUpdate(binding, new(value));
     }
 
-    private object? ResolveEnumConstant(Expr expression) => expression is Expr.Variable variable &&
-        _environment.GetValueBinding(variable.Name.Lexeme) is { } binding &&
-        _enumConstants.TryGetValue(binding, out var constant) ? constant.Value : null;
+    private object? ResolveEnumConstant(Expr expression)
+    {
+        if (expression is Expr.Variable variable &&
+            _environment.GetValueBinding(variable.Name.Lexeme) is { } binding &&
+            _enumConstants.TryGetValue(binding, out var constant))
+            return constant.Value;
+        if (expression is Expr.Get or Expr.GetIndex { Index: Expr.Literal { Value: string } } &&
+            _typeMap.Get(expression) is TypeInfo.Enum { MemberName: { } name } source &&
+            IsEnumDeclarationMemberReference(expression, source) &&
+            _knownEnumMembers.TryGetValue(source.Members, out var values))
+            return values.GetValueOrDefault(name);
+        return null;
+    }
 
     private void CheckEnumDeclaration(Stmt.Enum enumStmt)
     {

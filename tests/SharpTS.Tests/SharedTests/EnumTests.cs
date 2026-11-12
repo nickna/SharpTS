@@ -73,6 +73,34 @@ public class EnumTests
     }
 
     [Theory, ModeData]
+    public void ConstEnumInitializersReadConstantsAliasingQualifiedEnumMembers(ExecutionMode mode)
+    {
+        const string source = """
+            const enum Source { A = 4 }
+            const enum Words { Word = "value" }
+            enum Regular { A = 8 }
+            const value = Source.A;
+            const offset = Source.A;
+            const word = Words.Word;
+            const indexed = Regular["A"];
+            const enum Result { A = value, Offset = offset + 2, Word = word + "!", Indexed = indexed }
+            namespace Values {
+                export const enum Source { A = 12 }
+            }
+            const qualified = Values.Source.A;
+            const enum Qualified { A = qualified }
+            function read() {
+                const enum Source { A = 20 }
+                const value = Source.A;
+                const enum Result { A = value + 1 }
+                return Result.A;
+            }
+            console.log(Result.A, Result.Offset, Result.Word, Result.Indexed, Qualified.A, read());
+            """;
+        Assert.Equal("4 6 value! 8 12 21\n", TestHarness.Run(source, mode));
+    }
+
+    [Theory, ModeData]
     public void RegularEnumInitializersReadStringConstantsWithoutReverseMapping(ExecutionMode mode)
     {
         const string source = """
@@ -122,6 +150,8 @@ public class EnumTests
     [InlineData("let source = 4;")]
     [InlineData("const source: number = 4;")]
     [InlineData("const source = Math.random();")]
+    [InlineData("enum Values { A = Math.random() } const source = Values.A;")]
+    [InlineData("const Values = { A: 4 }; const source = Values.A;")]
     public void ConstEnumInitializersRejectNonConstantVariables(string declaration)
     {
         string source = declaration + "\nconst enum E { A = source }";
