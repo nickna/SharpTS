@@ -1,6 +1,7 @@
 using System.Collections;
 using System.Reflection;
 using SharpTS.Tests.CompilerTests;
+using SharpTS.Tests.SharedTests;
 using Xunit;
 using Xunit.Abstractions;
 using Xunit.Sdk;
@@ -15,7 +16,12 @@ public sealed class SerializableMemberDataTests
         var methods = typeof(StandaloneDllTests).GetMethods()
             .Select(method => (Method: method, Attribute: method.GetCustomAttribute<SerializableMemberDataAttribute>()))
             .Where(item => item.Attribute is not null).ToArray();
-        Assert.Equal(15, methods.Length);
+        Assert.Equal(16, methods.Length);
+        var collisionProvider = Assert.Single(methods, item => item.Method.Name ==
+            nameof(StandaloneDllTests.Isolated_MutableFunctionBindingsIgnoreCapturesInOtherModules));
+        Assert.Equal(typeof(ClassStaticBlockMutableFunctionTests), collisionProvider.Attribute!.MemberType);
+        Assert.Equal(nameof(ClassStaticBlockMutableFunctionTests.CapturedNameCollisionCases),
+            collisionProvider.Attribute.MemberName);
         var rows = 0;
         foreach (var (method, attribute) in methods)
         {
@@ -27,6 +33,8 @@ public sealed class SerializableMemberDataTests
             };
             var before = original.GetData(method).ToArray();
             var after = attribute.GetData(method).ToArray();
+            if (method == collisionProvider.Method)
+                Assert.Equal(4, before.Length);
             Assert.Equal(before.Length, after.Length);
             for (var index = 0; index < before.Length; index++)
             {
@@ -46,7 +54,7 @@ public sealed class SerializableMemberDataTests
                 rows++;
             }
         }
-        Assert.Equal(223, rows);
+        Assert.Equal(227, rows);
     }
 
     [Fact]
