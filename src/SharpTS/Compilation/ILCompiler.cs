@@ -2780,7 +2780,10 @@ public partial class ILCompiler
                     && _closures.Analyzer.IsVariableCaptured(function.Name.Lexeme) => function.Name.Lexeme,
             _ => null
         };
-        if (varName == null || _closures.CapturedTopLevelVars.Contains(varName)) return;
+        // Script files share the null registration key; real modules own separate
+        // capture fields even when another module declares the same bare name.
+        string? capturePath = modulePath != null && _scriptModulePaths.Contains(modulePath) ? null : modulePath;
+        if (varName == null || BuildCapturedTopLevelVarsForModule(capturePath)?.Contains(varName) == true) return;
 
         // Each module gets its own field, so two modules that both declare
         // `const foo` have independent storage. Field names are qualified
