@@ -95,6 +95,9 @@ public sealed class CanonicalArrayStringIndexReadDiagnosticTests
     [InlineData("Child<string>", "number | 'missing'")]
     [InlineData("Child<string>", "'length' | 'missing'")]
     [InlineData("Child<string> | Child<number>", "'0' | 'missing'")]
+    [InlineData("Child<string> | number[]", "'0' | 'missing'")]
+    [InlineData("number[] | Child<string>", "'0' | 'missing'")]
+    [InlineData("number[] | string[]", "'0' | 'missing'")]
     public void ArraySubclassRejectsAKeyUnionContainingAnUnknownName(string receiver, string key)
     {
         var statements = TestHarness.ParseOrThrow($$"""
@@ -108,6 +111,39 @@ public sealed class CanonicalArrayStringIndexReadDiagnosticTests
             .CheckWithRecovery(statements).Diagnostics);
         Assert.Equal("TS7015", diagnostic.TsCode);
         Assert.Equal(3, diagnostic.Line);
+    }
+
+    [Theory]
+    [InlineData("Child<string> | { other: number }")]
+    [InlineData("{ other: number } | Child<string>")]
+    [InlineData("string[] | { other: number }")]
+    [InlineData("{ other: number } | string[]")]
+    public void MixedArrayAndRecordReceiversRetainTheUnionDiagnostic(string receiver)
+    {
+        var statements = TestHarness.ParseOrThrow($$"""
+            class Child<T> extends Array<T> {}
+            function read(child: {{receiver}}, key: '0' | 'missing') {
+                const wrong: boolean = child[key];
+            }
+            """);
+
+        var diagnostic = Assert.Single(new TypeChecker(TypeCheckerOptions.Strict)
+            .CheckWithRecovery(statements).Diagnostics);
+        Assert.Equal("TS7053", diagnostic.TsCode);
+        Assert.Equal(3, diagnostic.Line);
+    }
+
+    [Fact]
+    public void ArrayReceiverUnionRejectsAFunctionIndexWithItsOriginalDiagnostic()
+    {
+        var statements = TestHarness.ParseOrThrow("""
+            function read(values: number[] | string[], key: () => void) {
+                return values[key];
+            }
+            """);
+        var diagnostic = Assert.Single(new TypeChecker(TypeCheckerOptions.Strict)
+            .CheckWithRecovery(statements).Diagnostics);
+        Assert.Equal("TS2538", diagnostic.TsCode);
     }
 
     internal const string Source = """
