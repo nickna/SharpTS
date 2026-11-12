@@ -90,6 +90,26 @@ public sealed class CanonicalArrayStringIndexReadDiagnosticTests
         Assert.Equal(4, diagnostic.Line);
     }
 
+    [Theory]
+    [InlineData("Child<string>", "'0' | 'missing'")]
+    [InlineData("Child<string>", "number | 'missing'")]
+    [InlineData("Child<string>", "'length' | 'missing'")]
+    [InlineData("Child<string> | Child<number>", "'0' | 'missing'")]
+    public void ArraySubclassRejectsAKeyUnionContainingAnUnknownName(string receiver, string key)
+    {
+        var statements = TestHarness.ParseOrThrow($$"""
+            class Child<T> extends Array<T> {}
+            function read(child: {{receiver}}, key: {{key}}) {
+                const wrong: boolean = child[key];
+            }
+            """);
+
+        var diagnostic = Assert.Single(new TypeChecker(TypeCheckerOptions.Strict)
+            .CheckWithRecovery(statements).Diagnostics);
+        Assert.Equal("TS7015", diagnostic.TsCode);
+        Assert.Equal(3, diagnostic.Line);
+    }
+
     internal const string Source = """
         const numbers: number[] = [4, 8];
         const wrongNumber: string = numbers['0'];
