@@ -360,8 +360,7 @@ public class SharpTSAsyncGenerator : ITypeCategorized, ISharpTSOwnPropertyObject
     /// </summary>
     private async Task<object?> DelegateYieldStarAsync(object? iterable)
     {
-        if (iterable is not SharpTSAsyncGenerator &&
-            _interpreter.TryGetAsyncIterator(iterable) is { } asyncIterator)
+        if (_interpreter.TryGetAsyncIterator(iterable) is { } asyncIterator)
         {
             return await DelegateGeneratorAsync(
                 received => DriveCustomAsyncIterator(asyncIterator, received),
@@ -376,13 +375,6 @@ public class SharpTSAsyncGenerator : ITypeCategorized, ISharpTSOwnPropertyObject
                 GeneratorResumeKind.Throw => synchronous.Throw(received.Value),
                 _ => synchronous.Next(received.Value),
             }));
-        if (iterable is SharpTSAsyncGenerator inner)
-            return await DelegateGeneratorAsync(received => received.Kind switch
-            {
-                GeneratorResumeKind.Return => inner.Return(received.Value),
-                GeneratorResumeKind.Throw => inner.Throw(received.Value),
-                _ => inner.Next(received.Value),
-            });
         // Custom iterator objects (those with [Symbol.iterator] and a next(v) that
         // consumes its argument) are driven manually so the outer's resume value is
         // forwarded as the argument to next(v) (ECMA-262 §14.4.14, #503).
