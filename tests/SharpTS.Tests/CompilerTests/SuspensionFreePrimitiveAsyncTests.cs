@@ -129,24 +129,28 @@ public sealed class SuspensionFreePrimitiveAsyncTests
         Assert.Equal("12\n", TestHarness.Run(source, mode));
     }
 
+    private const string ReassignedSource = """
+        async function identity(value: number): Promise<number> {
+            return value;
+        }
+        async function replacement(value: number): Promise<number> {
+            return value + 10;
+        }
+        identity = replacement;
+        async function run(): Promise<number> {
+            return await identity(1);
+        }
+        run().then((value: number): void => console.log(value));
+        """;
+
+    [Theory, ModeData]
+    public void ReassignedBinding_CallsReplacement(ExecutionMode mode)
+        => Assert.Equal("11\n", TestHarness.Run(ReassignedSource, mode));
+
     [Fact]
     public void ReassignedBinding_DoesNotUseTypedCore()
     {
-        const string source = """
-            async function identity(value: number): Promise<number> {
-                return value;
-            }
-            async function replacement(value: number): Promise<number> {
-                return value + 10;
-            }
-            identity = replacement;
-            async function run(): Promise<number> {
-                return await identity(1);
-            }
-            run();
-            """;
-
-        Assembly assembly = Compile(source);
+        Assembly assembly = Compile(ReassignedSource);
         MethodInfo moveNext = assembly.GetTypes()
             .Single(type => type.Name.Contains("<run>d__", StringComparison.Ordinal))
             .GetMethod("MoveNext")!;
@@ -157,7 +161,8 @@ public sealed class SuspensionFreePrimitiveAsyncTests
 
         Assert.DoesNotContain(calls, method => method.Name.Contains(
             "$asyncCore$identity", StringComparison.Ordinal));
-        Assert.Contains(calls, method => method.Name == "identity");
+        Assert.DoesNotContain(calls, method => method.Name == "identity");
+        Assert.Contains(calls, method => method.Name == "InvokeMethodValue");
     }
 
     [Theory, ModeData]
