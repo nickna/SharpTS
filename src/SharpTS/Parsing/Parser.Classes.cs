@@ -383,6 +383,11 @@ public partial class Parser
                         initializer = Expression();
                     }
 
+                    if (hasDefiniteAssignmentAssertion && initializer != null)
+                    {
+                        throw new Exception($"Parse Error at line {fieldName.Line}: Definite assignment assertion '!' cannot be used with an initializer.");
+                    }
+
                     if (isDeclare)
                         Match(TokenType.SEMICOLON);
                     else
@@ -1052,6 +1057,11 @@ public partial class Parser
                     if (Match(TokenType.EQUAL))
                     {
                         initializer = Expression();
+                    }
+
+                    if (hasDefiniteAssignmentAssertion && initializer != null)
+                    {
+                        throw new Exception($"Parse Error at line {fieldName.Line}: Definite assignment assertion '!' cannot be used with an initializer.");
                     }
 
                     ConsumeSemicolon("Expect ';' after private field declaration.");

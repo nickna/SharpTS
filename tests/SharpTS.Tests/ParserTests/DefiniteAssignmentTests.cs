@@ -284,6 +284,54 @@ class MyClass {
         Assert.Contains("Definite assignment assertion '!' cannot be used with an initializer", error.Message);
     }
 
+    [Theory]
+    [InlineData("class C", "")]
+    [InlineData("const C = class", "")]
+    [InlineData("class C", "static ")]
+    [InlineData("const C = class", "static ")]
+    public void Parser_DefiniteAssignment_InitializerIsRejectedForPublicAndPrivateFields(
+        string declaration, string modifiers)
+    {
+        foreach (string name in new[] { "value", "#value" })
+        {
+            var error = GetParseError($"{declaration} {{ {modifiers}{name}!: number = 1; }};");
+            Assert.NotNull(error);
+            Assert.Contains("Definite assignment assertion '!' cannot be used with an initializer", error.Message);
+        }
+    }
+
+    [Theory]
+    [InlineData("class C", "")]
+    [InlineData("const C = class", "")]
+    [InlineData("class C", "static ")]
+    [InlineData("const C = class", "static ")]
+    public void Parser_PrivateFieldsAllowAssertionsAndInitializersSeparately(string declaration, string modifiers)
+    {
+        var syntax = Assert.Single(Parse($$"""
+            {{declaration}} {
+                {{modifiers}}#asserted!: number;
+                {{modifiers}}#initialized: number = 1;
+            }
+            """));
+        var fields = syntax is Stmt.Class classDeclaration ? classDeclaration.Fields
+            : Assert.IsType<Expr.ClassExpr>(Assert.IsType<Stmt.Const>(syntax).Initializer).Fields;
+        Assert.Collection(fields,
+            asserted =>
+            {
+                Assert.True(asserted.IsPrivate);
+                Assert.Equal(modifiers.Length != 0, asserted.IsStatic);
+                Assert.True(asserted.HasDefiniteAssignmentAssertion);
+                Assert.Null(asserted.Initializer);
+            },
+            initialized =>
+            {
+                Assert.True(initialized.IsPrivate);
+                Assert.Equal(modifiers.Length != 0, initialized.IsStatic);
+                Assert.False(initialized.HasDefiniteAssignmentAssertion);
+                Assert.Equal(1.0, Assert.IsType<Expr.Literal>(initialized.Initializer).Value);
+            });
+    }
+
     #endregion
 
     #region Multiple Declarations
