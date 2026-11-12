@@ -2003,7 +2003,8 @@ public static partial class ObjectBuiltIns
                 .Concat(prototype.GetSymbolPropertyNames()).ToList(),
             SharpTSClass klass => klass.OwnStaticStringKeys().Cast<object?>()
                 .Concat(klass.OwnStaticSymbolKeys()).ToList(),
-            SharpTSInstance inst => inst.GetFieldNames().Cast<object?>().ToList(),
+            SharpTSInstance inst => inst.GetFieldNames().Cast<object?>()
+                .Concat(inst.GetSymbolPropertyNames()).ToList(),
             SharpTSTypedArray typedArray => typedArray.OwnStringKeys().Cast<object?>()
                 .Concat(typedArray.GetSymbolPropertyNames()).ToList(),
             SharpTSArray arr => arr.OwnStringKeys().Cast<object?>()

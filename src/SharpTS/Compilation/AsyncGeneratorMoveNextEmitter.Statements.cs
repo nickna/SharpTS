@@ -238,9 +238,16 @@ public partial class AsyncGeneratorMoveNextEmitter
         _il.Emit(OpCodes.Ldloc, doneLocal);
         _il.Emit(OpCodes.Brtrue, endLabel);
 
-        // loopVar = result.value
-        _il.Emit(OpCodes.Ldloc, resultLocal);
-        _il.Emit(OpCodes.Call, runtime.IteratorProtocol.Value);
+        // Reading value is part of iteration, so route a throwing getter to
+        // the enclosing handler before installing the body's close scope.
+        var iterationValue = _il.DeclareLocal(_types.Object);
+        EmitCaptureTryOperation(() =>
+        {
+            _il.Emit(OpCodes.Ldloc, resultLocal);
+            _il.Emit(OpCodes.Call, runtime.IteratorProtocol.Value);
+            _il.Emit(OpCodes.Stloc, iterationValue);
+        });
+        _il.Emit(OpCodes.Ldloc, iterationValue);
         if (TryInitializeLexicalCell(f.Variable, fresh: true)) { }
         else if (varField != null)
         {

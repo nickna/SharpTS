@@ -19,8 +19,13 @@ public partial class TypeChecker
         _ => false
     };
 
-    private void ValidateClassFieldComputedKey(Stmt.Field field)
+    private void ValidateClassFieldSyntax(Stmt.Field field)
     {
+        if (field.IsStatic && field.HasDefiniteAssignmentAssertion)
+            RecordTypeError(new TypeCheckException(
+                "A definite assignment assertion '!' is not permitted in this context.",
+                field.Name.Line, tsCode: "TS1255"));
+
         // TS1166 permits entity-name keys independently of their symbol type.
         // Other dynamic symbol expressions, such as `[Symbol()]`, remain invalid.
         if (field.ComputedKey != null && CheckExpr(field.ComputedKey) is TypeInfo.Symbol &&
@@ -416,7 +421,7 @@ public partial class TypeChecker
             }
             TypeInfo fieldType = ResolveFieldType(field);
 
-            ValidateClassFieldComputedKey(field);
+            ValidateClassFieldSyntax(field);
 
             // Handle ES2022 private fields (#field)
             if (field.IsPrivate)
@@ -738,6 +743,7 @@ public partial class TypeChecker
 
                     try
                     {
+                        HoistVarDeclarations(block.Body);
                         CheckBlock(block.Body, staticBlockEnv);
                     }
                     finally
@@ -878,6 +884,8 @@ public partial class TypeChecker
             ValidateDeclaredClassMembers(classStmt, classTypeForBody, classTypeParams, classTypeEnv);
 
             CheckClassStaticBlocks(classStmt, classTypeForBody);
+            if (classStmt.StaticInitializers?.Any(initializer => initializer is Stmt.StaticBlock) == true)
+                RevalidateClassFieldInitializers(classStmt, classStmt.Fields, mutableClass, classTypeEnv, classTypeParams);
             var staticBlockExit = classStmt.StaticInitializers?.Any(initializer => initializer is Stmt.StaticBlock) == true
                 ? CaptureValueFlow() : null;
 

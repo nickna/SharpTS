@@ -1,3 +1,4 @@
+using SharpTS.TypeSystem;
 using SharpTS.TypeSystem.Exceptions;
 using SharpTS.Tests.Infrastructure;
 using Xunit;
@@ -9,6 +10,68 @@ namespace SharpTS.Tests.SharedTests;
 /// </summary>
 public class EnumTests
 {
+    [Theory, ModeData]
+    public void EnumInitializersConcatenateStringAndNumericConstants(ExecutionMode mode)
+    {
+        const string source = """
+            const prefix = "value" + 5;
+            const suffix = 6 + "value";
+            enum E {
+                A = prefix,
+                B = suffix,
+                Decimal = "d" + 1.5,
+                Exponent = "e" + 1e21,
+                Zero = "z" + -0
+            }
+            const enum F { A = "const" + 2, B = 3 + "const" }
+            console.log(E.A, E.B, E.Decimal, E.Exponent, E.Zero, F.A, F.B);
+            console.log((E as any)[prefix], (E as any)[suffix], (E as any)["d1.5"]);
+            """;
+        Assert.Equal("value5 6value d1.5 e1e+21 z0 const2 3const\nundefined undefined undefined\n",
+            TestHarness.Run(source, mode));
+    }
+
+    [Fact]
+    public void MixedConcatenationEnumMemberDisablesImplicitIncrement()
+    {
+        const string source = """
+            const value = "value" + 5;
+            enum E { A = value, B }
+            """;
+        var error = Assert.Throws<TypeCheckException>(() => new TypeChecker().Check(TestHarness.ParseOrThrow(source)));
+        Assert.Contains("must have an initializer", error.Message);
+    }
+
+    [Theory, ModeData]
+    public void ConstEnumInitializersReadQualifiedEnumMembers(ExecutionMode mode)
+    {
+        const string source = """
+            const enum First { A = 4, Word = "value" }
+            enum Regular { A = 8 }
+            const enum Second { A = First.A, B = First["A"] + 2, C = Regular.A, Word = First.Word, D = Second["B"] }
+            namespace Values {
+                export const enum Source { A = 12 }
+            }
+            const enum Third { A = Values.Source.A }
+            function read() {
+                const enum First { A = 20 }
+                const enum Local { A = First.A + 1 }
+                return Local.A;
+            }
+            console.log(Second.A, Second.B, Second.C, Second.Word, Second.D, Third.A, read());
+            """;
+        Assert.Equal("4 6 8 value 6 12 21\n", TestHarness.Run(source, mode));
+    }
+
+    [Theory]
+    [InlineData("const Source = { A: 4 }; const enum Result { A = Source.A }")]
+    [InlineData("enum Source { A = Math.random() } const enum Result { A = Source.A }")]
+    [InlineData("const enum Source { A = 4 } function read() { const Source = { A: 8 }; const enum Result { A = Source.A } }")]
+    public void ConstEnumInitializersRejectNonConstantQualifiedMembers(string source)
+    {
+        Assert.Throws<TypeCheckException>(() => new TypeChecker().Check(TestHarness.ParseOrThrow(source)));
+    }
+
     [Theory, ModeData]
     public void RegularEnumInitializersReadStringConstantsWithoutReverseMapping(ExecutionMode mode)
     {

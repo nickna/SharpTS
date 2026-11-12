@@ -946,9 +946,9 @@ public partial class RuntimeEmitter
             EmitPromiseCapabilitySupport(moduleBuilder, runtime);
 
         // The async-from-sync adapter depends on iterator helpers plus
-        // CoerceAwaitableToTask, all of which are now defined. It is gated on
-        // for-await syntax because most programs never reference this type.
-        if (features.UsesForAwaitOf)
+        // CoerceAwaitableToTask, all of which are now defined. Async-generator
+        // delegation also needs it when the delegate exposes only Symbol.iterator.
+        if (features.UsesForAwaitOf || (features.UsesAsyncGenerator && features.UsesYieldStar))
         {
             runtime.RequireAsyncGenerators().BeginFromSyncEmission();
             EmitAsyncFromSyncIteratorSupport(
@@ -965,6 +965,7 @@ public partial class RuntimeEmitter
                     runtime.IteratorProtocol.Value,
                     runtime.Invocation,
                     runtime.IteratorRecords.InvokeNext,
+                    runtime.IteratorRecords.InvokeNextWithSent,
                     runtime.IteratorCollection.ToList,
                     runtime.IteratorHelpers.NormalizeToEnumerator,
                     runtime.ObjectRead,

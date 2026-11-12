@@ -155,6 +155,7 @@ public sealed class RuntimeFeatureSet
     public bool UsesModuleNamespaces { get; set; } = true;
     public bool UsesDynamicImport { get; set; } = true;     // `import(specifier)` syntax (Expr.DynamicImport)
     public bool UsesAsyncGenerator { get; set; } = true;    // `async function*` / async generators
+    public bool UsesYieldStar { get; set; } = true;         // `yield*` delegation
     public bool UsesForAwaitOf { get; set; } = true;        // `for await (... of ...)`
     public bool UsesWeakRef { get; set; } = true;           // `new WeakRef(target)` — bare or `new`
     public bool UsesWeakMap { get; set; } = true;           // `new WeakMap(...)` — bare or `new`

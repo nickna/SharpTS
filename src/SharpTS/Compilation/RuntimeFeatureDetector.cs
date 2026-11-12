@@ -119,6 +119,7 @@ public sealed partial class RuntimeFeatureDetector
             UsesDynamicImport = false,
             UsesModuleNamespaces = false,
             UsesAsyncGenerator = false,
+            UsesYieldStar = false,
             UsesForAwaitOf = false,
             UsesWeakRef = false,
             UsesWeakMap = false,
@@ -1902,6 +1903,7 @@ public sealed partial class RuntimeFeatureDetector
                     HandleModulePath(p);
                 break;
             case Expr.Yield y:
+                if (y.IsDelegating) _set.UsesYieldStar = true;
                 if (y.Value is not null) VisitExpr(y.Value);
                 break;
             case Expr.NonNullAssertion nn:
@@ -1931,6 +1933,9 @@ public sealed partial class RuntimeFeatureDetector
                 if (ce.Accessors is not null)
                     foreach (var a in ce.Accessors)
                         foreach (var s in a.Body) VisitStmt(s);
+                if (ce.StaticInitializers is not null)
+                    foreach (var block in ce.StaticInitializers.OfType<Stmt.StaticBlock>())
+                        VisitStmt(block);
                 break;
 
             case Expr.RegexLiteral:
@@ -2604,6 +2609,19 @@ public sealed partial class RuntimeFeatureDetector
         {
             Add(stmt.Name.Lexeme);
             base.VisitClass(stmt);
+            if (stmt.StaticInitializers is not null)
+                foreach (var block in stmt.StaticInitializers.OfType<Stmt.StaticBlock>())
+                    Visit(block);
+        }
+
+        protected override void VisitClassExpr(Expr.ClassExpr expr)
+        {
+            if (expr.Name is not null)
+                Add(expr.Name.Lexeme);
+            base.VisitClassExpr(expr);
+            if (expr.StaticInitializers is not null)
+                foreach (var block in expr.StaticInitializers.OfType<Stmt.StaticBlock>())
+                    Visit(block);
         }
 
         protected override void VisitEnum(Stmt.Enum stmt)

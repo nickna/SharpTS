@@ -23,7 +23,7 @@ internal readonly record struct ConstEnumError(ConstEnumErrorKind Kind, string M
 
 /// <summary>
 /// Phase-neutral evaluation of const-enum member initializer expressions — literals, references
-/// to previously defined members of the same enum, grouping, unary (+ - ~), binary arithmetic /
+/// to previously defined enum members and resolved constants, grouping, unary (+ - ~), binary arithmetic /
 /// bitwise / shift, and string concatenation. The single implementation shared by the type
 /// checker, the interpreter, and the IL compiler, which previously each carried an exact copy.
 /// </summary>
@@ -91,7 +91,7 @@ internal static class ConstEnumExpressionEvaluator
                 ResolveMember(g.Name.Lexeme, resolvedMembers, error),
 
             Expr.GetIndex { Object: Expr.Variable receiver, Index: Expr.Literal { Value: string key } }
-                when regularEnum && receiver.Name.Lexeme == enumName =>
+                when receiver.Name.Lexeme == enumName =>
                 ResolveMember(key, resolvedMembers, error),
 
             Expr.Variable variable when resolvedMembers.TryGetValue(variable.Name.Lexeme, out var memberValue) =>
@@ -109,7 +109,7 @@ internal static class ConstEnumExpressionEvaluator
 
             Expr.Binary b => EvaluateBinary(b, resolvedMembers, enumName, error, regularEnum, resolveReference),
 
-            Expr.Get or Expr.GetIndex when regularEnum && resolveReference?.Invoke(expression) is { } value => value,
+            Expr.Get or Expr.GetIndex when resolveReference?.Invoke(expression) is { } value => value,
 
             _ => throw error(new(
                 ConstEnumErrorKind.DisallowedExpression,
@@ -182,9 +182,17 @@ internal static class ConstEnumExpressionEvaluator
             };
         }
 
-        if (left is string ls && right is string rs && binary.Operator.Type == TokenType.PLUS)
+        if (binary.Operator.Type == TokenType.PLUS)
         {
-            return ls + rs;
+            string? concatenated = (left, right) switch
+            {
+                (string ls, string rs) => ls + rs,
+                (string text, double number) => text + Compilation.RuntimeTypes.FormatNumber(number),
+                (double number, string text) => Compilation.RuntimeTypes.FormatNumber(number) + text,
+                _ => null,
+            };
+            if (concatenated is not null)
+                return concatenated;
         }
 
         throw error(new(

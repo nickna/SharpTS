@@ -48,6 +48,48 @@ public sealed class CanonicalArrayStringIndexReadDiagnosticTests
         Assert.Equal(8, diagnostic.Line);
     }
 
+    [Theory]
+    [InlineData("Child<string>", "'0' | 'length'", "string | number", "boolean")]
+    [InlineData("Child<string>", "number | 'length'", "string | number", "boolean")]
+    [InlineData("Child<string>", "'0' | 'label'", "string | 42", "string")]
+    [InlineData("Child<string> | Child<number>", "'0' | 'length'", "string | number", "boolean")]
+    [InlineData("Explicit", "'0' | 'length'", "'first' | number", "boolean")]
+    public void ArraySubclassCombinesElementAndNamedPropertyTypes(
+        string receiver, string key, string expectedType, string rejectedType)
+    {
+        var statements = TestHarness.ParseOrThrow($$"""
+            class Child<T> extends Array<T> { label = 42 as const; }
+            class Explicit extends Array<string> { 0 = 'first' as const; }
+            function read(child: {{receiver}}, key: {{key}}) {
+                const correct: {{expectedType}} = child[key];
+                const wrong: {{rejectedType}} = child[key];
+            }
+            """);
+
+        var diagnostic = Assert.Single(new TypeChecker(TypeCheckerOptions.Strict).CheckWithRecovery(statements).Diagnostics);
+        Assert.Equal("TS2322", diagnostic.TsCode);
+        Assert.Equal(5, diagnostic.Line);
+    }
+
+    [Fact]
+    public void MixedArraySubclassKeysRetainUncheckedElementUndefined()
+    {
+        var statements = TestHarness.ParseOrThrow("""
+            class Child extends Array<string> {}
+            function read(child: Child, key: '0' | 'length') {
+                const correct: string | number | undefined = child[key];
+                const wrong: string | number = child[key];
+            }
+            """);
+
+        var diagnostic = Assert.Single(new TypeChecker(TypeCheckerOptions.Strict with
+        {
+            NoUncheckedIndexedAccess = true
+        }).CheckWithRecovery(statements).Diagnostics);
+        Assert.Equal("TS2322", diagnostic.TsCode);
+        Assert.Equal(4, diagnostic.Line);
+    }
+
     internal const string Source = """
         const numbers: number[] = [4, 8];
         const wrongNumber: string = numbers['0'];

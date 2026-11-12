@@ -197,9 +197,18 @@ public partial class TypeChecker
         DeclareValue(enumStmt.Name, enumType, mergeWithLocal: true);
         _environment.DefineType(enumStmt.Name.Lexeme, enumType);
 
-        object? ResolveConstInitializerReference(Expr expression) =>
-            expression is Expr.Variable variable && ResolveEnumConstant(variable) is { } constant &&
-            !enumStmt.Members.Any(member => member.Name.Lexeme == variable.Name.Lexeme) ? constant : null;
+        object? ResolveConstInitializerReference(Expr expression)
+        {
+            if (expression is Expr.Variable variable &&
+                !enumStmt.Members.Any(member => member.Name.Lexeme == variable.Name.Lexeme))
+                return ResolveEnumConstant(variable);
+            if (expression is Expr.Get or Expr.GetIndex { Index: Expr.Literal { Value: string } } &&
+                CheckExpr(expression) is TypeInfo.Enum { MemberName: { } name } source &&
+                IsEnumDeclarationMemberReference(expression, source) &&
+                _knownEnumMembers.TryGetValue(source.Members, out var values))
+                return values.GetValueOrDefault(name);
+            return null;
+        }
 
         object? ResolveInitializerReference(Expr expression)
         {

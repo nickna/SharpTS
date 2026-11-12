@@ -2785,6 +2785,7 @@ public partial class TypeChecker
             classExpr.Name ?? new Token(TokenType.IDENTIFIER, className, null, TryGetExprLine(classExpr) ?? 0),
             classExpr.TypeParams, classExpr.SuperclassExpr, classExpr.SuperclassTypeArgs,
             classExpr.Methods, classExpr.Fields, classExpr.Accessors, classExpr.AutoAccessors,
+            StaticInitializers: classExpr.StaticInitializers,
             IndexSignatures: classExpr.IndexSignatures);
 
         // Create mutable class early so self-references work
@@ -2888,7 +2889,7 @@ public partial class TypeChecker
                 TypeInfo fieldType = ResolveAnnotation(field.TypeAnnotation, field.TypeAnnotationNode, field)
                     ?? TypeInfo.Any.Shared;
 
-                ValidateClassFieldComputedKey(field);
+                ValidateClassFieldSyntax(field);
 
                 if (field.IsPrivate)
                 {
@@ -3347,6 +3348,11 @@ public partial class TypeChecker
         ValidateClassIndexSignatureExtends(declarationView, indexValidatedClass);
         ValidateStaticOverrideCompatibility(classExpr.Methods, classExpr.Accessors,
             className, mutableClass.Freeze());
+
+        using (new EnvironmentScope(this, classEnv))
+            CheckClassStaticBlocks(declarationView, indexValidatedClass);
+        if (classExpr.StaticInitializers?.Any(initializer => initializer is Stmt.StaticBlock) == true)
+            RevalidateClassFieldInitializers(classExpr, classExpr.Fields, mutableClass, classTypeEnv, classTypeParams);
 
         // Return the class type (not an instance). For a generic class expression this is the
         // GenericClass so callers (e.g. `new`) can instantiate/infer its type arguments (#291).

@@ -10,6 +10,57 @@ public sealed class ClassExpressionStaticBlockStorageTests
 {
     public static IEnumerable<object[]> Cases()
     {
+        yield return ["static-block-typed-array-callback-runtime", """
+            const callback = (value: number): number => value + 1;
+            const Holder = class {
+                static {
+                    const callback = (value: number): number => value + 100;
+                    console.log([1, 2].map(callback).join(','));
+                }
+            };
+            """ + "\n", "101,102\n"];
+        yield return ["static-block-captured-function-typed-parameter", """
+            function joinParts(parts: string[]): string { return parts.join(','); }
+            const Holder = class {
+                static { console.log(joinParts(['a', 'b'])); }
+            };
+            """ + "\n", "a,b\n"];
+        yield return ["static-block-captured-function-numeric-array-parameter", """
+            function total(values: number[]): number { return values[0] + values[1]; }
+            const Holder = class {
+                static { console.log(total([2, 3])); }
+            };
+            """ + "\n", "5\n"];
+        foreach (var (bindingKind, binding) in new[]
+        {
+            ("shadowed", "const touch: (target: Item, update: Update) => Item = Object.assign;"),
+            ("reassigned", "touch = Object.assign;")
+        })
+        foreach (var (kind, declaration) in new[]
+        {
+            ("declaration", "class Holder"),
+            ("anonymous", "const Holder = class"),
+            ("named", "const Holder = class Owner")
+        })
+        {
+            // Class-declaration function-value dispatch is tracked separately in #3653.
+            if (bindingKind == "reassigned" && kind == "declaration")
+                continue;
+            yield return ["static-block-" + bindingKind + "-record-mutator-" + kind, $$"""
+                type Item = { count: number; values: number[] };
+                type Update = { extra: number; count: number };
+                function touch(target: Item, update: Update): void {}
+                function read(item: Item): number { return item.count; }
+                const item: Item = { count: 1, values: [1] };
+                {{declaration}} {
+                    static {
+                        {{binding}}
+                        touch(item, { extra: 2, count: 9 });
+                    }
+                };
+                console.log(read(item), item.count);
+                """ + "\n", "9 9\n"];
+        }
         yield return ["anonymous-static-block-var-capture-issue", """
             let result = "";
             const C = class {

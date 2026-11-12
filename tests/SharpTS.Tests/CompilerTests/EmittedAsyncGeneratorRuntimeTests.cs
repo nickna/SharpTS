@@ -77,22 +77,26 @@ public sealed class EmittedAsyncGeneratorRuntimeTests
         var emitter = new RuntimeEmitter(TypeProvider.Runtime, emitHosted: hosted); var owners = new HashSet<object>();
         var cases = new[]
         {
-            (Source: "const n=1;", Async: false, ForAwait: false),
-            (Source: "async function* values(){yield 1;}", Async: true, ForAwait: false),
-            (Source: "async function run(){for await(const value of [1,2]){}}run();", Async: false, ForAwait: true),
-            (Source: "async function* values(){yield 1;}async function run(){for await(const value of values()){}}run();", Async: true, ForAwait: true),
-            (Source: "const n=2;", Async: false, ForAwait: false)
+            (Source: "const n=1;", Async: false, ForAwait: false, YieldStar: false),
+            (Source: "async function* values(){yield 1;}", Async: true, ForAwait: false, YieldStar: false),
+            (Source: "async function run(){for await(const value of [1,2]){}}run();", Async: false, ForAwait: true, YieldStar: false),
+            (Source: "async function* values(){yield 1;}async function run(){for await(const value of values()){}}run();", Async: true, ForAwait: true, YieldStar: false),
+            (Source: "async function* values(){yield* [1];}", Async: true, ForAwait: false, YieldStar: true),
+            (Source: "function* values(){yield* [1];}", Async: false, ForAwait: false, YieldStar: true),
+            (Source: "const n=2;", Async: false, ForAwait: false, YieldStar: false)
         };
         foreach (var item in cases)
         {
             var features = new RuntimeFeatureDetector().Detect(new Parser(new Lexer(item.Source).ScanTokens()).ParseOrThrow());
             Assert.Equal(item.Async, features.UsesAsyncGenerator); Assert.Equal(item.ForAwait, features.UsesForAwaitOf);
+            Assert.Equal(item.YieldStar, features.UsesYieldStar);
+            bool fromSyncRequired = item.ForAwait || (item.Async && item.YieldStar);
             var builder = NewAssembly(); var runtime = emitter.EmitAll(builder.DefineDynamicModule("main"), features);
             Assert.Equal(item.Async || item.ForAwait, runtime.AsyncGenerators is not null);
             if (runtime.AsyncGenerators is { } root)
             {
                 CheckOwner(root, builder, owners);
-                Assert.Equal(item.Async, root.Continuations is not null); Assert.Equal(item.ForAwait, root.FromSync is not null);
+                Assert.Equal(item.Async, root.Continuations is not null); Assert.Equal(fromSyncRequired, root.FromSync is not null);
                 if (root.Continuations is { } continuations) CheckOwner(continuations, builder, owners);
                 else Assert.Throws<InvalidOperationException>(() => root.RequireContinuations());
                 if (root.FromSync is { } fromSync) CheckOwner(fromSync, builder, owners);
@@ -117,9 +121,9 @@ public sealed class EmittedAsyncGeneratorRuntimeTests
             var runtimeType = loaded.GetType("$Runtime")!;
             foreach (string name in new[] { "AsyncGeneratorAwaitContinue", "AsyncGeneratorBuildResult" })
                 Assert.Equal(item.Async, runtimeType.GetMethod(name, Members) is not null);
-            Assert.Equal(item.ForAwait, loaded.GetType("$AsyncFromSyncIterator") is not null);
+            Assert.Equal(fromSyncRequired, loaded.GetType("$AsyncFromSyncIterator") is not null);
             foreach (string name in new[] { "AsyncFromSyncCreateResult", "AsyncFromSyncAwaitResult", "AsyncFromSyncAwaitContinuation", "AdaptSyncIterableToAsyncGenerator" })
-                Assert.Equal(item.ForAwait, runtimeType.GetMethod(name, Members) is not null);
+                Assert.Equal(fromSyncRequired, runtimeType.GetMethod(name, Members) is not null);
             Assert.DoesNotContain(loaded.GetReferencedAssemblies(), a => a.Name == "SharpTS");
             Assert.Equal(hosted, loaded.GetReferencedAssemblies().Any(a => a.Name == "SharpTS.Hosting.Abstractions"));
         }

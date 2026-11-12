@@ -257,6 +257,26 @@ public partial class TypeChecker
             type is not TypeInfo.Undefined && assigned.Contains(name);
     }
 
+    private bool StaticAssignmentProvesInitialization(FieldGetterScope scope, string name, Expr assignment)
+    {
+        var declaredType = scope.Owner.StaticProperties.GetValueOrDefault(name)
+            ?? scope.Owner.StaticPrivateFields.GetValueOrDefault(name);
+        if (declaredType is not null && !StaticAssignmentMayBeUndefined(declaredType))
+            return true;
+
+        // Block bodies are checked after initial field inference. Their checked assignment
+        // types become authoritative when the field initializers are revalidated afterwards.
+        return _typeMap.Get(assignment) is not { } assignedType || !StaticAssignmentMayBeUndefined(assignedType);
+    }
+
+    private static bool StaticAssignmentMayBeUndefined(TypeInfo type, int depth = 0) => depth >= 32 || type switch
+    {
+        TypeInfo.TypeParameter { Constraint: { } constraint } => StaticAssignmentMayBeUndefined(constraint, depth + 1),
+        TypeInfo.TypeParameter => true,
+        TypeInfo.Union union => union.FlattenedTypes.Any(member => StaticAssignmentMayBeUndefined(member, depth + 1)),
+        _ => CanBeUndefined(type)
+    };
+
     private void ObservePendingGetterFieldRead(TypeInfo owner, bool isStatic, string name)
     {
         if (FindFieldGetterScope(owner) is not { } scope ||

@@ -284,16 +284,10 @@ public partial class Interpreter
 
     /// <summary>
     /// Tries to get an async iterator from an object via Symbol.asyncIterator.
-    /// Async generators are their own async iterators.
+    /// Includes async generators' inherited method and observable overrides.
     /// </summary>
     internal AsyncIteratorRecord? TryGetAsyncIterator(object? iterable)
     {
-        // Async generators are their own async iterators
-        if (iterable is SharpTSAsyncGenerator asyncGen)
-        {
-            return CaptureAsyncIterator(asyncGen);
-        }
-
         // Web Streams ReadableStream: wrap in an async iterator that
         // delegates next() to a default reader's read(). Matches Node 18+
         // behaviour where `for await (const chunk of rs)` works natively.
