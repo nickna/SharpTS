@@ -3337,6 +3337,13 @@ public partial class TypeChecker
             _identityCompatibilityCache = null;
         }
 
+        if (classExpr.Name is { } completedInnerName)
+        {
+            classEnv.Define(completedInnerName.Lexeme, classExprResultType);
+            classEnv.DefineType(completedInnerName.Lexeme, classExprResultType);
+            BindEditorClassSelf(classExpr, classEnv, classExprResultType);
+        }
+
         // Validate against completed inferred signatures, not the placeholders
         // collected before method and getter bodies were checked.
         mutableClass.ResetFrozenCache();
