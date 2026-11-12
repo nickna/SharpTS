@@ -376,9 +376,9 @@ public class SharpTSAsyncGenerator : ITypeCategorized, ISharpTSOwnPropertyObject
                 GeneratorResumeKind.Throw => synchronous.Throw(received.Value),
                 _ => synchronous.Next(received.Value),
             }));
-        if (_interpreter.TryGetCustomIteratorProtocol(iterable, out var iterObj, out var nextFn))
+        if (_interpreter.TryGetCustomIteratorProtocol(iterable) is { } syncIterator)
             return await DelegateGeneratorAsync(
-                received => DriveCustomSyncIterator(iterObj!, nextFn!, received));
+                received => DriveCustomSyncIterator(syncIterator, received));
 
         // Built-in iterables (arrays, strings, Maps, Sets): next() ignores resume value.
         foreach (object? element in _interpreter.GetIterableElements(iterable))
@@ -390,7 +390,7 @@ public class SharpTSAsyncGenerator : ITypeCategorized, ISharpTSOwnPropertyObject
     }
 
     private async Task<object?> DriveCustomSyncIterator(
-        object iterator, ISharpTSCallable next, GeneratorResume received)
+        Interpreter.SyncIteratorRecord record, GeneratorResume received)
     {
         string name = received.Kind switch
         {
@@ -399,7 +399,7 @@ public class SharpTSAsyncGenerator : ITypeCategorized, ISharpTSOwnPropertyObject
             _ => "next",
         };
         object? method = received.Kind == GeneratorResumeKind.Next
-            ? next : _interpreter.GetPropertyValue(iterator, name);
+            ? record.Next : _interpreter.GetPropertyValue(record.Iterator, name);
         if (method is null or SharpTSUndefined)
         {
             if (received.Kind == GeneratorResumeKind.Return)
@@ -407,12 +407,12 @@ public class SharpTSAsyncGenerator : ITypeCategorized, ISharpTSOwnPropertyObject
 
             // AsyncFromSyncIterator.throw closes a delegate without throw(),
             // using zero arguments, before rejecting with a fresh TypeError.
-            object? close = _interpreter.GetPropertyValue(iterator, "return");
+            object? close = _interpreter.GetPropertyValue(record.Iterator, "return");
             if (close is not null and not SharpTSUndefined)
             {
                 if (close is not ISharpTSCallable closeMethod)
                     throw new ThrowException(new SharpTSTypeError("Iterator return property must be callable."));
-                object? closed = FunctionBuiltIns.CallWithThis(_interpreter, closeMethod, iterator, []);
+                object? closed = FunctionBuiltIns.CallWithThis(_interpreter, closeMethod, record.Iterator, []);
                 if (!RuntimeValue.FromBoxed(closed).IsObject)
                     throw new ThrowException(new SharpTSTypeError("Iterator return() must return an object."));
             }
@@ -421,7 +421,7 @@ public class SharpTSAsyncGenerator : ITypeCategorized, ISharpTSOwnPropertyObject
         if (method is not ISharpTSCallable callable)
             throw new ThrowException(new SharpTSTypeError($"Iterator {name} property must be callable."));
 
-        object? result = FunctionBuiltIns.CallWithThis(_interpreter, callable, iterator, [received.Value]);
+        object? result = FunctionBuiltIns.CallWithThis(_interpreter, callable, record.Iterator, [received.Value]);
         if (!RuntimeValue.FromBoxed(result).IsObject)
             throw new ThrowException(new SharpTSTypeError($"Iterator {name}() must return an object."));
 

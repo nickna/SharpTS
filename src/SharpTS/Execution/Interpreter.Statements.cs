@@ -870,63 +870,35 @@ public partial class Interpreter
         }
     }
 
+    internal readonly record struct SyncIteratorRecord(object Iterator, ISharpTSCallable Next);
+
     /// <summary>
-    /// Extracts the raw iterator object and its bound <c>next</c> callable from a custom iterable
-    /// (one that carries <c>[Symbol.iterator]</c>). Used by <c>yield*</c> delegation to drive the
-    /// iterator manually so the outer generator's resume value can be forwarded as the argument to
-    /// <c>next(v)</c> (ECMA-262 §14.4.14, #503).
+    /// Acquires a custom synchronous iterator and captures its next method once.
+    /// The record retains the actual returned object, including native generators.
+    /// Callers supply Iterator as the receiver when invoking Next.
     /// </summary>
     /// <returns>
-    /// <c>true</c> when a custom iterator was found; <c>false</c> for built-in iterables (arrays,
-    /// strings, Maps, Sets) that have no <c>[Symbol.iterator]</c> in the runtime.
+    /// Null for source kinds handled by the caller's enumerable adapter,
+    /// without reading their factory. Once a custom factory lookup starts,
+    /// acquisition either returns its record or throws; callers never reacquire it.
     /// </returns>
-    internal bool TryGetCustomIteratorProtocol(
-        object? iterable,
-        out object? iteratorObj,
-        out ISharpTSCallable? nextFn)
+    internal SyncIteratorRecord? TryGetCustomIteratorProtocol(object? iterable)
     {
-        iteratorObj = null;
-        nextFn = null;
+        if (iterable is not (SharpTSObject or SharpTSInstance))
+            return null;
 
-        object? iteratorFn = iterable is SharpTSObject or SharpTSInstance
-            ? GetSymbolPropertyValue(iterable, SharpTSSymbol.Iterator)
-            : null;
-        if (iteratorFn is null or SharpTSUndefined) return false;
+        object? iteratorFn = GetSymbolPropertyValue(iterable, SharpTSSymbol.Iterator);
+        if (iteratorFn is not ISharpTSCallable factory)
+            throw new ThrowException(new SharpTSTypeError("[Symbol.iterator] must be a function"));
 
-        // GetMethod observes symbol accessors before acquiring the iterator.
-        // Call the resulting factory with the original iterable receiver.
-        iteratorFn = BindMemberCallReceiver(iteratorFn, iterable);
+        object? iterator = FunctionBuiltIns.CallWithThis(this, factory, iterable, []);
+        if (!RuntimeValue.FromBoxed(iterator).IsObject)
+            throw new ThrowException(new SharpTSTypeError("[Symbol.iterator]() must return an object"));
 
-        object? iterator = iteratorFn is ISharpTSCallable callableIter
-            ? callableIter.Call(this, [])
-            : iteratorFn is SharpTSFunction fn
-                ? fn.Call(this, [])
-                : null;
-
-        if (iterator == null)
-            throw new ThrowException(new SharpTSTypeError(
-                "[Symbol.iterator]() must return an object"));
-
-        // A generator returned by [Symbol.iterator]() is driven directly (it doesn't
-        // expose a data-property next()); let the caller fall through to GetIterableElements.
-        if (iterator is IEnumerable<object?> and not SharpTSObject and not SharpTSInstance)
-            return false;
-
-        if (iterator is not (SharpTSObject or SharpTSInstance))
-            throw new ThrowException(new SharpTSTypeError(
-                "[Symbol.iterator]() must return an object"));
-
-        // GetIterator captures next once, including an accessor or inherited
-        // method. Invocation supplies the iterator receiver to that callable.
-        object? nextMethod = BindMemberCallReceiver(GetPropertyValue(iterator, "next"), iterator);
-
-        if (nextMethod is not ISharpTSCallable callable)
-            throw new ThrowException(new SharpTSTypeError(
-                "Iterator next property must be callable"));
-
-        iteratorObj = iterator;
-        nextFn = callable;
-        return true;
+        object? next = GetPropertyValue(iterator, "next");
+        if (next is not ISharpTSCallable callable)
+            throw new ThrowException(new SharpTSTypeError("Iterator next property must be callable"));
+        return new SyncIteratorRecord(iterator!, callable);
     }
 
     /// <summary>
@@ -1223,20 +1195,13 @@ public partial class Interpreter
     /// </summary>
     private void TryCallIteratorReturn(object? iterator)
     {
-        object? returnMethod = iterator switch
-        {
-            // Get(iterator, "return") — getter-aware, walks the prototype chain.
-            SharpTSObject iterObj => EvaluateGetOnRecord(iterObj, "return"),
-            SharpTSInstance iterInst => TryGetInstanceMember(iterInst, "return"),
-            _ => null,
-        };
+        object? returnMethod = GetPropertyValue(iterator, "return");
         if (returnMethod is null or SharpTSUndefined) return;
-
-        returnMethod = BindMemberCallReceiver(returnMethod, iterator);
         if (returnMethod is not ISharpTSCallable callable)
             throw new ThrowException(new SharpTSTypeError("Iterator.return must be a function."));
-        var result = callable.Call(this, []);
-        if (result is null or SharpTSUndefined or double or string or bool or SharpTSBigInt or SharpTSSymbol)
+
+        object? result = FunctionBuiltIns.CallWithThis(this, callable, iterator, []);
+        if (!RuntimeValue.FromBoxed(result).IsObject)
             throw new ThrowException(new SharpTSTypeError("Iterator.return must return an object."));
     }
 
@@ -1245,19 +1210,6 @@ public partial class Interpreter
     /// built-in algorithm (not by the C# enumerable adapter).
     /// </summary>
     internal void CloseIterator(object? iterator) => TryCallIteratorReturn(iterator);
-
-    /// <summary>
-    /// Reads a member from a class instance the way the iterator protocol does:
-    /// raw field first, then a declared method via the class chain (Get throws
-    /// when absent, so it is guarded). Returns null when the member is absent.
-    /// </summary>
-    private object? TryGetInstanceMember(SharpTSInstance instance, string name)
-    {
-        var field = instance.GetRawField(name);
-        if (field != null) return field;
-        var tok = new Token(TokenType.IDENTIFIER, name, null, 0);
-        try { return instance.Get(tok); } catch { return null; }
-    }
 
     /// <summary>
     /// Gets iterable elements from any iterable value, including custom iterables with Symbol.iterator.
