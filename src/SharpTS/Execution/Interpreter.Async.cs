@@ -457,16 +457,28 @@ public partial class Interpreter
         return result;
     }
 
-    private Task<object?> ResolveAsyncIteratorResult(object? result)
+    // Expose the synchronous PromiseResolve phase separately from awaiting its
+    // result: async-from-sync consumers must close immediately if it throws.
+    internal Task<object?> ResolveAsyncIteratorResult(object? result)
     {
-        if (result is SharpTSPromise promise)
-            return NormalizePromiseForAwait(promise);
-        if (result is Task<object?> task)
-            return task;
+        var saved = _environment;
+        var savedGen = CurrentAsyncGenerator;
+        try
+        {
+            if (result is SharpTSPromise promise)
+                return NormalizePromiseForAwait(promise);
+            if (result is Task<object?> task)
+                return task;
 
-        var completion = new TaskCompletionSource<object?>();
-        PromiseBuiltIns.ResolveThenableIntoCapability(this, completion, result);
-        return completion.Task;
+            var completion = new TaskCompletionSource<object?>();
+            PromiseBuiltIns.ResolveThenableIntoCapability(this, completion, result);
+            return completion.Task;
+        }
+        finally
+        {
+            _environment = saved;
+            CurrentAsyncGenerator = savedGen;
+        }
     }
 
     private async Task<ExecutionResult> ExecuteForInAsync(Stmt.ForIn forIn)

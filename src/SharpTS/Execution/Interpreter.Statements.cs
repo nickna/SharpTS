@@ -1209,7 +1209,16 @@ public partial class Interpreter
     /// Runs IteratorClose for a raw iterator record owned by a spec-level
     /// built-in algorithm (not by the C# enumerable adapter).
     /// </summary>
-    internal void CloseIterator(object? iterator) => TryCallIteratorReturn(iterator);
+    internal void CloseIterator(object? iterator, bool preserveThrow = false)
+    {
+        try { TryCallIteratorReturn(iterator); }
+        catch (Exception error) when (preserveThrow &&
+            error is not (OperationCanceledException or WorkerTerminatedException or ThreadInterruptedException))
+        {
+            // Guest cleanup failures cannot replace an existing throw. Host
+            // cancellation still aborts without being converted into guest work.
+        }
+    }
 
     /// <summary>
     /// Gets iterable elements from any iterable value, including custom iterables with Symbol.iterator.

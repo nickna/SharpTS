@@ -429,7 +429,19 @@ public class SharpTSAsyncGenerator : ITypeCategorized, ISharpTSOwnPropertyObject
         // must not change the done flag or cause a second property read.
         bool done = RuntimeTypes.IsTruthy(_interpreter.GetPropertyValue(result, "done"));
         object? value = _interpreter.GetPropertyValue(result, "value");
-        value = await _interpreter.AwaitAsyncGeneratorReturnValue(value);
+        try
+        {
+            // PromiseResolve can throw synchronously (for example, a poisoned
+            // Promise constructor); close before queueing the await in that case.
+            var adopted = _interpreter.ResolveAsyncIteratorResult(value);
+            value = await _interpreter.AwaitAsyncGeneratorReturnValue(adopted);
+        }
+        catch (Exception error) when (!done && received.Kind != GeneratorResumeKind.Return &&
+            error is not (OperationCanceledException or WorkerTerminatedException or ThreadInterruptedException))
+        {
+            _interpreter.CloseIterator(record.Iterator, preserveThrow: true);
+            throw;
+        }
         return new SharpTSIteratorResult(value, done);
     }
 
