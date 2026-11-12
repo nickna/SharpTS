@@ -69,7 +69,18 @@ public class AsyncFromSyncResultOrderTests
         "next done true\nnext value\nnext then\n" +
         "poison done\ntrue false\npoison done\ntrue\n";
 
+    private const string ForAwaitLoop = "for await (const value of source()) console.log(\"loop\", value);";
+    private const string ForAwaitOutput =
+        "next done false\nnext value\nnext then\nloop 7\nnext done true\nnext value\nnext then\n";
+
     [Theory, ModeData]
-    public void SyncResults_ReadDoneBeforeValueAndPreserveSnapshotAcrossAdoption(ExecutionMode mode)
+    public void DelegatedSyncResults_ReadDoneBeforeValueAndPreserveSnapshotAcrossAdoption(ExecutionMode mode)
+        => Assert.Equal(Expected.Replace(ForAwaitOutput, ""),
+            TestHarness.RunUnchecked(Source.Replace(ForAwaitLoop, ""), mode));
+
+    // The interpreter skips adoption of completed synchronous for-await values
+    // (#3660); delegation above exercises both backends independently.
+    [Theory, CompiledOnlyData]
+    public void SyncForAwaitResults_AdoptCompletedValuesAfterReadingDone(ExecutionMode mode)
         => Assert.Equal(Expected, TestHarness.RunUnchecked(Source, mode));
 }
