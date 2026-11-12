@@ -43,9 +43,6 @@ public sealed class ClassExpressionStaticBlockStorageTests
             ("named", "const Holder = class Owner")
         })
         {
-            // Class-declaration function-value dispatch is tracked separately in #3653.
-            if (bindingKind == "reassigned" && kind == "declaration")
-                continue;
             yield return ["static-block-" + bindingKind + "-record-mutator-" + kind, $$"""
                 type Item = { count: number; values: number[] };
                 type Update = { extra: number; count: number };
@@ -61,6 +58,31 @@ public sealed class ClassExpressionStaticBlockStorageTests
                 console.log(read(item), item.count);
                 """ + "\n", "9 9\n"];
         }
+        yield return ["declaration-static-block-live-function", """
+            function value(): number { return 1; }
+            console.log(value());
+            class Holder {
+                static {
+                    console.log(value());
+                    value = () => 2;
+                    console.log(value());
+                }
+            }
+            console.log(value());
+            """ + "\n", "1\n1\n2\n2\n"];
+        yield return ["declaration-static-block-mutable-typed-parameters", """
+            function joinParts(parts: string[]): string { return parts.join(','); }
+            function total(values: number[]): number { return values[0] + values[1]; }
+            class Holder {
+                static {
+                    console.log(joinParts(['a', 'b']), total([2, 3]));
+                    joinParts = parts => parts.join('-');
+                    total = values => values[0] * values[1];
+                    console.log(joinParts(['c', 'd']), total([2, 3]));
+                }
+            }
+            console.log(joinParts(['e', 'f']), total([3, 4]));
+            """ + "\n", "a,b 5\nc-d 6\ne-f 12\n"];
         foreach (var declaration in new[] { "class", "class Owner" })
         {
             yield return ["static-block-live-function-" + declaration.Replace(' ', '-'), $$"""
