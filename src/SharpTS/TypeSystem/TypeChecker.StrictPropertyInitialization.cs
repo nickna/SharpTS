@@ -199,6 +199,10 @@ public partial class TypeChecker
                 assigned = AnalyzeInitializationExpression(value, assigned, assignmentProvesInitialization);
                 RecordAssignment(name.Lexeme);
                 break;
+            case Expr.SetIndex { Object: Expr.This, Index: Expr.Literal { Value: string name }, Value: var value }:
+                assigned = AnalyzeInitializationExpression(value, assigned, assignmentProvesInitialization);
+                RecordAssignment(name);
+                break;
             case Expr.SetPrivate { Object: Expr.This, Name: var name, Value: var value }:
                 assigned = AnalyzeInitializationExpression(value, assigned, assignmentProvesInitialization);
                 RecordAssignment(name.Lexeme);

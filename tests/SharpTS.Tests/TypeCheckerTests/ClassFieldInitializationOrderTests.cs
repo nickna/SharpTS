@@ -46,6 +46,7 @@ public sealed class ClassFieldInitializationOrderTests
     [InlineData("const C = class", "#value", "")]
     [InlineData("class C", "value", "static { if (false) this.value = 1; }")]
     [InlineData("class C", "value", "static { if (flag) this.value = 1; }")]
+    [InlineData("class C", "value", "static { if (flag) this['value'] = 1; }")]
     [InlineData("class C", "value", "static { const assign = () => { this.value = 1; }; }")]
     public void EarlierUninitializedStaticFieldReportsAnInitializationError(
         string declaration, string field, string earlierBlock)
@@ -66,6 +67,8 @@ public sealed class ClassFieldInitializationOrderTests
 
     [Theory]
     [InlineData("class C", "value", "this.value = 1;")]
+    [InlineData("class C", "value", "this['value'] = 1;")]
+    [InlineData("const C = class", "value", "if (flag) this['value'] = 1; else this['value'] = 2;")]
     [InlineData("class C", "value", "if (true) this.value = 1;")]
     [InlineData("class C", "value", "if (flag) this.value = 1; else this.value = 2;")]
     [InlineData("const C = class", "#value", "this.#value = 1;")]
