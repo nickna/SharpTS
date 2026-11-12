@@ -749,6 +749,7 @@ public partial class ILCompiler
         if (!hasHostedTopLevelAwait && module.Statements.Any(statement => statement is Stmt.Using))
             emitter.InitializeCapturedLexicalTdzBindings(module.Statements);
         EmitLiveModuleFunctionInitialization(module, emitter);
+        EmitMutableFunctionInitialization(module.Statements, emitter);
         if (hasHostedTopLevelAwait)
         {
             // The internal async module runner executes this module through the
@@ -840,6 +841,7 @@ public partial class ILCompiler
         ctx.ModuleResolver = _modules.Resolver;
 
         var emitter = new ILEmitter(ctx);
+        EmitMutableFunctionInitialization(script.Statements, emitter);
         EmitInitializeHoistedVars(il, ctx, GetVarLoopHeadDeclarations(script.Statements));
 
         emitter.EmitTopLevelStatements(script.Statements, stmt =>
@@ -1104,6 +1106,7 @@ public partial class ILCompiler
         }
         var emitter = new ILEmitter(CreateHostedModuleStepContext(module, il, method));
         EmitLiveModuleFunctionInitialization(module, emitter);
+        EmitMutableFunctionInitialization(module.Statements, emitter);
         il.Emit(OpCodes.Call, runner);
         il.Emit(OpCodes.Ldstr, module.Path);
         il.Emit(OpCodes.Call, typeof(SharpTSHostedRuntimeBase).GetMethod(

@@ -2775,6 +2775,9 @@ public partial class ILCompiler
         {
             Stmt.Var { IsDeclare: false } v => v.Name.Lexeme,
             Stmt.Const c => c.Name.Lexeme,
+            Stmt.Function { Body: not null, IsDeclare: false } function
+                when !_stableSelfCallFunctions.Contains(function)
+                    && _closures.Analyzer.IsVariableCaptured(function.Name.Lexeme) => function.Name.Lexeme,
             _ => null
         };
         if (varName == null || _closures.CapturedTopLevelVars.Contains(varName)) return;
@@ -2814,6 +2817,8 @@ public partial class ILCompiler
         // (we `continue` above when the var is captured). For non-captured vars,
         // resolution goes through ctx.TopLevelStaticVars which is module-scoped.
         _topLevelStaticVars[varName] = field;
+        if (stmt is Stmt.Function functionDeclaration)
+            _mutableFunctionFields[functionDeclaration] = field;
         if (moduleDict != null)
         {
             moduleDict[varName] = field;

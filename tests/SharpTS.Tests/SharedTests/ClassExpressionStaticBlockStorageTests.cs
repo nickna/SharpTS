@@ -61,6 +61,34 @@ public sealed class ClassExpressionStaticBlockStorageTests
                 console.log(read(item), item.count);
                 """ + "\n", "9 9\n"];
         }
+        foreach (var declaration in new[] { "class", "class Owner" })
+        {
+            yield return ["static-block-live-function-" + declaration.Replace(' ', '-'), $$"""
+                function value(): number { return 1; }
+                console.log(value());
+                const Holder = {{declaration}} {
+                    static {
+                        console.log(value());
+                        value = () => 2;
+                        console.log(value());
+                    }
+                    static read() { return value(); }
+                };
+                console.log(value(), Holder.read());
+                value = () => 3;
+                console.log(value(), Holder.read());
+                """ + "\n", "1\n1\n2\n2 2\n3 3\n"];
+            yield return ["static-block-live-function-identity-" + declaration.Replace(' ', '-'), $$"""
+                function touch(target: any, update: any): any { return target; }
+                const Holder = {{declaration}} {
+                    static { touch = Object.assign; }
+                };
+                console.log(touch === Object.assign);
+                const item = { count: 1 };
+                touch(item, { count: 9 });
+                console.log(item.count);
+                """ + "\n", "true\n9\n"];
+        }
         yield return ["anonymous-static-block-var-capture-issue", """
             let result = "";
             const C = class {

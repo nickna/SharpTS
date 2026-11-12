@@ -1417,6 +1417,7 @@ public partial class ILCompiler
         InitializeNamespaceFields(il);
 
         var emitter = new ILEmitter(ctx);
+        EmitMutableFunctionInitialization(statements, emitter);
 
         emitter.EmitTopLevelStatements(statements, stmt =>
         {
@@ -1591,6 +1592,7 @@ public partial class ILCompiler
         InitializeNamespaceFields(il);
 
         var emitter = new ILEmitter(ctx);
+        EmitMutableFunctionInitialization(statements, emitter);
 
         // Execute top-level statements (module initialization), excluding the main function
         emitter.EmitTopLevelStatements(statements, stmt =>
