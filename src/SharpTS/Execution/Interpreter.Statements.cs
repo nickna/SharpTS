@@ -888,26 +888,14 @@ public partial class Interpreter
         iteratorObj = null;
         nextFn = null;
 
-        object? iteratorFn = null;
-        object? thisForBind = null;
+        object? iteratorFn = iterable is SharpTSObject or SharpTSInstance
+            ? GetSymbolPropertyValue(iterable, SharpTSSymbol.Iterator)
+            : null;
+        if (iteratorFn is null or SharpTSUndefined) return false;
 
-        if (iterable is SharpTSObject obj)
-        {
-            iteratorFn = obj.GetBySymbol(SharpTSSymbol.Iterator);
-            thisForBind = obj;
-        }
-        else if (iterable is SharpTSInstance inst)
-        {
-            iteratorFn = inst.GetBySymbol(SharpTSSymbol.Iterator);
-            if (iteratorFn == null && inst.GetClass().FindSymbolMethod(SharpTSSymbol.Iterator) is { } sym)
-                iteratorFn = SharpTSClass.BindMethod(sym, inst);
-            thisForBind = inst;
-        }
-
-        if (iteratorFn == null) return false;
-
-        // Bind 'this' and call to get the iterator object.
-        iteratorFn = BindMemberCallReceiver(iteratorFn, thisForBind);
+        // GetMethod observes symbol accessors before acquiring the iterator.
+        // Call the resulting factory with the original iterable receiver.
+        iteratorFn = BindMemberCallReceiver(iteratorFn, iterable);
 
         object? iterator = iteratorFn is ISharpTSCallable callableIter
             ? callableIter.Call(this, [])
