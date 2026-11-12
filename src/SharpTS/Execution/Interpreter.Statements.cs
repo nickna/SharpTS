@@ -928,26 +928,9 @@ public partial class Interpreter
             throw new ThrowException(new SharpTSTypeError(
                 "[Symbol.iterator]() must return an object"));
 
-        // Extract and bind the 'next' method from the iterator object.
-        object? nextMethod = null;
-        if (iterator is SharpTSObject iterObj)
-        {
-            nextMethod = iterObj.GetProperty("next");
-        }
-        else if (iterator is SharpTSInstance iterInst)
-        {
-            nextMethod = iterInst.GetRawField("next");
-            if (nextMethod == null)
-            {
-                var tok = new Token(TokenType.IDENTIFIER, "next", null, 0);
-                try { nextMethod = iterInst.Get(tok); } catch { }
-            }
-        }
-
-        if (nextMethod is SharpTSArrowFunction arrow)
-            nextMethod = arrow.Bind(iterator);
-        else if (nextMethod is SharpTSFunction nfn && iterator is SharpTSInstance nInst)
-            nextMethod = nfn.Bind(nInst);
+        // GetIterator captures next once, including an accessor or inherited
+        // method. Invocation supplies the iterator receiver to that callable.
+        object? nextMethod = BindMemberCallReceiver(GetPropertyValue(iterator, "next"), iterator);
 
         if (nextMethod is not ISharpTSCallable callable)
             throw new ThrowException(new SharpTSTypeError(
