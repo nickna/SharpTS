@@ -18,6 +18,7 @@ public partial class RuntimeEmitter
         MethodBuilder GetIteratorNextMethod,
         MethodBuilder GetIteratorValue,
         EmittedInvocationRuntime Invocation,
+        MethodBuilder IteratorClose,
         MethodBuilder InvokeCapturedIteratorNext,
         MethodBuilder InvokeCapturedIteratorNextWithSent,
         MethodBuilder IterateToList,
@@ -34,8 +35,10 @@ public partial class RuntimeEmitter
 
     private readonly record struct AsyncFromSyncIteratorTypeInputs(
         EmittedGeneratorRuntime Generators,
+        EmittedErrorRuntime Errors,
         MethodBuilder GetIteratorNextMethod,
         EmittedInvocationRuntime Invocation,
+        MethodBuilder IteratorClose,
         MethodBuilder InvokeCapturedIteratorNext,
         MethodBuilder InvokeCapturedIteratorNextWithSent,
         EmittedObjectReadRuntime ObjectRead,
@@ -55,6 +58,8 @@ public partial class RuntimeEmitter
 
     private readonly record struct AsyncFromSyncThrowInputs(
         EmittedGeneratorRuntime Generators,
+        EmittedErrorRuntime Errors,
+        MethodBuilder IteratorClose,
         EmittedInvocationRuntime Invocation,
         EmittedObjectReadRuntime ObjectRead,
         Type UndefinedType
@@ -97,8 +102,10 @@ public partial class RuntimeEmitter
             fromSync,
             new AsyncFromSyncIteratorTypeInputs(
                 inputs.Generators,
+                inputs.Errors,
                 inputs.GetIteratorNextMethod,
                 inputs.Invocation,
+                inputs.IteratorClose,
                 inputs.InvokeCapturedIteratorNext,
                 inputs.InvokeCapturedIteratorNextWithSent,
                 inputs.ObjectRead,
@@ -313,6 +320,8 @@ public partial class RuntimeEmitter
             fromSync,
             new AsyncFromSyncThrowInputs(
                 inputs.Generators,
+                inputs.Errors,
+                inputs.IteratorClose,
                 inputs.Invocation,
                 inputs.ObjectRead,
                 inputs.UndefinedType
@@ -592,8 +601,15 @@ public partial class RuntimeEmitter
         il.Emit(OpCodes.Ret);
 
         il.MarkLabel(noThrow);
+        // Missing throw closes the sync iterator with a normal completion;
+        // close failures take precedence over the required TypeError.
+        il.Emit(OpCodes.Ldarg_0);
+        il.Emit(OpCodes.Ldfld, iteratorField);
+        il.Emit(OpCodes.Ldc_I4_0);
+        il.Emit(OpCodes.Call, inputs.IteratorClose);
         il.Emit(OpCodes.Ldstr, "Synchronous iterator does not provide a throw() method.");
-        il.Emit(OpCodes.Newobj, _types.ExceptionCtorString);
+        il.Emit(OpCodes.Newobj, inputs.Errors.TypeErrorConstructor);
+        il.Emit(OpCodes.Call, inputs.Errors.CreateException);
         il.Emit(OpCodes.Call, TaskFromExceptionObject());
         il.Emit(OpCodes.Ret);
     }
