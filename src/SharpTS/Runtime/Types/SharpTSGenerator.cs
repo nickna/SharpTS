@@ -81,6 +81,7 @@ public class SharpTSGenerator : IEnumerable<object?>, IDisposable, ITypeCategori
     private enum State { NotStarted, Suspended, Running, Completed }
     private State _state = State.NotStarted;
     private object? _yieldedValue;
+    private bool _yieldedIteratorResult;
     // The generator's completion value. Defaults to undefined so a body that falls off the
     // end (or a no-arg return()) reports { value: undefined, done: true }, not C# null.
     private object? _returnValue = SharpTSUndefined.Instance;
@@ -265,7 +266,9 @@ public class SharpTSGenerator : IEnumerable<object?>, IDisposable, ITypeCategori
         if (_state == State.Completed)
             return new SharpTSIteratorResult(_returnValue, done: true);
 
-        return new SharpTSIteratorResult(_yieldedValue, done: false);
+        return _yieldedIteratorResult
+            ? new SharpTSIteratorResult(_interpreter, _yieldedValue!)
+            : new SharpTSIteratorResult(_yieldedValue, done: false);
     }
 
     /// <summary>
@@ -335,7 +338,7 @@ public class SharpTSGenerator : IEnumerable<object?>, IDisposable, ITypeCategori
     {
         if (isDelegating)
         {
-            return DelegateYieldStar(_interpreter, value, v => SuspendCore(v), () => _closed);
+            return DelegateYieldStar(_interpreter, value, result => SuspendCore(result, isIteratorResult: true), () => _closed);
         }
         // A plain `yield` evaluates to the value passed to the resuming next(v); an abrupt
         // resume (return/throw) is realized as the control-flow exception that unwinds the
@@ -373,7 +376,7 @@ public class SharpTSGenerator : IEnumerable<object?>, IDisposable, ITypeCategori
                 foreach (var element in interpreter.GetIterableElements(iterable))
                 {
                     if (isClosed()) return null;
-                    suspend(element).Realize();
+                    suspend(new SharpTSIteratorResult(element, done: false)).Realize();
                 }
                 return null;
         }
@@ -415,14 +418,14 @@ public class SharpTSGenerator : IEnumerable<object?>, IDisposable, ITypeCategori
             if (!RuntimeValue.FromBoxed(result).IsObject)
                 throw new ThrowException(new SharpTSTypeError($"Iterator {name}() must return an object."));
             bool done = RuntimeTypes.IsTruthy(interpreter.GetPropertyValue(result, "done"));
-            object? value = interpreter.GetPropertyValue(result, "value");
             if (done)
             {
+                object? value = interpreter.GetPropertyValue(result, "value");
                 if (received.Kind == GeneratorResumeKind.Return)
                     throw new GeneratorReturnException(value);
                 return value;
             }
-            received = suspend(value);
+            received = suspend(result);
         }
     }
 
@@ -483,7 +486,7 @@ public class SharpTSGenerator : IEnumerable<object?>, IDisposable, ITypeCategori
             }
 
             // Delegate yielded again; suspend the outer and forward the next completion.
-            received = suspend(inner.Value);
+            received = suspend(inner.GuestResult);
         }
     }
 
@@ -494,9 +497,10 @@ public class SharpTSGenerator : IEnumerable<object?>, IDisposable, ITypeCategori
     /// an abrupt resume as a thrown control-flow exception (<see cref="GeneratorResume.Realize"/>),
     /// while a <c>yield*</c> delegation forwards it into the delegated iterator.
     /// </summary>
-    private GeneratorResume SuspendCore(object? value)
+    private GeneratorResume SuspendCore(object? value, bool isIteratorResult = false)
     {
         _yieldedValue = value;
+        _yieldedIteratorResult = isIteratorResult;
         _state = State.Suspended;
 
         // Save generator state, restore caller state

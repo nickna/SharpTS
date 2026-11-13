@@ -471,6 +471,11 @@ public partial class Interpreter
     private object? GetPropertyValueFromChainCore(
         object? current, string name, object? receiver)
     {
+        if (current is SharpTSIteratorResult { DelegatedResult: { } delegated })
+        {
+            if (ReferenceEquals(receiver, current)) receiver = delegated;
+            current = delegated;
+        }
         if (current is VmInputPropertyView inputView) return inputView.Read(name);
         for (int depth = 0; depth < 64 && current is not (null or SharpTSUndefined); depth++)
         {
