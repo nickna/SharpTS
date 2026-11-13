@@ -102,9 +102,12 @@ public partial class AsyncArrowMoveNextEmitter
         if (!externalClassValue &&
             _ctx?.Functions.TryGetValue(_ctx.ResolveFunctionName(name), out var funcMethod) == true)
         {
-            _il.Emit(OpCodes.Ldnull);
             Types.EmitLoadMethodInfoViaHandle(_il, funcMethod);
-            _il.Emit(OpCodes.Newobj, _ctx.Runtime!.FunctionConstruction.Constructor);
+            _il.Emit(OpCodes.Ldstr, _ctx.GetFunctionName(funcMethod, name));
+            _il.Emit(OpCodes.Ldc_I4, _ctx.GetFunctionLength(funcMethod));
+            // Declarations have one callable identity, including prototype and
+            // expando state, shared with construction and synchronous reads.
+            _il.Emit(OpCodes.Call, _ctx.Runtime!.FunctionConstruction.GetOrCreate);
             SetStackUnknown();
             return;
         }
