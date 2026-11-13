@@ -277,6 +277,13 @@ public partial class RuntimeEmitter
             // catch (Exception e) { state=-2; builder.SetException(e); }
             il.BeginCatchBlock(typeof(Exception));
             il.Emit(OpCodes.Stloc, exLocal);
+            // BuildResult receives only our generated body enumerators. Their
+            // DisposeAsync marks the body completed synchronously; it does not
+            // invoke guest cleanup. Close before publishing the rejected request.
+            il.Emit(OpCodes.Ldarg_0);
+            il.Emit(OpCodes.Ldfld, genField);
+            il.Emit(OpCodes.Callvirt, _types.GetMethodNoParams(_types.IAsyncDisposable, "DisposeAsync"));
+            il.Emit(OpCodes.Pop);
             il.Emit(OpCodes.Ldarg_0);
             il.Emit(OpCodes.Ldc_I4, -2);
             il.Emit(OpCodes.Stfld, stateField);

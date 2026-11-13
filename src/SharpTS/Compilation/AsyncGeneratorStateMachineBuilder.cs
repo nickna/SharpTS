@@ -562,9 +562,13 @@ public class AsyncGeneratorStateMachineBuilder : StateMachineBuilderBase, IItera
         il.Emit(OpCodes.Stloc, resultLocal);
         il.Emit(OpCodes.Leave, doneLabel);
 
-        // catch (Exception e) { executing = false; result = Task.FromException<object>(e); }
+        // An exception escaping the body completes the generator before queued
+        // requests can resume it. Local handlers have already run inside MoveNext.
         il.BeginCatchBlock(_types.Exception);
         il.Emit(OpCodes.Stloc, exLocal);
+        il.Emit(OpCodes.Ldarg_0);
+        il.Emit(OpCodes.Ldc_I4, -2);
+        il.Emit(OpCodes.Stfld, StateField);
         il.Emit(OpCodes.Ldarg_0);
         il.Emit(OpCodes.Ldc_I4_0);
         il.Emit(OpCodes.Stfld, ExecutingField);
