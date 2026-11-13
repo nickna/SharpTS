@@ -6,8 +6,7 @@ namespace SharpTS.Tests.SharedTests;
 
 public class AsyncFromSyncRejectionCloseTests
 {
-    // Nested helper capture identity is tracked independently in #3668.
-    [Theory, InterpretedOnlyData]
+    [Theory, ModeData]
     public void RejectedNextAndThrowValuesCloseOnceAndPreserveTheOriginalReason(ExecutionMode mode)
     {
         const string source = """

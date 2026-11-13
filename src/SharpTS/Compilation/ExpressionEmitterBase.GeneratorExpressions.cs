@@ -70,6 +70,12 @@ public abstract partial class ExpressionEmitterBase
             IL.Emit(OpCodes.Ldsfld, Ctx.EntryPointDisplayClassStaticField);
             return true;
         }
+        if (TryEmitRetainedGeneratorCaptureOwner(owner)) return true;
+        return TryEmitClassDefinitionEnvironment(owner);
+    }
+
+    private bool TryEmitRetainedGeneratorCaptureOwner(Type owner)
+    {
         if (Ctx.CurrentGeneratorExpression is { } enclosing)
             foreach (var capture in enclosing.Captures.Values)
                 for (int index = 0; index < capture.TargetPath.Count - 1; index++)
@@ -80,6 +86,6 @@ public abstract partial class ExpressionEmitterBase
                         for (int step = 0; step <= index; step++) IL.Emit(OpCodes.Ldfld, capture.TargetPath[step]);
                         return true;
                     }
-        return TryEmitClassDefinitionEnvironment(owner);
+        return false;
     }
 }
