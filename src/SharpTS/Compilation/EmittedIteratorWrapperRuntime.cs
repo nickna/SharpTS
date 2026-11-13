@@ -3,7 +3,7 @@ using System.Runtime.CompilerServices;
 
 namespace SharpTS.Compilation;
 
-/// <summary>Required custom-iterator adapter type, constructor and sent-value metadata.</summary>
+/// <summary>Required custom-iterator adapter and delegated-request metadata.</summary>
 public sealed class EmittedIteratorWrapperRuntime
 {
     internal EmittedIteratorWrapperRuntime() { }
