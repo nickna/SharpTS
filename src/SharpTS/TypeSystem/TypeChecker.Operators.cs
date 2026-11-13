@@ -164,6 +164,11 @@ public partial class TypeChecker
 
     private TypeInfo CheckPlusOperator(TypeInfo left, TypeInfo right, int line = 0)
     {
+        bool IsNumericOperand(TypeInfo type) => IsTypeOfKind(type, operand =>
+            IsBareNumberType(operand) || operand is TypeInfo.Enum { IsScalar: true, Kind: EnumKind.Numeric });
+        bool IsStringOperand(TypeInfo type) => IsTypeOfKind(type, operand =>
+            operand is TypeInfo.String or TypeInfo.StringLiteral
+                or TypeInfo.Enum { IsScalar: true, Kind: EnumKind.String });
         // symbol poisons '+' even against `any` (unlike every other operator category here, which
         // bypasses on `any`) — checked first, before the any-bypass below. tsc picks between two
         // diagnostics depending on the OTHER operand: a bare number opposite symbol (or symbol on
@@ -189,7 +194,7 @@ public partial class TypeChecker
         if (left is TypeInfo.Never || right is TypeInfo.Never)
         {
             TypeInfo other = left is TypeInfo.Never ? right : left;
-            if (other is TypeInfo.Never || !IsAnyPermissive(other) && IsNumber(other))
+            if (other is TypeInfo.Never || !IsAnyPermissive(other) && IsNumericOperand(other))
                 return TypeInfo.Primitive.Number;
             if (!IsAnyPermissive(other) && IsBigInt(other))
                 return TypeInfo.BigInt.Shared;
@@ -198,9 +203,9 @@ public partial class TypeChecker
         // Any/Inferred (incl. in unions) bypasses type checking - return any
         if (IsAnyPermissive(left) || IsAnyPermissive(right)) return TypeInfo.Any.Shared;
         if (IsBigInt(left) && IsBigInt(right)) return TypeInfo.BigInt.Shared;
-        if (IsNumber(left) && IsNumber(right)) return TypeInfo.Primitive.Number;
-        if (IsString(left) || IsString(right)) return TypeInfo.String.Shared;
-        if ((IsBigInt(left) && IsNumber(right)) || (IsNumber(left) && IsBigInt(right)))
+        if (IsNumericOperand(left) && IsNumericOperand(right)) return TypeInfo.Primitive.Number;
+        if (IsStringOperand(left) || IsStringOperand(right)) return TypeInfo.String.Shared;
+        if ((IsBigInt(left) && IsNumericOperand(right)) || (IsNumericOperand(left) && IsBigInt(right)))
             throw new TypeCheckException("Cannot mix bigint and number in arithmetic operations. Use explicit BigInt() or Number() conversion.", line > 0 ? line : null, tsCode: "TS2365");
         throw new TypeCheckException("Operator '+' cannot be applied to types '" + left + "' and '" + right + "'.", line > 0 ? line : null, tsCode: "TS2365");
     }
