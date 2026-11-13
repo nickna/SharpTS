@@ -102,9 +102,7 @@ public class GeneratorLoopCleanupTests
         Assert.Equal("closing\nresumed\ntrue\nbody\n", TestHarness.Run(source, mode));
     }
 
-    // Current AsyncFromSyncIteratorContinuation closes on rejected values;
-    // the emitted adapter's missing cleanup is tracked by #3666.
-    [Theory, InterpretedOnlyData]
+    [Theory, ModeData]
     public void ForAwaitRejectedStep_ClosesSyncGeneratorBeforeRejecting(ExecutionMode mode)
     {
         const string source = """

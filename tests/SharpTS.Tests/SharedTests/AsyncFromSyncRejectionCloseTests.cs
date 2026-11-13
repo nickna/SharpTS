@@ -6,7 +6,7 @@ namespace SharpTS.Tests.SharedTests;
 
 public class AsyncFromSyncRejectionCloseTests
 {
-    // The independent emitted-adapter omission is tracked in #3666.
+    // Nested helper capture identity is tracked independently in #3668.
     [Theory, InterpretedOnlyData]
     public void RejectedNextAndThrowValuesCloseOnceAndPreserveTheOriginalReason(ExecutionMode mode)
     {
@@ -122,7 +122,7 @@ public class AsyncFromSyncRejectionCloseTests
             "true 0\ntrue 0\ntrue 0\ntrue 0\n", TestHarness.RunUnchecked(source, mode));
     }
 
-    [Theory, InterpretedOnlyData]
+    [Theory, ModeData]
     public void PoisonedPromiseConstructorClosesBeforeNextReturns(ExecutionMode mode)
     {
         const string source = """
@@ -143,7 +143,7 @@ public class AsyncFromSyncRejectionCloseTests
         Assert.Equal("constructor\nclose\nissued\ntrue\n", TestHarness.RunUnchecked(source, mode));
     }
 
-    [Theory, InterpretedOnlyData]
+    [Theory, ModeData]
     public void RejectedAcquiredGeneratorValueRunsItsFinally(ExecutionMode mode)
     {
         const string source = """
