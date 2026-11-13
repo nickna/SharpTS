@@ -1809,7 +1809,8 @@ public partial class RuntimeEmitter
         EmitIteratorWrapperType(
             moduleBuilder,
             runtime.IteratorWrappers,
-            new IteratorWrapperInputs(runtime.IteratorRecords, runtime.IteratorProtocol.Done, runtime.IteratorProtocol.Value, runtime.IteratorProtocol.Close)
+            new IteratorWrapperInputs(runtime.IteratorRecords, runtime.IteratorProtocol.Done, runtime.IteratorProtocol.Value,
+                runtime.IteratorProtocol.Close, runtime.ObjectRead, runtime.Invocation, runtime.Errors, runtime.Sentinels.UndefinedType)
         );
         runtime.IteratorWrappers.CompleteEmission();
         EmitArrayIteratorType(moduleBuilder, runtime.ArrayOperations,
