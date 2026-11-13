@@ -938,10 +938,10 @@ public partial class TypeChecker
         TypeInfo indexType = CheckExpr(setIndex.Index);
         if (objType is TypeInfo.Class or TypeInfo.GenericClass or
                 TypeInfo.InstantiatedGeneric { GenericDefinition: TypeInfo.GenericClass } &&
-            indexType is TypeInfo.StringLiteral literal &&
-            GetSymbolIndexedMemberType(objType, literal.Value) is not null)
+            TryGetLiteralPropertyKeys(indexType, out var staticKeys) && staticKeys.Count == 1 &&
+            GetSymbolIndexedMemberType(objType, staticKeys[0]) is not null)
         {
-            var name = new Token(TokenType.IDENTIFIER, literal.Value, null,
+            var name = new Token(TokenType.IDENTIFIER, staticKeys[0], null,
                 TryGetExprLine(setIndex.Index) ?? _currentStatementLine ?? 0);
             return CheckSetCore(new Expr.Set(setIndex.Object, name, setIndex.Value), objType, isLiteralIndex: true);
         }
