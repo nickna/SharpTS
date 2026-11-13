@@ -17,6 +17,7 @@ public partial class RuntimeEmitter
         MethodBuilder GetIteratorFunction,
         MethodBuilder GetIteratorNextMethod,
         MethodBuilder GetIteratorValue,
+        MethodBuilder RequireIteratorObject,
         EmittedInvocationRuntime Invocation,
         MethodBuilder IteratorClose,
         MethodBuilder InvokeCapturedIteratorNext,
@@ -31,7 +32,9 @@ public partial class RuntimeEmitter
         Type UndefinedType
     );
 
-    private readonly record struct AsyncFromSyncAwaitResultInputs(MethodBuilder GetIteratorDone, MethodBuilder GetIteratorValue, EmittedPromiseRuntime Promise);
+    private readonly record struct AsyncFromSyncAwaitResultInputs(
+        MethodBuilder GetIteratorDone, MethodBuilder GetIteratorValue, MethodBuilder RequireIteratorObject,
+        EmittedPromiseRuntime Promise);
 
     private readonly record struct AsyncFromSyncIteratorTypeInputs(
         EmittedGeneratorRuntime Generators,
@@ -94,7 +97,8 @@ public partial class RuntimeEmitter
         EmitAsyncFromSyncAwaitResult(
             runtimeType,
             fromSync,
-            new AsyncFromSyncAwaitResultInputs(inputs.GetIteratorDone, inputs.GetIteratorValue, inputs.Promise)
+            new AsyncFromSyncAwaitResultInputs(inputs.GetIteratorDone, inputs.GetIteratorValue,
+                inputs.RequireIteratorObject, inputs.Promise)
         );
         EmitAsyncFromSyncIteratorType(
             moduleBuilder,
@@ -217,6 +221,12 @@ public partial class RuntimeEmitter
         var il = method.GetILGenerator();
         var taskLocal = il.DeclareLocal(_types.TaskOfObject);
         var doneLocal = il.DeclareLocal(_types.Boolean);
+
+        // Return/throw methods can produce primitives. Reject with the guest
+        // TypeError before property reads can turn them into an empty result.
+        il.Emit(OpCodes.Ldarg_0);
+        il.Emit(OpCodes.Call, inputs.RequireIteratorObject);
+        il.Emit(OpCodes.Pop);
 
         // Both properties are read before adopting value. A getter or thenable
         // can mutate the original result, so only the captured boolean survives.

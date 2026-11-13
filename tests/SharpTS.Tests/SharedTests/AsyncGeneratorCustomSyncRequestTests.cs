@@ -65,26 +65,29 @@ public class AsyncGeneratorCustomSyncRequestTests
             TestHarness.RunUnchecked(RequestSource, mode));
     }
 
-    // The emitted adapter's primitive-result rejection loses its TypeError
-    // identity; that independent compiler defect is tracked in #3661.
-    [Theory, InterpretedOnlyData]
+    [Theory, ModeData]
     public void YieldStar_RejectsPrimitiveSyncReturnAndThrowResults(ExecutionMode mode)
     {
         const string source = """
+            let primitive;
             const iterable = {
                 [Symbol.iterator]() {
                     return {
                         next() { return { value: 1, done: false }; },
-                        return() { return 1; },
-                        throw() { return 1; }
+                        return() { return primitive; },
+                        throw() { return primitive; }
                     };
                 }
             };
             async function* run() {
                 try { yield* iterable; }
-                catch (error) { yield error.name; }
+                catch (error) {
+                    yield error.name + ':' + (error instanceof TypeError) + ':' + (error.constructor === TypeError);
+                }
             }
             async function main() {
+                for (const value of [1, null, undefined, false, 'invalid']) {
+                primitive = value;
                 const returning = run();
                 await returning.next();
                 console.log((await returning.return(9)).value);
@@ -93,9 +96,11 @@ public class AsyncGeneratorCustomSyncRequestTests
                 await throwing.next();
                 console.log((await throwing.throw("boom")).value);
                 console.log((await throwing.next()).done);
+                }
             }
             main();
             """;
-        Assert.Equal("TypeError\ntrue\nTypeError\ntrue\n", TestHarness.RunUnchecked(source, mode));
+        Assert.Equal(string.Concat(Enumerable.Repeat("TypeError:true:true\ntrue\nTypeError:true:true\ntrue\n", 5)),
+            TestHarness.RunUnchecked(source, mode));
     }
 }
