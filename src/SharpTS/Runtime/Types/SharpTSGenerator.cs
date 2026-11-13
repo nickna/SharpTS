@@ -3,6 +3,7 @@ using System.Runtime.ExceptionServices;
 using SharpTS.Compilation;
 using SharpTS.Parsing;
 using SharpTS.Runtime.Exceptions;
+using SharpTS.Runtime.BuiltIns;
 using SharpTS.Execution;
 using SharpTS.TypeSystem;
 
@@ -364,13 +365,11 @@ public class SharpTSGenerator : IEnumerable<object?>, IDisposable, ITypeCategori
                 // Custom iterator objects (those with [Symbol.iterator] and a next(v) that
                 // consumes its argument) are driven manually so the outer generator's resume
                 // value is forwarded as the argument to next(v) (ECMA-262 §14.4.14, #503).
-                if (interpreter.TryGetCustomIteratorProtocol(iterable, out var iterObj, out var nextFn))
-                    return DelegateToCustomIterator(interpreter, iterObj, nextFn!, suspend, isClosed);
+                if (interpreter.TryGetCustomIteratorProtocol(iterable) is { } record)
+                    return DelegateToCustomIterator(interpreter, record, suspend, isClosed);
 
-                // Built-in iterables (arrays, strings, Maps, Sets) and generator-valued
-                // [Symbol.iterator]() results: next() ignores the resume value, so driving
-                // lazily via GetIterableElements is correct. Abrupt resumes (return/throw)
-                // are realized here to unwind the outer body.
+                // Other source kinds use the existing enumerable adapter.
+                // Abrupt resumes unwind the outer body.
                 foreach (var element in interpreter.GetIterableElements(iterable))
                 {
                     if (isClosed()) return null;
@@ -381,61 +380,49 @@ public class SharpTSGenerator : IEnumerable<object?>, IDisposable, ITypeCategori
     }
 
     /// <summary>
-    /// Drives a custom (non-generator) iterator object manually, forwarding the outer generator's
-    /// resume value into its <c>next(v)</c> on each turn (ECMA-262 §14.4.14, #503).
-    /// Abrupt completions (<c>return</c>/<c>throw</c>) are realized as the appropriate
-    /// control-flow exception and unwind through the outer body unchanged.
+    /// Drives the acquired iterator record without repeating factory/next lookup.
+    /// Return and throw lookups stay live while next and its receiver remain captured.
     /// </summary>
     private static object? DelegateToCustomIterator(
         Interpreter interpreter,
-        object? iteratorObj,
-        ISharpTSCallable nextFn,
+        Interpreter.SyncIteratorRecord record,
         Func<object?, GeneratorResume> suspend,
         Func<bool> isClosed)
     {
-        object? sentValue = SharpTSUndefined.Instance;
+        var received = new GeneratorResume(GeneratorResumeKind.Next, SharpTSUndefined.Instance);
         while (true)
         {
             if (isClosed()) return null;
-
-            var result = nextFn.Call(interpreter, [sentValue]);
-
-            bool done = false;
-            object? value = null;
-            if (result is SharpTSObject resultObj)
+            string name = received.Kind switch
             {
-                done = RuntimeTypes.IsTruthy(resultObj.GetProperty("done"));
-                value = resultObj.GetProperty("value");
-            }
-            else if (result is SharpTSInstance resultInst)
+                GeneratorResumeKind.Return => "return",
+                GeneratorResumeKind.Throw => "throw",
+                _ => "next",
+            };
+            object? method = received.Kind == GeneratorResumeKind.Next
+                ? record.Next : interpreter.GetPropertyValue(record.Iterator, name);
+            if (method is null or SharpTSUndefined)
             {
-                var doneTok = new Token(TokenType.IDENTIFIER, "done", null, 0);
-                var valueTok = new Token(TokenType.IDENTIFIER, "value", null, 0);
-                try
-                {
-                    done = RuntimeTypes.IsTruthy(resultInst.Get(doneTok));
-                    value = resultInst.Get(valueTok);
-                }
-                catch
-                {
-                    done = RuntimeTypes.IsTruthy(resultInst.GetRawField("done"));
-                    value = resultInst.GetRawField("value");
-                }
+                if (received.Kind == GeneratorResumeKind.Return)
+                    throw new GeneratorReturnException(received.Value);
+                interpreter.CloseIterator(record.Iterator);
+                throw new ThrowException(new SharpTSTypeError("Iterator does not provide a throw() method."));
             }
+            if (method is not ISharpTSCallable callable)
+                throw new ThrowException(new SharpTSTypeError($"Iterator {name} property must be callable."));
 
-            if (done) return value ?? SharpTSUndefined.Instance;
-
-            var received = suspend(value);
-            switch (received.Kind)
+            object? result = FunctionBuiltIns.CallWithThis(interpreter, callable, record.Iterator, [received.Value]);
+            if (!RuntimeValue.FromBoxed(result).IsObject)
+                throw new ThrowException(new SharpTSTypeError($"Iterator {name}() must return an object."));
+            bool done = RuntimeTypes.IsTruthy(interpreter.GetPropertyValue(result, "done"));
+            object? value = interpreter.GetPropertyValue(result, "value");
+            if (done)
             {
-                case GeneratorResumeKind.Return:
-                case GeneratorResumeKind.Throw:
-                    received.Realize();
-                    return null; // unreachable
-                default:
-                    sentValue = received.Value;
-                    break;
+                if (received.Kind == GeneratorResumeKind.Return)
+                    throw new GeneratorReturnException(value);
+                return value;
             }
+            received = suspend(value);
         }
     }
 

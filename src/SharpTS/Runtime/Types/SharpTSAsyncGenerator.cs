@@ -1,6 +1,7 @@
 using SharpTS.Compilation;
 using SharpTS.Parsing;
 using SharpTS.Runtime.Exceptions;
+using SharpTS.Runtime.BuiltIns;
 using SharpTS.Execution;
 using SharpTS.TypeSystem;
 
@@ -360,8 +361,7 @@ public class SharpTSAsyncGenerator : ITypeCategorized, ISharpTSOwnPropertyObject
     /// </summary>
     private async Task<object?> DelegateYieldStarAsync(object? iterable)
     {
-        if (iterable is not SharpTSAsyncGenerator &&
-            _interpreter.TryGetAsyncIterator(iterable) is { } asyncIterator)
+        if (_interpreter.TryGetAsyncIterator(iterable) is { } asyncIterator)
         {
             return await DelegateGeneratorAsync(
                 received => DriveCustomAsyncIterator(asyncIterator, received),
@@ -376,37 +376,9 @@ public class SharpTSAsyncGenerator : ITypeCategorized, ISharpTSOwnPropertyObject
                 GeneratorResumeKind.Throw => synchronous.Throw(received.Value),
                 _ => synchronous.Next(received.Value),
             }));
-        if (iterable is SharpTSAsyncGenerator inner)
-            return await DelegateGeneratorAsync(received => received.Kind switch
-            {
-                GeneratorResumeKind.Return => inner.Return(received.Value),
-                GeneratorResumeKind.Throw => inner.Throw(received.Value),
-                _ => inner.Next(received.Value),
-            });
-        // Custom iterator objects (those with [Symbol.iterator] and a next(v) that
-        // consumes its argument) are driven manually so the outer's resume value is
-        // forwarded as the argument to next(v) (ECMA-262 §14.4.14, #503).
-        if (_interpreter.TryGetCustomIteratorProtocol(iterable, out var iterObj, out var nextFn))
-        {
-            object? sentValue = SharpTSUndefined.Instance;
-            while (true)
-            {
-                var result = nextFn!.Call(_interpreter, [sentValue]);
-                (bool done, object? innerValue) = ReadIteratorResult(result);
-                if (done) return innerValue ?? SharpTSUndefined.Instance;
-                GeneratorResume resume = await SuspendAtYieldAsync(innerValue);
-                switch (resume.Kind)
-                {
-                    case GeneratorResumeKind.Return:
-                    case GeneratorResumeKind.Throw:
-                        resume.Realize();
-                        return null; // unreachable
-                    default:
-                        sentValue = resume.Value;
-                        break;
-                }
-            }
-        }
+        if (_interpreter.TryGetCustomIteratorProtocol(iterable) is { } syncIterator)
+            return await DelegateGeneratorAsync(
+                received => DriveCustomSyncIterator(syncIterator, received));
 
         // Built-in iterables (arrays, strings, Maps, Sets): next() ignores resume value.
         foreach (object? element in _interpreter.GetIterableElements(iterable))
@@ -415,6 +387,62 @@ public class SharpTSAsyncGenerator : ITypeCategorized, ISharpTSOwnPropertyObject
             resume.Realize();
         }
         return SharpTSUndefined.Instance;
+    }
+
+    private async Task<object?> DriveCustomSyncIterator(
+        Interpreter.SyncIteratorRecord record, GeneratorResume received)
+    {
+        string name = received.Kind switch
+        {
+            GeneratorResumeKind.Return => "return",
+            GeneratorResumeKind.Throw => "throw",
+            _ => "next",
+        };
+        object? method = received.Kind == GeneratorResumeKind.Next
+            ? record.Next : _interpreter.GetPropertyValue(record.Iterator, name);
+        if (method is null or SharpTSUndefined)
+        {
+            if (received.Kind == GeneratorResumeKind.Return)
+                return new SharpTSIteratorResult(received.Value, done: true);
+
+            // AsyncFromSyncIterator.throw closes a delegate without throw(),
+            // using zero arguments, before rejecting with a fresh TypeError.
+            object? close = _interpreter.GetPropertyValue(record.Iterator, "return");
+            if (close is not null and not SharpTSUndefined)
+            {
+                if (close is not ISharpTSCallable closeMethod)
+                    throw new ThrowException(new SharpTSTypeError("Iterator return property must be callable."));
+                object? closed = FunctionBuiltIns.CallWithThis(_interpreter, closeMethod, record.Iterator, []);
+                if (!RuntimeValue.FromBoxed(closed).IsObject)
+                    throw new ThrowException(new SharpTSTypeError("Iterator return() must return an object."));
+            }
+            throw new ThrowException(new SharpTSTypeError("Synchronous iterator does not provide a throw() method."));
+        }
+        if (method is not ISharpTSCallable callable)
+            throw new ThrowException(new SharpTSTypeError($"Iterator {name} property must be callable."));
+
+        object? result = FunctionBuiltIns.CallWithThis(_interpreter, callable, record.Iterator, [received.Value]);
+        if (!RuntimeValue.FromBoxed(result).IsObject)
+            throw new ThrowException(new SharpTSTypeError($"Iterator {name}() must return an object."));
+
+        // Capture both properties before adopting value: thenable callbacks
+        // must not change the done flag or cause a second property read.
+        bool done = RuntimeTypes.IsTruthy(_interpreter.GetPropertyValue(result, "done"));
+        object? value = _interpreter.GetPropertyValue(result, "value");
+        try
+        {
+            // PromiseResolve can throw synchronously (for example, a poisoned
+            // Promise constructor); close before queueing the await in that case.
+            var adopted = _interpreter.ResolveAsyncIteratorResult(value);
+            value = await _interpreter.AwaitAsyncGeneratorReturnValue(adopted);
+        }
+        catch (Exception error) when (!done && received.Kind != GeneratorResumeKind.Return &&
+            error is not (OperationCanceledException or WorkerTerminatedException or ThreadInterruptedException))
+        {
+            _interpreter.CloseIterator(record.Iterator, preserveThrow: true);
+            throw;
+        }
+        return new SharpTSIteratorResult(value, done);
     }
 
     private async Task<object?> DriveCustomAsyncIterator(Interpreter.AsyncIteratorRecord record, GeneratorResume received)

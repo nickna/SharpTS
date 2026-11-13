@@ -2775,9 +2775,15 @@ public partial class ILCompiler
         {
             Stmt.Var { IsDeclare: false } v => v.Name.Lexeme,
             Stmt.Const c => c.Name.Lexeme,
+            Stmt.Function { Body: not null, IsDeclare: false } function
+                when !_stableSelfCallFunctions.Contains(function)
+                    && _closures.Analyzer.IsVariableCaptured(function.Name.Lexeme) => function.Name.Lexeme,
             _ => null
         };
-        if (varName == null || _closures.CapturedTopLevelVars.Contains(varName)) return;
+        // Script files share the null registration key; real modules own separate
+        // capture fields even when another module declares the same bare name.
+        string? capturePath = modulePath != null && _scriptModulePaths.Contains(modulePath) ? null : modulePath;
+        if (varName == null || BuildCapturedTopLevelVarsForModule(capturePath)?.Contains(varName) == true) return;
 
         // Each module gets its own field, so two modules that both declare
         // `const foo` have independent storage. Field names are qualified
@@ -2814,6 +2820,8 @@ public partial class ILCompiler
         // (we `continue` above when the var is captured). For non-captured vars,
         // resolution goes through ctx.TopLevelStaticVars which is module-scoped.
         _topLevelStaticVars[varName] = field;
+        if (stmt is Stmt.Function functionDeclaration)
+            _mutableFunctionFields[functionDeclaration] = field;
         if (moduleDict != null)
         {
             moduleDict[varName] = field;

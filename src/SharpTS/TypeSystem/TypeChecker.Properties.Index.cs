@@ -258,6 +258,11 @@ public partial class TypeChecker
             if (IndexDomainIsKnownForUnion(indexType, union))
                 return TypeInfo.Any.Shared;
 
+            bool isArrayReceiverUnion = union.FlattenedTypes.All(candidate => candidate is TypeInfo.Array ||
+                candidate is TypeInfo.Instance arrayInstance &&
+                TryGetBuiltInArraySubclassElement(arrayInstance, out _));
+            bool isArrayStringKeyUnion = isArrayReceiverUnion && indexType is TypeInfo.Union &&
+                TryGetStringLiteralKeys(indexType, out _);
             List<TypeInfo> memberTypes = [];
             foreach (var member in union.FlattenedTypes)
             {
@@ -285,10 +290,14 @@ public partial class TypeChecker
                     }
                     else
                     {
+                        if (isArrayStringKeyUnion)
+                            throw new TypeCheckException(
+                                "Element implicitly has an 'any' type because index expression is not of type 'number'.",
+                                TryGetExprLine(getIndex.Index), tsCode: "TS7015");
                         throw new TypeCheckException($" Index type '{indexType}' is not valid for indexing member '{member}' of union type.", tsCode: "TS7053");
                     }
                 }
-                catch (TypeCheckException)
+                catch (TypeCheckException error) when (error.Diagnostic.TsCode != "TS7015" || !isArrayReceiverUnion)
                 {
                     string code = union.FlattenedTypes.Any(member => member is TypeInfo.TypeParameter) &&
                         ContainsKeyOfDomain(indexType)
@@ -655,6 +664,10 @@ public partial class TypeChecker
                 members.Add(arrayMember);
             else if (IsStringOrNumberIndexDomain(key) && ReadStringIndexOf(instance) is { } stringIndex)
                 members.Add(WithUncheckedUndefined(stringIndex));
+            else if (IsString(key))
+                throw new TypeCheckException(
+                    "Element implicitly has an 'any' type because index expression is not of type 'number'.",
+                    TryGetExprLine(syntax.Index) ?? TryGetExprLine(syntax.Object), tsCode: "TS7015");
             else
                 return null;
         }

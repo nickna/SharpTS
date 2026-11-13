@@ -18,6 +18,33 @@ public sealed class ClassExpressionStaticBlockTests
         Assert.Equal(code, Assert.Single(diagnostics).TsCode);
     }
 
+    [Theory]
+    [InlineData("", "static value() { return 1; }", "Named.value()")]
+    [InlineData("<T>", "static value() { return 1; }", "Named.value()")]
+    [InlineData("", "static get value() { return 1; }", "Named.value")]
+    public void NamedSelfUsesCompletedInferredMembers(string typeParameters, string member, string read)
+    {
+        foreach (string annotation in new[] { "number", "string" })
+        {
+            var statements = TestHarness.ParseOrThrow($$"""
+                const C = class Named{{typeParameters}} {
+                    {{member}}
+                    static { const n: {{annotation}} = {{read}}; }
+                };
+                """);
+            var diagnostics = new TypeChecker(TypeCheckerOptions.Strict)
+                .CheckWithRecovery(statements).Diagnostics;
+            if (annotation == "number")
+                Assert.Empty(diagnostics);
+            else
+            {
+                var diagnostic = Assert.Single(diagnostics);
+                Assert.Equal("TS2322", diagnostic.TsCode);
+                Assert.Equal(3, diagnostic.Line);
+            }
+        }
+    }
+
     [Fact]
     public void NamedExpressionStaticBlocksUseTheConstructorAndIsolatedLocals()
     {

@@ -68,6 +68,12 @@ public partial class AsyncGeneratorMoveNextEmitter
         var iterableTemp = _il.DeclareLocal(typeof(object));
         EmitSuspensionOperand(y.Value!, iterableTemp);
 
+        // Each delegation starts with next(undefined), even when entering it
+        // after an earlier yield received a value from the outer consumer.
+        _il.Emit(OpCodes.Ldarg_0);
+        _il.Emit(OpCodes.Ldsfld, runtime.Sentinels.UndefinedInstance);
+        _il.Emit(OpCodes.Stfld, _builder.SentField);
+
         // Reserve the suspension state for the delegated iterator's next() await (consumed by the async
         // arm below, #688). Allocated AFTER the value expression so any awaits inside it take earlier
         // states — matching AsyncGeneratorStateAnalyzer.VisitYield, which records this synthetic await

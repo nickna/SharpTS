@@ -18,6 +18,7 @@ public partial class RuntimeEmitter
         MethodBuilder GetIteratorNextMethod,
         MethodBuilder GetIteratorValue,
         EmittedInvocationRuntime Invocation,
+        MethodBuilder IteratorClose,
         MethodBuilder InvokeCapturedIteratorNext,
         MethodBuilder InvokeCapturedIteratorNextWithSent,
         MethodBuilder IterateToList,
@@ -30,12 +31,14 @@ public partial class RuntimeEmitter
         Type UndefinedType
     );
 
-    private readonly record struct AsyncFromSyncAwaitResultInputs(MethodBuilder GetIteratorValue, EmittedPromiseRuntime Promise);
+    private readonly record struct AsyncFromSyncAwaitResultInputs(MethodBuilder GetIteratorDone, MethodBuilder GetIteratorValue, EmittedPromiseRuntime Promise);
 
     private readonly record struct AsyncFromSyncIteratorTypeInputs(
         EmittedGeneratorRuntime Generators,
+        EmittedErrorRuntime Errors,
         MethodBuilder GetIteratorNextMethod,
         EmittedInvocationRuntime Invocation,
+        MethodBuilder IteratorClose,
         MethodBuilder InvokeCapturedIteratorNext,
         MethodBuilder InvokeCapturedIteratorNextWithSent,
         EmittedObjectReadRuntime ObjectRead,
@@ -55,6 +58,8 @@ public partial class RuntimeEmitter
 
     private readonly record struct AsyncFromSyncThrowInputs(
         EmittedGeneratorRuntime Generators,
+        EmittedErrorRuntime Errors,
+        MethodBuilder IteratorClose,
         EmittedInvocationRuntime Invocation,
         EmittedObjectReadRuntime ObjectRead,
         Type UndefinedType
@@ -85,11 +90,11 @@ public partial class RuntimeEmitter
     )
     {
         EmitAsyncFromSyncCreateResult(runtimeType, fromSync);
-        EmitAsyncFromSyncAwaitContinuation(runtimeType, fromSync, inputs.GetIteratorDone);
+        EmitAsyncFromSyncAwaitContinuation(runtimeType, fromSync);
         EmitAsyncFromSyncAwaitResult(
             runtimeType,
             fromSync,
-            new AsyncFromSyncAwaitResultInputs(inputs.GetIteratorValue, inputs.Promise)
+            new AsyncFromSyncAwaitResultInputs(inputs.GetIteratorDone, inputs.GetIteratorValue, inputs.Promise)
         );
         EmitAsyncFromSyncIteratorType(
             moduleBuilder,
@@ -97,8 +102,10 @@ public partial class RuntimeEmitter
             fromSync,
             new AsyncFromSyncIteratorTypeInputs(
                 inputs.Generators,
+                inputs.Errors,
                 inputs.GetIteratorNextMethod,
                 inputs.Invocation,
+                inputs.IteratorClose,
                 inputs.InvokeCapturedIteratorNext,
                 inputs.InvokeCapturedIteratorNextWithSent,
                 inputs.ObjectRead,
@@ -157,13 +164,12 @@ public partial class RuntimeEmitter
     }
 
     /// <summary>
-    /// static object AsyncFromSyncAwaitContinuation(Task&lt;object&gt; task, object step)
+    /// static object AsyncFromSyncAwaitContinuation(Task&lt;object&gt; task, object done)
     /// — replaces the sync result's value with the awaited value while preserving done.
     /// </summary>
     private void EmitAsyncFromSyncAwaitContinuation(
         TypeBuilder runtimeType,
-        EmittedAsyncFromSyncRuntime fromSync,
-        MethodBuilder getIteratorDone
+        EmittedAsyncFromSyncRuntime fromSync
     )
     {
         var method = runtimeType.DefineMethod(
@@ -186,7 +192,7 @@ public partial class RuntimeEmitter
 
         il.Emit(OpCodes.Ldloc, valueLocal);
         il.Emit(OpCodes.Ldarg_1);
-        il.Emit(OpCodes.Call, getIteratorDone);
+        il.Emit(OpCodes.Unbox_Any, _types.Boolean);
         il.Emit(OpCodes.Call, fromSync.CreateResult);
         il.Emit(OpCodes.Ret);
     }
@@ -210,7 +216,13 @@ public partial class RuntimeEmitter
 
         var il = method.GetILGenerator();
         var taskLocal = il.DeclareLocal(_types.TaskOfObject);
+        var doneLocal = il.DeclareLocal(_types.Boolean);
 
+        // Both properties are read before adopting value. A getter or thenable
+        // can mutate the original result, so only the captured boolean survives.
+        il.Emit(OpCodes.Ldarg_0);
+        il.Emit(OpCodes.Call, inputs.GetIteratorDone);
+        il.Emit(OpCodes.Stloc, doneLocal);
         il.Emit(OpCodes.Ldarg_0);
         il.Emit(OpCodes.Call, inputs.GetIteratorValue);
         il.Emit(OpCodes.Call, inputs.Promise.AwaitValueToTaskMethod);
@@ -222,7 +234,8 @@ public partial class RuntimeEmitter
         var continuationType = _types.MakeGenericType(
             typeof(Func<,,>), _types.TaskOfObject, _types.Object, _types.Object);
         il.Emit(OpCodes.Newobj, _types.GetConstructor(continuationType, [_types.Object, typeof(IntPtr)])!);
-        il.Emit(OpCodes.Ldarg_0);
+        il.Emit(OpCodes.Ldloc, doneLocal);
+        il.Emit(OpCodes.Box, _types.Boolean);
         il.Emit(OpCodes.Ldc_I4, (int)TaskContinuationOptions.ExecuteSynchronously);
         il.Emit(OpCodes.Callvirt, ResolveAsyncFromSyncContinueWith());
         il.Emit(OpCodes.Ret);
@@ -313,6 +326,8 @@ public partial class RuntimeEmitter
             fromSync,
             new AsyncFromSyncThrowInputs(
                 inputs.Generators,
+                inputs.Errors,
+                inputs.IteratorClose,
                 inputs.Invocation,
                 inputs.ObjectRead,
                 inputs.UndefinedType
@@ -592,8 +607,15 @@ public partial class RuntimeEmitter
         il.Emit(OpCodes.Ret);
 
         il.MarkLabel(noThrow);
+        // Missing throw closes the sync iterator with a normal completion;
+        // close failures take precedence over the required TypeError.
+        il.Emit(OpCodes.Ldarg_0);
+        il.Emit(OpCodes.Ldfld, iteratorField);
+        il.Emit(OpCodes.Ldc_I4_0);
+        il.Emit(OpCodes.Call, inputs.IteratorClose);
         il.Emit(OpCodes.Ldstr, "Synchronous iterator does not provide a throw() method.");
-        il.Emit(OpCodes.Newobj, _types.ExceptionCtorString);
+        il.Emit(OpCodes.Newobj, inputs.Errors.TypeErrorConstructor);
+        il.Emit(OpCodes.Call, inputs.Errors.CreateException);
         il.Emit(OpCodes.Call, TaskFromExceptionObject());
         il.Emit(OpCodes.Ret);
     }

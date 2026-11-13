@@ -1150,9 +1150,10 @@ public static class PromiseBuiltIns
         public CombinatorIterator(Interpreter interpreter, object? iterable)
         {
             _interpreter = interpreter;
-            if (interpreter.TryGetCustomIteratorProtocol(
-                    iterable, out _iteratorObject, out _next))
+            if (interpreter.TryGetCustomIteratorProtocol(iterable) is { } record)
             {
+                _iteratorObject = record.Iterator;
+                _next = record.Next;
                 return;
             }
             try

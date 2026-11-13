@@ -8,6 +8,9 @@ public sealed class StaticDefiniteAssignmentAssertionTests
 {
     [Theory]
     [InlineData("class C { static value!: number; }")]
+    [InlineData("class C { static #value!: number; }")]
+    [InlineData("class C<T> { static #value!: number; }")]
+    [InlineData("const C = class { static #value!: number; };")]
     [InlineData("class C<T> { static value!: number; }")]
     [InlineData("const C = class { static value!: number; };")]
     public void StaticAssertionsReportTheGrammarDiagnostic(string source)
@@ -22,6 +25,9 @@ public sealed class StaticDefiniteAssignmentAssertionTests
 
     [Theory]
     [InlineData("class C { value!: number; }")]
+    [InlineData("class C { #value!: number; read() { return this.#value; } }")]
+    [InlineData("class C<T> { #value!: number; read() { return this.#value; } }")]
+    [InlineData("const C = class { #value!: number; read() { return this.#value; } };")]
     [InlineData("const C = class { value!: number; };")]
     public void InstanceAssertionsRemainValid(string source)
     {

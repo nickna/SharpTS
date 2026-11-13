@@ -8,6 +8,10 @@ public sealed class StaticUndefinedAssignmentFlowTests
 {
     [Theory]
     [InlineData("this.value = undefined;", true)]
+    [InlineData("this['value'] = undefined;", true)]
+    [InlineData("this['value'] = maybe;", true)]
+    [InlineData("this['value'] = 1; this['value'] = undefined;", true)]
+    [InlineData("this['value'] = 1;", false)]
     [InlineData("const n = undefined; this.value = n;", true)]
     [InlineData("this.value = maybe;", true)]
     [InlineData("this.value = anyValue;", true)]

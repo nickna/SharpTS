@@ -12,6 +12,25 @@ public class PrivateFieldTests
     #region Instance Private Fields
 
     [Theory, ModeData]
+    public void PrivateField_DefiniteAssignmentAssertions(ExecutionMode mode)
+    {
+        const string source = """
+            class Declared {
+                #value!: number;
+                constructor(value: number) { this.#value = value; }
+                read() { return this.#value; }
+            }
+            const Expression = class {
+                #value!: number;
+                constructor(value: number) { this.#value = value; }
+                read() { return this.#value; }
+            };
+            console.log(new Declared(7).read(), new Expression(9).read());
+            """;
+        Assert.Equal("7 9\n", TestHarness.Run(source, mode));
+    }
+
+    [Theory, ModeData]
     public void PrivateField_GetAndSet(ExecutionMode mode)
     {
         var source = """
