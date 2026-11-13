@@ -83,6 +83,7 @@ public partial class ILCompiler
         // Self-calls are handled via InnerFunctionMethodsByName direct dispatch.
         captures.Remove(funcStmt.Name.Lexeme);
         RemoveLiveModuleCaptures(funcStmt, captures, _modules.CurrentPath);
+        RemoveMutableFunctionCaptures(funcStmt, captures, _modules.CurrentPath);
         // Private names on evaluated classes belong to that evaluation, rather
         // than the emitted template. Carry its definition through ordinary
         // functions too, including frames that only create a nested closure.

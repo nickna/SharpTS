@@ -855,6 +855,7 @@ public partial class ILCompiler
                 // captures. Only the module storage rewrite needs a private copy.
                 captures = new HashSet<string>(captures);
                 RemoveLiveModuleCaptures(af, captures, _modules.CurrentPath);
+                RemoveMutableFunctionCaptures(af, captures, _modules.CurrentPath);
                 _collectedArrows.Add((af, captures));
                 if (_currentCollectClassName != null || _currentCollectStrict)
                     _strictArrows.Add(af);
