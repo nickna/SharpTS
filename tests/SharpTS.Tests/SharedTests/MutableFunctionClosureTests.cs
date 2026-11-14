@@ -5,6 +5,27 @@ namespace SharpTS.Tests.SharedTests;
 
 public class MutableFunctionClosureTests
 {
+    public const string NestedBlockShadowSource = """
+            function value(): number { return 1; }
+            const moduleRead = () => value();
+            value = () => 2;
+            console.log(moduleRead());
+            {
+                const value = () => 10;
+                const read = () => () => value();
+                console.log(read()());
+                const deepRead = () => () => () => value();
+                console.log(deepRead()()());
+            }
+            console.log(moduleRead());
+            """;
+
+    [Theory, ModeData]
+    public void NestedClosuresKeepTopLevelBlockShadows(ExecutionMode mode)
+    {
+        Assert.Equal("2\n10\n10\n2\n", TestHarness.Run(NestedBlockShadowSource, mode));
+    }
+
     [Theory, ModeData]
     public void ClosuresReadAndWriteTheLiveSourceFunction(ExecutionMode mode)
     {

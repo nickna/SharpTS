@@ -28,7 +28,7 @@ public partial class ILCompiler
         {
             if (!fields.TryGetValue(name, out var field) || !_mutableFunctionFields.ContainsValue(field)
                 || _closures.Analyzer.GetCaptureSource(callable, name) is not null
-                || _closures.Analyzer.IsDirectTopLevelBlockScopedCapture(callable, name)
+                || _closures.Analyzer.IsTopLevelBlockScopedCapture(callable, name)
                 || callable is Expr.ArrowFunction { Name: { } self } && self.Lexeme == name)
                 continue;
             captures.Remove(name);
