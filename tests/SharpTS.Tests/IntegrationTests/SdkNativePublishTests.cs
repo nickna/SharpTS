@@ -225,6 +225,12 @@ public sealed class SdkNativePublishTests
         foreach (string argument in arguments) start.ArgumentList.Add(argument);
         if (arguments[0] is "build" or "publish" or "clean")
         {
+            // Exported projects live outside the checkout. Keep their SDK aligned
+            // with the test host instead of selecting a newer globally installed
+            // SDK while inheriting this host's MSBuild task-host environment.
+            string sdkPin = Path.Combine(directory, "global.json");
+            if (!File.Exists(sdkPin))
+                File.Copy(Path.Combine(RepositoryRoot(), "global.json"), sdkPin);
             start.ArgumentList.Add("-m:2");
             start.ArgumentList.Add("-nr:false");
             start.ArgumentList.Add("-p:UseSharedCompilation=false");
