@@ -16,4 +16,25 @@ public partial class ILCompiler
             if (_mutableFunctionFields.TryGetValue(declaration, out var field))
                 emitter.EmitHoistedModuleFunction(declaration, field);
     }
+
+    private void RemoveMutableFunctionCaptures(object callable, HashSet<string> captures, string? path)
+    {
+        var fields = path is null ? _topLevelStaticVars
+            : _moduleTopLevelStaticVars.GetValueOrDefault(path);
+        if (fields is null) return;
+        // These bindings already have shared storage. A closure must resolve that
+        // field on each access rather than retaining its creation-time value.
+        foreach (var name in captures.ToArray())
+        {
+            if (!fields.TryGetValue(name, out var field) || !_mutableFunctionFields.ContainsValue(field)
+                || _closures.Analyzer.GetCaptureSource(callable, name) is not null
+                || _closures.Analyzer.IsTopLevelBlockScopedCapture(callable, name)
+                || callable is Expr.ArrowFunction { Name: { } self } && self.Lexeme == name)
+                continue;
+            captures.Remove(name);
+            if (!_liveModuleCaptureNames.TryGetValue(callable, out var removed))
+                _liveModuleCaptureNames[callable] = removed = [];
+            removed.Add(name);
+        }
+    }
 }

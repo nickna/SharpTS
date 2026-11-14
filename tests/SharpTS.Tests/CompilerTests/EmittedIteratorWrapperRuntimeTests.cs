@@ -16,6 +16,8 @@ public sealed class EmittedIteratorWrapperRuntimeTests
     [InlineData("Type")]
     [InlineData("Ctor")]
     [InlineData("MoveNextWithSent")]
+    [InlineData("Return")]
+    [InlineData("Throw")]
     public void MissingDeclarationCanBeRepairedAndCompletionFreezesMetadata(string missing)
     {
         var owner = new EmittedRuntime().IteratorWrappers;
@@ -24,7 +26,9 @@ public sealed class EmittedIteratorWrapperRuntimeTests
         {
             ["Type"] = type,
             ["Ctor"] = type.DefineConstructor(MethodAttributes.Public, CallingConventions.Standard, Type.EmptyTypes),
-            ["MoveNextWithSent"] = type.DefineMethod("Method", MethodAttributes.Public, typeof(bool), [typeof(object)])
+            ["MoveNextWithSent"] = type.DefineMethod("Method", MethodAttributes.Public, typeof(bool), [typeof(object)]),
+            ["Return"] = type.DefineMethod("Return", MethodAttributes.Public, typeof(object), [typeof(object)]),
+            ["Throw"] = type.DefineMethod("Throw", MethodAttributes.Public, typeof(object), [typeof(object)])
         };
         var property = Slots.Single(p => p.Name == missing);
         Expect<InvalidOperationException>(() => property.GetValue(owner));
@@ -71,6 +75,12 @@ public sealed class EmittedIteratorWrapperRuntimeTests
             Assert.Equal(new[] { typeof(object), typeof(Type) }, ctor.GetParameters().Select(p => p.ParameterType));
             var sent = wrapper.GetMethod("MoveNextWithSent")!;
             Assert.Equal(typeof(bool), sent.ReturnType); Assert.Equal(typeof(object), Assert.Single(sent.GetParameters()).ParameterType);
+            foreach (string name in new[] { "Return", "Throw" })
+            {
+                var request = wrapper.GetMethod(name)!;
+                Assert.Equal(typeof(object), request.ReturnType);
+                Assert.Equal(typeof(object), Assert.Single(request.GetParameters()).ParameterType);
+            }
             var calls = new List<object[]>();
             Func<object[], object> next = args =>
             {
@@ -106,13 +116,14 @@ public sealed class EmittedIteratorWrapperRuntimeTests
     [Fact]
     public void WrapperHelperReceivesOnlyOwnerAndExactDependencies()
     {
-        Assert.Equal(3, Slots.Length);
+        Assert.Equal(5, Slots.Length);
         foreach (string old in new[] { "IteratorWrapperType", "IteratorWrapperCtor", "IteratorWrapperMoveNextWithSent" }) Assert.Null(typeof(EmittedRuntime).GetProperty(old));
         var helper = typeof(RuntimeEmitter).GetMethod("EmitIteratorWrapperType", Members)!;
         Assert.Contains(helper.GetParameters(), p => p.ParameterType == typeof(EmittedIteratorWrapperRuntime));
         Assert.DoesNotContain(helper.GetParameters(), p => p.ParameterType == typeof(EmittedRuntime) || p.ParameterType == typeof(RuntimeFeatureSet));
         var peers = helper.GetParameters().Single(p => p.Name == "inputs").ParameterType;
-        Assert.Equal(new[] { "CloseIterator", "GetIteratorDone", "GetIteratorValue", "IteratorRecords" }, peers.GetProperties().Select(p => p.Name).Order());
+        Assert.Equal(new[] { "CloseIterator", "Errors", "GetIteratorDone", "GetIteratorValue", "Invocation", "IteratorRecords", "ObjectRead", "UndefinedType" },
+            peers.GetProperties().Select(p => p.Name).Order());
         Assert.DoesNotContain(peers.GetFields(Members), f => f.FieldType == typeof(EmittedRuntime) || f.FieldType == typeof(RuntimeFeatureSet));
     }
 

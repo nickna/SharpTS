@@ -78,9 +78,7 @@ public class AsyncFromSyncResultOrderTests
         => Assert.Equal(Expected.Replace(ForAwaitOutput, ""),
             TestHarness.RunUnchecked(Source.Replace(ForAwaitLoop, ""), mode));
 
-    // The interpreter skips adoption of completed synchronous for-await values
-    // (#3660); delegation above exercises both backends independently.
-    [Theory, CompiledOnlyData]
+    [Theory, ModeData]
     public void SyncForAwaitResults_AdoptCompletedValuesAfterReadingDone(ExecutionMode mode)
         => Assert.Equal(Expected, TestHarness.RunUnchecked(Source, mode));
 }

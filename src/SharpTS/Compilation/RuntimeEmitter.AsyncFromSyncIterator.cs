@@ -17,6 +17,7 @@ public partial class RuntimeEmitter
         MethodBuilder GetIteratorFunction,
         MethodBuilder GetIteratorNextMethod,
         MethodBuilder GetIteratorValue,
+        MethodBuilder RequireIteratorObject,
         EmittedInvocationRuntime Invocation,
         MethodBuilder IteratorClose,
         MethodBuilder InvokeCapturedIteratorNext,
@@ -31,7 +32,9 @@ public partial class RuntimeEmitter
         Type UndefinedType
     );
 
-    private readonly record struct AsyncFromSyncAwaitResultInputs(MethodBuilder GetIteratorDone, MethodBuilder GetIteratorValue, EmittedPromiseRuntime Promise);
+    private readonly record struct AsyncFromSyncAwaitResultInputs(
+        MethodBuilder GetIteratorDone, MethodBuilder GetIteratorValue, MethodBuilder RequireIteratorObject,
+        EmittedPromiseRuntime Promise, MethodBuilder IteratorClose);
 
     private readonly record struct AsyncFromSyncIteratorTypeInputs(
         EmittedGeneratorRuntime Generators,
@@ -90,11 +93,12 @@ public partial class RuntimeEmitter
     )
     {
         EmitAsyncFromSyncCreateResult(runtimeType, fromSync);
-        EmitAsyncFromSyncAwaitContinuation(runtimeType, fromSync);
+        EmitAsyncFromSyncAwaitContinuation(runtimeType, fromSync, inputs.IteratorClose);
         EmitAsyncFromSyncAwaitResult(
             runtimeType,
             fromSync,
-            new AsyncFromSyncAwaitResultInputs(inputs.GetIteratorDone, inputs.GetIteratorValue, inputs.Promise)
+            new AsyncFromSyncAwaitResultInputs(inputs.GetIteratorDone, inputs.GetIteratorValue,
+                inputs.RequireIteratorObject, inputs.Promise, inputs.IteratorClose)
         );
         EmitAsyncFromSyncIteratorType(
             moduleBuilder,
@@ -164,12 +168,13 @@ public partial class RuntimeEmitter
     }
 
     /// <summary>
-    /// static object AsyncFromSyncAwaitContinuation(Task&lt;object&gt; task, object done)
+    /// static object AsyncFromSyncAwaitContinuation(Task&lt;object&gt; task, object state)
     /// — replaces the sync result's value with the awaited value while preserving done.
     /// </summary>
     private void EmitAsyncFromSyncAwaitContinuation(
         TypeBuilder runtimeType,
-        EmittedAsyncFromSyncRuntime fromSync
+        EmittedAsyncFromSyncRuntime fromSync,
+        MethodBuilder iteratorClose
     )
     {
         var method = runtimeType.DefineMethod(
@@ -182,23 +187,49 @@ public partial class RuntimeEmitter
         var il = method.GetILGenerator();
         var awaiterLocal = il.DeclareLocal(_types.TaskAwaiterOfObject);
         var valueLocal = il.DeclareLocal(_types.Object);
+        var state = il.DeclareLocal(_types.ObjectArray);
+        var adopted = il.DefineLabel();
+        il.Emit(OpCodes.Ldarg_1);
+        il.Emit(OpCodes.Castclass, _types.ObjectArray);
+        il.Emit(OpCodes.Stloc, state);
 
+        il.BeginExceptionBlock();
         il.Emit(OpCodes.Ldarg_0);
         il.Emit(OpCodes.Callvirt, _types.TaskOfObjectGetAwaiter);
         il.Emit(OpCodes.Stloc, awaiterLocal);
         il.Emit(OpCodes.Ldloca, awaiterLocal);
         il.Emit(OpCodes.Call, _types.GetMethodNoParams(_types.TaskAwaiterOfObject, "GetResult"));
         il.Emit(OpCodes.Stloc, valueLocal);
+        il.Emit(OpCodes.Leave, adopted);
+        il.BeginCatchBlock(_types.Exception);
+        il.Emit(OpCodes.Pop);
+        var noClose = il.DefineLabel();
+        il.Emit(OpCodes.Ldloc, state);
+        il.Emit(OpCodes.Ldc_I4_2);
+        il.Emit(OpCodes.Ldelem_Ref);
+        il.Emit(OpCodes.Unbox_Any, _types.Boolean);
+        il.Emit(OpCodes.Brfalse, noClose);
+        il.Emit(OpCodes.Ldloc, state);
+        il.Emit(OpCodes.Ldc_I4_1);
+        il.Emit(OpCodes.Ldelem_Ref);
+        il.Emit(OpCodes.Ldc_I4_1);
+        il.Emit(OpCodes.Call, iteratorClose);
+        il.MarkLabel(noClose);
+        il.Emit(OpCodes.Rethrow);
+        il.EndExceptionBlock();
 
+        il.MarkLabel(adopted);
         il.Emit(OpCodes.Ldloc, valueLocal);
-        il.Emit(OpCodes.Ldarg_1);
+        il.Emit(OpCodes.Ldloc, state);
+        il.Emit(OpCodes.Ldc_I4_0);
+        il.Emit(OpCodes.Ldelem_Ref);
         il.Emit(OpCodes.Unbox_Any, _types.Boolean);
         il.Emit(OpCodes.Call, fromSync.CreateResult);
         il.Emit(OpCodes.Ret);
     }
 
     /// <summary>
-    /// static Task&lt;object&gt; AsyncFromSyncAwaitResult(object step)
+    /// static Task&lt;object&gt; AsyncFromSyncAwaitResult(object step, object iterator, bool closeOnRejection)
     /// — awaits Promise/Task/thenable iterator values and rebuilds the result.
     /// </summary>
     private void EmitAsyncFromSyncAwaitResult(
@@ -211,12 +242,20 @@ public partial class RuntimeEmitter
             "AsyncFromSyncAwaitResult",
             MethodAttributes.Public | MethodAttributes.Static,
             _types.TaskOfObject,
-            [_types.Object]);
+            [_types.Object, _types.Object, _types.Boolean]);
         fromSync.AwaitResult = method;
 
         var il = method.GetILGenerator();
         var taskLocal = il.DeclareLocal(_types.TaskOfObject);
         var doneLocal = il.DeclareLocal(_types.Boolean);
+        var valueLocal = il.DeclareLocal(_types.Object);
+        var adopted = il.DefineLabel();
+
+        // Return/throw methods can produce primitives. Reject with the guest
+        // TypeError before property reads can turn them into an empty result.
+        il.Emit(OpCodes.Ldarg_0);
+        il.Emit(OpCodes.Call, inputs.RequireIteratorObject);
+        il.Emit(OpCodes.Pop);
 
         // Both properties are read before adopting value. A getter or thenable
         // can mutate the original result, so only the captured boolean survives.
@@ -225,8 +264,28 @@ public partial class RuntimeEmitter
         il.Emit(OpCodes.Stloc, doneLocal);
         il.Emit(OpCodes.Ldarg_0);
         il.Emit(OpCodes.Call, inputs.GetIteratorValue);
+        il.Emit(OpCodes.Stloc, valueLocal);
+        // Result getter failures do not close. Only PromiseResolve/adoption
+        // failures close a non-final next/throw result, preserving its reason.
+        il.BeginExceptionBlock();
+        il.Emit(OpCodes.Ldloc, valueLocal);
         il.Emit(OpCodes.Call, inputs.Promise.AwaitValueToTaskMethod);
         il.Emit(OpCodes.Stloc, taskLocal);
+        il.Emit(OpCodes.Leave, adopted);
+        il.BeginCatchBlock(_types.Exception);
+        il.Emit(OpCodes.Pop);
+        var noClose = il.DefineLabel();
+        il.Emit(OpCodes.Ldloc, doneLocal);
+        il.Emit(OpCodes.Brtrue, noClose);
+        il.Emit(OpCodes.Ldarg_2);
+        il.Emit(OpCodes.Brfalse, noClose);
+        il.Emit(OpCodes.Ldarg_1);
+        il.Emit(OpCodes.Ldc_I4_1);
+        il.Emit(OpCodes.Call, inputs.IteratorClose);
+        il.MarkLabel(noClose);
+        il.Emit(OpCodes.Rethrow);
+        il.EndExceptionBlock();
+        il.MarkLabel(adopted);
 
         il.Emit(OpCodes.Ldloc, taskLocal);
         il.Emit(OpCodes.Ldnull);
@@ -234,8 +293,28 @@ public partial class RuntimeEmitter
         var continuationType = _types.MakeGenericType(
             typeof(Func<,,>), _types.TaskOfObject, _types.Object, _types.Object);
         il.Emit(OpCodes.Newobj, _types.GetConstructor(continuationType, [_types.Object, typeof(IntPtr)])!);
+        // Continuation state: the done snapshot, source iterator, and whether
+        // rejection requires IteratorClose. No live result getters are reread.
+        il.Emit(OpCodes.Ldc_I4_3);
+        il.Emit(OpCodes.Newarr, _types.Object);
+        il.Emit(OpCodes.Dup);
+        il.Emit(OpCodes.Ldc_I4_0);
         il.Emit(OpCodes.Ldloc, doneLocal);
         il.Emit(OpCodes.Box, _types.Boolean);
+        il.Emit(OpCodes.Stelem_Ref);
+        il.Emit(OpCodes.Dup);
+        il.Emit(OpCodes.Ldc_I4_1);
+        il.Emit(OpCodes.Ldarg_1);
+        il.Emit(OpCodes.Stelem_Ref);
+        il.Emit(OpCodes.Dup);
+        il.Emit(OpCodes.Ldc_I4_2);
+        il.Emit(OpCodes.Ldloc, doneLocal);
+        il.Emit(OpCodes.Ldc_I4_0);
+        il.Emit(OpCodes.Ceq);
+        il.Emit(OpCodes.Ldarg_2);
+        il.Emit(OpCodes.And);
+        il.Emit(OpCodes.Box, _types.Boolean);
+        il.Emit(OpCodes.Stelem_Ref);
         il.Emit(OpCodes.Ldc_I4, (int)TaskContinuationOptions.ExecuteSynchronously);
         il.Emit(OpCodes.Callvirt, ResolveAsyncFromSyncContinueWith());
         il.Emit(OpCodes.Ret);
@@ -419,6 +498,9 @@ public partial class RuntimeEmitter
 
         il.MarkLabel(haveStep);
         il.Emit(OpCodes.Ldloc, stepLocal);
+        il.Emit(OpCodes.Ldarg_0);
+        il.Emit(OpCodes.Ldfld, iteratorField);
+        il.Emit(OpCodes.Ldc_I4_1);
         il.Emit(OpCodes.Call, fromSync.AwaitResult);
         il.Emit(OpCodes.Stloc, resultTask);
         il.Emit(OpCodes.Leave, done);
@@ -530,6 +612,9 @@ public partial class RuntimeEmitter
 
         il.MarkLabel(haveStep);
         il.Emit(OpCodes.Ldloc, stepLocal);
+        il.Emit(OpCodes.Ldarg_0);
+        il.Emit(OpCodes.Ldfld, iteratorField);
+        il.Emit(OpCodes.Ldc_I4_0);
         il.Emit(OpCodes.Call, fromSync.AwaitResult);
         il.Emit(OpCodes.Stloc, resultTask);
         il.Emit(OpCodes.Leave, done);
@@ -590,6 +675,9 @@ public partial class RuntimeEmitter
         il.Emit(OpCodes.Call, inputs.Invocation.Method);
         il.Emit(OpCodes.Stloc, stepLocal);
         il.Emit(OpCodes.Ldloc, stepLocal);
+        il.Emit(OpCodes.Ldarg_0);
+        il.Emit(OpCodes.Ldfld, iteratorField);
+        il.Emit(OpCodes.Ldc_I4_1);
         il.Emit(OpCodes.Call, fromSync.AwaitResult);
         il.Emit(OpCodes.Ret);
 
@@ -603,6 +691,9 @@ public partial class RuntimeEmitter
         il.Emit(OpCodes.Castclass, inputs.Generators.Type);
         il.Emit(OpCodes.Ldarg_1);
         il.Emit(OpCodes.Callvirt, inputs.Generators.Throw);
+        il.Emit(OpCodes.Ldarg_0);
+        il.Emit(OpCodes.Ldfld, iteratorField);
+        il.Emit(OpCodes.Ldc_I4_1);
         il.Emit(OpCodes.Call, fromSync.AwaitResult);
         il.Emit(OpCodes.Ret);
 

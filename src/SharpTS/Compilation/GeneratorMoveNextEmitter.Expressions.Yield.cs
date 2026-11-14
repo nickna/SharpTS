@@ -407,13 +407,22 @@ public partial class GeneratorMoveNextEmitter
                 _il.Emit(OpCodes.Stloc, genResultLocal);
             });
 
-            _il.Emit(OpCodes.Ldloc, genResultLocal);
-            _il.Emit(OpCodes.Call, _ctx!.Runtime!.IteratorProtocol.Done);
+            var doneLocal = _il.DeclareLocal(typeof(bool));
+            EmitTryBodyOperation(() =>
+            {
+                _il.Emit(OpCodes.Ldloc, genResultLocal);
+                _il.Emit(OpCodes.Call, _ctx!.Runtime!.IteratorProtocol.Done);
+                _il.Emit(OpCodes.Stloc, doneLocal);
+            });
+            _il.Emit(OpCodes.Ldloc, doneLocal);
             _il.Emit(OpCodes.Brtrue, genDoneLabel);
 
-            _il.Emit(OpCodes.Ldloc, genResultLocal);
-            _il.Emit(OpCodes.Call, _ctx!.Runtime!.IteratorProtocol.Value);
-            _il.Emit(OpCodes.Stloc, valueTemp);
+            EmitTryBodyOperation(() =>
+            {
+                _il.Emit(OpCodes.Ldloc, genResultLocal);
+                _il.Emit(OpCodes.Call, _ctx!.Runtime!.IteratorProtocol.Value);
+                _il.Emit(OpCodes.Stloc, valueTemp);
+            });
             // fall through to haveValue
         }
 
@@ -460,9 +469,12 @@ public partial class GeneratorMoveNextEmitter
 
             // $IGenerator done: the completion value is the done record's `value`.
             _il.MarkLabel(genDoneLabel);
-            _il.Emit(OpCodes.Ldloc, genResultLocal);
-            _il.Emit(OpCodes.Call, _ctx!.Runtime!.IteratorProtocol.Value);
-            _il.Emit(OpCodes.Stloc, yieldStarResultLocal);
+            EmitTryBodyOperation(() =>
+            {
+                _il.Emit(OpCodes.Ldloc, genResultLocal);
+                _il.Emit(OpCodes.Call, _ctx!.Runtime!.IteratorProtocol.Value);
+                _il.Emit(OpCodes.Stloc, yieldStarResultLocal);
+            });
             // fall through to doneCleanup
         }
 
@@ -536,6 +548,43 @@ public partial class GeneratorMoveNextEmitter
             _il.Emit(OpCodes.Ldfld, valueField);
         }
 
+        void BranchUnlessProtocolDelegate(Label missing)
+        {
+            var found = _il.DefineLabel();
+            _il.Emit(OpCodes.Ldarg_0);
+            _il.Emit(OpCodes.Ldfld, delegatedField);
+            _il.Emit(OpCodes.Isinst, _ctx!.Runtime!.IteratorWrappers.Type);
+            _il.Emit(OpCodes.Brtrue, found);
+            _il.Emit(OpCodes.Ldarg_0);
+            _il.Emit(OpCodes.Ldfld, delegatedField);
+            _il.Emit(OpCodes.Isinst, generatorInterfaceType!);
+            _il.Emit(OpCodes.Brfalse, missing);
+            _il.MarkLabel(found);
+        }
+
+        void EmitRequest(bool isThrow)
+        {
+            var native = _il.DefineLabel();
+            var done = _il.DefineLabel();
+            _il.Emit(OpCodes.Ldarg_0);
+            _il.Emit(OpCodes.Ldfld, delegatedField);
+            _il.Emit(OpCodes.Isinst, _ctx!.Runtime!.IteratorWrappers.Type);
+            _il.Emit(OpCodes.Brfalse, native);
+            _il.Emit(OpCodes.Ldarg_0);
+            _il.Emit(OpCodes.Ldfld, delegatedField);
+            _il.Emit(OpCodes.Castclass, _ctx.Runtime.IteratorWrappers.Type);
+            LoadInjectedValue();
+            _il.Emit(OpCodes.Call, isThrow ? _ctx.Runtime.IteratorWrappers.Throw : _ctx.Runtime.IteratorWrappers.Return);
+            _il.Emit(OpCodes.Br, done);
+            _il.MarkLabel(native);
+            _il.Emit(OpCodes.Ldarg_0);
+            _il.Emit(OpCodes.Ldfld, delegatedField);
+            _il.Emit(OpCodes.Castclass, generatorInterfaceType!);
+            LoadInjectedValue();
+            _il.Emit(OpCodes.Callvirt, isThrow ? _ctx.Runtime.Generators.Throw : _ctx.Runtime.Generators.Return);
+            _il.MarkLabel(done);
+        }
+
         // ---- return(v) forwarding ----
         var afterReturn = _il.DefineLabel();
         _il.Emit(OpCodes.Ldarg_0);
@@ -547,36 +596,44 @@ public partial class GeneratorMoveNextEmitter
         if (generatorInterfaceType != null)
         {
             var notGenReturn = _il.DefineLabel();
-            _il.Emit(OpCodes.Ldarg_0);
-            _il.Emit(OpCodes.Ldfld, delegatedField);
-            _il.Emit(OpCodes.Isinst, generatorInterfaceType);
-            _il.Emit(OpCodes.Brfalse, notGenReturn);
+            BranchUnlessProtocolDelegate(notGenReturn);
 
             // result = delegate.return(injectedValue) — runs the delegate's finally(s).
-            _il.Emit(OpCodes.Ldarg_0);
-            _il.Emit(OpCodes.Ldfld, delegatedField);
-            _il.Emit(OpCodes.Castclass, generatorInterfaceType);
-            LoadInjectedValue();
-            _il.Emit(OpCodes.Callvirt, _ctx!.Runtime!.Generators.Return);
-            _il.Emit(OpCodes.Stloc, genResultLocal);
+            EmitTryBodyOperation(() =>
+            {
+                EmitRequest(isThrow: false);
+                _il.Emit(OpCodes.Stloc, genResultLocal);
+            });
 
             // result.done → the outer returns result.value (§14.4.14 c.7); else the delegate's
             // finally yielded, so the outer yields result.value and stays delegating.
             var innerReturnNotDone = _il.DefineLabel();
-            _il.Emit(OpCodes.Ldloc, genResultLocal);
-            _il.Emit(OpCodes.Call, _ctx.Runtime.IteratorProtocol.Done);
-            _il.Emit(OpCodes.Brfalse, innerReturnNotDone);
-            ClearDelegateField(delegatedField);
-            EmitRoutedReturn(() =>
+            var returnDoneLocal = _il.DeclareLocal(typeof(bool));
+            EmitTryBodyOperation(() =>
             {
                 _il.Emit(OpCodes.Ldloc, genResultLocal);
-                _il.Emit(OpCodes.Call, _ctx.Runtime.IteratorProtocol.Value);
+                _il.Emit(OpCodes.Call, _ctx!.Runtime!.IteratorProtocol.Done);
+                _il.Emit(OpCodes.Stloc, returnDoneLocal);
             });
+            _il.Emit(OpCodes.Ldloc, returnDoneLocal);
+            _il.Emit(OpCodes.Brfalse, innerReturnNotDone);
+            // Read accessors with an empty IL stack before staging a routed return.
+            EmitTryBodyOperation(() =>
+            {
+                _il.Emit(OpCodes.Ldloc, genResultLocal);
+                _il.Emit(OpCodes.Call, _ctx!.Runtime!.IteratorProtocol.Value);
+                _il.Emit(OpCodes.Stloc, valueTemp);
+            });
+            ClearDelegateField(delegatedField);
+            EmitRoutedReturn(() => _il.Emit(OpCodes.Ldloc, valueTemp));
 
             _il.MarkLabel(innerReturnNotDone);
-            _il.Emit(OpCodes.Ldloc, genResultLocal);
-            _il.Emit(OpCodes.Call, _ctx.Runtime.IteratorProtocol.Value);
-            _il.Emit(OpCodes.Stloc, valueTemp);
+            EmitTryBodyOperation(() =>
+            {
+                _il.Emit(OpCodes.Ldloc, genResultLocal);
+                _il.Emit(OpCodes.Call, _ctx!.Runtime!.IteratorProtocol.Value);
+                _il.Emit(OpCodes.Stloc, valueTemp);
+            });
             _il.Emit(OpCodes.Br, haveValueLabel);
 
             _il.MarkLabel(notGenReturn);
@@ -599,32 +656,28 @@ public partial class GeneratorMoveNextEmitter
         if (generatorInterfaceType != null)
         {
             var notGenThrow = _il.DefineLabel();
-            _il.Emit(OpCodes.Ldarg_0);
-            _il.Emit(OpCodes.Ldfld, delegatedField);
-            _il.Emit(OpCodes.Isinst, generatorInterfaceType);
-            _il.Emit(OpCodes.Brfalse, notGenThrow);
+            BranchUnlessProtocolDelegate(notGenThrow);
 
             // Drive delegate.throw(injectedValue) in a mini try/catch so an inner rethrow (the
             // delegate has no handler, §14.4.14 b.ii) is captured and re-raised at this point —
             // running the outer's own catch/finally — rather than escaping MoveNext directly.
             var caughtLocal = _il.DeclareLocal(typeof(object));
+            var didThrow = _il.DeclareLocal(typeof(bool));
             _il.Emit(OpCodes.Ldnull);
             _il.Emit(OpCodes.Stloc, caughtLocal);
             _il.BeginExceptionBlock();
-            _il.Emit(OpCodes.Ldarg_0);
-            _il.Emit(OpCodes.Ldfld, delegatedField);
-            _il.Emit(OpCodes.Castclass, generatorInterfaceType);
-            LoadInjectedValue();
-            _il.Emit(OpCodes.Callvirt, _ctx!.Runtime!.Generators.Throw);
+            EmitRequest(isThrow: true);
             _il.Emit(OpCodes.Stloc, genResultLocal);
             _il.BeginCatchBlock(typeof(Exception));
-            _il.Emit(OpCodes.Call, _ctx.Runtime.Errors.WrapException);
+            _il.Emit(OpCodes.Call, _ctx!.Runtime!.Errors.WrapException);
             _il.Emit(OpCodes.Stloc, caughtLocal);
+            _il.Emit(OpCodes.Ldc_I4_1);
+            _il.Emit(OpCodes.Stloc, didThrow);
             _il.EndExceptionBlock();
 
             // Inner rethrew → re-raise at this point (runs the outer's catch/finally).
             var innerHandled = _il.DefineLabel();
-            _il.Emit(OpCodes.Ldloc, caughtLocal);
+            _il.Emit(OpCodes.Ldloc, didThrow);
             _il.Emit(OpCodes.Brfalse, innerHandled);
             ClearDelegateField(delegatedField);
             EmitRoutedThrow(() => _il.Emit(OpCodes.Ldloc, caughtLocal));
@@ -633,15 +686,24 @@ public partial class GeneratorMoveNextEmitter
             // yield* (§14.4.14 b.5); else the delegate yielded again, so the outer yields and stays.
             _il.MarkLabel(innerHandled);
             var innerThrowNotDone = _il.DefineLabel();
-            _il.Emit(OpCodes.Ldloc, genResultLocal);
-            _il.Emit(OpCodes.Call, _ctx.Runtime.IteratorProtocol.Done);
+            var throwDoneLocal = _il.DeclareLocal(typeof(bool));
+            EmitTryBodyOperation(() =>
+            {
+                _il.Emit(OpCodes.Ldloc, genResultLocal);
+                _il.Emit(OpCodes.Call, _ctx.Runtime.IteratorProtocol.Done);
+                _il.Emit(OpCodes.Stloc, throwDoneLocal);
+            });
+            _il.Emit(OpCodes.Ldloc, throwDoneLocal);
             _il.Emit(OpCodes.Brfalse, innerThrowNotDone);
             _il.Emit(OpCodes.Br, genDoneLabel);
 
             _il.MarkLabel(innerThrowNotDone);
-            _il.Emit(OpCodes.Ldloc, genResultLocal);
-            _il.Emit(OpCodes.Call, _ctx.Runtime.IteratorProtocol.Value);
-            _il.Emit(OpCodes.Stloc, valueTemp);
+            EmitTryBodyOperation(() =>
+            {
+                _il.Emit(OpCodes.Ldloc, genResultLocal);
+                _il.Emit(OpCodes.Call, _ctx.Runtime.IteratorProtocol.Value);
+                _il.Emit(OpCodes.Stloc, valueTemp);
+            });
             _il.Emit(OpCodes.Br, haveValueLabel);
 
             _il.MarkLabel(notGenThrow);

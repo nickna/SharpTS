@@ -128,7 +128,20 @@ public partial class Interpreter
             {
                 return await IterateAsyncIterator(record, forOf, labels);
             }
-            // Fall through to sync iterator with async unwrap
+            // Keep the result object through the async-from-sync continuation:
+            // IEnumerable discards the final value before it can be adopted.
+            if (iterable is not null && iterable is not string)
+            {
+                object? factory = GetSymbolPropertyValue(iterable, SharpTSSymbol.Iterator);
+                if (factory is not null and not SharpTSUndefined)
+                {
+                    object? acquired = InvokeAsyncIteratorMethod(iterable, factory, "[Symbol.iterator]", []);
+                    return await IterateAsyncIterator(CaptureAsyncIterator(acquired), forOf, labels, fromSync: true);
+                }
+                if (iterable is not (SharpTSBuffer or SharpTSTypedArray or SharpTSIterator))
+                    throw new ThrowException(new SharpTSTypeError("[Symbol.iterator] must be a function"));
+            }
+            // Intrinsic values without a runtime protocol use their enumerable adapter.
         }
 
         // Check for Symbol.iterator protocol first (works for both sync and async for...of)
@@ -337,14 +350,18 @@ public partial class Interpreter
     /// <summary>
     /// Iterates an async iterator by repeatedly calling .next() and awaiting results.
     /// </summary>
-    private async Task<ExecutionResult> IterateAsyncIterator(AsyncIteratorRecord record, Stmt.ForOf forOf, IReadOnlyList<string>? labels = null)
+    private async Task<ExecutionResult> IterateAsyncIterator(AsyncIteratorRecord record, Stmt.ForOf forOf,
+        IReadOnlyList<string>? labels = null, bool fromSync = false)
     {
         var completion = ExecutionResult.Success(RuntimeValue.Undefined);
         object asyncIterator = record.Iterator;
         while (true)
         {
             ThrowIfExecutionCancelled();
-            var nextResult = await AwaitAsyncIteratorStep(asyncIterator, record.Next, "next", []);
+            var nextResult = fromSync
+                ? await AwaitSyncIteratorResult(asyncIterator,
+                    InvokeAsyncIteratorMethod(asyncIterator, record.Next, "next", []), closeOnRejection: true)
+                : await AwaitAsyncIteratorStep(asyncIterator, record.Next, "next", []);
 
             if (IsTruthy(GetPropertyValue(nextResult, "done"))) break;
             object? value = GetPropertyValue(nextResult, "value");
@@ -358,7 +375,7 @@ public partial class Interpreter
             {
                 // Binding initialization/assignment is part of the loop body
                 // completion and must close a real async iterator on failure.
-                await CloseAsyncIteratorOnEarlyExit(asyncIterator, preserveThrow: true);
+                await Close(preserveThrow: true);
                 throw;
             }
             result = UpdateLoopCompletion(ref completion, result);
@@ -370,13 +387,13 @@ public partial class Interpreter
             // break/continue that targets this for-await loop rather than escaping it.
             if (shouldBreak)
             {
-                await CloseAsyncIteratorOnEarlyExit(asyncIterator, preserveThrow: false);
+                await Close(preserveThrow: false);
                 return completion;
             }
             if (shouldContinue) continue;
             if (abruptResult.HasValue)
             {
-                await CloseAsyncIteratorOnEarlyExit(asyncIterator,
+                await Close(
                     preserveThrow: abruptResult.Value.Type == ExecutionResult.ResultType.Throw);
                 return abruptResult.Value;
             }
@@ -386,6 +403,42 @@ public partial class Interpreter
         }
 
         return completion;
+
+        async Task Close(bool preserveThrow)
+        {
+            if (!fromSync)
+            {
+                await CloseAsyncIteratorOnEarlyExit(asyncIterator, preserveThrow);
+                return;
+            }
+            try
+            {
+                object? method = GetPropertyValue(asyncIterator, "return");
+                if (method is null or SharpTSUndefined) return;
+                await AwaitSyncIteratorResult(asyncIterator,
+                    InvokeAsyncIteratorMethod(asyncIterator, method, "return", []), closeOnRejection: false);
+            }
+            catch when (preserveThrow) { }
+        }
+    }
+
+    internal async Task<object?> AwaitSyncIteratorResult(object iterator, object? result, bool closeOnRejection)
+    {
+        if (!RuntimeValue.FromBoxed(result).IsObject)
+            throw new ThrowException(new SharpTSTypeError("Iterator result must be an object."));
+        bool done = IsTruthy(GetPropertyValue(result, "done"));
+        object? value = GetPropertyValue(result, "value");
+        try
+        {
+            value = await AwaitAsyncIterationValue(value);
+        }
+        catch (Exception error) when (!done && closeOnRejection &&
+            error is not (OperationCanceledException or WorkerTerminatedException or ThreadInterruptedException))
+        {
+            CloseIterator(iterator, preserveThrow: true);
+            throw;
+        }
+        return new SharpTSIteratorResult(value, done);
     }
 
     /// <summary>

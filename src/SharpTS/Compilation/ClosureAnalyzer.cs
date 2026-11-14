@@ -76,6 +76,10 @@ public class ClosureAnalyzer : AstVisitorBase
     // keep the historical $entryPointDC chain routing.
     private readonly Dictionary<object, HashSet<string>> _directTopLevelBlockCaptures = [];
 
+    // Lexical provenance at every closure depth. Unlike the direct-capture map,
+    // this does not imply that an entry-point local is visible at creation time.
+    private readonly Dictionary<object, HashSet<string>> _topLevelBlockCaptures = [];
+
     // Maps function/arrow node → names it declares as `for (let/const …)` loop
     // bindings. Each iteration of such a loop gets its OWN binding (ECMA-262
     // 13.7.4 CreatePerIterationEnvironment), so a closure created in one iteration
@@ -305,6 +309,9 @@ public class ClosureAnalyzer : AstVisitorBase
         return _directTopLevelBlockCaptures.TryGetValue(functionNode, out var names) &&
                names.Contains(name);
     }
+
+    public bool IsTopLevelBlockScopedCapture(object functionNode, string name) =>
+        _topLevelBlockCaptures.TryGetValue(functionNode, out var names) && names.Contains(name);
 
 
     /// <summary>
@@ -616,17 +623,29 @@ public class ClosureAnalyzer : AstVisitorBase
                 // like the function-local case (#1231).
                 RecordChainCapture(name, null);
 
-                if (_functionStack.Count == 1 && IsNearestDeclaringScopeNested(name))
+                if (IsNearestDeclaringScopeNested(name))
                 {
-                    // The nearest declaring scope is a nested top-level block, referenced
-                    // by a closure created directly in top-level code (#1222) — see
-                    // _directTopLevelBlockCaptures.
-                    if (!_directTopLevelBlockCaptures.TryGetValue(_currentFunction, out var blockCaps))
+                    // Intermediate closures may relay this binding's lexical cell
+                    // without reading it themselves. Preserve its provenance there
+                    // too, so capture filtering cannot replace the relay with a
+                    // same-named module function.
+                    int depth = _functionStack.Count;
+                    foreach (var frame in _functionStack)
                     {
-                        blockCaps = [];
-                        _directTopLevelBlockCaptures[_currentFunction] = blockCaps;
+                        if (frame is not null)
+                        {
+                            if (!_topLevelBlockCaptures.TryGetValue(frame, out var lexicalCaptures))
+                                _topLevelBlockCaptures[frame] = lexicalCaptures = [];
+                            lexicalCaptures.Add(name);
+                            if (depth == 1)
+                            {
+                                if (!_directTopLevelBlockCaptures.TryGetValue(frame, out var directCaptures))
+                                    _directTopLevelBlockCaptures[frame] = directCaptures = [];
+                                directCaptures.Add(name);
+                            }
+                        }
+                        depth--;
                     }
-                    blockCaps.Add(name);
                 }
             }
         }

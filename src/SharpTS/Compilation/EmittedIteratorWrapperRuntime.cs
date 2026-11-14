@@ -3,7 +3,7 @@ using System.Runtime.CompilerServices;
 
 namespace SharpTS.Compilation;
 
-/// <summary>Required custom-iterator adapter type, constructor and sent-value metadata.</summary>
+/// <summary>Required custom-iterator adapter and delegated-request metadata.</summary>
 public sealed class EmittedIteratorWrapperRuntime
 {
     internal EmittedIteratorWrapperRuntime() { }
@@ -31,6 +31,20 @@ public sealed class EmittedIteratorWrapperRuntime
         internal set => SetHandle(ref _moveNextWithSent, value);
     }
 
+    private MethodBuilder? _return;
+    public MethodBuilder Return
+    {
+        get => Require(_return);
+        internal set => SetHandle(ref _return, value);
+    }
+
+    private MethodBuilder? _throw;
+    public MethodBuilder Throw
+    {
+        get => Require(_throw);
+        internal set => SetHandle(ref _throw, value);
+    }
+
     private static T Require<T>(T? handle, [CallerMemberName] string name = "") where T : class =>
         handle ?? throw new InvalidOperationException("Iterator wrapper metadata '" + name + "' has not been declared.");
 
@@ -55,6 +69,8 @@ public sealed class EmittedIteratorWrapperRuntime
         _ = Type;
         _ = Ctor;
         _ = MoveNextWithSent;
+        _ = Return;
+        _ = Throw;
         IsComplete = true;
     }
 }

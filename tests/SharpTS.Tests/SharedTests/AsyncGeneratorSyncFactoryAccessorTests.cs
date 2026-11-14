@@ -39,14 +39,28 @@ public class AsyncGeneratorSyncFactoryAccessorTests
         AssertFactoryAccessor(FactoryAccessorSource, mode);
     }
 
-    // The compiled async-from-sync acquisition path ignores inherited symbol
-    // accessors; its separately reported defect is tracked in #3658.
-    [Theory, InterpretedOnlyData]
+    [Theory, ModeData]
     public void YieldStar_CapturesInheritedSyncIteratorFactoryAccessorWithOriginalReceiver(ExecutionMode mode)
     {
         var source = FactoryAccessorSource.Replace("const iterable = {", "const prototype = {")
             .Replace("async function* run()", "const iterable = Object.create(prototype); async function* run()");
         AssertFactoryAccessor(source, mode);
+    }
+
+    [Theory, ModeData]
+    public void YieldStar_InheritedSyncFactoryGetterFailureReachesCatch(ExecutionMode mode)
+    {
+        const string source = """
+            const marker = {};
+            const prototype = { get [Symbol.iterator]() { console.log(this === iterable); throw marker; } };
+            const iterable = Object.create(Object.create(prototype));
+            async function* run() {
+                try { yield* iterable; }
+                catch (error) { yield error === marker; }
+            }
+            run().next().then(result => console.log(result.value, result.done));
+            """;
+        Assert.Equal("true\ntrue false\n", TestHarness.RunUnchecked(source, mode));
     }
 
     [Theory, ModeData]

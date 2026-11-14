@@ -563,12 +563,13 @@ and descriptor guards. Optional NodeStreams lookup stays nullable. The
 write-only InvokeIteratorNextWithSent holder store is removed while its
 generated public method, local handle, signature and IL remain unchanged.
 
-Required `IteratorWrappers` owns the custom-iterator adapter type, constructor
-and sent-value method. It completes immediately after the original wrapper
-emission call, which receives the owner and exact captured-next/result-helper
-dependencies. Both nullable generator probes, the ignored constructor Type
-argument, captured next callable, both Current getters, completion values,
-Reset exception, no-op Dispose and local construction order are preserved.
+Required `IteratorWrappers` owns the custom-iterator adapter type, constructor,
+sent-value method and delegated return/throw methods. It completes after wrapper
+emission, which receives exact captured-next, result-reading, property-lookup,
+invocation, error and close dependencies. Each instance retains its acquired iterator
+and captured next callable; abrupt requests look up the iterator's live return/throw
+method with the original receiver and validate its result. Both Current getters,
+completion state, Reset exception and ignored constructor Type argument retain their ABI.
 
 Required `IteratorRecords` owns captured-next lookup and invocation metadata.
 Its three declarations complete together immediately after their original

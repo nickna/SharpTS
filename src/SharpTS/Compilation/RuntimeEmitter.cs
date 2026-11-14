@@ -963,6 +963,7 @@ public partial class RuntimeEmitter
                     runtime.IteratorProtocol.Function,
                     runtime.IteratorRecords.NextMethod,
                     runtime.IteratorProtocol.Value,
+                    runtime.IteratorRecords.RequireObject,
                     runtime.Invocation,
                     runtime.IteratorProtocol.Close,
                     runtime.IteratorRecords.InvokeNext,

@@ -884,7 +884,7 @@ public partial class Interpreter
     /// </returns>
     internal SyncIteratorRecord? TryGetCustomIteratorProtocol(object? iterable)
     {
-        if (iterable is not (SharpTSObject or SharpTSInstance))
+        if (iterable is not (SharpTSObject or SharpTSInstance or SharpTSGenerator))
             return null;
 
         object? iteratorFn = GetSymbolPropertyValue(iterable, SharpTSSymbol.Iterator);

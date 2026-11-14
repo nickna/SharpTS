@@ -639,7 +639,11 @@ public partial class RuntimeEmitter
         EmittedIteratorRecordRuntime IteratorRecords,
         MethodBuilder GetIteratorDone,
         MethodBuilder GetIteratorValue,
-        MethodInfo CloseIterator
+        MethodInfo CloseIterator,
+        EmittedObjectReadRuntime ObjectRead,
+        EmittedInvocationRuntime Invocation,
+        EmittedErrorRuntime Errors,
+        Type UndefinedType
     );
 
     /// <summary>
@@ -692,6 +696,62 @@ public partial class RuntimeEmitter
         ctorIl.Emit(OpCodes.Stfld, currentField);
         // runtimeType (arg_2) is ignored - no longer needed
         ctorIl.Emit(OpCodes.Ret);
+
+        iteratorWrappers.Return = EmitRequest("Return", isThrow: false);
+        iteratorWrappers.Throw = EmitRequest("Throw", isThrow: true);
+
+        MethodBuilder EmitRequest(string name, bool isThrow)
+        {
+            var request = typeBuilder.DefineMethod(name, MethodAttributes.Public,
+                _types.Object, [_types.Object]);
+            var body = request.GetILGenerator();
+            var method = body.DeclareLocal(_types.Object);
+            var present = body.DefineLabel();
+            var missing = body.DefineLabel();
+            body.Emit(OpCodes.Ldarg_0);
+            body.Emit(OpCodes.Ldfld, iteratorField);
+            body.Emit(OpCodes.Ldstr, isThrow ? "throw" : "return");
+            body.Emit(OpCodes.Call, inputs.ObjectRead.Property);
+            body.Emit(OpCodes.Stloc, method);
+            body.Emit(OpCodes.Ldloc, method);
+            body.Emit(OpCodes.Brfalse, missing);
+            body.Emit(OpCodes.Ldloc, method);
+            body.Emit(OpCodes.Isinst, inputs.UndefinedType);
+            body.Emit(OpCodes.Brfalse, present);
+            body.MarkLabel(missing);
+            if (isThrow)
+            {
+                body.Emit(OpCodes.Ldarg_0);
+                body.Emit(OpCodes.Ldfld, iteratorField);
+                body.Emit(OpCodes.Ldc_I4_0);
+                body.Emit(OpCodes.Call, inputs.CloseIterator);
+                GuestErrorEmitter.ThrowError(body, inputs.Errors.CreateException,
+                    inputs.Errors.TypeErrorConstructor, "Iterator does not provide a throw() method.");
+            }
+            else
+            {
+                body.Emit(OpCodes.Newobj, _types.GetDefaultConstructor(_types.DictionaryStringObject));
+                body.Emit(OpCodes.Dup);
+                body.Emit(OpCodes.Ldstr, "value");
+                body.Emit(OpCodes.Ldarg_1);
+                body.Emit(OpCodes.Callvirt, _types.GetMethod(_types.DictionaryStringObject, "set_Item", _types.String, _types.Object));
+                body.Emit(OpCodes.Dup);
+                body.Emit(OpCodes.Ldstr, "done");
+                body.Emit(OpCodes.Ldc_I4_1);
+                body.Emit(OpCodes.Box, _types.Boolean);
+                body.Emit(OpCodes.Callvirt, _types.GetMethod(_types.DictionaryStringObject, "set_Item", _types.String, _types.Object));
+                body.Emit(OpCodes.Ret);
+            }
+            body.MarkLabel(present);
+            body.Emit(OpCodes.Ldarg_0);
+            body.Emit(OpCodes.Ldfld, iteratorField);
+            body.Emit(OpCodes.Ldloc, method);
+            EmitSingleObjectArgumentArray(body, argumentIndex: 1);
+            body.Emit(OpCodes.Call, inputs.Invocation.Method);
+            body.Emit(OpCodes.Call, inputs.IteratorRecords.RequireObject);
+            body.Emit(OpCodes.Ret);
+            return request;
+        }
 
         // Property: object Current { get; } - generic version
         var currentProp = typeBuilder.DefineProperty(
@@ -1280,8 +1340,11 @@ public partial class RuntimeEmitter
 
         var ordinaryRegistry = il.DefineLabel();
         var ordinaryUserClass = il.DefineLabel();
-        // Constructors use ordinary symbol lookup so inherited accessor
-        // descriptors execute with the constructor as their receiver.
+        // Ordinary objects and constructors use symbol [[Get]] so inherited
+        // accessor descriptors execute with the original iterable receiver.
+        il.Emit(OpCodes.Ldarg_0);
+        il.Emit(OpCodes.Isinst, _types.DictionaryStringObject);
+        il.Emit(OpCodes.Brtrue, ordinaryUserClass);
         il.Emit(OpCodes.Ldarg_0);
         il.Emit(OpCodes.Isinst, _types.Type);
         il.Emit(OpCodes.Brtrue, ordinaryUserClass);

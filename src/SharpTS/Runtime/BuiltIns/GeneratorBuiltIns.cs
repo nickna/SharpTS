@@ -30,7 +30,7 @@ public static class GeneratorBuiltIns
                     // ECMA-262 §27.5.3.3: the argument becomes the result of the
                     // resumed yield. A bare next() resumes with undefined.
                     object? sent = args.Length > 0 ? args[0].ToObject() : SharpTSUndefined.Instance;
-                    return RuntimeValue.FromObject(gen.Next(sent));
+                    return RuntimeValue.FromObject(gen.Next(sent).GuestResult);
                 }
                 throw new ThrowException(new SharpTSTypeError("next() called on non-generator."));
             }),
@@ -40,7 +40,7 @@ public static class GeneratorBuiltIns
                 {
                     // A bare return() resumes with the value undefined (ECMA-262 §27.5.3.4).
                     object? value = args.Length > 0 ? args[0].ToObject() : SharpTSUndefined.Instance;
-                    return RuntimeValue.FromObject(gen.Return(value));
+                    return RuntimeValue.FromObject(gen.Return(value).GuestResult);
                 }
                 throw new ThrowException(new SharpTSTypeError("return() called on non-generator."));
             }),
@@ -50,7 +50,7 @@ public static class GeneratorBuiltIns
                 {
                     // A bare throw() throws undefined (ECMA-262 §27.5.3.4).
                     object? error = args.Length > 0 ? args[0].ToObject() : SharpTSUndefined.Instance;
-                    return RuntimeValue.FromObject(gen.Throw(error));
+                    return RuntimeValue.FromObject(gen.Throw(error).GuestResult);
                 }
                 throw new ThrowException(new SharpTSTypeError("throw() called on non-generator."));
             }),

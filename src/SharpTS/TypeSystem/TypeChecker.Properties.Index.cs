@@ -938,12 +938,17 @@ public partial class TypeChecker
         TypeInfo indexType = CheckExpr(setIndex.Index);
         if (objType is TypeInfo.Class or TypeInfo.GenericClass or
                 TypeInfo.InstantiatedGeneric { GenericDefinition: TypeInfo.GenericClass } &&
-            indexType is TypeInfo.StringLiteral literal &&
-            GetSymbolIndexedMemberType(objType, literal.Value) is not null)
+            TryGetLiteralPropertyKeys(indexType, out var staticKeys) && staticKeys.Count == 1 &&
+            GetSymbolIndexedMemberType(objType, staticKeys[0]) is not null)
         {
-            var name = new Token(TokenType.IDENTIFIER, literal.Value, null,
+            var name = new Token(TokenType.IDENTIFIER, staticKeys[0], null,
                 TryGetExprLine(setIndex.Index) ?? _currentStatementLine ?? 0);
-            return CheckSetCore(new Expr.Set(setIndex.Object, name, setIndex.Value), objType, isLiteralIndex: true);
+            TypeInfo staticWriteType = CheckSetCore(new Expr.Set(setIndex.Object, name, setIndex.Value), objType, isLiteralIndex: true);
+            // Numeric reads use element paths, while CheckSetCore invalidates
+            // property paths. Keep the old narrowing available to the RHS first.
+            if (ExtractNarrowingPath(new Expr.GetIndex(setIndex.Object, setIndex.Index)) is Narrowing.NarrowingPath.ElementAccess element)
+                InvalidateNarrowingsFor(element);
+            return staticWriteType;
         }
 
         TypeInfo? intersectionWriteContext = null;

@@ -2201,21 +2201,40 @@ public abstract partial class ExpressionEmitterBase : IEmitterContext
                 IL.Emit(OpCodes.Ldfld, stateMachineFunctionDC);
                 IL.Emit(OpCodes.Stfld, arrowFunctionDCField);
             }
-            else if (TryEmitClassDefinitionEnvironment(arrowFunctionDCField.FieldType))
+            // A generator expression can relay an ancestor's environment even
+            // when that environment is distinct from its own invocation scope.
+            else if (TryEmitRetainedGeneratorCaptureOwner(arrowFunctionDCField.FieldType)
+                || TryEmitClassDefinitionEnvironment(arrowFunctionDCField.FieldType))
                 IL.Emit(OpCodes.Stfld, arrowFunctionDCField);
             else IL.Emit(OpCodes.Pop);
         }
 
         // Iterator expressions keep their per-invocation arrow scope in the state machine's
         // function-DC slot. A body closure must retain that same scope, not snapshot its values.
-        if (Ctx.ArrowScopeDCFields?.TryGetValue(af, out var arrowScopeDCField) == true &&
-            GetFunctionDCField() is FieldBuilder stateMachineArrowScope &&
-            stateMachineArrowScope.FieldType == arrowScopeDCField.FieldType)
+        if (Ctx.ArrowScopeDCFields?.TryGetValue(af, out var arrowScopeDCField) == true)
         {
             IL.Emit(OpCodes.Dup);
-            IL.Emit(OpCodes.Ldarg_0);
-            IL.Emit(OpCodes.Ldfld, stateMachineArrowScope);
-            IL.Emit(OpCodes.Stfld, arrowScopeDCField);
+            if (GetFunctionDCField() is FieldBuilder stateMachineArrowScope &&
+                stateMachineArrowScope.FieldType == arrowScopeDCField.FieldType)
+            {
+                IL.Emit(OpCodes.Ldarg_0);
+                IL.Emit(OpCodes.Ldfld, stateMachineArrowScope);
+                IL.Emit(OpCodes.Stfld, arrowScopeDCField);
+            }
+            else if (TryEmitRetainedGeneratorCaptureOwner(arrowScopeDCField.FieldType))
+                IL.Emit(OpCodes.Stfld, arrowScopeDCField);
+            else IL.Emit(OpCodes.Pop);
+        }
+
+        if (Ctx.CurrentGeneratorExpression is not null &&
+            Ctx.ArrowScopeDCExtraFieldsByArrow?.TryGetValue(af, out var extraOwners) == true)
+        {
+            foreach (var field in extraOwners.Values)
+            {
+                IL.Emit(OpCodes.Dup);
+                if (TryEmitRetainedGeneratorCaptureOwner(field.FieldType)) IL.Emit(OpCodes.Stfld, field);
+                else IL.Emit(OpCodes.Pop);
+            }
         }
 
         if (Ctx.DisplayClassFields?.TryGetValue(af, out var fieldMap) == true)

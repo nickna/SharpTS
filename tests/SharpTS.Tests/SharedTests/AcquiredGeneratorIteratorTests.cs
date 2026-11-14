@@ -102,9 +102,7 @@ public class AcquiredGeneratorIteratorTests
             TestHarness.RunUnchecked(source, mode));
     }
 
-    // Compiled synchronous delegation skips abrupt requests to a generator
-    // returned by a custom factory; the separate limitation is tracked in #3664.
-    [Theory, InterpretedOnlyData]
+    [Theory, ModeData]
     public void SyncYieldStar_UsesAcquiredGeneratorForReturnThrowAndCleanup(ExecutionMode mode)
     {
         var source = FactorySource + """
@@ -130,6 +128,41 @@ public class AcquiredGeneratorIteratorTests
             """;
         Assert.Equal(Acquisition("sync-return") + "inner close\nouter close\n9 true\n" +
             Acquisition("sync-throw") + "caught true\n2 false\nnext sync-throw true\ninner close\nouter close\n3 true\n",
+            TestHarness.RunUnchecked(source, mode));
+    }
+
+    [Theory, ModeData]
+    public void SyncYieldStar_HonorsAcquiredGeneratorRequestAccessors(ExecutionMode mode)
+    {
+        const string source = """
+            const marker = {};
+            function* values() { yield 1; yield 2; }
+            const iterator = values();
+            const close = iterator.return;
+            Object.defineProperty(iterator, 'throw', { get() {
+                console.log('lookup throw', this === iterator);
+                return function (value) {
+                    console.log('throw', arguments.length, value === marker, this === iterator);
+                    return { value: 7, done: false };
+                };
+            } });
+            Object.defineProperty(iterator, 'return', { get() {
+                console.log('lookup return', this === iterator);
+                return function (value) {
+                    console.log('return', arguments.length, value, this === iterator);
+                    return { value: value + 1, done: true };
+                };
+            } });
+            function* outer() { return yield* { [Symbol.iterator]() { return iterator; } }; }
+            const generator = outer();
+            console.log(generator.next().value);
+            const thrown = generator.throw(marker);
+            console.log(thrown.value, thrown.done);
+            const returned = generator.return(9);
+            console.log(returned.value, returned.done);
+            close.call(iterator);
+            """;
+        Assert.Equal("1\nlookup throw true\nthrow 1 true true\n7 false\nlookup return true\nreturn 1 9 true\n10 true\n",
             TestHarness.RunUnchecked(source, mode));
     }
 

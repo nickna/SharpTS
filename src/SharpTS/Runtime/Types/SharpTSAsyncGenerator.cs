@@ -369,13 +369,6 @@ public class SharpTSAsyncGenerator : ITypeCategorized, ISharpTSOwnPropertyObject
                     _interpreter.GetPropertyValue(result, "value")));
         }
 
-        if (iterable is SharpTSGenerator synchronous)
-            return await DelegateGeneratorAsync(received => Task.FromResult<object?>(received.Kind switch
-            {
-                GeneratorResumeKind.Return => synchronous.Return(received.Value),
-                GeneratorResumeKind.Throw => synchronous.Throw(received.Value),
-                _ => synchronous.Next(received.Value),
-            }));
         if (_interpreter.TryGetCustomIteratorProtocol(iterable) is { } syncIterator)
             return await DelegateGeneratorAsync(
                 received => DriveCustomSyncIterator(syncIterator, received));
