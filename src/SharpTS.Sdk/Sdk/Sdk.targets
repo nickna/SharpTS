@@ -131,9 +131,18 @@
   </Target>
 
   <Target Name="_SharpTSBuildCompilerArguments"
-          DependsOnTargets="_SharpTSReadTsConfig;_SharpTSValidateInputs;_SharpTSResolveEntryPoint">
+          DependsOnTargets="_SharpTSReadTsConfig;_SharpTSValidateInputs;_SharpTSResolveEntryPoint;ResolveTargetingPackAssets">
+    <ItemGroup>
+      <!-- Use the resolved asset rather than guessing the highest installed
+           patch. Targeting packs can also come from the NuGet cache. -->
+      <_SharpTSFrameworkAnchor Include="@(Reference)"
+          Condition="'%(Reference.FrameworkReferenceName)' == 'Microsoft.NETCore.App' and '%(Reference.Filename)' == 'System.Runtime'" />
+    </ItemGroup>
     <PropertyGroup>
+      <_SharpTSFrameworkDirectory>@(_SharpTSFrameworkAnchor->'%(RootDir)%(Directory)')</_SharpTSFrameworkDirectory>
       <_SharpTSArgs>--compile "$(_SharpTSAbsoluteEntryPoint)"</_SharpTSArgs>
+      <!-- The final dot keeps a trailing Windows separator from escaping the closing quote. -->
+      <_SharpTSArgs Condition="'$(_SharpTSFrameworkDirectory)' != ''">$(_SharpTSArgs) --sdk-path "$(_SharpTSFrameworkDirectory)."</_SharpTSArgs>
       <_SharpTSArgs>$(_SharpTSArgs) --msbuild-errors</_SharpTSArgs>
       <_SharpTSArgs>$(_SharpTSArgs) --quiet</_SharpTSArgs>
       <_SharpTSArgs>$(_SharpTSArgs) --gc-profile &quot;$(_SharpTSGcProfileNormalized)&quot;</_SharpTSArgs>
@@ -182,7 +191,7 @@
   </Target>
 
   <Target Name="_SharpTSPrepareNativeGuest"
-          DependsOnTargets="_SharpTSBuildCompilerArguments;_SharpTSValidateNativeReferences"
+          DependsOnTargets="_SharpTSValidateNativeReferences;_SharpTSBuildCompilerArguments"
           Condition="'$(SharpTSTarget)' == 'native-aot' and '$(DesignTimeBuild)' != 'true'">
     <PropertyGroup>
       <!-- ILLink itself appends IL2121 for redundant suppression notices. Keep
