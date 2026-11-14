@@ -8,6 +8,7 @@ using Xunit;
 
 namespace SharpTS.Tests.InterpreterTests;
 
+[Collection(GarbageCollectionTestsCollection.Name)]
 public sealed class InterpreterExecutionFrameLifetimeTests
 {
     private sealed class GuestPayload(Interpreter owner)
