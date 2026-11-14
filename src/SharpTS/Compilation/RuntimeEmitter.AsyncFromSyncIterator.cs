@@ -345,8 +345,8 @@ public partial class RuntimeEmitter
         var iteratorField = typeBuilder.DefineField("_iterator", _types.Object, FieldAttributes.Private);
         var nextField = typeBuilder.DefineField("_next", _types.Object, FieldAttributes.Private);
         var isProtocolField = typeBuilder.DefineField("_isProtocol", _types.Boolean, FieldAttributes.Private);
-        // yield* forwards one argument to next, while for-await calls next
-        // without arguments; guest code can observe arguments.length.
+        // yield* forwards one argument to next/return, while for-await calls
+        // them without arguments; guest code can observe arguments.length.
         var forwardSentField = typeBuilder.DefineField("_forwardSent", _types.Boolean, FieldAttributes.Private);
 
         var ctor = typeBuilder.DefineConstructor(
@@ -397,7 +397,8 @@ public partial class RuntimeEmitter
                 inputs.UndefinedType
             ),
             iteratorField,
-            isProtocolField
+            isProtocolField,
+            forwardSentField
         );
         EmitAsyncFromSyncThrow(
             typeBuilder,
@@ -524,7 +525,8 @@ public partial class RuntimeEmitter
         EmittedAsyncFromSyncRuntime fromSync,
         AsyncFromSyncReturnInputs inputs,
         FieldBuilder iteratorField,
-        FieldBuilder isProtocolField
+        FieldBuilder isProtocolField,
+        FieldBuilder forwardSentField
     )
     {
         var method = typeBuilder.DefineMethod(
@@ -553,7 +555,7 @@ public partial class RuntimeEmitter
         il.Emit(OpCodes.Ldfld, isProtocolField);
         il.Emit(OpCodes.Brfalse, clrIterator);
 
-        // Custom sync iterator: call its optional return(value).
+        // Custom sync iterator: preserve the absent argument on implicit close.
         il.Emit(OpCodes.Ldarg_0);
         il.Emit(OpCodes.Ldfld, iteratorField);
         il.Emit(OpCodes.Ldstr, "return");
@@ -567,7 +569,17 @@ public partial class RuntimeEmitter
         il.Emit(OpCodes.Ldarg_0);
         il.Emit(OpCodes.Ldfld, iteratorField);
         il.Emit(OpCodes.Ldloc, fnLocal);
+        var noSent = il.DefineLabel();
+        var haveArguments = il.DefineLabel();
+        il.Emit(OpCodes.Ldarg_0);
+        il.Emit(OpCodes.Ldfld, forwardSentField);
+        il.Emit(OpCodes.Brfalse, noSent);
         EmitSingleObjectArgumentArray(il, argumentIndex: 1);
+        il.Emit(OpCodes.Br, haveArguments);
+        il.MarkLabel(noSent);
+        il.Emit(OpCodes.Ldc_I4_0);
+        il.Emit(OpCodes.Newarr, _types.Object);
+        il.MarkLabel(haveArguments);
         il.Emit(OpCodes.Call, inputs.Invocation.Method);
         il.Emit(OpCodes.Stloc, stepLocal);
         il.Emit(OpCodes.Br, haveStep);
