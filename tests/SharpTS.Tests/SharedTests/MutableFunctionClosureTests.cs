@@ -51,10 +51,16 @@ public class MutableFunctionClosureTests
         var files = new Dictionary<string, string>
         {
             ["first.ts"] = """
-                function value(): number { return 1; }
+                export function value(): number { return 1; }
                 export const read = () => value();
                 export const readAsync = async () => value();
                 export function change() { value = () => 2; }
+                export let blockRead: () => number = () => 0;
+                {
+                    const value = () => 10;
+                    const nested = () => () => value();
+                    blockRead = nested();
+                }
                 """,
             ["second.ts"] = """
                 function value(): number { return 10; }
@@ -62,16 +68,16 @@ public class MutableFunctionClosureTests
                 value = () => 20;
                 """,
             ["main.ts"] = """
-                import { read, readAsync, change } from './first';
+                import { read, readAsync, change, blockRead } from './first';
                 import { read as second } from './second';
                 async function main() {
-                    console.log(read(), await readAsync(), second());
+                    console.log(read(), await readAsync(), second(), blockRead());
                     change();
-                    console.log(read(), await readAsync(), second());
+                    console.log(read(), await readAsync(), second(), blockRead());
                 }
                 main();
                 """
         };
-        Assert.Equal("1 1 20\n2 2 20\n", TestHarness.RunModules(files, "main.ts", mode));
+        Assert.Equal("1 1 20 10\n2 2 20 10\n", TestHarness.RunModules(files, "main.ts", mode));
     }
 }

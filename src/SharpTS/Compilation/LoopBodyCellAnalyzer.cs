@@ -401,6 +401,10 @@ internal sealed class LoopBodyCellAnalyzer : AstVisitorBase
             case Stmt.Sequence sequence:
                 foreach (var child in sequence.Statements) Predeclare(child, allowCandidates, unsupportedShadows, generatorLexicals, ordinaryHandler, ordinaryBlock);
                 break;
+            case Stmt.Export { Declaration: { } declaration }:
+                foreach (var child in ExportDeclarationSequence.Declarations(declaration))
+                    Predeclare(child, allowCandidates, unsupportedShadows, generatorLexicals, ordinaryHandler, ordinaryBlock);
+                break;
         }
     }
 
