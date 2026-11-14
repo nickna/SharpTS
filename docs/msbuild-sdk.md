@@ -235,6 +235,11 @@ Example:
 
 Standard resolved .NET references from `@(ReferencePath)` are forwarded as repeatable `-r`
 arguments, so project/package references can participate in TypeScript-to-.NET interop.
+The SDK also forwards the `Microsoft.NETCore.App` reference directory selected by
+`ResolveTargetingPackAssets` through `--sdk-path`. Managed metadata loading and native
+framework capture therefore use the consumer's targeting pack, including a pack restored
+to the NuGet cache, rather than independently choosing a newer installed patch. Native
+reference hash validation remains strict.
 
 ## Build lifecycle
 
