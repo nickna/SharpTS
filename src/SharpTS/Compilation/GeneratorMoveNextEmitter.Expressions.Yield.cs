@@ -294,18 +294,21 @@ public partial class GeneratorMoveNextEmitter
         // before the setup above, so the field already holds the live value (#400/#414).
         _helpers.RehydrateLiveSpillsAfterResume();
 
-        // Drive the delegate one step. Three paths converge on a single value via valueTemp:
+        // Protocol delegates retain their raw result; CLR enumerators yield Current:
         //   - $IGenerator (a delegated SharpTS generator): call next(this.SentField) so the
         //     outer's resume value reaches the inner's suspended yield (#476). The result is
-        //     a { value, done } record.
+        //     an iterator result object.
         //   - $IteratorWrapper (custom iterator objects with [Symbol.iterator]): call
-        //     MoveNextWithSent(this.SentField) to forward the sent value to next(v) (#503).
+        //     NextResultWithSent(this.SentField) forwards next(v) without reading value.
         //   - Plain IEnumerator (arrays, Maps, Sets, etc.): MoveNext()/Current with no
         //     resume slot — the sent value is irrelevant to those iterators.
         var valueTemp = _il.DeclareLocal(typeof(object));
         var genResultLocal = _il.DeclareLocal(typeof(object));
         var yieldStarResultLocal = _il.DeclareLocal(typeof(object));
         var haveValueLabel = _il.DefineLabel();
+        var haveDelegatedResultLabel = _il.DefineLabel();
+        var protocolResultLabel = _il.DefineLabel();
+        var suspendLabel = _il.DefineLabel();
         var doneCleanupLabel = _il.DefineLabel();
         Label driveViaGeneratorLabel = default, genDoneLabel = default;
         if (generatorInterfaceType != null)
@@ -314,9 +317,9 @@ public partial class GeneratorMoveNextEmitter
             genDoneLabel = _il.DefineLabel();
         }
         var iteratorWrapperType = _ctx?.Runtime?.IteratorWrappers.Type;
-        var moveNextWithSent = _ctx?.Runtime?.IteratorWrappers.MoveNextWithSent;
+        var nextResultWithSent = _ctx?.Runtime?.IteratorWrappers.NextResultWithSent;
         Label plainEnumeratorLabel = default;
-        if (iteratorWrapperType != null && moveNextWithSent != null)
+        if (iteratorWrapperType != null && nextResultWithSent != null)
             plainEnumeratorLabel = _il.DefineLabel();
 
         // #526: an external return()/throw() injected while suspended at this yield* is forwarded
@@ -326,7 +329,7 @@ public partial class GeneratorMoveNextEmitter
         // re-raises here. Emits nothing that transfers control when no injection is pending.
         EmitYieldStarResumeInjectionCheck(
             delegatedField, generatorInterfaceType, genResultLocal, valueTemp,
-            yieldStarResultLocal, haveValueLabel, genDoneLabel, doneCleanupLabel);
+            yieldStarResultLocal, haveDelegatedResultLabel, genDoneLabel, doneCleanupLabel);
 
         if (generatorInterfaceType != null)
         {
@@ -336,16 +339,15 @@ public partial class GeneratorMoveNextEmitter
             _il.Emit(OpCodes.Brtrue, driveViaGeneratorLabel);
         }
 
-        // $IteratorWrapper path: call MoveNextWithSent(SentField) so the outer's resume value
-        // is forwarded as the argument to the custom iterator's next(v) (ECMA-262 §14.4.14, #503).
-        if (iteratorWrapperType != null && moveNextWithSent != null)
+        // Preserve a custom iterator's exact result, including absent properties
+        // and accessors. Only done is needed before suspending yield*.
+        if (iteratorWrapperType != null && nextResultWithSent != null)
         {
             _il.Emit(OpCodes.Ldarg_0);
             _il.Emit(OpCodes.Ldfld, delegatedField);
             _il.Emit(OpCodes.Isinst, iteratorWrapperType);
             _il.Emit(OpCodes.Brfalse, plainEnumeratorLabel);
 
-            var wrapperMovedLocal = _il.DeclareLocal(typeof(bool));
             EmitTryBodyOperation(() =>
             {
                 _il.Emit(OpCodes.Ldarg_0);
@@ -353,16 +355,10 @@ public partial class GeneratorMoveNextEmitter
                 _il.Emit(OpCodes.Castclass, iteratorWrapperType);
                 _il.Emit(OpCodes.Ldarg_0);
                 _il.Emit(OpCodes.Ldfld, _builder.SentField);
-                _il.Emit(OpCodes.Call, moveNextWithSent);
-                _il.Emit(OpCodes.Stloc, wrapperMovedLocal);
+                _il.Emit(OpCodes.Call, nextResultWithSent);
+                _il.Emit(OpCodes.Stloc, genResultLocal);
             });
-            _il.Emit(OpCodes.Ldloc, wrapperMovedLocal);
-            _il.Emit(OpCodes.Brfalse, loopEnd);
-            _il.Emit(OpCodes.Ldarg_0);
-            _il.Emit(OpCodes.Ldfld, delegatedField);
-            _il.Emit(OpCodes.Callvirt, current);
-            _il.Emit(OpCodes.Stloc, valueTemp);
-            _il.Emit(OpCodes.Br, haveValueLabel);
+            _il.Emit(OpCodes.Br, protocolResultLabel);
 
             _il.MarkLabel(plainEnumeratorLabel);
         }
@@ -407,6 +403,7 @@ public partial class GeneratorMoveNextEmitter
                 _il.Emit(OpCodes.Stloc, genResultLocal);
             });
 
+            _il.MarkLabel(protocolResultLabel);
             var doneLocal = _il.DeclareLocal(typeof(bool));
             EmitTryBodyOperation(() =>
             {
@@ -417,20 +414,21 @@ public partial class GeneratorMoveNextEmitter
             _il.Emit(OpCodes.Ldloc, doneLocal);
             _il.Emit(OpCodes.Brtrue, genDoneLabel);
 
-            EmitTryBodyOperation(() =>
-            {
-                _il.Emit(OpCodes.Ldloc, genResultLocal);
-                _il.Emit(OpCodes.Call, _ctx!.Runtime!.IteratorProtocol.Value);
-                _il.Emit(OpCodes.Stloc, valueTemp);
-            });
-            // fall through to haveValue
+            _il.Emit(OpCodes.Br, haveDelegatedResultLabel);
         }
 
-        // Yield the delegated value: store in <>2__current, set resume state, return true.
+        // CLR enumerators supply a value; protocol delegates supply a result
+        // object that next/return/throw must expose unchanged.
         _il.MarkLabel(haveValueLabel);
         _il.Emit(OpCodes.Ldarg_0);
         _il.Emit(OpCodes.Ldloc, valueTemp);
         _il.Emit(OpCodes.Stfld, _builder.CurrentField);
+        _il.Emit(OpCodes.Br, suspendLabel);
+        _il.MarkLabel(haveDelegatedResultLabel);
+        _il.Emit(OpCodes.Ldarg_0);
+        _il.Emit(OpCodes.Ldloc, genResultLocal);
+        _il.Emit(OpCodes.Stfld, _builder.DelegatedResultField!);
+        _il.MarkLabel(suspendLabel);
         _il.Emit(OpCodes.Ldarg_0);
         _il.Emit(OpCodes.Ldc_I4, stateNumber);
         _il.Emit(OpCodes.Stfld, _builder.StateField);
@@ -534,7 +532,7 @@ public partial class GeneratorMoveNextEmitter
         LocalBuilder genResultLocal,
         LocalBuilder valueTemp,
         LocalBuilder yieldStarResultLocal,
-        Label haveValueLabel,
+        Label haveDelegatedResultLabel,
         Label genDoneLabel,
         Label doneCleanupLabel)
     {
@@ -628,13 +626,7 @@ public partial class GeneratorMoveNextEmitter
             EmitRoutedReturn(() => _il.Emit(OpCodes.Ldloc, valueTemp));
 
             _il.MarkLabel(innerReturnNotDone);
-            EmitTryBodyOperation(() =>
-            {
-                _il.Emit(OpCodes.Ldloc, genResultLocal);
-                _il.Emit(OpCodes.Call, _ctx!.Runtime!.IteratorProtocol.Value);
-                _il.Emit(OpCodes.Stloc, valueTemp);
-            });
-            _il.Emit(OpCodes.Br, haveValueLabel);
+            _il.Emit(OpCodes.Br, haveDelegatedResultLabel);
 
             _il.MarkLabel(notGenReturn);
         }
@@ -698,13 +690,7 @@ public partial class GeneratorMoveNextEmitter
             _il.Emit(OpCodes.Br, genDoneLabel);
 
             _il.MarkLabel(innerThrowNotDone);
-            EmitTryBodyOperation(() =>
-            {
-                _il.Emit(OpCodes.Ldloc, genResultLocal);
-                _il.Emit(OpCodes.Call, _ctx.Runtime.IteratorProtocol.Value);
-                _il.Emit(OpCodes.Stloc, valueTemp);
-            });
-            _il.Emit(OpCodes.Br, haveValueLabel);
+            _il.Emit(OpCodes.Br, haveDelegatedResultLabel);
 
             _il.MarkLabel(notGenThrow);
         }

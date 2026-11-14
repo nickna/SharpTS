@@ -16,6 +16,7 @@ public sealed class EmittedIteratorWrapperRuntimeTests
     [InlineData("Type")]
     [InlineData("Ctor")]
     [InlineData("MoveNextWithSent")]
+    [InlineData("NextResultWithSent")]
     [InlineData("Return")]
     [InlineData("Throw")]
     public void MissingDeclarationCanBeRepairedAndCompletionFreezesMetadata(string missing)
@@ -27,6 +28,7 @@ public sealed class EmittedIteratorWrapperRuntimeTests
             ["Type"] = type,
             ["Ctor"] = type.DefineConstructor(MethodAttributes.Public, CallingConventions.Standard, Type.EmptyTypes),
             ["MoveNextWithSent"] = type.DefineMethod("Method", MethodAttributes.Public, typeof(bool), [typeof(object)]),
+            ["NextResultWithSent"] = type.DefineMethod("NextResultWithSent", MethodAttributes.Public, typeof(object), [typeof(object)]),
             ["Return"] = type.DefineMethod("Return", MethodAttributes.Public, typeof(object), [typeof(object)]),
             ["Throw"] = type.DefineMethod("Throw", MethodAttributes.Public, typeof(object), [typeof(object)])
         };
@@ -75,7 +77,8 @@ public sealed class EmittedIteratorWrapperRuntimeTests
             Assert.Equal(new[] { typeof(object), typeof(Type) }, ctor.GetParameters().Select(p => p.ParameterType));
             var sent = wrapper.GetMethod("MoveNextWithSent")!;
             Assert.Equal(typeof(bool), sent.ReturnType); Assert.Equal(typeof(object), Assert.Single(sent.GetParameters()).ParameterType);
-            foreach (string name in new[] { "Return", "Throw" })
+            var nextResult = wrapper.GetMethod("NextResultWithSent")!;
+            foreach (string name in new[] { "NextResultWithSent", "Return", "Throw" })
             {
                 var request = wrapper.GetMethod(name)!;
                 Assert.Equal(typeof(object), request.ReturnType);
@@ -95,6 +98,22 @@ public sealed class EmittedIteratorWrapperRuntimeTests
             Assert.False((bool)sent.Invoke(instance, [9d])!); Assert.Equal(9d, instance.Current); Assert.Equal(instance.Current, ((IEnumerator)instance).Current);
             Assert.Equal(2, calls.Count); Assert.Empty(calls[0]); Assert.Equal(9d, Assert.Single(calls[1]));
             instance.Dispose(); Assert.Equal(2, calls.Count); Assert.Equal(9d, instance.Current);
+            var rawResult = new IteratorResultProbe();
+            var rawCalls = new List<object[]>();
+            var rawIterator = new Dictionary<string, object>
+            {
+                ["next"] = new Func<object[], object>(args => { rawCalls.Add(args.ToArray()); return rawResult; })
+            };
+            var rawWrapper = (IEnumerator<object>)ctor.Invoke([rawIterator, null]);
+            rawIterator["next"] = new Func<object[], object>(_ => throw new InvalidOperationException("Replaced next was called"));
+            var marker = new object();
+            Assert.Same(rawResult, nextResult.Invoke(rawWrapper, [marker]));
+            Assert.Same(marker, Assert.Single(Assert.Single(rawCalls)));
+            Assert.Equal(0, rawResult.DoneReads); Assert.Equal(0, rawResult.ValueReads);
+            var protocol = loaded.GetType(runtime.IteratorProtocol.Done.DeclaringType!.FullName!)!;
+            Assert.Equal(false, protocol.GetMethod(runtime.IteratorProtocol.Done.Name)!.Invoke(null, [rawResult]));
+            Assert.Equal(7d, protocol.GetMethod(runtime.IteratorProtocol.Value.Name)!.Invoke(null, [rawResult]));
+            Assert.Equal(1, rawResult.DoneReads); Assert.Equal(1, rawResult.ValueReads);
             int closes = 0; int advances = 0;
             var closingIterator = new Dictionary<string, object>
             {
@@ -108,6 +127,8 @@ public sealed class EmittedIteratorWrapperRuntimeTests
             Assert.Equal("Reset is not supported for iterator wrappers", Assert.Throws<NotSupportedException>(instance.Reset).Message);
             var invalid = (IEnumerator<object>)ctor.Invoke([iterator, null]);
             Assert.Contains("Iterator protocol requires an object", Assert.ThrowsAny<Exception>(() => invalid.MoveNext()).Message);
+            Assert.Contains("Iterator protocol requires an object",
+                Assert.Throws<TargetInvocationException>(() => nextResult.Invoke(invalid, [marker])).InnerException!.Message);
             Assert.DoesNotContain(loaded.GetReferencedAssemblies(), a => a.Name == "SharpTS");
             Assert.Equal(hosted, loaded.GetReferencedAssemblies().Any(a => a.Name == "SharpTS.Hosting.Abstractions"));
         }
@@ -116,7 +137,7 @@ public sealed class EmittedIteratorWrapperRuntimeTests
     [Fact]
     public void WrapperHelperReceivesOnlyOwnerAndExactDependencies()
     {
-        Assert.Equal(5, Slots.Length);
+        Assert.Equal(6, Slots.Length);
         foreach (string old in new[] { "IteratorWrapperType", "IteratorWrapperCtor", "IteratorWrapperMoveNextWithSent" }) Assert.Null(typeof(EmittedRuntime).GetProperty(old));
         var helper = typeof(RuntimeEmitter).GetMethod("EmitIteratorWrapperType", Members)!;
         Assert.Contains(helper.GetParameters(), p => p.ParameterType == typeof(EmittedIteratorWrapperRuntime));
@@ -128,6 +149,15 @@ public sealed class EmittedIteratorWrapperRuntimeTests
     }
 
     private static void Expect<T>(Action action) where T : Exception => Assert.IsType<T>(Assert.Throws<TargetInvocationException>(action).InnerException);
+
+    public sealed class IteratorResultProbe
+    {
+        public int DoneReads { get; private set; }
+        public int ValueReads { get; private set; }
+        public bool Done { get { DoneReads++; return false; } }
+        public object Value { get { ValueReads++; return 7d; } }
+    }
+
     private static PersistedAssemblyBuilder NewAssembly() => new(new AssemblyName($"iterator_wrapper_{Guid.NewGuid():N}"), typeof(object).Assembly);
     private static Assembly SaveVerifyLoad(PersistedAssemblyBuilder builder)
     {

@@ -90,6 +90,16 @@ public partial class GeneratorMoveNextEmitter : IteratorMoveNextEmitter
         _returnFalseLabel = _il.DefineLabel();
         _deferredReturnLabel = _il.DefineLabel();
 
+        // Each drive replaces the previous suspension's result. Clear this
+        // before dispatch so completion, recovery yields, and CLR drives all
+        // stop exposing the old delegated object.
+        if (_builder.DelegatedResultField != null)
+        {
+            _il.Emit(OpCodes.Ldarg_0);
+            _il.Emit(OpCodes.Ldnull);
+            _il.Emit(OpCodes.Stfld, _builder.DelegatedResultField);
+        }
+
         // Check if generator is already completed (state == -2)
         _il.Emit(OpCodes.Ldarg_0);
         _il.Emit(OpCodes.Ldfld, _builder.StateField);
