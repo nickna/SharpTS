@@ -191,7 +191,7 @@
   </Target>
 
   <Target Name="_SharpTSPrepareNativeGuest"
-          DependsOnTargets="_SharpTSBuildCompilerArguments;_SharpTSValidateNativeReferences"
+          DependsOnTargets="_SharpTSValidateNativeReferences;_SharpTSBuildCompilerArguments"
           Condition="'$(SharpTSTarget)' == 'native-aot' and '$(DesignTimeBuild)' != 'true'">
     <PropertyGroup>
       <!-- ILLink itself appends IL2121 for redundant suppression notices. Keep
