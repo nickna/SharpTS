@@ -6,6 +6,33 @@ namespace SharpTS.Tests.SharedTests;
 
 public class NumericStaticMemberWriteTests
 {
+    [Fact]
+    public void NumericWriteInvalidatesThePriorElementNarrowing()
+    {
+        const string source = """
+            class C { static 1: number | string = 1; }
+            if (typeof C[1] === 'number') {
+                C[1] = 'text';
+                const invalid: number = C[1];
+            }
+            """;
+        var diagnostics = new TypeChecker(TypeCheckerOptions.Strict)
+            .CheckWithRecovery(TestHarness.ParseOrThrow(source)).Diagnostics;
+        Assert.Contains(diagnostics, diagnostic => diagnostic.TsCode == "TS2322" && diagnostic.Line == 4);
+    }
+
+    [Theory, ModeData]
+    public void NumericWriteRhsCanUseThePriorElementNarrowing(ExecutionMode mode)
+    {
+        const string source = """
+            class C { static 1: number | string = 1; }
+            if (typeof C[1] === 'number') C[1] = C[1] + 1;
+            console.log(C[1]);
+            """;
+        new TypeChecker(TypeCheckerOptions.Strict).Check(TestHarness.ParseOrThrow(source));
+        Assert.Equal("2\n", TestHarness.Run(source, mode));
+    }
+
     [Theory, ModeData]
     public void NumericKeysWriteStaticFieldsAndSetters(ExecutionMode mode)
     {
