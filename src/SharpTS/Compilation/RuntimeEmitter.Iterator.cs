@@ -1356,8 +1356,17 @@ public partial class RuntimeEmitter
 
         var ordinaryRegistry = il.DefineLabel();
         var ordinaryUserClass = il.DefineLabel();
-        // Ordinary objects and constructors use symbol [[Get]] so inherited
-        // accessor descriptors execute with the original iterable receiver.
+        // Ordinary objects, constructors and primitive operands use symbol
+        // [[Get]] so inherited accessors retain the original iterable receiver.
+        il.Emit(OpCodes.Ldarg_0);
+        il.Emit(OpCodes.Isinst, _types.Boolean);
+        il.Emit(OpCodes.Brtrue, ordinaryUserClass);
+        il.Emit(OpCodes.Ldarg_0);
+        il.Emit(OpCodes.Isinst, _types.Double);
+        il.Emit(OpCodes.Brtrue, ordinaryUserClass);
+        il.Emit(OpCodes.Ldarg_0);
+        il.Emit(OpCodes.Isinst, _types.Int32);
+        il.Emit(OpCodes.Brtrue, ordinaryUserClass);
         il.Emit(OpCodes.Ldarg_0);
         il.Emit(OpCodes.Isinst, _types.DictionaryStringObject);
         il.Emit(OpCodes.Brtrue, ordinaryUserClass);

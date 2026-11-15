@@ -884,10 +884,17 @@ public partial class Interpreter
     /// </returns>
     internal SyncIteratorRecord? TryGetCustomIteratorProtocol(object? iterable)
     {
-        if (iterable is not (SharpTSObject or SharpTSInstance or SharpTSGenerator))
+        if (iterable is not (SharpTSObject or SharpTSInstance or SharpTSGenerator or bool or double))
             return null;
 
-        object? iteratorFn = GetSymbolPropertyValue(iterable, SharpTSSymbol.Iterator);
+        // Primitive operands inherit the factory from their intrinsic prototype;
+        // accessors and the factory still receive the original primitive value.
+        object? iteratorFn = iterable switch
+        {
+            bool => GetSymbolPropertyValue(GetBooleanPrototype(), SharpTSSymbol.Iterator, iterable),
+            double => GetSymbolPropertyValue(GetNumberPrototype(), SharpTSSymbol.Iterator, iterable),
+            _ => GetSymbolPropertyValue(iterable, SharpTSSymbol.Iterator)
+        };
         if (iteratorFn is not ISharpTSCallable factory)
             throw new ThrowException(new SharpTSTypeError("[Symbol.iterator] must be a function"));
 

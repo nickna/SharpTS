@@ -248,11 +248,24 @@ public partial class GeneratorMoveNextEmitter
         _il.Emit(OpCodes.Br, gotEnumeratorLabel);
         _il.MarkLabel(notStringDelegateLabel);
 
-        // No Symbol.iterator - fall back to IEnumerable cast
-        _il.Emit(OpCodes.Ldloc, iterableLocal);
-        _il.Emit(OpCodes.Castclass, typeof(System.Collections.IEnumerable));
-        _il.Emit(OpCodes.Callvirt, getEnumerator);
-        _il.Emit(OpCodes.Stloc, enumTemp);
+        // A primitive without a prototype iterator is noniterable. Reject it
+        // with a guest TypeError instead of leaking a CLR cast failure, and
+        // route the acquisition error through any surrounding guest handlers.
+        EmitTryBodyOperation(() =>
+        {
+            var enumerable = _il.DeclareLocal(typeof(System.Collections.IEnumerable));
+            var validEnumerable = _il.DefineLabel();
+            _il.Emit(OpCodes.Ldloc, iterableLocal);
+            _il.Emit(OpCodes.Isinst, typeof(System.Collections.IEnumerable));
+            _il.Emit(OpCodes.Stloc, enumerable);
+            _il.Emit(OpCodes.Ldloc, enumerable);
+            _il.Emit(OpCodes.Brtrue, validEnumerable);
+            GuestErrorEmitter.ThrowTypeError(_il, _ctx.Runtime, "Value is not iterable.");
+            _il.MarkLabel(validEnumerable);
+            _il.Emit(OpCodes.Ldloc, enumerable);
+            _il.Emit(OpCodes.Callvirt, getEnumerator);
+            _il.Emit(OpCodes.Stloc, enumTemp);
+        });
         _il.Emit(OpCodes.Br, gotEnumeratorLabel);
 
         // Has Symbol.iterator - use iterator protocol with $IteratorWrapper
