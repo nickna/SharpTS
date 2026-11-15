@@ -106,10 +106,13 @@ public sealed class EmittedObjectConstructionRuntime
         _ = GetEnumerableFields;
         _ = DefineSymbolAccessor;
         _ = Rest;
-        _ = WithObject;
-        _ = WithHasBinding;
-        _ = WithGetCheck;
-        _ = WithSet;
+        if (_withObject is not null || _withHasBinding is not null || _withGetCheck is not null || _withSet is not null)
+        {
+            _ = WithObject;
+            _ = WithHasBinding;
+            _ = WithGetCheck;
+            _ = WithSet;
+        }
         IsComplete = true;
     }
 }

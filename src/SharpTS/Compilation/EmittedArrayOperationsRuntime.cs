@@ -704,11 +704,14 @@ public sealed class EmittedArrayOperationsRuntime
     }
 
     private MethodBuilder? _binding;
-    public MethodBuilder Binding
+    internal MethodBuilder? Binding
     {
-        get => Require(_binding);
-        internal set => SetHandle(ref _binding, value);
+        get => _binding;
+        set => SetHandle(ref _binding, value!);
     }
+
+    internal MethodBuilder RequireBinding() => _binding
+        ?? throw new InvalidOperationException("Array binding was not enabled for this compilation.");
 
     private MethodBuilder? _destructureSource;
     public MethodBuilder DestructureSource
@@ -964,7 +967,6 @@ public sealed class EmittedArrayOperationsRuntime
         _ = GetMethod;
         _ = CurrentReceiverField;
         _ = DestructureSource;
-        _ = Binding;
         _ = MaterializeForIteration;
         _ = LoadArrayLikeElement;
         _ = HasArrayLikeProperty;

@@ -2981,7 +2981,8 @@ public partial class RuntimeEmitter
                     NativeProxyRejection: runtime.ReflectedMethods.NativeProxyRejection),
                 ProxySelected: _features.UsesProxy)
         );
-        EmitWithEnvironmentHelpers(typeBuilder, runtime);
+        if (_features.UsesWithEnvironment)
+            EmitWithEnvironmentHelpers(typeBuilder, runtime);
         // #685: array binding-pattern source normalizer uses the declared iterator
         // collection helper and array storage constructor.
         EmitArrayDestructureSource(typeBuilder, runtime.ArrayOperations,
@@ -2992,9 +2993,10 @@ public partial class RuntimeEmitter
                 runtime.TypedArrays.Implementation?.BaseType,
                 _features.UsesBuffer ? runtime.RequireBuffer().Type : null,
                 _features.UsesArrayPrototypeMutation));
-        EmitArrayBinding(typeBuilder, runtime.ArrayOperations,
-            new ArrayBindingInputs(GetCollectionConsumerInputs(runtime), runtime.ArrayStorage,
-                runtime.Sentinels.UndefinedInstance, runtime.Cancellation.Check));
+        if (_features.UsesArrayBinding)
+            EmitArrayBinding(typeBuilder, runtime.ArrayOperations,
+                new ArrayBindingInputs(GetCollectionConsumerInputs(runtime), runtime.ArrayStorage,
+                    runtime.Sentinels.UndefinedInstance, runtime.Cancellation.Check));
         // JSON methods — gated on UsesJSON (also implied by UsesHttp).
         if (runtime.Json.Implementation is not null)
         {

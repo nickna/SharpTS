@@ -104,6 +104,24 @@ public class EmittedArrayOperationsRuntimeTests
     [Fact]
     public void HostedEmissionCompletesOperations() => AssertComplete(EmitRuntime("console.log(1);", hosted: true));
 
+    [Theory]
+    [InlineData("console.log(1);", false)]
+    [InlineData("async function f() { for await (const value of []) {} }", false)]
+    [InlineData("async function f() { for await (const [value] of []) {} }", true)]
+    [InlineData(null, true)]
+    public void IncrementalBindingHelpersFollowSourceUsage(string? source, bool expected)
+    {
+        var runtime = EmitRuntime(source);
+        Assert.Equal(expected, runtime.ArrayOperations.Binding is not null);
+        var methods = runtime.RuntimeClass.Type.GetMethods(BindingFlags.Public | BindingFlags.NonPublic | BindingFlags.Static);
+        Assert.Equal(expected, methods.Any(method => method.Name.StartsWith("ArrayBinding", StringComparison.Ordinal)));
+        if (expected)
+            Assert.Same(runtime.ArrayOperations.Binding, runtime.ArrayOperations.RequireBinding());
+        else
+            Assert.Throws<InvalidOperationException>(runtime.ArrayOperations.RequireBinding);
+        Assert.Throws<InvalidOperationException>(() => runtime.ArrayOperations.Binding = null);
+    }
+
     [Fact]
     public void ArrayOperationsDoNotIntroduceGuestRuntimeDependencies()
     {
