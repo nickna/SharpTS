@@ -6,6 +6,26 @@ namespace SharpTS.Tests.SharedTests;
 public sealed class PrimitiveForOfOperandTests
 {
     [Theory, ModeData]
+    public void MissingPrimitiveIteratorIsLookedUpOnce(ExecutionMode mode)
+    {
+        const string source = """
+            let reads = 0;
+            function lookup() {
+                reads++;
+                return reads === 1 ? undefined : function* () { yield 9; };
+            }
+            Object.defineProperty(Number.prototype, Symbol.iterator, { get: lookup, configurable: true });
+            try { for (const value of 7) console.log('unexpected', value); }
+            catch (error) { console.log(error instanceof TypeError, reads); }
+            reads = 0;
+            Object.defineProperty(Boolean.prototype, Symbol.iterator, { get: lookup, configurable: true });
+            try { for (const value of true) console.log('unexpected', value); }
+            catch (error) { console.log(error instanceof TypeError, reads); }
+            """;
+        Assert.Equal("true 1\ntrue 1\n", TestHarness.RunUnchecked(source, mode));
+    }
+
+    [Theory, ModeData]
     public void PrimitiveLiteralAndComputedOperands_VerifyAndUsePrototypeIterators(ExecutionMode mode)
     {
         const string source = """
