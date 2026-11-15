@@ -154,9 +154,11 @@ public partial class AsyncArrowMoveNextEmitter
         if (TryEmitGlobalVariable(name, checkedReference))
             return;
 
-        // Not found - push null
-        _il.Emit(OpCodes.Ldnull);
-        SetStackType(StackType.Null);
+        // Sloppy assignments may have created a global property without a
+        // compiled binding. Use the same live lookup as other emitters.
+        _il.Emit(OpCodes.Ldstr, name);
+        _il.Emit(OpCodes.Call, Ctx.Runtime!.GlobalObject.GetBinding);
+        SetStackUnknown();
     }
 
     protected override void EmitAssign(Expr.Assign a)
@@ -167,6 +169,7 @@ public partial class AsyncArrowMoveNextEmitter
         if (TryEmitArrayGlobalAssignment(a)) return;
 
         string name = a.Name.Lexeme;
+        var globalReference = CaptureUnresolvedAssignmentReference(name);
         EmitExpression(a.Value);
         EnsureBoxed();
         _il.Emit(OpCodes.Dup);
@@ -186,7 +189,7 @@ public partial class AsyncArrowMoveNextEmitter
             if (_resolver.HasVariable(name))
                 _resolver.TryStoreVariable(name);
             else
-                EmitUnresolvedAssignmentStore(name);
+                EmitUnresolvedAssignmentStore(name, globalReference);
         }
 
         SetStackUnknown();
