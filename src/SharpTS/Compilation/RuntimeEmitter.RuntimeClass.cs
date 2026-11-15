@@ -1833,7 +1833,7 @@ public partial class RuntimeEmitter
             runtime.IteratorCollection,
             new IteratorCollectionInputs(
                 runtime.ArrayStorage, runtime.DescriptorStorage, runtime.CollectionKeys, runtime.Errors, runtime.Invocation,
-                runtime.IteratorProtocol, runtime.IteratorRecords, runtime.ObjectRead,
+                runtime.IteratorProtocol, runtime.IteratorRecords, runtime.Generators.Type, runtime.ObjectRead,
                 runtime.Sentinels.UndefinedType, runtime.Sentinels.UndefinedInstance, runtime.TypedArrays.Implementation,
                 _features.UsesBuffer ? runtime.RequireBuffer() : null,
                 runtime.Map is not null, _features.UsesArrayPrototypeMutation)

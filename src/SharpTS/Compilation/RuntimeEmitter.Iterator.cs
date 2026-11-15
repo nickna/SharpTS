@@ -16,6 +16,7 @@ public partial class RuntimeEmitter
         EmittedInvocationRuntime Invocation,
         EmittedIteratorProtocolRuntime IteratorProtocol,
         EmittedIteratorRecordRuntime IteratorRecords,
+        Type GeneratorType,
         EmittedObjectReadRuntime ObjectRead,
         Type UndefinedType,
         FieldInfo UndefinedInstance,
@@ -1910,6 +1911,11 @@ public partial class RuntimeEmitter
 
         // 4. Try IEnumerator<object> (from iterator helpers, ArrayValues, etc.)
         il.MarkLabel(tryIEnumerableLabel);
+        // Guest generators are iterable only through their selected guest
+        // method. A removed method must not revive their CLR enumeration.
+        il.Emit(OpCodes.Ldarg_0);
+        il.Emit(OpCodes.Isinst, inputs.GeneratorType);
+        il.Emit(OpCodes.Brtrue, throwLabel);
         {
             var tryNonGenericEnumerableLabel = il.DefineLabel();
             var ienumLoopLabel = il.DefineLabel();

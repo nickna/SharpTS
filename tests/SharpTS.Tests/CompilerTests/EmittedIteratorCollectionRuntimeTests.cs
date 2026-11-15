@@ -116,7 +116,7 @@ public sealed class EmittedIteratorCollectionRuntimeTests
         var helper = typeof(RuntimeEmitter).GetMethod("EmitIteratorMethodsAdvanced", Members)!;
         var inputs = Activator.CreateInstance(helper.GetParameters()[2].ParameterType,
             runtime.ArrayStorage, runtime.DescriptorStorage, runtime.CollectionKeys, runtime.Errors, runtime.Invocation,
-            runtime.IteratorProtocol, runtime.IteratorRecords, runtime.ObjectRead,
+            runtime.IteratorProtocol, runtime.IteratorRecords, runtime.Generators.Type, runtime.ObjectRead,
             runtime.Sentinels.UndefinedType, runtime.Sentinels.UndefinedInstance, runtime.TypedArrays.Implementation,
             bufferSelected ? runtime.RequireBuffer() : null, runtime.Map is not null, mutation)!;
         helper.Invoke(emitter, [type, owner, inputs]); Assert.False(owner.IsComplete); owner.CompleteEmission(); type.CreateType();
