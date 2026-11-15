@@ -259,14 +259,26 @@ public partial class Parser(List<Token> tokens, DecoratorMode decoratorMode = De
     {
         var directives = new List<Stmt.Directive>();
 
-        // Directives must be string literals followed by semicolons at the beginning
+        // A directive is a complete string-literal expression statement. Parse its
+        // expression boundary so a newline before a continuation (call, index,
+        // binary operator, tagged template, etc.) does not incorrectly enable strict mode.
         while (Check(TokenType.STRING))
         {
             var saved = SaveCursor();
-            Token stringToken = Advance();
+            Token stringToken = Peek();
+            Expr expression;
+            try { expression = CommaExpression(); }
+            catch (OperationCanceledException) { throw; }
+            catch (Exception)
+            {
+                // Let the ordinary statement parser report malformed expressions.
+                RestoreCursor(saved);
+                break;
+            }
 
-            // Must be followed by semicolon (or end of input for single-statement case)
-            if (!Match(TokenType.SEMICOLON))
+            if (expression is not Expr.Literal { Value: string }
+                || (!Match(TokenType.SEMICOLON) && !HasLineTerminatorBeforeCurrent()
+                    && !Check(TokenType.RIGHT_BRACE) && !IsAtEnd()))
             {
                 // Not a directive - restore position and stop
                 RestoreCursor(saved);

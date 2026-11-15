@@ -34,7 +34,7 @@ public sealed class EmittedObjectConstructionRuntimeTests
         var first = new EmittedRuntime(); var second = new EmittedRuntime();
         Assert.NotSame(first.ObjectConstruction, second.ObjectConstruction);
         Assert.False(first.ObjectConstruction.IsComplete); Assert.False(second.ObjectConstruction.IsComplete);
-        Assert.Equal(10, Handles(typeof(EmittedObjectConstructionRuntime)).Length);
+        Assert.Equal(11, Handles(typeof(EmittedObjectConstructionRuntime)).Length);
         Assert.Null(typeof(EmittedRuntime).GetProperty(nameof(EmittedRuntime.ObjectConstruction))!.SetMethod);
     }
 

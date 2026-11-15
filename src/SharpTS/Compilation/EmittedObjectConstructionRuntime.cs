@@ -82,6 +82,13 @@ public sealed class EmittedObjectConstructionRuntime
         set => SetHandle(ref _withSet, value);
     }
 
+    private MethodBuilder? _withCaptureCall;
+    internal MethodBuilder WithCaptureCall
+    {
+        get => Require(_withCaptureCall);
+        set => SetHandle(ref _withCaptureCall, value);
+    }
+
     private void SetHandle<T>(ref T? field, T value, [CallerMemberName] string name = "") where T : class
     {
         EnsureMutable();
@@ -106,12 +113,14 @@ public sealed class EmittedObjectConstructionRuntime
         _ = GetEnumerableFields;
         _ = DefineSymbolAccessor;
         _ = Rest;
-        if (_withObject is not null || _withHasBinding is not null || _withGetCheck is not null || _withSet is not null)
+        if (_withObject is not null || _withHasBinding is not null || _withGetCheck is not null ||
+            _withSet is not null || _withCaptureCall is not null)
         {
             _ = WithObject;
             _ = WithHasBinding;
             _ = WithGetCheck;
             _ = WithSet;
+            _ = WithCaptureCall;
         }
         IsComplete = true;
     }

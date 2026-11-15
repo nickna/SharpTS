@@ -114,5 +114,64 @@ public partial class RuntimeEmitter
         il.Emit(OpCodes.Call, runtime.ObjectWrite.PropertyStrict);
         il.Emit(OpCodes.Ldarg_2);
         il.Emit(OpCodes.Ret);
+
+        // A closed static delegate stores only the chosen receiver and callable.
+        // Unlike Function.prototype.bind, capture performs no guest-visible
+        // prototype/name/length reads and defers callability errors until invocation.
+        var invoke = builder.DefineMethod("InvokeWithCapturedReference", MethodAttributes.Private | MethodAttributes.Static,
+            _types.Object, [_types.ObjectArray, _types.ObjectArray]);
+        il = invoke.GetILGenerator();
+        il.Emit(OpCodes.Ldarg_0);
+        il.Emit(OpCodes.Ldc_I4_0);
+        il.Emit(OpCodes.Ldelem_Ref);
+        il.Emit(OpCodes.Ldarg_0);
+        il.Emit(OpCodes.Ldc_I4_1);
+        il.Emit(OpCodes.Ldelem_Ref);
+        il.Emit(OpCodes.Ldarg_1);
+        il.Emit(OpCodes.Call, runtime.Invocation.Method);
+        il.Emit(OpCodes.Ret);
+
+        var capture = builder.DefineMethod("WithCaptureCall", MethodAttributes.Public | MethodAttributes.Static,
+            _types.Object, [_types.Object, _types.String, _types.Object]);
+        runtime.ObjectConstruction.WithCaptureCall = capture;
+        il = capture.GetILGenerator();
+        var missing = il.DefineLabel();
+        var returnCallee = il.DefineLabel();
+        var callee = il.DeclareLocal(_types.Object);
+        il.Emit(OpCodes.Ldarg_0);
+        il.Emit(OpCodes.Ldarg_1);
+        il.Emit(OpCodes.Ldarg_2);
+        il.Emit(OpCodes.Call, getCheck);
+        il.Emit(OpCodes.Unbox_Any, _types.Boolean);
+        il.Emit(OpCodes.Brfalse, missing);
+        il.Emit(OpCodes.Ldarg_0);
+        il.Emit(OpCodes.Ldarg_1);
+        il.Emit(OpCodes.Call, runtime.ObjectRead.Property);
+        il.Emit(OpCodes.Stloc, callee);
+        // Optional calls must still see nullish callees and skip their arguments.
+        il.Emit(OpCodes.Ldloc, callee);
+        il.Emit(OpCodes.Brfalse, returnCallee);
+        il.Emit(OpCodes.Ldloc, callee);
+        il.Emit(OpCodes.Isinst, runtime.Sentinels.UndefinedType);
+        il.Emit(OpCodes.Brtrue, returnCallee);
+        il.Emit(OpCodes.Ldc_I4_2);
+        il.Emit(OpCodes.Newarr, _types.Object);
+        il.Emit(OpCodes.Dup);
+        il.Emit(OpCodes.Ldc_I4_0);
+        il.Emit(OpCodes.Ldarg_0);
+        il.Emit(OpCodes.Stelem_Ref);
+        il.Emit(OpCodes.Dup);
+        il.Emit(OpCodes.Ldc_I4_1);
+        il.Emit(OpCodes.Ldloc, callee);
+        il.Emit(OpCodes.Stelem_Ref);
+        il.Emit(OpCodes.Ldftn, invoke);
+        il.Emit(OpCodes.Newobj, _types.GetConstructor(_types.FuncObjectArrayToObject, _types.Object, _types.IntPtr));
+        il.Emit(OpCodes.Ret);
+        il.MarkLabel(missing);
+        il.Emit(OpCodes.Ldsfld, runtime.Sentinels.UndefinedInstance);
+        il.Emit(OpCodes.Ret);
+        il.MarkLabel(returnCallee);
+        il.Emit(OpCodes.Ldloc, callee);
+        il.Emit(OpCodes.Ret);
     }
 }

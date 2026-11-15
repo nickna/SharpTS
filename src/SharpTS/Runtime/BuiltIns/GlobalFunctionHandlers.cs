@@ -64,6 +64,7 @@ internal static class GlobalFunctionHandlers
         registry.RegisterV2(WithStatementLowering.HasBinding, HandleWithHasBinding);
         registry.RegisterV2(WithStatementLowering.CheckGet, HandleWithGetCheck);
         registry.RegisterV2(WithStatementLowering.SetBinding, HandleWithSet);
+        registry.RegisterV2(WithStatementLowering.CaptureCall, HandleWithCaptureCall);
         registry.RegisterV2(BuiltInNames.ArrayBinding, HandleArrayBinding);
 
         // Note: Error constructors are handled by SharpTSErrorClass (registered as globals).
@@ -511,6 +512,20 @@ internal static class GlobalFunctionHandlers
         if (!exists && strict)
             throw new ThrowException(new SharpTSReferenceError($"'{name}' is not defined"));
         return RuntimeValue.FromBoolean(exists);
+    }
+
+    private static async ValueTask<RuntimeValue> HandleWithCaptureCall(
+        Func<Expr, ValueTask<RuntimeValue>> evaluateArg, IReadOnlyList<Expr> arguments, Interpreter interpreter)
+    {
+        object value = (await evaluateArg(arguments[0])).ToObject()!;
+        string name = (string)(await evaluateArg(arguments[1])).ToObject()!;
+        bool strict = (await evaluateArg(arguments[2])).IsTruthy();
+        if (!interpreter.HasProperty(value, name))
+        {
+            if (strict) throw new ThrowException(new SharpTSReferenceError($"'{name}' is not defined"));
+            return RuntimeValue.Undefined;
+        }
+        return RuntimeValue.FromBoxed(interpreter.CaptureWithCall(value, name));
     }
 
     private static async ValueTask<RuntimeValue> HandleWithSet(

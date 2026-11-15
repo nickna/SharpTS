@@ -4,7 +4,7 @@ using Xunit;
 
 namespace SharpTS.Tests.SharedTests;
 
-public sealed class WithStatementTests
+public sealed partial class WithStatementTests
 {
     public const string StandaloneSource = """
         let read;
@@ -352,6 +352,10 @@ public sealed class WithStatementTests
 
     [Theory]
     [InlineData("'use strict'; with ({}) {}")]
+    [InlineData("'use strict'\nwith ({}) {}")]
+    [InlineData("function f() { 'use strict'\nwith ({}) {} }")]
+    [InlineData("class C { static { with ({}) {} } }")]
+    [InlineData("const C = class { static { with ({}) {} } };")]
     [InlineData("function f() { 'use strict'; with ({}) {} }")]
     [InlineData("class C { method() { with ({}) {} } }")]
     [InlineData("const C = class { method() { with ({}) {} } };")]

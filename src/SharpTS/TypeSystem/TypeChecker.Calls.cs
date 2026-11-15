@@ -38,7 +38,7 @@ public partial class TypeChecker
     {
         if (call.Callee is Expr.Variable { Name.IsGeneratedTemporary: true } helper
             && helper.Name.Lexeme is WithStatementLowering.ToObject or WithStatementLowering.HasBinding
-                or WithStatementLowering.CheckGet or WithStatementLowering.SetBinding)
+                or WithStatementLowering.CheckGet or WithStatementLowering.SetBinding or WithStatementLowering.CaptureCall)
         {
             foreach (Expr argument in call.Arguments) CheckExpr(argument);
             return helper.Name.Lexeme is WithStatementLowering.HasBinding or WithStatementLowering.CheckGet

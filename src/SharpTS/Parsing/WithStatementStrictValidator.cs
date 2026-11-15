@@ -31,6 +31,14 @@ internal sealed class WithStatementStrictValidator(bool strict) : AstVisitorBase
     protected override void VisitArrowFunction(Expr.ArrowFunction expression) =>
         InStrictContext(HasStrictDirective(expression.BlockBody), () => base.VisitArrowFunction(expression));
 
-    protected override void VisitClass(Stmt.Class statement) => InStrictContext(true, () => base.VisitClass(statement));
-    protected override void VisitClassExpr(Expr.ClassExpr expression) => InStrictContext(true, () => base.VisitClassExpr(expression));
+    protected override void VisitClass(Stmt.Class statement) => InStrictContext(true, () =>
+    {
+        base.VisitClass(statement);
+        foreach (var block in (statement.StaticInitializers ?? []).OfType<Stmt.StaticBlock>()) Visit(block);
+    });
+    protected override void VisitClassExpr(Expr.ClassExpr expression) => InStrictContext(true, () =>
+    {
+        base.VisitClassExpr(expression);
+        foreach (var block in (expression.StaticInitializers ?? []).OfType<Stmt.StaticBlock>()) Visit(block);
+    });
 }

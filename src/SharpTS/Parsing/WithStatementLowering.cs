@@ -9,6 +9,7 @@ internal sealed class WithStatementLowering(Token storage, SpanTable spans, Func
     internal const string HasBinding = "<with:has>";
     internal const string CheckGet = "<with:get>";
     internal const string SetBinding = "<with:set>";
+    internal const string CaptureCall = "<with:call-reference>";
     private readonly Stack<HashSet<string>> _scopes = new();
     private bool _strict;
 
@@ -342,23 +343,35 @@ internal sealed class WithStatementLowering(Token storage, SpanTable spans, Func
 
     private Expr Call(Expr.Call expression)
     {
-        var rewritten = expression with { Arguments = expression.Arguments.Select(Expression).ToList() };
-        return Reference(expression.Callee) is { } variable
-            ? Resolve(variable.Name, p => Read(p,
+        // The parser encodes console intrinsics as dotted pseudo-identifiers;
+        // they are complete calls, not identifier References that can be captured.
+        if (Reference(expression.Callee) is { } intrinsic && intrinsic.Name.Lexeme.Contains('.'))
+            return expression with { Arguments = expression.Arguments.Select(Expression).ToList() };
+        // Direct eval is syntactic: moving its fallback callee into a value
+        // expression would turn it into indirect eval, lose caller bindings and
+        // introduce a runtime dependency for otherwise standalone literal eval.
+        if (Reference(expression.Callee) is { Name.Lexeme: "eval" } eval)
+            return Resolve(eval.Name, p => Read(p,
                 property => expression with { Callee = property, Arguments = expression.Arguments.Select(Expression).ToList() },
-                expression with { Callee = new Expr.Literal(SharpTS.Runtime.Types.SharpTSUndefined.Instance), Arguments = expression.Arguments.Select(Expression).ToList() }), rewritten)
-            : rewritten with { Callee = Expression(expression.Callee) };
+                expression with { Callee = new Expr.Literal(SharpTS.Runtime.Types.SharpTSUndefined.Instance), Arguments = expression.Arguments.Select(Expression).ToList() }),
+                expression with { Arguments = expression.Arguments.Select(Expression).ToList() });
+        return expression with { Callee = Callable(expression.Callee),
+            Arguments = expression.Arguments.Select(Expression).ToList() };
     }
 
     private Expr Tagged(Expr.TaggedTemplateLiteral expression)
     {
-        var rewritten = expression with { Expressions = expression.Expressions.Select(Expression).ToList() };
-        return Reference(expression.Tag) is { } variable
-            ? Resolve(variable.Name, p => Read(p,
-                property => expression with { Tag = property, Expressions = expression.Expressions.Select(Expression).ToList() },
-                expression with { Tag = new Expr.Literal(SharpTS.Runtime.Types.SharpTSUndefined.Instance), Expressions = expression.Expressions.Select(Expression).ToList() }), rewritten)
-            : rewritten with { Tag = Expression(expression.Tag) };
+        return expression with { Tag = Callable(expression.Tag),
+            Expressions = expression.Expressions.Select(Expression).ToList() };
     }
+
+    // Resolve the call Reference before evaluating one argument/interpolation tree.
+    // A captured callable retains the object receiver without reading guest .bind,
+    // .call, name or length properties, and survives argument suspension.
+    private Expr Callable(Expr expression) => Reference(expression) is { } variable
+        ? Resolve(variable.Name, p => Helper(CaptureCall, variable.Name, p.Object,
+            new Expr.Literal(variable.Name.Lexeme), new Expr.Literal(_strict)), expression)
+        : Expression(expression);
 
     private Expr Update(Expr.Get property, Token operation, bool postfix)
     {
