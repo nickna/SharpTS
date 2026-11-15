@@ -1262,6 +1262,16 @@ public partial class Interpreter
         if (obj is ConstEnumValues constEnum && index is string enumMember)
             return constEnum.GetMemberRV(enumMember);
 
+        if (obj is bool or double)
+        {
+            index = ToPropertyKey(index);
+            if (index is SharpTSSymbol primitiveSymbol)
+            {
+                object prototype = obj is bool ? GetBooleanPrototype() : GetNumberPrototype();
+                return RuntimeValue.FromBoxed(GetSymbolPropertyValue(prototype, primitiveSymbol, obj));
+            }
+        }
+
         if (HasArrayObjectKey(obj, index))
             index = ToPropertyKey(index);
         if (obj is SharpTSTypedArray numericTypedArray
