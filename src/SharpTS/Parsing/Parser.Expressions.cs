@@ -580,7 +580,7 @@ public partial class Parser
             if (isDelegating || (!HasLineTerminatorBeforeCurrent() &&
                 !Check(TokenType.SEMICOLON) && !Check(TokenType.RIGHT_BRACE) &&
                 !Check(TokenType.RIGHT_PAREN) && !Check(TokenType.COMMA) &&
-                !Check(TokenType.RIGHT_BRACKET) &&
+                !Check(TokenType.RIGHT_BRACKET) && !Check(TokenType.COLON) &&
                 !Check(TokenType.TEMPLATE_MIDDLE) && !Check(TokenType.TEMPLATE_TAIL) && !IsAtEnd()))
             {
                 value = Assignment();  // Use Assignment to handle full expressions
