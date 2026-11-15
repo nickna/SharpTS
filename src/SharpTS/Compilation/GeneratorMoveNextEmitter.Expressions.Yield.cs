@@ -142,25 +142,9 @@ public partial class GeneratorMoveNextEmitter
             _il.Emit(OpCodes.Stloc, iterableLocal);
         });
 
-        // A delegated SharpTS generator implements $IGenerator. Store it directly in the
-        // delegate field and skip the Symbol.iterator/$IteratorWrapper setup below, which
-        // drives via IEnumerator.MoveNext() — a path with no slot to forward the outer's
-        // resume value. The per-element loop detects $IGenerator and drives it via
-        // next(sent) instead, forwarding next(v) into the delegate (ECMA-262 §14.4.14, #476).
+        // Acquire native generators through the guest protocol too: their
+        // iterator factory and next/return/throw properties can be overridden.
         var generatorInterfaceType = _ctx?.Runtime?.Generators.Type;
-        if (generatorInterfaceType != null)
-        {
-            var notDelegatedGeneratorLabel = _il.DefineLabel();
-            _il.Emit(OpCodes.Ldloc, iterableLocal);
-            _il.Emit(OpCodes.Isinst, generatorInterfaceType);
-            _il.Emit(OpCodes.Brfalse, notDelegatedGeneratorLabel);
-            _il.Emit(OpCodes.Ldarg_0);
-            _il.Emit(OpCodes.Ldloc, iterableLocal);
-            _il.Emit(OpCodes.Castclass, typeof(System.Collections.IEnumerator));
-            _il.Emit(OpCodes.Stfld, delegatedField);
-            _il.Emit(OpCodes.Br, resumeLabel);
-            _il.MarkLabel(notDelegatedGeneratorLabel);
-        }
 
         // Handle Map/Set specially - convert to List before iteration. Each
         // arm checks the corresponding $Runtime method MethodBuilder for null;
@@ -230,6 +214,22 @@ public partial class GeneratorMoveNextEmitter
         _il.Emit(OpCodes.Ldloc, iterFnLocal);
         _il.Emit(OpCodes.Isinst, _ctx!.Runtime!.Sentinels.UndefinedType);
         _il.Emit(OpCodes.Brfalse, hasIteratorLabel);
+
+        // A native generator reaches this arm only when its observable
+        // iterator method was made absent. Its CLR carrier must not restore
+        // the protocol that the guest explicitly removed.
+        if (generatorInterfaceType != null)
+        {
+            EmitTryBodyOperation(() =>
+            {
+                var notNativeGenerator = _il.DefineLabel();
+                _il.Emit(OpCodes.Ldloc, iterableLocal);
+                _il.Emit(OpCodes.Isinst, generatorInterfaceType);
+                _il.Emit(OpCodes.Brfalse, notNativeGenerator);
+                GuestErrorEmitter.ThrowTypeError(_il, _ctx.Runtime, "Generator has no iterator method.");
+                _il.MarkLabel(notNativeGenerator);
+            });
+        }
 
         // A CLR string enumerates UTF-16 code units. Reuse the ordinary
         // string iterator so delegation keeps surrogate pairs together and
