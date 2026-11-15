@@ -69,6 +69,7 @@ public class GeneratorStateMachineBuilder : StateMachineBuilderBase, IIteratorSt
 
     // Delegated enumerator field for yield* expressions
     public FieldBuilder? DelegatedEnumeratorField { get; private set; }
+    public FieldBuilder? DelegatedResultField { get; private set; }
 
     // Constructor
     public ConstructorBuilder Constructor { get; private set; } = null!;
@@ -185,6 +186,10 @@ public class GeneratorStateMachineBuilder : StateMachineBuilderBase, IIteratorSt
                 _types.IEnumerator,
                 FieldAttributes.Private
             );
+            // An incomplete yield* result is exposed unchanged. Current reads
+            // its value lazily only when a CLR iterator consumer requests it.
+            DelegatedResultField = _stateMachineType.DefineField(
+                "<>7__delegatedResult", _types.Object, FieldAttributes.Private);
         }
 
         // Define constructor
@@ -310,16 +315,7 @@ public class GeneratorStateMachineBuilder : StateMachineBuilderBase, IIteratorSt
         );
 
         var il = CurrentGetMethod.GetILGenerator();
-        il.Emit(OpCodes.Ldarg_0);
-        if (NativeNumberCurrentField != null)
-        {
-            il.Emit(OpCodes.Ldfld, NativeNumberCurrentField);
-            il.Emit(OpCodes.Box, _types.Double);
-        }
-        else
-        {
-            il.Emit(OpCodes.Ldfld, CurrentField);
-        }
+        EmitLoadYieldValueBoxed(il);
         il.Emit(OpCodes.Ret);
 
         currentProp.SetGetMethod(CurrentGetMethod);
@@ -344,16 +340,7 @@ public class GeneratorStateMachineBuilder : StateMachineBuilderBase, IIteratorSt
         );
 
         var il2 = NonGenericCurrentGetMethod.GetILGenerator();
-        il2.Emit(OpCodes.Ldarg_0);
-        if (NativeNumberCurrentField != null)
-        {
-            il2.Emit(OpCodes.Ldfld, NativeNumberCurrentField);
-            il2.Emit(OpCodes.Box, _types.Double);
-        }
-        else
-        {
-            il2.Emit(OpCodes.Ldfld, CurrentField);
-        }
+        EmitLoadYieldValueBoxed(il2);
         il2.Emit(OpCodes.Ret);
 
         nonGenericCurrentProp.SetGetMethod(NonGenericCurrentGetMethod);
@@ -558,6 +545,8 @@ public class GeneratorStateMachineBuilder : StateMachineBuilderBase, IIteratorSt
         nextIL.Emit(OpCodes.Ldloc, movedLocal);
         nextIL.Emit(OpCodes.Brfalse, doneLabel);
 
+        EmitReturnDelegatedResultIfPresent(nextIL);
+
         // Not done: create { value: Current, done: false }
         nextIL.Emit(OpCodes.Newobj, _types.GetDefaultConstructor(_types.DictionaryStringObject));
         nextIL.Emit(OpCodes.Dup);
@@ -743,6 +732,19 @@ public class GeneratorStateMachineBuilder : StateMachineBuilderBase, IIteratorSt
 
     private void EmitLoadYieldValueBoxed(ILGenerator il)
     {
+        var ready = il.DefineLabel();
+        if (DelegatedResultField != null && _runtime != null)
+        {
+            var ordinary = il.DefineLabel();
+            il.Emit(OpCodes.Ldarg_0);
+            il.Emit(OpCodes.Ldfld, DelegatedResultField);
+            il.Emit(OpCodes.Dup);
+            il.Emit(OpCodes.Brfalse, ordinary);
+            il.Emit(OpCodes.Call, _runtime.IteratorProtocol.Value);
+            il.Emit(OpCodes.Br, ready);
+            il.MarkLabel(ordinary);
+            il.Emit(OpCodes.Pop);
+        }
         il.Emit(OpCodes.Ldarg_0);
         if (NativeNumberCurrentField != null)
         {
@@ -753,6 +755,21 @@ public class GeneratorStateMachineBuilder : StateMachineBuilderBase, IIteratorSt
         {
             il.Emit(OpCodes.Ldfld, CurrentField);
         }
+        il.MarkLabel(ready);
+    }
+
+    private void EmitReturnDelegatedResultIfPresent(ILGenerator il)
+    {
+        if (DelegatedResultField == null) return;
+
+        var ordinary = il.DefineLabel();
+        il.Emit(OpCodes.Ldarg_0);
+        il.Emit(OpCodes.Ldfld, DelegatedResultField);
+        il.Emit(OpCodes.Dup);
+        il.Emit(OpCodes.Brfalse, ordinary);
+        il.Emit(OpCodes.Ret);
+        il.MarkLabel(ordinary);
+        il.Emit(OpCodes.Pop);
     }
 
     private void EmitLoadMoveNextResultValueBoxed(ILGenerator il, LocalBuilder moved)
@@ -825,6 +842,8 @@ public class GeneratorStateMachineBuilder : StateMachineBuilderBase, IIteratorSt
         il.Emit(OpCodes.Ldc_I4_0);
         il.Emit(OpCodes.Stfld, ExecutingField!);
         il.EndExceptionBlock();
+
+        EmitReturnDelegatedResultIfPresent(il);
 
         // return { value: Current, done: (moved ? false : true) }
         var setItem = _types.GetMethod(_types.DictionaryStringObject, "set_Item", _types.String, _types.Object);

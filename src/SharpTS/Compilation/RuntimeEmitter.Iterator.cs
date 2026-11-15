@@ -840,9 +840,25 @@ public partial class RuntimeEmitter
         moveNextIl.Emit(OpCodes.Ldc_I4_1);
         moveNextIl.Emit(OpCodes.Ret);
 
+        // Synchronous yield* forwards incomplete result objects without reading value.
+        // Keep that protocol operation separate from the IEnumerator value adapter.
+        var nextResultWithSent = typeBuilder.DefineMethod(
+            "NextResultWithSent",
+            MethodAttributes.Public | MethodAttributes.HideBySig,
+            _types.Object,
+            [_types.Object]
+        );
+        iteratorWrappers.NextResultWithSent = nextResultWithSent;
+        var nextResultIl = nextResultWithSent.GetILGenerator();
+        nextResultIl.Emit(OpCodes.Ldarg_0);
+        nextResultIl.Emit(OpCodes.Ldfld, iteratorField);
+        nextResultIl.Emit(OpCodes.Ldarg_0);
+        nextResultIl.Emit(OpCodes.Ldfld, nextField);
+        nextResultIl.Emit(OpCodes.Ldarg_1);
+        nextResultIl.Emit(OpCodes.Call, inputs.IteratorRecords.InvokeNextWithSent);
+        nextResultIl.Emit(OpCodes.Ret);
+
         // Method: bool MoveNextWithSent(object? sent) — forwards sent value to next(v) (#503).
-        // Called by the yield* drive loop instead of MoveNext() when the delegate is a
-        // $IteratorWrapper so the outer generator's resume value reaches the iterator's next(v).
         var moveNextWithSent = typeBuilder.DefineMethod(
             "MoveNextWithSent",
             MethodAttributes.Public | MethodAttributes.HideBySig,

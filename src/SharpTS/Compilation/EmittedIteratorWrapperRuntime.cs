@@ -31,6 +31,13 @@ public sealed class EmittedIteratorWrapperRuntime
         internal set => SetHandle(ref _moveNextWithSent, value);
     }
 
+    private MethodBuilder? _nextResultWithSent;
+    public MethodBuilder NextResultWithSent
+    {
+        get => Require(_nextResultWithSent);
+        internal set => SetHandle(ref _nextResultWithSent, value);
+    }
+
     private MethodBuilder? _return;
     public MethodBuilder Return
     {
@@ -69,6 +76,7 @@ public sealed class EmittedIteratorWrapperRuntime
         _ = Type;
         _ = Ctor;
         _ = MoveNextWithSent;
+        _ = NextResultWithSent;
         _ = Return;
         _ = Throw;
         IsComplete = true;
