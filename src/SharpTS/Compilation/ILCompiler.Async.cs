@@ -1035,7 +1035,11 @@ public partial class ILCompiler
                 break;
             case Expr.ObjectLiteral o:
                 foreach (var prop in o.Properties)
+                {
+                    if (prop.Key is Expr.ComputedKey computed)
+                        AnalyzeArrowExprForAwaits(computed.Expression, ref awaitCount, ref seenAwait, declaredVariables, usedAfterAwait, declaredBeforeAwait);
                     AnalyzeArrowExprForAwaits(prop.Value, ref awaitCount, ref seenAwait, declaredVariables, usedAfterAwait, declaredBeforeAwait);
+                }
                 break;
             case Expr.Ternary t:
                 AnalyzeArrowExprForAwaits(t.Condition, ref awaitCount, ref seenAwait, declaredVariables, usedAfterAwait, declaredBeforeAwait);

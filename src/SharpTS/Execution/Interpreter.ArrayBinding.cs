@@ -23,6 +23,10 @@ public partial class Interpreter
             {
                 var scope = (List<ArrayBindingCursor>)args[1]!;
                 var source = args[2];
+                // A getter may remove its own descriptor. Retain the guest claim
+                // before lookup so that mutation cannot restore a native bridge.
+                bool hasIteratorClaim = source is SharpTSTypedArray or SharpTSBuffer or SharpTSIterator
+                    && ArrayBindingHasIteratorClaim(source);
                 object? factory = source switch
                 {
                     bool => GetSymbolPropertyValue(GetBooleanPrototype(), SharpTSSymbol.Iterator, source),
@@ -33,7 +37,7 @@ public partial class Interpreter
                 };
                 object? iterator;
                 if (factory is SharpTSUndefined && source is SharpTSTypedArray or SharpTSBuffer or SharpTSIterator
-                    && !ArrayBindingHasIteratorClaim(source))
+                    && !hasIteratorClaim)
                 {
                     iterator = source switch
                     {
@@ -70,13 +74,8 @@ public partial class Interpreter
                 return new SharpTSArray(result);
             }
             case "close": CloseArrayBinding((ArrayBindingCursor)args[1]!, false); break;
-            case "abort":
-            {
-                var scope = (List<ArrayBindingCursor>)args[1]!;
-                for (int index = scope.Count - 1; index >= 0; index--)
-                    CloseArrayBinding(scope[index], true);
-                break;
-            }
+            case "abort": CloseArrayBindingScope((List<ArrayBindingCursor>)args[1]!, true); break;
+            case "finish": CloseArrayBindingScope((List<ArrayBindingCursor>)args[1]!, false); break;
             default: throw new InvalidOperationException("Unknown array binding operation");
         }
         return SharpTSUndefined.Instance;
@@ -118,5 +117,22 @@ public partial class Interpreter
         if (cursor.Done) return;
         cursor.Done = true;
         CloseIterator(cursor.Iterator, preserveThrow);
+    }
+
+    private void CloseArrayBindingScope(List<ArrayBindingCursor> scope, bool preserveThrow)
+    {
+        try
+        {
+            for (int index = scope.Count - 1; index >= 0; index--)
+                CloseArrayBinding(scope[index], preserveThrow);
+        }
+        catch
+        {
+            // A close failure replaces a return completion. Finish closing the
+            // enclosing cursors with that failure as the incoming throw.
+            for (int index = scope.Count - 1; index >= 0; index--)
+                CloseArrayBinding(scope[index], true);
+            throw;
+        }
     }
 }

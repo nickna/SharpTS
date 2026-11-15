@@ -18,6 +18,8 @@ public partial class RuntimeEmitter
             _types.Object, [_types.ObjectArray, _types.Boolean]);
         var close = type.DefineMethod("ArrayBindingClose", MethodAttributes.Private | MethodAttributes.Static,
             _types.Void, [_types.ObjectArray, _types.Boolean]);
+        var closeScope = type.DefineMethod("ArrayBindingCloseScope", MethodAttributes.Private | MethodAttributes.Static,
+            _types.Void, [_types.ListOfObject, _types.Boolean]);
         var dispatch = type.DefineMethod("ArrayBinding", MethodAttributes.Public | MethodAttributes.Static,
             _types.Object, [_types.ObjectArray]);
         arrays.Binding = dispatch;
@@ -28,6 +30,7 @@ public partial class RuntimeEmitter
         var factory = il.DeclareLocal(_types.Object);
         var cursor = il.DeclareLocal(_types.ObjectArray);
         var iterator = il.DeclareLocal(_types.Object);
+        var hasIteratorClaim = il.DeclareLocal(_types.Boolean);
         var acquired = il.DefineLabel();
         var fallback = il.DefineLabel();
         var invalid = il.DefineLabel();
@@ -36,6 +39,54 @@ public partial class RuntimeEmitter
         il.Emit(OpCodes.Newarr, _types.Object);
         il.Emit(OpCodes.Stloc, cursor);
         StoreSlot(il, cursor, 2, () => EmitBoolean(il, false));
+        // Snapshot a native carrier's guest claim before invoking its getter:
+        // deleting the descriptor during lookup must not restore native fallback.
+        var owner = il.DeclareLocal(_types.Object);
+        var storage = il.DeclareLocal(_types.DictionaryObjectObject);
+        var inspectSource = il.DefineLabel();
+        var inspect = il.DefineLabel();
+        var inspectStorage = il.DefineLabel();
+        var parent = il.DefineLabel();
+        var claimed = il.DefineLabel();
+        var lookup = il.DefineLabel();
+        foreach (var nativeType in new[] { iteration.TypedArrays?.BaseType, iteration.Buffer?.Type,
+                     iteration.MapIteratorConstructor is null ? null : _types.DictionaryObjectObject,
+                     iteration.SetIteratorConstructor is null ? null : _types.HashSetOfObject })
+        {
+            if (nativeType is null) continue;
+            il.Emit(OpCodes.Ldarg_1);
+            il.Emit(OpCodes.Isinst, nativeType);
+            il.Emit(OpCodes.Brtrue, inspectSource);
+        }
+        il.Emit(OpCodes.Br, lookup);
+        il.MarkLabel(inspectSource);
+        il.Emit(OpCodes.Ldarg_1);
+        il.Emit(OpCodes.Stloc, owner);
+        il.MarkLabel(inspect);
+        il.Emit(OpCodes.Ldloc, owner);
+        il.Emit(OpCodes.Brfalse, lookup);
+        // A proxy owns the ordinary lookup; do not invoke extra descriptor or
+        // prototype traps while deciding whether an internal bridge applies.
+        EmitProxyTypeCheck(il, () => il.Emit(OpCodes.Ldloc, owner), claimed, inspectStorage);
+        il.MarkLabel(inspectStorage);
+        il.Emit(OpCodes.Ldloc, owner);
+        il.Emit(OpCodes.Call, iteration.Symbols.TryGetStorage);
+        il.Emit(OpCodes.Stloc, storage);
+        il.Emit(OpCodes.Ldloc, storage);
+        il.Emit(OpCodes.Brfalse, parent);
+        il.Emit(OpCodes.Ldloc, storage);
+        il.Emit(OpCodes.Ldsfld, iteration.Symbols.Iterator);
+        il.Emit(OpCodes.Callvirt, _types.GetMethod(_types.DictionaryObjectObject, "ContainsKey", _types.Object));
+        il.Emit(OpCodes.Brtrue, claimed);
+        il.MarkLabel(parent);
+        il.Emit(OpCodes.Ldloc, owner);
+        il.Emit(OpCodes.Call, iteration.Prototypes.GetPrototypeOf);
+        il.Emit(OpCodes.Stloc, owner);
+        il.Emit(OpCodes.Br, inspect);
+        il.MarkLabel(claimed);
+        il.Emit(OpCodes.Ldc_I4_1);
+        il.Emit(OpCodes.Stloc, hasIteratorClaim);
+        il.MarkLabel(lookup);
         il.Emit(OpCodes.Ldarg_1);
         il.Emit(OpCodes.Ldsfld, iteration.Symbols.Iterator);
         il.Emit(OpCodes.Call, iteration.ObjectRead.Index);
@@ -54,31 +105,8 @@ public partial class RuntimeEmitter
         il.Emit(OpCodes.Br, acquired);
 
         il.MarkLabel(fallback);
-        var owner = il.DeclareLocal(_types.Object);
-        var storage = il.DeclareLocal(_types.DictionaryObjectObject);
-        var inspect = il.DefineLabel();
-        var parent = il.DefineLabel();
-        var unclaimed = il.DefineLabel();
-        il.Emit(OpCodes.Ldarg_1);
-        il.Emit(OpCodes.Stloc, owner);
-        il.MarkLabel(inspect);
-        il.Emit(OpCodes.Ldloc, owner);
-        il.Emit(OpCodes.Brfalse, unclaimed);
-        il.Emit(OpCodes.Ldloc, owner);
-        il.Emit(OpCodes.Call, iteration.Symbols.TryGetStorage);
-        il.Emit(OpCodes.Stloc, storage);
-        il.Emit(OpCodes.Ldloc, storage);
-        il.Emit(OpCodes.Brfalse, parent);
-        il.Emit(OpCodes.Ldloc, storage);
-        il.Emit(OpCodes.Ldsfld, iteration.Symbols.Iterator);
-        il.Emit(OpCodes.Callvirt, _types.GetMethod(_types.DictionaryObjectObject, "ContainsKey", _types.Object));
+        il.Emit(OpCodes.Ldloc, hasIteratorClaim);
         il.Emit(OpCodes.Brtrue, invalid);
-        il.MarkLabel(parent);
-        il.Emit(OpCodes.Ldloc, owner);
-        il.Emit(OpCodes.Call, iteration.Prototypes.GetPrototypeOf);
-        il.Emit(OpCodes.Stloc, owner);
-        il.Emit(OpCodes.Br, inspect);
-        il.MarkLabel(unclaimed);
         // Native typed-array/buffer carriers retain indexed state rather than
         // snapshotting their elements before a default can mutate them.
         foreach (var nativeType in new[] { iteration.TypedArrays?.BaseType, iteration.Buffer?.Type })
@@ -202,6 +230,18 @@ public partial class RuntimeEmitter
         il.MarkLabel(closed);
         il.Emit(OpCodes.Ret);
 
+        il = closeScope.GetILGenerator();
+        il.BeginExceptionBlock();
+        EmitCloseScopeLoop(() => il.Emit(OpCodes.Ldarg_1));
+        il.BeginCatchBlock(_types.Exception);
+        il.Emit(OpCodes.Pop);
+        // Once a close replaces a return with a throw, remaining outer cursors
+        // close with throw precedence without replacing that first failure.
+        EmitCloseScopeLoop(() => il.Emit(OpCodes.Ldc_I4_1));
+        il.Emit(OpCodes.Rethrow);
+        il.EndExceptionBlock();
+        il.Emit(OpCodes.Ret);
+
         il = dispatch.GetILGenerator();
         var operation = il.DeclareLocal(_types.String);
         LoadArgSlot(il, 0);
@@ -243,36 +283,44 @@ public partial class RuntimeEmitter
             il.Emit(OpCodes.Newobj, inputs.Arrays.Ctor);
             il.Emit(OpCodes.Ret);
         });
-        EmitOperation("abort", () =>
-        {
-            var scope = il.DeclareLocal(_types.ListOfObject);
-            var index = il.DeclareLocal(_types.Int32);
-            var loop = il.DefineLabel();
-            LoadArgSlot(il, 1);
-            il.Emit(OpCodes.Castclass, _types.ListOfObject);
-            il.Emit(OpCodes.Stloc, scope);
-            il.Emit(OpCodes.Ldloc, scope);
-            il.Emit(OpCodes.Callvirt, _types.GetPropertyGetter(_types.ListOfObject, "Count"));
-            il.Emit(OpCodes.Stloc, index);
-            il.MarkLabel(loop);
-            il.Emit(OpCodes.Ldloc, index);
-            il.Emit(OpCodes.Brfalse, returnUndefined);
-            il.Emit(OpCodes.Ldloc, index);
-            il.Emit(OpCodes.Ldc_I4_1);
-            il.Emit(OpCodes.Sub);
-            il.Emit(OpCodes.Stloc, index);
-            il.Emit(OpCodes.Ldloc, scope);
-            il.Emit(OpCodes.Ldloc, index);
-            il.Emit(OpCodes.Callvirt, _types.GetMethod(_types.ListOfObject, "get_Item", _types.Int32));
-            il.Emit(OpCodes.Castclass, _types.ObjectArray);
-            il.Emit(OpCodes.Ldc_I4_1);
-            il.Emit(OpCodes.Call, close);
-            il.Emit(OpCodes.Br, loop);
-        });
+        EmitOperation("abort", () => EmitCloseScope(true));
+        EmitOperation("finish", () => EmitCloseScope(false));
         il.MarkLabel(returnUndefined);
         il.Emit(OpCodes.Ldsfld, inputs.Undefined);
         il.Emit(OpCodes.Ret);
 
+        void EmitCloseScope(bool preserveThrow)
+        {
+            LoadArgSlot(il, 1);
+            il.Emit(OpCodes.Castclass, _types.ListOfObject);
+            il.Emit(preserveThrow ? OpCodes.Ldc_I4_1 : OpCodes.Ldc_I4_0);
+            il.Emit(OpCodes.Call, closeScope);
+            il.Emit(OpCodes.Br, returnUndefined);
+        }
+        void EmitCloseScopeLoop(Action emitPreserveThrow)
+        {
+            var index = il.DeclareLocal(_types.Int32);
+            var loop = il.DefineLabel();
+            var done = il.DefineLabel();
+            il.Emit(OpCodes.Ldarg_0);
+            il.Emit(OpCodes.Callvirt, _types.GetPropertyGetter(_types.ListOfObject, "Count"));
+            il.Emit(OpCodes.Stloc, index);
+            il.MarkLabel(loop);
+            il.Emit(OpCodes.Ldloc, index);
+            il.Emit(OpCodes.Brfalse, done);
+            il.Emit(OpCodes.Ldloc, index);
+            il.Emit(OpCodes.Ldc_I4_1);
+            il.Emit(OpCodes.Sub);
+            il.Emit(OpCodes.Stloc, index);
+            il.Emit(OpCodes.Ldarg_0);
+            il.Emit(OpCodes.Ldloc, index);
+            il.Emit(OpCodes.Callvirt, _types.GetMethod(_types.ListOfObject, "get_Item", _types.Int32));
+            il.Emit(OpCodes.Castclass, _types.ObjectArray);
+            emitPreserveThrow();
+            il.Emit(OpCodes.Call, close);
+            il.Emit(OpCodes.Br, loop);
+            il.MarkLabel(done);
+        }
         void EmitOperation(string name, Action body)
         {
             var next = il.DefineLabel();

@@ -43,7 +43,11 @@ public partial class Parser
             new Stmt.Var(scope, null, ArrayBindingCall("scope", line)),
             new Stmt.TryCatch(statements, error,
                 [new Stmt.Expression(ArrayBindingCall("abort", line, new Expr.Variable(scope))),
-                 new Stmt.Throw(new Token(TokenType.THROW, "throw", null, line), new Expr.Variable(error))], null)
+                 new Stmt.Throw(new Token(TokenType.THROW, "throw", null, line), new Expr.Variable(error))],
+                // A generator return resumes a suspended default without entering
+                // catch. Finish closes it with return (rather than throw) precedence;
+                // cursors already completed by normal binding or abort are skipped.
+                [new Stmt.Expression(ArrayBindingCall("finish", line, new Expr.Variable(scope)))])
         ]);
     }
 
