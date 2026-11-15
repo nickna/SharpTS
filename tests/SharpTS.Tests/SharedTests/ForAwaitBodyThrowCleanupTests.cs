@@ -74,7 +74,7 @@ public class ForAwaitBodyThrowCleanupTests
                 .Replace("resolve({ done: true });", "resolve(undefined);")
                 .Replace("}, 0));", "}, 0)), done: true };");
 
-        const string expected = """
+        var expected = """
             close throw 0 true
             closed throw
             caught throw true
@@ -89,7 +89,7 @@ public class ForAwaitBodyThrowCleanupTests
             close unhandled 0 true
             closed unhandled
             rejected true
-            """ + "\n";
+            """.ReplaceLineEndings("\n") + "\n";
         Assert.Equal(expected, TestHarness.RunUnchecked(source, mode));
     }
 }
