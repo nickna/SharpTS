@@ -27,6 +27,18 @@ block. It must remain a passing control, not evidence of early closing.
 close result. Unchanged main and current instead exceed the original 30-second
 deadline with empty streams. This failure remains outside passing counts.
 
+## Scoped progress — #3692
+
+#3692 implements an incremental cursor path for array binding and assignment
+patterns in `for await` loop heads in both engines. The path preserves nested
+iteration, defaults (including suspension), elisions, rest and iterator closing
+through explicit operations in the existing lowering.
+
+Ordinary declaration and assignment patterns retain their eager normalization;
+this scoped change does not complete the general #1750 contract. The historical
+baseline receipts, original fixture expectations and failure disposition above
+remain unchanged and are not promoted by the `for await` regression results.
+
 ## Why the binding representation must change
 
 `Parser.Destructuring.cs` lowers declaration patterns to a scope-free Sequence:

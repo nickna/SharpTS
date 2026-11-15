@@ -130,6 +130,17 @@ public partial class TypeChecker
                 _typeMap.Set(expr, sourceType);
                 return sourceType;
             }
+            case Expr.Call
+            {
+                Callee: Expr.Variable { Name: { Lexeme: BuiltInNames.ArrayBinding, IsGeneratedTemporary: true } },
+                Arguments: [Expr.Literal { Value: "start" }, var scope, var source]
+            }:
+            {
+                CheckExpr(scope);
+                var sourceType = NormalizeArrayDestructureSourceType(CheckExprWithContext(source, contextualType));
+                _typeMap.Set(expr, sourceType);
+                return sourceType;
+            }
             case Expr.Call call:
             {
                 TypeInfo result = CheckCall(call, contextualType);

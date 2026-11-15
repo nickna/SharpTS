@@ -703,6 +703,13 @@ public sealed class EmittedArrayOperationsRuntime
         internal set => SetHandle(ref _currentReceiverField, value);
     }
 
+    private MethodBuilder? _binding;
+    public MethodBuilder Binding
+    {
+        get => Require(_binding);
+        internal set => SetHandle(ref _binding, value);
+    }
+
     private MethodBuilder? _destructureSource;
     public MethodBuilder DestructureSource
     {
@@ -957,6 +964,7 @@ public sealed class EmittedArrayOperationsRuntime
         _ = GetMethod;
         _ = CurrentReceiverField;
         _ = DestructureSource;
+        _ = Binding;
         _ = MaterializeForIteration;
         _ = LoadArrayLikeElement;
         _ = HasArrayLikeProperty;

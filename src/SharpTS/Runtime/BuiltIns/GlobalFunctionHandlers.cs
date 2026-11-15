@@ -64,6 +64,7 @@ internal static class GlobalFunctionHandlers
         registry.RegisterV2(WithStatementLowering.HasBinding, HandleWithHasBinding);
         registry.RegisterV2(WithStatementLowering.CheckGet, HandleWithGetCheck);
         registry.RegisterV2(WithStatementLowering.SetBinding, HandleWithSet);
+        registry.RegisterV2(BuiltInNames.ArrayBinding, HandleArrayBinding);
 
         // Note: Error constructors are handled by SharpTSErrorClass (registered as globals).
         // Error() without 'new' resolves to SharpTSErrorClass.Call() via the general
@@ -454,6 +455,17 @@ internal static class GlobalFunctionHandlers
             return RuntimeValue.FromBoxed(ObjectBuiltIns.ObjectRest(interpreter, source, (IEnumerable<object?>?)excludeKeys ?? []));
         }
         throw new Exception($"{BuiltInNames.ObjectRest} requires 2 arguments");
+    }
+
+    private static async ValueTask<RuntimeValue> HandleArrayBinding(
+        Func<Expr, ValueTask<RuntimeValue>> evaluateArg,
+        IReadOnlyList<Expr> arguments,
+        Interpreter interpreter)
+    {
+        var args = new object?[arguments.Count];
+        for (int index = 0; index < args.Length; index++)
+            args[index] = (await evaluateArg(arguments[index])).ToObject();
+        return RuntimeValue.FromBoxed(interpreter.ExecuteArrayBinding(args));
     }
 
     private static async ValueTask<RuntimeValue> HandleArrayDestructure(

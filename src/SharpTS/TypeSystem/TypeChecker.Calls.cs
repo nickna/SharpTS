@@ -1107,6 +1107,20 @@ public partial class TypeChecker
             { result = TypeInfo.Any.Shared; return true; } // Returns an object with remaining properties
         }
 
+        if (call.Callee is Expr.Variable { Name: { Lexeme: BuiltInNames.ArrayBinding, IsGeneratedTemporary: true } })
+        {
+            var argumentTypes = call.Arguments.Select(CheckExpr).ToList();
+            result = call.Arguments[0] switch
+            {
+                Expr.Literal { Value: "start" } => NormalizeArrayDestructureSourceType(argumentTypes[2]),
+                Expr.Literal { Value: "next" } => CheckExpr(new Expr.GetIndex(call.Arguments[1], call.Arguments[2])),
+                Expr.Literal { Value: "rest" } when TryGetIterableElementType(argumentTypes[1], out var elementType)
+                    => new TypeInfo.Array(elementType),
+                _ => TypeInfo.Any.Shared
+            };
+            return true;
+        }
+
         // Handle __arrayDestructure (internal helper for array binding patterns, #685).
         // Normalizes the destructuring source so the desugared positional index
         // access types correctly for non-indexable iterables.

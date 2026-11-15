@@ -2992,6 +2992,9 @@ public partial class RuntimeEmitter
                 runtime.TypedArrays.Implementation?.BaseType,
                 _features.UsesBuffer ? runtime.RequireBuffer().Type : null,
                 _features.UsesArrayPrototypeMutation));
+        EmitArrayBinding(typeBuilder, runtime.ArrayOperations,
+            new ArrayBindingInputs(GetCollectionConsumerInputs(runtime), runtime.ArrayStorage,
+                runtime.Sentinels.UndefinedInstance, runtime.Cancellation.Check));
         // JSON methods — gated on UsesJSON (also implied by UsesHttp).
         if (runtime.Json.Implementation is not null)
         {
