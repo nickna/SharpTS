@@ -32,6 +32,7 @@ public partial class Parser
         if (Match(TokenType.DO)) return DoWhileStatement();
         if (Match(TokenType.WHILE)) return WhileStatement();
         if (Match(TokenType.RETURN)) return ReturnStatement();
+        if (Match(TokenType.WITH)) return WithStatement();
         if (Match(TokenType.LEFT_BRACE))
         {
             int start = Previous().Start;
@@ -639,6 +640,7 @@ public partial class Parser
                 case TokenType.IF:
                 case TokenType.FOR:
                 case TokenType.WHILE:
+                case TokenType.WITH:
                 case TokenType.DO:
                 case TokenType.SWITCH:
                 case TokenType.TRY:

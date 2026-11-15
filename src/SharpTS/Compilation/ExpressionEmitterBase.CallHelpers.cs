@@ -1282,6 +1282,8 @@ public abstract partial class ExpressionEmitterBase
     protected static bool ExprContainsSuspension(Expr expr) => expr switch
     {
         Expr.Await or Expr.Yield => true,
+        Expr.DestructuringAssign assignment => AnyStmtContainsSuspension(assignment.Assignments)
+            || ExprContainsSuspension(assignment.ResultValue),
         Expr.Comma c => ExprContainsSuspension(c.Left) || ExprContainsSuspension(c.Right),
         Expr.Binary b => ExprContainsSuspension(b.Left) || ExprContainsSuspension(b.Right),
         Expr.Logical l => ExprContainsSuspension(l.Left) || ExprContainsSuspension(l.Right),

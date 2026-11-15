@@ -206,6 +206,16 @@ public partial class Parser(List<Token> tokens, DecoratorMode decoratorMode = De
                     new SourceLocation(_filePath, expression.Keyword.Line), "TS17013");
         }
 
+        var withValidator = new WithStatementStrictValidator(_isStrictMode
+            || Path.GetExtension(_filePath)?.ToLowerInvariant() is ".mjs" or ".mts"
+            || statements.Any(
+            statement => statement is Stmt.Import or Stmt.Export or Stmt.ImportRequire));
+        foreach (Stmt statement in statements) withValidator.Visit(statement);
+        foreach (Token keyword in withValidator.InvalidKeywords)
+            _diagnostics.AddError(DiagnosticCode.ParseError,
+                "'with' statements are not allowed in strict mode.",
+                new SourceLocation(_filePath, keyword.Line), "TS1101");
+
         // Apply var hoisting to the top-level (module/script) statement list. Function bodies
         // and arrow function bodies are hoisted at their respective parse sites.
         _cancellationToken.ThrowIfCancellationRequested();
@@ -320,6 +330,7 @@ public partial class Parser(List<Token> tokens, DecoratorMode decoratorMode = De
                 case TokenType.IF:
                 case TokenType.FOR:
                 case TokenType.WHILE:
+                case TokenType.WITH:
                 case TokenType.DO:
                 case TokenType.SWITCH:
                 case TokenType.TRY:
@@ -556,7 +567,7 @@ public partial class Parser(List<Token> tokens, DecoratorMode decoratorMode = De
             TokenType.SATISFIES or
             TokenType.TRY or TokenType.TYPE or TokenType.TYPEOF or TokenType.UNDEFINED or
             TokenType.UNKNOWN or TokenType.USING or TokenType.VAR or TokenType.VOID or
-            TokenType.WHILE or TokenType.YIELD => true,
+            TokenType.WHILE or TokenType.WITH or TokenType.YIELD => true,
             _ => false
         };
     }

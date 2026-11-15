@@ -182,7 +182,12 @@ public partial class AsyncArrowMoveNextEmitter
         if (storage != null)
             storage.EmitStore(_il);
         else if (!TryStoreTopLevelVariable(name))
-            _resolver.TryStoreVariable(name);
+        {
+            if (_resolver.HasVariable(name))
+                _resolver.TryStoreVariable(name);
+            else
+                EmitUnresolvedAssignmentStore(name);
+        }
 
         SetStackUnknown();
     }

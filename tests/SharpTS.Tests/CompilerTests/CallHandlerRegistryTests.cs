@@ -17,10 +17,10 @@ public class CallHandlerRegistryTests
         Assert.True(registry.IsComplete);
         Assert.Throws<InvalidOperationException>(() => registry.Register(new Handler(0, () => false)));
         var handlers = Handlers(registry);
-        Assert.Equal(new[] { 10, 15, 16, 20, 30, 32, 35, 40, 43, 44, 45, 46, 50, 60, 72, 74, 76, 80 },
+        Assert.Equal(new[] { 10, 15, 16, 17, 20, 30, 32, 35, 40, 43, 44, 45, 46, 50, 60, 72, 74, 76, 80 },
             handlers.Select(handler => handler.Priority));
         Assert.Equal(new[] { typeof(SuperConstructorHandler), typeof(ObjectRestHandler),
-            typeof(ArrayDestructureHandler), typeof(ConsoleMethodHandler), typeof(StaticTypeHandler),
+            typeof(ArrayDestructureHandler), typeof(WithEnvironmentHandler), typeof(ConsoleMethodHandler), typeof(StaticTypeHandler),
             typeof(GlobalThisChainHandler), typeof(DateStaticHandler), typeof(BuiltInModuleHandler),
             typeof(ProcessStreamHandler), typeof(CookieJarHandler), typeof(TimerHandler),
             typeof(FetchHandler), typeof(GlobalFunctionHandler), typeof(BuiltInConstructorHandler),

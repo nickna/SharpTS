@@ -943,6 +943,13 @@ public partial class ILCompiler
     {
         switch (expr)
         {
+            case Expr.DestructuringAssign assignment:
+                foreach (var statement in assignment.Assignments)
+                    AnalyzeArrowStmtForAwaits(statement, ref awaitCount, ref seenAwait,
+                        declaredVariables, usedAfterAwait, declaredBeforeAwait);
+                AnalyzeArrowExprForAwaits(assignment.ResultValue, ref awaitCount, ref seenAwait,
+                    declaredVariables, usedAfterAwait, declaredBeforeAwait);
+                break;
             case Expr.ClassExpr classExpr:
                 foreach (var expression in ClassDefinitionExpressions.Enumerate(classExpr))
                     AnalyzeArrowExprForAwaits(expression, ref awaitCount, ref seenAwait, declaredVariables, usedAfterAwait, declaredBeforeAwait);

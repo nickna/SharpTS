@@ -167,6 +167,7 @@ public class Lexer(string source)
         { "unique", TokenType.UNIQUE },
         { "unknown", TokenType.UNKNOWN },
         { "while", TokenType.WHILE },
+        { "with", TokenType.WITH },
         { "yield", TokenType.YIELD },
         { "using", TokenType.USING },
         { "void", TokenType.VOID },

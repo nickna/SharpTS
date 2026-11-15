@@ -2981,6 +2981,7 @@ public partial class RuntimeEmitter
                     NativeProxyRejection: runtime.ReflectedMethods.NativeProxyRejection),
                 ProxySelected: _features.UsesProxy)
         );
+        EmitWithEnvironmentHelpers(typeBuilder, runtime);
         // #685: array binding-pattern source normalizer uses the declared iterator
         // collection helper and array storage constructor.
         EmitArrayDestructureSource(typeBuilder, runtime.ArrayOperations,

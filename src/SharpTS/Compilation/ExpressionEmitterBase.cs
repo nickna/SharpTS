@@ -957,8 +957,32 @@ public abstract partial class ExpressionEmitterBase : IEmitterContext
         if (TryEmitStoreClassDefinitionCapture(name)) { SetStackUnknown(); return; }
         if (TryEmitGlobalStore(name)) return;
 
-        Resolver.TryStoreVariable(name);
+        if (!Resolver.TryStoreVariable(name))
+            EmitUnresolvedAssignmentStore(name);
         SetStackUnknown();
+    }
+
+    /// <summary>
+    /// Completes an assignment with no compiled binding. The stack contains the
+    /// duplicated assignment value; leave exactly one result after PutValue.
+    /// </summary>
+    protected void EmitUnresolvedAssignmentStore(string name)
+    {
+        IL.Emit(OpCodes.Pop);
+        var value = IL.DeclareLocal(Ctx.Types.Object);
+        IL.Emit(OpCodes.Stloc, value);
+        EmitPropertyWriteOperation(() =>
+        {
+            IL.Emit(OpCodes.Ldstr, name);
+            if (Ctx.IsStrictMode)
+                IL.Emit(OpCodes.Call, Ctx.Runtime!.Errors.ThrowUndefinedVariable);
+            else
+            {
+                IL.Emit(OpCodes.Ldloc, value);
+                IL.Emit(OpCodes.Call, Ctx.Runtime!.GlobalObject.SetProperty);
+            }
+        });
+        IL.Emit(OpCodes.Ldloc, value);
     }
 
     /// <summary>
