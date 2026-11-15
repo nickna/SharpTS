@@ -2301,6 +2301,7 @@ public partial class ILEmitter
         }
 
         // Store the iterable for potential iterator protocol check
+        EmitBoxIfNeeded(f.Iterable);
         var iterableLocal = IL.DeclareLocal(_ctx.Types.Object);
         IL.Emit(OpCodes.Stloc, iterableLocal);
         var afterLoopLabel = builder.DefineLabel("forof_after");
