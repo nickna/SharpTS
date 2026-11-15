@@ -268,12 +268,16 @@ public partial class GeneratorMoveNextEmitter
             _il.Emit(OpCodes.Stloc, iteratorLocal);
         });
 
-        // Create $IteratorWrapper: new $IteratorWrapper(iterator, runtimeType)
-        _il.Emit(OpCodes.Ldloc, iteratorLocal);
-        _il.Emit(OpCodes.Ldtoken, _ctx.Runtime.RuntimeClass.Type);
-        _il.Emit(OpCodes.Call, Types.TypeGetTypeFromHandle);
-        _il.Emit(OpCodes.Newobj, _ctx.Runtime.IteratorWrappers.Ctor);
-        _il.Emit(OpCodes.Stloc, enumTemp);
+        // Validation and the captured next lookup are part of acquisition too.
+        // Route their failures through the active guest catch/finally.
+        EmitTryBodyOperation(() =>
+        {
+            _il.Emit(OpCodes.Ldloc, iteratorLocal);
+            _il.Emit(OpCodes.Ldtoken, _ctx.Runtime.RuntimeClass.Type);
+            _il.Emit(OpCodes.Call, Types.TypeGetTypeFromHandle);
+            _il.Emit(OpCodes.Newobj, _ctx.Runtime.IteratorWrappers.Ctor);
+            _il.Emit(OpCodes.Stloc, enumTemp);
+        });
 
         // Store enumerator in field
         _il.MarkLabel(gotEnumeratorLabel);
