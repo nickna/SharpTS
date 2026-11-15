@@ -579,7 +579,9 @@ public partial class Parser
             Expr? value = null;
             if (!HasLineTerminatorBeforeCurrent() &&
                 !Check(TokenType.SEMICOLON) && !Check(TokenType.RIGHT_BRACE) &&
-                !Check(TokenType.RIGHT_PAREN) && !Check(TokenType.COMMA) && !IsAtEnd())
+                !Check(TokenType.RIGHT_PAREN) && !Check(TokenType.COMMA) &&
+                (isDelegating || (!Check(TokenType.RIGHT_BRACKET) &&
+                    !Check(TokenType.TEMPLATE_MIDDLE) && !Check(TokenType.TEMPLATE_TAIL))) && !IsAtEnd())
             {
                 value = Assignment();  // Use Assignment to handle full expressions
             }

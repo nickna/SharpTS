@@ -142,25 +142,9 @@ public partial class GeneratorMoveNextEmitter
             _il.Emit(OpCodes.Stloc, iterableLocal);
         });
 
-        // A delegated SharpTS generator implements $IGenerator. Store it directly in the
-        // delegate field and skip the Symbol.iterator/$IteratorWrapper setup below, which
-        // drives via IEnumerator.MoveNext() — a path with no slot to forward the outer's
-        // resume value. The per-element loop detects $IGenerator and drives it via
-        // next(sent) instead, forwarding next(v) into the delegate (ECMA-262 §14.4.14, #476).
+        // Acquire native generators through the guest protocol too: their
+        // iterator factory and next/return/throw properties can be overridden.
         var generatorInterfaceType = _ctx?.Runtime?.Generators.Type;
-        if (generatorInterfaceType != null)
-        {
-            var notDelegatedGeneratorLabel = _il.DefineLabel();
-            _il.Emit(OpCodes.Ldloc, iterableLocal);
-            _il.Emit(OpCodes.Isinst, generatorInterfaceType);
-            _il.Emit(OpCodes.Brfalse, notDelegatedGeneratorLabel);
-            _il.Emit(OpCodes.Ldarg_0);
-            _il.Emit(OpCodes.Ldloc, iterableLocal);
-            _il.Emit(OpCodes.Castclass, typeof(System.Collections.IEnumerator));
-            _il.Emit(OpCodes.Stfld, delegatedField);
-            _il.Emit(OpCodes.Br, resumeLabel);
-            _il.MarkLabel(notDelegatedGeneratorLabel);
-        }
 
         // Handle Map/Set specially - convert to List before iteration. Each
         // arm checks the corresponding $Runtime method MethodBuilder for null;
@@ -231,6 +215,22 @@ public partial class GeneratorMoveNextEmitter
         _il.Emit(OpCodes.Isinst, _ctx!.Runtime!.Sentinels.UndefinedType);
         _il.Emit(OpCodes.Brfalse, hasIteratorLabel);
 
+        // A native generator reaches this arm only when its observable
+        // iterator method was made absent. Its CLR carrier must not restore
+        // the protocol that the guest explicitly removed.
+        if (generatorInterfaceType != null)
+        {
+            EmitTryBodyOperation(() =>
+            {
+                var notNativeGenerator = _il.DefineLabel();
+                _il.Emit(OpCodes.Ldloc, iterableLocal);
+                _il.Emit(OpCodes.Isinst, generatorInterfaceType);
+                _il.Emit(OpCodes.Brfalse, notNativeGenerator);
+                GuestErrorEmitter.ThrowTypeError(_il, _ctx.Runtime, "Generator has no iterator method.");
+                _il.MarkLabel(notNativeGenerator);
+            });
+        }
+
         // A CLR string enumerates UTF-16 code units. Reuse the ordinary
         // string iterator so delegation keeps surrogate pairs together and
         // retains lone surrogates as individual strings.
@@ -248,11 +248,24 @@ public partial class GeneratorMoveNextEmitter
         _il.Emit(OpCodes.Br, gotEnumeratorLabel);
         _il.MarkLabel(notStringDelegateLabel);
 
-        // No Symbol.iterator - fall back to IEnumerable cast
-        _il.Emit(OpCodes.Ldloc, iterableLocal);
-        _il.Emit(OpCodes.Castclass, typeof(System.Collections.IEnumerable));
-        _il.Emit(OpCodes.Callvirt, getEnumerator);
-        _il.Emit(OpCodes.Stloc, enumTemp);
+        // A primitive without a prototype iterator is noniterable. Reject it
+        // with a guest TypeError instead of leaking a CLR cast failure, and
+        // route the acquisition error through any surrounding guest handlers.
+        EmitTryBodyOperation(() =>
+        {
+            var enumerable = _il.DeclareLocal(typeof(System.Collections.IEnumerable));
+            var validEnumerable = _il.DefineLabel();
+            _il.Emit(OpCodes.Ldloc, iterableLocal);
+            _il.Emit(OpCodes.Isinst, typeof(System.Collections.IEnumerable));
+            _il.Emit(OpCodes.Stloc, enumerable);
+            _il.Emit(OpCodes.Ldloc, enumerable);
+            _il.Emit(OpCodes.Brtrue, validEnumerable);
+            GuestErrorEmitter.ThrowTypeError(_il, _ctx.Runtime, "Value is not iterable.");
+            _il.MarkLabel(validEnumerable);
+            _il.Emit(OpCodes.Ldloc, enumerable);
+            _il.Emit(OpCodes.Callvirt, getEnumerator);
+            _il.Emit(OpCodes.Stloc, enumTemp);
+        });
         _il.Emit(OpCodes.Br, gotEnumeratorLabel);
 
         // Has Symbol.iterator - use iterator protocol with $IteratorWrapper
@@ -268,12 +281,16 @@ public partial class GeneratorMoveNextEmitter
             _il.Emit(OpCodes.Stloc, iteratorLocal);
         });
 
-        // Create $IteratorWrapper: new $IteratorWrapper(iterator, runtimeType)
-        _il.Emit(OpCodes.Ldloc, iteratorLocal);
-        _il.Emit(OpCodes.Ldtoken, _ctx.Runtime.RuntimeClass.Type);
-        _il.Emit(OpCodes.Call, Types.TypeGetTypeFromHandle);
-        _il.Emit(OpCodes.Newobj, _ctx.Runtime.IteratorWrappers.Ctor);
-        _il.Emit(OpCodes.Stloc, enumTemp);
+        // Validation and the captured next lookup are part of acquisition too.
+        // Route their failures through the active guest catch/finally.
+        EmitTryBodyOperation(() =>
+        {
+            _il.Emit(OpCodes.Ldloc, iteratorLocal);
+            _il.Emit(OpCodes.Ldtoken, _ctx.Runtime.RuntimeClass.Type);
+            _il.Emit(OpCodes.Call, Types.TypeGetTypeFromHandle);
+            _il.Emit(OpCodes.Newobj, _ctx.Runtime.IteratorWrappers.Ctor);
+            _il.Emit(OpCodes.Stloc, enumTemp);
+        });
 
         // Store enumerator in field
         _il.MarkLabel(gotEnumeratorLabel);

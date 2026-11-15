@@ -207,7 +207,7 @@ public partial class Interpreter
     /// </remarks>
     private RuntimeValue EvaluateYield(Expr.Yield yieldExpr)
     {
-        object? value = yieldExpr.Value != null ? Evaluate(yieldExpr.Value) : null;
+        object? value = yieldExpr.Value != null ? Evaluate(yieldExpr.Value) : SharpTSUndefined.Instance;
 
         // If a yield callback is set (coroutine-based generator), call it directly
         // instead of throwing. This suspends the worker thread without unwinding

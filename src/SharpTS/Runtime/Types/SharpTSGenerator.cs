@@ -360,26 +360,18 @@ public class SharpTSGenerator : IEnumerable<object?>, IDisposable, ITypeCategori
     /// </param>
     internal static object? DelegateYieldStar(Interpreter interpreter, object? iterable, Func<object?, GeneratorResume> suspend, Func<bool> isClosed)
     {
-        switch (iterable)
-        {
-            case SharpTSGenerator gen:
-                return DelegateToGenerator(gen.Next, gen.Return, gen.Throw, suspend, isClosed);
-            default:
-                // Custom iterator objects (those with [Symbol.iterator] and a next(v) that
-                // consumes its argument) are driven manually so the outer generator's resume
-                // value is forwarded as the argument to next(v) (ECMA-262 §14.4.14, #503).
-                if (interpreter.TryGetCustomIteratorProtocol(iterable) is { } record)
-                    return DelegateToCustomIterator(interpreter, record, suspend, isClosed);
+        // Native generators participate in the same observable acquisition and
+        // request protocol as any other iterator. Capture next once, while
+        // return/throw remain live property lookups.
+        if (interpreter.TryGetCustomIteratorProtocol(iterable) is { } record)
+            return DelegateToCustomIterator(interpreter, record, suspend, isClosed);
 
-                // Other source kinds use the existing enumerable adapter.
-                // Abrupt resumes unwind the outer body.
-                foreach (var element in interpreter.GetIterableElements(iterable))
-                {
-                    if (isClosed()) return null;
-                    suspend(new SharpTSIteratorResult(element, done: false)).Realize();
-                }
-                return null;
+        foreach (var element in interpreter.GetIterableElements(iterable))
+        {
+            if (isClosed()) return null;
+            suspend(new SharpTSIteratorResult(element, done: false)).Realize();
         }
+        return null;
     }
 
     /// <summary>
@@ -426,67 +418,6 @@ public class SharpTSGenerator : IEnumerable<object?>, IDisposable, ITypeCategori
                 return value;
             }
             received = suspend(result);
-        }
-    }
-
-    /// <summary>
-    /// Drives a delegated SharpTS generator, forwarding into it whatever completion the outer
-    /// generator receives at each <c>yield*</c> suspension (ECMA-262 §14.4.14):
-    /// <list type="bullet">
-    /// <item><c>next(v)</c> → <paramref name="next"/>; when the delegate finishes, <c>yield*</c>
-    /// evaluates to its return value (step a.v).</item>
-    /// <item><c>return(v)</c> → <paramref name="return"/>, running the delegate's <c>finally</c>;
-    /// when it finishes, the <c>yield*</c> itself completes as a <c>return</c> carrying the
-    /// delegate's value, so the OUTER generator returns (step c.viii).</item>
-    /// <item><c>throw(e)</c> → <paramref name="throw"/>, running the delegate's <c>catch</c>/
-    /// <c>finally</c>. If the delegate has no handler, <paramref name="throw"/> rethrows and the
-    /// error propagates out of <c>yield*</c> (step b.ii). If it catches and finishes,
-    /// <c>yield*</c> evaluates to its value as a NORMAL completion — the outer continues past
-    /// <c>yield*</c> (step b.5).</item>
-    /// </list>
-    /// In every case, a delegate that yields again (from its body, a <c>catch</c>, or a
-    /// <c>finally</c>) re-suspends the outer; the resulting completion drives the next turn.
-    /// </summary>
-    private static object? DelegateToGenerator(
-        Func<object?, SharpTSIteratorResult> next,
-        Func<object?, SharpTSIteratorResult> @return,
-        Func<object?, SharpTSIteratorResult> @throw,
-        Func<object?, GeneratorResume> suspend,
-        Func<bool> isClosed)
-    {
-        // Seed `received` with normal/undefined: the first inner next() gets undefined (a
-        // delegate suspended at its start ignores the argument anyway); every later turn
-        // forwards whatever completion the outer received at the previous GeneratorYield.
-        var received = new GeneratorResume(GeneratorResumeKind.Next, SharpTSUndefined.Instance);
-        while (true)
-        {
-            if (isClosed()) return null;
-
-            SharpTSIteratorResult inner;
-            switch (received.Kind)
-            {
-                case GeneratorResumeKind.Return:
-                    inner = @return(received.Value);
-                    // Delegate finished its finally → the outer generator returns this value.
-                    if (inner.Done) throw new GeneratorReturnException(inner.Value);
-                    break;
-
-                case GeneratorResumeKind.Throw:
-                    // @throw rethrows if the delegate has no catch — propagating out of yield*.
-                    inner = @throw(received.Value);
-                    // Delegate caught + finished → yield* value (normal); outer continues.
-                    if (inner.Done) return inner.Value;
-                    break;
-
-                default:
-                    inner = next(received.Value);
-                    // Delegate finished normally → yield* evaluates to its return value.
-                    if (inner.Done) return inner.Value;
-                    break;
-            }
-
-            // Delegate yielded again; suspend the outer and forward the next completion.
-            received = suspend(inner.GuestResult);
         }
     }
 
