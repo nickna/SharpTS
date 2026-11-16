@@ -27,6 +27,15 @@ public sealed partial class RuntimeFeatureDetector
     private readonly RuntimeFeatureSet _set;
     private readonly bool _nativeClassBodiesOnly;
     private readonly HashSet<string> _sourceFunctions = new(StringComparer.Ordinal);
+    private readonly HashSet<string> _evalAliases = new(StringComparer.Ordinal) { "eval" };
+
+    private bool IsPossibleEval(Expr expression) => expression switch
+    {
+        Expr.Variable variable => _evalAliases.Contains(variable.Name.Lexeme),
+        Expr.Grouping grouping => IsPossibleEval(grouping.Expression),
+        Expr.Comma comma => IsPossibleEval(comma.Right),
+        _ => false
+    };
     private readonly HashSet<string> _opaqueValueBindings = new(StringComparer.Ordinal);
     private readonly HashSet<string> _numberConstructorAliases = new(StringComparer.Ordinal)
     {
@@ -796,6 +805,7 @@ public sealed partial class RuntimeFeatureDetector
                     _set.UsesObjectDefinitionRuntime = true;
                 if (var.Initializer is not null)
                 {
+                    if (IsPossibleEval(var.Initializer)) _evalAliases.Add(var.Name.Lexeme);
                     TrackGlobalObjectAlias(var.Name.Lexeme, var.Initializer);
                     TrackNumberAlias(var.Name.Lexeme, var.Initializer);
                     TrackStringAlias(var.Name.Lexeme, var.Initializer);
@@ -809,6 +819,7 @@ public sealed partial class RuntimeFeatureDetector
                 break;
 
             case Stmt.Const cst:
+                if (IsPossibleEval(cst.Initializer)) _evalAliases.Add(cst.Name.Lexeme);
                 TrackGlobalObjectAlias(cst.Name.Lexeme, cst.Initializer);
                 TrackNumberAlias(cst.Name.Lexeme, cst.Initializer);
                 TrackStringAlias(cst.Name.Lexeme, cst.Initializer);
@@ -1428,18 +1439,19 @@ public sealed partial class RuntimeFeatureDetector
                         HandleModulePath(modPath);
                     }
                 }
-                // Constant direct eval is parsed again during callable discovery
+                // Constant direct/indirect eval is parsed again during callable discovery
                 // and emitted as its exact AST when it is expression-only. Detect
                 // runtime features in that source now, before runtime types are
                 // emitted; otherwise an eval-contained regex (for example) reaches
                 // EmitRegexLiteral with its constructor helper never defined.
-                if (c.Callee is Expr.Variable { Name.Lexeme: "eval" }
+                if (IsPossibleEval(c.Callee)
                     && c.Arguments.Count > 0
                     && c.Arguments[0] is Expr.Literal { Value: string evalSource })
                 {
                     try
                     {
-                        foreach (var statement in new Parser(new Lexer(evalSource).ScanTokens()).ParseOrThrow())
+                        foreach (var statement in c.PreparedEvalStatements
+                            ?? new Parser(new Lexer(evalSource).ScanTokens()).ParseOrThrow())
                             VisitStmt(statement);
                     }
                     catch
