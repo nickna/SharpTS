@@ -85,6 +85,10 @@ property. Strict code rejects `with`; strict functions created inside a non-stri
 apply strict binding-read/write rules. Lowered helpers are emitted into standalone output.
 Direct `eval` source does not yet inherit the lowered object environment; that limitation is
 tracked in [#3705](https://github.com/nickna/SharpTS/issues/3705).
+Direct `eval` also retains syntactic branch lowering to preserve caller bindings and literal
+standalone compilation. Nested direct-eval arguments can still cause exponential AST growth
+([#3710](https://github.com/nickna/SharpTS/issues/3710)); ordinary calls and tags share one lowered
+argument/interpolation tree.
 
 ### Compile-time and runtime environments
 
