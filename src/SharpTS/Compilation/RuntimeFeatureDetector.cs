@@ -976,6 +976,10 @@ public sealed partial class RuntimeFeatureDetector
             case Stmt.LabeledStatement lab:
                 VisitStmt(lab.Statement);
                 break;
+            case Stmt.Enum { IsAmbient: false, IsConst: false } enumeration:
+                foreach (var member in enumeration.Members)
+                    VisitExpr(member.Value);
+                break;
 
             // Statements that carry no expressions worth walking.
             default:
