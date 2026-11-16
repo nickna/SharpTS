@@ -2704,8 +2704,10 @@ public static partial class ObjectBuiltIns
         // A class instance's [[Prototype]] is its constructor's `prototype` object, so
         // `Object.getPrototypeOf(new C()) === C.prototype`.
         SharpTSInstance inst => inst.Prototype,
-        SharpTSGenerator generator => generator.Prototype ?? interp?.GetGeneratorIntrinsics(false).GeneratorPrototype,
-        SharpTSAsyncGenerator generator => generator.Prototype ?? interp?.GetGeneratorIntrinsics(true).GeneratorPrototype,
+        SharpTSGenerator generator => generator.HasExplicitPrototype
+            ? generator.Prototype : interp?.GetGeneratorIntrinsics(false).GeneratorPrototype,
+        SharpTSAsyncGenerator generator => generator.HasExplicitPrototype
+            ? generator.Prototype : interp?.GetGeneratorIntrinsics(true).GeneratorPrototype,
         // Native errors raised from C# carry only their type name; resolve it back to the
         // same constructor the global `TypeError` identifier yields so the prototypes match.
         SharpTSError err => interp?.GetErrorClass(err.ErrorTypeName).Prototype,
@@ -2860,6 +2862,16 @@ public static partial class ObjectBuiltIns
             case SharpTSObjectPrototype:
                 return proto is null;
 
+            case SharpTSGenerator or SharpTSAsyncGenerator:
+                if (ReferenceEquals(PrototypeOf(interpreter, target), proto)) return true;
+                if (!((ISharpTSOwnPropertyObject)target).OwnProperties.IsExtensible) return false;
+                if (WouldCreatePrototypeCycle(interpreter, target, proto)) return false;
+                if (target is SharpTSGenerator generator)
+                    generator.Prototype = proto;
+                else
+                    ((SharpTSAsyncGenerator)target).Prototype = proto;
+                return true;
+
             case SharpTSNumberPrototype or SharpTSBooleanPrototype:
                 if (ReferenceEquals(PrototypeOf(interpreter, target), proto)) return true;
                 if (!PropertyDescriptorStore.IsExtensible(target)) return false;
@@ -2975,6 +2987,7 @@ public static partial class ObjectBuiltIns
             {
                 SharpTSObject or SharpTSArray or SharpTSTypedArray or SharpTSClassPrototype or SharpTSInstance or SharpTSArrayGlobal or SharpTSClass or SharpTSPromise
                     or SharpTSFunctionPrototype or SharpTSNumberPrototype or SharpTSBooleanPrototype
+                    or SharpTSGenerator or SharpTSAsyncGenerator
                     or Dictionary<string, object?>
                     => PrototypeOf(interpreter, candidate),
                 ISharpTSCallable function when function is not SharpTSProxy
