@@ -1711,7 +1711,7 @@ public partial class RuntimeEmitter
         il.Emit(OpCodes.Callvirt, inputs.ArrayStorage.HasIndex);
         il.Emit(OpCodes.Brtrue, tsArraySetRawStorage);
         EmitArrayIndexPrototypeSetPolicy(
-            il, new ArrayIndexPrototypeSetInputs(inputs.DescriptorStorage,
+            il, new ArrayIndexPrototypeSetInputs(inputs.DescriptorStorage, inputs.TypedArrays,
                 inputs.InvokeMethodUnwrapped, inputs.InvokeMethodValue, inputs.ObjectDescriptors,
                 inputs.ObjectPrototypes, inputs.ObjectRead, inputs.ProxySelected,
                 inputs.ReflectAssignment, inputs.UndefinedType, NativeProxyRejection: inputs.NativeProxyRejection),
@@ -1831,7 +1831,7 @@ public partial class RuntimeEmitter
             {
                 var listCheckExtensible = il.DefineLabel();
                 EmitArgumentsIndexPrototypeSetPolicy(il, inputs.ArgumentsType, inputs.ObjectOwnProperties.HasOwnProperty,
-                    new ArrayIndexPrototypeSetInputs(inputs.DescriptorStorage, inputs.InvokeMethodUnwrapped,
+                    new ArrayIndexPrototypeSetInputs(inputs.DescriptorStorage, inputs.TypedArrays, inputs.InvokeMethodUnwrapped,
                         inputs.InvokeMethodValue, inputs.ObjectDescriptors, inputs.ObjectPrototypes, inputs.ObjectRead,
                         inputs.ProxySelected, inputs.ReflectAssignment, inputs.UndefinedType, inputs.NativeProxyRejection),
                     listSetKeyLocal, listCheckExtensible, nullLabel);

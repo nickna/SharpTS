@@ -122,14 +122,15 @@ public sealed class EmittedObjectWriteRuntimeTests
         var emitter = new RuntimeEmitter(TypeProvider.Runtime); var runtime = emitter.EmitAll(module, features);
         features.UsesBuffer = features.UsesCjsRequire = features.UsesPromise = features.UsesAbortController = selected;
         features.TypedArrays = selected ? RuntimeFeatureSet.TypedArrayKinds.All : RuntimeFeatureSet.TypedArrayKinds.None;
+        var probe = runtime.RuntimeClass.Type.DefineNestedType("SuppliedWrite", TypeAttributes.NestedPublic);
+        var typedArrays = supplied ? runtime.TypedArrays : CreateTreeShakenTypedArrays(probe);
         var inputs = new Dictionary<string, object?>
         {
             ["Buffer"] = supplied ? runtime.Buffer : null, ["CommonJs"] = supplied ? runtime.Modules.CommonJs : null,
             ["Promise"] = supplied ? runtime.Promise : null, ["Abort"] = supplied ? runtime.Abort : null,
-            ["TypedArrays"] = supplied ? runtime.TypedArrays : new EmittedTypedArrayRuntime(), ["ProxySelected"] = false,
+            ["TypedArrays"] = typedArrays, ["ProxySelected"] = false,
             ["ReflectAssignment"] = null
         };
-        var probe = runtime.RuntimeClass.Type.DefineNestedType("SuppliedWrite", TypeAttributes.NestedPublic);
         var owner = EmitWrites(emitter, probe, runtime, inputs); AssertFrozen(owner); probe.CreateType();
         var loaded = SaveVerifyLoad(builder); var saved = loaded.GetType(probe.FullName!)!;
         foreach (var name in new[] { "SetFieldsProperty", "SetFieldsPropertyStrict" })
@@ -145,6 +146,24 @@ public sealed class EmittedObjectWriteRuntimeTests
         var signal = new Dictionary<string, object?> { ["_reasonSet"] = false };
         property.Invoke(null, [signal, "onabort", "handler"]);
         Assert.Equal("handler", signal[supplied ? "_onabort" : "onabort"]);
+    }
+
+    private static EmittedTypedArrayRuntime CreateTreeShakenTypedArrays(TypeBuilder probe)
+    {
+        // Detection helpers remain required when the TypedArray implementation is absent.
+        MethodBuilder FalseHelper(string name, params Type[] parameters)
+        {
+            var method = probe.DefineMethod(name, MethodAttributes.Public | MethodAttributes.Static, typeof(bool), parameters);
+            var il = method.GetILGenerator(); il.Emit(OpCodes.Ldc_I4_0); il.Emit(OpCodes.Ret);
+            return method;
+        }
+        var arrays = new EmittedTypedArrayRuntime
+        {
+            IsTypedArray = FalseHelper("IsTypedArray", typeof(object)),
+            IsInvalidCanonicalIndex = FalseHelper("IsInvalidTypedArrayCanonicalIndex", typeof(object), typeof(object))
+        };
+        arrays.CompleteEmission();
+        return arrays;
     }
 
     [Theory]

@@ -678,6 +678,8 @@ public partial class RuntimeEmitter
         // The body follows arrays.Implementation availability inside the helper.
         // Without an emitted typed-array type, IsTypedArray just returns false.
         EmitIsTypedArrayHelper(runtimeType, runtime.TypedArrays);
+        EmitIsInvalidTypedArrayCanonicalIndexHelper(runtimeType, runtime.TypedArrays,
+            runtime.NumericCoercion.ToNumber, runtime.StringCoercion.ToJsString);
         if (_features.HasAnyTypedArray)
         {
             EmitGetTypedArrayElementHelper(runtimeType, runtime.TypedArrays.RequireImplementation());

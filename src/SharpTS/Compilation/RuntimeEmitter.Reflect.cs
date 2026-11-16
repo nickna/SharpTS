@@ -578,6 +578,18 @@ public partial class RuntimeEmitter
         il.Emit(OpCodes.Ret);
         il.MarkLabel(notProxyTargetLabel);
 
+        var ordinaryTarget = il.DefineLabel();
+        il.Emit(OpCodes.Ldarg_0);
+        il.Emit(OpCodes.Ldarg_3);
+        il.Emit(OpCodes.Beq, ordinaryTarget);
+        il.Emit(OpCodes.Ldarg_0);
+        il.Emit(OpCodes.Ldloc, keyLocal);
+        il.Emit(OpCodes.Call, inputs.TypedArrays.IsInvalidCanonicalIndex);
+        il.Emit(OpCodes.Brfalse, ordinaryTarget);
+        il.Emit(OpCodes.Ldc_I4_1);
+        il.Emit(OpCodes.Ret);
+        il.MarkLabel(ordinaryTarget);
+
         // OrdinarySetWithOwnDescriptor: an own accessor on the target invokes
         // its setter with Receiver, rather than defining a data property on
         // Receiver. This is the forwarding path used when a Proxy has no set

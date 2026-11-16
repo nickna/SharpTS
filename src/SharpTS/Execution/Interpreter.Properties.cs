@@ -3551,6 +3551,8 @@ public partial class Interpreter
                     throw StrictModeErrors.TypeError($"Proxy set trap rejected property '{name}'");
                 return true;
             }
+            if (current is SharpTSTypedArray array && array.IsInvalidCanonicalIndex(name))
+                return true;
             if (ObjectBuiltIns.OwnPropertyDescriptorOf(this, current, name) is { } descriptor)
                 return TryAssignThroughDescriptor(descriptor, receiver, name, value, strictMode);
             current = ObjectBuiltIns.PrototypeOf(this, current);

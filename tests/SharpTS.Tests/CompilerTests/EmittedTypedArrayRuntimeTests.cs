@@ -45,6 +45,11 @@ public class EmittedTypedArrayRuntimeTests
         var type = assembly.DefineDynamicModule("main").DefineType("Helpers");
         arrays.IsTypedArray = type.DefineMethod("IsTypedArray", MethodAttributes.Public | MethodAttributes.Static,
             typeof(bool), [typeof(object)]);
+        Assert.Contains("'IsInvalidCanonicalIndex'", Assert.Throws<InvalidOperationException>(arrays.CompleteEmission).Message);
+        arrays.IsInvalidCanonicalIndex = type.DefineMethod("IsInvalidCanonicalIndex", MethodAttributes.Public | MethodAttributes.Static,
+            typeof(bool), [typeof(object), typeof(object)]);
+        arrays.IsInvalidCanonicalIndex.GetILGenerator().Emit(OpCodes.Ldc_I4_0);
+        arrays.IsInvalidCanonicalIndex.GetILGenerator().Emit(OpCodes.Ret);
         var caller = type.DefineMethod("Call", MethodAttributes.Public | MethodAttributes.Static,
             typeof(bool), Type.EmptyTypes);
         caller.GetILGenerator().Emit(OpCodes.Ldnull);
@@ -383,6 +388,7 @@ public class EmittedTypedArrayRuntimeTests
         var method = type.DefineMethod("Placeholder", MethodAttributes.Public, typeof(void), Type.EmptyTypes);
         method.GetILGenerator().Emit(OpCodes.Ret);
         arrays.IsTypedArray = method;
+        arrays.IsInvalidCanonicalIndex = method;
         var field = type.DefineField("Placeholder", typeof(object), FieldAttributes.Public);
         foreach (var property in Handles.Where(property => property.Name != missingHandle))
         {
@@ -404,6 +410,7 @@ public class EmittedTypedArrayRuntimeTests
         Assert.Throws<InvalidOperationException>(arrays.CompleteEmission);
         Assert.Throws<InvalidOperationException>(arrays.BeginImplementationEmission);
         Assert.Throws<InvalidOperationException>(() => arrays.IsTypedArray = arrays.IsTypedArray);
+        Assert.Throws<InvalidOperationException>(() => arrays.IsInvalidCanonicalIndex = arrays.IsInvalidCanonicalIndex);
         if (arrays.Implementation is not { } implementation) return;
         Assert.True(implementation.IsComplete);
         Assert.Throws<InvalidOperationException>(implementation.CompleteEmission);

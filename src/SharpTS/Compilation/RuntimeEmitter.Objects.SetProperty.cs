@@ -934,6 +934,8 @@ public partial class RuntimeEmitter
         }
         // Normalize descriptors so object-literal accessor tables and PDS
         // descriptors participate in the same inherited [[Set]] operation.
+        EmitInheritedTypedArrayIndexSetGuard(il, inputs.TypedArrays, inheritedSetPrototypeLocal,
+            () => il.Emit(OpCodes.Ldarg_1));
         var inheritedSetDescriptorLocal = il.DeclareLocal(_types.Object);
         il.Emit(OpCodes.Ldloc, inheritedSetPrototypeLocal);
         il.Emit(OpCodes.Ldarg_1);
@@ -2384,6 +2386,7 @@ public partial class RuntimeEmitter
 
     private readonly record struct ConstructorPrototypeSetGuardInputs(
         bool ProxySelected,
+        EmittedTypedArrayRuntime TypedArrays,
         EmittedReflectAssignment? ReflectAssignment,
         EmittedObjectDescriptorRuntime ObjectDescriptors,
         EmittedObjectReadRuntime ObjectRead,
@@ -2397,7 +2400,7 @@ public partial class RuntimeEmitter
     private void EmitConstructorPrototypeSetGuard(
         ILGenerator il, SetPropertyStrictInputs inputs, Action emitPrototype, Label create, Label reject)
         => EmitConstructorPrototypeSetGuard(il,
-            new ConstructorPrototypeSetGuardInputs(inputs.ProxySelected, inputs.ReflectAssignment,
+            new ConstructorPrototypeSetGuardInputs(inputs.ProxySelected, inputs.TypedArrays, inputs.ReflectAssignment,
                 inputs.ObjectDescriptors, inputs.ObjectRead, inputs.InvokeMethodUnwrapped, inputs.InvokeMethodValue,
                 inputs.Errors, inputs.UndefinedType, inputs.ObjectPrototypes, true, NativeProxyRejection: inputs.NativeProxyRejection), emitPrototype, create, reject);
 
@@ -2449,7 +2452,7 @@ public partial class RuntimeEmitter
         il.Emit(OpCodes.Isinst, inputs.UndefinedType);
         il.Emit(OpCodes.Brfalse, proceed);
         EmitConstructorPrototypeSetGuard(il,
-            new ConstructorPrototypeSetGuardInputs(inputs.ProxySelected, inputs.ReflectAssignment,
+            new ConstructorPrototypeSetGuardInputs(inputs.ProxySelected, inputs.TypedArrays, inputs.ReflectAssignment,
                 inputs.ObjectDescriptors, inputs.ObjectRead, inputs.InvokeMethodUnwrapped, inputs.InvokeMethodValue,
                 inputs.Errors, inputs.UndefinedType, inputs.ObjectPrototypes, false, NativeProxyRejection: inputs.NativeProxyRejection), () =>
             {
@@ -2505,6 +2508,7 @@ public partial class RuntimeEmitter
             il.Emit(OpCodes.Ret);
             il.MarkLabel(notProxy);
         }
+        EmitInheritedTypedArrayIndexSetGuard(il, inputs.TypedArrays, prototype, () => il.Emit(OpCodes.Ldarg_1));
         il.Emit(OpCodes.Ldloc, prototype);
         il.Emit(OpCodes.Ldarg_1);
         il.Emit(OpCodes.Call, inputs.ObjectDescriptors.GetOwnPropertyDescriptor);
@@ -2802,6 +2806,7 @@ public partial class RuntimeEmitter
 
     private readonly record struct ArrayIndexPrototypeSetInputs(
         EmittedDescriptorStorageRuntime DescriptorStorage,
+        EmittedTypedArrayRuntime TypedArrays,
         MethodBuilder InvokeMethodUnwrapped,
         MethodBuilder InvokeMethodValue,
         EmittedObjectDescriptorRuntime ObjectDescriptors,
@@ -2871,6 +2876,7 @@ public partial class RuntimeEmitter
             il.MarkLabel(notProxy);
         }
 
+        EmitInheritedTypedArrayIndexSetGuard(il, inputs.TypedArrays, prototype, loadKey);
         il.Emit(OpCodes.Ldloc, prototype);
         loadKey();
         il.Emit(OpCodes.Call, inputs.ObjectDescriptors.GetOwnPropertyDescriptor);
@@ -3311,7 +3317,7 @@ public partial class RuntimeEmitter
             il.Emit(OpCodes.Brtrue, arrayCheckFrozenLabel);
             il.MarkLabel(checkArrayInheritedProperty);
             EmitArrayIndexPrototypeSetPolicy(il,
-                new ArrayIndexPrototypeSetInputs(inputs.DescriptorStorage, inputs.InvokeMethodUnwrapped,
+                new ArrayIndexPrototypeSetInputs(inputs.DescriptorStorage, inputs.TypedArrays, inputs.InvokeMethodUnwrapped,
                     inputs.InvokeMethodValue, inputs.ObjectDescriptors, inputs.ObjectPrototypes,
                     inputs.ObjectRead, inputs.ProxySelected, inputs.ReflectAssignment,
                     inputs.UndefinedType, inputs.NativeProxyRejection),
@@ -3797,7 +3803,7 @@ public partial class RuntimeEmitter
         il.Emit(OpCodes.Callvirt, inputs.ArrayStorage.HasIndex);
         il.Emit(OpCodes.Brtrue, strictArrayNoInheritedSetterLabel);
         EmitArrayIndexPrototypeSetPolicy(
-            il, new ArrayIndexPrototypeSetInputs(inputs.DescriptorStorage,
+            il, new ArrayIndexPrototypeSetInputs(inputs.DescriptorStorage, inputs.TypedArrays,
                 inputs.InvokeMethodUnwrapped, inputs.InvokeMethodValue, inputs.ObjectDescriptors,
                 inputs.ObjectPrototypes, inputs.ObjectRead, inputs.ProxySelected,
                 inputs.ReflectAssignment, inputs.UndefinedType, NativeProxyRejection: inputs.NativeProxyRejection),
@@ -3861,7 +3867,7 @@ public partial class RuntimeEmitter
         {
             var strictListOwnStorage = il.DefineLabel();
             EmitArgumentsIndexPrototypeSetPolicy(il, inputs.ArgumentsType, inputs.HasOwnProperty,
-                new ArrayIndexPrototypeSetInputs(inputs.DescriptorStorage, inputs.InvokeMethodUnwrapped,
+                new ArrayIndexPrototypeSetInputs(inputs.DescriptorStorage, inputs.TypedArrays, inputs.InvokeMethodUnwrapped,
                     inputs.InvokeMethodValue, inputs.ObjectDescriptors, inputs.ObjectPrototypes, inputs.ObjectRead,
                     inputs.ProxySelected, inputs.ReflectAssignment, inputs.UndefinedType, inputs.NativeProxyRejection),
                 strictListKeyLocal, strictListOwnStorage, strictListRejectLabel);
