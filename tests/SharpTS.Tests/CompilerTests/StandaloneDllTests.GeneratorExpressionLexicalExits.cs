@@ -1,3 +1,4 @@
+using SharpTS.Tests.Infrastructure;
 using SharpTS.Tests.SharedTests;
 using Xunit;
 
@@ -5,7 +6,7 @@ namespace SharpTS.Tests.CompilerTests;
 
 public partial class StandaloneDllTests
 {
-    [Theory, MemberData(nameof(GeneratorExpressionLexicalExitTests.Cases), MemberType = typeof(GeneratorExpressionLexicalExitTests))]
+    [Theory, DeploymentData(nameof(GeneratorExpressionLexicalExitTests.Cases), MemberType = typeof(GeneratorExpressionLexicalExitTests))]
     public void Isolated_Issue2149GeneratorExpressions_PreserveProtectedLexicalExits(
         string name, string source, string expected)
     {

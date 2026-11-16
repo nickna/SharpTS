@@ -1,3 +1,4 @@
+using SharpTS.Tests.Infrastructure;
 using SharpTS.Tests.SharedTests;
 using Xunit;
 
@@ -5,7 +6,7 @@ namespace SharpTS.Tests.CompilerTests;
 
 public partial class StandaloneDllTests
 {
-    [Theory, MemberData(nameof(ArrayPrototypeOwnDescriptorTests.Cases), MemberType = typeof(ArrayPrototypeOwnDescriptorTests))]
+    [Theory, DeploymentData(nameof(ArrayPrototypeOwnDescriptorTests.Cases), MemberType = typeof(ArrayPrototypeOwnDescriptorTests))]
     public void Isolated_Issue2826ArrayPrototypeOwnDescriptors_VerifyBeforeExecution(
         string name, string source, string expected)
     {

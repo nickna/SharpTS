@@ -1,3 +1,4 @@
+using SharpTS.Tests.Infrastructure;
 using System.Security.Cryptography;
 using SharpTS.Tests.SharedTests;
 using Xunit;
@@ -6,7 +7,7 @@ namespace SharpTS.Tests.CompilerTests;
 
 public partial class StandaloneDllTests
 {
-    [Theory, MemberData(nameof(IdentifierLoopHeadStorageTests.Cases), MemberType = typeof(IdentifierLoopHeadStorageTests))]
+    [Theory, DeploymentData(nameof(IdentifierLoopHeadStorageTests.Cases), MemberType = typeof(IdentifierLoopHeadStorageTests))]
     public void Isolated_Issue2586IdentifierLoopHeadStorage_VerifyBeforeExecution(
         string name, string source, string expected)
     {

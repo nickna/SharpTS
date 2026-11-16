@@ -1,3 +1,4 @@
+using SharpTS.Tests.Infrastructure;
 using SharpTS.Tests.SharedTests;
 using Xunit;
 
@@ -5,7 +6,7 @@ namespace SharpTS.Tests.CompilerTests;
 
 public partial class StandaloneDllTests
 {
-    [Theory, MemberData(nameof(PrivateMethodPatternParameterTests.Cases), MemberType = typeof(PrivateMethodPatternParameterTests))]
+    [Theory, DeploymentData(nameof(PrivateMethodPatternParameterTests.Cases), MemberType = typeof(PrivateMethodPatternParameterTests))]
     public void Isolated_Issue2750PrivateMethodPatternParameters_VerifyBeforeExecution(
         string name, string source, string expected)
     {

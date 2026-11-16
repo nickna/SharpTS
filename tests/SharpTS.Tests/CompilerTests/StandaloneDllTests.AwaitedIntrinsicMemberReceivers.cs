@@ -1,3 +1,4 @@
+using SharpTS.Tests.Infrastructure;
 using SharpTS.Tests.SharedTests;
 using Xunit;
 
@@ -5,7 +6,7 @@ namespace SharpTS.Tests.CompilerTests;
 
 public partial class StandaloneDllTests
 {
-    [Theory, MemberData(nameof(AwaitedIntrinsicMemberReceiverTests.SavedCases), MemberType = typeof(AwaitedIntrinsicMemberReceiverTests))]
+    [Theory, DeploymentData(nameof(AwaitedIntrinsicMemberReceiverTests.SavedCases), MemberType = typeof(AwaitedIntrinsicMemberReceiverTests))]
     public void Isolated_Issue2691AwaitedIntrinsicMemberReceivers_VerifyBeforeExecution(
         string name, string source, string expected)
     {

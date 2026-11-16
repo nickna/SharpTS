@@ -1,3 +1,4 @@
+using SharpTS.Tests.Infrastructure;
 using SharpTS.Tests.SharedTests;
 using Xunit;
 
@@ -6,7 +7,7 @@ namespace SharpTS.Tests.CompilerTests;
 public partial class StandaloneDllTests
 {
     [Theory]
-    [MemberData(nameof(StaticGetterReceiverTests.Cases), MemberType = typeof(StaticGetterReceiverTests))]
+    [DeploymentData(nameof(StaticGetterReceiverTests.Cases), MemberType = typeof(StaticGetterReceiverTests))]
     public void Saved_Issue2086StaticGetter_VerifyBeforeExecution(string name, string source, string expected)
     {
         using var directory = IntegrationTests.CliTestHelper.CreateTempDirectory();

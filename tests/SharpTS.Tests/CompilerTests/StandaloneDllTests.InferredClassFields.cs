@@ -1,3 +1,4 @@
+using SharpTS.Tests.Infrastructure;
 using SharpTS.Tests.SharedTests;
 using Xunit;
 
@@ -5,7 +6,7 @@ namespace SharpTS.Tests.CompilerTests;
 
 public partial class StandaloneDllTests
 {
-    [Theory, MemberData(nameof(InferredClassFieldRuntimeTests.Cases),
+    [Theory, DeploymentData(nameof(InferredClassFieldRuntimeTests.Cases),
         MemberType = typeof(InferredClassFieldRuntimeTests))]
     public void Isolated_Issue2144InferredClassFields_PreserveEffectsAndValues(
         string name, string source, string expected)

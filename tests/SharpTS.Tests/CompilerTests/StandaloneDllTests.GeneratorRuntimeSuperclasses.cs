@@ -1,3 +1,4 @@
+using SharpTS.Tests.Infrastructure;
 using SharpTS.Tests.SharedTests;
 using Xunit;
 
@@ -5,7 +6,7 @@ namespace SharpTS.Tests.CompilerTests;
 
 public partial class StandaloneDllTests
 {
-    [Theory, MemberData(nameof(GeneratorRuntimeSuperclassTests.Cases), MemberType = typeof(GeneratorRuntimeSuperclassTests))]
+    [Theory, DeploymentData(nameof(GeneratorRuntimeSuperclassTests.Cases), MemberType = typeof(GeneratorRuntimeSuperclassTests))]
     public void Isolated_Issue2203GeneratorRuntimeSuperclasses_VerifiesContextAndProtocol(
         string name, string source, string expected)
     {

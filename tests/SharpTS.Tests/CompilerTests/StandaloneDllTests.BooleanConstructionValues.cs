@@ -1,3 +1,4 @@
+using SharpTS.Tests.Infrastructure;
 using SharpTS.Tests.SharedTests;
 using Xunit;
 
@@ -6,7 +7,7 @@ namespace SharpTS.Tests.CompilerTests;
 public partial class StandaloneDllTests
 {
     [Theory]
-    [MemberData(nameof(BooleanConstructionValueTests.Cases), MemberType = typeof(BooleanConstructionValueTests))]
+    [DeploymentData(nameof(BooleanConstructionValueTests.Cases), MemberType = typeof(BooleanConstructionValueTests))]
     public void Saved_Issue2093BooleanConstructorValues_VerifyBeforeExecution(
         string name, string source, string expected)
     {

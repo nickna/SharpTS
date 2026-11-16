@@ -1,3 +1,4 @@
+using SharpTS.Tests.Infrastructure;
 using SharpTS.Tests.SharedTests;
 using Xunit;
 
@@ -5,7 +6,7 @@ namespace SharpTS.Tests.CompilerTests;
 
 public partial class StandaloneDllTests
 {
-    [Theory, MemberData(nameof(ClassDeclarationStaticBlockCaptureTests.Cases), MemberType = typeof(ClassDeclarationStaticBlockCaptureTests))]
+    [Theory, DeploymentData(nameof(ClassDeclarationStaticBlockCaptureTests.Cases), MemberType = typeof(ClassDeclarationStaticBlockCaptureTests))]
     public void Isolated_Issue2868ClassDeclarationStaticBlockCaptures_VerifyBeforeExecution(
         string name, string source, string expected)
     {

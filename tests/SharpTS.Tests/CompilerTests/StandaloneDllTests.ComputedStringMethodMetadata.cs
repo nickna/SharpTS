@@ -1,3 +1,4 @@
+using SharpTS.Tests.Infrastructure;
 using SharpTS.Tests.SharedTests;
 using Xunit;
 
@@ -5,7 +6,7 @@ namespace SharpTS.Tests.CompilerTests;
 
 public partial class StandaloneDllTests
 {
-    [Theory, MemberData(nameof(ComputedStringMethodMetadataTests.Cases), MemberType = typeof(ComputedStringMethodMetadataTests))]
+    [Theory, DeploymentData(nameof(ComputedStringMethodMetadataTests.Cases), MemberType = typeof(ComputedStringMethodMetadataTests))]
     public void Isolated_Issue2166ComputedStringMethods_PreserveCanonicalMetadataAndDescriptors(
         string name, string source, string expected)
     {

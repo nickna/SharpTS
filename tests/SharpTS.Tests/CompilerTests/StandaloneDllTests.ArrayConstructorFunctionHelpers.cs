@@ -1,3 +1,4 @@
+using SharpTS.Tests.Infrastructure;
 using SharpTS.Tests.SharedTests;
 using Xunit;
 
@@ -5,7 +6,7 @@ namespace SharpTS.Tests.CompilerTests;
 
 public partial class StandaloneDllTests
 {
-    [Theory, MemberData(nameof(ArrayConstructorFunctionHelperTests.Cases), MemberType = typeof(ArrayConstructorFunctionHelperTests))]
+    [Theory, DeploymentData(nameof(ArrayConstructorFunctionHelperTests.Cases), MemberType = typeof(ArrayConstructorFunctionHelperTests))]
     public void Isolated_Issue2128ArrayAliases_ReadCanonicalFunctionHelpersAndPreserveArrayCalls(
         string name, string source, string expected)
     {

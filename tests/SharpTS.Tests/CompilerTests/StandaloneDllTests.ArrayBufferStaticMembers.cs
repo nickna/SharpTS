@@ -1,3 +1,4 @@
+using SharpTS.Tests.Infrastructure;
 using SharpTS.Tests.SharedTests;
 using Xunit;
 
@@ -5,7 +6,7 @@ namespace SharpTS.Tests.CompilerTests;
 
 public partial class StandaloneDllTests
 {
-    [Theory, MemberData(nameof(ArrayBufferStaticMemberTests.CompiledCases), MemberType = typeof(ArrayBufferStaticMemberTests))]
+    [Theory, DeploymentData(nameof(ArrayBufferStaticMemberTests.CompiledCases), MemberType = typeof(ArrayBufferStaticMemberTests))]
     public void Isolated_Issue2729ArrayBufferStaticMembers_VerifyBeforeExecution(
         string name, string source, string expected)
     {

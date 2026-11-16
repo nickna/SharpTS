@@ -1,3 +1,4 @@
+using SharpTS.Tests.Infrastructure;
 using SharpTS.Tests.SharedTests;
 using Xunit;
 
@@ -5,7 +6,7 @@ namespace SharpTS.Tests.CompilerTests;
 
 public partial class StandaloneDllTests
 {
-    [Theory, MemberData(nameof(DestructuredParameterDefaultScopeTests.StandaloneCases), MemberType = typeof(DestructuredParameterDefaultScopeTests))]
+    [Theory, DeploymentData(nameof(DestructuredParameterDefaultScopeTests.StandaloneCases), MemberType = typeof(DestructuredParameterDefaultScopeTests))]
     public void Isolated_Issue2747DestructuredParameterDefaultScope_VerifyBeforeExecution(
         string name, string source, string expected)
     {

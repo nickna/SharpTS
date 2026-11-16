@@ -1,3 +1,4 @@
+using SharpTS.Tests.Infrastructure;
 using SharpTS.Tests.SharedTests;
 using Xunit;
 
@@ -5,7 +6,7 @@ namespace SharpTS.Tests.CompilerTests;
 
 public partial class StandaloneDllTests
 {
-    [Theory, MemberData(nameof(ArraySubclassIteratorOverrideTests.CompiledCases),
+    [Theory, DeploymentData(nameof(ArraySubclassIteratorOverrideTests.CompiledCases),
         MemberType = typeof(ArraySubclassIteratorOverrideTests))]
     public void Isolated_Issue2106ArraySubclassIteratorOverrides_VerifyBeforeExecution(
         string name, string source, string expected)

@@ -1,3 +1,4 @@
+using SharpTS.Tests.Infrastructure;
 using SharpTS.Tests.SharedTests;
 using Xunit;
 
@@ -6,7 +7,7 @@ namespace SharpTS.Tests.CompilerTests;
 public partial class StandaloneDllTests
 {
     [Theory]
-    [MemberData(nameof(EmptyClassElementTests.Cases), MemberType = typeof(EmptyClassElementTests))]
+    [DeploymentData(nameof(EmptyClassElementTests.Cases), MemberType = typeof(EmptyClassElementTests))]
     public void Isolated_Issue2083EmptyClassElements_VerifyBeforeExecution(string declaration, string source)
     {
         Assert.NotEmpty(declaration);

@@ -1,3 +1,4 @@
+using SharpTS.Tests.Infrastructure;
 using SharpTS.Tests.SharedTests;
 using Xunit;
 
@@ -5,7 +6,7 @@ namespace SharpTS.Tests.CompilerTests;
 
 public partial class StandaloneDllTests
 {
-    [Theory, MemberData(nameof(AsyncNumberBitwiseConversionTests.Cases), MemberType = typeof(AsyncNumberBitwiseConversionTests))]
+    [Theory, DeploymentData(nameof(AsyncNumberBitwiseConversionTests.Cases), MemberType = typeof(AsyncNumberBitwiseConversionTests))]
     public void Isolated_Issue2687AsyncNumberBitwiseConversions_VerifyBeforeExecution(
         string name, string source, string expected)
     {

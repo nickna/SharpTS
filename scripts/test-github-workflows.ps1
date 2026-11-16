@@ -80,7 +80,7 @@ foreach ($requiredText in @(
         $errors.Add("ci.yml is missing change-routing contract text: $requiredText")
     }
 }
-foreach ($jobName in @('build', 'process-tests', 'standalone', 'typescript-conformance', 'editor-contract', 'dap-macos-smoke', 'aot-ratchet', 'native-aot-compile-smoke')) {
+foreach ($jobName in @('build', 'core-tests', 'gui-tests', 'benchmark-smoke', 'process-tests', 'standalone', 'typescript-conformance', 'editor-contract', 'dap-macos-smoke', 'aot-ratchet', 'native-aot-compile-smoke')) {
     $job = Get-WorkflowJob $ci $jobName 'ci.yml'
     if (-not $job.Contains('needs: workflow-policy', [StringComparison]::Ordinal) -or
         -not $job.Contains("if: needs.workflow-policy.outputs.mode == 'full'", [StringComparison]::Ordinal)) {
@@ -96,7 +96,9 @@ if ($ciGateJob -notmatch '(?m)^    needs: \[[^\r\n]*\bstandalone\b' -or
     $ciGateJob -notmatch '(?m)^          \$heavy = @\([^\r\n]*''standalone''') {
     $errors.Add('ci.yml Gate must require standalone tests in the full route and skip them in lightweight routes.')
 }
-$coreJob = Get-WorkflowJob $ci 'build' 'ci.yml'
+$buildJob = Get-WorkflowJob $ci 'build' 'ci.yml'
+$coreJob = Get-WorkflowJob $ci 'core-tests' 'ci.yml'
+$guiJob = Get-WorkflowJob $ci 'gui-tests' 'ci.yml'
 $processJob = Get-WorkflowJob $ci 'process-tests' 'ci.yml'
 $standaloneJob = Get-WorkflowJob $ci 'standalone' 'ci.yml'
 foreach ($requiredText in @('name: Acquire pinned independent Authenticode verifier', 'id: signature-verifier',
@@ -136,7 +138,7 @@ foreach ($partition in @($coreJob, $processJob, $standaloneJob)) {
     }
 }
 $standaloneScript = Get-Content -LiteralPath (Join-Path $PSScriptRoot 'test-standalone-shard.ps1') -Raw
-$guiFailureUpload = [regex]::Match($coreJob,
+$guiFailureUpload = [regex]::Match($guiJob,
     '(?ms)^      - name: Upload unexpected GUI conformance diagnostics\r?\n.*?(?=^      - |\z)').Value
 foreach ($requiredText in @('name: gui-conformance-failures-${{ matrix.os }}',
     'path: artifacts/gui-conformance-failures/', 'if: always()', 'if-no-files-found: ignore', 'retention-days: 7')) {
@@ -144,14 +146,14 @@ foreach ($requiredText in @('name: gui-conformance-failures-${{ matrix.os }}',
         $errors.Add("Core GUI tests must retain unexpected failure diagnostics: $requiredText")
     }
 }
-if (-not $coreJob.Contains('--filter "' + $corePartitions.InProcess + '"', [StringComparison]::Ordinal) -or
+if (-not $coreJob.Contains('./scripts/test-core-shard.ps1', [StringComparison]::Ordinal) -or
     -not $processJob.Contains('--filter "' + $corePartitions.Process + '"', [StringComparison]::Ordinal) -or
     -not $standaloneScript.Contains('$baseFilter = ''' + $standaloneFilter + '''', [StringComparison]::Ordinal)) {
     $errors.Add('Core and standalone discovery must retain their complementary category/class filters.')
 }
-foreach ($partition in @($coreJob, $processJob)) {
+foreach ($partition in @($buildJob, $processJob)) {
     foreach ($requiredText in @('./scripts/verify-core-test-partitions.ps1', 'timeout-minutes: 50',
-        'timeout-minutes: 30', 'artifacts/core-partitions/', 'retention-days: 7')) {
+        'artifacts/core-partitions/', 'retention-days: 7')) {
         if (-not $partition.Contains($requiredText, [StringComparison]::Ordinal)) {
             $errors.Add("Core partitions must retain full discovery proof and existing budgets: $requiredText")
         }
@@ -183,7 +185,7 @@ foreach ($requiredText in @('shard: [0, 1, 2, 3, 4, 5, 6, 7]', 'shell: pwsh',
     './scripts/test-standalone-shard.ps1 -ShardIndex ${{ matrix.shard }} -ShardCount 8',
     '-ResultsDirectory artifacts/standalone/${{ matrix.os }}-${{ matrix.shard }}',
     'timeout-minutes: 35', 'timeout-minutes: 40', 'fail-fast: false', 'if: always()',
-    'name: standalone-${{ matrix.os }}-${{ matrix.shard }}',
+    'name: standalone-shard-${{ matrix.os }}-${{ matrix.shard }}',
     'path: artifacts/standalone/', 'retention-days: 7')) {
     if (-not $standaloneJob.Contains($requiredText, [StringComparison]::Ordinal)) {
         $errors.Add("ci.yml standalone job is missing its complete shard contract: $requiredText")
@@ -196,7 +198,7 @@ if (-not $policyJob.Contains('./scripts/test-standalone-shard-plan.ps1', [String
 if (-not $policyJob.Contains('./scripts/test-core-test-partitions.ps1', [StringComparison]::Ordinal)) {
     $errors.Add('Workflow policy must execute the pure core partition regressions.')
 }
-foreach ($requiredText in @('WaitForExit(60000)', '5000',
+foreach ($requiredText in @('Get-TestInventory', 'New-TestCadenceProof',
     'Unrecognized standalone test identity; refusing partial coverage:',
     "[ValidateRange(1, 3600)][int]`$HangTimeoutSeconds = 120", '--blame-hang-timeout',
     "'--blame-hang-dump-type', 'mini'", 'New-StandaloneShardPlan')) {
@@ -210,10 +212,36 @@ foreach ($requiredText in @('method-row-lpt-v1', 'discovered-entry', 'InventoryD
         $errors.Add("Standalone planner is missing its deterministic planning contract: $requiredText")
     }
 }
-foreach ($requiredText in @('build, typescript-conformance,', "'typescript-conformance'")) {
+foreach ($requiredText in @('benchmark-smoke, typescript-conformance,', "'typescript-conformance'")) {
     if (-not $ciGateJob.Contains($requiredText, [StringComparison]::Ordinal)) {
         $errors.Add("ci.yml Gate must require the TypeScript job in the full route and skip it in lightweight routes: $requiredText")
     }
+}
+foreach ($requiredText in @('shard: [0, 1, 2, 3]', '-ShardCount 4', 'timeout-minutes: 30',
+    'name: core-shard-${{ matrix.os }}-${{ matrix.shard }}', 'if-no-files-found: error')) {
+    if (-not $coreJob.Contains($requiredText, [StringComparison]::Ordinal)) {
+        $errors.Add("Core shard contract missing: $requiredText")
+    }
+}
+foreach ($jobName in @('core-tests', 'gui-tests', 'benchmark-smoke')) {
+    if (-not $ciGateJob.Contains("'$jobName'", [StringComparison]::Ordinal) -or
+        $ciGateJob -notmatch ('(?m)^    needs: \[[^\r\n]*\b' + $jobName + '\b')) {
+        $errors.Add("Gate must require $jobName.")
+    }
+}
+foreach ($requiredText in @("cron: '23 10 * * *'", 'workflow_dispatch:', 'ci:full',
+    'scripts/get-test-coverage-scope.ps1', './scripts/test-ci-test-plans.ps1',
+    '-Coverage ${{ needs.workflow-policy.outputs.deployment }}')) {
+    if (-not $ci.Contains($requiredText, [StringComparison]::Ordinal)) {
+        $errors.Add("CI cadence routing missing: $requiredText")
+    }
+}
+if (-not $ciGateJob.Contains('./scripts/verify-ci-shard-results.ps1', [StringComparison]::Ordinal)) {
+    $errors.Add('Gate must validate all shard execution artifacts.')
+}
+$discovery = Get-Content (Join-Path $PSScriptRoot 'test-inventory.ps1') -Raw
+foreach ($requiredText in @('WaitForExit(60000)', '5000', 'No tests were discovered.', 'Get-InventoryDigest', 'EveryMethodOnPr')) {
+    if (-not $discovery.Contains($requiredText, [StringComparison]::Ordinal)) { $errors.Add("Inventory contract missing: $requiredText") }
 }
 $typeScriptJob = Get-WorkflowJob $ci 'typescript-conformance' 'ci.yml'
 $nativeHostJob = Get-WorkflowJob $ci 'native-aot-custom-host-smoke' 'ci.yml'

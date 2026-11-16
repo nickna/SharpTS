@@ -1,3 +1,4 @@
+using SharpTS.Tests.Infrastructure;
 using SharpTS.Tests.SharedTests;
 using Xunit;
 
@@ -5,7 +6,7 @@ namespace SharpTS.Tests.CompilerTests;
 
 public partial class StandaloneDllTests
 {
-    [Theory, MemberData(nameof(AwaitedAccessorCompoundAssignmentTests.Cases), MemberType = typeof(AwaitedAccessorCompoundAssignmentTests))]
+    [Theory, DeploymentData(nameof(AwaitedAccessorCompoundAssignmentTests.Cases), MemberType = typeof(AwaitedAccessorCompoundAssignmentTests))]
     public void Isolated_Issue2777AwaitedAccessorCompoundAssignment_VerifyBeforeExecution(
         string name, string source, string expected)
     {

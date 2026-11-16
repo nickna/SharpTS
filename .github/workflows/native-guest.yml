@@ -2,6 +2,7 @@ name: Native generated programs
 
 on:
   pull_request:
+    types: [opened, synchronize, reopened, ready_for_review, labeled, unlabeled]
     paths:
       - '.github/workflows/native-guest.yml'
       - 'src/SharpTS/**'
@@ -9,6 +10,7 @@ on:
       - 'src/SharpTS.Sdk.Tasks/**'
       - 'src/SharpTS.Hosting.Abstractions/**'
       - 'scripts/test-native-guest.ps1'
+      - 'scripts/get-test-coverage-scope.ps1'
       - 'scripts/test-packaged-sdk.ps1'
       - 'tests/native-guest/**'
       - 'global.json'
@@ -22,34 +24,62 @@ on:
       - 'src/SharpTS.Sdk.Tasks/**'
       - 'src/SharpTS.Hosting.Abstractions/**'
       - 'scripts/test-native-guest.ps1'
+      - 'scripts/get-test-coverage-scope.ps1'
       - 'scripts/test-packaged-sdk.ps1'
       - 'tests/native-guest/**'
       - 'global.json'
       - 'Directory.*'
+  schedule:
+    - cron: '43 10 * * *'
   workflow_dispatch:
 
 permissions:
   contents: read
 
 concurrency:
-  group: native-guest-${{ github.event.pull_request.number || github.ref }}
+  group: native-guest-${{ github.event_name }}-${{ github.event.pull_request.number || github.ref }}
   cancel-in-progress: true
 
 jobs:
+  scope:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 5
+    outputs:
+      matrix: ${{ steps.scope.outputs.matrix }}
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+          fetch-depth: 0
+      - name: Select representative or exhaustive native platforms
+        id: scope
+        shell: pwsh
+        env:
+          BASE_SHA: ${{ github.event.pull_request.base.sha }}
+          HEAD_SHA: ${{ github.event.pull_request.head.sha }}
+          EVENT_NAME: ${{ github.event_name }}
+          FORCE_FULL: ${{ contains(github.event.pull_request.labels.*.name, 'ci:full') }}
+        run: |
+          $full = $env:EVENT_NAME -ne 'pull_request' -or $env:FORCE_FULL -eq 'true'
+          if (-not $full) {
+            $paths = @(git diff --name-only $env:BASE_SHA $env:HEAD_SHA)
+            if ($LASTEXITCODE -ne 0 -or $paths.Count -eq 0) { $full = $true }
+            else {
+              $coverage = ./scripts/get-test-coverage-scope.ps1 -ChangedPaths $paths
+              $full = $coverage.Deployment -eq 'Full'
+            }
+          }
+          $matrix = if ($full) { '{"include":[{"rid":"win-x64","os":"windows-2025"},{"rid":"win-arm64","os":"windows-11-vs2026-arm"},{"rid":"linux-x64","os":"ubuntu-24.04"},{"rid":"linux-arm64","os":"ubuntu-24.04-arm"},{"rid":"osx-x64","os":"macos-15-intel"},{"rid":"osx-arm64","os":"macos-15"}]}' } else { '{"include":[{"rid":"win-x64","os":"windows-2025"},{"rid":"linux-x64","os":"ubuntu-24.04"},{"rid":"osx-arm64","os":"macos-15"}]}' }
+          "matrix=$matrix" >> $env:GITHUB_OUTPUT
+
   native-guest:
+    needs: scope
     name: native-guest (${{ matrix.rid }})
     runs-on: ${{ matrix.os }}
     timeout-minutes: 50
     strategy:
       fail-fast: false
-      matrix:
-        include:
-          - { rid: win-x64, os: windows-2025 }
-          - { rid: win-arm64, os: windows-11-vs2026-arm }
-          - { rid: linux-x64, os: ubuntu-24.04 }
-          - { rid: linux-arm64, os: ubuntu-24.04-arm }
-          - { rid: osx-x64, os: macos-15-intel }
-          - { rid: osx-arm64, os: macos-15 }
+      matrix: ${{ fromJSON(needs.scope.outputs.matrix) }}
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:

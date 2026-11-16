@@ -1,3 +1,4 @@
+using SharpTS.Tests.Infrastructure;
 using SharpTS.Tests.SharedTests;
 using Xunit;
 
@@ -5,7 +6,7 @@ namespace SharpTS.Tests.CompilerTests;
 
 public partial class StandaloneDllTests
 {
-    [Theory, MemberData(nameof(PromiseConstructorValueTests.Cases),
+    [Theory, DeploymentData(nameof(PromiseConstructorValueTests.Cases),
         MemberType = typeof(PromiseConstructorValueTests))]
     public void Isolated_Issue2301PromiseConstructorValues_VerifyBeforeExecution(
         string name, string source, string expected)

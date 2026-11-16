@@ -26,7 +26,7 @@ public partial class StandaloneDllTests
     }
 
     [Theory]
-    [MemberData(nameof(RepeatedLocalClassDeclarationTests.Cases), MemberType = typeof(RepeatedLocalClassDeclarationTests))]
+    [DeploymentData(nameof(RepeatedLocalClassDeclarationTests.Cases), MemberType = typeof(RepeatedLocalClassDeclarationTests))]
     public void Saved_Issue2096RepeatedLocalClasses_VerifyBeforeExecution(
         string name, string source, string expected)
     {

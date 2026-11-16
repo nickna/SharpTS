@@ -1,3 +1,4 @@
+using SharpTS.Tests.Infrastructure;
 using SharpTS.Tests.SharedTests;
 using Xunit;
 
@@ -5,7 +6,7 @@ namespace SharpTS.Tests.CompilerTests;
 
 public partial class StandaloneDllTests
 {
-    [Theory, MemberData(nameof(ArraySparseOwnPropertyQueryTests.Cases), MemberType = typeof(ArraySparseOwnPropertyQueryTests))]
+    [Theory, DeploymentData(nameof(ArraySparseOwnPropertyQueryTests.Cases), MemberType = typeof(ArraySparseOwnPropertyQueryTests))]
     public void Isolated_Issue2785ArraySparseOwnPropertyQueries_VerifyBeforeExecution(
         string name, string source, string expected)
     {

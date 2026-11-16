@@ -1,3 +1,4 @@
+using SharpTS.Tests.Infrastructure;
 using SharpTS.Tests.SharedTests;
 using Xunit;
 
@@ -5,7 +6,7 @@ namespace SharpTS.Tests.CompilerTests;
 
 public partial class StandaloneDllTests
 {
-    [Theory, MemberData(nameof(ImportedStaticMethodReceiverTests.Cases),
+    [Theory, DeploymentData(nameof(ImportedStaticMethodReceiverTests.Cases),
         MemberType = typeof(ImportedStaticMethodReceiverTests))]
     public void Isolated_Issue2242ImportedStaticMethods_VerifyBeforeExecution(
         string name, string entry, string expected)

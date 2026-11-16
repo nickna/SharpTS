@@ -20,7 +20,7 @@ namespace SharpTS.Tests.CompilerTests;
 public partial class StandaloneDllTests
 {
     [Theory]
-    [MemberData(nameof(SharedTests.WindowsProcessShutdownTests.OriginalCases), MemberType = typeof(SharedTests.WindowsProcessShutdownTests))]
+    [DeploymentData(nameof(SharedTests.WindowsProcessShutdownTests.OriginalCases), MemberType = typeof(SharedTests.WindowsProcessShutdownTests))]
     public void Isolated_Issue1772UnhandledOriginals_ExitAndClosePipes(string name, string source, string nodeExpected)
     {
         Assert.NotEmpty(nodeExpected); // Full reference retained separately from the supported-boundary diagnostic.
@@ -113,7 +113,7 @@ public partial class StandaloneDllTests
     }
 
     [Theory]
-    [MemberData(nameof(SharedTests.WindowsUnicodeOutputTests.Cases), MemberType = typeof(SharedTests.WindowsUnicodeOutputTests))]
+    [DeploymentData(nameof(SharedTests.WindowsUnicodeOutputTests.Cases), MemberType = typeof(SharedTests.WindowsUnicodeOutputTests))]
     public void Isolated_Issue1743UnicodeOutput_PreservesUtf8InBothWindowsProcessContexts(string name, string source, string expected)
     {
         using var directory = IntegrationTests.CliTestHelper.CreateTempDirectory();
@@ -180,7 +180,7 @@ public partial class StandaloneDllTests
     }
 
     [Theory]
-    [MemberData(nameof(SharedTests.TypedEnumReverseLookupTests.Cases), MemberType = typeof(SharedTests.TypedEnumReverseLookupTests))]
+    [DeploymentData(nameof(SharedTests.TypedEnumReverseLookupTests.Cases), MemberType = typeof(SharedTests.TypedEnumReverseLookupTests))]
     public void Isolated_Issue1791TypedEnumReverseLookups_PreserveForwardAndReverseMappings(string name, string source, string expected)
     {
         using var directory = IntegrationTests.CliTestHelper.CreateTempDirectory();
@@ -198,7 +198,7 @@ public partial class StandaloneDllTests
     }
 
     [Theory]
-    [MemberData(nameof(SharedTests.TypedEnumReverseLookupTests.HostedCases), MemberType = typeof(SharedTests.TypedEnumReverseLookupTests))]
+    [DeploymentData(nameof(SharedTests.TypedEnumReverseLookupTests.HostedCases), MemberType = typeof(SharedTests.TypedEnumReverseLookupTests))]
     public void Isolated_Issue1791HostedTypedEnumReverseLookups_VerifyDeclarations(string name, string source)
     {
         using var directory = IntegrationTests.CliTestHelper.CreateTempDirectory();
@@ -216,7 +216,7 @@ public partial class StandaloneDllTests
     }
 
     [Theory]
-    [MemberData(nameof(SharedTests.EnumMissingPropertyTests.ModuleCases), MemberType = typeof(SharedTests.EnumMissingPropertyTests))]
+    [DeploymentData(nameof(SharedTests.EnumMissingPropertyTests.ModuleCases), MemberType = typeof(SharedTests.EnumMissingPropertyTests))]
     public void Isolated_Issue1789ModuleEnumMissingProperties_VerifyMappingsAndIdentity(string name, string main, string library, string expected)
     {
         using var directory = IntegrationTests.CliTestHelper.CreateTempDirectory();
@@ -241,7 +241,7 @@ public partial class StandaloneDllTests
     }
 
     [Theory]
-    [MemberData(nameof(SharedTests.EnumMissingPropertyTests.Cases), MemberType = typeof(SharedTests.EnumMissingPropertyTests))]
+    [DeploymentData(nameof(SharedTests.EnumMissingPropertyTests.Cases), MemberType = typeof(SharedTests.EnumMissingPropertyTests))]
     public void Isolated_Issue1789EnumMissingProperties_PreserveForwardAndReverseMappings(string name, string source, string expected)
     {
         using var directory = IntegrationTests.CliTestHelper.CreateTempDirectory();
@@ -259,7 +259,7 @@ public partial class StandaloneDllTests
     }
 
     [Theory]
-    [MemberData(nameof(SharedTests.EnumMissingPropertyTests.HostedCases), MemberType = typeof(SharedTests.EnumMissingPropertyTests))]
+    [DeploymentData(nameof(SharedTests.EnumMissingPropertyTests.HostedCases), MemberType = typeof(SharedTests.EnumMissingPropertyTests))]
     public void Isolated_Issue1789HostedEnumMissingProperties_VerifyDeclarations(string name, string source)
     {
         using var directory = IntegrationTests.CliTestHelper.CreateTempDirectory();
@@ -277,7 +277,7 @@ public partial class StandaloneDllTests
     }
 
     [Theory]
-    [MemberData(nameof(SharedTests.EnumValueBindingTests.ModuleCases), MemberType = typeof(SharedTests.EnumValueBindingTests))]
+    [DeploymentData(nameof(SharedTests.EnumValueBindingTests.ModuleCases), MemberType = typeof(SharedTests.EnumValueBindingTests))]
     public void Isolated_Issue1790ModuleEnumBindings_VerifyMappingsAndIdentity(string name, string main, string library, string expected)
     {
         using var directory = IntegrationTests.CliTestHelper.CreateTempDirectory();
@@ -302,7 +302,7 @@ public partial class StandaloneDllTests
     }
 
     [Theory]
-    [MemberData(nameof(SharedTests.EnumValueBindingTests.Cases), MemberType = typeof(SharedTests.EnumValueBindingTests))]
+    [DeploymentData(nameof(SharedTests.EnumValueBindingTests.Cases), MemberType = typeof(SharedTests.EnumValueBindingTests))]
     public void Isolated_Issue1790EnumValueBindings_PreserveForwardAndReverseMappings(string name, string source, string expected)
     {
         using var directory = IntegrationTests.CliTestHelper.CreateTempDirectory();
@@ -320,7 +320,7 @@ public partial class StandaloneDllTests
     }
 
     [Theory]
-    [MemberData(nameof(SharedTests.EnumValueBindingTests.HostedCases), MemberType = typeof(SharedTests.EnumValueBindingTests))]
+    [DeploymentData(nameof(SharedTests.EnumValueBindingTests.HostedCases), MemberType = typeof(SharedTests.EnumValueBindingTests))]
     public void Isolated_Issue1790HostedEnumValueBindings_VerifyDeclarations(string name, string source)
     {
         using var directory = IntegrationTests.CliTestHelper.CreateTempDirectory();
@@ -338,7 +338,7 @@ public partial class StandaloneDllTests
     }
 
     [Theory]
-    [MemberData(nameof(SharedTests.SignedEnumValueTests.Cases), MemberType = typeof(SharedTests.SignedEnumValueTests))]
+    [DeploymentData(nameof(SharedTests.SignedEnumValueTests.Cases), MemberType = typeof(SharedTests.SignedEnumValueTests))]
     public void Isolated_Issue1788SignedEnumValues_PreserveForwardAndReverseMappings(string name, string source, string expected)
     {
         using var directory = IntegrationTests.CliTestHelper.CreateTempDirectory();
@@ -356,7 +356,7 @@ public partial class StandaloneDllTests
     }
 
     [Theory]
-    [MemberData(nameof(SharedTests.SignedEnumValueTests.HostedCases), MemberType = typeof(SharedTests.SignedEnumValueTests))]
+    [DeploymentData(nameof(SharedTests.SignedEnumValueTests.HostedCases), MemberType = typeof(SharedTests.SignedEnumValueTests))]
     public void Isolated_Issue1788HostedSignedEnumValues_VerifyDeclarations(string name, string source)
     {
         using var directory = IntegrationTests.CliTestHelper.CreateTempDirectory();
@@ -374,7 +374,7 @@ public partial class StandaloneDllTests
     }
 
     [Theory]
-    [MemberData(nameof(SharedTests.UsingLoopTransferTests.Cases), MemberType = typeof(SharedTests.UsingLoopTransferTests))]
+    [DeploymentData(nameof(SharedTests.UsingLoopTransferTests.Cases), MemberType = typeof(SharedTests.UsingLoopTransferTests))]
     public void Isolated_Issue1786UsingLoopTransfers_VerifyAndCleanUp(string name, string source, string expected)
     {
         using var directory = IntegrationTests.CliTestHelper.CreateTempDirectory();
@@ -392,7 +392,7 @@ public partial class StandaloneDllTests
     }
 
     [Theory]
-    [MemberData(nameof(SharedTests.UsingLoopTransferTests.HostedCases), MemberType = typeof(SharedTests.UsingLoopTransferTests))]
+    [DeploymentData(nameof(SharedTests.UsingLoopTransferTests.HostedCases), MemberType = typeof(SharedTests.UsingLoopTransferTests))]
     public void Isolated_Issue1786HostedUsingLoopTransfers_VerifyDeclarations(string name, string source)
     {
         using var directory = IntegrationTests.CliTestHelper.CreateTempDirectory();
@@ -410,7 +410,7 @@ public partial class StandaloneDllTests
     }
 
     [Theory]
-    [MemberData(nameof(SharedTests.GeneratorUsingCleanupTests.Cases), MemberType = typeof(SharedTests.GeneratorUsingCleanupTests))]
+    [DeploymentData(nameof(SharedTests.GeneratorUsingCleanupTests.Cases), MemberType = typeof(SharedTests.GeneratorUsingCleanupTests))]
     public void Isolated_Issue1785GeneratorUsing_CleansUpAcrossSuspension(string name, string source, string expected)
     {
         using var directory = IntegrationTests.CliTestHelper.CreateTempDirectory();
@@ -428,7 +428,7 @@ public partial class StandaloneDllTests
     }
 
     [Theory]
-    [MemberData(nameof(SharedTests.GeneratorUsingCleanupTests.HostedCases), MemberType = typeof(SharedTests.GeneratorUsingCleanupTests))]
+    [DeploymentData(nameof(SharedTests.GeneratorUsingCleanupTests.HostedCases), MemberType = typeof(SharedTests.GeneratorUsingCleanupTests))]
     public void Isolated_Issue1785HostedGeneratorUsing_VerifiesDeclarations(string name, string source)
     {
         using var directory = IntegrationTests.CliTestHelper.CreateTempDirectory();
@@ -446,7 +446,7 @@ public partial class StandaloneDllTests
     }
 
     [Theory]
-    [MemberData(nameof(SharedTests.UsingAcquisitionTests.Cases), MemberType = typeof(SharedTests.UsingAcquisitionTests))]
+    [DeploymentData(nameof(SharedTests.UsingAcquisitionTests.Cases), MemberType = typeof(SharedTests.UsingAcquisitionTests))]
     public void Isolated_Issue1784UsingAcquisition_CapturesOriginalMethod(string name, string source, string expected)
     {
         using var directory = IntegrationTests.CliTestHelper.CreateTempDirectory();
@@ -464,7 +464,7 @@ public partial class StandaloneDllTests
     }
 
     [Theory]
-    [MemberData(nameof(SharedTests.UsingAcquisitionTests.HostedCases), MemberType = typeof(SharedTests.UsingAcquisitionTests))]
+    [DeploymentData(nameof(SharedTests.UsingAcquisitionTests.HostedCases), MemberType = typeof(SharedTests.UsingAcquisitionTests))]
     public void Isolated_Issue1784HostedUsingAcquisition_VerifiesDeclarations(string name, string source)
     {
         using var directory = IntegrationTests.CliTestHelper.CreateTempDirectory();
@@ -482,7 +482,7 @@ public partial class StandaloneDllTests
     }
 
     [Theory]
-    [MemberData(nameof(SharedTests.BorrowedStringProtocolReceiverTests.Cases), MemberType = typeof(SharedTests.BorrowedStringProtocolReceiverTests))]
+    [DeploymentData(nameof(SharedTests.BorrowedStringProtocolReceiverTests.Cases), MemberType = typeof(SharedTests.BorrowedStringProtocolReceiverTests))]
     public void Isolated_Issue1796BorrowedStringReceivers_PreserveOrdering(string name, string source, string expected)
     {
         using var directory = IntegrationTests.CliTestHelper.CreateTempDirectory();
@@ -500,7 +500,7 @@ public partial class StandaloneDllTests
     }
 
     [Theory]
-    [MemberData(nameof(SharedTests.BorrowedStringProtocolReceiverTests.HostedCases), MemberType = typeof(SharedTests.BorrowedStringProtocolReceiverTests))]
+    [DeploymentData(nameof(SharedTests.BorrowedStringProtocolReceiverTests.HostedCases), MemberType = typeof(SharedTests.BorrowedStringProtocolReceiverTests))]
     public void Isolated_Issue1796HostedBorrowedStringReceivers_VerifyDeclarations(string name, string source)
     {
         using var directory = IntegrationTests.CliTestHelper.CreateTempDirectory();
@@ -518,7 +518,7 @@ public partial class StandaloneDllTests
     }
 
     [Theory]
-    [MemberData(nameof(SharedTests.PrimitiveStringSymbolHookTests.Cases), MemberType = typeof(SharedTests.PrimitiveStringSymbolHookTests))]
+    [DeploymentData(nameof(SharedTests.PrimitiveStringSymbolHookTests.Cases), MemberType = typeof(SharedTests.PrimitiveStringSymbolHookTests))]
     public void Isolated_StringProtocolCandidates_PreserveObjectLookup(string name, string source, string expected)
     {
         using var directory = IntegrationTests.CliTestHelper.CreateTempDirectory();
@@ -536,7 +536,7 @@ public partial class StandaloneDllTests
     }
 
     [Theory]
-    [MemberData(nameof(SharedTests.PrimitiveStringSymbolHookTests.HostedCases), MemberType = typeof(SharedTests.PrimitiveStringSymbolHookTests))]
+    [DeploymentData(nameof(SharedTests.PrimitiveStringSymbolHookTests.HostedCases), MemberType = typeof(SharedTests.PrimitiveStringSymbolHookTests))]
     public void Isolated_HostedStringProtocolCandidates_VerifyDeclarations(string name, string source)
     {
         using var directory = IntegrationTests.CliTestHelper.CreateTempDirectory();
@@ -554,7 +554,7 @@ public partial class StandaloneDllTests
     }
 
     [Theory]
-    [MemberData(nameof(SharedTests.RegExpOwnMatchOverrideTests.Cases), MemberType = typeof(SharedTests.RegExpOwnMatchOverrideTests))]
+    [DeploymentData(nameof(SharedTests.RegExpOwnMatchOverrideTests.Cases), MemberType = typeof(SharedTests.RegExpOwnMatchOverrideTests))]
     public void Isolated_Issue1794RegExpOwnMatchOverrides_PreserveFallback(string name, string source, string expected)
     {
         using var directory = IntegrationTests.CliTestHelper.CreateTempDirectory();
@@ -572,7 +572,7 @@ public partial class StandaloneDllTests
     }
 
     [Theory]
-    [MemberData(nameof(SharedTests.RegExpOwnMatchOverrideTests.HostedCases), MemberType = typeof(SharedTests.RegExpOwnMatchOverrideTests))]
+    [DeploymentData(nameof(SharedTests.RegExpOwnMatchOverrideTests.HostedCases), MemberType = typeof(SharedTests.RegExpOwnMatchOverrideTests))]
     public void Isolated_Issue1794HostedRegExpOwnMatchOverrides_VerifyDeclarations(string name, string source)
     {
         using var directory = IntegrationTests.CliTestHelper.CreateTempDirectory();
@@ -590,7 +590,7 @@ public partial class StandaloneDllTests
     }
 
     [Theory]
-    [MemberData(nameof(SharedTests.GlobalIsNaNValueTests.Cases), MemberType = typeof(SharedTests.GlobalIsNaNValueTests))]
+    [DeploymentData(nameof(SharedTests.GlobalIsNaNValueTests.Cases), MemberType = typeof(SharedTests.GlobalIsNaNValueTests))]
     public void Isolated_Issue1770GlobalIsNaNValues_PreserveCoercion(string name, string source, string expected)
     {
         using var directory = IntegrationTests.CliTestHelper.CreateTempDirectory();
@@ -608,7 +608,7 @@ public partial class StandaloneDllTests
     }
 
     [Theory]
-    [MemberData(nameof(SharedTests.GlobalIsNaNValueTests.HostedCases), MemberType = typeof(SharedTests.GlobalIsNaNValueTests))]
+    [DeploymentData(nameof(SharedTests.GlobalIsNaNValueTests.HostedCases), MemberType = typeof(SharedTests.GlobalIsNaNValueTests))]
     public void Isolated_Issue1770HostedGlobalIsNaNValues_VerifyDeclarations(string name, string source)
     {
         using var directory = IntegrationTests.CliTestHelper.CreateTempDirectory();
@@ -626,7 +626,7 @@ public partial class StandaloneDllTests
     }
 
     [Theory]
-    [MemberData(nameof(SharedTests.GlobalAccessorWriteTests.Cases), MemberType = typeof(SharedTests.GlobalAccessorWriteTests))]
+    [DeploymentData(nameof(SharedTests.GlobalAccessorWriteTests.Cases), MemberType = typeof(SharedTests.GlobalAccessorWriteTests))]
     public void Isolated_Issue1769GlobalAccessors_InvokeSetters(string name, string source, string expected)
     {
         using var directory = IntegrationTests.CliTestHelper.CreateTempDirectory();
@@ -644,7 +644,7 @@ public partial class StandaloneDllTests
     }
 
     [Theory]
-    [MemberData(nameof(SharedTests.GlobalAccessorWriteTests.HostedCases), MemberType = typeof(SharedTests.GlobalAccessorWriteTests))]
+    [DeploymentData(nameof(SharedTests.GlobalAccessorWriteTests.HostedCases), MemberType = typeof(SharedTests.GlobalAccessorWriteTests))]
     public void Isolated_Issue1769HostedGlobalAccessors_VerifyDeclarations(string name, string source)
     {
         using var directory = IntegrationTests.CliTestHelper.CreateTempDirectory();
@@ -662,7 +662,7 @@ public partial class StandaloneDllTests
     }
 
     [Theory]
-    [MemberData(nameof(SharedTests.UriComponentSemanticsTests.Cases), MemberType = typeof(SharedTests.UriComponentSemanticsTests))]
+    [DeploymentData(nameof(SharedTests.UriComponentSemanticsTests.Cases), MemberType = typeof(SharedTests.UriComponentSemanticsTests))]
     public void Isolated_Issue1767UriComponents_PreserveValidation(string name, string source, string expected)
     {
         using var directory = IntegrationTests.CliTestHelper.CreateTempDirectory();
@@ -680,7 +680,7 @@ public partial class StandaloneDllTests
     }
 
     [Theory]
-    [MemberData(nameof(SharedTests.UriComponentSemanticsTests.HostedCases), MemberType = typeof(SharedTests.UriComponentSemanticsTests))]
+    [DeploymentData(nameof(SharedTests.UriComponentSemanticsTests.HostedCases), MemberType = typeof(SharedTests.UriComponentSemanticsTests))]
     public void Isolated_Issue1767HostedUriComponents_VerifyDeclarations(string name, string source)
     {
         using var directory = IntegrationTests.CliTestHelper.CreateTempDirectory();
@@ -698,7 +698,7 @@ public partial class StandaloneDllTests
     }
 
     [Theory]
-    [MemberData(nameof(SharedTests.ClassOwnKeyOrderTests.Cases), MemberType = typeof(SharedTests.ClassOwnKeyOrderTests))]
+    [DeploymentData(nameof(SharedTests.ClassOwnKeyOrderTests.Cases), MemberType = typeof(SharedTests.ClassOwnKeyOrderTests))]
     public void Isolated_Issue1765ClassOwnKeyOrder_PreservesDeclaredFields(string name, string source, string expected)
     {
         using var directory = IntegrationTests.CliTestHelper.CreateTempDirectory();
@@ -717,7 +717,7 @@ public partial class StandaloneDllTests
     }
 
     [Theory]
-    [MemberData(nameof(SharedTests.ClassOwnKeyOrderTests.HostedCases), MemberType = typeof(SharedTests.ClassOwnKeyOrderTests))]
+    [DeploymentData(nameof(SharedTests.ClassOwnKeyOrderTests.HostedCases), MemberType = typeof(SharedTests.ClassOwnKeyOrderTests))]
     public void Isolated_Issue1765HostedClassOwnKeyOrder_VerifiesDeclarations(string name, string source)
     {
         using var directory = IntegrationTests.CliTestHelper.CreateTempDirectory();
@@ -736,7 +736,7 @@ public partial class StandaloneDllTests
     }
 
     [Theory]
-    [MemberData(nameof(SharedTests.CapturedLexicalAssignmentTests.Cases), MemberType = typeof(SharedTests.CapturedLexicalAssignmentTests))]
+    [DeploymentData(nameof(SharedTests.CapturedLexicalAssignmentTests.Cases), MemberType = typeof(SharedTests.CapturedLexicalAssignmentTests))]
     public void Isolated_Issue1761CapturedLexicalAssignments_CheckInitialization(string name, string source, string expected)
     {
         using var directory = IntegrationTests.CliTestHelper.CreateTempDirectory();
@@ -754,7 +754,7 @@ public partial class StandaloneDllTests
     }
 
     [Theory]
-    [MemberData(nameof(SharedTests.CapturedLexicalAssignmentTests.HostedCases), MemberType = typeof(SharedTests.CapturedLexicalAssignmentTests))]
+    [DeploymentData(nameof(SharedTests.CapturedLexicalAssignmentTests.HostedCases), MemberType = typeof(SharedTests.CapturedLexicalAssignmentTests))]
     public void Isolated_Issue1761HostedCapturedLexicalAssignments_VerifyDeclarations(string name, string source)
     {
         using var directory = IntegrationTests.CliTestHelper.CreateTempDirectory();
@@ -772,7 +772,7 @@ public partial class StandaloneDllTests
     }
 
     [Theory]
-    [MemberData(nameof(SharedTests.AsyncArrowSuperValueTests.Cases), MemberType = typeof(SharedTests.AsyncArrowSuperValueTests))]
+    [DeploymentData(nameof(SharedTests.AsyncArrowSuperValueTests.Cases), MemberType = typeof(SharedTests.AsyncArrowSuperValueTests))]
     public void Isolated_Issue1759AsyncArrowSuperValues_PreserveParentResults(string name, string source, string expected)
     {
         using var directory = IntegrationTests.CliTestHelper.CreateTempDirectory();
@@ -790,7 +790,7 @@ public partial class StandaloneDllTests
     }
 
     [Theory]
-    [MemberData(nameof(SharedTests.AsyncArrowSuperValueTests.HostedCases), MemberType = typeof(SharedTests.AsyncArrowSuperValueTests))]
+    [DeploymentData(nameof(SharedTests.AsyncArrowSuperValueTests.HostedCases), MemberType = typeof(SharedTests.AsyncArrowSuperValueTests))]
     public void Isolated_Issue1759HostedAsyncArrowSuperValues_VerifyDeclarations(string name, string source)
     {
         using var directory = IntegrationTests.CliTestHelper.CreateTempDirectory();
@@ -808,7 +808,7 @@ public partial class StandaloneDllTests
     }
 
     [Theory]
-    [MemberData(nameof(SharedTests.SynchronousArrowSuperTests.Cases), MemberType = typeof(SharedTests.SynchronousArrowSuperTests))]
+    [DeploymentData(nameof(SharedTests.SynchronousArrowSuperTests.Cases), MemberType = typeof(SharedTests.SynchronousArrowSuperTests))]
     public void Isolated_Issue1758SynchronousArrowSuper_UsesCapturedReceivers(string name, string source, string expected)
     {
         using var directory = IntegrationTests.CliTestHelper.CreateTempDirectory();
@@ -826,7 +826,7 @@ public partial class StandaloneDllTests
     }
 
     [Theory]
-    [MemberData(nameof(SharedTests.SynchronousArrowSuperTests.HostedCases), MemberType = typeof(SharedTests.SynchronousArrowSuperTests))]
+    [DeploymentData(nameof(SharedTests.SynchronousArrowSuperTests.HostedCases), MemberType = typeof(SharedTests.SynchronousArrowSuperTests))]
     public void Isolated_Issue1758HostedSynchronousArrowSuper_VerifiesDeclarations(string name, string source)
     {
         using var directory = IntegrationTests.CliTestHelper.CreateTempDirectory();
@@ -844,7 +844,7 @@ public partial class StandaloneDllTests
     }
 
     [Theory]
-    [MemberData(nameof(SharedTests.StateMachineSuperCallTests.Cases), MemberType = typeof(SharedTests.StateMachineSuperCallTests))]
+    [DeploymentData(nameof(SharedTests.StateMachineSuperCallTests.Cases), MemberType = typeof(SharedTests.StateMachineSuperCallTests))]
     public void Isolated_Issue1757StateMachineSuperCalls_VerifyAndPreserveReceivers(string name, string source, string expected)
     {
         using var directory = IntegrationTests.CliTestHelper.CreateTempDirectory();
@@ -862,7 +862,7 @@ public partial class StandaloneDllTests
     }
 
     [Theory]
-    [MemberData(nameof(SharedTests.StateMachineSuperCallTests.HostedCases), MemberType = typeof(SharedTests.StateMachineSuperCallTests))]
+    [DeploymentData(nameof(SharedTests.StateMachineSuperCallTests.HostedCases), MemberType = typeof(SharedTests.StateMachineSuperCallTests))]
     public void Isolated_Issue1757HostedStateMachineSuperCalls_VerifyDeclarations(string name, string source)
     {
         using var directory = IntegrationTests.CliTestHelper.CreateTempDirectory();
@@ -902,7 +902,7 @@ public partial class StandaloneDllTests
     }
 
     [Theory]
-    [MemberData(nameof(SharedTests.InheritedSuperMethodTests.HostedCases), MemberType = typeof(SharedTests.InheritedSuperMethodTests))]
+    [DeploymentData(nameof(SharedTests.InheritedSuperMethodTests.HostedCases), MemberType = typeof(SharedTests.InheritedSuperMethodTests))]
     public void Isolated_Issue1756HostedInheritedSuperMethods_VerifyDeclarations(string name, string source)
     {
         using var directory = IntegrationTests.CliTestHelper.CreateTempDirectory();
@@ -920,7 +920,7 @@ public partial class StandaloneDllTests
     }
 
     [Theory]
-    [MemberData(nameof(SharedTests.InheritedSuperMethodTests.Cases), MemberType = typeof(SharedTests.InheritedSuperMethodTests))]
+    [DeploymentData(nameof(SharedTests.InheritedSuperMethodTests.Cases), MemberType = typeof(SharedTests.InheritedSuperMethodTests))]
     public void Isolated_Issue1756InheritedSuperMethods_PreserveParentLookup(string name, string source, string expected)
     {
         using var directory = IntegrationTests.CliTestHelper.CreateTempDirectory();
@@ -938,7 +938,7 @@ public partial class StandaloneDllTests
     }
 
     [Theory]
-    [MemberData(nameof(SharedTests.NamespaceClassConstructionTests.Cases), MemberType = typeof(SharedTests.NamespaceClassConstructionTests))]
+    [DeploymentData(nameof(SharedTests.NamespaceClassConstructionTests.Cases), MemberType = typeof(SharedTests.NamespaceClassConstructionTests))]
     public void Isolated_Issue1781NamespaceClasses_VerifyConstructionAndIdentity(string name, string source, string expected)
     {
         using var directory = IntegrationTests.CliTestHelper.CreateTempDirectory();
@@ -956,7 +956,7 @@ public partial class StandaloneDllTests
     }
 
     [Theory]
-    [MemberData(nameof(SharedTests.NamespaceEnumReverseMappingTests.Cases), MemberType = typeof(SharedTests.NamespaceEnumReverseMappingTests))]
+    [DeploymentData(nameof(SharedTests.NamespaceEnumReverseMappingTests.Cases), MemberType = typeof(SharedTests.NamespaceEnumReverseMappingTests))]
     public void Isolated_Issue1780NamespaceEnums_PreserveNumericReverseMappings(string name, string source, string expected)
     {
         using var directory = IntegrationTests.CliTestHelper.CreateTempDirectory();
@@ -974,7 +974,7 @@ public partial class StandaloneDllTests
     }
 
     [Theory]
-    [MemberData(nameof(SharedTests.NamespaceEnumReverseMappingTests.HostedCases), MemberType = typeof(SharedTests.NamespaceEnumReverseMappingTests))]
+    [DeploymentData(nameof(SharedTests.NamespaceEnumReverseMappingTests.HostedCases), MemberType = typeof(SharedTests.NamespaceEnumReverseMappingTests))]
     public void Isolated_Issue1780HostedNamespaceEnums_VerifyDeclarationsAndDeployment(string name, string source)
     {
         using var directory = IntegrationTests.CliTestHelper.CreateTempDirectory();
@@ -992,7 +992,7 @@ public partial class StandaloneDllTests
     }
 
     [Theory]
-    [MemberData(nameof(SharedTests.NamespaceDeletionTests.Cases), MemberType = typeof(SharedTests.NamespaceDeletionTests))]
+    [DeploymentData(nameof(SharedTests.NamespaceDeletionTests.Cases), MemberType = typeof(SharedTests.NamespaceDeletionTests))]
     public void Isolated_Issue1779NamespaceDeletion_RemovesMembersAndPreservesAliases(string name, string source, string expected)
     {
         using var directory = IntegrationTests.CliTestHelper.CreateTempDirectory();
@@ -1010,7 +1010,7 @@ public partial class StandaloneDllTests
     }
 
     [Theory]
-    [MemberData(nameof(SharedTests.NamespaceMissingMemberTests.Cases), MemberType = typeof(SharedTests.NamespaceMissingMemberTests))]
+    [DeploymentData(nameof(SharedTests.NamespaceMissingMemberTests.Cases), MemberType = typeof(SharedTests.NamespaceMissingMemberTests))]
     public void Isolated_Issue1778NamespaceMissingMembers_DistinguishUndefinedAndNull(string name, string source, string expected)
     {
         using var directory = IntegrationTests.CliTestHelper.CreateTempDirectory();
@@ -1028,7 +1028,7 @@ public partial class StandaloneDllTests
     }
 
     [Theory]
-    [MemberData(nameof(SharedTests.NamespaceMutationTests.Cases), MemberType = typeof(SharedTests.NamespaceMutationTests))]
+    [DeploymentData(nameof(SharedTests.NamespaceMutationTests.Cases), MemberType = typeof(SharedTests.NamespaceMutationTests))]
     public void Isolated_Issue1777NamespaceWrites_PreserveMembersAndLiveBindings(string name, string source, string expected)
     {
         using var directory = IntegrationTests.CliTestHelper.CreateTempDirectory();
@@ -1046,7 +1046,7 @@ public partial class StandaloneDllTests
     }
 
     [Theory]
-    [MemberData(nameof(SharedTests.ImportedNamespaceFunctionTests.Cases), MemberType = typeof(SharedTests.ImportedNamespaceFunctionTests))]
+    [DeploymentData(nameof(SharedTests.ImportedNamespaceFunctionTests.Cases), MemberType = typeof(SharedTests.ImportedNamespaceFunctionTests))]
     public void Isolated_Issue1776ImportedNamespaces_PreserveValuesAndMembers(string name, string source, string library, string expected)
     {
         using var directory = IntegrationTests.CliTestHelper.CreateTempDirectory();
@@ -1065,7 +1065,7 @@ public partial class StandaloneDllTests
     }
 
     [Theory]
-    [MemberData(nameof(SharedTests.NamespaceInitializerFunctionTests.Cases), MemberType = typeof(SharedTests.NamespaceInitializerFunctionTests))]
+    [DeploymentData(nameof(SharedTests.NamespaceInitializerFunctionTests.Cases), MemberType = typeof(SharedTests.NamespaceInitializerFunctionTests))]
     public void Isolated_Issue1775NamespaceInitializers_ResolvePrivateFunctions(string name, string source, string expected)
     {
         using var directory = IntegrationTests.CliTestHelper.CreateTempDirectory();
@@ -1083,7 +1083,7 @@ public partial class StandaloneDllTests
     }
 
     [Theory]
-    [MemberData(nameof(SharedTests.NamespaceFunctionValueTests.CallableCases), MemberType = typeof(SharedTests.NamespaceFunctionValueTests))]
+    [DeploymentData(nameof(SharedTests.NamespaceFunctionValueTests.CallableCases), MemberType = typeof(SharedTests.NamespaceFunctionValueTests))]
     public void Isolated_Issue1774NamespaceFunctions_PreserveCallabilityAndIdentity(string name, string source, string expected)
     {
         using var directory = IntegrationTests.CliTestHelper.CreateTempDirectory();
@@ -1101,7 +1101,7 @@ public partial class StandaloneDllTests
     }
 
     [Theory]
-    [MemberData(nameof(SharedTests.IndirectEvalDeploymentTests.Cases), MemberType = typeof(SharedTests.IndirectEvalDeploymentTests))]
+    [DeploymentData(nameof(SharedTests.IndirectEvalDeploymentTests.Cases), MemberType = typeof(SharedTests.IndirectEvalDeploymentTests))]
     public void Isolated_Issue1771IndirectEval_DeploysMatchingOptionalRuntime(string name, string source, string expected)
     {
         using var directory = IntegrationTests.CliTestHelper.CreateTempDirectory();
@@ -1121,7 +1121,7 @@ public partial class StandaloneDllTests
     }
 
     [Theory]
-    [MemberData(nameof(SharedTests.IndirectEvalDeploymentTests.StandaloneCases), MemberType = typeof(SharedTests.IndirectEvalDeploymentTests))]
+    [DeploymentData(nameof(SharedTests.IndirectEvalDeploymentTests.StandaloneCases), MemberType = typeof(SharedTests.IndirectEvalDeploymentTests))]
     public void Isolated_Issue1771StandaloneEval_PreservesIdentityLexicalLoweringAndOmission(string name, string source, string expected, bool usesBridge)
     {
         using var directory = IntegrationTests.CliTestHelper.CreateTempDirectory();
@@ -1140,7 +1140,7 @@ public partial class StandaloneDllTests
     }
 
     [Theory]
-    [MemberData(nameof(SharedTests.BuiltInModules.PrefixedStreamImportTests.Cases), MemberType = typeof(SharedTests.BuiltInModules.PrefixedStreamImportTests))]
+    [DeploymentData(nameof(SharedTests.BuiltInModules.PrefixedStreamImportTests.Cases), MemberType = typeof(SharedTests.BuiltInModules.PrefixedStreamImportTests))]
     public void Isolated_Issue1740StreamImports_ResolveStaticCallsAndConstructors(string name, string source, string expected)
     {
         using var directory = IntegrationTests.CliTestHelper.CreateTempDirectory();
@@ -1158,7 +1158,7 @@ public partial class StandaloneDllTests
     }
 
     [Theory]
-    [MemberData(nameof(SharedTests.DynamicArrayDestructureOverrideTests.AllCases), MemberType = typeof(SharedTests.DynamicArrayDestructureOverrideTests))]
+    [DeploymentData(nameof(SharedTests.DynamicArrayDestructureOverrideTests.AllCases), MemberType = typeof(SharedTests.DynamicArrayDestructureOverrideTests))]
     public void Isolated_Issue1753DynamicArrays_HonorIteratorOverrides(string name, string source, string expected)
     {
         using var directory = IntegrationTests.CliTestHelper.CreateTempDirectory();
@@ -1176,7 +1176,7 @@ public partial class StandaloneDllTests
     }
 
     [Theory]
-    [MemberData(nameof(IteratorTakeCloseTests.Cases), MemberType = typeof(IteratorTakeCloseTests))]
+    [DeploymentData(nameof(IteratorTakeCloseTests.Cases), MemberType = typeof(IteratorTakeCloseTests))]
     public void Isolated_Issue1747IteratorTake_ClosesSourceExactlyOnce(string name, string source, string expected)
     {
         using var directory = IntegrationTests.CliTestHelper.CreateTempDirectory();
@@ -1194,7 +1194,7 @@ public partial class StandaloneDllTests
     }
 
     [Theory]
-    [MemberData(nameof(IteratorFromArrayTests.Cases), MemberType = typeof(IteratorFromArrayTests))]
+    [DeploymentData(nameof(IteratorFromArrayTests.Cases), MemberType = typeof(IteratorFromArrayTests))]
     public void Isolated_Issue1748IteratorFrom_AdaptsArrayAndRetainsIteratorIdentity(string name, string source, string expected)
     {
         using var directory = IntegrationTests.CliTestHelper.CreateTempDirectory();
@@ -1212,7 +1212,7 @@ public partial class StandaloneDllTests
     }
 
     [Theory]
-    [MemberData(nameof(SharedTests.ArrayDestructureIterationControlTests.Cases), MemberType = typeof(SharedTests.ArrayDestructureIterationControlTests))]
+    [DeploymentData(nameof(SharedTests.ArrayDestructureIterationControlTests.Cases), MemberType = typeof(SharedTests.ArrayDestructureIterationControlTests))]
     public void Isolated_Issue1750Controls_FullRestAndExhaustion(string name, string source, string expected)
     {
         using var directory = IntegrationTests.CliTestHelper.CreateTempDirectory();
@@ -1230,7 +1230,7 @@ public partial class StandaloneDllTests
     }
 
     [Theory]
-    [MemberData(nameof(ArrayDestructureSourceValidationTests.Cases), MemberType = typeof(ArrayDestructureSourceValidationTests))]
+    [DeploymentData(nameof(ArrayDestructureSourceValidationTests.Cases), MemberType = typeof(ArrayDestructureSourceValidationTests))]
     public void Isolated_Issue1751Destructuring_RejectsNonIterableGuestSources(string name, string source, string expected)
     {
         using var directory = IntegrationTests.CliTestHelper.CreateTempDirectory();
@@ -1248,7 +1248,7 @@ public partial class StandaloneDllTests
     }
 
     [Theory]
-    [MemberData(nameof(SharedTests.ArrayIteratorAssignmentTests.Cases), MemberType = typeof(SharedTests.ArrayIteratorAssignmentTests))]
+    [DeploymentData(nameof(SharedTests.ArrayIteratorAssignmentTests.Cases), MemberType = typeof(SharedTests.ArrayIteratorAssignmentTests))]
     public void Isolated_Issue1752ArrayIteratorAssignment_PreservesTypedFactories(string name, string source, string expected)
     {
         using var directory = IntegrationTests.CliTestHelper.CreateTempDirectory();
@@ -1266,7 +1266,7 @@ public partial class StandaloneDllTests
     }
 
     [Theory]
-    [MemberData(nameof(SharedTests.ArrayIteratorAssignmentTests.TypingOnlyCliCases), MemberType = typeof(SharedTests.ArrayIteratorAssignmentTests))]
+    [DeploymentData(nameof(SharedTests.ArrayIteratorAssignmentTests.TypingOnlyCliCases), MemberType = typeof(SharedTests.ArrayIteratorAssignmentTests))]
     public void Isolated_Issue1752ArrayValuesFactory_AcceptsTypingAndVerifiesEmission(string name, string source)
     {
         using var directory = IntegrationTests.CliTestHelper.CreateTempDirectory();
@@ -1283,7 +1283,7 @@ public partial class StandaloneDllTests
     }
 
     [Theory]
-    [MemberData(nameof(SharedTests.ArrayIteratorAssignmentTests.InvalidCliCases), MemberType = typeof(SharedTests.ArrayIteratorAssignmentTests))]
+    [DeploymentData(nameof(SharedTests.ArrayIteratorAssignmentTests.InvalidCliCases), MemberType = typeof(SharedTests.ArrayIteratorAssignmentTests))]
     public void Isolated_Issue1752InvalidArrayIteratorFactory_RejectsBeforeEmission(string name, string source)
     {
         using var directory = IntegrationTests.CliTestHelper.CreateTempDirectory();
@@ -1298,7 +1298,7 @@ public partial class StandaloneDllTests
     }
 
     [Theory]
-    [MemberData(nameof(IteratorLimitTests.Cases), MemberType = typeof(IteratorLimitTests))]
+    [DeploymentData(nameof(IteratorLimitTests.Cases), MemberType = typeof(IteratorLimitTests))]
     public void Isolated_Issue1746IteratorLimits_ValidateAndCoerceBeforeIteration(string name, string source, string expected)
     {
         using var directory = IntegrationTests.CliTestHelper.CreateTempDirectory();
@@ -1316,7 +1316,7 @@ public partial class StandaloneDllTests
     }
 
     [Theory]
-    [MemberData(nameof(IteratorForEachReturnTests.Cases), MemberType = typeof(IteratorForEachReturnTests))]
+    [DeploymentData(nameof(IteratorForEachReturnTests.Cases), MemberType = typeof(IteratorForEachReturnTests))]
     public void Isolated_Issue1745IteratorForEach_ReturnsUndefined(string name, string source, string expected)
     {
         using var directory = IntegrationTests.CliTestHelper.CreateTempDirectory();
@@ -1334,7 +1334,7 @@ public partial class StandaloneDllTests
     }
 
     [Theory]
-    [MemberData(nameof(ArraySpreadDescriptorTests.Cases), MemberType = typeof(ArraySpreadDescriptorTests))]
+    [DeploymentData(nameof(ArraySpreadDescriptorTests.Cases), MemberType = typeof(ArraySpreadDescriptorTests))]
     public void Isolated_Issue1742ArraySpread_HonorsOwnGettersAndLiveIteration(string name, string source, string expected)
     {
         using var directory = IntegrationTests.CliTestHelper.CreateTempDirectory();
@@ -1352,7 +1352,7 @@ public partial class StandaloneDllTests
     }
 
     [Theory]
-    [MemberData(nameof(IteratorCloseResultTests.Cases), MemberType = typeof(IteratorCloseResultTests))]
+    [DeploymentData(nameof(IteratorCloseResultTests.Cases), MemberType = typeof(IteratorCloseResultTests))]
     public void Isolated_Issue1739IteratorClose_RejectsPrimitivesAndPreservesThrow(string name, string source, string expected)
     {
         using var directory = IntegrationTests.CliTestHelper.CreateTempDirectory();
@@ -1370,7 +1370,7 @@ public partial class StandaloneDllTests
     }
 
     [Theory]
-    [MemberData(nameof(SharedTests.ForAwaitElementInferenceTests.Cases), MemberType = typeof(SharedTests.ForAwaitElementInferenceTests))]
+    [DeploymentData(nameof(SharedTests.ForAwaitElementInferenceTests.Cases), MemberType = typeof(SharedTests.ForAwaitElementInferenceTests))]
     public void Isolated_Issue1735ForAwaitElements_InferAndExecuteAwaitedValues(string name, string source, string expected)
     {
         using var directory = IntegrationTests.CliTestHelper.CreateTempDirectory();
@@ -1388,7 +1388,7 @@ public partial class StandaloneDllTests
     }
 
     [Theory]
-    [MemberData(nameof(SharedTests.ForAwaitElementInferenceTests.InvalidCliCases), MemberType = typeof(SharedTests.ForAwaitElementInferenceTests))]
+    [DeploymentData(nameof(SharedTests.ForAwaitElementInferenceTests.InvalidCliCases), MemberType = typeof(SharedTests.ForAwaitElementInferenceTests))]
     public void Isolated_Issue1735InvalidLoopBindings_ProduceNoAssembly(string name, string source)
     {
         using var directory = IntegrationTests.CliTestHelper.CreateTempDirectory();
@@ -1403,7 +1403,7 @@ public partial class StandaloneDllTests
     }
 
     [Theory]
-    [MemberData(nameof(SharedTests.AsyncMutableCaptureTests.Cases), MemberType = typeof(SharedTests.AsyncMutableCaptureTests))]
+    [DeploymentData(nameof(SharedTests.AsyncMutableCaptureTests.Cases), MemberType = typeof(SharedTests.AsyncMutableCaptureTests))]
     public void Isolated_Issue1734AsyncCaptures_PreserveSharedCounterAndCompleteOriginalLoop(string name, string source, string expected)
     {
         using var directory = IntegrationTests.CliTestHelper.CreateTempDirectory();
@@ -1421,7 +1421,7 @@ public partial class StandaloneDllTests
     }
 
     [Theory]
-    [MemberData(nameof(SharedTests.AsyncGeneratorDelegationCompletionTests.Cases), MemberType = typeof(SharedTests.AsyncGeneratorDelegationCompletionTests))]
+    [DeploymentData(nameof(SharedTests.AsyncGeneratorDelegationCompletionTests.Cases), MemberType = typeof(SharedTests.AsyncGeneratorDelegationCompletionTests))]
     public void Isolated_Issue1733AsyncDelegation_PreservesCompletionSentValuesAndCleanup(string name, string source, string expected)
     {
         using var directory = IntegrationTests.CliTestHelper.CreateTempDirectory();
@@ -1439,7 +1439,7 @@ public partial class StandaloneDllTests
     }
 
     [Theory]
-    [MemberData(nameof(SharedTests.AsyncGeneratorInjectedThrowTests.CompiledCases), MemberType = typeof(SharedTests.AsyncGeneratorInjectedThrowTests))]
+    [DeploymentData(nameof(SharedTests.AsyncGeneratorInjectedThrowTests.CompiledCases), MemberType = typeof(SharedTests.AsyncGeneratorInjectedThrowTests))]
     public void Isolated_Issue1732AsyncGeneratorThrow_ResumesBodyAndSettlesPromise(string name, string source, string expected)
     {
         using var directory = IntegrationTests.CliTestHelper.CreateTempDirectory();
@@ -1457,7 +1457,7 @@ public partial class StandaloneDllTests
     }
 
     [Theory]
-    [MemberData(nameof(SharedTests.GeneratorStringDelegationTests.Cases), MemberType = typeof(SharedTests.GeneratorStringDelegationTests))]
+    [DeploymentData(nameof(SharedTests.GeneratorStringDelegationTests.Cases), MemberType = typeof(SharedTests.GeneratorStringDelegationTests))]
     public void Isolated_Issue1730StringDelegation_PreservesCodePointsAndCompletion(string name, string source, string expected)
     {
         using var directory = IntegrationTests.CliTestHelper.CreateTempDirectory();
@@ -1475,7 +1475,7 @@ public partial class StandaloneDllTests
     }
 
     [Theory]
-    [MemberData(nameof(SharedTests.DynamicGeneratorIteratorTests.Cases), MemberType = typeof(SharedTests.DynamicGeneratorIteratorTests))]
+    [DeploymentData(nameof(SharedTests.DynamicGeneratorIteratorTests.Cases), MemberType = typeof(SharedTests.DynamicGeneratorIteratorTests))]
     public void Isolated_Issue1729DynamicGeneratorIterator_PreservesOriginalOutputsAndLifecycle(string name, string source, string expected)
     {
         using var directory = IntegrationTests.CliTestHelper.CreateTempDirectory();
@@ -1493,7 +1493,7 @@ public partial class StandaloneDllTests
     }
 
     [Theory]
-    [MemberData(nameof(SharedTests.ArrayStaticDescriptorValueTests.Cases), MemberType = typeof(SharedTests.ArrayStaticDescriptorValueTests))]
+    [DeploymentData(nameof(SharedTests.ArrayStaticDescriptorValueTests.Cases), MemberType = typeof(SharedTests.ArrayStaticDescriptorValueTests))]
     public void Isolated_Issue1802ArrayDescriptorValues_ShareCachedStaticFunction(string name, string source, string expected)
     {
         using var directory = IntegrationTests.CliTestHelper.CreateTempDirectory();
@@ -1511,7 +1511,7 @@ public partial class StandaloneDllTests
     }
 
     [Theory]
-    [MemberData(nameof(SharedTests.NumberPredicateValueTests.Cases), MemberType = typeof(SharedTests.NumberPredicateValueTests))]
+    [DeploymentData(nameof(SharedTests.NumberPredicateValueTests.Cases), MemberType = typeof(SharedTests.NumberPredicateValueTests))]
     public void Isolated_Issue1801NumberPredicateValues_RetainOriginalOutputs(string name, string source, string expected)
     {
         using var directory = IntegrationTests.CliTestHelper.CreateTempDirectory();
@@ -1529,7 +1529,7 @@ public partial class StandaloneDllTests
     }
 
     [Theory]
-    [MemberData(nameof(SharedTests.ProxyConstructorTests.Cases), MemberType = typeof(SharedTests.ProxyConstructorTests))]
+    [DeploymentData(nameof(SharedTests.ProxyConstructorTests.Cases), MemberType = typeof(SharedTests.ProxyConstructorTests))]
     public void Isolated_Issue1799ProxyConstructors_FinishWithinOriginalDeadline(string name, string source, string expected)
     {
         using var directory = IntegrationTests.CliTestHelper.CreateTempDirectory();
@@ -1570,7 +1570,7 @@ public partial class StandaloneDllTests
     }
 
     [Theory]
-    [MemberData(nameof(SharedTests.TypedReflectApplyTests.Cases), MemberType = typeof(SharedTests.TypedReflectApplyTests))]
+    [DeploymentData(nameof(SharedTests.TypedReflectApplyTests.Cases), MemberType = typeof(SharedTests.TypedReflectApplyTests))]
     public void Isolated_Issue1798ReflectApply_PreservesTypedAndDynamicResults(string name, string source, string expected)
     {
         using var directory = IntegrationTests.CliTestHelper.CreateTempDirectory();
@@ -1592,7 +1592,7 @@ public partial class StandaloneDllTests
     }
 
     [Theory]
-    [MemberData(nameof(SharedTests.NestedMethodArgumentTests.CompiledCases), MemberType = typeof(SharedTests.NestedMethodArgumentTests))]
+    [DeploymentData(nameof(SharedTests.NestedMethodArgumentTests.CompiledCases), MemberType = typeof(SharedTests.NestedMethodArgumentTests))]
     public void Isolated_Issue1727NestedMethodArguments_PreserveValuesAndOrder(string name, string source, string expected)
     {
         using var directory = IntegrationTests.CliTestHelper.CreateTempDirectory();
@@ -1609,7 +1609,7 @@ public partial class StandaloneDllTests
     }
 
     [Theory]
-    [MemberData(nameof(SharedTests.NonConstructibleFunctionTests.CompiledCases), MemberType = typeof(SharedTests.NonConstructibleFunctionTests))]
+    [DeploymentData(nameof(SharedTests.NonConstructibleFunctionTests.CompiledCases), MemberType = typeof(SharedTests.NonConstructibleFunctionTests))]
     public void Isolated_Issue1725NonConstructibleFunctions_ThrowGuestTypeError(string name, string source, string expected)
     {
         using var directory = IntegrationTests.CliTestHelper.CreateTempDirectory();
@@ -1626,7 +1626,7 @@ public partial class StandaloneDllTests
     }
 
     [Theory]
-    [MemberData(nameof(SharedTests.BoundConstructorTests.Cases), MemberType = typeof(SharedTests.BoundConstructorTests))]
+    [DeploymentData(nameof(SharedTests.BoundConstructorTests.Cases), MemberType = typeof(SharedTests.BoundConstructorTests))]
     public void Isolated_Issue1724BoundConstructors_UseFreshReceiver(string name, string source, string expected)
     {
         using var directory = IntegrationTests.CliTestHelper.CreateTempDirectory();
@@ -1643,7 +1643,7 @@ public partial class StandaloneDllTests
     }
 
     [Theory]
-    [MemberData(nameof(SharedTests.ExtractedTextDecoderMethodTests.Cases), MemberType = typeof(SharedTests.ExtractedTextDecoderMethodTests))]
+    [DeploymentData(nameof(SharedTests.ExtractedTextDecoderMethodTests.Cases), MemberType = typeof(SharedTests.ExtractedTextDecoderMethodTests))]
     public void Isolated_Issue1722ExtractedTextDecoderDecode_PreservesInvocation(string name, string source, string expected)
     {
         using var directory = IntegrationTests.CliTestHelper.CreateTempDirectory();
@@ -1660,7 +1660,7 @@ public partial class StandaloneDllTests
     }
 
     [Theory]
-    [MemberData(nameof(SharedTests.ExtractedTypedArrayMethodTests.Cases), MemberType = typeof(SharedTests.ExtractedTypedArrayMethodTests))]
+    [DeploymentData(nameof(SharedTests.ExtractedTypedArrayMethodTests.Cases), MemberType = typeof(SharedTests.ExtractedTypedArrayMethodTests))]
     public void Isolated_Issue1721ExtractedTypedArrayFill_PreservesInvocation(string name, string source, string expected)
     {
         using var directory = IntegrationTests.CliTestHelper.CreateTempDirectory();
@@ -1678,7 +1678,7 @@ public partial class StandaloneDllTests
     }
 
     [Theory]
-    [MemberData(nameof(SharedTests.TypedReflectConstructTests.Cases), MemberType = typeof(SharedTests.TypedReflectConstructTests))]
+    [DeploymentData(nameof(SharedTests.TypedReflectConstructTests.Cases), MemberType = typeof(SharedTests.TypedReflectConstructTests))]
     public void Isolated_Issue1718TypedReflectConstruct_PreservesInstanceIdentity(string name, string source, string expected)
     {
         using var directory = IntegrationTests.CliTestHelper.CreateTempDirectory();
@@ -1695,7 +1695,7 @@ public partial class StandaloneDllTests
     }
 
     [Theory]
-    [MemberData(nameof(SharedTests.NestedBoundFunctionNameTests.Cases), MemberType = typeof(SharedTests.NestedBoundFunctionNameTests))]
+    [DeploymentData(nameof(SharedTests.NestedBoundFunctionNameTests.Cases), MemberType = typeof(SharedTests.NestedBoundFunctionNameTests))]
     public void Isolated_Issue1717NestedBinding_PreservesNamesAndProperties(string name, string source, string expected)
     {
         using var directory = IntegrationTests.CliTestHelper.CreateTempDirectory();
@@ -1712,7 +1712,7 @@ public partial class StandaloneDllTests
     }
 
     [Theory]
-    [MemberData(nameof(SharedTests.CallableProxyWrapperTests.Cases), MemberType = typeof(SharedTests.CallableProxyWrapperTests))]
+    [DeploymentData(nameof(SharedTests.CallableProxyWrapperTests.Cases), MemberType = typeof(SharedTests.CallableProxyWrapperTests))]
     public void Isolated_Issue1715CallableProxyWrappers_FinishWithinOriginalDeadline(string name, string source, string expected)
     {
         using var directory = IntegrationTests.CliTestHelper.CreateTempDirectory();
@@ -1732,7 +1732,7 @@ public partial class StandaloneDllTests
     }
 
     [Theory]
-    [MemberData(nameof(SharedTests.ExtractedFunctionWrapperTests.Cases), MemberType = typeof(SharedTests.ExtractedFunctionWrapperTests))]
+    [DeploymentData(nameof(SharedTests.ExtractedFunctionWrapperTests.Cases), MemberType = typeof(SharedTests.ExtractedFunctionWrapperTests))]
     public void Isolated_Issue1714ExtractedWrappers_PreserveInvocation(string name, string source, string expected)
     {
         using var directory = IntegrationTests.CliTestHelper.CreateTempDirectory();
@@ -1790,7 +1790,7 @@ public partial class StandaloneDllTests
     }
 
     [Theory]
-    [MemberData(nameof(SharedTests.PromiseModuleIdentityTests.ImportOrders), MemberType = typeof(SharedTests.PromiseModuleIdentityTests))]
+    [DeploymentData(nameof(SharedTests.PromiseModuleIdentityTests.ImportOrders), MemberType = typeof(SharedTests.PromiseModuleIdentityTests))]
     public void Isolated_Issue1910PromiseModules_HaveUniqueTypeDeclarationsAndExports(string imports)
     {
         using var directory = IntegrationTests.CliTestHelper.CreateTempDirectory();
@@ -1882,7 +1882,7 @@ public partial class StandaloneDllTests
         ["async_before_await", "async function run(){class C{static value=5;}const value=C.value;await Promise.resolve(0);return value;}run().then(v=>console.log(v));"],
     ];
 
-    [Theory, MemberData(nameof(Issue1805Programs))]
+    [Theory, DeploymentData(nameof(Issue1805Programs))]
     public void Isolated_Issue1805OriginalPrograms_ResolveLocalClassBindings(string name, string source)
     {
         // Keep the original #1805 acceptance sources alongside the in-process regressions.
@@ -1899,7 +1899,7 @@ public partial class StandaloneDllTests
             verifyStandardError: error => Assert.Empty(error), standardInput: ""));
     }
 
-    [Theory, MemberData(nameof(Issue1805Programs))]
+    [Theory, DeploymentData(nameof(Issue1805Programs))]
     public void Isolated_Issue1805HostedPrograms_VerifyLocalClassDeclarations(string name, string source)
     {
         using var directory = IntegrationTests.CliTestHelper.CreateTempDirectory();
@@ -2190,7 +2190,7 @@ public partial class StandaloneDllTests
     /// Worker/@DotNetType), so every output must be fully standalone.
     /// </summary>
     [Theory]
-    [MemberData(nameof(StandaloneFeatureBattery))]
+    [DeploymentData(nameof(StandaloneFeatureBattery))]
     public void CompiledDll_FeatureBattery_ShouldNotReferenceSharpTsAssembly(string feature, string source)
     {
         var (tempDir, dllPath) = CompileStandalone(source);
@@ -3259,7 +3259,7 @@ public partial class StandaloneDllTests
     }
 
     [Theory]
-    [MemberData(nameof(ChildProcessMetadataPrograms))]
+    [DeploymentData(nameof(ChildProcessMetadataPrograms))]
     public void Isolated_ChildProcessMetadata_PreservesExecutionStreamsErrorsAndDependencyContract(string source, string expected)
     {
         var files = new Dictionary<string, string> { ["main.ts"] = source };
@@ -3350,7 +3350,7 @@ public partial class StandaloneDllTests
     ];
 
     [Theory]
-    [MemberData(nameof(HostPrimitiveMetadataPrograms))]
+    [DeploymentData(nameof(HostPrimitiveMetadataPrograms))]
     public void Isolated_HostPrimitiveMetadata_PreservesClockStateAndTerminalChecks(string source, string expected, string entryPoint)
     {
         using var tempDir = IntegrationTests.CliTestHelper.CreateTempDirectory();
@@ -5028,7 +5028,7 @@ public partial class StandaloneDllTests
     ];
 
     [Theory]
-    [MemberData(nameof(BigIntMetadataPrograms))]
+    [DeploymentData(nameof(BigIntMetadataPrograms))]
     public void Isolated_BigIntMetadata_PreservesConversionsOperatorsAndPrototypeBehavior(string name, string source, string expected, string entryPoint)
     {
         using var tempDir = IntegrationTests.CliTestHelper.CreateTempDirectory();
@@ -5143,7 +5143,7 @@ public partial class StandaloneDllTests
     ];
 
     [Theory]
-    [MemberData(nameof(BooleanMetadataPrograms))]
+    [DeploymentData(nameof(BooleanMetadataPrograms))]
     public void Isolated_BooleanMetadata_PreservesTruthinessAndPrototypeBehavior(string name, string source, string expected, string entryPoint)
     {
         using var tempDir = IntegrationTests.CliTestHelper.CreateTempDirectory();
@@ -5274,7 +5274,7 @@ public partial class StandaloneDllTests
     ];
 
     [Theory]
-    [MemberData(nameof(NumericCoercionMetadataPrograms))]
+    [DeploymentData(nameof(NumericCoercionMetadataPrograms))]
     public void Isolated_NumericCoercionMetadata_PreservesConversionAndCoercionOrder(string name, string source, string expected, string entryPoint)
     {
         using var tempDir = IntegrationTests.CliTestHelper.CreateTempDirectory();
@@ -5385,7 +5385,7 @@ public partial class StandaloneDllTests
     ];
 
     [Theory]
-    [MemberData(nameof(ObjectStorageMetadataPrograms))]
+    [DeploymentData(nameof(ObjectStorageMetadataPrograms))]
     public void Isolated_ObjectStorageMetadata_PreservesPropertiesAccessorsAndRestrictions(string name, string source, string expected, bool standalone)
     {
         using var tempDir = IntegrationTests.CliTestHelper.CreateTempDirectory();
@@ -5491,7 +5491,7 @@ public partial class StandaloneDllTests
     ];
 
     [Theory]
-    [MemberData(nameof(DescriptorStorageMetadataPrograms))]
+    [DeploymentData(nameof(DescriptorStorageMetadataPrograms))]
     public void Isolated_DescriptorStorageMetadata_PreservesDescriptorsKeysAndRestrictions(string name, string source, string expected, bool standalone)
     {
         using var tempDir = IntegrationTests.CliTestHelper.CreateTempDirectory();
@@ -5656,7 +5656,7 @@ public partial class StandaloneDllTests
     ];
 
     [Theory]
-    [MemberData(nameof(ReflectMetadataPrograms))]
+    [DeploymentData(nameof(ReflectMetadataPrograms))]
     public void Isolated_ReflectMetadata_PreservesOperationsReceiversMetadataAndProxyDeployment(
         string name, string source, string expected, bool standalone, string options)
     {
@@ -5752,7 +5752,7 @@ public partial class StandaloneDllTests
     ];
 
     [Theory]
-    [MemberData(nameof(SuperMethodPrograms))]
+    [DeploymentData(nameof(SuperMethodPrograms))]
     public void Isolated_SuperMethods_PreserveParentLookupAndCapturedReceivers(
         string name, string source, string expected, bool hosted, string extraArguments)
     {
@@ -5866,7 +5866,7 @@ public partial class StandaloneDllTests
     ];
 
     [Theory]
-    [MemberData(nameof(ArrayDestructuringPrograms))]
+    [DeploymentData(nameof(ArrayDestructuringPrograms))]
     public void Isolated_ArrayDestructuring_PreservesSourcesDefaultsAndRest(
         string name, string source, string expected, bool hosted, string extraArguments)
     {
@@ -5980,7 +5980,7 @@ public partial class StandaloneDllTests
     ];
 
     [Theory]
-    [MemberData(nameof(IteratorHelpersPrograms))]
+    [DeploymentData(nameof(IteratorHelpersPrograms))]
     public void Isolated_IteratorHelpers_PreservesLazyAndEagerIteration(
         string name, string source, string expected, bool hosted, string extraArguments)
     {
@@ -6094,7 +6094,7 @@ public partial class StandaloneDllTests
     ];
 
     [Theory]
-    [MemberData(nameof(IteratorCollectionPrograms))]
+    [DeploymentData(nameof(IteratorCollectionPrograms))]
     public void Isolated_IteratorCollection_PreservesSpreadAppendAndLiveArrayIteration(
         string name, string source, string expected, bool hosted, string extraArguments)
     {
@@ -6216,7 +6216,7 @@ public partial class StandaloneDllTests
     ];
 
     [Theory]
-    [MemberData(nameof(IteratorProtocolPrograms))]
+    [DeploymentData(nameof(IteratorProtocolPrograms))]
     public void Isolated_IteratorProtocol_PreservesLookupResultsClosingAndDynamicCalls(
         string name, string source, string expected, bool hosted, string extraArguments)
     {
@@ -6290,7 +6290,7 @@ public partial class StandaloneDllTests
     ];
 
     [Theory]
-    [MemberData(nameof(IteratorWrapperPrograms))]
+    [DeploymentData(nameof(IteratorWrapperPrograms))]
     public void Isolated_IteratorWrapper_PreservesConsumersAndDelegatedCompletion(
         string name, string source, string expected, bool hosted, string extraArguments)
     {
@@ -6380,7 +6380,7 @@ public partial class StandaloneDllTests
     ];
 
     [Theory]
-    [MemberData(nameof(IteratorRecordPrograms))]
+    [DeploymentData(nameof(IteratorRecordPrograms))]
     public void Isolated_IteratorRecord_PreservesCapturedNextValidationAndSentValues(
         string name, string source, string expected, bool hosted, string extraArguments)
     {
@@ -6502,7 +6502,7 @@ public partial class StandaloneDllTests
     ];
 
     [Theory]
-    [MemberData(nameof(AsyncGeneratorPrograms))]
+    [DeploymentData(nameof(AsyncGeneratorPrograms))]
     public void Isolated_AsyncGenerator_PreservesAwaitingDelegationAndCleanup(
         string name, string source, string expected, bool hosted, string extraArguments)
     {
@@ -6632,7 +6632,7 @@ public partial class StandaloneDllTests
     ];
 
     [Theory]
-    [MemberData(nameof(GeneratorProtocolPrograms))]
+    [DeploymentData(nameof(GeneratorProtocolPrograms))]
     public void Isolated_GeneratorProtocol_PreservesIterationAndNumericResults(
         string name, string source, string expected, bool hosted, string extraArguments)
     {
@@ -6706,7 +6706,7 @@ public partial class StandaloneDllTests
     ];
 
     [Theory]
-    [MemberData(nameof(CallArgumentsPrograms))]
+    [DeploymentData(nameof(CallArgumentsPrograms))]
     public void Isolated_CallArguments_PreservesAritySpreadAndEvaluationOrder(
         string name, string source, string expected, bool hosted, string extraArguments)
     {
@@ -6756,7 +6756,7 @@ public partial class StandaloneDllTests
     ];
 
     [Theory]
-    [MemberData(nameof(DynamicConstructionPrograms))]
+    [DeploymentData(nameof(DynamicConstructionPrograms))]
     public void Isolated_DynamicConstruction_PreservesReturnsAliasesAndNestedReceivers(
         string name, string source, string expected, bool hosted, string extraArguments)
     {
@@ -6822,7 +6822,7 @@ public partial class StandaloneDllTests
     ];
 
     [Theory]
-    [MemberData(nameof(InvocationDispatchPrograms))]
+    [DeploymentData(nameof(InvocationDispatchPrograms))]
     public void Isolated_InvocationDispatch_PreservesReceiversAndOptionalWrappers(
         string name, string source, string expected, bool hosted, string extraArguments)
     {
@@ -6872,7 +6872,7 @@ public partial class StandaloneDllTests
     ];
 
     [Theory]
-    [MemberData(nameof(ReflectedMethodPrograms))]
+    [DeploymentData(nameof(ReflectedMethodPrograms))]
     public void Isolated_ReflectedMethods_PreserveCachedWrappersAndCallableDispatch(
         string name, string source, string expected, bool hosted, string extraArguments)
     {
@@ -6922,7 +6922,7 @@ public partial class StandaloneDllTests
     ];
 
     [Theory]
-    [MemberData(nameof(FunctionIntrospectionPrograms))]
+    [DeploymentData(nameof(FunctionIntrospectionPrograms))]
     public void Isolated_FunctionIntrospection_PreservesPropertiesAndConstructorCapabilities(
         string name, string source, string expected, bool hosted, string extraArguments)
     {
@@ -6980,7 +6980,7 @@ public partial class StandaloneDllTests
     ];
 
     [Theory]
-    [MemberData(nameof(FunctionPrototypePrograms))]
+    [DeploymentData(nameof(FunctionPrototypePrograms))]
     public void Isolated_FunctionPrototype_PreservesDescriptorsAndBorrowedMethods(
         string name, string source, string expected, bool hosted, string extraArguments)
     {
@@ -7110,7 +7110,7 @@ public partial class StandaloneDllTests
     ];
 
     [Theory]
-    [MemberData(nameof(FunctionInvocationPrograms))]
+    [DeploymentData(nameof(FunctionInvocationPrograms))]
     public void Isolated_FunctionInvocation_PreservesArgumentsBindingAndDeployment(
         string name, string source, string expected, bool hosted, string extraArguments)
     {
@@ -7232,7 +7232,7 @@ public partial class StandaloneDllTests
     ];
 
     [Theory]
-    [MemberData(nameof(FunctionConstructionPrograms))]
+    [DeploymentData(nameof(FunctionConstructionPrograms))]
     public void Isolated_FunctionConstruction_PreservesCreationAndDeployment(
         string name, string source, string expected, bool hosted, string extraArguments)
     {
@@ -7354,7 +7354,7 @@ public partial class StandaloneDllTests
     ];
 
     [Theory]
-    [MemberData(nameof(FunctionAttributePrograms))]
+    [DeploymentData(nameof(FunctionAttributePrograms))]
     public void Isolated_FunctionAttributes_PreserveInvocationMetadataAndDeployment(
         string name, string source, string expected, bool hosted, string extraArguments)
     {
@@ -7407,7 +7407,7 @@ public partial class StandaloneDllTests
     ];
 
     [Theory]
-    [MemberData(nameof(ScopedFeatureGatePrograms))]
+    [DeploymentData(nameof(ScopedFeatureGatePrograms))]
     public void Isolated_ScopedFeatureGates_PreserveCombinedInputAndDeployment(
         string name, string source, string expected, string input, bool hosted, bool standalone)
     {
@@ -7734,7 +7734,7 @@ public partial class StandaloneDllTests
     ];
 
     [Theory]
-    [MemberData(nameof(OperatorMetadataPrograms))]
+    [DeploymentData(nameof(OperatorMetadataPrograms))]
     public void Isolated_OperatorMetadata_PreservesOperatorsAndDeployment(
         string name, string entry, string[] paths, string[] sources, string expected, bool hosted, bool standalone)
     {
@@ -8133,7 +8133,7 @@ public partial class StandaloneDllTests
     ];
 
     [Theory]
-    [MemberData(nameof(ObjectWriteMetadataPrograms))]
+    [DeploymentData(nameof(ObjectWriteMetadataPrograms))]
     public void Isolated_ObjectWriteMetadata_PreservesWritingAndDeployment(
         string name, string entry, string[] paths, string[] sources, string expected, bool hosted, bool standalone)
     {
@@ -8532,7 +8532,7 @@ public partial class StandaloneDllTests
     ];
 
     [Theory]
-    [MemberData(nameof(ObjectReadMetadataPrograms))]
+    [DeploymentData(nameof(ObjectReadMetadataPrograms))]
     public void Isolated_ObjectReadMetadata_PreservesReadingAndDeployment(
         string name, string entry, string[] paths, string[] sources, string expected, bool hosted, bool standalone)
     {
@@ -8861,7 +8861,7 @@ public partial class StandaloneDllTests
     ];
 
     [Theory]
-    [MemberData(nameof(ObjectDeletionMetadataPrograms))]
+    [DeploymentData(nameof(ObjectDeletionMetadataPrograms))]
     public void Isolated_ObjectDeletionMetadata_PreservesDeletionAndDeployment(
         string name, string entry, string[] paths, string[] sources, string expected, bool hosted, bool standalone)
     {
@@ -9190,7 +9190,7 @@ public partial class StandaloneDllTests
     ];
 
     [Theory]
-    [MemberData(nameof(ObjectConstructionMetadataPrograms))]
+    [DeploymentData(nameof(ObjectConstructionMetadataPrograms))]
     public void Isolated_ObjectConstructionMetadata_PreservesConstructionAndDeployment(
         string name, string entry, string[] paths, string[] sources, string expected, bool hosted, bool standalone)
     {
@@ -9549,7 +9549,7 @@ public partial class StandaloneDllTests
     ];
 
     [Theory]
-    [MemberData(nameof(ObjectOperationsMetadataPrograms))]
+    [DeploymentData(nameof(ObjectOperationsMetadataPrograms))]
     public void Isolated_ObjectOperationsMetadata_PreservesOperationsAndDeployment(
         string name, string entry, string[] paths, string[] sources, string expected, bool hosted, bool standalone)
     {
@@ -9888,7 +9888,7 @@ public partial class StandaloneDllTests
     ];
 
     [Theory]
-    [MemberData(nameof(ObjectOwnPropertiesMetadataPrograms))]
+    [DeploymentData(nameof(ObjectOwnPropertiesMetadataPrograms))]
     public void Isolated_ObjectOwnPropertiesMetadata_PreservesPredicatesAccessorsAndDeployment(
         string name, string entry, string[] paths, string[] sources, string expected, bool hosted, bool standalone)
     {
@@ -10267,7 +10267,7 @@ public partial class StandaloneDllTests
     ];
 
     [Theory]
-    [MemberData(nameof(OwnKeysMetadataPrograms))]
+    [DeploymentData(nameof(OwnKeysMetadataPrograms))]
     public void Isolated_OwnKeysMetadata_PreservesEnumerationAndDeployment(
         string name, string entry, string[] paths, string[] sources, string expected, bool hosted, bool standalone)
     {
@@ -10636,7 +10636,7 @@ public partial class StandaloneDllTests
     ];
 
     [Theory]
-    [MemberData(nameof(ObjectPrototypeMetadataPrograms))]
+    [DeploymentData(nameof(ObjectPrototypeMetadataPrograms))]
     public void Isolated_ObjectPrototypeMetadata_PreservesPrototypesAndDeployment(
         string name, string entry, string[] paths, string[] sources, string expected, bool hosted, bool standalone)
     {
@@ -11005,7 +11005,7 @@ public partial class StandaloneDllTests
     ];
 
     [Theory]
-    [MemberData(nameof(ObjectDescriptorMetadataPrograms))]
+    [DeploymentData(nameof(ObjectDescriptorMetadataPrograms))]
     public void Isolated_ObjectDescriptorMetadata_PreservesDescriptorsAndDeployment(
         string name, string entry, string[] paths, string[] sources, string expected, bool hosted, bool standalone)
     {
@@ -11304,7 +11304,7 @@ public partial class StandaloneDllTests
     ];
 
     [Theory]
-    [MemberData(nameof(ErrorMetadataPrograms))]
+    [DeploymentData(nameof(ErrorMetadataPrograms))]
     public void Isolated_ErrorMetadata_PreservesErrorsAndDeployment(
         string name, string entry, string[] paths, string[] sources, string expected, bool hosted, bool standalone)
     {
@@ -11613,7 +11613,7 @@ public partial class StandaloneDllTests
     ];
 
     [Theory]
-    [MemberData(nameof(ObjectStateMetadataPrograms))]
+    [DeploymentData(nameof(ObjectStateMetadataPrograms))]
     public void Isolated_ObjectStateMetadata_PreservesIntegrityAndDeployment(
         string name, string entry, string[] paths, string[] sources, string expected, bool hosted, bool standalone)
     {
@@ -12002,7 +12002,7 @@ public partial class StandaloneDllTests
     ];
 
     [Theory]
-    [MemberData(nameof(RegExpMetadataPrograms))]
+    [DeploymentData(nameof(RegExpMetadataPrograms))]
     public void Isolated_RegExpMetadata_PreservesCollectionsAndDeployment(
         string name, string entry, string[] paths, string[] sources, string expected, bool hosted)
     {
@@ -12260,7 +12260,7 @@ public partial class StandaloneDllTests
     ];
 
     [Theory]
-    [MemberData(nameof(DateMetadataPrograms))]
+    [DeploymentData(nameof(DateMetadataPrograms))]
     public void Isolated_DateMetadata_PreservesCollectionsAndDeployment(
         string name, string entry, string[] paths, string[] sources, string expected, bool hosted, bool standalone)
     {
@@ -12460,7 +12460,7 @@ public partial class StandaloneDllTests
     ];
 
     [Theory]
-    [MemberData(nameof(SymbolMetadataPrograms))]
+    [DeploymentData(nameof(SymbolMetadataPrograms))]
     public void Isolated_SymbolMetadata_PreservesCollectionsAndDeployment(
         string name, string entry, string[] paths, string[] sources, string expected, bool hosted)
     {
@@ -12623,7 +12623,7 @@ public partial class StandaloneDllTests
     ];
 
     [Theory]
-    [MemberData(nameof(WeakMetadataPrograms))]
+    [DeploymentData(nameof(WeakMetadataPrograms))]
     public void Isolated_WeakMetadata_PreservesCollectionsAndDeployment(
         string name, string entry, string[] paths, string[] sources, string expected, bool hosted)
     {
@@ -12804,7 +12804,7 @@ public partial class StandaloneDllTests
     ];
 
     [Theory]
-    [MemberData(nameof(MapSetMetadataPrograms))]
+    [DeploymentData(nameof(MapSetMetadataPrograms))]
     public void Isolated_MapSetMetadata_PreservesCollectionsAndDeployment(
         string name, string entry, string[] paths, string[] sources, string expected, bool hosted)
     {
@@ -12999,7 +12999,7 @@ public partial class StandaloneDllTests
     ];
 
     [Theory]
-    [MemberData(nameof(JsonMetadataPrograms))]
+    [DeploymentData(nameof(JsonMetadataPrograms))]
     public void Isolated_JsonMetadata_PreservesSerializationShapesAndDeployment(
         string name, string source, string expected, bool standalone, string options)
     {
@@ -13281,7 +13281,7 @@ public partial class StandaloneDllTests
     ];
 
     [Theory]
-    [MemberData(nameof(ClusterMetadataPrograms))]
+    [DeploymentData(nameof(ClusterMetadataPrograms))]
     public void Isolated_ClusterMetadata_PreservesBridgeStateWorkerLifecycleAndDependencies(string source, string expected, string entryPoint, bool standalone)
     {
         using var tempDir = IntegrationTests.CliTestHelper.CreateTempDirectory();
@@ -13392,7 +13392,7 @@ public partial class StandaloneDllTests
     ];
 
     [Theory]
-    [MemberData(nameof(AtomicsMetadataPrograms))]
+    [DeploymentData(nameof(AtomicsMetadataPrograms))]
     public void Isolated_AtomicsMetadata_PreservesOptimizedLockedAndSuspendedOperations(string source, string expected, string entryPoint)
     {
         using var tempDir = IntegrationTests.CliTestHelper.CreateTempDirectory();
@@ -13488,7 +13488,7 @@ public partial class StandaloneDllTests
     ];
 
     [Theory]
-    [MemberData(nameof(NodeErrorMetadataPrograms))]
+    [DeploymentData(nameof(NodeErrorMetadataPrograms))]
     public void Isolated_NodeErrorMetadata_PreservesSharedErrorsAndDescriptorLifetime(string source, string expected, string entryPoint)
     {
         using var tempDir = IntegrationTests.CliTestHelper.CreateTempDirectory();
@@ -13575,7 +13575,7 @@ public partial class StandaloneDllTests
     ];
 
     [Theory]
-    [MemberData(nameof(IntlMetadataPrograms))]
+    [DeploymentData(nameof(IntlMetadataPrograms))]
     public void Isolated_IntlMetadata_PreservesFactoriesNamespaceAndDeployment(string source, string expected, string entryPoint, bool standalone)
     {
         using var tempDir = IntegrationTests.CliTestHelper.CreateTempDirectory();
@@ -13671,7 +13671,7 @@ public partial class StandaloneDllTests
     ];
 
     [Theory]
-    [MemberData(nameof(AsyncLocalStorageMetadataPrograms))]
+    [DeploymentData(nameof(AsyncLocalStorageMetadataPrograms))]
     public void Isolated_AsyncLocalStorageMetadata_PreservesContextRestorationAndAsyncFlow(string source, string expected, string entryPoint)
     {
         using var tempDir = IntegrationTests.CliTestHelper.CreateTempDirectory();
@@ -13802,7 +13802,7 @@ public partial class StandaloneDllTests
     ];
 
     [Theory]
-    [MemberData(nameof(AbortMetadataPrograms))]
+    [DeploymentData(nameof(AbortMetadataPrograms))]
     public void Isolated_AbortMetadata_PreservesSignalStateEventsAndDependencies(string source, string expected, string entryPoint, bool standalone)
     {
         using var tempDir = IntegrationTests.CliTestHelper.CreateTempDirectory();
@@ -13902,7 +13902,7 @@ public partial class StandaloneDllTests
     ];
 
     [Theory]
-    [MemberData(nameof(SourceExecutionMetadataPrograms))]
+    [DeploymentData(nameof(SourceExecutionMetadataPrograms))]
     public void Isolated_SourceExecutionMetadata_PreservesInterpreterBridgeAndDeployment(string source, string expected, string entryPoint, bool standalone)
     {
         using var tempDir = IntegrationTests.CliTestHelper.CreateTempDirectory();
@@ -14016,7 +14016,7 @@ public partial class StandaloneDllTests
     ];
 
     [Theory]
-    [MemberData(nameof(VmMetadataPrograms))]
+    [DeploymentData(nameof(VmMetadataPrograms))]
     public void Isolated_VmMetadata_PreservesInterpreterBridgeAndDeployment(string source, string expected, string entryPoint, bool standalone)
     {
         using var tempDir = IntegrationTests.CliTestHelper.CreateTempDirectory();
@@ -14214,7 +14214,7 @@ public partial class StandaloneDllTests
     ];
 
     [Theory]
-    [MemberData(nameof(ReadlineMetadataPrograms))]
+    [DeploymentData(nameof(ReadlineMetadataPrograms))]
     public void Isolated_ReadlineMetadata_PreservesStateEventsAndInput(string source, string expected, string input)
     {
         var files = new Dictionary<string, string> { ["main.ts"] = source };
@@ -14296,7 +14296,7 @@ public partial class StandaloneDllTests
     ];
 
     [Theory]
-    [MemberData(nameof(TextEncodingMetadataPrograms))]
+    [DeploymentData(nameof(TextEncodingMetadataPrograms))]
     public void Isolated_TextEncodingMetadata_PreservesConstructorsWrappersAndSuspension(string source, string expected)
     {
         var files = new Dictionary<string, string> { ["main.ts"] = source };
@@ -14348,7 +14348,7 @@ public partial class StandaloneDllTests
     ];
 
     [Theory]
-    [MemberData(nameof(InspectionMetadataPrograms))]
+    [DeploymentData(nameof(InspectionMetadataPrograms))]
     public void Isolated_InspectionMetadata_PreservesFormattingRecursionAndSuspension(string source, string expected)
     {
         Assert.Empty(TestHarness.CompileAndVerifyOnly(source));
@@ -14449,7 +14449,7 @@ public partial class StandaloneDllTests
     ];
 
     [Theory]
-    [MemberData(nameof(ConsoleMetadataPrograms))]
+    [DeploymentData(nameof(ConsoleMetadataPrograms))]
     public void Isolated_ConsoleMetadata_PreservesOutputStreamsAndSuspendedArguments(
         string source, string expectedOutput, string expectedError)
     {
@@ -14535,7 +14535,7 @@ public partial class StandaloneDllTests
     }
 
     [Theory]
-    [MemberData(nameof(OsMetadataPrograms))]
+    [DeploymentData(nameof(OsMetadataPrograms))]
     public void Isolated_OsMetadata_PreservesHelpersAndModuleBindings(string source, string expected)
     {
         var files = new Dictionary<string, string> { ["main.ts"] = source };
@@ -14653,7 +14653,7 @@ public partial class StandaloneDllTests
     }
 
     [Theory]
-    [MemberData(nameof(ProcessMetadataPrograms))]
+    [DeploymentData(nameof(ProcessMetadataPrograms))]
     public void Isolated_ProcessMetadata_PreservesSingletonsHelpersLifecycleAndStreams(string source, string expected)
     {
         var files = new Dictionary<string, string> { ["main.ts"] = source };
@@ -14762,7 +14762,7 @@ public partial class StandaloneDllTests
     }
 
     [Theory]
-    [MemberData(nameof(FileSystemWatcherMetadataPrograms))]
+    [DeploymentData(nameof(FileSystemWatcherMetadataPrograms))]
     public void Isolated_FileSystemWatcherMetadata_PreservesCallbacksPollingAndClose(string source, string expected)
     {
         var files = new Dictionary<string, string> { ["main.ts"] = source };
@@ -14857,7 +14857,7 @@ public partial class StandaloneDllTests
     }
 
     [Theory]
-    [MemberData(nameof(FileSystemStreamMetadataPrograms))]
+    [DeploymentData(nameof(FileSystemStreamMetadataPrograms))]
     public void Isolated_FileSystemStreamMetadata_PreservesEventsRangesDescriptorsAndPipes(string source, string expected)
     {
         var files = new Dictionary<string, string> { ["main.ts"] = source };
@@ -14961,7 +14961,7 @@ public partial class StandaloneDllTests
     }
 
     [Theory]
-    [MemberData(nameof(FileSystemAsyncMetadataPrograms))]
+    [DeploymentData(nameof(FileSystemAsyncMetadataPrograms))]
     public void Isolated_FileSystemAsyncMetadata_PreservesPromisesErrorsConcurrencyAndCallbackDrain(string source, string expected)
     {
         var files = new Dictionary<string, string> { ["main.ts"] = source };
@@ -15077,7 +15077,7 @@ public partial class StandaloneDllTests
     }
 
     [Theory]
-    [MemberData(nameof(FileSystemMetadataPrograms))]
+    [DeploymentData(nameof(FileSystemMetadataPrograms))]
     public void Isolated_FileSystemMetadata_PreservesDataDescriptorsDirectoriesAndConsumers(string source, string expected)
     {
         var files = new Dictionary<string, string> { ["main.ts"] = source };
@@ -15185,7 +15185,7 @@ public partial class StandaloneDllTests
     }
 
     [Theory]
-    [MemberData(nameof(WebStreamMetadataPrograms))]
+    [DeploymentData(nameof(WebStreamMetadataPrograms))]
     public void Isolated_WebStreamMetadata_PreservesStrategiesStreamsConsumersAndPeerAccess(string source, string expected)
     {
         var files = new Dictionary<string, string> { ["main.ts"] = source };
@@ -15290,7 +15290,7 @@ public partial class StandaloneDllTests
     }
 
     [Theory]
-    [MemberData(nameof(NodeStreamMetadataPrograms))]
+    [DeploymentData(nameof(NodeStreamMetadataPrograms))]
     public void Isolated_NodeStreamMetadata_PreservesPipelinesCompositionIterationAndCancellation(string source, string expected)
     {
         var files = new Dictionary<string, string> { ["main.ts"] = source };
@@ -15385,7 +15385,7 @@ public partial class StandaloneDllTests
     }
 
     [Theory]
-    [MemberData(nameof(EventLoopMetadataPrograms))]
+    [DeploymentData(nameof(EventLoopMetadataPrograms))]
     public void Isolated_EventLoopMetadata_PreservesIoResumeLifecycleAndQuiescence(string source, string expected)
     {
         var files = new Dictionary<string, string> { ["main.ts"] = source };
@@ -15487,7 +15487,7 @@ public partial class StandaloneDllTests
     }
 
     [Theory]
-    [MemberData(nameof(TimerMetadataPrograms))]
+    [DeploymentData(nameof(TimerMetadataPrograms))]
     public void Isolated_TimerMetadata_PreservesSchedulingCancellationAndPromiseJobs(string source, string expected)
     {
         var files = new Dictionary<string, string> { ["main.ts"] = source };
@@ -17039,7 +17039,7 @@ public partial class StandaloneDllTests
     ];
 
     [Theory]
-    [MemberData(nameof(SentinelPrograms))]
+    [DeploymentData(nameof(SentinelPrograms))]
     public void Isolated_Sentinels_PreserveUndefinedAndLexicalInitialization(
         string name, string source, string expected, bool hosted, string extraArguments)
     {
@@ -17122,7 +17122,7 @@ public partial class StandaloneDllTests
     ];
 
     [Theory]
-    [MemberData(nameof(UnionValuePrograms))]
+    [DeploymentData(nameof(UnionValuePrograms))]
     public void Isolated_UnionValues_PreserveClassificationAndTypedValues(
         string name, string source, string expected, bool hosted, string extraArguments)
     {
@@ -17213,7 +17213,7 @@ public partial class StandaloneDllTests
     ];
 
     [Theory]
-    [MemberData(nameof(ObjectFieldPrograms))]
+    [DeploymentData(nameof(ObjectFieldPrograms))]
     public void Isolated_ObjectFields_PreserveFieldsAndPropertyAccess(
         string name, string source, string expected, bool hosted, string extraArguments)
     {
@@ -17296,7 +17296,7 @@ public partial class StandaloneDllTests
     ];
 
     [Theory]
-    [MemberData(nameof(UriComponentPrograms))]
+    [DeploymentData(nameof(UriComponentPrograms))]
     public void Isolated_UriComponents_PreserveCoercionValuesAndDeployment(
         string name, string source, string expected, bool hosted, string extraArguments)
     {
@@ -17443,7 +17443,7 @@ public partial class StandaloneDllTests
     ];
 
     [Theory]
-    [MemberData(nameof(GlobalObjectPrograms))]
+    [DeploymentData(nameof(GlobalObjectPrograms))]
     public void Isolated_GlobalObject_PreservesIdentityPropertiesAndEvalDeployment(
         string name, string source, string expected, bool hosted, bool standalone)
     {
@@ -17518,7 +17518,7 @@ public partial class StandaloneDllTests
     ];
 
     [Theory]
-    [MemberData(nameof(NamespaceValuePrograms))]
+    [DeploymentData(nameof(NamespaceValuePrograms))]
     public void Isolated_NamespaceValues_PreserveMembersIdentityAndDeployment(
         string name, string source, string librarySource, string expected, bool hosted)
     {
@@ -17609,7 +17609,7 @@ public partial class StandaloneDllTests
     ];
 
     [Theory]
-    [MemberData(nameof(EventSubscriptionPrograms))]
+    [DeploymentData(nameof(EventSubscriptionPrograms))]
     public void Isolated_EventSubscriptions_PreserveHandlerIdentityAndDeployment(
         string name, string source, string expected, bool hosted, bool standalone)
     {
@@ -17733,7 +17733,7 @@ public partial class StandaloneDllTests
     ];
 
     [Theory]
-    [MemberData(nameof(ResourceDisposalPrograms))]
+    [DeploymentData(nameof(ResourceDisposalPrograms))]
     public void Isolated_ResourceDisposal_PreservesCleanupReceiversAndDeployment(
         string name, string source, string librarySource, string expected, bool hosted)
     {
@@ -17800,7 +17800,7 @@ public partial class StandaloneDllTests
     ];
 
     [Theory]
-    [MemberData(nameof(EnumReversePrograms))]
+    [DeploymentData(nameof(EnumReversePrograms))]
     public void Isolated_EnumReverse_PreservesLookupAndDeployment(
         string name, string source, string librarySource, string expected, bool hosted)
     {
@@ -17925,7 +17925,7 @@ public partial class StandaloneDllTests
     ];
 
     [Theory]
-    [MemberData(nameof(ReceiverGuardPrograms))]
+    [DeploymentData(nameof(ReceiverGuardPrograms))]
     public void Isolated_ReceiverGuard_PreservesValidationCoercionAndDeployment(
         string name, string source, string expected, bool hosted)
     {
@@ -18063,7 +18063,7 @@ public partial class StandaloneDllTests
     ];
 
     [Theory]
-    [MemberData(nameof(StringSymbolDispatchPrograms))]
+    [DeploymentData(nameof(StringSymbolDispatchPrograms))]
     public void Isolated_StringSymbolDispatch_PreservesProtocolsAndDeployment(
         string name, string source, string expected, bool hosted)
     {
@@ -18225,7 +18225,7 @@ public partial class StandaloneDllTests
     ];
 
     [Theory]
-    [MemberData(nameof(ProxyConstructionPrograms))]
+    [DeploymentData(nameof(ProxyConstructionPrograms))]
     public void Isolated_ProxyConstruction_PreservesFactoriesValidationAndDeployment(
         string name, string source, string expected, bool hosted, bool requiresRuntime)
     {
@@ -18348,7 +18348,7 @@ public partial class StandaloneDllTests
     ];
 
     [Theory]
-    [MemberData(nameof(BuiltInStaticDispatchPrograms))]
+    [DeploymentData(nameof(BuiltInStaticDispatchPrograms))]
     public void Isolated_BuiltInStaticDispatch_PreservesValuesIdentityAndDeployment(
         string name, string source, string expected, bool hosted)
     {
@@ -18385,7 +18385,7 @@ public partial class StandaloneDllTests
     ];
 
     [Theory]
-    [MemberData(nameof(CancellationPrograms))]
+    [DeploymentData(nameof(CancellationPrograms))]
     public void Isolated_CancellationMetadata_PreservesLoopsAndDeployment(
         string name, string source, string expected, bool hosted)
     {
@@ -18422,7 +18422,7 @@ public partial class StandaloneDllTests
     ];
 
     [Theory]
-    [MemberData(nameof(ClassInitializationPrograms))]
+    [DeploymentData(nameof(ClassInitializationPrograms))]
     public void Isolated_ClassInitialization_PreservesEvaluationAndDeployment(
         string name, string source, string expected, bool hosted)
     {
@@ -18463,7 +18463,7 @@ public partial class StandaloneDllTests
     ];
 
     [Theory]
-    [MemberData(nameof(RegexLiteralCachePrograms))]
+    [DeploymentData(nameof(RegexLiteralCachePrograms))]
     public void Isolated_RegexLiteralCache_PreservesIdentityAndDeployment(
         string name, string source, string expected, bool hosted)
     {
@@ -18505,7 +18505,7 @@ public partial class StandaloneDllTests
     ];
 
     [Theory]
-    [MemberData(nameof(RuntimeClassPrograms))]
+    [DeploymentData(nameof(RuntimeClassPrograms))]
     public void Isolated_RuntimeClass_PreservesCrossFamilyCallsAndDeployment(
         string name, string source, string expected, bool hosted)
     {

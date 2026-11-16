@@ -1,3 +1,4 @@
+using SharpTS.Tests.Infrastructure;
 using SharpTS.Tests.SharedTests;
 using Xunit;
 
@@ -5,7 +6,7 @@ namespace SharpTS.Tests.CompilerTests;
 
 public partial class StandaloneDllTests
 {
-    [Theory, MemberData(nameof(PromiseAwaitConstructorTests.Cases), MemberType = typeof(PromiseAwaitConstructorTests))]
+    [Theory, DeploymentData(nameof(PromiseAwaitConstructorTests.Cases), MemberType = typeof(PromiseAwaitConstructorTests))]
     public void Isolated_Issue2168PromiseAwait_ObservesConstructorAndLiveThenProtocol(
         string name, string source, string expected)
     {

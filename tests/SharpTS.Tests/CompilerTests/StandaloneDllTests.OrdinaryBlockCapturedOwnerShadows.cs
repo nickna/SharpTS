@@ -1,3 +1,4 @@
+using SharpTS.Tests.Infrastructure;
 using SharpTS.Tests.SharedTests;
 using Xunit;
 
@@ -5,7 +6,7 @@ namespace SharpTS.Tests.CompilerTests;
 
 public partial class StandaloneDllTests
 {
-    [Theory, MemberData(nameof(OrdinaryBlockCapturedOwnerShadowTests.Cases), MemberType = typeof(OrdinaryBlockCapturedOwnerShadowTests))]
+    [Theory, DeploymentData(nameof(OrdinaryBlockCapturedOwnerShadowTests.Cases), MemberType = typeof(OrdinaryBlockCapturedOwnerShadowTests))]
     public void Isolated_Issue2553OrdinaryBlockCapturedOwnerShadows_VerifyBeforeExecution(
         string name, string source, string expected)
     {

@@ -1,3 +1,4 @@
+using SharpTS.Tests.Infrastructure;
 using SharpTS.Tests.SharedTests;
 using Xunit;
 
@@ -5,7 +6,7 @@ namespace SharpTS.Tests.CompilerTests;
 
 public partial class StandaloneDllTests
 {
-    [Theory, MemberData(nameof(ClassInstanceExpandoDeletionTests.Cases), MemberType = typeof(ClassInstanceExpandoDeletionTests))]
+    [Theory, DeploymentData(nameof(ClassInstanceExpandoDeletionTests.Cases), MemberType = typeof(ClassInstanceExpandoDeletionTests))]
     public void Isolated_Issue2801ClassInstanceExpandos_VerifyBeforeExecution(
         string name, string source, string expected)
     {

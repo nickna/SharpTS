@@ -1,3 +1,4 @@
+using SharpTS.Tests.Infrastructure;
 using SharpTS.Tests.SharedTests;
 using Xunit;
 
@@ -5,7 +6,7 @@ namespace SharpTS.Tests.CompilerTests;
 
 public partial class StandaloneDllTests
 {
-    [Theory, MemberData(nameof(ForwardedReturnValueTests.Cases),
+    [Theory, DeploymentData(nameof(ForwardedReturnValueTests.Cases),
         MemberType = typeof(ForwardedReturnValueTests))]
     public void Isolated_Issue2299ForwardedReturns_VerifyBeforeExecution(
         string name, string source, string expected)

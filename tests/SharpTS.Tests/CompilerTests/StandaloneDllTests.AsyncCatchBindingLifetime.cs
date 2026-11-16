@@ -1,3 +1,4 @@
+using SharpTS.Tests.Infrastructure;
 using SharpTS.Tests.SharedTests;
 using Xunit;
 
@@ -5,7 +6,7 @@ namespace SharpTS.Tests.CompilerTests;
 
 public partial class StandaloneDllTests
 {
-    [Theory, MemberData(nameof(AsyncCatchBindingLifetimeTests.Cases), MemberType = typeof(AsyncCatchBindingLifetimeTests))]
+    [Theory, DeploymentData(nameof(AsyncCatchBindingLifetimeTests.Cases), MemberType = typeof(AsyncCatchBindingLifetimeTests))]
     public void Isolated_Issue2850AsyncCatchBindingLifetime_VerifyBeforeExecution(
         string name, string source, string expected)
     {

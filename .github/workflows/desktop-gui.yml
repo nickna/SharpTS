@@ -1,6 +1,8 @@
 name: Desktop GUI
 
 on:
+  schedule:
+    - cron: '53 10 * * *'
   workflow_dispatch:
     inputs:
       platform:
@@ -23,7 +25,7 @@ permissions:
   contents: read
 
 concurrency:
-  group: desktop-gui-${{ github.event.pull_request.number || github.ref }}
+  group: desktop-gui-${{ github.event_name }}-${{ github.event.pull_request.number || github.ref }}
   cancel-in-progress: ${{ github.event_name == 'pull_request' }}
 
 jobs:
@@ -48,10 +50,11 @@ jobs:
           HEAD_SHA: ${{ github.event.pull_request.head.sha }}
           DISPATCH_TARGET: ${{ inputs.platform }}
         run: |
-          if ('${{ github.event_name }}' -eq 'workflow_dispatch') {
-            $desktopScope = ./scripts/get-desktop-gui-ci-scope.ps1 -Target $env:DISPATCH_TARGET
+          if ('${{ github.event_name }}' -in @('workflow_dispatch', 'schedule')) {
+            $target = if ($env:DISPATCH_TARGET) { $env:DISPATCH_TARGET } else { 'all' }
+            $desktopScope = ./scripts/get-desktop-gui-ci-scope.ps1 -Target $target
             $mode = 'full'
-            $reason = 'Manual desktop dispatch always runs the selected platform scope.'
+            $reason = 'Scheduled/manual desktop runs always exercise the selected platform scope.'
           }
           else {
             $changeScope = ./scripts/get-ci-change-scope.ps1 `

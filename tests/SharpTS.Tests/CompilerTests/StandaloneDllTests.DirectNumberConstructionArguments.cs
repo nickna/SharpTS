@@ -1,3 +1,4 @@
+using SharpTS.Tests.Infrastructure;
 using SharpTS.Tests.SharedTests;
 using Xunit;
 
@@ -5,7 +6,7 @@ namespace SharpTS.Tests.CompilerTests;
 
 public partial class StandaloneDllTests
 {
-    [Theory, MemberData(nameof(DirectNumberConstructionArgumentTests.Cases),
+    [Theory, DeploymentData(nameof(DirectNumberConstructionArgumentTests.Cases),
         MemberType = typeof(DirectNumberConstructionArgumentTests))]
     public void Isolated_Issue2101DirectNumberArguments_VerifyBeforeExecution(
         string name, string source, string expected)

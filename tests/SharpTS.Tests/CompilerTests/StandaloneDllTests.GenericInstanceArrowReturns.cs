@@ -1,3 +1,4 @@
+using SharpTS.Tests.Infrastructure;
 using System.Reflection;
 using SharpTS.Tests.SharedTests;
 using Xunit;
@@ -6,7 +7,7 @@ namespace SharpTS.Tests.CompilerTests;
 
 public partial class StandaloneDllTests
 {
-    [Theory, MemberData(nameof(GenericInstanceArrowReturnTests.Cases),
+    [Theory, DeploymentData(nameof(GenericInstanceArrowReturnTests.Cases),
         MemberType = typeof(GenericInstanceArrowReturnTests))]
     public void Isolated_Issue2266GenericInstanceArrowReturns_VerifyBeforeExecution(
         string name, string source, string expected)

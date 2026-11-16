@@ -23,7 +23,7 @@ public partial class StandaloneDllTests
     }
 
     [Theory]
-    [MemberData(nameof(SuperArrowPropertyTests.Cases), MemberType = typeof(SuperArrowPropertyTests))]
+    [DeploymentData(nameof(SuperArrowPropertyTests.Cases), MemberType = typeof(SuperArrowPropertyTests))]
     public void Saved_Issue2085SuperArrow_VerifyBeforeExecution(string name, string source, string expected)
     {
         // The source is JavaScript: undeclared prototype properties intentionally

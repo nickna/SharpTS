@@ -1,3 +1,4 @@
+using SharpTS.Tests.Infrastructure;
 using SharpTS.Tests.SharedTests.BuiltInModules;
 using Xunit;
 
@@ -5,7 +6,7 @@ namespace SharpTS.Tests.CompilerTests;
 
 public partial class StandaloneDllTests
 {
-    [Theory, MemberData(nameof(NextTickTimerSchedulingTests.Cases), MemberType = typeof(NextTickTimerSchedulingTests))]
+    [Theory, DeploymentData(nameof(NextTickTimerSchedulingTests.Cases), MemberType = typeof(NextTickTimerSchedulingTests))]
     public void Isolated_Issue2743NextTickTimerScheduling_VerifyBeforeExecution(
         string name, string source, string expected)
     {

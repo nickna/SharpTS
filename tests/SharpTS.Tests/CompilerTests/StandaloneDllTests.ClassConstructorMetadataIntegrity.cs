@@ -1,3 +1,4 @@
+using SharpTS.Tests.Infrastructure;
 using SharpTS.Tests.SharedTests;
 using Xunit;
 
@@ -5,7 +6,7 @@ namespace SharpTS.Tests.CompilerTests;
 
 public partial class StandaloneDllTests
 {
-    [Theory, MemberData(nameof(ClassConstructorMetadataIntegrityTests.SavedCases), MemberType = typeof(ClassConstructorMetadataIntegrityTests))]
+    [Theory, DeploymentData(nameof(ClassConstructorMetadataIntegrityTests.SavedCases), MemberType = typeof(ClassConstructorMetadataIntegrityTests))]
     public void Isolated_Issue2720ClassConstructorMetadataIntegrity_VerifyBeforeExecution(
         string name, string source, string expected)
     {

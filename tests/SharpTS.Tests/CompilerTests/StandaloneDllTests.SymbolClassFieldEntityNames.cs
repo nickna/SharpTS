@@ -1,3 +1,4 @@
+using SharpTS.Tests.Infrastructure;
 using SharpTS.Tests.SharedTests;
 using Xunit;
 
@@ -5,7 +6,7 @@ namespace SharpTS.Tests.CompilerTests;
 
 public partial class StandaloneDllTests
 {
-    [Theory, MemberData(nameof(SymbolClassFieldEntityNameTests.Cases), MemberType = typeof(SymbolClassFieldEntityNameTests))]
+    [Theory, DeploymentData(nameof(SymbolClassFieldEntityNameTests.Cases), MemberType = typeof(SymbolClassFieldEntityNameTests))]
     public void Isolated_Issue2446SymbolClassFieldEntityNames_VerifyBeforeExecution(
         string name, string source, string expected)
     {

@@ -1,3 +1,4 @@
+using SharpTS.Tests.Infrastructure;
 using SharpTS.Tests.SharedTests;
 using Xunit;
 
@@ -6,7 +7,7 @@ namespace SharpTS.Tests.CompilerTests;
 public partial class StandaloneDllTests
 {
     [Theory]
-    [MemberData(nameof(FunctionReadonlyPropertyTests.Cases), MemberType = typeof(FunctionReadonlyPropertyTests))]
+    [DeploymentData(nameof(FunctionReadonlyPropertyTests.Cases), MemberType = typeof(FunctionReadonlyPropertyTests))]
     public void Isolated_Issue2217FunctionReadonlyProperties_VerifyBeforeExecution(
         string name, string source, string expected)
     {

@@ -1,3 +1,4 @@
+using SharpTS.Tests.Infrastructure;
 using SharpTS.Tests.SharedTests;
 using Xunit;
 
@@ -5,7 +6,7 @@ namespace SharpTS.Tests.CompilerTests;
 
 public partial class StandaloneDllTests
 {
-    [Theory, MemberData(nameof(PropertyTypeofGuardTests.Cases), MemberType = typeof(PropertyTypeofGuardTests))]
+    [Theory, DeploymentData(nameof(PropertyTypeofGuardTests.Cases), MemberType = typeof(PropertyTypeofGuardTests))]
     public void Isolated_Issue2774PropertyTypeofGuards_VerifyBeforeExecution(
         string name, string source, string expected)
     {

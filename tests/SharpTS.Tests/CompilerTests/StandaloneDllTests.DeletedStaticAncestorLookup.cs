@@ -1,3 +1,4 @@
+using SharpTS.Tests.Infrastructure;
 using SharpTS.Tests.SharedTests;
 using Xunit;
 
@@ -5,7 +6,7 @@ namespace SharpTS.Tests.CompilerTests;
 
 public partial class StandaloneDllTests
 {
-    [Theory, MemberData(nameof(DeletedStaticAncestorLookupTests.Cases), MemberType = typeof(DeletedStaticAncestorLookupTests))]
+    [Theory, DeploymentData(nameof(DeletedStaticAncestorLookupTests.Cases), MemberType = typeof(DeletedStaticAncestorLookupTests))]
     public void Isolated_Issue2200DeletedStaticAncestorLookup_VerifiesLiveContinuation(
         string name, string source, string expected)
     {

@@ -1,3 +1,4 @@
+using SharpTS.Tests.Infrastructure;
 using SharpTS.Tests.SharedTests;
 using Xunit;
 
@@ -5,7 +6,7 @@ namespace SharpTS.Tests.CompilerTests;
 
 public partial class StandaloneDllTests
 {
-    [Theory, MemberData(nameof(ObjectDefinitionRuntimeReachabilityTests.Cases), MemberType = typeof(ObjectDefinitionRuntimeReachabilityTests))]
+    [Theory, DeploymentData(nameof(ObjectDefinitionRuntimeReachabilityTests.Cases), MemberType = typeof(ObjectDefinitionRuntimeReachabilityTests))]
     public void Isolated_Issue2802ObjectDefinitionRuntimeReachability_VerifyBeforeExecution(
         string name, string source, string expected)
     {

@@ -1,3 +1,4 @@
+using SharpTS.Tests.Infrastructure;
 using SharpTS.Tests.SharedTests;
 using Xunit;
 
@@ -5,7 +6,7 @@ namespace SharpTS.Tests.CompilerTests;
 
 public partial class StandaloneDllTests
 {
-    [Theory, MemberData(nameof(ForOfBodyLexicalCellTests.Cases), MemberType = typeof(ForOfBodyLexicalCellTests))]
+    [Theory, DeploymentData(nameof(ForOfBodyLexicalCellTests.Cases), MemberType = typeof(ForOfBodyLexicalCellTests))]
     public void Isolated_Issue2148ForOfBodyLexicalCells_ShareWithinEachActivation(
         string name, string source, string expected)
     {

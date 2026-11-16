@@ -1,3 +1,4 @@
+using SharpTS.Tests.Infrastructure;
 using System.Security.Cryptography;
 using SharpTS.Tests.SharedTests.BuiltInModules;
 using Xunit;
@@ -6,7 +7,7 @@ namespace SharpTS.Tests.CompilerTests;
 
 public partial class StandaloneDllTests
 {
-    [Theory, MemberData(nameof(ReadableStreamAsyncPullLivenessTests.Names), MemberType = typeof(ReadableStreamAsyncPullLivenessTests))]
+    [Theory, DeploymentData(nameof(ReadableStreamAsyncPullLivenessTests.Names), MemberType = typeof(ReadableStreamAsyncPullLivenessTests))]
     public void Isolated_ReadableStreamAsyncPull_ReturnsWithoutBlockingJobs(string name)
     {
         var (source, expected) = ReadableStreamAsyncPullLivenessTests.GetCase(name);

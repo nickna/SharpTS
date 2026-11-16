@@ -1,3 +1,4 @@
+using SharpTS.Tests.Infrastructure;
 using SharpTS.Tests.SharedTests;
 using Xunit;
 
@@ -5,7 +6,7 @@ namespace SharpTS.Tests.CompilerTests;
 
 public partial class StandaloneDllTests
 {
-    [Theory, MemberData(nameof(BinaryBigIntObjectCoercionTests.AllCases), MemberType = typeof(BinaryBigIntObjectCoercionTests))]
+    [Theory, DeploymentData(nameof(BinaryBigIntObjectCoercionTests.AllCases), MemberType = typeof(BinaryBigIntObjectCoercionTests))]
     public void Isolated_Issue2686BinaryBigIntObjectCoercions_VerifyBeforeExecution(
         string name, string source, string expected)
     {

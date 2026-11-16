@@ -1,3 +1,4 @@
+using SharpTS.Tests.Infrastructure;
 using SharpTS.Tests.SharedTests;
 using Xunit;
 
@@ -5,7 +6,7 @@ namespace SharpTS.Tests.CompilerTests;
 
 public partial class StandaloneDllTests
 {
-    [Theory, MemberData(nameof(MathAccessorPropertyReadTests.SavedCases), MemberType = typeof(MathAccessorPropertyReadTests))]
+    [Theory, DeploymentData(nameof(MathAccessorPropertyReadTests.SavedCases), MemberType = typeof(MathAccessorPropertyReadTests))]
     public void Isolated_Issue2692MathAccessorPropertyReads_VerifyBeforeExecution(
         string name, string source, string expected)
     {

@@ -1,3 +1,4 @@
+using SharpTS.Tests.Infrastructure;
 using SharpTS.Tests.SharedTests;
 using Xunit;
 
@@ -5,7 +6,7 @@ namespace SharpTS.Tests.CompilerTests;
 
 public partial class StandaloneDllTests
 {
-    [Theory, MemberData(nameof(AsyncArrowForAwaitCleanupTests.SavedCases), MemberType = typeof(AsyncArrowForAwaitCleanupTests))]
+    [Theory, DeploymentData(nameof(AsyncArrowForAwaitCleanupTests.SavedCases), MemberType = typeof(AsyncArrowForAwaitCleanupTests))]
     public void Isolated_Issue2848AsyncArrowForAwaitCleanup_VerifyBeforeExecution(
         string name, string source, string expected)
     {

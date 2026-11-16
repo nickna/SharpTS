@@ -1,3 +1,4 @@
+using SharpTS.Tests.Infrastructure;
 using System.Security.Cryptography;
 using SharpTS.Tests.SharedTests;
 using Xunit;
@@ -6,7 +7,7 @@ namespace SharpTS.Tests.CompilerTests;
 
 public partial class StandaloneDllTests
 {
-    [Theory, MemberData(nameof(AsyncSynchronousCaptureLivenessTests.Names), MemberType = typeof(AsyncSynchronousCaptureLivenessTests))]
+    [Theory, DeploymentData(nameof(AsyncSynchronousCaptureLivenessTests.Names), MemberType = typeof(AsyncSynchronousCaptureLivenessTests))]
     public void Isolated_AsyncSynchronousCaptures_RetainSourcesAcrossSuspension(
         string name)
     {

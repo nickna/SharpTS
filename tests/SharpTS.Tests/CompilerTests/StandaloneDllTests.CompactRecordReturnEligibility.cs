@@ -1,3 +1,4 @@
+using SharpTS.Tests.Infrastructure;
 using SharpTS.Tests.SharedTests;
 using Xunit;
 
@@ -5,7 +6,7 @@ namespace SharpTS.Tests.CompilerTests;
 
 public partial class StandaloneDllTests
 {
-    [Theory, MemberData(nameof(CompactRecordReturnEligibilityTests.SavedCases), MemberType = typeof(CompactRecordReturnEligibilityTests))]
+    [Theory, DeploymentData(nameof(CompactRecordReturnEligibilityTests.SavedCases), MemberType = typeof(CompactRecordReturnEligibilityTests))]
     public void Isolated_Issue2794CompactRecordReturnEligibility_VerifyBeforeExecution(
         string name, string source, string expected)
     {

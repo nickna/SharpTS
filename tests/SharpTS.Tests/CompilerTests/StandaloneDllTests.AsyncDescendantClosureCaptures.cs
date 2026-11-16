@@ -1,3 +1,4 @@
+using SharpTS.Tests.Infrastructure;
 using SharpTS.Tests.SharedTests;
 using Xunit;
 
@@ -5,7 +6,7 @@ namespace SharpTS.Tests.CompilerTests;
 
 public partial class StandaloneDllTests
 {
-    [Theory, MemberData(nameof(AsyncDescendantClosureCaptureTests.Cases), MemberType = typeof(AsyncDescendantClosureCaptureTests))]
+    [Theory, DeploymentData(nameof(AsyncDescendantClosureCaptureTests.Cases), MemberType = typeof(AsyncDescendantClosureCaptureTests))]
     public void Isolated_Issue2457AsyncDescendantClosures_VerifyBeforeExecution(
         string name, string source, string expected)
     {

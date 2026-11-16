@@ -1,3 +1,4 @@
+using SharpTS.Tests.Infrastructure;
 using SharpTS.Tests.SharedTests;
 using Xunit;
 
@@ -5,7 +6,7 @@ namespace SharpTS.Tests.CompilerTests;
 
 public partial class StandaloneDllTests
 {
-    [Theory, MemberData(nameof(CallableFunctionPrototypeTests.Cases), MemberType = typeof(CallableFunctionPrototypeTests))]
+    [Theory, DeploymentData(nameof(CallableFunctionPrototypeTests.Cases), MemberType = typeof(CallableFunctionPrototypeTests))]
     public void Isolated_Issue2240CallableFunctionPrototype_VerifyBeforeExecution(string name, string source, string expected)
     {
         using var directory = IntegrationTests.CliTestHelper.CreateTempDirectory();

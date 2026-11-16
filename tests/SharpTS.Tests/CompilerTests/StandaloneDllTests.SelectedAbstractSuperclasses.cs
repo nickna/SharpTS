@@ -1,3 +1,4 @@
+using SharpTS.Tests.Infrastructure;
 using SharpTS.Tests.SharedTests;
 using Xunit;
 
@@ -5,7 +6,7 @@ namespace SharpTS.Tests.CompilerTests;
 
 public partial class StandaloneDllTests
 {
-    [Theory, MemberData(nameof(SelectedAbstractSuperclassTests.Cases), MemberType = typeof(SelectedAbstractSuperclassTests))]
+    [Theory, DeploymentData(nameof(SelectedAbstractSuperclassTests.Cases), MemberType = typeof(SelectedAbstractSuperclassTests))]
     public void Isolated_Issue2761SelectedAbstractSuperclasses_VerifyBeforeExecution(
         string name, string source, string expected)
     {

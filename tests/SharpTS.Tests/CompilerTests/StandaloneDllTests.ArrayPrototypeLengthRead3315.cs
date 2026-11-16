@@ -1,3 +1,4 @@
+using SharpTS.Tests.Infrastructure;
 using SharpTS.Tests.SharedTests;
 using Xunit;
 
@@ -5,7 +6,7 @@ namespace SharpTS.Tests.CompilerTests;
 
 public partial class StandaloneDllTests
 {
-    [Theory, MemberData(nameof(ArrayPrototypeLengthRead3315Tests.LibraryModes), MemberType = typeof(ArrayPrototypeLengthRead3315Tests))]
+    [Theory, DeploymentData(nameof(ArrayPrototypeLengthRead3315Tests.LibraryModes), MemberType = typeof(ArrayPrototypeLengthRead3315Tests))]
     public void Isolated_Issue3315ArrayPrototypeLength_VerifiesBothLibraryProfiles(
         string name, string source, string expected, bool noLib)
     {

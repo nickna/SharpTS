@@ -1,3 +1,4 @@
+using SharpTS.Tests.Infrastructure;
 using SharpTS.Tests.SharedTests;
 using Xunit;
 
@@ -5,7 +6,7 @@ namespace SharpTS.Tests.CompilerTests;
 
 public partial class StandaloneDllTests
 {
-    [Theory, MemberData(nameof(ClassPrototypePartialMethodDescriptorTests.Cases), MemberType = typeof(ClassPrototypePartialMethodDescriptorTests))]
+    [Theory, DeploymentData(nameof(ClassPrototypePartialMethodDescriptorTests.Cases), MemberType = typeof(ClassPrototypePartialMethodDescriptorTests))]
     public void Isolated_Issue2672ClassPrototypePartialMethodDescriptors_VerifyBeforeExecution(
         string name, string source, string expected)
     {

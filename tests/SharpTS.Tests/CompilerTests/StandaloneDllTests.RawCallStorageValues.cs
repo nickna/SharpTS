@@ -1,3 +1,4 @@
+using SharpTS.Tests.Infrastructure;
 using SharpTS.Tests.SharedTests;
 using Xunit;
 
@@ -5,7 +6,7 @@ namespace SharpTS.Tests.CompilerTests;
 
 public partial class StandaloneDllTests
 {
-    [Theory, MemberData(nameof(RawCallStorageValueTests.Cases), MemberType = typeof(RawCallStorageValueTests))]
+    [Theory, DeploymentData(nameof(RawCallStorageValueTests.Cases), MemberType = typeof(RawCallStorageValueTests))]
     public void Isolated_Issue2531RawCallStorage_VerifyBeforeExecution(string name, string source, string expected)
     {
         Assert.NotEmpty(name);

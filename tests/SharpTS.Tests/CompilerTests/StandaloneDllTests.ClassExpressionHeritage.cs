@@ -1,3 +1,4 @@
+using SharpTS.Tests.Infrastructure;
 using SharpTS.Tests.SharedTests;
 using Xunit;
 
@@ -6,7 +7,7 @@ namespace SharpTS.Tests.CompilerTests;
 public partial class StandaloneDllTests
 {
     [Theory]
-    [MemberData(nameof(ClassExpressionHeritageDispatchTests.Cases), MemberType = typeof(ClassExpressionHeritageDispatchTests))]
+    [DeploymentData(nameof(ClassExpressionHeritageDispatchTests.Cases), MemberType = typeof(ClassExpressionHeritageDispatchTests))]
     public void Isolated_Issue2015Heritage_VerifiesActualClrPropertyDispatch(string name, string source, string expected)
     {
         using var directory = IntegrationTests.CliTestHelper.CreateTempDirectory();

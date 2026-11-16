@@ -1,3 +1,4 @@
+using SharpTS.Tests.Infrastructure;
 using SharpTS.Tests.SharedTests;
 using Xunit;
 
@@ -5,7 +6,7 @@ namespace SharpTS.Tests.CompilerTests;
 
 public partial class StandaloneDllTests
 {
-    [Theory, MemberData(nameof(InferredAsyncArrowPromiseReturnTests.Cases), MemberType = typeof(InferredAsyncArrowPromiseReturnTests))]
+    [Theory, DeploymentData(nameof(InferredAsyncArrowPromiseReturnTests.Cases), MemberType = typeof(InferredAsyncArrowPromiseReturnTests))]
     public void Isolated_Issue2434InferredAsyncArrowPromises_VerifyBeforeExecution(
         string name, string source, string expected)
     {

@@ -1,3 +1,4 @@
+using SharpTS.Tests.Infrastructure;
 using SharpTS.Tests.SharedTests;
 using Xunit;
 
@@ -5,7 +6,7 @@ namespace SharpTS.Tests.CompilerTests;
 
 public partial class StandaloneDllTests
 {
-    [Theory, MemberData(nameof(NestedParameterDefaultCaptureTests.Cases), MemberType = typeof(NestedParameterDefaultCaptureTests))]
+    [Theory, DeploymentData(nameof(NestedParameterDefaultCaptureTests.Cases), MemberType = typeof(NestedParameterDefaultCaptureTests))]
     public void Isolated_Issue2663NestedParameterDefaultCapture_VerifyBeforeExecution(
         string name, string source, string expected)
     {

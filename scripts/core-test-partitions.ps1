@@ -1,3 +1,5 @@
+. (Join-Path $PSScriptRoot 'test-inventory.ps1')
+
 function Get-CoreTestFilters {
     $baseFilter = 'Category!=LiveNetwork&Category!=LoadSensitive&Category!=npm&FullyQualifiedName!~SharpTS.Tests.CompilerTests.StandaloneDllTests.'
     [ordered]@{
@@ -51,6 +53,8 @@ function New-CoreTestPartitionProof {
         BaseEntries = $BaseEntries.Count
         InProcessEntries = $InProcessEntries.Count
         ProcessEntries = $ProcessEntries.Count
+        InProcessInventoryDigest = Get-InventoryDigest $InProcessEntries
+        ProcessInventoryDigest = Get-InventoryDigest $ProcessEntries
         InventoryDigest = $digest
         Inventory = $inventory
         ExactOnce = $true

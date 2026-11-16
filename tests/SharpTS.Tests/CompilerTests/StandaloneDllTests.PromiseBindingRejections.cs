@@ -1,3 +1,4 @@
+using SharpTS.Tests.Infrastructure;
 using Xunit;
 
 namespace SharpTS.Tests.CompilerTests;
@@ -34,7 +35,7 @@ public partial class StandaloneDllTests
         yield return ["vm-catch-read-does-not-handle", "import * as vm from \"node:vm\";const p:any=vm.runInNewContext(`Promise.reject(\"vm-read\")`);const method=p.catch;process.on(\"unhandledRejection\",(e:any,q:any)=>console.log(e,q===p));", false, "vm-read true\n", ""];
     }
 
-    [Theory, MemberData(nameof(Issue3469BindingCases))]
+    [Theory, DeploymentData(nameof(Issue3469BindingCases))]
     public void Isolated_Issue3469PromiseBindingRejections(
         string name, string source, bool nonzero, string expectedStdout, string diagnostic)
     {

@@ -1,3 +1,4 @@
+using SharpTS.Tests.Infrastructure;
 using SharpTS.Tests.IntegrationTests;
 using Xunit;
 
@@ -5,7 +6,7 @@ namespace SharpTS.Tests.CompilerTests;
 
 public partial class StandaloneDllTests
 {
-    [Theory, MemberData(nameof(CliPromiseSubclassTests.LibraryModes), MemberType = typeof(CliPromiseSubclassTests))]
+    [Theory, DeploymentData(nameof(CliPromiseSubclassTests.LibraryModes), MemberType = typeof(CliPromiseSubclassTests))]
     public void Isolated_Issue2169DefaultLibraryPromiseHeritage_VerifiesBeforeExecution(
         string name, string source, string expected, bool noLib)
     {

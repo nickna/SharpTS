@@ -1,3 +1,4 @@
+using SharpTS.Tests.Infrastructure;
 using SharpTS.Tests.SharedTests;
 using Xunit;
 
@@ -5,7 +6,7 @@ namespace SharpTS.Tests.CompilerTests;
 
 public partial class StandaloneDllTests
 {
-    [Theory, MemberData(nameof(BorrowedReplaceAllFlagsRegressionTests.SavedCases), MemberType = typeof(BorrowedReplaceAllFlagsRegressionTests))]
+    [Theory, DeploymentData(nameof(BorrowedReplaceAllFlagsRegressionTests.SavedCases), MemberType = typeof(BorrowedReplaceAllFlagsRegressionTests))]
     public void Isolated_Issue2800ObservableRegExpFlags_VerifyBeforeExecution(
         string name, string source, string expected)
     {

@@ -1,3 +1,4 @@
+using SharpTS.Tests.Infrastructure;
 using SharpTS.Tests.SharedTests;
 using Xunit;
 
@@ -5,7 +6,7 @@ namespace SharpTS.Tests.CompilerTests;
 
 public partial class StandaloneDllTests
 {
-    [Theory, MemberData(nameof(MethodEnvironmentRelayTests.Cases), MemberType = typeof(MethodEnvironmentRelayTests))]
+    [Theory, DeploymentData(nameof(MethodEnvironmentRelayTests.Cases), MemberType = typeof(MethodEnvironmentRelayTests))]
     public void Isolated_Issue2496MethodEnvironmentRelays_VerifyBeforeExecution(
         string name, string source, string expected)
     {

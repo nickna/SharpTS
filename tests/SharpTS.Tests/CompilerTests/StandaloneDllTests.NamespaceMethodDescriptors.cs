@@ -1,3 +1,4 @@
+using SharpTS.Tests.Infrastructure;
 using SharpTS.Tests.SharedTests;
 using Xunit;
 
@@ -5,7 +6,7 @@ namespace SharpTS.Tests.CompilerTests;
 
 public partial class StandaloneDllTests
 {
-    [Theory, MemberData(nameof(NamespaceMethodDescriptorTests.Cases), MemberType = typeof(NamespaceMethodDescriptorTests))]
+    [Theory, DeploymentData(nameof(NamespaceMethodDescriptorTests.Cases), MemberType = typeof(NamespaceMethodDescriptorTests))]
     public void Isolated_Issue2854NamespaceMethodDescriptors_VerifyBeforeExecution(
         string name, string source, string expected)
     {

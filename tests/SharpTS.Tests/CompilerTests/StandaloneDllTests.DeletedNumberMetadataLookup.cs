@@ -1,3 +1,4 @@
+using SharpTS.Tests.Infrastructure;
 using SharpTS.Tests.SharedTests;
 using Xunit;
 
@@ -5,7 +6,7 @@ namespace SharpTS.Tests.CompilerTests;
 
 public partial class StandaloneDllTests
 {
-    [Theory, MemberData(nameof(DeletedNumberMetadataLookupTests.Cases), MemberType = typeof(DeletedNumberMetadataLookupTests))]
+    [Theory, DeploymentData(nameof(DeletedNumberMetadataLookupTests.Cases), MemberType = typeof(DeletedNumberMetadataLookupTests))]
     public void Isolated_Issue2164DeletedNumberMetadataLookup_PreservesLivePrototypeAndReceiver(
         string name, string source, string expected)
     {

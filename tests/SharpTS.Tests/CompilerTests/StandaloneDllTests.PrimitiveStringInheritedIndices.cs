@@ -1,3 +1,4 @@
+using SharpTS.Tests.Infrastructure;
 using SharpTS.Tests.SharedTests;
 using Xunit;
 
@@ -5,7 +6,7 @@ namespace SharpTS.Tests.CompilerTests;
 
 public partial class StandaloneDllTests
 {
-    [Theory, MemberData(nameof(PrimitiveStringInheritedIndexTests.Cases), MemberType = typeof(PrimitiveStringInheritedIndexTests))]
+    [Theory, DeploymentData(nameof(PrimitiveStringInheritedIndexTests.Cases), MemberType = typeof(PrimitiveStringInheritedIndexTests))]
     public void Isolated_Issue2798PrimitiveStringInheritedIndices_VerifyBeforeExecution(
         string name, string source, string expected)
     {

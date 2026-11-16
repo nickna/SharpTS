@@ -1,3 +1,4 @@
+using SharpTS.Tests.Infrastructure;
 using SharpTS.Tests.SharedTests;
 using Xunit;
 
@@ -5,7 +6,7 @@ namespace SharpTS.Tests.CompilerTests;
 
 public partial class StandaloneDllTests
 {
-    [Theory, MemberData(nameof(PromiseDerivedCapabilityTests.Cases), MemberType = typeof(PromiseDerivedCapabilityTests))]
+    [Theory, DeploymentData(nameof(PromiseDerivedCapabilityTests.Cases), MemberType = typeof(PromiseDerivedCapabilityTests))]
     public void Isolated_Issue2156DerivedPromiseCapabilities_PreserveConstructorCompletion(
         string name, string source, string expected)
     {

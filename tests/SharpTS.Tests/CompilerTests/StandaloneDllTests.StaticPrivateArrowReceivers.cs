@@ -1,3 +1,4 @@
+using SharpTS.Tests.Infrastructure;
 using SharpTS.Tests.SharedTests;
 using Xunit;
 
@@ -5,7 +6,7 @@ namespace SharpTS.Tests.CompilerTests;
 
 public partial class StandaloneDllTests
 {
-    [Theory, MemberData(nameof(StaticPrivateArrowReceiverTests.Cases), MemberType = typeof(StaticPrivateArrowReceiverTests))]
+    [Theory, DeploymentData(nameof(StaticPrivateArrowReceiverTests.Cases), MemberType = typeof(StaticPrivateArrowReceiverTests))]
     public void Isolated_Issue2755StaticPrivateArrowReceivers_VerifyBeforeExecution(
         string name, string source, string expected)
     {

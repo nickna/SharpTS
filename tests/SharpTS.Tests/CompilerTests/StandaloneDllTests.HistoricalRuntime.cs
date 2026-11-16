@@ -1,3 +1,4 @@
+using SharpTS.Tests.Infrastructure;
 using SharpTS.Tests.SharedTests;
 using Xunit;
 
@@ -10,27 +11,27 @@ public partial class StandaloneDllTests
     public static IEnumerable<object[]> HistoricalRuntimeDeploymentCases(int partition)
         => HistoricalRuntimeRegressionTests.Cases().Where((_, index) => index % 6 == partition);
 
-    [Theory, MemberData(nameof(HistoricalRuntimeDeploymentCases), 0)]
+    [Theory, DeploymentData(nameof(HistoricalRuntimeDeploymentCases), 0)]
     public void Isolated_HistoricalRuntimeSources0(string file, string source, string expected)
         => HistoricalRuntimeDeploymentTests.AssertDeployment(file, source, expected);
 
-    [Theory, MemberData(nameof(HistoricalRuntimeDeploymentCases), 1)]
+    [Theory, DeploymentData(nameof(HistoricalRuntimeDeploymentCases), 1)]
     public void Isolated_HistoricalRuntimeSources1(string file, string source, string expected)
         => HistoricalRuntimeDeploymentTests.AssertDeployment(file, source, expected);
 
-    [Theory, MemberData(nameof(HistoricalRuntimeDeploymentCases), 2)]
+    [Theory, DeploymentData(nameof(HistoricalRuntimeDeploymentCases), 2)]
     public void Isolated_HistoricalRuntimeSources2(string file, string source, string expected)
         => HistoricalRuntimeDeploymentTests.AssertDeployment(file, source, expected);
 
-    [Theory, MemberData(nameof(HistoricalRuntimeDeploymentCases), 3)]
+    [Theory, DeploymentData(nameof(HistoricalRuntimeDeploymentCases), 3)]
     public void Isolated_HistoricalRuntimeSources3(string file, string source, string expected)
         => HistoricalRuntimeDeploymentTests.AssertDeployment(file, source, expected);
 
-    [Theory, MemberData(nameof(HistoricalRuntimeDeploymentCases), 4)]
+    [Theory, DeploymentData(nameof(HistoricalRuntimeDeploymentCases), 4)]
     public void Isolated_HistoricalRuntimeSources4(string file, string source, string expected)
         => HistoricalRuntimeDeploymentTests.AssertDeployment(file, source, expected);
 
-    [Theory, MemberData(nameof(HistoricalRuntimeDeploymentCases), 5)]
+    [Theory, DeploymentData(nameof(HistoricalRuntimeDeploymentCases), 5)]
     public void Isolated_HistoricalRuntimeSources5(string file, string source, string expected)
         => HistoricalRuntimeDeploymentTests.AssertDeployment(file, source, expected);
 }

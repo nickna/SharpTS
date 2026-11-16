@@ -1,3 +1,4 @@
+using SharpTS.Tests.Infrastructure;
 using SharpTS.Tests.SharedTests;
 using Xunit;
 
@@ -5,7 +6,7 @@ namespace SharpTS.Tests.CompilerTests;
 
 public partial class StandaloneDllTests
 {
-    [Theory, MemberData(nameof(ComputedSuperReadTests.Cases), MemberType = typeof(ComputedSuperReadTests))]
+    [Theory, DeploymentData(nameof(ComputedSuperReadTests.Cases), MemberType = typeof(ComputedSuperReadTests))]
     public void Isolated_Issue2744ComputedSuperReads_VerifyBeforeExecution(
         string name, string source, string expected)
     {

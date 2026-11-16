@@ -1,3 +1,4 @@
+using SharpTS.Tests.Infrastructure;
 using SharpTS.Tests.SharedTests;
 using Xunit;
 
@@ -5,7 +6,7 @@ namespace SharpTS.Tests.CompilerTests;
 
 public partial class StandaloneDllTests
 {
-    [Theory, MemberData(nameof(InstancePropertyCacheTests.Cases), MemberType = typeof(InstancePropertyCacheTests))]
+    [Theory, DeploymentData(nameof(InstancePropertyCacheTests.Cases), MemberType = typeof(InstancePropertyCacheTests))]
     public void Isolated_Issue2284InstancePropertyCache_VerifyBeforeExecution(
         string name, string source, string expected)
     {

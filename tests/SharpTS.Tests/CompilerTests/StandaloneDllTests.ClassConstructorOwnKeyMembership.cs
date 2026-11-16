@@ -8,7 +8,7 @@ namespace SharpTS.Tests.CompilerTests;
 
 public partial class StandaloneDllTests
 {
-    [Theory, MemberData(nameof(ClassConstructorOwnKeyMembershipTests.Cases), MemberType = typeof(ClassConstructorOwnKeyMembershipTests))]
+    [Theory, DeploymentData(nameof(ClassConstructorOwnKeyMembershipTests.Cases), MemberType = typeof(ClassConstructorOwnKeyMembershipTests))]
     public void Isolated_Issue2633ConstructorOwnKeyMembership_VerifyBeforeExecution(
         string name, string source, string expected)
     {

@@ -1,3 +1,4 @@
+using SharpTS.Tests.Infrastructure;
 using System.Security.Cryptography;
 using Xunit;
 
@@ -6,7 +7,7 @@ namespace SharpTS.Tests.CompilerTests;
 public partial class StandaloneDllTests
 {
     [Theory]
-    [MemberData(nameof(SharedTests.ArrayConcatAwaitTests.Cases), MemberType = typeof(SharedTests.ArrayConcatAwaitTests))]
+    [DeploymentData(nameof(SharedTests.ArrayConcatAwaitTests.Cases), MemberType = typeof(SharedTests.ArrayConcatAwaitTests))]
     public void Isolated_ArrayConcatAwait_PreservesReceiverAndSpreadEvaluation(
         string name, string source, string expected)
     {

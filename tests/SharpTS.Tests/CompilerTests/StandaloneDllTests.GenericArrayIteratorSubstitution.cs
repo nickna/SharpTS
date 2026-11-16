@@ -1,3 +1,4 @@
+using SharpTS.Tests.Infrastructure;
 using System.Security.Cryptography;
 using SharpTS.Tests.SharedTests;
 using Xunit;
@@ -6,7 +7,7 @@ namespace SharpTS.Tests.CompilerTests;
 
 public partial class StandaloneDllTests
 {
-    [Theory, MemberData(nameof(GenericArrayIteratorSubstitutionTests.Cases), MemberType = typeof(GenericArrayIteratorSubstitutionTests))]
+    [Theory, DeploymentData(nameof(GenericArrayIteratorSubstitutionTests.Cases), MemberType = typeof(GenericArrayIteratorSubstitutionTests))]
     public void Isolated_Issue2808GenericArrayIteratorSubstitution_VerifyBeforeExecution(
         string name, string source, string expected)
     {

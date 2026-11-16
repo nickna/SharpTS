@@ -8,7 +8,7 @@ namespace SharpTS.Tests.CompilerTests;
 
 public partial class StandaloneDllTests
 {
-    [Theory, MemberData(nameof(ArrayElementBindingDefaultTests.Cases), MemberType = typeof(ArrayElementBindingDefaultTests))]
+    [Theory, DeploymentData(nameof(ArrayElementBindingDefaultTests.Cases), MemberType = typeof(ArrayElementBindingDefaultTests))]
     public void Isolated_Issue2833ArrayElementBindingDefaults_VerifyBeforeExecution(
         string name, string source, string expected)
     {

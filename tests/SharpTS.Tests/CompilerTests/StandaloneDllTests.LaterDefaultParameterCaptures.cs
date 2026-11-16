@@ -1,3 +1,4 @@
+using SharpTS.Tests.Infrastructure;
 using SharpTS.Tests.SharedTests;
 using Xunit;
 
@@ -5,7 +6,7 @@ namespace SharpTS.Tests.CompilerTests;
 
 public partial class StandaloneDllTests
 {
-    [Theory, MemberData(nameof(LaterDefaultParameterCaptureTests.Cases), MemberType = typeof(LaterDefaultParameterCaptureTests))]
+    [Theory, DeploymentData(nameof(LaterDefaultParameterCaptureTests.Cases), MemberType = typeof(LaterDefaultParameterCaptureTests))]
     public void Isolated_Issue2745LaterDefaultParameterCaptures_VerifyBeforeExecution(
         string name, string source, string expected)
     {

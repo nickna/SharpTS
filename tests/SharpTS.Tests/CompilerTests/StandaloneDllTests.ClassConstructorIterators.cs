@@ -1,3 +1,4 @@
+using SharpTS.Tests.Infrastructure;
 using SharpTS.Tests.SharedTests;
 using Xunit;
 
@@ -26,7 +27,7 @@ public partial class StandaloneDllTests
             verifyStandardError: error => Assert.Empty(error), standardInput: ""));
     }
 
-    [Theory, MemberData(nameof(ClassConstructorIteratorTests.ReceiverCases), MemberType = typeof(ClassConstructorIteratorTests))]
+    [Theory, DeploymentData(nameof(ClassConstructorIteratorTests.ReceiverCases), MemberType = typeof(ClassConstructorIteratorTests))]
     public void Isolated_Issue2056ClassConstructorIterators_PreserveAcquiredReceivers(
         string name, string source, string expected)
     {
@@ -44,7 +45,7 @@ public partial class StandaloneDllTests
             verifyStandardError: error => Assert.Empty(error), standardInput: ""));
     }
 
-    [Theory, MemberData(nameof(ClassConstructorIteratorTests.CompiledGetterCases), MemberType = typeof(ClassConstructorIteratorTests))]
+    [Theory, DeploymentData(nameof(ClassConstructorIteratorTests.CompiledGetterCases), MemberType = typeof(ClassConstructorIteratorTests))]
     public void Isolated_Issue2057ClassConstructorIterators_AcquireLiveGetters(
         string name, string source, string expected)
     {

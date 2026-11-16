@@ -1,3 +1,4 @@
+using SharpTS.Tests.Infrastructure;
 using SharpTS.Tests.SharedTests;
 using Xunit;
 
@@ -5,7 +6,7 @@ namespace SharpTS.Tests.CompilerTests;
 
 public partial class StandaloneDllTests
 {
-    [Theory, MemberData(nameof(OwnedCapturedParameterReadTests.Cases), MemberType = typeof(OwnedCapturedParameterReadTests))]
+    [Theory, DeploymentData(nameof(OwnedCapturedParameterReadTests.Cases), MemberType = typeof(OwnedCapturedParameterReadTests))]
     public void Isolated_Issue2518OwnedCapturedParameterReads_VerifyBeforeExecution(
         string name, string source, string expected)
     {

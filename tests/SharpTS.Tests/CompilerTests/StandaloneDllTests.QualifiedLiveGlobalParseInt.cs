@@ -1,3 +1,4 @@
+using SharpTS.Tests.Infrastructure;
 using SharpTS.Tests.SharedTests;
 using Xunit;
 
@@ -5,7 +6,7 @@ namespace SharpTS.Tests.CompilerTests;
 
 public partial class StandaloneDllTests
 {
-    [Theory, MemberData(nameof(QualifiedLiveGlobalParseIntTests.Cases), MemberType = typeof(QualifiedLiveGlobalParseIntTests))]
+    [Theory, DeploymentData(nameof(QualifiedLiveGlobalParseIntTests.Cases), MemberType = typeof(QualifiedLiveGlobalParseIntTests))]
     public void Isolated_Issue2539QualifiedLiveGlobalParseInt_VerifyBeforeExecution(
         string name, string source, string expected)
     {

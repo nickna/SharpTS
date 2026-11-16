@@ -1,3 +1,4 @@
+using SharpTS.Tests.Infrastructure;
 using SharpTS.Tests.SharedTests;
 using Xunit;
 
@@ -5,7 +6,7 @@ namespace SharpTS.Tests.CompilerTests;
 
 public partial class StandaloneDllTests
 {
-    [Theory, MemberData(nameof(NestedGeneratorLiveCaptureTests.Cases),
+    [Theory, DeploymentData(nameof(NestedGeneratorLiveCaptureTests.Cases),
         MemberType = typeof(NestedGeneratorLiveCaptureTests))]
     public void Isolated_Issue2269NestedGeneratorCaptures_VerifyBeforeExecution(
         string name, string source, string expected)

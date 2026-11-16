@@ -1,3 +1,4 @@
+using SharpTS.Tests.Infrastructure;
 using SharpTS.Tests.SharedTests;
 using Xunit;
 
@@ -6,7 +7,7 @@ namespace SharpTS.Tests.CompilerTests;
 public partial class StandaloneDllTests
 {
     [Theory]
-    [MemberData(nameof(AnyStaticPrivateReceiverTests.Cases), MemberType = typeof(AnyStaticPrivateReceiverTests))]
+    [DeploymentData(nameof(AnyStaticPrivateReceiverTests.Cases), MemberType = typeof(AnyStaticPrivateReceiverTests))]
     public void Isolated_Issue2127AnyStaticPrivateReceivers_UseLexicalTypesAndRuntimeBrands(
         string name, string source, string expected)
     {

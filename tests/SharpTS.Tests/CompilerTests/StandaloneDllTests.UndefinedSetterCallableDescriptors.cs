@@ -1,3 +1,4 @@
+using SharpTS.Tests.Infrastructure;
 using SharpTS.Tests.SharedTests;
 using Xunit;
 
@@ -5,7 +6,7 @@ namespace SharpTS.Tests.CompilerTests;
 
 public partial class StandaloneDllTests
 {
-    [Theory, MemberData(nameof(UndefinedSetterCallableDescriptorTests.CompiledCases), MemberType = typeof(UndefinedSetterCallableDescriptorTests))]
+    [Theory, DeploymentData(nameof(UndefinedSetterCallableDescriptorTests.CompiledCases), MemberType = typeof(UndefinedSetterCallableDescriptorTests))]
     public void Isolated_Issue2215UndefinedSetterDescriptors_VerifyBeforeExecution(string name, string source, string expected)
     {
         Assert.NotEmpty(name);

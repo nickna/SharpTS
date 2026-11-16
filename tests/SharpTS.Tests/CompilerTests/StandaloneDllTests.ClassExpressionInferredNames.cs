@@ -8,7 +8,7 @@ namespace SharpTS.Tests.CompilerTests;
 
 public partial class StandaloneDllTests
 {
-    [Theory, MemberData(nameof(ClassExpressionInferredNameTests.SavedCases), MemberType = typeof(ClassExpressionInferredNameTests))]
+    [Theory, DeploymentData(nameof(ClassExpressionInferredNameTests.SavedCases), MemberType = typeof(ClassExpressionInferredNameTests))]
     public void Isolated_Issue2718ClassExpressionInferredNames_VerifyBeforeExecution(
         string name, string source, string expected)
     {

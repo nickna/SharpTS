@@ -1,3 +1,4 @@
+using SharpTS.Tests.Infrastructure;
 using SharpTS.Tests.SharedTests;
 using Xunit;
 
@@ -5,7 +6,7 @@ namespace SharpTS.Tests.CompilerTests;
 
 public partial class StandaloneDllTests
 {
-    [Theory, MemberData(nameof(ReflectClassPrototypeDefinitionTests.Cases), MemberType = typeof(ReflectClassPrototypeDefinitionTests))]
+    [Theory, DeploymentData(nameof(ReflectClassPrototypeDefinitionTests.Cases), MemberType = typeof(ReflectClassPrototypeDefinitionTests))]
     public void Isolated_Issue2762ReflectClassPrototypeDefinitions_VerifyBeforeExecution(
         string name, string source, string expected)
     {

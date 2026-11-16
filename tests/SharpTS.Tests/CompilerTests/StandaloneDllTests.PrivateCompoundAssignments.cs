@@ -1,3 +1,4 @@
+using SharpTS.Tests.Infrastructure;
 using SharpTS.Tests.SharedTests;
 using Xunit;
 
@@ -5,7 +6,7 @@ namespace SharpTS.Tests.CompilerTests;
 
 public partial class StandaloneDllTests
 {
-    [Theory, MemberData(nameof(PrivateCompoundAssignmentTests.Cases), MemberType = typeof(PrivateCompoundAssignmentTests))]
+    [Theory, DeploymentData(nameof(PrivateCompoundAssignmentTests.Cases), MemberType = typeof(PrivateCompoundAssignmentTests))]
     public void Isolated_Issue2098PrivateCompoundAssignments_PreserveTheSavedReference(
         string name, string source, string expected)
     {

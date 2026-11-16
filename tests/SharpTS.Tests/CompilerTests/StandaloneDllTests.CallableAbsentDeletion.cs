@@ -1,3 +1,4 @@
+using SharpTS.Tests.Infrastructure;
 using SharpTS.Tests.SharedTests;
 using Xunit;
 
@@ -5,7 +6,7 @@ namespace SharpTS.Tests.CompilerTests;
 
 public partial class StandaloneDllTests
 {
-    [Theory, MemberData(nameof(CallableAbsentDeletionTests.Cases), MemberType = typeof(CallableAbsentDeletionTests))]
+    [Theory, DeploymentData(nameof(CallableAbsentDeletionTests.Cases), MemberType = typeof(CallableAbsentDeletionTests))]
     public void Isolated_Issue2680CallableAbsentDeletion_VerifyBeforeExecution(
         string name, string source, string expected)
     {

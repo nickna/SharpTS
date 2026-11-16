@@ -1,3 +1,4 @@
+using SharpTS.Tests.Infrastructure;
 using SharpTS.Tests.SharedTests;
 using Xunit;
 
@@ -5,7 +6,7 @@ namespace SharpTS.Tests.CompilerTests;
 
 public partial class StandaloneDllTests
 {
-    [Theory, MemberData(nameof(DefinePropertiesSymbolMapTests.Cases), MemberType = typeof(DefinePropertiesSymbolMapTests))]
+    [Theory, DeploymentData(nameof(DefinePropertiesSymbolMapTests.Cases), MemberType = typeof(DefinePropertiesSymbolMapTests))]
     public void Isolated_Issue2674DefinePropertiesSymbolMaps_VerifyBeforeExecution(
         string name, string source, string expected)
     {

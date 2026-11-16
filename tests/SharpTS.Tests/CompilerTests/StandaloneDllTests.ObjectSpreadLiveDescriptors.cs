@@ -1,3 +1,4 @@
+using SharpTS.Tests.Infrastructure;
 using SharpTS.Tests.SharedTests;
 using Xunit;
 
@@ -5,7 +6,7 @@ namespace SharpTS.Tests.CompilerTests;
 
 public partial class StandaloneDllTests
 {
-    [Theory, MemberData(nameof(ObjectSpreadLiveDescriptorTests.Cases), MemberType = typeof(ObjectSpreadLiveDescriptorTests))]
+    [Theory, DeploymentData(nameof(ObjectSpreadLiveDescriptorTests.Cases), MemberType = typeof(ObjectSpreadLiveDescriptorTests))]
     public void Isolated_Issue2758ObjectSpreadLiveDescriptors_VerifyBeforeExecution(
         string name, string source, string expected)
     {

@@ -1,3 +1,4 @@
+using SharpTS.Tests.Infrastructure;
 using SharpTS.Tests.SharedTests;
 using Xunit;
 
@@ -5,7 +6,7 @@ namespace SharpTS.Tests.CompilerTests;
 
 public partial class StandaloneDllTests
 {
-    [Theory, MemberData(nameof(DestructuringAssignmentRestTests.Cases), MemberType = typeof(DestructuringAssignmentRestTests))]
+    [Theory, DeploymentData(nameof(DestructuringAssignmentRestTests.Cases), MemberType = typeof(DestructuringAssignmentRestTests))]
     public void Isolated_Issue2173DestructuringAssignmentRest_VerifiesValidPatternsAndLiterals(
         string name, string source, string expected)
     {

@@ -8,7 +8,7 @@ namespace SharpTS.Tests.CompilerTests;
 
 public partial class StandaloneDllTests
 {
-    [Theory, MemberData(nameof(ArrayInheritedAccessorPresenceTests.CompiledCases), MemberType = typeof(ArrayInheritedAccessorPresenceTests))]
+    [Theory, DeploymentData(nameof(ArrayInheritedAccessorPresenceTests.CompiledCases), MemberType = typeof(ArrayInheritedAccessorPresenceTests))]
     public void Isolated_Issue2723ArrayInheritedAccessorPresence_VerifyBeforeExecution(
         string name, string source, string expected)
     {

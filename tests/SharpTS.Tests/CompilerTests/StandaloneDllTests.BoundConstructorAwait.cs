@@ -1,3 +1,4 @@
+using SharpTS.Tests.Infrastructure;
 using System.Security.Cryptography;
 using Xunit;
 
@@ -6,7 +7,7 @@ namespace SharpTS.Tests.CompilerTests;
 public partial class StandaloneDllTests
 {
     [Theory]
-    [MemberData(nameof(SharedTests.BoundConstructorAwaitTests.Cases), MemberType = typeof(SharedTests.BoundConstructorAwaitTests))]
+    [DeploymentData(nameof(SharedTests.BoundConstructorAwaitTests.Cases), MemberType = typeof(SharedTests.BoundConstructorAwaitTests))]
     public void Isolated_BoundConstructorAwait_PreservesLiveCalleeAndEvaluationOrder(
         string name, string source, string expected)
     {

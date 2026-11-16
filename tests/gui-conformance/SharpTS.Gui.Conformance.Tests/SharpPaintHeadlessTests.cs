@@ -56,11 +56,19 @@ string compiler = GuiConformanceBuildPaths.Compiler;
     [Theory]
     [InlineData("interpreted", "editing", 2)]
     [InlineData("compiled", "editing", 2)]
+    public Task EditingWorkflowsPass(string mode, string scenario, int expectedWindows)
+        => AssertWorkflowAsync(mode, scenario, expectedWindows);
+
+    // Exhaustive theme permutations run daily and on GUI-affecting PRs.
+    [Theory, Trait("Cadence", "Daily")]
     [InlineData("interpreted", "light", 3)]
     [InlineData("compiled", "light", 3)]
     [InlineData("interpreted", "dark", 3)]
     [InlineData("compiled", "dark", 3)]
-    public async Task WorkflowsPass(string mode, string scenario, int expectedWindows)
+    public Task PresentationWorkflowsPass(string mode, string scenario, int expectedWindows)
+        => AssertWorkflowAsync(mode, scenario, expectedWindows);
+
+    private async Task AssertWorkflowAsync(string mode, string scenario, int expectedWindows)
     {
         TraceEvent[] events = await RunAsync(mode, scenario: scenario);
         Assert.Single(events, item => item.Stage == "guest-init-end");

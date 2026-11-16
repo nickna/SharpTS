@@ -1,3 +1,4 @@
+using SharpTS.Tests.Infrastructure;
 using SharpTS.Tests.SharedTests;
 using Xunit;
 
@@ -5,7 +6,7 @@ namespace SharpTS.Tests.CompilerTests;
 
 public partial class StandaloneDllTests
 {
-    [Theory, MemberData(nameof(NamedClassSelfArrowTests.Cases), MemberType = typeof(NamedClassSelfArrowTests))]
+    [Theory, DeploymentData(nameof(NamedClassSelfArrowTests.Cases), MemberType = typeof(NamedClassSelfArrowTests))]
     public void Isolated_Issue2208NamedClassSelfArrows_VerifiesLexicalOwnerAndShadowIdentity(
         string name, string source, string expected)
     {

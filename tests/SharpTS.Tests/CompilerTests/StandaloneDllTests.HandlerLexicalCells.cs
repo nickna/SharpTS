@@ -1,3 +1,4 @@
+using SharpTS.Tests.Infrastructure;
 using SharpTS.Tests.SharedTests;
 using Xunit;
 
@@ -5,7 +6,7 @@ namespace SharpTS.Tests.CompilerTests;
 
 public partial class StandaloneDllTests
 {
-    [Theory, MemberData(nameof(HandlerLexicalScopeTests.LexicalCases), MemberType = typeof(HandlerLexicalScopeTests))]
+    [Theory, DeploymentData(nameof(HandlerLexicalScopeTests.LexicalCases), MemberType = typeof(HandlerLexicalScopeTests))]
     public void Isolated_Issue2530HandlerLexicalCells_VerifyBeforeExecution(
         string name, string source, string expected)
     {

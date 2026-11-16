@@ -8,7 +8,7 @@ namespace SharpTS.Tests.CompilerTests;
 
 public partial class StandaloneDllTests
 {
-    [Theory, MemberData(nameof(PrimitiveAwaitSchedulingTests.CompiledCases), MemberType = typeof(PrimitiveAwaitSchedulingTests))]
+    [Theory, DeploymentData(nameof(PrimitiveAwaitSchedulingTests.CompiledCases), MemberType = typeof(PrimitiveAwaitSchedulingTests))]
     public void Isolated_Issue2831PrimitiveAwaitScheduling_VerifyBeforeExecution(
         string name, string source, string expected)
     {

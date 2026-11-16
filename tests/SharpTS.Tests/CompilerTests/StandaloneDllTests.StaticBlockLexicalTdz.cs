@@ -1,3 +1,4 @@
+using SharpTS.Tests.Infrastructure;
 using System.Security.Cryptography;
 using SharpTS.Tests.SharedTests;
 using Xunit;
@@ -6,7 +7,7 @@ namespace SharpTS.Tests.CompilerTests;
 
 public partial class StandaloneDllTests
 {
-    [Theory, MemberData(nameof(StaticBlockLexicalReservationTests.Cases), MemberType = typeof(StaticBlockLexicalReservationTests))]
+    [Theory, DeploymentData(nameof(StaticBlockLexicalReservationTests.Cases), MemberType = typeof(StaticBlockLexicalReservationTests))]
     public void Isolated_Issue2869StaticBlockLexicalTdz_VerifyBeforeExecution(
         string name, string source, string expected)
     {

@@ -1,3 +1,4 @@
+using SharpTS.Tests.Infrastructure;
 using SharpTS.Tests.SharedTests;
 using Xunit;
 
@@ -5,7 +6,7 @@ namespace SharpTS.Tests.CompilerTests;
 
 public partial class StandaloneDllTests
 {
-    [Theory, MemberData(nameof(SwitchStrictEqualityTests.Cases), MemberType = typeof(SwitchStrictEqualityTests))]
+    [Theory, DeploymentData(nameof(SwitchStrictEqualityTests.Cases), MemberType = typeof(SwitchStrictEqualityTests))]
     public void Isolated_Issue2533SwitchStrictEquality_VerifyBeforeExecution(string name, string source, string expected)
     {
         using var directory = IntegrationTests.CliTestHelper.CreateTempDirectory();

@@ -1,3 +1,4 @@
+using SharpTS.Tests.Infrastructure;
 using SharpTS.Tests.SharedTests;
 using Xunit;
 
@@ -5,7 +6,7 @@ namespace SharpTS.Tests.CompilerTests;
 
 public partial class StandaloneDllTests
 {
-    [Theory, MemberData(nameof(ConstructorParameterArrowMutationTests.Cases), MemberType = typeof(ConstructorParameterArrowMutationTests))]
+    [Theory, DeploymentData(nameof(ConstructorParameterArrowMutationTests.Cases), MemberType = typeof(ConstructorParameterArrowMutationTests))]
     public void Isolated_Issue2473ConstructorParameterArrowMutations_VerifyBeforeExecution(
         string name, string source, string expected)
     {
