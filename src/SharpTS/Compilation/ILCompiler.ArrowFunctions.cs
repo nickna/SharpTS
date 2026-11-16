@@ -1010,9 +1010,9 @@ public partial class ILCompiler
                 {
                     try
                     {
-                        var evalStatements = c.PreparedEvalStatements
+                        var evalStatements = _staticDirectEvalStatements.GetValueOrDefault(c) ?? c.PreparedEvalStatements
                             ?? new Parser(new Lexer(evalSource).ScanTokens()).ParseOrThrow();
-                        if (isDirectEval && c.PreparedEvalStatements is null)
+                        if (isDirectEval && c.PreparedEvalStatements is null && !_staticDirectEvalStatements.ContainsKey(c))
                             evalStatements = WithStatementLowering.ApplyEvalEnvironments(evalStatements, c.EvalObjectEnvironments);
                         if (evalStatements.All(statement =>
                                 statement is Stmt.Expression

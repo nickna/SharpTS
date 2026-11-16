@@ -819,7 +819,7 @@ public partial class ILCompiler
     /// </summary>
     private void Phase2_AnalyzeClosures(List<Stmt> statements, IReadOnlyList<ParsedModule>? modules = null)
     {
-        _closures.Analyzer = new ClosureAnalyzer(_runtimeClassDeclarations);
+        _closures.Analyzer = new ClosureAnalyzer(_runtimeClassDeclarations, _staticDirectEvalStatements);
         Dictionary<Stmt, IReadOnlySet<string>>? moduleClrImports = null;
         Dictionary<Stmt, object>? moduleOwners = null;
         if (modules != null)
