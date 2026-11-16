@@ -577,11 +577,11 @@ public partial class Parser
             // yield can be bare (yields undefined) or have an expression
             // Restricted production: yield [no LineTerminator here] Expression
             Expr? value = null;
-            if (!HasLineTerminatorBeforeCurrent() &&
+            if (isDelegating || (!HasLineTerminatorBeforeCurrent() &&
                 !Check(TokenType.SEMICOLON) && !Check(TokenType.RIGHT_BRACE) &&
                 !Check(TokenType.RIGHT_PAREN) && !Check(TokenType.COMMA) &&
-                (isDelegating || (!Check(TokenType.RIGHT_BRACKET) &&
-                    !Check(TokenType.TEMPLATE_MIDDLE) && !Check(TokenType.TEMPLATE_TAIL))) && !IsAtEnd())
+                !Check(TokenType.RIGHT_BRACKET) && !Check(TokenType.COLON) &&
+                !Check(TokenType.TEMPLATE_MIDDLE) && !Check(TokenType.TEMPLATE_TAIL) && !IsAtEnd()))
             {
                 value = Assignment();  // Use Assignment to handle full expressions
             }

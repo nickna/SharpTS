@@ -678,15 +678,18 @@ public abstract partial class ExpressionEmitterBase
         IL.Emit(OpCodes.Call, Ctx.Runtime!.ObjectRead.Property); // → fn
         var fnLocal = _helpers.SpillStoreObject();
 
-        // When the caller hasn't pre-spilled the arguments and one can suspend, spill them now
-        // (after the lookup) so the suspension happens with a clear stack (#614/#413).
-        argLocals ??= AnyContainsSuspension(arguments)
-            ? arguments.Select(SpillBoxed).ToArray()
-            : null;
-
+        // An argument may open a resumed-generator exception guard without
+        // containing a suspension itself. Finish argument evaluation before
+        // placing any invocation operands on the stack.
+        if (argLocals is null)
+            EmitArgsArrayWithSpread(arguments);
+        else
+            EmitBoxedArgsArray(arguments, argLocals);
+        var argumentValues = IL.DeclareLocal(Types.ObjectArray);
+        IL.Emit(OpCodes.Stloc, argumentValues);
         IL.Emit(OpCodes.Ldloc, objLocal);                // receiver for InvokeMethodValue
         IL.Emit(OpCodes.Ldloc, fnLocal);                 // resolved fn
-        EmitBoxedArgsArray(arguments, argLocals);
+        IL.Emit(OpCodes.Ldloc, argumentValues);
         IL.Emit(OpCodes.Call, Ctx.Runtime!.Invocation.Method);
     }
 
@@ -1282,6 +1285,8 @@ public abstract partial class ExpressionEmitterBase
     protected static bool ExprContainsSuspension(Expr expr) => expr switch
     {
         Expr.Await or Expr.Yield => true,
+        Expr.DestructuringAssign assignment => AnyStmtContainsSuspension(assignment.Assignments)
+            || ExprContainsSuspension(assignment.ResultValue),
         Expr.Comma c => ExprContainsSuspension(c.Left) || ExprContainsSuspension(c.Right),
         Expr.Binary b => ExprContainsSuspension(b.Left) || ExprContainsSuspension(b.Right),
         Expr.Logical l => ExprContainsSuspension(l.Left) || ExprContainsSuspension(l.Right),
@@ -2702,26 +2707,66 @@ public abstract partial class ExpressionEmitterBase
 
     protected void EmitAmbiguousMethodCall(Expr obj, string methodName, List<Expr> arguments)
     {
+        if (ExprContainsSuspension(obj) || AnyContainsSuspension(arguments))
+        {
+            EmitAmbiguousMethodCallCore(obj, methodName, arguments);
+            return;
+        }
+
+        // A resumed enclosing expression is outside the statement's synchronous
+        // try segment. Guard this complete non-suspending call with an empty stack,
+        // including receiver/method/argument getters and the final invocation.
+        var result = IL.DeclareLocal(Types.Object);
+        EmitPropertyWriteOperation(() =>
+        {
+            EmitAmbiguousMethodCallCore(obj, methodName, arguments);
+            EnsureBoxed();
+            IL.Emit(OpCodes.Stloc, result);
+        });
+        IL.Emit(OpCodes.Ldloc, result);
+        SetStackUnknown();
+    }
+
+    private void EmitAmbiguousMethodCallCore(Expr obj, string methodName, List<Expr> arguments)
+    {
         EmitExpression(obj);
         EnsureBoxed();
-        var objLocal = _helpers.SpillStoreObject();
+        bool capturesMethod = methodName is "slice" or "concat" or "indexOf" or "includes";
+        // Lowered arguments can contain statement boundaries before a yield;
+        // keep both parts of the selected reference live until invocation.
+        var objLocal = _helpers.SpillStoreObject(retainAcrossStatements: capturesMethod);
 
-        if ((methodName is "indexOf" or "includes") && AnyContainsSuspension(arguments))
+        if (capturesMethod)
         {
             // Mutually exclusive type branches must not emit the same source await twice.
             // Select the method before arguments and retain both receiver and callable.
-            EmitThrowIfReceiverUndefined(objLocal, methodName);
-            IL.Emit(OpCodes.Ldloc, objLocal);
-            IL.Emit(OpCodes.Ldstr, methodName);
-            IL.Emit(OpCodes.Call, Ctx.Runtime!.ObjectRead.Property);
-            var callee = _helpers.SpillStoreObject();
+            // Arguments can also open a with-binding exception guard without
+            // suspending, so argument evaluation always starts with an empty stack.
+            IL.Emit(OpCodes.Ldsfld, Ctx.Runtime!.Sentinels.UndefinedInstance);
+            var callee = _helpers.SpillStoreObject(retainAcrossStatements: true);
+            EmitPropertyWriteOperation(() =>
+            {
+                EmitThrowIfReceiverUndefined(objLocal, methodName);
+                IL.Emit(OpCodes.Ldloc, objLocal);
+                IL.Emit(OpCodes.Ldstr, methodName);
+                IL.Emit(OpCodes.Call, Ctx.Runtime.ObjectRead.Property);
+                IL.Emit(OpCodes.Stloc, callee);
+            });
             EmitArgsArrayWithSpread(arguments);
             var argumentValues = IL.DeclareLocal(Types.ObjectArray);
             IL.Emit(OpCodes.Stloc, argumentValues);
-            IL.Emit(OpCodes.Ldloc, objLocal);
-            IL.Emit(OpCodes.Ldloc, callee);
-            IL.Emit(OpCodes.Ldloc, argumentValues);
-            IL.Emit(OpCodes.Call, Ctx.Runtime.Invocation.Method);
+            var result = IL.DeclareLocal(Types.Object);
+            EmitPropertyWriteOperation(() =>
+            {
+                IL.Emit(OpCodes.Ldloc, objLocal);
+                IL.Emit(OpCodes.Ldloc, callee);
+                IL.Emit(OpCodes.Ldloc, argumentValues);
+                IL.Emit(OpCodes.Call, Ctx.Runtime.Invocation.Method);
+                IL.Emit(OpCodes.Stloc, result);
+            });
+            _helpers.ReleaseSpill(callee);
+            _helpers.ReleaseSpill(objLocal);
+            IL.Emit(OpCodes.Ldloc, result);
             SetStackUnknown();
             return;
         }

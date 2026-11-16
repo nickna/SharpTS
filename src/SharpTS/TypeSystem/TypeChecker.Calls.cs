@@ -36,6 +36,14 @@ public partial class TypeChecker
         Expr.Call call,
         TypeInfo? contextualResultType)
     {
+        if (call.Callee is Expr.Variable { Name.IsGeneratedTemporary: true } helper
+            && helper.Name.Lexeme is WithStatementLowering.ToObject or WithStatementLowering.HasBinding
+                or WithStatementLowering.CheckGet or WithStatementLowering.SetBinding or WithStatementLowering.CaptureCall)
+        {
+            foreach (Expr argument in call.Arguments) CheckExpr(argument);
+            return helper.Name.Lexeme is WithStatementLowering.HasBinding or WithStatementLowering.CheckGet
+                ? new TypeInfo.Primitive(TokenType.TYPE_BOOLEAN) : TypeInfo.Any.Shared;
+        }
         // JSX-origin calls (parser-lowered elements) bypass ordinary call checking entirely:
         // the JSX pipeline owns their semantics and diagnostics (see TypeChecker.Jsx.cs), so
         // the factory signature never produces TS2554/TS2345 alongside JSX-shaped errors.
@@ -1097,6 +1105,20 @@ public partial class TypeChecker
         {
             foreach (var arg in call.Arguments) CheckExpr(arg);
             { result = TypeInfo.Any.Shared; return true; } // Returns an object with remaining properties
+        }
+
+        if (call.Callee is Expr.Variable { Name: { Lexeme: BuiltInNames.ArrayBinding, IsGeneratedTemporary: true } })
+        {
+            var argumentTypes = call.Arguments.Select(CheckExpr).ToList();
+            result = call.Arguments[0] switch
+            {
+                Expr.Literal { Value: "start" } => NormalizeArrayDestructureSourceType(argumentTypes[2]),
+                Expr.Literal { Value: "next" } => CheckExpr(new Expr.GetIndex(call.Arguments[1], call.Arguments[2])),
+                Expr.Literal { Value: "rest" } when TryGetIterableElementType(argumentTypes[1], out var elementType)
+                    => new TypeInfo.Array(elementType),
+                _ => TypeInfo.Any.Shared
+            };
+            return true;
         }
 
         // Handle __arrayDestructure (internal helper for array binding patterns, #685).

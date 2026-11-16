@@ -1833,7 +1833,7 @@ public partial class RuntimeEmitter
             runtime.IteratorCollection,
             new IteratorCollectionInputs(
                 runtime.ArrayStorage, runtime.DescriptorStorage, runtime.CollectionKeys, runtime.Errors, runtime.Invocation,
-                runtime.IteratorProtocol, runtime.IteratorRecords, runtime.ObjectRead,
+                runtime.IteratorProtocol, runtime.IteratorRecords, runtime.Generators.Type, runtime.ObjectRead,
                 runtime.Sentinels.UndefinedType, runtime.Sentinels.UndefinedInstance, runtime.TypedArrays.Implementation,
                 _features.UsesBuffer ? runtime.RequireBuffer() : null,
                 runtime.Map is not null, _features.UsesArrayPrototypeMutation)
@@ -2981,6 +2981,8 @@ public partial class RuntimeEmitter
                     NativeProxyRejection: runtime.ReflectedMethods.NativeProxyRejection),
                 ProxySelected: _features.UsesProxy)
         );
+        if (_features.UsesWithEnvironment)
+            EmitWithEnvironmentHelpers(typeBuilder, runtime);
         // #685: array binding-pattern source normalizer uses the declared iterator
         // collection helper and array storage constructor.
         EmitArrayDestructureSource(typeBuilder, runtime.ArrayOperations,
@@ -2991,6 +2993,10 @@ public partial class RuntimeEmitter
                 runtime.TypedArrays.Implementation?.BaseType,
                 _features.UsesBuffer ? runtime.RequireBuffer().Type : null,
                 _features.UsesArrayPrototypeMutation));
+        if (_features.UsesArrayBinding)
+            EmitArrayBinding(typeBuilder, runtime.ArrayOperations,
+                new ArrayBindingInputs(GetCollectionConsumerInputs(runtime), runtime.ArrayStorage,
+                    runtime.Sentinels.UndefinedInstance, runtime.Cancellation.Check));
         // JSON methods — gated on UsesJSON (also implied by UsesHttp).
         if (runtime.Json.Implementation is not null)
         {

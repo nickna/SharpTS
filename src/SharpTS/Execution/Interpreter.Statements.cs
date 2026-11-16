@@ -914,6 +914,17 @@ public partial class Interpreter
     /// <returns>An enumerable of values if the object has a Symbol.iterator, null otherwise.</returns>
     private IEnumerable<object?>? TryGetSymbolIterator(object? iterable)
     {
+        if (iterable is bool or double)
+        {
+            object prototype = iterable is bool ? GetBooleanPrototype() : GetNumberPrototype();
+            var iteratorFn = GetSymbolPropertyValue(prototype, SharpTSSymbol.Iterator, iterable);
+            if (iteratorFn is null or SharpTSUndefined)
+                return null;
+            if (iteratorFn is not ISharpTSCallable)
+                throw new ThrowException(new SharpTSTypeError("[Symbol.iterator] must be a function"));
+            return EnumerateWithIteratorProtocol(BindMemberCallReceiver(iteratorFn, iterable)!);
+        }
+
         if (iterable is SharpTSProxy proxy)
         {
             // GetMethod must run the proxy's ordinary symbol Get once, even

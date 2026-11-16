@@ -22,6 +22,7 @@ public class CallHandlerRegistry
             new SuperConstructorHandler(),   // Priority 10 - super() calls
             new ObjectRestHandler(),         // Priority 15 - Internal helpers first
             new ArrayDestructureHandler(),   // Priority 16 - Internal helper (#685)
+            new WithEnvironmentHandler(),
             new ConsoleMethodHandler(),      // Priority 20 - Console methods
             new StaticTypeHandler(),         // Priority 30 - Math, JSON, Object, Array, etc.
             new GlobalThisChainHandler(),    // Priority 32 - globalThis.X.Y()

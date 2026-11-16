@@ -941,6 +941,7 @@ public abstract partial class ExpressionEmitterBase : IEmitterContext
 
         string name = a.Name.Lexeme;
 
+        var globalReference = CaptureUnresolvedAssignmentReference(name);
         EmitExpression(a.Value);
         EnsureBoxed();
         if (Ctx.LexicalInitializerTdzName == name)
@@ -949,16 +950,93 @@ public abstract partial class ExpressionEmitterBase : IEmitterContext
             IL.Emit(OpCodes.Ldstr, name);
             IL.Emit(OpCodes.Call, Ctx.Runtime!.Errors.ThrowUndefinedVariable);
             IL.Emit(OpCodes.Ldnull);
+            ReleaseUnresolvedAssignmentReference(globalReference);
             SetStackUnknown();
             return;
         }
         IL.Emit(OpCodes.Dup);
 
-        if (TryEmitStoreClassDefinitionCapture(name)) { SetStackUnknown(); return; }
-        if (TryEmitGlobalStore(name)) return;
+        if (TryEmitStoreClassDefinitionCapture(name))
+        {
+            ReleaseUnresolvedAssignmentReference(globalReference);
+            SetStackUnknown();
+            return;
+        }
+        if (TryEmitGlobalStore(name))
+        {
+            ReleaseUnresolvedAssignmentReference(globalReference);
+            return;
+        }
 
-        Resolver.TryStoreVariable(name);
+        if (!Resolver.TryStoreVariable(name))
+            EmitUnresolvedAssignmentStore(name, globalReference);
+        ReleaseUnresolvedAssignmentReference(globalReference);
         SetStackUnknown();
+    }
+
+    // Strict PutValue must retain whether the identifier resolved before the
+    // RHS, even if an await or other RHS effect creates a global property.
+    protected LocalBuilder? CaptureUnresolvedAssignmentReference(string name)
+    {
+        if (!Ctx.IsStrictMode || Resolver.HasVariable(name)
+            || Ctx.LexicalInitializerTdzName == name
+            || TryGetClassDefinitionCaptureSlot(name, out _)
+            || Ctx.TopLevelStaticVars?.ContainsKey(name) == true
+            || (Ctx.CapturedTopLevelVars?.Contains(name) == true
+                && Ctx.EntryPointDisplayClassFields?.ContainsKey(name) == true
+                && Ctx.EntryPointDisplayClassStaticField != null))
+            return null;
+
+        IL.Emit(OpCodes.Ldstr, name);
+        IL.Emit(OpCodes.Ldsfld, Ctx.Runtime!.GlobalObject.SingletonField);
+        IL.Emit(OpCodes.Call, Ctx.Runtime.Operators.HasIn);
+        IL.Emit(OpCodes.Box, Ctx.Types.Boolean);
+        // Destructuring in the RHS emits nested statements before its defaults
+        // suspend; those statement boundaries must not discard the left reference.
+        return _helpers.SpillStoreObject(retainAcrossStatements: true);
+    }
+
+    protected void ReleaseUnresolvedAssignmentReference(LocalBuilder? globalReference)
+    {
+        if (globalReference != null)
+            _helpers.ReleaseSpill(globalReference);
+    }
+
+    /// <summary>
+    /// Completes an assignment with no compiled binding. The stack contains the
+    /// duplicated assignment value; leave exactly one result after PutValue.
+    /// </summary>
+    protected void EmitUnresolvedAssignmentStore(string name, LocalBuilder? globalReference)
+    {
+        IL.Emit(OpCodes.Pop);
+        var value = IL.DeclareLocal(Ctx.Types.Object);
+        IL.Emit(OpCodes.Stloc, value);
+        EmitPropertyWriteOperation(() =>
+        {
+            if (Ctx.IsStrictMode)
+            {
+                var missing = IL.DefineLabel();
+                var present = IL.DefineLabel();
+                if (globalReference != null)
+                {
+                    IL.Emit(OpCodes.Ldloc, globalReference);
+                    IL.Emit(OpCodes.Unbox_Any, Ctx.Types.Boolean);
+                    IL.Emit(OpCodes.Brfalse, missing);
+                }
+                IL.Emit(OpCodes.Ldstr, name);
+                IL.Emit(OpCodes.Ldsfld, Ctx.Runtime!.GlobalObject.SingletonField);
+                IL.Emit(OpCodes.Call, Ctx.Runtime.Operators.HasIn);
+                IL.Emit(OpCodes.Brtrue, present);
+                IL.MarkLabel(missing);
+                IL.Emit(OpCodes.Ldstr, name);
+                IL.Emit(OpCodes.Call, Ctx.Runtime!.Errors.ThrowUndefinedVariable);
+                IL.MarkLabel(present);
+            }
+            IL.Emit(OpCodes.Ldstr, name);
+            IL.Emit(OpCodes.Ldloc, value);
+            EmitGlobalPropertyStore();
+        });
+        IL.Emit(OpCodes.Ldloc, value);
     }
 
     /// <summary>

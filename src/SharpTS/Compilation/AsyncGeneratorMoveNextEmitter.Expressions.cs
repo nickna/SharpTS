@@ -126,7 +126,7 @@ public partial class AsyncGeneratorMoveNextEmitter
         }
         else
         {
-            _il.Emit(OpCodes.Ldnull);
+            _il.Emit(OpCodes.Ldsfld, _ctx!.Runtime!.Sentinels.UndefinedInstance);
             _il.Emit(OpCodes.Stloc, valueTemp);
         }
 

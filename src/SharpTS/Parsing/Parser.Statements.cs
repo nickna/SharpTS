@@ -32,6 +32,7 @@ public partial class Parser
         if (Match(TokenType.DO)) return DoWhileStatement();
         if (Match(TokenType.WHILE)) return WhileStatement();
         if (Match(TokenType.RETURN)) return ReturnStatement();
+        if (Match(TokenType.WITH)) return WithStatement();
         if (Match(TokenType.LEFT_BRACE))
         {
             int start = Previous().Start;
@@ -235,10 +236,26 @@ public partial class Parser
         Stmt originalBody = Statement();
 
         Token tempVar = GenerateTempVar(line);
-        Expr assignment = BuildDestructuringAssignment(pattern, new Expr.Variable(tempVar), line);
+        Token? scope = isAsync ? GenerateTempVar(line) : null;
+        Expr assignment;
+        var priorScope = _arrayBindingScope;
+        try
+        {
+            _arrayBindingScope = scope;
+            assignment = BuildDestructuringAssignment(pattern, new Expr.Variable(tempVar), line);
+        }
+        finally { _arrayBindingScope = priorScope; }
         // The head assigns outer targets before entering the user's body scope.
         // Retain a block body as a nested block so its declarations cannot shadow them.
-        Stmt body = new Stmt.Block([new Stmt.Expression(assignment), originalBody]);
+        // The expression's RHS result is unused in a loop head. Keeping its
+        // lowered statements visible lets suspension analysis protect awaited
+        // defaults and retain the cursor through resumption.
+        Stmt assignmentStatement = scope is not null && assignment is Expr.DestructuringAssign lowered
+            ? new Stmt.Sequence(lowered.Assignments)
+            : new Stmt.Expression(assignment);
+        Stmt body = scope is not null
+            ? GuardArrayBindingHead(scope, [assignmentStatement, originalBody], line)
+            : new Stmt.Block([assignmentStatement, originalBody]);
         return new Stmt.ForOf(tempVar, null, iterable, body, isAsync);
     }
 
@@ -351,12 +368,20 @@ public partial class Parser
 
         // Desugar the pattern with temp var as the initializer
         Expr tempVarExpr = new Expr.Variable(tempVar);
-        Stmt destructuringStmt = pattern switch
+        Token? scope = isAsync ? GenerateTempVar(line) : null;
+        Stmt destructuringStmt;
+        var priorScope = _arrayBindingScope;
+        try
         {
-            ArrayPattern arrayPattern => DesugarArrayPattern(arrayPattern, tempVarExpr, isVar: isVar, isConst: isConst),
-            ObjectPattern objectPattern => DesugarObjectPattern(objectPattern, tempVarExpr, isVar: isVar, isConst: isConst),
-            _ => throw new Exception("Unexpected pattern type in for...of destructuring.")
-        };
+            _arrayBindingScope = scope;
+            destructuringStmt = pattern switch
+            {
+                ArrayPattern arrayPattern => DesugarArrayPattern(arrayPattern, tempVarExpr, isVar: isVar, isConst: isConst),
+                ObjectPattern objectPattern => DesugarObjectPattern(objectPattern, tempVarExpr, isVar: isVar, isConst: isConst),
+                _ => throw new Exception("Unexpected pattern type in for...of destructuring.")
+            };
+        }
+        finally { _arrayBindingScope = priorScope; }
 
         // Combine destructuring statement with original body
         List<Stmt> bodyStatements = [destructuringStmt];
@@ -369,7 +394,9 @@ public partial class Parser
             bodyStatements.Add(originalBody);
         }
 
-        Stmt newBody = new Stmt.Block(bodyStatements);
+        Stmt newBody = scope is not null
+            ? GuardArrayBindingHead(scope, bodyStatements, line)
+            : new Stmt.Block(bodyStatements);
 
         return new Stmt.ForOf(tempVar, null, iterable, newBody, isAsync);
     }
@@ -639,6 +666,7 @@ public partial class Parser
                 case TokenType.IF:
                 case TokenType.FOR:
                 case TokenType.WHILE:
+                case TokenType.WITH:
                 case TokenType.DO:
                 case TokenType.SWITCH:
                 case TokenType.TRY:

@@ -54,6 +54,41 @@ public sealed class EmittedObjectConstructionRuntime
     private static T Require<T>(T? handle, [CallerMemberName] string name = "") where T : class =>
         handle ?? throw new InvalidOperationException("Object construction metadata '" + name + "' has not been declared.");
 
+    private MethodBuilder? _withObject;
+    internal MethodBuilder WithObject
+    {
+        get => Require(_withObject);
+        set => SetHandle(ref _withObject, value);
+    }
+
+    private MethodBuilder? _withHasBinding;
+    internal MethodBuilder WithHasBinding
+    {
+        get => Require(_withHasBinding);
+        set => SetHandle(ref _withHasBinding, value);
+    }
+
+    private MethodBuilder? _withGetCheck;
+    internal MethodBuilder WithGetCheck
+    {
+        get => Require(_withGetCheck);
+        set => SetHandle(ref _withGetCheck, value);
+    }
+
+    private MethodBuilder? _withSet;
+    internal MethodBuilder WithSet
+    {
+        get => Require(_withSet);
+        set => SetHandle(ref _withSet, value);
+    }
+
+    private MethodBuilder? _withCaptureCall;
+    internal MethodBuilder WithCaptureCall
+    {
+        get => Require(_withCaptureCall);
+        set => SetHandle(ref _withCaptureCall, value);
+    }
+
     private void SetHandle<T>(ref T? field, T value, [CallerMemberName] string name = "") where T : class
     {
         EnsureMutable();
@@ -78,6 +113,15 @@ public sealed class EmittedObjectConstructionRuntime
         _ = GetEnumerableFields;
         _ = DefineSymbolAccessor;
         _ = Rest;
+        if (_withObject is not null || _withHasBinding is not null || _withGetCheck is not null ||
+            _withSet is not null || _withCaptureCall is not null)
+        {
+            _ = WithObject;
+            _ = WithHasBinding;
+            _ = WithGetCheck;
+            _ = WithSet;
+            _ = WithCaptureCall;
+        }
         IsComplete = true;
     }
 }

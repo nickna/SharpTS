@@ -703,6 +703,16 @@ public sealed class EmittedArrayOperationsRuntime
         internal set => SetHandle(ref _currentReceiverField, value);
     }
 
+    private MethodBuilder? _binding;
+    internal MethodBuilder? Binding
+    {
+        get => _binding;
+        set => SetHandle(ref _binding, value!);
+    }
+
+    internal MethodBuilder RequireBinding() => _binding
+        ?? throw new InvalidOperationException("Array binding was not enabled for this compilation.");
+
     private MethodBuilder? _destructureSource;
     public MethodBuilder DestructureSource
     {

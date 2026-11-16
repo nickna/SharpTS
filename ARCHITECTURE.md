@@ -76,6 +76,20 @@ applicable dispatch family; registry tests re-derive the node set and catch omis
 The parser may perform syntax-directed lowering, but it must preserve source locations and enough
 node identity for checking, debug information, feature detection, and diagnostics.
 
+Non-strict JavaScript `with` statements lower to a captured object temporary and conditional
+reference operations. Closer lexical declarations retain their normal scope; closures and state
+machines retain the object through the ordinary capture machinery. Binding lookup observes
+`Symbol.unscopables`, while binding reads and writes separately check property presence. The
+selected object remains fixed across RHS evaluation, including when that evaluation deletes a
+property. Strict code rejects `with`; strict functions created inside a non-strict `with` still
+apply strict binding-read/write rules. Lowered helpers are emitted into standalone output.
+Direct `eval` source does not yet inherit the lowered object environment; that limitation is
+tracked in [#3705](https://github.com/nickna/SharpTS/issues/3705).
+Direct `eval` also retains syntactic branch lowering to preserve caller bindings and literal
+standalone compilation. Nested direct-eval arguments can still cause exponential AST growth
+([#3710](https://github.com/nickna/SharpTS/issues/3710)); ordinary calls and tags share one lowered
+argument/interpolation tree.
+
 ### Compile-time and runtime environments
 
 `TypeEnvironment` contains static names and `TypeInfo`; `RuntimeEnvironment` contains executed
@@ -2324,7 +2338,7 @@ ownership audit remain separate work under #1599.
 
 ### Shared call handler registry
 
-All emitter types share a completed default `CallHandlerRegistry`. Its eighteen handlers
+All emitter types share a completed default `CallHandlerRegistry`. Its handlers
 are stateless; generated metadata and compilation state come from the supplied context.
 Registration rejects null handlers and duplicate object identities. Distinct handlers may
 share types or priorities; equal priorities retain registration order. Custom registries

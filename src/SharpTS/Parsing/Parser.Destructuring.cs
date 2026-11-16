@@ -2,6 +2,55 @@ namespace SharpTS.Parsing;
 
 public partial class Parser
 {
+    // Only async loop heads use cursor lowering. The scope owns unfinished nested
+    // iterators until all bindings have completed, including suspended defaults.
+    private Token? _arrayBindingScope;
+
+    private static Expr.Call ArrayBindingCall(string operation, int line, params Expr[] arguments) => new(
+        new Expr.Variable(new Token(TokenType.IDENTIFIER, "<array-binding>", null, line) { IsGeneratedTemporary = true }),
+        new Token(TokenType.RIGHT_PAREN, ")", null, line), null,
+        [new Expr.Literal(operation), .. arguments]);
+
+    private Expr ArrayBindingSource(Expr source, int line) => _arrayBindingScope is { } scope
+        ? ArrayBindingCall("start", line, new Expr.Variable(scope), source)
+        : MakeArrayDestructureCall(source, line);
+
+    private Expr ArrayBindingElement(Expr source, int index, int line) => _arrayBindingScope is not null
+        ? ArrayBindingCall("next", line, source, new Expr.Literal((double)index), new Expr.Literal(true))
+        : new Expr.GetIndex(source, new Expr.Literal((double)index));
+
+    private Expr ArrayBindingRest(Expr source, int index, int line) => _arrayBindingScope is not null
+        ? ArrayBindingCall("rest", line, source)
+        : MakeSliceCall(source, index, line);
+
+    private void ArrayBindingElision(List<Stmt> statements, Expr source, int index, int line)
+    {
+        if (_arrayBindingScope is not null)
+            statements.Add(new Stmt.Expression(ArrayBindingCall("next", line,
+                source, new Expr.Literal((double)index), new Expr.Literal(false))));
+    }
+
+    private void ArrayBindingClose(List<Stmt> statements, Expr source, int line)
+    {
+        if (_arrayBindingScope is not null)
+            statements.Add(new Stmt.Expression(ArrayBindingCall("close", line, source)));
+    }
+
+    private Stmt GuardArrayBindingHead(Token scope, List<Stmt> statements, int line)
+    {
+        Token error = GenerateTempVar(line);
+        return new Stmt.Block([
+            new Stmt.Var(scope, null, ArrayBindingCall("scope", line)),
+            new Stmt.TryCatch(statements, error,
+                [new Stmt.Expression(ArrayBindingCall("abort", line, new Expr.Variable(scope))),
+                 new Stmt.Throw(new Token(TokenType.THROW, "throw", null, line), new Expr.Variable(error))],
+                // A generator return resumes a suspended default without entering
+                // catch. Finish closes it with return (rather than throw) precedence;
+                // cursors already completed by normal binding or abort are skipped.
+                [new Stmt.Expression(ArrayBindingCall("finish", line, new Expr.Variable(scope)))])
+        ]);
+    }
+
     // ============== DESTRUCTURING PATTERN PARSING ==============
 
     private DestructurePattern ParseDestructurePattern()
@@ -179,12 +228,7 @@ public partial class Parser
         // into an array so the index access below is spec-correct (#685/#1288);
         // arrays/tuples pass through unchanged to keep the fast index path.
         Token temp = GenerateTempVar(pattern.Line);
-        Expr normalizedInit = new Expr.Call(
-            new Expr.Variable(new Token(TokenType.IDENTIFIER, "__arrayDestructure", null, pattern.Line)),
-            new Token(TokenType.RIGHT_PAREN, ")", null, pattern.Line),
-            null,
-            [initializer]
-        );
+        Expr normalizedInit = ArrayBindingSource(initializer, pattern.Line);
         // Carry the pattern's shape as a contextual type so a mixed array-literal source (`[[7], 8]`)
         // infers as a tuple instead of an array — otherwise `_dest[0]` is a non-indexable union and a
         // nested pattern (`[m]`) fails to type-check (#783). Erased at runtime.
@@ -197,6 +241,7 @@ public partial class Parser
         {
             if (element.IsHole)
             {
+                ArrayBindingElision(statements, new Expr.Variable(temp), index, pattern.Line);
                 index++;
                 continue;
             }
@@ -204,22 +249,13 @@ public partial class Parser
             if (element.Pattern is RestPattern rest)
             {
                 // const rest = _dest0.slice(index);
-                Expr sliceCall = new Expr.Call(
-                    new Expr.Get(new Expr.Variable(temp),
-                        new Token(TokenType.IDENTIFIER, "slice", null, pattern.Line)),
-                    new Token(TokenType.RIGHT_PAREN, ")", null, pattern.Line),
-                    null,
-                    [new Expr.Literal((double)index)]
-                );
+                Expr sliceCall = ArrayBindingRest(new Expr.Variable(temp), index, pattern.Line);
                 statements.Add(new Stmt.Var(rest.Name, null, sliceCall, IsVar: isVar) { IsSourceConst = isConst });
                 break; // Rest must be last
             }
 
             // Access expression: _dest0[index]
-            Expr accessExpr = new Expr.GetIndex(
-                new Expr.Variable(temp),
-                new Expr.Literal((double)index)
-            );
+            Expr accessExpr = ArrayBindingElement(new Expr.Variable(temp), index, pattern.Line);
 
             // Apply an element's undefined-only default before entering its binding.
             // The shared helper spills the source read once and evaluates the default lazily.
@@ -244,6 +280,7 @@ public partial class Parser
             index++;
         }
 
+        ArrayBindingClose(statements, new Expr.Variable(temp), pattern.Line);
         return new Stmt.Sequence(statements);
     }
 
@@ -441,24 +478,29 @@ public partial class Parser
     {
         // _srcN = __arrayDestructure(source) — normalize any iterable to an indexable array (#685).
         Token srcTemp = GenerateTempVar(line);
-        stmts.Add(new Stmt.Var(srcTemp, null, MakeArrayDestructureCall(source, line),
+        stmts.Add(new Stmt.Var(srcTemp, null, ArrayBindingSource(source, line),
             DestructuringSource: DestructuringSourceKind.Array));
         Expr src = new Expr.Variable(srcTemp);
 
         for (int i = 0; i < arr.Elements.Count; i++)
         {
-            if (arr.IsHole(i)) continue;
-            Expr element = Unwrap(arr.Elements[i]);
+            if (arr.IsHole(i))
+            {
+                ArrayBindingElision(stmts, src, i, line);
+                continue;
+            }
+            Expr element = PreserveArrayAssignmentElement(Unwrap(arr.Elements[i]), stmts, line);
 
             if (element is Expr.Spread spread)
             {
                 // Rest: target = _srcN.slice(i). Must be the final element.
-                LowerAssignmentTarget(spread.Expression, MakeSliceCall(src, i, line), stmts, line, underDefault);
+                LowerAssignmentTarget(spread.Expression, ArrayBindingRest(src, i, line), stmts, line, underDefault);
                 break;
             }
 
-            LowerElementWithDefault(element, new Expr.GetIndex(src, new Expr.Literal((double)i)), stmts, line, underDefault);
+            LowerElementWithDefault(element, ArrayBindingElement(src, i, line), stmts, line, underDefault);
         }
+        ArrayBindingClose(stmts, src, line);
     }
 
     private void LowerObjectAssignmentTarget(Expr.ObjectLiteral obj, Expr source, List<Stmt> stmts, int line, bool underDefault = false)
@@ -490,6 +532,45 @@ public partial class Parser
     // that the eager parser captured as an Assign (variable target) or Set/SetIndex/SetPrivate (member
     // target). The default is applied only when the read is `undefined` (ECMA-262 AssignmentElement),
     // via the shared DefaultIfUndefined helper (#784).
+    private Expr PreserveArrayAssignmentElement(Expr element, List<Stmt> statements, int line)
+    {
+        if (_arrayBindingScope is null) return element;
+        Expr Capture(Expr value)
+        {
+            Token temp = GenerateTempVar(line);
+            statements.Add(new Stmt.Var(temp, null, value) { PreserveRawInitializerValue = true });
+            return new Expr.Variable(temp);
+        }
+        Expr Receiver(Expr value) => Capture(value);
+        (Expr Object, Expr Key) Reference(Expr obj, Expr key)
+        {
+            // Resolve the reference's receiver and key expression before stepping.
+            // PutValue still performs key coercion and nullish receiver validation
+            // after the element/default value has been obtained.
+            return (Capture(obj), Capture(key));
+        }
+        switch (element)
+        {
+            case Expr.Set property: return property with { Object = Receiver(property.Object) };
+            case Expr.Get property: return property with { Object = Receiver(property.Object) };
+            case Expr.SetIndex property:
+            {
+                var reference = Reference(property.Object, property.Index);
+                return property with { Object = reference.Object, Index = reference.Key };
+            }
+            case Expr.GetIndex property:
+            {
+                var reference = Reference(property.Object, property.Index);
+                return property with { Object = reference.Object, Index = reference.Key };
+            }
+            case Expr.SetPrivate property: return property with { Object = Capture(property.Object) };
+            case Expr.GetPrivate property: return property with { Object = Capture(property.Object) };
+            case Expr.Spread rest:
+                return rest with { Expression = PreserveArrayAssignmentElement(rest.Expression, statements, line) };
+            default: return element;
+        }
+    }
+
     private void LowerElementWithDefault(Expr element, Expr access, List<Stmt> stmts, int line, bool underDefault = false)
     {
         switch (Unwrap(element))

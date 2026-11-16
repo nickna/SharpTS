@@ -23,6 +23,13 @@ public class ArrayDestructureHandler : ICallHandler
 
     public bool TryHandle(IEmitterContext emitter, Expr.Call call)
     {
+        if (call.Callee is Expr.Variable { Name: { Lexeme: BuiltInNames.ArrayBinding, IsGeneratedTemporary: true } })
+        {
+            emitter.EmitArgsArray(call.Arguments);
+            emitter.IL.Emit(OpCodes.Call, emitter.Context.Runtime!.ArrayOperations.RequireBinding());
+            emitter.SetStackUnknown();
+            return true;
+        }
         if (call.Callee is not Expr.Variable v || v.Name.Lexeme != BuiltInNames.ArrayDestructure)
             return false;
         if (call.Arguments.Count != 1)

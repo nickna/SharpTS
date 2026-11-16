@@ -60,6 +60,12 @@ internal static class GlobalFunctionHandlers
         // Internal helper
         registry.RegisterV2(BuiltInNames.ObjectRest, HandleObjectRest);
         registry.RegisterV2(BuiltInNames.ArrayDestructure, HandleArrayDestructure);
+        registry.RegisterV2(WithStatementLowering.ToObject, HandleWithObject);
+        registry.RegisterV2(WithStatementLowering.HasBinding, HandleWithHasBinding);
+        registry.RegisterV2(WithStatementLowering.CheckGet, HandleWithGetCheck);
+        registry.RegisterV2(WithStatementLowering.SetBinding, HandleWithSet);
+        registry.RegisterV2(WithStatementLowering.CaptureCall, HandleWithCaptureCall);
+        registry.RegisterV2(BuiltInNames.ArrayBinding, HandleArrayBinding);
 
         // Note: Error constructors are handled by SharpTSErrorClass (registered as globals).
         // Error() without 'new' resolves to SharpTSErrorClass.Call() via the general
@@ -452,6 +458,17 @@ internal static class GlobalFunctionHandlers
         throw new Exception($"{BuiltInNames.ObjectRest} requires 2 arguments");
     }
 
+    private static async ValueTask<RuntimeValue> HandleArrayBinding(
+        Func<Expr, ValueTask<RuntimeValue>> evaluateArg,
+        IReadOnlyList<Expr> arguments,
+        Interpreter interpreter)
+    {
+        var args = new object?[arguments.Count];
+        for (int index = 0; index < args.Length; index++)
+            args[index] = (await evaluateArg(arguments[index])).ToObject();
+        return RuntimeValue.FromBoxed(interpreter.ExecuteArrayBinding(args));
+    }
+
     private static async ValueTask<RuntimeValue> HandleArrayDestructure(
         Func<Expr, ValueTask<RuntimeValue>> evaluateArg,
         IReadOnlyList<Expr> arguments,
@@ -462,6 +479,66 @@ internal static class GlobalFunctionHandlers
 
         var source = (await evaluateArg(arguments[0])).ToObject();
         return RuntimeValue.FromBoxed(interpreter.NormalizeArrayDestructureSource(source));
+    }
+
+    private static async ValueTask<RuntimeValue> HandleWithObject(
+        Func<Expr, ValueTask<RuntimeValue>> evaluateArg, IReadOnlyList<Expr> arguments, Interpreter interpreter)
+    {
+        object? value = (await evaluateArg(arguments[0])).ToObject();
+        if (value is null or SharpTSUndefined)
+            throw new ThrowException(new SharpTSTypeError("Cannot convert null or undefined to object"));
+        return RuntimeValue.FromBoxed(BuiltInConstructorFactory.ToObject(value, interpreter));
+    }
+
+    private static async ValueTask<RuntimeValue> HandleWithHasBinding(
+        Func<Expr, ValueTask<RuntimeValue>> evaluateArg, IReadOnlyList<Expr> arguments, Interpreter interpreter)
+    {
+        object value = (await evaluateArg(arguments[0])).ToObject()!;
+        string name = (string)(await evaluateArg(arguments[1])).ToObject()!;
+        if (!interpreter.HasProperty(value, name)) return RuntimeValue.False;
+        object? unscopables = interpreter.GetSymbolPropertyValue(value, SharpTSSymbol.Unscopables);
+        bool blocked = RuntimeValue.FromBoxed(unscopables).IsObject
+            && RuntimeValue.FromBoxed(interpreter.GetProperty(unscopables, name)).IsTruthy();
+        return RuntimeValue.FromBoolean(!blocked);
+    }
+
+    private static async ValueTask<RuntimeValue> HandleWithGetCheck(
+        Func<Expr, ValueTask<RuntimeValue>> evaluateArg, IReadOnlyList<Expr> arguments, Interpreter interpreter)
+    {
+        object value = (await evaluateArg(arguments[0])).ToObject()!;
+        string name = (string)(await evaluateArg(arguments[1])).ToObject()!;
+        bool strict = (await evaluateArg(arguments[2])).IsTruthy();
+        bool exists = interpreter.HasProperty(value, name);
+        if (!exists && strict)
+            throw new ThrowException(new SharpTSReferenceError($"'{name}' is not defined"));
+        return RuntimeValue.FromBoolean(exists);
+    }
+
+    private static async ValueTask<RuntimeValue> HandleWithCaptureCall(
+        Func<Expr, ValueTask<RuntimeValue>> evaluateArg, IReadOnlyList<Expr> arguments, Interpreter interpreter)
+    {
+        object value = (await evaluateArg(arguments[0])).ToObject()!;
+        string name = (string)(await evaluateArg(arguments[1])).ToObject()!;
+        bool strict = (await evaluateArg(arguments[2])).IsTruthy();
+        if (!interpreter.HasProperty(value, name))
+        {
+            if (strict) throw new ThrowException(new SharpTSReferenceError($"'{name}' is not defined"));
+            return RuntimeValue.Undefined;
+        }
+        return RuntimeValue.FromBoxed(interpreter.CaptureWithCall(value, name));
+    }
+
+    private static async ValueTask<RuntimeValue> HandleWithSet(
+        Func<Expr, ValueTask<RuntimeValue>> evaluateArg, IReadOnlyList<Expr> arguments, Interpreter interpreter)
+    {
+        object value = (await evaluateArg(arguments[0])).ToObject()!;
+        string name = (string)(await evaluateArg(arguments[1])).ToObject()!;
+        RuntimeValue assigned = await evaluateArg(arguments[2]);
+        bool strict = (await evaluateArg(arguments[3])).IsTruthy();
+        if (!interpreter.HasProperty(value, name) && strict)
+            throw new ThrowException(new SharpTSReferenceError($"'{name}' is not defined"));
+        interpreter.SetWithBinding(value, name, assigned.ToObject(), strict);
+        return assigned;
     }
 
     /// <summary>

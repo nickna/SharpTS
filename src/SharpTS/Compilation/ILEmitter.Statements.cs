@@ -2301,6 +2301,7 @@ public partial class ILEmitter
         }
 
         // Store the iterable for potential iterator protocol check
+        EmitBoxIfNeeded(f.Iterable);
         var iterableLocal = IL.DeclareLocal(_ctx.Types.Object);
         IL.Emit(OpCodes.Stloc, iterableLocal);
         var afterLoopLabel = builder.DefineLabel("forof_after");
@@ -2386,10 +2387,16 @@ public partial class ILEmitter
         builder.Emit_Brfalse(noOwnIteratorClaim);
         GuestErrorEmitter.ThrowTypeError(IL, _ctx.Runtime, "Symbol.iterator is not callable");
         builder.MarkLabel(noOwnIteratorClaim);
-        // Constructor values have no indexed/CLR enumerable fallback. Reject
-        // a missing method here instead of materializing and reading the
+        // Numeric/boolean primitives and constructor values have no indexed/CLR
+        // enumerable fallback. Reject a missing method instead of reading the
         // same observable iterator getter for a second time.
         var missingConstructorMethod = builder.DefineLabel("forof_missing_constructor_method");
+        IL.Emit(OpCodes.Ldloc, iterableLocal);
+        IL.Emit(OpCodes.Isinst, _ctx.Types.Double);
+        builder.Emit_Brtrue(missingConstructorMethod);
+        IL.Emit(OpCodes.Ldloc, iterableLocal);
+        IL.Emit(OpCodes.Isinst, _ctx.Types.Boolean);
+        builder.Emit_Brtrue(missingConstructorMethod);
         IL.Emit(OpCodes.Ldloc, iterableLocal);
         IL.Emit(OpCodes.Isinst, _ctx.Types.Type);
         builder.Emit_Brtrue(missingConstructorMethod);

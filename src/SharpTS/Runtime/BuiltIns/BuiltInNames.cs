@@ -193,6 +193,7 @@ public static class BuiltInNames
     /// (arrays, strings, tuples) pass through unchanged to keep the fast path.
     /// </summary>
     public const string ArrayDestructure = "__arrayDestructure";
+    public const string ArrayBinding = "<array-binding>";
 
     #endregion
 }

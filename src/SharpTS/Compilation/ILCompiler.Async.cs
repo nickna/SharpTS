@@ -943,6 +943,13 @@ public partial class ILCompiler
     {
         switch (expr)
         {
+            case Expr.DestructuringAssign assignment:
+                foreach (var statement in assignment.Assignments)
+                    AnalyzeArrowStmtForAwaits(statement, ref awaitCount, ref seenAwait,
+                        declaredVariables, usedAfterAwait, declaredBeforeAwait);
+                AnalyzeArrowExprForAwaits(assignment.ResultValue, ref awaitCount, ref seenAwait,
+                    declaredVariables, usedAfterAwait, declaredBeforeAwait);
+                break;
             case Expr.ClassExpr classExpr:
                 foreach (var expression in ClassDefinitionExpressions.Enumerate(classExpr))
                     AnalyzeArrowExprForAwaits(expression, ref awaitCount, ref seenAwait, declaredVariables, usedAfterAwait, declaredBeforeAwait);
@@ -1028,7 +1035,11 @@ public partial class ILCompiler
                 break;
             case Expr.ObjectLiteral o:
                 foreach (var prop in o.Properties)
+                {
+                    if (prop.Key is Expr.ComputedKey computed)
+                        AnalyzeArrowExprForAwaits(computed.Expression, ref awaitCount, ref seenAwait, declaredVariables, usedAfterAwait, declaredBeforeAwait);
                     AnalyzeArrowExprForAwaits(prop.Value, ref awaitCount, ref seenAwait, declaredVariables, usedAfterAwait, declaredBeforeAwait);
+                }
                 break;
             case Expr.Ternary t:
                 AnalyzeArrowExprForAwaits(t.Condition, ref awaitCount, ref seenAwait, declaredVariables, usedAfterAwait, declaredBeforeAwait);

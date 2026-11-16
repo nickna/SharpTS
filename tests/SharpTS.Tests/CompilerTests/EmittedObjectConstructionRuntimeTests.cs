@@ -11,14 +11,14 @@ public sealed class EmittedObjectConstructionRuntimeTests
 {
     private const BindingFlags Members = BindingFlags.Instance | BindingFlags.Public | BindingFlags.NonPublic;
     private static readonly Type[] OwnerTypes = [typeof(EmittedObjectConstructionRuntime)];
-    private static PropertyInfo[] Handles(Type type) => type.GetProperties().Where(p => typeof(MemberInfo).IsAssignableFrom(p.PropertyType)).ToArray();
+    private static PropertyInfo[] Handles(Type type) => type.GetProperties(Members).Where(p => typeof(MemberInfo).IsAssignableFrom(p.PropertyType)).ToArray();
     public static IEnumerable<object[]> Declarations => OwnerTypes.SelectMany(type => Handles(type).Select(p => new object[] { type, p.Name }));
 
     [Theory]
     [MemberData(nameof(Declarations))]
     public void MissingDeclarationIsRepairableAndCompletionFreezesMetadata(Type type, string missing)
     {
-        var owner = Activator.CreateInstance(type, nonPublic: true)!; var property = type.GetProperty(missing)!;
+        var owner = Activator.CreateInstance(type, nonPublic: true)!; var property = type.GetProperty(missing, Members)!;
         Expect<InvalidOperationException>(() => property.GetValue(owner));
         Expect<ArgumentNullException>(() => property.SetValue(owner, null));
         Fill(owner, missing);
@@ -34,7 +34,7 @@ public sealed class EmittedObjectConstructionRuntimeTests
         var first = new EmittedRuntime(); var second = new EmittedRuntime();
         Assert.NotSame(first.ObjectConstruction, second.ObjectConstruction);
         Assert.False(first.ObjectConstruction.IsComplete); Assert.False(second.ObjectConstruction.IsComplete);
-        Assert.Equal(6, Handles(typeof(EmittedObjectConstructionRuntime)).Length);
+        Assert.Equal(11, Handles(typeof(EmittedObjectConstructionRuntime)).Length);
         Assert.Null(typeof(EmittedRuntime).GetProperty(nameof(EmittedRuntime.ObjectConstruction))!.SetMethod);
     }
 
@@ -50,10 +50,16 @@ public sealed class EmittedObjectConstructionRuntimeTests
             var builder = NewAssembly(); var features = Detect(optional);
             // This probe invokes the canonical descriptor APIs directly.
             features.UsesObjectDefinitionRuntime = true;
+            features.UsesWithEnvironment = optional;
             var runtime = emitter.EmitAll(builder.DefineDynamicModule("main"), features);
             Assert.True(owners.Add(runtime.ObjectConstruction)); AssertFrozen(runtime.ObjectConstruction);
             foreach (var property in Handles(typeof(EmittedObjectConstructionRuntime)))
-                Assert.Same(builder, Assert.IsAssignableFrom<MemberInfo>(property.GetValue(runtime.ObjectConstruction)).Module.Assembly);
+            {
+                if (!optional && property.Name.StartsWith("With", StringComparison.Ordinal))
+                    Expect<InvalidOperationException>(() => property.GetValue(runtime.ObjectConstruction));
+                else
+                    Assert.Same(builder, Assert.IsAssignableFrom<MemberInfo>(property.GetValue(runtime.ObjectConstruction)).Module.Assembly);
+            }
             var callbackProbe=runtime.RuntimeClass.Type.DefineNestedType("NativeConstructionCallback",TypeAttributes.NestedPublic);
             var callback=callbackProbe.DefineMethod("Read",MethodAttributes.Public|MethodAttributes.Static,typeof(object),Type.EmptyTypes);
             var callbackIl=callback.GetILGenerator();callbackIl.Emit(OpCodes.Ldc_R8,7d);callbackIl.Emit(OpCodes.Box,typeof(double));callbackIl.Emit(OpCodes.Ret);callbackProbe.CreateType();
@@ -61,6 +67,7 @@ public sealed class EmittedObjectConstructionRuntimeTests
             Assert.DoesNotContain("SharpTS", references); Assert.Equal(hosted, references.Contains("SharpTS.Hosting.Abstractions"));
             Assert.DoesNotContain(references, name => name!.StartsWith("object_construction_runtime_", StringComparison.Ordinal));
             var rt=loaded.GetType("$Runtime")!;
+            Assert.Equal(optional, rt.GetMethod("WithObject") is not null);
             object? Call(string methodName,params object?[] args)=>rt.GetMethod(methodName,BindingFlags.Public|BindingFlags.NonPublic|BindingFlags.Static)!.Invoke(null,args);
             // MergeIntoTSObject consumes the previously declared own-data copy helper.
             var methodNames=new[]{"CreateObject","MergeIntoObject","MergeIntoTSObject","DefineSymbolAccessor","TSObjectMergeEnumerable","ObjectRest"};
@@ -181,7 +188,7 @@ public sealed class EmittedObjectConstructionRuntimeTests
         Assert.True(IsComplete(owner)); Expect<InvalidOperationException>(() => Invoke(owner, "CompleteEmission"));
         foreach (var property in Handles(owner.GetType()))
         {
-            Assert.False(property.SetMethod!.IsPublic); Expect<InvalidOperationException>(() => property.SetValue(owner, property.GetValue(owner)));
+            Assert.False(property.SetMethod!.IsPublic); Expect<InvalidOperationException>(() => property.SetValue(owner, Handle(property)));
         }
     }
     private static void Expect<T>(Action action) where T : Exception => Assert.IsType<T>(Assert.Throws<TargetInvocationException>(action).InnerException);

@@ -72,6 +72,8 @@ public sealed partial class RuntimeFeatureDetector
         _set = new RuntimeFeatureSet
         {
             UsesNewTarget = false,
+            UsesArrayBinding = false,
+            UsesWithEnvironment = false,
             UsesNet = false,
             UsesHttp = false,
             UsesTls = false,
@@ -409,6 +411,10 @@ public sealed partial class RuntimeFeatureDetector
                 _set.UsesObjectIntegrityMutation = true;
                 if (name is "eval" or "Function")
                 {
+                    // Callable discovery can expose helper calls from grouped,
+                    // indirect or aliased literal source after this feature walk.
+                    _set.UsesArrayBinding = true;
+                    _set.UsesWithEnvironment = true;
                     _set.UsesArguments = true;
                     _set.UsesExternalFieldReads = true;
                     _set.UsesTimerFunctionValues = true;
@@ -1304,6 +1310,10 @@ public sealed partial class RuntimeFeatureDetector
                 break;
 
             case Expr.Call c:
+                if (c.Callee is Expr.Variable { Name.Lexeme: "<array-binding>" })
+                    _set.UsesArrayBinding = true;
+                if (c.Callee is Expr.Variable withHelper && withHelper.Name.Lexeme.StartsWith("<with:", StringComparison.Ordinal))
+                    _set.UsesWithEnvironment = true;
                 if (c.Callee is Expr.Get { Name.Lexeme: "call", Object: Expr.Get method }
                     && method.Name.Lexeme is not ("findLast" or "findLastIndex")
                     && UsesArrayReceiverScope(method.Name.Lexeme))
@@ -2118,6 +2128,8 @@ public sealed partial class RuntimeFeatureDetector
 
     private void MarkOpaqueEvaluatorMutation()
     {
+        _set.UsesArrayBinding = true;
+        _set.UsesWithEnvironment = true;
         _set.UsesArguments = true;
         _set.UsesArrayConstructorMutation = true;
         _set.UsesObjectIntegrityMutation = true;

@@ -16,6 +16,7 @@ public partial class RuntimeEmitter
         EmittedInvocationRuntime Invocation,
         EmittedIteratorProtocolRuntime IteratorProtocol,
         EmittedIteratorRecordRuntime IteratorRecords,
+        Type GeneratorType,
         EmittedObjectReadRuntime ObjectRead,
         Type UndefinedType,
         FieldInfo UndefinedInstance,
@@ -1338,10 +1339,9 @@ public partial class RuntimeEmitter
         il.Emit(OpCodes.Ret);
 
         il.MarkLabel(tryRegistryLabel);
-        // Emitted generators are iterator objects, but their intrinsic
-        // @@iterator method lives on $IGenerator rather than in an own symbol
-        // dictionary. Return the interface MethodInfo; InvokeMethodValue binds
-        // the generator receiver and the method returns that receiver unchanged.
+        // Generator iterator methods can be replaced anywhere on the live
+        // prototype chain. Ordinary symbol [[Get]] also retains the generator
+        // as the receiver of an inherited accessor.
         var notGeneratorIterator = il.DefineLabel();
         il.Emit(OpCodes.Ldarg_1);
         il.Emit(OpCodes.Ldsfld, inputs.Symbols.Iterator);
@@ -1349,7 +1349,9 @@ public partial class RuntimeEmitter
         il.Emit(OpCodes.Ldarg_0);
         il.Emit(OpCodes.Isinst, inputs.Generators.Type);
         il.Emit(OpCodes.Brfalse, notGeneratorIterator);
-        EmitInstanceMethodInfoLiteral(il, inputs.Generators.Iterator, inputs.Generators.Type);
+        il.Emit(OpCodes.Ldarg_0);
+        il.Emit(OpCodes.Ldarg_1);
+        il.Emit(OpCodes.Call, inputs.ObjectRead.Index);
         il.Emit(OpCodes.Ret);
         il.MarkLabel(notGeneratorIterator);
 
@@ -1909,6 +1911,11 @@ public partial class RuntimeEmitter
 
         // 4. Try IEnumerator<object> (from iterator helpers, ArrayValues, etc.)
         il.MarkLabel(tryIEnumerableLabel);
+        // Guest generators are iterable only through their selected guest
+        // method. A removed method must not revive their CLR enumeration.
+        il.Emit(OpCodes.Ldarg_0);
+        il.Emit(OpCodes.Isinst, inputs.GeneratorType);
+        il.Emit(OpCodes.Brtrue, throwLabel);
         {
             var tryNonGenericEnumerableLabel = il.DefineLabel();
             var ienumLoopLabel = il.DefineLabel();

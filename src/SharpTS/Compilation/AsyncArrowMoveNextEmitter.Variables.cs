@@ -154,9 +154,11 @@ public partial class AsyncArrowMoveNextEmitter
         if (TryEmitGlobalVariable(name, checkedReference))
             return;
 
-        // Not found - push null
-        _il.Emit(OpCodes.Ldnull);
-        SetStackType(StackType.Null);
+        // Sloppy assignments may have created a global property without a
+        // compiled binding. Use the same live lookup as other emitters.
+        _il.Emit(OpCodes.Ldstr, name);
+        _il.Emit(OpCodes.Call, Ctx.Runtime!.GlobalObject.GetBinding);
+        SetStackUnknown();
     }
 
     protected override void EmitAssign(Expr.Assign a)
@@ -167,11 +169,17 @@ public partial class AsyncArrowMoveNextEmitter
         if (TryEmitArrayGlobalAssignment(a)) return;
 
         string name = a.Name.Lexeme;
+        var globalReference = CaptureUnresolvedAssignmentReference(name);
         EmitExpression(a.Value);
         EnsureBoxed();
         _il.Emit(OpCodes.Dup);
 
-        if (LexicalEnvironmentCellAccess.TryStore(_il, Ctx, name)) { SetStackUnknown(); return; }
+        if (LexicalEnvironmentCellAccess.TryStore(_il, Ctx, name))
+        {
+            ReleaseUnresolvedAssignmentReference(globalReference);
+            SetStackUnknown();
+            return;
+        }
         // Assignments keep a previously declared local or parameter in its own
         // storage; only unresolved names can fall through to module storage.
         var storage = _resolver!.TryResolveCell(name)
@@ -182,8 +190,14 @@ public partial class AsyncArrowMoveNextEmitter
         if (storage != null)
             storage.EmitStore(_il);
         else if (!TryStoreTopLevelVariable(name))
-            _resolver.TryStoreVariable(name);
+        {
+            if (_resolver.HasVariable(name))
+                _resolver.TryStoreVariable(name);
+            else
+                EmitUnresolvedAssignmentStore(name, globalReference);
+        }
 
+        ReleaseUnresolvedAssignmentReference(globalReference);
         SetStackUnknown();
     }
 
