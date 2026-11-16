@@ -2195,6 +2195,18 @@ public partial class ILEmitter
             if (isTypedDouble) IL.Emit(OpCodes.Box, _ctx.Types.Double);
             IL.Emit(OpCodes.Stsfld, topLevelField);
         }
+        else
+        {
+            // The preceding read resolved this identifier through the global
+            // object (and already rejected an absent binding). Consume only the
+            // pending store value, retaining the prefix/postfix result beneath it.
+            if (isTypedDouble) IL.Emit(OpCodes.Box, _ctx.Types.Double);
+            var value = IL.DeclareLocal(_ctx.Types.Object);
+            IL.Emit(OpCodes.Stloc, value);
+            IL.Emit(OpCodes.Ldstr, name);
+            IL.Emit(OpCodes.Ldloc, value);
+            EmitGlobalPropertyStore();
+        }
 
         // Result is on the stack; keep an unboxed double as-is for lazy boxing by consumers.
         if (resultIsUnboxedDouble)
