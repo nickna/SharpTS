@@ -31,6 +31,9 @@ namespace SharpTS.Compilation;
 /// </remarks>
 public partial class ILCompiler
 {
+    private readonly Dictionary<List<string>, FieldBuilder> _templateObjectFields =
+        new(ReferenceEqualityComparer.Instance);
+
     /// <summary>
     /// Creates a CompilationContext carrying only compilation-wide invariants. Scope-sensitive
     /// values (current module/namespace/class, strict-mode overrides, captured-variable maps,
@@ -81,6 +84,7 @@ public partial class ILCompiler
             EnumKinds = _enums.Kinds,
             // Compilation-wide services
             Runtime = _runtime,
+            TemplateObjectFields = _templateObjectFields,
             ProgramType = _programType,
             NativeClassInitialization = GetNativeClassInitialization(),
             NativeClrAdmission = _nativeClrAdmission,
@@ -285,6 +289,8 @@ public partial class ILCompiler
         return new CompilationContext(il, parentCtx.TypeMapper, parentCtx.Functions, parentCtx.Classes, parentCtx.NamespaceFields, parentCtx.NamespaceVarFields, parentCtx.Types)
         {
             Runtime = parentCtx.Runtime,
+            ProgramType = parentCtx.ProgramType,
+            TemplateObjectFields = parentCtx.TemplateObjectFields,
             GetStaticReceiverCall = parentCtx.GetStaticReceiverCall,
             RuntimeFeatures = parentCtx.RuntimeFeatures,
             StaticDirectEvalStatements = parentCtx.StaticDirectEvalStatements,

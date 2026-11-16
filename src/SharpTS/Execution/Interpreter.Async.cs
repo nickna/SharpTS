@@ -877,8 +877,7 @@ public partial class Interpreter
     {
         object? tag = await EvaluateMemberCallReference(_asyncContext, tagged.Tag);
 
-        var cookedList = tagged.CookedStrings.Cast<object?>().ToList();
-        var stringsArray = new Runtime.Types.SharpTSTemplateStringsArray(cookedList, tagged.RawStrings);
+        var stringsArray = GetTemplateObject(tagged);
 
         List<object?> args = [stringsArray];
         foreach (var expr in tagged.Expressions)

@@ -213,42 +213,25 @@ public partial class RuntimeEmitter
     }
 
     private void EmitInvokeTaggedTemplate(TypeBuilder typeBuilder, EmittedTemplateRuntime templates,
-        MethodInfo objectFreeze,
         MethodInfo invokeValue,
         MethodInfo createException,
         ConstructorInfo typeErrorCtor)
     {
-        // InvokeTaggedTemplate(tag: object, cooked: object[], raw: string[], expressions: object[]) -> object?
+        // The caller supplies the site's cached, frozen template object.
         var method = typeBuilder.DefineMethod(
             "InvokeTaggedTemplate",
             MethodAttributes.Public | MethodAttributes.Static,
             _types.Object,
-            [_types.Object, _types.ObjectArray, _types.StringArray, _types.ObjectArray]
+            [_types.Object, _types.Object, _types.ObjectArray]
         );
         templates.Invoke = method;
 
         var il = method.GetILGenerator();
 
-        // Create strings array: new $TemplateStringsList(cooked, raw)
-        var stringsLocal = il.DeclareLocal(templates.StringsListType);
-        il.Emit(OpCodes.Ldarg_1); // cooked
-        il.Emit(OpCodes.Ldarg_2); // raw
-        il.Emit(OpCodes.Newobj, templates.StringsListCtor);
-        il.Emit(OpCodes.Stloc, stringsLocal);
-
-        // Freeze the template strings array and its raw property (JS spec: frozen/immutable)
-        il.Emit(OpCodes.Ldloc, stringsLocal);
-        il.Emit(OpCodes.Call, objectFreeze);
-        il.Emit(OpCodes.Pop); // ObjectFreeze returns the object, discard
-        il.Emit(OpCodes.Ldloc, stringsLocal);
-        il.Emit(OpCodes.Callvirt, templates.RawGetter);
-        il.Emit(OpCodes.Call, objectFreeze);
-        il.Emit(OpCodes.Pop); // discard
-
         // Build args array: new object[1 + expressions.Length]
         var argsLocal = il.DeclareLocal(_types.ObjectArray);
         il.Emit(OpCodes.Ldc_I4_1);
-        il.Emit(OpCodes.Ldarg_3); // expressions
+        il.Emit(OpCodes.Ldarg_2); // expressions
         il.Emit(OpCodes.Ldlen);
         il.Emit(OpCodes.Conv_I4);
         il.Emit(OpCodes.Add);
@@ -258,7 +241,7 @@ public partial class RuntimeEmitter
         // args[0] = stringsArray
         il.Emit(OpCodes.Ldloc, argsLocal);
         il.Emit(OpCodes.Ldc_I4_0);
-        il.Emit(OpCodes.Ldloc, stringsLocal);
+        il.Emit(OpCodes.Ldarg_1);
         il.Emit(OpCodes.Stelem_Ref);
 
         // Copy expressions to args[1..]
@@ -272,7 +255,7 @@ public partial class RuntimeEmitter
 
         il.MarkLabel(copyLoopStart);
         il.Emit(OpCodes.Ldloc, iLocal);
-        il.Emit(OpCodes.Ldarg_3); // expressions
+        il.Emit(OpCodes.Ldarg_2); // expressions
         il.Emit(OpCodes.Ldlen);
         il.Emit(OpCodes.Conv_I4);
         il.Emit(OpCodes.Bge, copyLoopEnd);
@@ -282,7 +265,7 @@ public partial class RuntimeEmitter
         il.Emit(OpCodes.Ldloc, iLocal);
         il.Emit(OpCodes.Ldc_I4_1);
         il.Emit(OpCodes.Add);
-        il.Emit(OpCodes.Ldarg_3);
+        il.Emit(OpCodes.Ldarg_2);
         il.Emit(OpCodes.Ldloc, iLocal);
         il.Emit(OpCodes.Ldelem_Ref);
         il.Emit(OpCodes.Stelem_Ref);
@@ -312,10 +295,9 @@ public partial class RuntimeEmitter
 
     /// <summary>
     /// Emits InvokeTaggedTemplateWithThis - like InvokeTaggedTemplate but passes a this binding.
-    /// Signature: object? InvokeTaggedTemplateWithThis(tag, thisArg, cooked, raw, expressions)
+    /// Signature: object? InvokeTaggedTemplateWithThis(tag, thisArg, template, expressions)
     /// </summary>
     private void EmitInvokeTaggedTemplateWithThis(TypeBuilder typeBuilder, EmittedTemplateRuntime templates,
-        MethodInfo objectFreeze,
         MethodInfo invokeMethodValue,
         MethodInfo createException,
         ConstructorInfo typeErrorCtor)
@@ -324,32 +306,16 @@ public partial class RuntimeEmitter
             "InvokeTaggedTemplateWithThis",
             MethodAttributes.Public | MethodAttributes.Static,
             _types.Object,
-            [_types.Object, _types.Object, _types.ObjectArray, _types.StringArray, _types.ObjectArray]
+            [_types.Object, _types.Object, _types.Object, _types.ObjectArray]
         );
         templates.InvokeWithThis = method;
 
         var il = method.GetILGenerator();
 
-        // Create strings array: new $TemplateStringsList(cooked, raw)
-        var stringsLocal = il.DeclareLocal(templates.StringsListType);
-        il.Emit(OpCodes.Ldarg_2); // cooked
-        il.Emit(OpCodes.Ldarg_3); // raw
-        il.Emit(OpCodes.Newobj, templates.StringsListCtor);
-        il.Emit(OpCodes.Stloc, stringsLocal);
-
-        // Freeze the template strings array and its raw property (JS spec)
-        il.Emit(OpCodes.Ldloc, stringsLocal);
-        il.Emit(OpCodes.Call, objectFreeze);
-        il.Emit(OpCodes.Pop);
-        il.Emit(OpCodes.Ldloc, stringsLocal);
-        il.Emit(OpCodes.Callvirt, templates.RawGetter);
-        il.Emit(OpCodes.Call, objectFreeze);
-        il.Emit(OpCodes.Pop);
-
         // Build args array: new object[1 + expressions.Length]
         var argsLocal = il.DeclareLocal(_types.ObjectArray);
         il.Emit(OpCodes.Ldc_I4_1);
-        il.Emit(OpCodes.Ldarg, 4); // expressions (arg index 4)
+        il.Emit(OpCodes.Ldarg_3); // expressions
         il.Emit(OpCodes.Ldlen);
         il.Emit(OpCodes.Conv_I4);
         il.Emit(OpCodes.Add);
@@ -359,7 +325,7 @@ public partial class RuntimeEmitter
         // args[0] = stringsArray
         il.Emit(OpCodes.Ldloc, argsLocal);
         il.Emit(OpCodes.Ldc_I4_0);
-        il.Emit(OpCodes.Ldloc, stringsLocal);
+        il.Emit(OpCodes.Ldarg_2);
         il.Emit(OpCodes.Stelem_Ref);
 
         // Copy expressions to args[1..]
@@ -372,7 +338,7 @@ public partial class RuntimeEmitter
 
         il.MarkLabel(copyLoopStart);
         il.Emit(OpCodes.Ldloc, iLocal);
-        il.Emit(OpCodes.Ldarg, 4); // expressions
+        il.Emit(OpCodes.Ldarg_3); // expressions
         il.Emit(OpCodes.Ldlen);
         il.Emit(OpCodes.Conv_I4);
         il.Emit(OpCodes.Bge, copyLoopEnd);
@@ -381,7 +347,7 @@ public partial class RuntimeEmitter
         il.Emit(OpCodes.Ldloc, iLocal);
         il.Emit(OpCodes.Ldc_I4_1);
         il.Emit(OpCodes.Add);
-        il.Emit(OpCodes.Ldarg, 4);
+        il.Emit(OpCodes.Ldarg_3);
         il.Emit(OpCodes.Ldloc, iLocal);
         il.Emit(OpCodes.Ldelem_Ref);
         il.Emit(OpCodes.Stelem_Ref);

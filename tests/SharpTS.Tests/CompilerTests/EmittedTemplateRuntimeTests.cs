@@ -108,9 +108,9 @@ public class EmittedTemplateRuntimeTests
         Assert.Equal(typeof(string), type.GetMethod(runtime.Templates.Raw.Name)!.ReturnType);
         Assert.Equal(new[] { typeof(object[]) },
             type.GetMethod(runtime.Templates.Concat.Name)!.GetParameters().Select(parameter => parameter.ParameterType));
-        Assert.Equal(new[] { typeof(object), typeof(object[]), typeof(string[]), typeof(object[]) },
+        Assert.Equal(new[] { typeof(object), typeof(object), typeof(object[]) },
             type.GetMethod(runtime.Templates.Invoke.Name)!.GetParameters().Select(parameter => parameter.ParameterType));
-        Assert.Equal(new[] { typeof(object), typeof(object), typeof(object[]), typeof(string[]), typeof(object[]) },
+        Assert.Equal(new[] { typeof(object), typeof(object), typeof(object), typeof(object[]) },
             type.GetMethod(runtime.Templates.InvokeWithThis.Name)!.GetParameters().Select(parameter => parameter.ParameterType));
     }
 
@@ -129,14 +129,14 @@ public class EmittedTemplateRuntimeTests
     [Theory]
     [InlineData(false)]
     [InlineData(true)]
-    public void MissingTagRaisesGuestTypeErrorAfterTemplateConstruction(bool withThis)
+    public void MissingTagRaisesGuestTypeErrorWithSuppliedTemplateObject(bool withThis)
     {
         var runtime = EmitRuntime("const value=1;", false);
         using var bytes = Save(runtime);
         var type = Assembly.Load(bytes.ToArray()).GetType("$Runtime")!;
         var args = withThis
-            ? new object?[] { null, null, new object[] { "value" }, new[] { "value" }, Array.Empty<object>() }
-            : new object?[] { null, new object[] { "value" }, new[] { "value" }, Array.Empty<object>() };
+            ? new object?[] { null, null, new object[] { "value" }, Array.Empty<object>() }
+            : new object?[] { null, new object[] { "value" }, Array.Empty<object>() };
         var method = withThis ? runtime.Templates.InvokeWithThis : runtime.Templates.Invoke;
         var error = Assert.Throws<TargetInvocationException>(() => Invoke(type, method.Name, args));
         Assert.Equal("$ThrownValueException", error.InnerException!.GetType().Name);
