@@ -1513,14 +1513,32 @@ public abstract partial class ExpressionEmitterBase : IEmitterContext
 
     private void EmitTemplateObject(Expr.TaggedTemplateLiteral ttl)
     {
-        if (!Ctx.TemplateObjectFields.TryGetValue(ttl.RawStrings, out var field))
+        var evalSite = Ctx.ClosureAnalyzer?.GetEvalTemplateSite(ttl.RawStrings);
+        LocalBuilder? evalCache = null;
+        FieldBuilder? field = null;
+        if (evalSite is not null)
+        {
+            EmitVariable(new Expr.Variable(new Token(TokenType.IDENTIFIER, evalSite.Cache.Storage, null, 0)));
+            EnsureBoxed();
+            IL.Emit(OpCodes.Castclass, typeof(object[]));
+            evalCache = IL.DeclareLocal(typeof(object[]));
+            IL.Emit(OpCodes.Stloc, evalCache);
+        }
+        else if (!Ctx.TemplateObjectFields.TryGetValue(ttl.RawStrings, out field))
         {
             field = Ctx.ProgramType!.DefineField($"$templateSite{Ctx.TemplateObjectFields.Count}",
                 Ctx.Runtime!.Templates.StringsListType, FieldAttributes.Public | FieldAttributes.Static);
             Ctx.TemplateObjectFields.Add(ttl.RawStrings, field);
         }
         var ready = IL.DefineLabel();
-        IL.Emit(OpCodes.Ldsfld, field);
+        if (evalCache is not null)
+        {
+            IL.Emit(OpCodes.Ldloc, evalCache);
+            IL.Emit(OpCodes.Ldc_I4, evalSite!.Index);
+            IL.Emit(OpCodes.Ldelem_Ref);
+            IL.Emit(OpCodes.Castclass, Ctx.Runtime!.Templates.StringsListType);
+        }
+        else IL.Emit(OpCodes.Ldsfld, field!);
         IL.Emit(OpCodes.Dup);
         IL.Emit(OpCodes.Brtrue, ready);
         IL.Emit(OpCodes.Pop);
@@ -1557,7 +1575,16 @@ public abstract partial class ExpressionEmitterBase : IEmitterContext
         IL.Emit(OpCodes.Call, Ctx.Runtime.ObjectState.Freeze);
         IL.Emit(OpCodes.Pop);
         IL.Emit(OpCodes.Dup);
-        IL.Emit(OpCodes.Stsfld, field);
+        if (evalCache is not null)
+        {
+            var value = IL.DeclareLocal(Ctx.Runtime!.Templates.StringsListType);
+            IL.Emit(OpCodes.Stloc, value);
+            IL.Emit(OpCodes.Ldloc, evalCache);
+            IL.Emit(OpCodes.Ldc_I4, evalSite!.Index);
+            IL.Emit(OpCodes.Ldloc, value);
+            IL.Emit(OpCodes.Stelem_Ref);
+        }
+        else IL.Emit(OpCodes.Stsfld, field!);
         IL.MarkLabel(ready);
         SetStackUnknown();
     }

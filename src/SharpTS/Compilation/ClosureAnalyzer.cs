@@ -36,6 +36,7 @@ public partial class ClosureAnalyzer : AstVisitorBase
         // the same lexical object temporary as ordinary source closures.
         if (GetEvalProgram(expression) is { } statements)
         {
+            PrepareEvalTemplateCache(statements);
             bool previous = _visitingEvalProgram;
             _visitingEvalProgram = true;
             try { foreach (var statement in statements) Visit(statement); }

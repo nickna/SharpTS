@@ -95,6 +95,17 @@ public partial class ILEmitter
             }
         }
 
+        // Template sites belong to this execution of the eval script. Create
+        // its cache before hoisting functions, which capture the array by value.
+        if (_ctx.ClosureAnalyzer?.GetEvalTemplateCache(statements) is { } templateCache)
+        {
+            var cacheLocal = IL.DeclareLocal(typeof(object[]));
+            IL.Emit(OpCodes.Ldc_I4, templateCache.Count);
+            IL.Emit(OpCodes.Newarr, _ctx.Types.Object);
+            IL.Emit(OpCodes.Stloc, cacheLocal);
+            _ctx.Locals.RegisterLocal(templateCache.Storage, cacheLocal);
+        }
+
         // Function declarations are instantiated before the first eval
         // statement, regardless of textual order.
         foreach (var function in statements.OfType<Stmt.Function>())

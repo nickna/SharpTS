@@ -19,7 +19,6 @@ public partial class ClosureAnalyzer
             var statements = call.PreparedEvalStatements ?? WithStatementLowering.ApplyEvalEnvironments(
                 new Parser(new Lexer(source).ScanTokens()).ParseOrThrow(), call.EvalObjectEnvironments);
             statements = StaticEvalLowering.LowerAsyncDeclarations(statements);
-            if (DirectivePrologue.HasUseStrict(statements)) return call.PreparedEvalStatements;
             _evalPrograms[call] = statements;
             return statements;
         }
