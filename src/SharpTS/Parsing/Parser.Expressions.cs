@@ -572,6 +572,10 @@ public partial class Parser
         if (Match(TokenType.YIELD))
         {
             Token keyword = Previous();
+            // Reject here rather than leaving '*' for the multiplicative parser:
+            // an unparenthesized bare yield cannot be its left operand either.
+            if (Check(TokenType.STAR) && HasLineTerminatorBeforeCurrent())
+                throw new ParseError("A line terminator is not allowed between 'yield' and '*'.", "TS1109");
             bool isDelegating = Match(TokenType.STAR);  // yield* delegates to another iterable
 
             // yield can be bare (yields undefined) or have an expression
