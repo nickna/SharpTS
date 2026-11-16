@@ -34,11 +34,23 @@ internal sealed class WithStatementStrictValidator(bool strict) : AstVisitorBase
     protected override void VisitClass(Stmt.Class statement) => InStrictContext(true, () =>
     {
         base.VisitClass(statement);
+        if (statement.SuperclassExpr is { } superclass) Visit(superclass);
+        foreach (var method in statement.Methods)
+            if (method.ComputedKey is { } key) Visit(key);
+        foreach (var field in statement.Fields)
+            if (field.ComputedKey is { } key) Visit(key);
+        foreach (var accessor in statement.AutoAccessors ?? []) VisitAutoAccessor(accessor);
         foreach (var block in (statement.StaticInitializers ?? []).OfType<Stmt.StaticBlock>()) Visit(block);
     });
     protected override void VisitClassExpr(Expr.ClassExpr expression) => InStrictContext(true, () =>
     {
         base.VisitClassExpr(expression);
+        if (expression.SuperclassExpr is { } superclass) Visit(superclass);
+        foreach (var method in expression.Methods)
+            if (method.ComputedKey is { } key) Visit(key);
+        foreach (var field in expression.Fields)
+            if (field.ComputedKey is { } key) Visit(key);
+        foreach (var accessor in expression.AutoAccessors ?? []) VisitAutoAccessor(accessor);
         foreach (var block in (expression.StaticInitializers ?? []).OfType<Stmt.StaticBlock>()) Visit(block);
     });
 }

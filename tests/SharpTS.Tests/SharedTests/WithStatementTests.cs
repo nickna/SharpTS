@@ -367,6 +367,34 @@ public sealed partial class WithStatementTests
     }
 
     [Theory]
+    [InlineData("class C { [(function () { with ({}) {} return 'm'; })()]() {} }")]
+    [InlineData("class C { static [(function () { with ({}) {} return 'm'; })()]() {} }")]
+    [InlineData("const C = class { [(function () { with ({}) {} return 'm'; })()]() {} };")]
+    [InlineData("const C = class { static [(function () { with ({}) {} return 'm'; })()]() {} };")]
+    [InlineData("class C { [(function () { with ({}) {} return 'x'; })()] = 1; }")]
+    [InlineData("class C { static [(function () { with ({}) {} return 'x'; })()] = 1; }")]
+    [InlineData("const C = class { [(function () { with ({}) {} return 'x'; })()] = 1; };")]
+    [InlineData("const C = class { static [(function () { with ({}) {} return 'x'; })()] = 1; };")]
+    [InlineData("class C extends (function () { with ({}) {} return Object; })() {}")]
+    [InlineData("const C = class extends (function () { with ({}) {} return Object; })() {};")]
+    [InlineData("class C { accessor x = (function () { with ({}) {} return 1; })(); }")]
+    [InlineData("class C { static accessor x = (function () { with ({}) {} return 1; })(); }")]
+    [InlineData("const C = class { accessor x = (function () { with ({}) {} return 1; })(); };")]
+    [InlineData("const C = class { static accessor x = (function () { with ({}) {} return 1; })(); };")]
+    public void With_IsRejectedInClassDefinitionExpressions(string source)
+    {
+        var result = new Parser(new Lexer(source).ScanTokens()).Parse();
+        Assert.Contains(result.Diagnostics, diagnostic => diagnostic.TsCode == "TS1101");
+    }
+
+    [Fact]
+    public void With_RemainsAllowedInSloppyObjectMethodKeys()
+    {
+        const string source = "const value = { [(function () { with ({}) {} return 'm'; })()]() {} };";
+        Assert.True(new Parser(new Lexer(source).ScanTokens()).Parse().IsSuccess);
+    }
+
+    [Theory]
     [InlineData("main.mjs")]
     [InlineData("main.mts")]
     public void With_IsRejectedByExplicitModuleFileGoal(string path)
