@@ -50,6 +50,7 @@ public class EmitterSyncTests
             // #1399: loop/catch lowering receives declaration identities rather than rewritten
             // variables; resolve analyzed binding storage while retaining the shared lowering.
             "GetBindingStorageName",
+            "IsKnownVariable",     // #3708: captured function declarations live in the state-machine function display, without a resolver local
             "GetClassStorageName",  // Use analyzed per-binding class storage across suspension without changing the AST node used for class-builder lookup
             "DefineLexicalCellField", // #2148/#2149: retain shared lexical cells in state-machine fields across await/yield
             "EmitCompoundAssign",   // Route a shadowing compound assignment to its own slot
