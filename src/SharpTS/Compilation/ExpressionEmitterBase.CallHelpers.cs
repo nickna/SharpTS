@@ -450,14 +450,18 @@ public abstract partial class ExpressionEmitterBase
             return false;
         }
 
-        List<Stmt> statements;
-        try
+        List<Stmt>? statements = null;
+        Ctx.StaticDirectEvalStatements?.TryGetValue(call, out statements);
+        if (statements is null)
         {
-            statements = new Parser(new Lexer(source).ScanTokens()).ParseOrThrow();
-        }
-        catch
-        {
-            return false;
+            try
+            {
+                statements = new Parser(new Lexer(source).ScanTokens()).ParseOrThrow();
+            }
+            catch
+            {
+                return false;
+            }
         }
 
         if (Ctx.IsScriptTopLevel && this is ILEmitter syncEmitter
