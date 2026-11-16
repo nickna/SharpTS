@@ -465,7 +465,8 @@ public abstract partial class ExpressionEmitterBase
         }
 
         if (Ctx.IsScriptTopLevel && this is ILEmitter syncEmitter
-            && statements.Any(statement => statement is Stmt.Function))
+            && statements.Any(statement => statement is Stmt.Function
+                or Stmt.Var { IsVar: true, Initializer: Expr.ArrowFunction { IsAsync: true } }))
         {
             EmitCalleeSideEffect();
             return syncEmitter.TryEmitStaticDirectEval(call, source);

@@ -52,6 +52,10 @@ internal static class ObjectReadTestSupport
             if (parameter.Name == "SourceOwners") return runtime.ClassInitialization.SourceOwners;
             return parameter.Name switch
             {
+                "ArrayIteratorType" => runtime.ArrayOperations.IteratorCtor.DeclaringType,
+                // These field-reader probes do not select iterator method values.
+                "ArrayIteratorNext" => null,
+                "GetOrCreateFunction" => runtime.FunctionConstruction.GetOrCreate,
                 "TSFunctionCtor" => runtime.FunctionConstruction.Constructor,
                 "TSFunctionCtorWithCache" => runtime.FunctionConstruction.CachedConstructor,
                 "TSFunctionGetOrCreate" => runtime.FunctionConstruction.GetOrCreate,

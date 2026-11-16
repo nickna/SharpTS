@@ -58,14 +58,23 @@ public partial class RuntimeEmitter
             Type.EmptyTypes);
     }
 
-    private void EmitMathSingletonPopulate(EmittedMathRuntime math, BuiltinSingletonInputs inputs, MethodBuilder installDataProperty) =>
+    private void EmitMathSingletonPopulate(EmittedMathRuntime math, BuiltinSingletonInputs inputs,
+        MethodBuilder installDataProperty, ConstructorBuilder padUndefined)
+    {
+        var methods = MathStaticEmitter.EnumerateValueFormMethods(math).ToArray();
+        // Function-value invocation must distinguish an omitted argument from
+        // explicit null before Math's ToNumber conversion (NaN versus zero).
+        foreach (var (_, method, _) in methods)
+            if (method is MethodBuilder adapter)
+                adapter.SetCustomAttribute(padUndefined, CustomAttributeEncoder.EmptyBlob);
         EmitBuiltinSingletonPopulate(
             math.SingletonPopulateMethod,
             math.SingletonField,
             inputs,
             installDataProperty,
-            MathStaticEmitter.EnumerateValueFormMethods(math),
+            methods,
             "Math", MathStaticEmitter.EnumerateConstantValues());
+    }
 
     private void EmitJsonSingletonPopulate(EmittedJsonRuntime json, BuiltinSingletonInputs inputs, MethodBuilder installDataProperty) =>
         EmitBuiltinSingletonPopulate(

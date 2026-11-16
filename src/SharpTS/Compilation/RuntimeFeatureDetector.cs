@@ -1000,7 +1000,7 @@ public sealed partial class RuntimeFeatureDetector
         UsesArrayReceiverScope(name) || IsArrayMutatorName(name)
         || name is "join" or "pop" or "slice" or "splice" or "concat" or "reverse"
             or "fill" or "copyWithin" or "entries" or "keys" or "values"
-            or "toString" or "toLocaleString";
+            or "toString" or "toLocaleString" or "next";
 
     private void VisitExpr(Expr? expr)
     {

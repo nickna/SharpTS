@@ -1129,11 +1129,20 @@ public partial class RuntimeEmitter
             new InvokeMethodValue0Inputs(runtime.Cancellation.Check, runtime.Errors, runtime.FunctionValues)
         );
         runtime.Invocation.CompleteEmission();
+        var arrayIteratorType = DefineArrayIteratorType(moduleBuilder);
+        var arrayIteratorNext = _features.UsesVm || _features.UsesArrayMethodValues || _features.UsesReflect
+            ? EmitCapturedNativeIteratorNext(typeBuilder,
+                new NativeIteratorNextInputs(runtime.Errors, runtime.FunctionAttributes, runtime.Sentinels.UndefinedInstance),
+                arrayIteratorType, "ArrayIteratorNext")
+            : null;
         EmitGetFieldsProperty(
             typeBuilder,
             runtime.ObjectRead,
             new GetFieldsPropertyInputs(
                 runtime.ArrayOperations,
+                arrayIteratorType,
+                arrayIteratorNext,
+                runtime.FunctionConstruction.GetOrCreate,
                 runtime.FunctionBindings.BoundType,
                 runtime.Dates,
                 runtime.DescriptorStorage,
@@ -1812,7 +1821,7 @@ public partial class RuntimeEmitter
                 runtime.IteratorProtocol.Close, runtime.ObjectRead, runtime.Invocation, runtime.Errors, runtime.Sentinels.UndefinedType)
         );
         runtime.IteratorWrappers.CompleteEmission();
-        EmitArrayIteratorType(moduleBuilder, runtime.ArrayOperations,
+        EmitArrayIteratorType(arrayIteratorType, runtime.ArrayOperations,
             new ArrayIteratorInputs(runtime.Arguments, runtime.ObjectRead.Property, runtime.ObjectRead.Index,
                 runtime.NumericCoercion));
         if (runtime.Map is not null)
@@ -3127,7 +3136,8 @@ public partial class RuntimeEmitter
         // EmitMathAdapters (Math.*Adapter) and the JSON methods above — so their
         // backing MethodBuilders are resolved. JSON helpers are null when JSON is
         // unused; EmitBuiltinSingletonPopulate skips null backings. (#276)
-        EmitMathSingletonPopulate(runtime.Math, builtinSingletonInputs, installBuiltinSingletonDataProperty);
+        EmitMathSingletonPopulate(runtime.Math, builtinSingletonInputs, installBuiltinSingletonDataProperty,
+            runtime.FunctionAttributes.PadUndefinedCtor);
         EmitJsonSingletonPopulate(runtime.Json, builtinSingletonInputs, installBuiltinSingletonDataProperty);
         // BigInt methods — gated on UsesBigInt. Detector flips it on for any
         // `123n` literal, bare `BigInt` identifier, or BigInt64Array/BigUint64Array

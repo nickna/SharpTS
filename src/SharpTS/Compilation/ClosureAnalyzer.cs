@@ -16,13 +16,17 @@ namespace SharpTS.Compilation;
 /// </remarks>
 /// <seealso cref="ILCompiler"/>
 /// <seealso cref="CompilationContext"/>
-public class ClosureAnalyzer : AstVisitorBase
+public partial class ClosureAnalyzer : AstVisitorBase
 {
     private readonly IReadOnlyDictionary<Stmt.Class, Expr.ClassExpr>? _runtimeClassDeclarations;
+    private readonly Dictionary<Expr.Call, List<Stmt>>? _evalPrograms;
+    private bool _visitingEvalProgram;
 
-    public ClosureAnalyzer(IReadOnlyDictionary<Stmt.Class, Expr.ClassExpr>? runtimeClassDeclarations = null)
+    public ClosureAnalyzer(IReadOnlyDictionary<Stmt.Class, Expr.ClassExpr>? runtimeClassDeclarations = null,
+        Dictionary<Expr.Call, List<Stmt>>? evalPrograms = null)
     {
         _runtimeClassDeclarations = runtimeClassDeclarations;
+        _evalPrograms = evalPrograms;
     }
 
     protected override void VisitCall(Expr.Call expression)
@@ -30,8 +34,14 @@ public class ClosureAnalyzer : AstVisitorBase
         base.VisitCall(expression);
         // With lowering prepares literal eval early so its closures capture
         // the same lexical object temporary as ordinary source closures.
-        if (expression.PreparedEvalStatements is { } statements)
-            foreach (var statement in statements) Visit(statement);
+        if (GetEvalProgram(expression) is { } statements)
+        {
+            PrepareEvalTemplateCache(statements);
+            bool previous = _visitingEvalProgram;
+            _visitingEvalProgram = true;
+            try { foreach (var statement in statements) Visit(statement); }
+            finally { _visitingEvalProgram = previous; }
+        }
     }
 
     // Maps each function AST node to the set of variable names it captures
@@ -511,6 +521,7 @@ public class ClosureAnalyzer : AstVisitorBase
 
     private void ReferenceVariable(string name)
     {
+        ReferenceEvalBindings(name);
         if (_currentFunction == null) return;
 
         // Intrinsic values need no capture, but a lexical declaration with the same name
@@ -846,7 +857,8 @@ public class ClosureAnalyzer : AstVisitorBase
     protected override void VisitVar(Stmt.Var stmt)
     {
         if (stmt.IsDeclare) return;
-        DeclareVariable(stmt.Name.Lexeme, isPerIterationBinding: !stmt.IsVar);
+        if (!_visitingEvalProgram || !stmt.IsVar || _currentFunction is null)
+            DeclareVariable(stmt.Name.Lexeme, isPerIterationBinding: !stmt.IsVar);
         base.VisitVar(stmt);
     }
 
@@ -1277,6 +1289,8 @@ public class ClosureAnalyzer : AstVisitorBase
 
     private void AnalyzeFunctionBody(object funcNode, List<Stmt.Parameter> parameters, List<Stmt> body)
     {
+        bool previousEvalProgram = _visitingEvalProgram;
+        _visitingEvalProgram = false;
         // Save current context
         var previousFunction = _currentFunction;
         var previousOuter = new HashSet<string>(_outerVariables);
@@ -1322,6 +1336,7 @@ public class ClosureAnalyzer : AstVisitorBase
         // Hoist sibling function declarations so forward references in one sibling's
         // body resolve to another sibling declared later in source order.
         HoistFunctionDeclarations(body, hoistOwnedVars: true);
+        DeclareEvalBindings(body);
 
         // Analyze body
         foreach (var stmt in Runtime.ParameterBinder.BodyStatements(body))
@@ -1334,6 +1349,7 @@ public class ClosureAnalyzer : AstVisitorBase
 
         // Restore context
         _currentFunction = previousFunction;
+        _visitingEvalProgram = previousEvalProgram;
         _loopBodyDepth = previousLoopBodyDepth;
         _outerVariables.Clear();
         foreach (var name in previousOuter)
@@ -1342,6 +1358,8 @@ public class ClosureAnalyzer : AstVisitorBase
 
     private void AnalyzeArrowFunctionBody(Expr.ArrowFunction af)
     {
+        bool previousEvalProgram = _visitingEvalProgram;
+        _visitingEvalProgram = false;
         // Save current context
         var previousFunction = _currentFunction;
         var previousOuter = new HashSet<string>(_outerVariables);
@@ -1411,6 +1429,7 @@ public class ClosureAnalyzer : AstVisitorBase
         else if (af.BlockBody != null)
         {
             HoistFunctionDeclarations(af.BlockBody, hoistOwnedVars: true);
+            DeclareEvalBindings(af.BlockBody);
             foreach (var stmt in Runtime.ParameterBinder.BodyStatements(af.BlockBody))
                 Visit(stmt);
         }
@@ -1422,6 +1441,7 @@ public class ClosureAnalyzer : AstVisitorBase
 
         // Restore context
         _currentFunction = previousFunction;
+        _visitingEvalProgram = previousEvalProgram;
         _currentFunctionName = previousFunctionName;
         _loopBodyDepth = previousLoopBodyDepth;
         _outerVariables.Clear();

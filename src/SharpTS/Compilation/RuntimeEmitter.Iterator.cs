@@ -79,9 +79,8 @@ public partial class RuntimeEmitter
     /// Its MoveNext reads Count and the current indexed value on every call,
     /// so mutations after iterator creation remain observable.
     /// </summary>
-    private void EmitArrayIteratorType(ModuleBuilder moduleBuilder, EmittedArrayOperationsRuntime arrayOperations, ArrayIteratorInputs inputs)
-    {
-        var typeBuilder = EmitTypeDefinitions.DefineType(
+    private TypeBuilder DefineArrayIteratorType(ModuleBuilder moduleBuilder) =>
+        EmitTypeDefinitions.DefineType(
             moduleBuilder,
             "$ArrayIterator",
             TypeAttributes.Public | TypeAttributes.Sealed | TypeAttributes.BeforeFieldInit,
@@ -89,6 +88,8 @@ public partial class RuntimeEmitter
             [_types.IEnumeratorOfObject, _types.IEnumerator, _types.IDisposable,
              _types.IEnumerableOfObject, _types.IEnumerable]);
 
+    private void EmitArrayIteratorType(TypeBuilder typeBuilder, EmittedArrayOperationsRuntime arrayOperations, ArrayIteratorInputs inputs)
+    {
         var arrayField = typeBuilder.DefineField(
             "_array", _types.ListOfObject, FieldAttributes.Private | FieldAttributes.InitOnly);
         var kindField = typeBuilder.DefineField(
