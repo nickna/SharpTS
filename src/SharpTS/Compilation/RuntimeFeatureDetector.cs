@@ -411,6 +411,10 @@ public sealed partial class RuntimeFeatureDetector
                 _set.UsesObjectIntegrityMutation = true;
                 if (name is "eval" or "Function")
                 {
+                    // Callable discovery can expose helper calls from grouped,
+                    // indirect or aliased literal source after this feature walk.
+                    _set.UsesArrayBinding = true;
+                    _set.UsesWithEnvironment = true;
                     _set.UsesArguments = true;
                     _set.UsesExternalFieldReads = true;
                     _set.UsesTimerFunctionValues = true;
@@ -2124,6 +2128,8 @@ public sealed partial class RuntimeFeatureDetector
 
     private void MarkOpaqueEvaluatorMutation()
     {
+        _set.UsesArrayBinding = true;
+        _set.UsesWithEnvironment = true;
         _set.UsesArguments = true;
         _set.UsesArrayConstructorMutation = true;
         _set.UsesObjectIntegrityMutation = true;
