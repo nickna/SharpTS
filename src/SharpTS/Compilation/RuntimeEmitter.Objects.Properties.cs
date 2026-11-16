@@ -366,6 +366,9 @@ public partial class RuntimeEmitter
 
     private readonly record struct GetFieldsPropertyInputs(
         EmittedArrayOperationsRuntime ArrayOperations,
+        Type ArrayIteratorType,
+        MethodBuilder? ArrayIteratorNext,
+        MethodBuilder GetOrCreateFunction,
         TypeBuilder BoundTSFunctionType,
         EmittedDateRuntime Dates,
         EmittedDescriptorStorageRuntime DescriptorStorage,
@@ -771,6 +774,30 @@ public partial class RuntimeEmitter
         il.Emit(OpCodes.Call, inputs.ReadGeneratorProperty);
         il.Emit(OpCodes.Ret);
         il.MarkLabel(notGenerator);
+
+        // Array iterators expose one unbound intrinsic, shared across receivers.
+        // Own descriptors above still shadow it, including an explicit undefined.
+        // Replacing [[Prototype]] removes the intrinsic next from the lookup chain.
+        if (inputs.ArrayIteratorNext is { } arrayIteratorNext)
+        {
+            var notArrayIteratorNext = il.DefineLabel();
+            il.Emit(OpCodes.Ldarg_0);
+            il.Emit(OpCodes.Isinst, inputs.ArrayIteratorType);
+            il.Emit(OpCodes.Brfalse, notArrayIteratorNext);
+            il.Emit(OpCodes.Ldarg_1);
+            il.Emit(OpCodes.Ldstr, "next");
+            il.Emit(OpCodes.Call, _types.StringOpEquality);
+            il.Emit(OpCodes.Brfalse, notArrayIteratorNext);
+            il.Emit(OpCodes.Ldarg_0);
+            il.Emit(OpCodes.Call, inputs.DescriptorStorage.HasPrototypeEntry);
+            il.Emit(OpCodes.Brtrue, errorPrototypeLookupLabel);
+            var nextParameters = EmitReflectedMethodLiteral(il, arrayIteratorNext);
+            il.Emit(OpCodes.Ldstr, "next");
+            il.Emit(OpCodes.Ldc_I4_0);
+            EmitReflectedFunctionFactory(il, inputs.GetOrCreateFunction, nextParameters);
+            il.Emit(OpCodes.Ret);
+            il.MarkLabel(notArrayIteratorNext);
+        }
 
         // $TSDate has no JavaScript-visible CLR own methods. Once expando/PDS
         // own properties miss, every named lookup must continue through the

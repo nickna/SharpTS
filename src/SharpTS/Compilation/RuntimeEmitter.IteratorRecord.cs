@@ -104,7 +104,8 @@ public partial class RuntimeEmitter
         il.MarkLabel(invalid);
         GuestErrorEmitter.ThrowError(il, inputs.Errors.CreateException, inputs.Errors.TypeErrorConstructor, "Iterator protocol requires an object");
 
-        var nativeNext = EmitCapturedNativeIteratorNext(typeBuilder, inputs);
+        var nativeNext = EmitCapturedNativeIteratorNext(typeBuilder,
+            new NativeIteratorNextInputs(inputs.Errors, inputs.Attributes, inputs.UndefinedInstance));
         var getNext = typeBuilder.DefineMethod("GetIteratorNextMethod",
             MethodAttributes.Public | MethodAttributes.Static, _types.Object, [_types.Object]);
         iteratorRecords.NextMethod = getNext;
@@ -174,9 +175,13 @@ public partial class RuntimeEmitter
         }
     }
 
-    private MethodBuilder EmitCapturedNativeIteratorNext(TypeBuilder typeBuilder, CapturedIteratorInputs inputs)
+    private readonly record struct NativeIteratorNextInputs(
+        EmittedErrorRuntime Errors, EmittedFunctionAttributesRuntime Attributes, FieldInfo UndefinedInstance);
+
+    private MethodBuilder EmitCapturedNativeIteratorNext(TypeBuilder typeBuilder, NativeIteratorNextInputs inputs,
+        Type? receiverType = null, string name = "CapturedNativeIteratorNext")
     {
-        var method = typeBuilder.DefineMethod("CapturedNativeIteratorNext",
+        var method = typeBuilder.DefineMethod(name,
             MethodAttributes.Public | MethodAttributes.Static, _types.Object, [_types.Object]);
         method.DefineParameter(1, ParameterAttributes.None, "__this");
         method.SetCustomAttribute(inputs.Attributes.ExpectsThisCtor, CustomAttributeEncoder.EmptyBlob);
@@ -187,7 +192,7 @@ public partial class RuntimeEmitter
         var result = il.DeclareLocal(_types.DictionaryStringObject);
         var valid = il.DefineLabel();
         il.Emit(OpCodes.Ldarg_0);
-        il.Emit(OpCodes.Isinst, _types.IEnumerator);
+        il.Emit(OpCodes.Isinst, receiverType ?? _types.IEnumerator);
         il.Emit(OpCodes.Stloc, iterator);
         il.Emit(OpCodes.Ldloc, iterator);
         il.Emit(OpCodes.Brtrue, valid);

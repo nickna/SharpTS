@@ -49,6 +49,7 @@ public class PromiseRuntimeFeatureGatingTests
         Assert.DoesNotContain(types.SelectMany(type => type.GetMethods(
                 BindingFlags.Public | BindingFlags.NonPublic | BindingFlags.Static)),
             method => method.Name.StartsWith("ArrayBinding", StringComparison.Ordinal) ||
+                      method.Name == "ArrayIteratorNext" ||
                       method.Name.StartsWith("With", StringComparison.Ordinal));
 
         string[] promiseOnlyMethods = types

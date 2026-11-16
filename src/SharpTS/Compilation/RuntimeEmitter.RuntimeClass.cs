@@ -1129,11 +1129,20 @@ public partial class RuntimeEmitter
             new InvokeMethodValue0Inputs(runtime.Cancellation.Check, runtime.Errors, runtime.FunctionValues)
         );
         runtime.Invocation.CompleteEmission();
+        var arrayIteratorType = DefineArrayIteratorType(moduleBuilder);
+        var arrayIteratorNext = _features.UsesVm || _features.UsesArrayMethodValues || _features.UsesReflect
+            ? EmitCapturedNativeIteratorNext(typeBuilder,
+                new NativeIteratorNextInputs(runtime.Errors, runtime.FunctionAttributes, runtime.Sentinels.UndefinedInstance),
+                arrayIteratorType, "ArrayIteratorNext")
+            : null;
         EmitGetFieldsProperty(
             typeBuilder,
             runtime.ObjectRead,
             new GetFieldsPropertyInputs(
                 runtime.ArrayOperations,
+                arrayIteratorType,
+                arrayIteratorNext,
+                runtime.FunctionConstruction.GetOrCreate,
                 runtime.FunctionBindings.BoundType,
                 runtime.Dates,
                 runtime.DescriptorStorage,
@@ -1812,7 +1821,7 @@ public partial class RuntimeEmitter
                 runtime.IteratorProtocol.Close, runtime.ObjectRead, runtime.Invocation, runtime.Errors, runtime.Sentinels.UndefinedType)
         );
         runtime.IteratorWrappers.CompleteEmission();
-        EmitArrayIteratorType(moduleBuilder, runtime.ArrayOperations,
+        EmitArrayIteratorType(arrayIteratorType, runtime.ArrayOperations,
             new ArrayIteratorInputs(runtime.Arguments, runtime.ObjectRead.Property, runtime.ObjectRead.Index,
                 runtime.NumericCoercion));
         if (runtime.Map is not null)
