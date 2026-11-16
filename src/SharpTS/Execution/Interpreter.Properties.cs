@@ -1008,7 +1008,7 @@ public partial class Interpreter
                         : BindAccessorToObject(getter, receiver).CallBoxed(this, []);
                 if (symbolBag.HasSymbolProperty(symbol))
                     return symbolBag.GetBySymbol(symbol);
-                if (UsesExplicitPrimitivePrototypeLink(current))
+                if (UsesPrimitivePrototypePropertyReads(current))
                 {
                     current = ObjectBuiltIns.PrototypeOf(this, current);
                     continue;
@@ -1310,7 +1310,7 @@ public partial class Interpreter
             }
             if (current is ISharpTSSymbolPropertyBag symbolBag
                 && symbolBag.HasSymbolProperty(symbol)) return true;
-            if (UsesExplicitPrimitivePrototypeLink(current))
+            if (UsesPrimitivePrototypePropertyReads(current))
             {
                 current = ObjectBuiltIns.PrototypeOf(this, current);
                 continue;

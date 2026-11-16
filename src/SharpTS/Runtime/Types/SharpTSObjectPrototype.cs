@@ -11,7 +11,7 @@ namespace SharpTS.Runtime.Types;
 /// (lodash's <c>hasOwnProperty.call(obj, key)</c>, Intl <c>toString</c>
 /// detection, etc.) can resolve these names.
 /// </summary>
-public sealed class SharpTSObjectPrototype : ISharpTSMutableBuiltIn
+public sealed class SharpTSObjectPrototype : ISharpTSMutableBuiltIn, ISharpTSSymbolPropertyBag
 {
     public static readonly SharpTSObjectPrototype Instance = new();
     internal SharpTSObjectPrototype()
@@ -41,6 +41,21 @@ public sealed class SharpTSObjectPrototype : ISharpTSMutableBuiltIn
         => _overlay.GetOwnPropertyDescriptor(name);
     public ISharpTSCallable? GetExtraGetter(string name) => _overlay.GetGetter(name);
     public ISharpTSCallable? GetExtraSetter(string name) => _overlay.GetSetter(name);
+
+    internal SharpTSPropertyDescriptor? GetOwnSymbolPropertyDescriptor(SharpTSSymbol symbol)
+        => _overlay.GetOwnPropertyDescriptor(symbol);
+    internal bool DefineOwnSymbolProperty(SharpTSSymbol symbol, SharpTSPropertyDescriptor descriptor)
+        => _overlay.DefineProperty(symbol, descriptor);
+    internal bool DeleteBySymbolStrict(SharpTSSymbol symbol, bool strictMode)
+        => _overlay.DeleteBySymbolStrict(symbol, strictMode);
+    internal IEnumerable<SharpTSSymbol> GetSymbolPropertyNames() => _overlay.GetSymbolPropertyNames();
+    bool ISharpTSSymbolPropertyBag.HasSymbolProperty(SharpTSSymbol symbol) => _overlay.HasSymbolProperty(symbol);
+    object? ISharpTSSymbolPropertyBag.GetBySymbol(SharpTSSymbol symbol) => _overlay.GetBySymbol(symbol);
+    bool ISharpTSSymbolPropertyBag.TryGetSymbolAccessor(
+        SharpTSSymbol symbol, out ISharpTSCallable? getter, out ISharpTSCallable? setter)
+        => _overlay.TryGetSymbolAccessor(symbol, out getter, out setter);
+    void ISharpTSSymbolPropertyBag.SetBySymbolStrict(SharpTSSymbol symbol, object? value, bool strictMode)
+        => _overlay.SetBySymbolStrict(symbol, value, strictMode);
 
     // Per-realm copies of the unbound methods. The templates below are process-wide statics,
     // but each carries mutable ECMA-262 §17 metadata (a `delete fn.length` is observable), so

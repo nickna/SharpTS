@@ -808,6 +808,11 @@ public class SharpTSProxy : ISharpTSCallable
         {
             return booleanPrototype.GetOwnSymbolPropertyDescriptor(booleanSymbol);
         }
+        else if (prop is SharpTSSymbol prototypeSymbol
+            && target is SharpTSObjectPrototype objectPrototype)
+        {
+            return objectPrototype.GetOwnSymbolPropertyDescriptor(prototypeSymbol);
+        }
         else if (prop is string name)
         {
             return ObjectBuiltIns.OwnPropertyDescriptorOf(interpreter, target, name);

@@ -982,6 +982,10 @@ public static partial class ObjectBuiltIns
                     if (!booleanPrototype.DefineOwnSymbolProperty(symKey, descriptor))
                         throw new ThrowException(new SharpTSTypeError("Cannot redefine symbol property"));
                     return target;
+                case SharpTSObjectPrototype objectPrototype:
+                    if (!objectPrototype.DefineOwnSymbolProperty(symKey, descriptor))
+                        throw new ThrowException(new SharpTSTypeError("Cannot redefine symbol property"));
+                    return target;
                 case SharpTSFunctionPrototype functionPrototype:
                     if (!functionPrototype.DefineProperty(symKey, descriptor))
                         throw new ThrowException(new SharpTSTypeError("Cannot redefine symbol property"));
@@ -1235,6 +1239,9 @@ public static partial class ObjectBuiltIns
         if (target is SharpTSObjectPrototype objectPrototype && propertyKey is string prototypeName)
             return DefineObjectPrototypeProperty(
                 interpreter, objectPrototype, prototypeName, ToPropertyDescriptor(interpreter, descriptor));
+        if (target is SharpTSObjectPrototype symbolPrototype && propertyKey is SharpTSSymbol prototypeSymbol)
+            return symbolPrototype.DefineOwnSymbolProperty(
+                prototypeSymbol, ToPropertyDescriptor(interpreter, descriptor));
         if (target is SharpTSNumberPrototype numberPrototype
             && propertyKey is SharpTSSymbol numberSymbol)
             return numberPrototype.DefineOwnSymbolProperty(
@@ -1704,6 +1711,9 @@ public static partial class ObjectBuiltIns
             case SharpTSBooleanPrototype booleanPrototype
                 when booleanPrototype.GetOwnSymbolPropertyDescriptor(key) is { } descriptor:
                 return descriptor.ToObject();
+            case SharpTSObjectPrototype objectPrototype
+                when objectPrototype.GetOwnSymbolPropertyDescriptor(key) is { } descriptor:
+                return descriptor.ToObject();
             case SharpTSJSON json when json.GetOwnPropertyDescriptor(key) is { } descriptor:
                 return descriptor.ToObject();
             case SharpTSBigIntPrototype bigIntPrototype
@@ -1992,6 +2002,8 @@ public static partial class ObjectBuiltIns
             ISharpTSOwnPropertyObject carrier => carrier.OwnProperties.OwnVisibleStringKeys().Cast<object?>()
                 .Concat(carrier.OwnProperties.GetSymbolPropertyNames().Cast<object?>()).ToList(),
             SharpTSObjectNamespace objectNamespace => objectNamespace.OwnPropertyKeys().Cast<object?>().ToList(),
+            SharpTSObjectPrototype objectPrototype => objectPrototype.OwnStringKeys().Cast<object?>()
+                .Concat(objectPrototype.GetSymbolPropertyNames()).ToList(),
             SharpTSObject obj => GetAllOwnPropertyNames(obj).Cast<object?>()
                 .Concat(obj.GetSymbolPropertyNames().Cast<object?>()).ToList(),
             SharpTSArrayGlobal arrayGlobal => arrayGlobal.OwnStringKeys().Cast<object?>().ToList(),
@@ -2665,6 +2677,7 @@ public static partial class ObjectBuiltIns
                 => stringPrototype.GetSymbolPropertyNames().Select(s => (object?)s).ToList(),
             SharpTSNumberPrototype numberPrototype => numberPrototype.GetSymbolPropertyNames().Cast<object?>().ToList(),
             SharpTSBooleanPrototype booleanPrototype => booleanPrototype.GetSymbolPropertyNames().Cast<object?>().ToList(),
+            SharpTSObjectPrototype objectPrototype => objectPrototype.GetSymbolPropertyNames().Cast<object?>().ToList(),
             SharpTSFunctionPrototype functionPrototype
                 => functionPrototype.GetSymbolPropertyNames().Cast<object?>().ToList(),
             SharpTSClassPrototype prototype => prototype.GetSymbolPropertyNames().Cast<object?>().ToList(),

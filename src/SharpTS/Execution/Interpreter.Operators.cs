@@ -1396,6 +1396,7 @@ public partial class Interpreter
             SharpTSStringPrototype prototype => prototype.DeleteBySymbolStrict(symbol, strictMode),
             SharpTSNumberPrototype prototype => prototype.DeleteBySymbolStrict(symbol, strictMode),
             SharpTSBooleanPrototype prototype => prototype.DeleteBySymbolStrict(symbol, strictMode),
+            SharpTSObjectPrototype prototype => prototype.DeleteBySymbolStrict(symbol, strictMode),
             SharpTSJSON json => json.DeleteBySymbolStrict(symbol, strictMode),
             SharpTSBigIntPrototype prototype => prototype.DeleteBySymbolStrict(symbol, strictMode),
             SharpTSFunctionPrototype prototype => prototype.DeleteBySymbolStrict(symbol, strictMode),
