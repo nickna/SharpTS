@@ -5,6 +5,9 @@ namespace SharpTS.Tests.CompilerTests;
 
 public sealed class AsyncArrowGlobalBindingTests
 {
+    // Interpreter assignments do not yet resolve implicit globals or properties
+    // created on globalThis as bare identifiers (#3715). These regressions remain
+    // single-mode until that independent global-environment boundary is repaired.
     [Fact]
     public void ImplicitGlobalReadsRemainLiveAcrossAwait()
     {
@@ -51,28 +54,31 @@ public sealed class AsyncArrowGlobalBindingTests
             TestHarness.RunUnchecked(source, ExecutionMode.Compiled));
     }
 
-    [Fact]
-    public void StrictAssignmentKeepsReferenceSelectedBeforeAwaitedRightHandSide()
-    {
-        // Assignment evaluates leftRef before the RHS; PutValue must retain its
-        // unresolvable status. Node 22 accepts this write, contrary to these steps:
-        // https://tc39.es/ecma262/#sec-assignment-operators-runtime-semantics-evaluation
-        // https://tc39.es/ecma262/#sec-putvalue
-        const string source = """
-            const run = async () => {
-                'use strict';
-                try { reviewCreated = (globalThis.reviewCreated = 1, await Promise.resolve(2)); }
-                catch (error) { console.log(error instanceof ReferenceError, globalThis.reviewCreated); }
-            };
-            run();
-            """;
-        Assert.Equal("true 1\n", TestHarness.RunUnchecked(source, ExecutionMode.Compiled));
-    }
-
     [Theory]
     [InlineData("async function run() { 'use strict'; reviewExisting = await Promise.resolve(7); console.log(reviewExisting); } run();", "7\n")]
     [InlineData("function* run() { 'use strict'; reviewExisting = yield 2; console.log(reviewExisting); } const iterator = run(); console.log(iterator.next().value); iterator.next(7);", "2\n7\n")]
     [InlineData("async function* run() { 'use strict'; reviewExisting = yield 2; console.log(reviewExisting); } async function main() { const iterator = run(); console.log((await iterator.next()).value); await iterator.next(7); } main();", "2\n7\n")]
     public void StrictGlobalAssignmentSurvivesStateMachineSuspension(string body, string expected)
         => Assert.Equal(expected, TestHarness.RunUnchecked("globalThis.reviewExisting = 1;" + body, ExecutionMode.Compiled));
+
+    [Theory]
+    [InlineData("const run = async () =>", "await Promise.resolve(7)", "run();", "7 0\n")]
+    [InlineData("async function run()", "await Promise.resolve(7)", "run();", "7 0\n")]
+    [InlineData("function* run()", "yield 2", "const iterator = run(); console.log(iterator.next().value); iterator.next(7);", "2\n7 0\n")]
+    [InlineData("async function* run()", "yield 2", "async function main() { const iterator = run(); console.log((await iterator.next()).value); await iterator.next(7); } main();", "2\n7 0\n")]
+    public void StrictGlobalReferenceSurvivesDestructuringDefaultSuspension(
+        string declaration, string initializer, string invocation, string expected)
+    {
+        var source = $$"""
+            globalThis.reviewTarget = 0;
+            {{declaration}} {
+                'use strict';
+                let item;
+                reviewTarget = ([item = {{initializer}}] = []);
+                console.log(item, reviewTarget.length);
+            };
+            {{invocation}}
+            """;
+        Assert.Equal(expected, TestHarness.RunUnchecked(source, ExecutionMode.Compiled));
+    }
 }

@@ -950,16 +950,27 @@ public abstract partial class ExpressionEmitterBase : IEmitterContext
             IL.Emit(OpCodes.Ldstr, name);
             IL.Emit(OpCodes.Call, Ctx.Runtime!.Errors.ThrowUndefinedVariable);
             IL.Emit(OpCodes.Ldnull);
+            ReleaseUnresolvedAssignmentReference(globalReference);
             SetStackUnknown();
             return;
         }
         IL.Emit(OpCodes.Dup);
 
-        if (TryEmitStoreClassDefinitionCapture(name)) { SetStackUnknown(); return; }
-        if (TryEmitGlobalStore(name)) return;
+        if (TryEmitStoreClassDefinitionCapture(name))
+        {
+            ReleaseUnresolvedAssignmentReference(globalReference);
+            SetStackUnknown();
+            return;
+        }
+        if (TryEmitGlobalStore(name))
+        {
+            ReleaseUnresolvedAssignmentReference(globalReference);
+            return;
+        }
 
         if (!Resolver.TryStoreVariable(name))
             EmitUnresolvedAssignmentStore(name, globalReference);
+        ReleaseUnresolvedAssignmentReference(globalReference);
         SetStackUnknown();
     }
 
@@ -980,7 +991,15 @@ public abstract partial class ExpressionEmitterBase : IEmitterContext
         IL.Emit(OpCodes.Ldsfld, Ctx.Runtime!.GlobalObject.SingletonField);
         IL.Emit(OpCodes.Call, Ctx.Runtime.Operators.HasIn);
         IL.Emit(OpCodes.Box, Ctx.Types.Boolean);
-        return _helpers.SpillStoreObject();
+        // Destructuring in the RHS emits nested statements before its defaults
+        // suspend; those statement boundaries must not discard the left reference.
+        return _helpers.SpillStoreObject(retainAcrossStatements: true);
+    }
+
+    protected void ReleaseUnresolvedAssignmentReference(LocalBuilder? globalReference)
+    {
+        if (globalReference != null)
+            _helpers.ReleaseSpill(globalReference);
     }
 
     /// <summary>

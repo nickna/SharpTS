@@ -174,7 +174,12 @@ public partial class AsyncArrowMoveNextEmitter
         EnsureBoxed();
         _il.Emit(OpCodes.Dup);
 
-        if (LexicalEnvironmentCellAccess.TryStore(_il, Ctx, name)) { SetStackUnknown(); return; }
+        if (LexicalEnvironmentCellAccess.TryStore(_il, Ctx, name))
+        {
+            ReleaseUnresolvedAssignmentReference(globalReference);
+            SetStackUnknown();
+            return;
+        }
         // Assignments keep a previously declared local or parameter in its own
         // storage; only unresolved names can fall through to module storage.
         var storage = _resolver!.TryResolveCell(name)
@@ -192,6 +197,7 @@ public partial class AsyncArrowMoveNextEmitter
                 EmitUnresolvedAssignmentStore(name, globalReference);
         }
 
+        ReleaseUnresolvedAssignmentReference(globalReference);
         SetStackUnknown();
     }
 

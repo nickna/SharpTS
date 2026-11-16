@@ -5,6 +5,8 @@ namespace SharpTS.Tests.CompilerTests;
 
 public sealed class GeneratorMissingIteratorTests
 {
+    // Interpreter spread still bypasses inherited missing @@iterator overrides
+    // (#3707). Keep the emitted IteratorCollection regression covered independently.
     [Fact]
     public void SpreadRejectsMissingInheritedGeneratorIterator()
     {
