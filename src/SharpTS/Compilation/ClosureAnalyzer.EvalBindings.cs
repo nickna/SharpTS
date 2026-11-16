@@ -18,6 +18,7 @@ public partial class ClosureAnalyzer
         {
             var statements = call.PreparedEvalStatements ?? WithStatementLowering.ApplyEvalEnvironments(
                 new Parser(new Lexer(source).ScanTokens()).ParseOrThrow(), call.EvalObjectEnvironments);
+            statements = StaticEvalLowering.LowerAsyncDeclarations(statements);
             if (DirectivePrologue.HasUseStrict(statements)) return call.PreparedEvalStatements;
             _evalPrograms[call] = statements;
             return statements;
@@ -47,7 +48,7 @@ public partial class ClosureAnalyzer
         // emitter. State machines retain their existing eval bridge boundary.
         if (_currentFunction is Stmt.Function { IsAsync: true } or Stmt.Function { IsGenerator: true }
             or Expr.ArrowFunction { IsAsync: true } or Expr.ArrowFunction { IsGenerator: true }) return;
-        var scanner = new BodyEvalBindingScanner();
+        var scanner = new BodyEvalBindingScanner(GetEvalProgram);
         foreach (var statement in Runtime.ParameterBinder.BodyStatements(body)) scanner.Visit(statement);
         var scope = _scopeStack.Peek();
         foreach (string name in scanner.Names)
@@ -77,7 +78,7 @@ public partial class ClosureAnalyzer
         }
     }
 
-    private sealed class BodyEvalBindingScanner : AstVisitorBase
+    private sealed class BodyEvalBindingScanner(Func<Expr.Call, List<Stmt>?> prepare) : AstVisitorBase
     {
         internal HashSet<string> Names { get; } = new(StringComparer.Ordinal);
         protected override void VisitFunction(Stmt.Function statement) { }
@@ -91,7 +92,7 @@ public partial class ClosureAnalyzer
             {
                 try
                 {
-                    var statements = call.PreparedEvalStatements
+                    var statements = prepare(call) ?? call.PreparedEvalStatements
                         ?? new Parser(new Lexer(source).ScanTokens()).ParseOrThrow();
                     if (!DirectivePrologue.HasUseStrict(statements))
                         foreach (var (name, _) in Runtime.ParameterBinder.BodyVarDeclarations(statements))
