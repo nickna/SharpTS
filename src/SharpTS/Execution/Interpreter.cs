@@ -1382,24 +1382,36 @@ public partial class Interpreter : IDisposable
     private void AssignVariableValue(Token name, RuntimeValue value)
     {
         if (name.IsGeneratedTemporary && _environment.TryAssignVmTemporary(name, value)) return;
-        if (!_environment.IsDefined(name.Lexeme) && _environment.VmGlobalObject is { } vmGlobal)
-            WriteGlobalObjectVariable(vmGlobal, name.Lexeme, value, _environment.IsStrictMode);
-        else if (!_environment.IsDefined(name.Lexeme) && IsMutableGlobalObjectBinding(name.Lexeme))
-            WriteClassicGlobalVariable(name.Lexeme, value, _environment.IsStrictMode);
+        if (!_environment.IsDefined(name.Lexeme))
+            WriteGlobalObjectVariable(_environment.VmGlobalObject ?? GlobalThis,
+                name.Lexeme, value, _environment.IsStrictMode);
         else
             _environment.Assign(name, value);
     }
 
-    private (RuntimeEnvironment Environment, int? Distance) SelectVariableAssignment(Token name, Expr expression)
-        => (_environment, _locals.TryGetValue(expression, out int distance)
+    private (RuntimeEnvironment Environment, int? Distance, bool ResolvableGlobal) SelectVariableAssignment(Token name, Expr expression)
+    {
+        int? bindingDistance = _locals.TryGetValue(expression, out int distance)
             ? _environment.ResolveEvalBindingDistance(name.Lexeme, distance)
-            : _environment.FindBindingDistance(name.Lexeme));
+            : _environment.FindBindingDistance(name.Lexeme);
+        return (_environment, bindingDistance, bindingDistance is null
+            && (_environment.VmGlobalObject ?? GlobalThis).HasProperty(name.Lexeme));
+    }
 
     private void AssignSelectedVariable(
-        (RuntimeEnvironment Environment, int? Distance) selected, Token name, RuntimeValue value)
+        (RuntimeEnvironment Environment, int? Distance, bool ResolvableGlobal) selected, Token name, RuntimeValue value)
     {
         if (selected.Distance is { } distance) selected.Environment.AssignAt(distance, name, value);
-        else AssignVariableValue(name, value);
+        else
+        {
+            if (name.IsGeneratedTemporary && selected.Environment.TryAssignVmTemporary(name, value)) return;
+            if (selected.Environment.IsStrictMode && !selected.ResolvableGlobal)
+                throw new InterpreterException($"ReferenceError: Undefined variable '{name.Lexeme}'.");
+            // A later eval declaration must not change the Reference selected
+            // before evaluating this assignment's right-hand side.
+            WriteGlobalObjectVariable(selected.Environment.VmGlobalObject ?? GlobalThis,
+                name.Lexeme, value, selected.Environment.IsStrictMode);
+        }
     }
 
     private bool IsGlobalFunctionBinding(string name)
