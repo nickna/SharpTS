@@ -503,6 +503,7 @@ public partial class ILEmitter
         // expression emitter for that representation up front for number[] reads,
         // allowing the guarded GetDouble arm to avoid a box/unbox round trip.
         var assignmentLocal = _ctx.Locals.GetLocal(a.Name.Lexeme);
+        var globalReference = CaptureUnresolvedAssignmentReference(a.Name.Lexeme);
         if ((assignmentDCField?.FieldType == _ctx.Types.Double) ||
             (a.Value is Expr.GetIndex && assignmentLocal != null &&
              _ctx.Types.IsDouble(assignmentLocal.LocalType)))
@@ -514,7 +515,8 @@ public partial class ILEmitter
             EmitExpression(a.Value);
         }
 
-        EmitAssignmentValueFromStack(a.Name.Lexeme, assignmentDCField, () => EmitBoxIfNeeded(a.Value));
+        EmitAssignmentValueFromStack(a.Name.Lexeme, assignmentDCField, () => EmitBoxIfNeeded(a.Value), globalReference);
+        ReleaseUnresolvedAssignmentReference(globalReference);
     }
 
     protected override void EmitStoreAssignmentLoopVariable(string name)
@@ -550,7 +552,8 @@ public partial class ILEmitter
         SetStackUnknown();
     }
 
-    private void EmitAssignmentValueFromStack(string name, FieldBuilder? assignmentDCField, Action ensureBoxed)
+    private void EmitAssignmentValueFromStack(string name, FieldBuilder? assignmentDCField, Action ensureBoxed,
+        LocalBuilder? globalReference = null)
     {
         if (_ctx.LexicalInitializerTdzName == name)
         {
@@ -854,30 +857,12 @@ public partial class ILEmitter
         }
         else
         {
-            // Class bodies and other strict contexts must reject creation of an
-            // unresolvable binding. Evaluate the RHS first, then throw the same
-            // guest ReferenceError used by an unknown identifier read.
+            // The global object can contain a binding without a compiled slot.
+            // Share state-machine PutValue, including the pre-RHS reference and
+            // strict descriptor checks, while preserving the assignment result.
             ensureBoxed();
-            if (_ctx.IsStrictMode)
-            {
-                IL.Emit(OpCodes.Pop);
-                IL.Emit(OpCodes.Ldstr, name);
-                IL.Emit(OpCodes.Call, _ctx.Runtime!.Errors.ThrowUndefinedVariable);
-                IL.Emit(OpCodes.Ldsfld, _ctx.Runtime.Sentinels.UndefinedInstance);
-            }
-            else
-            {
-                // Sloppy PutValue creates a property on the global object and
-                // still evaluates to the assigned value.  Preserve one copy
-                // as the expression result while the other is consumed by
-                // the runtime setter.
-                var value = IL.DeclareLocal(_ctx.Types.Object);
-                IL.Emit(OpCodes.Dup);
-                IL.Emit(OpCodes.Stloc, value);
-                IL.Emit(OpCodes.Ldstr, name);
-                IL.Emit(OpCodes.Ldloc, value);
-                IL.Emit(OpCodes.Call, _ctx.Runtime!.GlobalObject.SetProperty);
-            }
+            IL.Emit(OpCodes.Dup);
+            EmitUnresolvedAssignmentStore(name, globalReference);
             SetStackUnknown();
         }
     }

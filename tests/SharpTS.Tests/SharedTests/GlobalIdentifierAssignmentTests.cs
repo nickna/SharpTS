@@ -22,8 +22,7 @@ public sealed class GlobalIdentifierAssignmentTests
         Assert.Equal("5\n5\n21\n5\n2\n3\n", TestHarness.RunUnchecked(source, mode));
     }
 
-    // #3716 owns the remaining synchronous compiler path.
-    [Theory, InterpretedOnlyData]
+    [Theory, ModeData]
     public void StrictSynchronousWritesUseExistingGlobalProperties(ExecutionMode mode)
     {
         const string source = """
@@ -37,5 +36,28 @@ public sealed class GlobalIdentifierAssignmentTests
             run();
             """;
         Assert.Equal("7 7\nrhs\ntrue\nfalse\n", TestHarness.RunUnchecked(source, mode));
+    }
+
+    [Theory, ModeData]
+    public void StrictGlobalWritesHonorDescriptorsAndTheSelectedReference(ExecutionMode mode)
+    {
+        const string source = """
+            Object.defineProperty(globalThis, 'fixed', {value: 1});
+            Object.defineProperty(globalThis, 'setter', {
+                get(){ throw 'read'; }, set(value){ console.log(this === globalThis, value); }
+            });
+            function run() {
+                'use strict';
+                console.log(setter = 7);
+                try { fixed = 2; } catch(e) { console.log(e instanceof TypeError); }
+                try { created = (globalThis.created = 1, 2); }
+                catch(e) { console.log(e instanceof ReferenceError, globalThis.created); }
+                globalThis.deleted = 3;
+                try { deleted = (delete globalThis.deleted, 4); }
+                catch(e) { console.log(e instanceof ReferenceError, Object.hasOwn(globalThis, 'deleted')); }
+            }
+            run();
+            """;
+        Assert.Equal("true 7\n7\ntrue\ntrue 1\ntrue false\n", TestHarness.RunUnchecked(source, mode));
     }
 }
