@@ -157,7 +157,7 @@ public partial class Interpreter
             SharpTSMap map => map.Entries().Elements,
             SharpTSSet set => set.Values().Elements,
             SharpTSIterator iter => iter.Elements,
-            SharpTSGenerator gen => gen,
+            SharpTSGenerator => throw new ThrowException(new SharpTSTypeError("[Symbol.iterator] must be a function")),
             string s => StringBuiltIns.IterateCodePoints(s),
             _ => throw new ThrowException(new SharpTSTypeError(
                 "for...of requires an iterable (array, Map, Set, or iterator)."))
