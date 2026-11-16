@@ -1,3 +1,4 @@
+using SharpTS.Tests.Infrastructure;
 using SharpTS.Tests.SharedTests;
 using Xunit;
 
@@ -5,7 +6,7 @@ namespace SharpTS.Tests.CompilerTests;
 
 public partial class StandaloneDllTests
 {
-    [Theory, MemberData(nameof(PendingAsyncArrowCallerScopeTests.Cases),
+    [Theory, DeploymentData(nameof(PendingAsyncArrowCallerScopeTests.Cases),
         MemberType = typeof(PendingAsyncArrowCallerScopeTests))]
     public void Isolated_Issue2263PendingAsyncArrowCallerScope_VerifiesBeforeExecution(
         string name, string source, string expected)

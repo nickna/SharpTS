@@ -1,3 +1,4 @@
+using SharpTS.Tests.Infrastructure;
 using SharpTS.Tests.SharedTests;
 using Xunit;
 
@@ -5,7 +6,7 @@ namespace SharpTS.Tests.CompilerTests;
 
 public partial class StandaloneDllTests
 {
-    [Theory, MemberData(nameof(HandlerLexicalScopeTests.VarCases), MemberType = typeof(HandlerLexicalScopeTests))]
+    [Theory, DeploymentData(nameof(HandlerLexicalScopeTests.VarCases), MemberType = typeof(HandlerLexicalScopeTests))]
     public void Isolated_Issue2405HandlerVarPlacement_VerifyBeforeExecution(string name, string source, string expected)
     {
         Assert.NotEmpty(name);

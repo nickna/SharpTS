@@ -1,3 +1,4 @@
+using SharpTS.Tests.Infrastructure;
 using SharpTS.Tests.SharedTests;
 using Xunit;
 
@@ -5,7 +6,7 @@ namespace SharpTS.Tests.CompilerTests;
 
 public partial class StandaloneDllTests
 {
-    [Theory, MemberData(nameof(LocalClassMethodCaptureTests.Cases), MemberType = typeof(LocalClassMethodCaptureTests))]
+    [Theory, DeploymentData(nameof(LocalClassMethodCaptureTests.Cases), MemberType = typeof(LocalClassMethodCaptureTests))]
     public void Isolated_Issue2152LocalClassMethods_RetainEnclosingCaptures(
         string name, string source, string expected)
     {

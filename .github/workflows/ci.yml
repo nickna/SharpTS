@@ -11,12 +11,16 @@ on:
 
   pull_request:
     branches: [main]
+    types: [opened, synchronize, reopened, ready_for_review, labeled, unlabeled]
+  schedule:
+    - cron: '23 10 * * *'
+  workflow_dispatch:
 
 permissions:
   contents: read
 
 concurrency:
-  group: ci-${{ github.event.pull_request.number || github.ref }}
+  group: ci-${{ github.event_name }}-${{ github.event.pull_request.number || github.ref }}
   cancel-in-progress: ${{ github.event_name == 'pull_request' }}
 
 jobs:
@@ -26,6 +30,11 @@ jobs:
     outputs:
       mode: ${{ steps.scope.outputs.mode }}
       reason: ${{ steps.scope.outputs.reason }}
+      deployment: ${{ steps.scope.outputs.deployment }}
+      deployment-methods: ${{ steps.scope.outputs.deployment-methods }}
+      deployment-types: ${{ steps.scope.outputs.deployment-types }}
+      gui: ${{ steps.scope.outputs.gui }}
+      benchmarks: ${{ steps.scope.outputs.benchmarks }}
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
@@ -38,9 +47,26 @@ jobs:
         env:
           BASE_SHA: ${{ github.event.pull_request.base.sha || github.event.before }}
           HEAD_SHA: ${{ github.event.pull_request.head.sha || github.sha }}
+          EVENT_NAME: ${{ github.event_name }}
+          FORCE_FULL: ${{ contains(github.event.pull_request.labels.*.name, 'ci:full') }}
         run: |
-          $scope = ./scripts/get-ci-change-scope.ps1 `
+          if ($env:EVENT_NAME -in @('schedule', 'workflow_dispatch')) {
+            $scope = [pscustomobject]@{ Mode = 'full'; Reason = 'Scheduled/manual complete coverage'; ChangedPaths = @() }
+          }
+          else {
+            $scope = ./scripts/get-ci-change-scope.ps1 `
             -BaseSha $env:BASE_SHA -HeadSha $env:HEAD_SHA
+          }
+          if ($env:FORCE_FULL -eq 'true') { $scope.Mode = 'full'; $scope.Reason = 'ci:full PR override' }
+          $full = $env:EVENT_NAME -in @('schedule', 'workflow_dispatch') -or $env:FORCE_FULL -eq 'true'
+          # A missing diff must never select reduced coverage.
+          if ($scope.Mode -eq 'full' -and @($scope.ChangedPaths).Count -eq 0) { $full = $true }
+          $coverage = ./scripts/get-test-coverage-scope.ps1 -ChangedPaths $scope.ChangedPaths -Full:$full
+          "deployment=$($coverage.Deployment)" >> $env:GITHUB_OUTPUT
+          "deployment-methods=$($coverage.DeploymentMethods)" >> $env:GITHUB_OUTPUT
+          "deployment-types=$($coverage.DeploymentTypes)" >> $env:GITHUB_OUTPUT
+          "gui=$($coverage.Gui)" >> $env:GITHUB_OUTPUT
+          "benchmarks=$($coverage.Benchmarks)" >> $env:GITHUB_OUTPUT
           $reason = $scope.Reason -replace '[\r\n]', ' '
           "mode=$($scope.Mode)" >> $env:GITHUB_OUTPUT
           "reason=$reason" >> $env:GITHUB_OUTPUT
@@ -49,9 +75,11 @@ jobs:
             ''
             "- Mode: ``$($scope.Mode)``"
             "- Reason: $reason"
+            "- Deployment: $($coverage.Deployment); GUI: $($coverage.Gui); benchmarks: $($coverage.Benchmarks)"
           ) >> $env:GITHUB_STEP_SUMMARY
 
       - name: Check diff whitespace
+        if: github.event_name == 'pull_request' || github.event_name == 'push'
         shell: pwsh
         env:
           BASE_SHA: ${{ github.event.pull_request.base.sha || github.event.before }}
@@ -66,6 +94,7 @@ jobs:
           ./scripts/test-ci-change-scope.ps1
           ./scripts/test-standalone-shard-plan.ps1
           ./scripts/test-core-test-partitions.ps1
+          ./scripts/test-ci-test-plans.ps1
           ./scripts/test-github-workflows.ps1
 
       - name: Install and run actionlint 1.7.12
@@ -82,8 +111,6 @@ jobs:
     needs: workflow-policy
     if: needs.workflow-policy.outputs.mode == 'full'
     runs-on: ${{ matrix.os }}
-    # Process-heavy integration/package tests have a complementary runner below.
-    # Keep the existing core, build, GUI and packaging budgets.
     timeout-minutes: 50
     strategy:
       # Don't let one platform's failure cancel the others — we want to see each
@@ -139,24 +166,7 @@ jobs:
           unzip -l vscode-sharpts-*.vsix | grep 'extension/bin/server/SharpTS.DebugAdapter.dll'
           unzip -l vscode-sharpts-*.vsix | grep 'extension/bin/server/SharpTS.LanguageServer.dll'
 
-      # Discover and type-check/compile every cross-runtime workload through the
-      # real runner. This catches repository moves and declaration drift without
-      # paying the cost (or accepting the noise) of timing benchmarks in CI.
-      - name: Smoke test benchmark harnesses
-        shell: pwsh
-        run: |
-          ./scripts/test-perf-local.ps1
-          ./benchmarks/cross-runtime/test-snapshot.ps1
-          ./benchmarks/cross-runtime/validate-snapshot.ps1 `
-            benchmarks/cross-runtime/snapshots/latest.json
-          ./benchmarks/snapshots/test-snapshot.ps1
-          ./benchmarks/cross-runtime/run-benchmarks.ps1 -Smoke -NoBuild
-          dotnet run --configuration Release --no-build `
-            --project benchmarks/micro/SharpTS.Microbenchmarks -- --smoke
-        timeout-minutes: 10
-
-      # Keep cross-platform harness build coverage. TypeScript's executable baseline
-      # smoke lives in typescript-conformance; Test262 execution is tracked by #1280.
+      # Compile conformance harnesses on both operating systems.
       - name: Build conformance harnesses (compile-only)
         shell: bash
         run: |
@@ -164,44 +174,10 @@ jobs:
           dotnet build tests/conformance/SharpTS.Test262.Worker/SharpTS.Test262.Worker.csproj --configuration Release
           dotnet build tests/conformance/SharpTS.TypeScriptConformance/SharpTS.TypeScriptConformance.csproj --configuration Release
 
-      # Category!=LiveNetwork excludes the opt-in tests that make real outbound
-      # DNS/HTTP calls (tagged [Trait("Category","LiveNetwork")]); those depend on
-      # the runner's network and false-red CI (#495). Run them on demand locally:
-      # dotnet test --filter "Category=LiveNetwork"
-      #
-      # Category!=LoadSensitive is the same quarantine for tests that inherently
-      # depend on load/wall-clock timing (#1215 policy): the default suite must
-      # contain no test we know can fail without a code defect. Currently no test
-      # carries the tag — every known load-flake was fixed at the product level
-      # (#1211/#1212/#1213) — but any future inherently-timing-dependent test gets
-      # [Trait("Category","LoadSensitive")] and is excluded here automatically.
-      #
-      # Category!=npm excludes tests that run a real `npm install` against
-      # registry.npmjs.org (RealPackageSmokeTests) — same hermeticity policy as
-      # LiveNetwork; the host-literal guardrail can't see package-name installs.
-      # Run them on demand locally: dotnet test --filter "Category=npm"
-      - name: Acquire pinned independent Authenticode verifier
-        id: signature-verifier
-        if: runner.os == 'Windows'
-        shell: pwsh
-        timeout-minutes: 3
-        run: |
-          $verifier = ./scripts/get-osslsigncode.ps1
-          if (-not $verifier) { throw 'The independent signature verifier path is missing.' }
-          "executable=$verifier" >> $env:GITHUB_OUTPUT
-
       - name: Verify complete core test partition
         shell: pwsh
         run: ./scripts/verify-core-test-partitions.ps1
         timeout-minutes: 3
-
-      - name: Test core
-        env:
-          SHARPTS_TEST_OSSLSIGNCODE: ${{ steps.signature-verifier.outputs.executable }}
-        run: dotnet test tests/SharpTS.Tests/SharpTS.Tests.csproj --no-build --configuration Release --verbosity normal --filter "Category!=LiveNetwork&Category!=LoadSensitive&Category!=npm&FullyQualifiedName!~SharpTS.Tests.CompilerTests.StandaloneDllTests.&FullyQualifiedName!~SharpTS.Tests.IntegrationTests.&FullyQualifiedName!~SharpTS.Tests.PackagingTests."
-        # The standalone job runs the complementary class on its own runner;
-        # its sequential child-process cases otherwise dominate this step.
-        timeout-minutes: 30
 
       - name: Upload core partition proof
         if: always()
@@ -209,19 +185,6 @@ jobs:
         with:
           name: core-partitions-${{ matrix.os }}
           path: artifacts/core-partitions/
-          retention-days: 7
-
-      - name: Test GUI conformance
-        run: dotnet test tests/gui-conformance/SharpTS.Gui.Conformance.Tests/SharpTS.Gui.Conformance.Tests.csproj --no-build --configuration Release --verbosity normal --filter "Category!=LiveNetwork&Category!=LoadSensitive&Category!=npm"
-        timeout-minutes: 10
-
-      - name: Upload unexpected GUI conformance diagnostics
-        if: always()
-        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7
-        with:
-          name: gui-conformance-failures-${{ matrix.os }}
-          path: artifacts/gui-conformance-failures/
-          if-no-files-found: ignore
           retention-days: 7
 
       - name: Test NuGet release helper
@@ -242,6 +205,130 @@ jobs:
       - name: Packaged SDK smoke test
         shell: pwsh
         run: ./scripts/test-packaged-sdk.ps1
+
+  core-tests:
+    needs: workflow-policy
+    if: needs.workflow-policy.outputs.mode == 'full'
+    runs-on: ${{ matrix.os }}
+    timeout-minutes: 40
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-24.04, windows-2025]
+        shard: [0, 1, 2, 3]
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - name: Setup .NET
+        uses: actions/setup-dotnet@a98b56852c35b8e3190ac28c8c2271da59106c68 # v6.0.0
+        with:
+          global-json-file: global.json
+      - name: Build core test assembly
+        run: dotnet build tests/SharpTS.Tests/SharpTS.Tests.csproj --configuration Release
+      - name: Acquire pinned independent Authenticode verifier
+        id: signature-verifier
+        if: runner.os == 'Windows'
+        shell: pwsh
+        timeout-minutes: 3
+        run: |
+          $verifier = ./scripts/get-osslsigncode.ps1
+          if (-not $verifier) { throw 'The independent signature verifier path is missing.' }
+          "executable=$verifier" >> $env:GITHUB_OUTPUT
+
+      - name: Test core shard
+        shell: pwsh
+        env:
+          SHARPTS_TEST_OSSLSIGNCODE: ${{ steps.signature-verifier.outputs.executable }}
+        run: ./scripts/test-core-shard.ps1 -ShardIndex ${{ matrix.shard }} -ShardCount 4 -ResultsDirectory artifacts/core-shards/${{ matrix.os }}-${{ matrix.shard }}
+        # Keep the existing safety bound until hosted timings confirm the target.
+        timeout-minutes: 30
+      - name: Upload core shard proof and results
+        if: always()
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7
+        with:
+          name: core-shard-${{ matrix.os }}-${{ matrix.shard }}
+          path: artifacts/core-shards/
+          if-no-files-found: error
+          retention-days: 7
+
+  gui-tests:
+    needs: workflow-policy
+    if: needs.workflow-policy.outputs.mode == 'full'
+    runs-on: ${{ matrix.os }}
+    timeout-minutes: 30
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-24.04, windows-2025]
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - name: Setup .NET
+        uses: actions/setup-dotnet@a98b56852c35b8e3190ac28c8c2271da59106c68 # v6.0.0
+        with:
+          global-json-file: global.json
+      - name: Build GUI conformance
+        run: dotnet build tests/gui-conformance/SharpTS.Gui.Conformance.Tests/SharpTS.Gui.Conformance.Tests.csproj --configuration Release
+      - name: Test GUI conformance
+        shell: pwsh
+        run: ./scripts/test-gui-conformance.ps1 -Coverage ${{ needs.workflow-policy.outputs.gui }}
+        timeout-minutes: 12
+      - name: Upload GUI cadence proof and results
+        if: always()
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7
+        with:
+          name: gui-tests-${{ matrix.os }}
+          path: artifacts/gui-conformance/
+          if-no-files-found: error
+          retention-days: 7
+      - name: Upload unexpected GUI conformance diagnostics
+        if: always()
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7
+        with:
+          name: gui-conformance-failures-${{ matrix.os }}
+          path: artifacts/gui-conformance-failures/
+          if-no-files-found: ignore
+          retention-days: 7
+
+
+  benchmark-smoke:
+    needs: workflow-policy
+    if: needs.workflow-policy.outputs.mode == 'full'
+    runs-on: ${{ matrix.os }}
+    timeout-minutes: 30
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-24.04, windows-2025]
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - name: Setup .NET
+        uses: actions/setup-dotnet@a98b56852c35b8e3190ac28c8c2271da59106c68 # v6.0.0
+        with:
+          global-json-file: global.json
+      - name: Build benchmark harnesses
+        run: dotnet build benchmarks/micro/SharpTS.Microbenchmarks/SharpTS.Microbenchmarks.csproj --configuration Release
+      - name: Smoke test benchmark harnesses
+        shell: pwsh
+        run: |
+          ./scripts/test-perf-local.ps1
+          ./benchmarks/cross-runtime/test-snapshot.ps1
+          ./benchmarks/cross-runtime/validate-snapshot.ps1 `
+            benchmarks/cross-runtime/snapshots/latest.json
+          ./benchmarks/snapshots/test-snapshot.ps1
+          if ('${{ needs.workflow-policy.outputs.benchmarks }}' -eq 'Full') {
+            ./benchmarks/cross-runtime/run-benchmarks.ps1 -Smoke -NoBuild
+          } else {
+            ./benchmarks/cross-runtime/run-benchmarks.ps1 -Smoke -NoBuild -Workloads @('exceptions')
+          }
+          dotnet run --configuration Release --no-build `
+            --project benchmarks/micro/SharpTS.Microbenchmarks -- --smoke
+        timeout-minutes: 10
+
 
   process-tests:
     needs: workflow-policy
@@ -382,15 +469,18 @@ jobs:
         run: dotnet build tests/SharpTS.Tests/SharpTS.Tests.csproj --no-restore --configuration Release
       - name: Test standalone
         shell: pwsh
+        env:
+          SHARPTS_DEPLOYMENT_FULL_METHODS: ${{ needs.workflow-policy.outputs.deployment-methods }}
+          SHARPTS_DEPLOYMENT_FULL_TYPES: ${{ needs.workflow-policy.outputs.deployment-types }}
         # Balance discovered row counts while keeping each method's rows together.
         # Bound aggregate shard time separately from the 120-second per-test hang guard.
-        run: ./scripts/test-standalone-shard.ps1 -ShardIndex ${{ matrix.shard }} -ShardCount 8 -ResultsDirectory artifacts/standalone/${{ matrix.os }}-${{ matrix.shard }}
+        run: ./scripts/test-standalone-shard.ps1 -ShardIndex ${{ matrix.shard }} -ShardCount 8 -Coverage ${{ needs.workflow-policy.outputs.deployment }} -ResultsDirectory artifacts/standalone/${{ matrix.os }}-${{ matrix.shard }}
         timeout-minutes: 35
       - name: Upload standalone shard evidence
         if: always()
         uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7
         with:
-          name: standalone-${{ matrix.os }}-${{ matrix.shard }}
+          name: standalone-shard-${{ matrix.os }}-${{ matrix.shard }}
           path: artifacts/standalone/
           if-no-files-found: warn
           retention-days: 7
@@ -755,10 +845,35 @@ jobs:
   gate:
     name: Gate
     if: always()
-    needs: [workflow-policy, build, typescript-conformance, editor-contract, standalone, process-tests, dap-macos-smoke, aot-ratchet, native-aot-compile-smoke, native-aot-custom-host-smoke, lightweight-validation]
+    needs: [workflow-policy, build, core-tests, gui-tests, benchmark-smoke, typescript-conformance, editor-contract, standalone, process-tests, dap-macos-smoke, aot-ratchet, native-aot-compile-smoke, native-aot-custom-host-smoke, lightweight-validation]
     runs-on: ubuntu-24.04
     timeout-minutes: 5
     steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - name: Download independent core partition evidence
+        if: needs.workflow-policy.outputs.mode == 'full'
+        uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333 # v8
+        with:
+          pattern: core-partitions-*
+          path: artifacts/ci-shard-evidence
+      - name: Download core shard evidence
+        if: needs.workflow-policy.outputs.mode == 'full'
+        uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333 # v8
+        with:
+          pattern: core-shard-*
+          path: artifacts/ci-shard-evidence
+      - name: Download standalone shard evidence
+        if: needs.workflow-policy.outputs.mode == 'full'
+        uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333 # v8
+        with:
+          pattern: standalone-shard-*
+          path: artifacts/ci-shard-evidence
+      - name: Verify every expected shard executed its inventory
+        if: needs.workflow-policy.outputs.mode == 'full'
+        shell: pwsh
+        run: ./scripts/verify-ci-shard-results.ps1 -ResultsDirectory artifacts/ci-shard-evidence -Coverage ${{ needs.workflow-policy.outputs.deployment }}
       - name: Require the selected CI route to pass
         shell: pwsh
         env:
@@ -770,7 +885,7 @@ jobs:
             throw "CI change classification or workflow policy did not pass."
           }
 
-          $heavy = @('build', 'typescript-conformance', 'editor-contract', 'standalone', 'process-tests', 'dap-macos-smoke', 'aot-ratchet', 'native-aot-compile-smoke', 'native-aot-custom-host-smoke')
+          $heavy = @('build', 'core-tests', 'gui-tests', 'benchmark-smoke', 'typescript-conformance', 'editor-contract', 'standalone', 'process-tests', 'dap-macos-smoke', 'aot-ratchet', 'native-aot-compile-smoke', 'native-aot-custom-host-smoke')
           if ($env:CHANGE_MODE -eq 'full') {
             $bad = @($heavy | Where-Object { $needs.PSObject.Properties[$_].Value.result -ne 'success' })
             if ($needs.'lightweight-validation'.result -ne 'skipped') {

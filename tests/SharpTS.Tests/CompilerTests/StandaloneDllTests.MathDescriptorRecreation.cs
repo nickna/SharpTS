@@ -1,3 +1,4 @@
+using SharpTS.Tests.Infrastructure;
 using SharpTS.Tests.SharedTests;
 using Xunit;
 
@@ -5,7 +6,7 @@ namespace SharpTS.Tests.CompilerTests;
 
 public partial class StandaloneDllTests
 {
-    [Theory, MemberData(nameof(MathDescriptorRecreationTests.Cases), MemberType = typeof(MathDescriptorRecreationTests))]
+    [Theory, DeploymentData(nameof(MathDescriptorRecreationTests.Cases), MemberType = typeof(MathDescriptorRecreationTests))]
     public void Isolated_Issue2853MathDescriptorRecreation_VerifyBeforeExecution(
         string name, string source, string expected)
     {

@@ -1,3 +1,4 @@
+using SharpTS.Tests.Infrastructure;
 using System.Security.Cryptography;
 using SharpTS.Tests.SharedTests;
 using Xunit;
@@ -6,7 +7,7 @@ namespace SharpTS.Tests.CompilerTests;
 
 public partial class StandaloneDllTests
 {
-    [Theory, MemberData(nameof(AsyncArrowVoidCallReturnTests.Cases), MemberType = typeof(AsyncArrowVoidCallReturnTests))]
+    [Theory, DeploymentData(nameof(AsyncArrowVoidCallReturnTests.Cases), MemberType = typeof(AsyncArrowVoidCallReturnTests))]
     public void Isolated_Issue2810AsyncArrowVoidCallReturns_VerifyBeforeExecution(
         string name, string source, string expected)
     {

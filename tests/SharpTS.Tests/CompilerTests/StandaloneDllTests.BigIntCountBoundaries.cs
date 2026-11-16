@@ -1,3 +1,4 @@
+using SharpTS.Tests.Infrastructure;
 using SharpTS.Tests.SharedTests;
 using Xunit;
 
@@ -5,7 +6,7 @@ namespace SharpTS.Tests.CompilerTests;
 
 public partial class StandaloneDllTests
 {
-    [Theory, MemberData(nameof(BigIntCountBoundaryTests.Cases), MemberType = typeof(BigIntCountBoundaryTests))]
+    [Theory, DeploymentData(nameof(BigIntCountBoundaryTests.Cases), MemberType = typeof(BigIntCountBoundaryTests))]
     public void Isolated_Issue2786BigIntCountBoundaries_VerifyBeforeExecution(
         string name, string source, string expected)
     {

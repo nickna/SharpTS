@@ -1,3 +1,4 @@
+using SharpTS.Tests.Infrastructure;
 using SharpTS.Tests.SharedTests;
 using Xunit;
 
@@ -5,7 +6,7 @@ namespace SharpTS.Tests.CompilerTests;
 
 public partial class StandaloneDllTests
 {
-    [Theory, MemberData(nameof(NativeClassExpressionConstructorTests.SavedCases), MemberType = typeof(NativeClassExpressionConstructorTests))]
+    [Theory, DeploymentData(nameof(NativeClassExpressionConstructorTests.SavedCases), MemberType = typeof(NativeClassExpressionConstructorTests))]
     public void Isolated_Issue2708NativeClassExpressionConstructors_VerifyBeforeExecution(
         string name, string source, string expected)
     {

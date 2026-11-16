@@ -1,3 +1,4 @@
+using SharpTS.Tests.Infrastructure;
 using SharpTS.Tests.SharedTests;
 using Xunit;
 
@@ -5,7 +6,7 @@ namespace SharpTS.Tests.CompilerTests;
 
 public partial class StandaloneDllTests
 {
-    [Theory, MemberData(nameof(ExtractedPrivateCaptureScopeTests.Cases), MemberType = typeof(ExtractedPrivateCaptureScopeTests))]
+    [Theory, DeploymentData(nameof(ExtractedPrivateCaptureScopeTests.Cases), MemberType = typeof(ExtractedPrivateCaptureScopeTests))]
     public void Isolated_Issue2151ExtractedPrivateMethods_PreserveCaptureScope(
         string name, string source, string expected)
     {

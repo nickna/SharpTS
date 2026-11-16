@@ -1,3 +1,4 @@
+using SharpTS.Tests.Infrastructure;
 using SharpTS.Tests.SharedTests;
 using Xunit;
 
@@ -5,7 +6,7 @@ namespace SharpTS.Tests.CompilerTests;
 
 public partial class StandaloneDllTests
 {
-    [Theory, MemberData(nameof(InstanceSymbolMethodIdentityTests.Cases), MemberType = typeof(InstanceSymbolMethodIdentityTests))]
+    [Theory, DeploymentData(nameof(InstanceSymbolMethodIdentityTests.Cases), MemberType = typeof(InstanceSymbolMethodIdentityTests))]
     public void Isolated_Issue2032InstanceSymbolMethods_VerifyIdentityAndReceivers(
         string name, string source, string expected)
     {

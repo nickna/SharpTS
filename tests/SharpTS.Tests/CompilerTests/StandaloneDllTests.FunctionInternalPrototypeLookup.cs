@@ -1,3 +1,4 @@
+using SharpTS.Tests.Infrastructure;
 using SharpTS.Tests.SharedTests;
 using Xunit;
 
@@ -5,7 +6,7 @@ namespace SharpTS.Tests.CompilerTests;
 
 public partial class StandaloneDllTests
 {
-    [Theory, MemberData(nameof(FunctionInternalPrototypeLookupTests.StandaloneCases), MemberType = typeof(FunctionInternalPrototypeLookupTests))]
+    [Theory, DeploymentData(nameof(FunctionInternalPrototypeLookupTests.StandaloneCases), MemberType = typeof(FunctionInternalPrototypeLookupTests))]
     public void Isolated_Issue2359FunctionInternalPrototypeLookup_VerifyBeforeExecution(
         string name, string source, string expected)
     {

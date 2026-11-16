@@ -1,3 +1,4 @@
+using SharpTS.Tests.Infrastructure;
 using System.Security.Cryptography;
 using SharpTS.Tests.SharedTests;
 using Xunit;
@@ -6,7 +7,7 @@ namespace SharpTS.Tests.CompilerTests;
 
 public partial class StandaloneDllTests
 {
-    [Theory, MemberData(nameof(NativePromiseExpressionParentTests.Cases), MemberType = typeof(NativePromiseExpressionParentTests))]
+    [Theory, DeploymentData(nameof(NativePromiseExpressionParentTests.Cases), MemberType = typeof(NativePromiseExpressionParentTests))]
     public void Isolated_Issue2809NativePromiseExpressionParents_VerifyBeforeExecution(
         string name, string source, string expected)
     {

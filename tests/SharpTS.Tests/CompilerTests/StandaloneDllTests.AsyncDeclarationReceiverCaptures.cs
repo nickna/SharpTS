@@ -1,3 +1,4 @@
+using SharpTS.Tests.Infrastructure;
 using SharpTS.Tests.SharedTests;
 using Xunit;
 
@@ -5,7 +6,7 @@ namespace SharpTS.Tests.CompilerTests;
 
 public partial class StandaloneDllTests
 {
-    [Theory, MemberData(nameof(AsyncDeclarationReceiverCaptureTests.SavedCases), MemberType = typeof(AsyncDeclarationReceiverCaptureTests))]
+    [Theory, DeploymentData(nameof(AsyncDeclarationReceiverCaptureTests.SavedCases), MemberType = typeof(AsyncDeclarationReceiverCaptureTests))]
     public void Isolated_Issue2738AsyncDeclarationReceiverCaptures_VerifyBeforeExecution(
         string name, string source, string expected)
     {

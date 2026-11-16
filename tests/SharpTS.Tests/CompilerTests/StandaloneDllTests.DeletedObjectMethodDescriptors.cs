@@ -1,3 +1,4 @@
+using SharpTS.Tests.Infrastructure;
 using SharpTS.Tests.SharedTests;
 using Xunit;
 
@@ -5,7 +6,7 @@ namespace SharpTS.Tests.CompilerTests;
 
 public partial class StandaloneDllTests
 {
-    [Theory, MemberData(nameof(DeletedObjectMethodDescriptorTests.Cases), MemberType = typeof(DeletedObjectMethodDescriptorTests))]
+    [Theory, DeploymentData(nameof(DeletedObjectMethodDescriptorTests.Cases), MemberType = typeof(DeletedObjectMethodDescriptorTests))]
     public void Isolated_Issue2132DeletedObjectMethodDescriptors_PreserveUserDefinitionsAndDeletion(
         string name, string source, string expected)
     {

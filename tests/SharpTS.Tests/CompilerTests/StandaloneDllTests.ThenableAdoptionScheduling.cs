@@ -1,3 +1,4 @@
+using SharpTS.Tests.Infrastructure;
 using SharpTS.Tests.SharedTests;
 using Xunit;
 
@@ -9,7 +10,7 @@ public partial class StandaloneDllTests
         ThenableAdoptionSchedulingTests.SavedCases()
             .Concat(ThenableAwaitDeferralTests.Cases());
 
-    [Theory, MemberData(nameof(Issue2740ThenableOrderingSavedCases))]
+    [Theory, DeploymentData(nameof(Issue2740ThenableOrderingSavedCases))]
     public void Isolated_Issue2740ThenableAdoptionScheduling_VerifyBeforeExecution(
         string name, string source, string expected)
     {

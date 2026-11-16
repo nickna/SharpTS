@@ -1,3 +1,4 @@
+using SharpTS.Tests.Infrastructure;
 using SharpTS.Tests.SharedTests;
 using Xunit;
 
@@ -5,7 +6,7 @@ namespace SharpTS.Tests.CompilerTests;
 
 public partial class StandaloneDllTests
 {
-    [Theory, MemberData(nameof(DotNetImportedTypeValueTests.Cases), MemberType = typeof(DotNetImportedTypeValueTests))]
+    [Theory, DeploymentData(nameof(DotNetImportedTypeValueTests.Cases), MemberType = typeof(DotNetImportedTypeValueTests))]
     public void Isolated_Issue2163ImportedClrTypeValues_VerifyBeforeExecution(
         string name, string source, string expected)
     {

@@ -1,3 +1,4 @@
+using SharpTS.Tests.Infrastructure;
 using System.Reflection.Metadata;
 using System.Reflection.Metadata.Ecma335;
 using System.Reflection.PortableExecutable;
@@ -8,7 +9,7 @@ namespace SharpTS.Tests.CompilerTests;
 
 public partial class StandaloneDllTests
 {
-    [Theory, MemberData(nameof(OptionalCallableParameterValueTests.Cases), MemberType = typeof(OptionalCallableParameterValueTests))]
+    [Theory, DeploymentData(nameof(OptionalCallableParameterValueTests.Cases), MemberType = typeof(OptionalCallableParameterValueTests))]
     public void Isolated_Issue2408OptionalCallableParameters_VerifyBeforeExecution(string name, string source, string expected)
     {
         Assert.NotEmpty(name);

@@ -1,3 +1,4 @@
+using SharpTS.Tests.Infrastructure;
 using SharpTS.Tests.SharedTests;
 using Xunit;
 
@@ -5,7 +6,7 @@ namespace SharpTS.Tests.CompilerTests;
 
 public partial class StandaloneDllTests
 {
-    [Theory, MemberData(nameof(ParameterDefaultCapturedBodyTests.Cases), MemberType = typeof(ParameterDefaultCapturedBodyTests))]
+    [Theory, DeploymentData(nameof(ParameterDefaultCapturedBodyTests.Cases), MemberType = typeof(ParameterDefaultCapturedBodyTests))]
     public void Isolated_Issue2585ParameterDefaultCapturedBody_VerifyBeforeExecution(
         string name, string source, string expected)
     {

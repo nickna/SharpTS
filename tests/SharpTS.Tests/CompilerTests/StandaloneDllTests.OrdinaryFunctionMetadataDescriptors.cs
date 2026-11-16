@@ -1,3 +1,4 @@
+using SharpTS.Tests.Infrastructure;
 using SharpTS.Tests.SharedTests;
 using Xunit;
 
@@ -5,7 +6,7 @@ namespace SharpTS.Tests.CompilerTests;
 
 public partial class StandaloneDllTests
 {
-    [Theory, MemberData(nameof(OrdinaryFunctionMetadataDescriptorTests.Cases), MemberType = typeof(OrdinaryFunctionMetadataDescriptorTests))]
+    [Theory, DeploymentData(nameof(OrdinaryFunctionMetadataDescriptorTests.Cases), MemberType = typeof(OrdinaryFunctionMetadataDescriptorTests))]
     public void Isolated_Issue2170OrdinaryFunctionMetadataDescriptors_PreserveOwnStorage(
         string name, string source, string expected)
     {

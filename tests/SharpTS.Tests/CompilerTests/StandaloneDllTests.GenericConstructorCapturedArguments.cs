@@ -1,3 +1,4 @@
+using SharpTS.Tests.Infrastructure;
 using SharpTS.Tests.SharedTests;
 using Xunit;
 
@@ -5,7 +6,7 @@ namespace SharpTS.Tests.CompilerTests;
 
 public partial class StandaloneDllTests
 {
-    [Theory, MemberData(nameof(GenericConstructorCapturedArgumentTests.Cases),
+    [Theory, DeploymentData(nameof(GenericConstructorCapturedArgumentTests.Cases),
         MemberType = typeof(GenericConstructorCapturedArgumentTests))]
     public void Isolated_Issue2100GenericConstructors_PreserveCapturedClassArguments(
         string name, string source, string expected)

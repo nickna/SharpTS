@@ -1,3 +1,4 @@
+using SharpTS.Tests.Infrastructure;
 using SharpTS.Tests.SharedTests;
 using Xunit;
 
@@ -5,7 +6,7 @@ namespace SharpTS.Tests.CompilerTests;
 
 public partial class StandaloneDllTests
 {
-    [Theory, MemberData(nameof(StrictGetterOnlyClassAssignmentTests.Cases), MemberType = typeof(StrictGetterOnlyClassAssignmentTests))]
+    [Theory, DeploymentData(nameof(StrictGetterOnlyClassAssignmentTests.Cases), MemberType = typeof(StrictGetterOnlyClassAssignmentTests))]
     public void Isolated_Issue2171StrictGetterOnlyClassAssignments_PreserveDescriptorPolicy(
         string name, string source, string expected)
     {

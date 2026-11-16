@@ -1,3 +1,4 @@
+using SharpTS.Tests.Infrastructure;
 using System.Security.Cryptography;
 using SharpTS.Tests.SharedTests;
 using Xunit;
@@ -6,7 +7,7 @@ namespace SharpTS.Tests.CompilerTests;
 
 public partial class StandaloneDllTests
 {
-    [Theory, MemberData(nameof(BoundFunctionOwnDescriptorTests.Cases), MemberType = typeof(BoundFunctionOwnDescriptorTests))]
+    [Theory, DeploymentData(nameof(BoundFunctionOwnDescriptorTests.Cases), MemberType = typeof(BoundFunctionOwnDescriptorTests))]
     public void Isolated_BoundFunctionOwnDescriptors_PreserveMetadataAndInvocation(
         string name, string source, string expected)
     {

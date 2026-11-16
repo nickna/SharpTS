@@ -1,3 +1,4 @@
+using SharpTS.Tests.Infrastructure;
 using SharpTS.Tests.SharedTests;
 using Xunit;
 
@@ -5,7 +6,7 @@ namespace SharpTS.Tests.CompilerTests;
 
 public partial class StandaloneDllTests
 {
-    [Theory, MemberData(nameof(NonExtensibleClassConstructorAssignmentTests.Cases), MemberType = typeof(NonExtensibleClassConstructorAssignmentTests))]
+    [Theory, DeploymentData(nameof(NonExtensibleClassConstructorAssignmentTests.Cases), MemberType = typeof(NonExtensibleClassConstructorAssignmentTests))]
     public void Isolated_Issue2202NonExtensibleClassConstructorAssignments_VerifiesCreationGuardsAndAllowedWrites(
         string name, string source, string expected)
     {

@@ -1,3 +1,4 @@
+using SharpTS.Tests.Infrastructure;
 using SharpTS.Tests.SharedTests;
 using Xunit;
 
@@ -5,7 +6,7 @@ namespace SharpTS.Tests.CompilerTests;
 
 public partial class StandaloneDllTests
 {
-    [Theory, MemberData(nameof(GeneratorDefaultGlobalCaptureTests.Cases), MemberType = typeof(GeneratorDefaultGlobalCaptureTests))]
+    [Theory, DeploymentData(nameof(GeneratorDefaultGlobalCaptureTests.Cases), MemberType = typeof(GeneratorDefaultGlobalCaptureTests))]
     public void Isolated_Issue2753GeneratorDefaultGlobalCapture_VerifyBeforeExecution(
         string name, string source, string expected)
     {

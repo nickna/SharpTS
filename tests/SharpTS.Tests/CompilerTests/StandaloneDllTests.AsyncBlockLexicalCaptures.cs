@@ -1,3 +1,4 @@
+using SharpTS.Tests.Infrastructure;
 using SharpTS.Tests.SharedTests;
 using Xunit;
 
@@ -5,7 +6,7 @@ namespace SharpTS.Tests.CompilerTests;
 
 public partial class StandaloneDllTests
 {
-    [Theory, MemberData(nameof(AsyncBlockLexicalCaptureTests.Cases), MemberType = typeof(AsyncBlockLexicalCaptureTests))]
+    [Theory, DeploymentData(nameof(AsyncBlockLexicalCaptureTests.Cases), MemberType = typeof(AsyncBlockLexicalCaptureTests))]
     public void Isolated_Issue2584AsyncBlockLexicalCaptures_VerifyBeforeExecution(
         string name, string source, string expected)
     {

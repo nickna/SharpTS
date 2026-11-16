@@ -1,3 +1,4 @@
+using SharpTS.Tests.Infrastructure;
 using SharpTS.Tests.SharedTests;
 using Xunit;
 
@@ -5,7 +6,7 @@ namespace SharpTS.Tests.CompilerTests;
 
 public partial class StandaloneDllTests
 {
-    [Theory, MemberData(nameof(DerivedFieldInitializationOrderTests.CompiledCases),
+    [Theory, DeploymentData(nameof(DerivedFieldInitializationOrderTests.CompiledCases),
         MemberType = typeof(DerivedFieldInitializationOrderTests))]
     public void Isolated_Issue2110DerivedFieldOrder_VerifyBeforeExecution(
         string name, string source, string expected)

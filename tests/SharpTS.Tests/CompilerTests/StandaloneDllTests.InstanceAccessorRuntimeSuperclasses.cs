@@ -1,3 +1,4 @@
+using SharpTS.Tests.Infrastructure;
 using SharpTS.Tests.SharedTests;
 using Xunit;
 
@@ -5,7 +6,7 @@ namespace SharpTS.Tests.CompilerTests;
 
 public partial class StandaloneDllTests
 {
-    [Theory, MemberData(nameof(InstanceAccessorRuntimeSuperclassTests.Cases), MemberType = typeof(InstanceAccessorRuntimeSuperclassTests))]
+    [Theory, DeploymentData(nameof(InstanceAccessorRuntimeSuperclassTests.Cases), MemberType = typeof(InstanceAccessorRuntimeSuperclassTests))]
     public void Isolated_Issue2172InstanceAccessorRuntimeSuperclasses_PreserveReceiversAndDefinitions(
         string name, string source, string expected)
     {

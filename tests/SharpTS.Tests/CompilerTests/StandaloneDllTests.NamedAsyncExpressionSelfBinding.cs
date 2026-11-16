@@ -1,3 +1,4 @@
+using SharpTS.Tests.Infrastructure;
 using SharpTS.Tests.SharedTests;
 using Xunit;
 
@@ -5,7 +6,7 @@ namespace SharpTS.Tests.CompilerTests;
 
 public partial class StandaloneDllTests
 {
-    [Theory, MemberData(nameof(NamedAsyncExpressionSelfBindingTests.SavedCases), MemberType = typeof(NamedAsyncExpressionSelfBindingTests))]
+    [Theory, DeploymentData(nameof(NamedAsyncExpressionSelfBindingTests.SavedCases), MemberType = typeof(NamedAsyncExpressionSelfBindingTests))]
     public void Isolated_Issue2679NamedAsyncExpressionSelfBinding_VerifyBeforeExecution(
         string name, string source, string expected)
     {

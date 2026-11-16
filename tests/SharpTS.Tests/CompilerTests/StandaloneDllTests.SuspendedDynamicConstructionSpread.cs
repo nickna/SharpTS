@@ -1,3 +1,4 @@
+using SharpTS.Tests.Infrastructure;
 using SharpTS.Tests.SharedTests;
 using Xunit;
 
@@ -5,7 +6,7 @@ namespace SharpTS.Tests.CompilerTests;
 
 public partial class StandaloneDllTests
 {
-    [Theory, MemberData(nameof(SuspendedDynamicConstructionSpreadTests.Cases),
+    [Theory, DeploymentData(nameof(SuspendedDynamicConstructionSpreadTests.Cases),
         MemberType = typeof(SuspendedDynamicConstructionSpreadTests))]
     public void Isolated_Issue2102DynamicConstructionSpread_VerifyBeforeExecution(
         string name, string source, string expected)

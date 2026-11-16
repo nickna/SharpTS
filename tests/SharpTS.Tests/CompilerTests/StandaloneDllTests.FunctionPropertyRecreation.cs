@@ -1,3 +1,4 @@
+using SharpTS.Tests.Infrastructure;
 using SharpTS.Tests.SharedTests;
 using Xunit;
 
@@ -5,7 +6,7 @@ namespace SharpTS.Tests.CompilerTests;
 
 public partial class StandaloneDllTests
 {
-    [Theory, MemberData(nameof(FunctionPropertyRecreationTests.Cases), MemberType = typeof(FunctionPropertyRecreationTests))]
+    [Theory, DeploymentData(nameof(FunctionPropertyRecreationTests.Cases), MemberType = typeof(FunctionPropertyRecreationTests))]
     public void Isolated_Issue2647FunctionPropertyRecreation_VerifyBeforeExecution(
         string name, string source, string expected)
     {

@@ -1,3 +1,4 @@
+using SharpTS.Tests.Infrastructure;
 using Xunit;
 
 namespace SharpTS.Tests.CompilerTests;
@@ -36,7 +37,7 @@ public partial class StandaloneDllTests
             """, "0,1,2\n"];
     }
 
-    [Theory, MemberData(nameof(AsyncArrowLoopCellReadCases))]
+    [Theory, DeploymentData(nameof(AsyncArrowLoopCellReadCases))]
     public void Isolated_Issue2771AsyncArrowLoopCellReads_VerifyBeforeExecution(
         string name, string source, string expected)
     {

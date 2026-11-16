@@ -1,3 +1,4 @@
+using SharpTS.Tests.Infrastructure;
 using SharpTS.Tests.SharedTests;
 using Xunit;
 
@@ -5,7 +6,7 @@ namespace SharpTS.Tests.CompilerTests;
 
 public partial class StandaloneDllTests
 {
-    [Theory, MemberData(nameof(ClassDeclarationDeclareFieldErasureTests.SavedCases), MemberType = typeof(ClassDeclarationDeclareFieldErasureTests))]
+    [Theory, DeploymentData(nameof(ClassDeclarationDeclareFieldErasureTests.SavedCases), MemberType = typeof(ClassDeclarationDeclareFieldErasureTests))]
     public void Isolated_Issue2707ClassDeclarationDeclareFields_VerifyBeforeExecution(
         string name, string source, string expected)
     {

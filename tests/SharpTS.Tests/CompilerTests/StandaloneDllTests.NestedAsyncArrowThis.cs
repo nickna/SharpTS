@@ -1,3 +1,4 @@
+using SharpTS.Tests.Infrastructure;
 using SharpTS.Tests.IntegrationTests;
 using SharpTS.Tests.SharedTests;
 using Xunit;
@@ -11,7 +12,7 @@ public partial class StandaloneDllTests
             new[] { false, true }.Select(standalone => new object[] { row[0], standalone }));
 
     [Theory]
-    [MemberData(nameof(NestedAsyncArrowThisDeployments))]
+    [DeploymentData(nameof(NestedAsyncArrowThisDeployments))]
     public void Isolated_Issue2385NestedAsyncArrowThis_VerifiesBeforeExecution(string name, bool standalone)
     {
         var row = NestedAsyncArrowThisTests.Cases().Single(row => (string)row[0] == name);

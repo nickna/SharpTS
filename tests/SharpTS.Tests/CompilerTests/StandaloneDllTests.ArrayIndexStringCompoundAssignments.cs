@@ -1,3 +1,4 @@
+using SharpTS.Tests.Infrastructure;
 using SharpTS.Tests.SharedTests;
 using Xunit;
 
@@ -5,7 +6,7 @@ namespace SharpTS.Tests.CompilerTests;
 
 public partial class StandaloneDllTests
 {
-    [Theory, MemberData(nameof(ArrayIndexStringCompoundAssignmentTests.Cases), MemberType = typeof(ArrayIndexStringCompoundAssignmentTests))]
+    [Theory, DeploymentData(nameof(ArrayIndexStringCompoundAssignmentTests.Cases), MemberType = typeof(ArrayIndexStringCompoundAssignmentTests))]
     public void Isolated_Issue2681ArrayIndexStringCompoundAssignments_VerifyBeforeExecution(
         string name, string source, string expected)
     {

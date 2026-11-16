@@ -1,3 +1,4 @@
+using SharpTS.Tests.Infrastructure;
 using SharpTS.Tests.SharedTests;
 using Xunit;
 
@@ -5,7 +6,7 @@ namespace SharpTS.Tests.CompilerTests;
 
 public partial class StandaloneDllTests
 {
-    [Theory, MemberData(nameof(ComputedObjectBindingTests.Cases), MemberType = typeof(ComputedObjectBindingTests))]
+    [Theory, DeploymentData(nameof(ComputedObjectBindingTests.Cases), MemberType = typeof(ComputedObjectBindingTests))]
     public void Isolated_Issue2759ComputedObjectBindings_VerifyBeforeExecution(
         string name, string source, string expected)
     {

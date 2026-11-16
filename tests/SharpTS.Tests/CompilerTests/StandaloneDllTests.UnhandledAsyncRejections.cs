@@ -1,3 +1,4 @@
+using SharpTS.Tests.Infrastructure;
 using Xunit;
 
 namespace SharpTS.Tests.CompilerTests;
@@ -20,7 +21,7 @@ public partial class StandaloneDllTests
         yield return ["microtask-catch", "async function fail(){structuredClone(()=>{})}const p=fail();queueMicrotask(()=>p.catch(()=>console.log(\"caught\")));", false, "caught\n", ""];
     }
 
-    [Theory, MemberData(nameof(Issue3456Cases))]
+    [Theory, DeploymentData(nameof(Issue3456Cases))]
     public void Isolated_Issue3456UnhandledRejectionsMatchProcessOutcomes(
         string name, string source, bool nonzero, string expectedStdout, string diagnostic)
     {

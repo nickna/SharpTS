@@ -1,3 +1,4 @@
+using SharpTS.Tests.Infrastructure;
 using SharpTS.Tests.SharedTests;
 using Xunit;
 
@@ -5,7 +6,7 @@ namespace SharpTS.Tests.CompilerTests;
 
 public partial class StandaloneDllTests
 {
-    [Theory, MemberData(nameof(AsyncExpressionModuleCaptureTests.SavedCases), MemberType = typeof(AsyncExpressionModuleCaptureTests))]
+    [Theory, DeploymentData(nameof(AsyncExpressionModuleCaptureTests.SavedCases), MemberType = typeof(AsyncExpressionModuleCaptureTests))]
     public void Isolated_Issue2769AsyncExpressionModuleCaptures_VerifyBeforeExecution(
         string name, string source, string expected)
     {

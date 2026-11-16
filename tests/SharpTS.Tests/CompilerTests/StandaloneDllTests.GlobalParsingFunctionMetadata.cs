@@ -1,3 +1,4 @@
+using SharpTS.Tests.Infrastructure;
 using SharpTS.Tests.SharedTests;
 using Xunit;
 
@@ -5,7 +6,7 @@ namespace SharpTS.Tests.CompilerTests;
 
 public partial class StandaloneDllTests
 {
-    [Theory, MemberData(nameof(GlobalParsingFunctionMetadataTests.Cases), MemberType = typeof(GlobalParsingFunctionMetadataTests))]
+    [Theory, DeploymentData(nameof(GlobalParsingFunctionMetadataTests.Cases), MemberType = typeof(GlobalParsingFunctionMetadataTests))]
     public void Isolated_Issue2165ParsingFunctionMetadata_PreservesArityAndCalls(
         string name, string source, string expected)
     {

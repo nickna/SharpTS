@@ -1,3 +1,4 @@
+using SharpTS.Tests.Infrastructure;
 using SharpTS.Tests.SharedTests;
 using Xunit;
 
@@ -5,7 +6,7 @@ namespace SharpTS.Tests.CompilerTests;
 
 public partial class StandaloneDllTests
 {
-    [Theory, MemberData(nameof(DeclaredStaticFieldDescriptorTests.Cases), MemberType = typeof(DeclaredStaticFieldDescriptorTests))]
+    [Theory, DeploymentData(nameof(DeclaredStaticFieldDescriptorTests.Cases), MemberType = typeof(DeclaredStaticFieldDescriptorTests))]
     public void Isolated_Issue2201DeclaredStaticFieldDescriptors_VerifiesLiveFieldsAndFlags(
         string name, string source, string expected)
     {

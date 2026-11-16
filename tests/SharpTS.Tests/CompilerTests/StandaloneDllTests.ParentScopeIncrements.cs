@@ -1,3 +1,4 @@
+using SharpTS.Tests.Infrastructure;
 using SharpTS.Tests.SharedTests;
 using Xunit;
 
@@ -5,7 +6,7 @@ namespace SharpTS.Tests.CompilerTests;
 
 public partial class StandaloneDllTests
 {
-    [Theory, MemberData(nameof(ParentScopeIncrementTests.Cases), MemberType = typeof(ParentScopeIncrementTests))]
+    [Theory, DeploymentData(nameof(ParentScopeIncrementTests.Cases), MemberType = typeof(ParentScopeIncrementTests))]
     public void Isolated_Issue2495IncrementsAndDecrementsUpdateLiveParentScopeBindings(
         string name, string source, string expected)
     {

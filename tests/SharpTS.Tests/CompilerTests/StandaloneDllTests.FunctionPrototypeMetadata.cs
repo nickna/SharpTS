@@ -1,3 +1,4 @@
+using SharpTS.Tests.Infrastructure;
 using SharpTS.Tests.SharedTests;
 using Xunit;
 
@@ -6,7 +7,7 @@ namespace SharpTS.Tests.CompilerTests;
 public partial class StandaloneDllTests
 {
     [Theory]
-    [MemberData(nameof(FunctionPrototypeMetadataTests.Cases), MemberType = typeof(FunctionPrototypeMetadataTests))]
+    [DeploymentData(nameof(FunctionPrototypeMetadataTests.Cases), MemberType = typeof(FunctionPrototypeMetadataTests))]
     public void Saved_Issue2097FunctionPrototypeMetadata_VerifyBeforeExecution(
         string name, string source, string expected)
     {

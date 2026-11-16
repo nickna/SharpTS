@@ -1,3 +1,4 @@
+using SharpTS.Tests.Infrastructure;
 using SharpTS.Tests.SharedTests;
 using Xunit;
 
@@ -5,7 +6,7 @@ namespace SharpTS.Tests.CompilerTests;
 
 public partial class StandaloneDllTests
 {
-    [Theory, MemberData(nameof(InnerFunctionPrivateContextTests.Cases), MemberType = typeof(InnerFunctionPrivateContextTests))]
+    [Theory, DeploymentData(nameof(InnerFunctionPrivateContextTests.Cases), MemberType = typeof(InnerFunctionPrivateContextTests))]
     public void Isolated_Issue2487OrdinaryFunctions_PreservePrivateContext(
         string name, string source, string expected)
     {

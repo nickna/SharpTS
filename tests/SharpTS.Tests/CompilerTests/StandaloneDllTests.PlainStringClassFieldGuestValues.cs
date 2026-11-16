@@ -1,3 +1,4 @@
+using SharpTS.Tests.Infrastructure;
 using SharpTS.Tests.SharedTests;
 using Xunit;
 
@@ -5,7 +6,7 @@ namespace SharpTS.Tests.CompilerTests;
 
 public partial class StandaloneDllTests
 {
-    [Theory, MemberData(nameof(PlainStringClassFieldGuestValueTests.Cases), MemberType = typeof(PlainStringClassFieldGuestValueTests))]
+    [Theory, DeploymentData(nameof(PlainStringClassFieldGuestValueTests.Cases), MemberType = typeof(PlainStringClassFieldGuestValueTests))]
     public void Isolated_Issue2737PlainStringClassFieldGuestValues_VerifyBeforeExecution(
         string name, string source, string expected)
     {

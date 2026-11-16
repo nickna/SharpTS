@@ -1,3 +1,4 @@
+using SharpTS.Tests.Infrastructure;
 using SharpTS.Tests.SharedTests;
 using Xunit;
 
@@ -5,7 +6,7 @@ namespace SharpTS.Tests.CompilerTests;
 
 public partial class StandaloneDllTests
 {
-    [Theory, MemberData(nameof(CallableStrictDeletionTests.Cases), MemberType = typeof(CallableStrictDeletionTests))]
+    [Theory, DeploymentData(nameof(CallableStrictDeletionTests.Cases), MemberType = typeof(CallableStrictDeletionTests))]
     public void Isolated_Issue2415CallableStrictDeletion_VerifyBeforeExecution(
         string name, string source, string expected)
     {

@@ -1,3 +1,4 @@
+using SharpTS.Tests.Infrastructure;
 using SharpTS.Tests.SharedTests;
 using Xunit;
 
@@ -5,7 +6,7 @@ namespace SharpTS.Tests.CompilerTests;
 
 public partial class StandaloneDllTests
 {
-    [Theory, MemberData(nameof(PrimitiveClassFieldRawValueTests.CompiledCases), MemberType = typeof(PrimitiveClassFieldRawValueTests))]
+    [Theory, DeploymentData(nameof(PrimitiveClassFieldRawValueTests.CompiledCases), MemberType = typeof(PrimitiveClassFieldRawValueTests))]
     public void Isolated_Issue2114PrimitiveClassFields_VerifyBeforeExecution(string name, string source, string expected)
     {
         Assert.NotEmpty(name);

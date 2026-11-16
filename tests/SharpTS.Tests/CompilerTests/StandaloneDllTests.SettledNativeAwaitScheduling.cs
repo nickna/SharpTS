@@ -1,3 +1,4 @@
+using SharpTS.Tests.Infrastructure;
 using SharpTS.Tests.SharedTests;
 using Xunit;
 
@@ -5,7 +6,7 @@ namespace SharpTS.Tests.CompilerTests;
 
 public partial class StandaloneDllTests
 {
-    [Theory, MemberData(nameof(SettledNativeAwaitSchedulingTests.Cases), MemberType = typeof(SettledNativeAwaitSchedulingTests))]
+    [Theory, DeploymentData(nameof(SettledNativeAwaitSchedulingTests.Cases), MemberType = typeof(SettledNativeAwaitSchedulingTests))]
     public void Isolated_Issue2832SettledNativeAwaitScheduling_VerifyBeforeExecution(
         string name, string source, string expected)
     {

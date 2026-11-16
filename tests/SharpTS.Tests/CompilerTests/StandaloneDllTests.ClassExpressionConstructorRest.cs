@@ -1,3 +1,4 @@
+using SharpTS.Tests.Infrastructure;
 using SharpTS.Tests.SharedTests;
 using Xunit;
 
@@ -6,7 +7,7 @@ namespace SharpTS.Tests.CompilerTests;
 public partial class StandaloneDllTests
 {
     [Theory]
-    [MemberData(nameof(ClassExpressionConstructorRestTests.Cases), MemberType = typeof(ClassExpressionConstructorRestTests))]
+    [DeploymentData(nameof(ClassExpressionConstructorRestTests.Cases), MemberType = typeof(ClassExpressionConstructorRestTests))]
     public void Isolated_Issue2125ExpressionConstructors_PackRestArguments(
         string name, string source, string expected)
     {

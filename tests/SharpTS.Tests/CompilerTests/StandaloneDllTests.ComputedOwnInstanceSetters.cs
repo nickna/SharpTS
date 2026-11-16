@@ -1,3 +1,4 @@
+using SharpTS.Tests.Infrastructure;
 using SharpTS.Tests.SharedTests;
 using Xunit;
 
@@ -5,7 +6,7 @@ namespace SharpTS.Tests.CompilerTests;
 
 public partial class StandaloneDllTests
 {
-    [Theory, MemberData(nameof(ComputedOwnInstanceSetterTests.Cases), MemberType = typeof(ComputedOwnInstanceSetterTests))]
+    [Theory, DeploymentData(nameof(ComputedOwnInstanceSetterTests.Cases), MemberType = typeof(ComputedOwnInstanceSetterTests))]
     public void Isolated_Issue2805ComputedOwnInstanceSetters_VerifyBeforeExecution(
         string name, string source, string expected)
     {

@@ -1,3 +1,4 @@
+using SharpTS.Tests.Infrastructure;
 using SharpTS.Tests.SharedTests;
 using Xunit;
 
@@ -5,7 +6,7 @@ namespace SharpTS.Tests.CompilerTests;
 
 public partial class StandaloneDllTests
 {
-    [Theory, MemberData(nameof(StaticCallReceiverRestorationTests.Cases), MemberType = typeof(StaticCallReceiverRestorationTests))]
+    [Theory, DeploymentData(nameof(StaticCallReceiverRestorationTests.Cases), MemberType = typeof(StaticCallReceiverRestorationTests))]
     public void Isolated_Issue2523StaticCallReceiverRestorations_VerifyBeforeExecution(
         string name, string source, string expected)
     {

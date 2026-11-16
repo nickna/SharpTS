@@ -1,3 +1,4 @@
+using SharpTS.Tests.Infrastructure;
 using SharpTS.Tests.SharedTests;
 using Xunit;
 
@@ -23,7 +24,7 @@ public partial class StandaloneDllTests
     }
 
     [Theory]
-    [MemberData(nameof(ClassExpressionStaticSelfTests.Cases), MemberType = typeof(ClassExpressionStaticSelfTests))]
+    [DeploymentData(nameof(ClassExpressionStaticSelfTests.Cases), MemberType = typeof(ClassExpressionStaticSelfTests))]
     public void Saved_Issue2091ClassExpressionStaticSelf_VerifyBeforeExecution(
         string name, string source, string expected)
     {

@@ -81,3 +81,7 @@ known gaps, use [STATUS.md](../STATUS.md).
 - [String accumulator optimization](plans/archive/issue-857-string-accumulator-stringbuilder.md)
 - [Typed array-method pipeline](plans/archive/issue-861-array-methods-typed-pipeline.md)
 - [Sparse arrays in compiled mode](plans/archive/sparse-arrays-compile-mode.md)
+
+## Contributing and CI
+
+- [PR and daily test coverage](ci-test-coverage.md) — test partitions, schedules, full-run overrides and coverage proofs

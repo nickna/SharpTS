@@ -1,3 +1,4 @@
+using SharpTS.Tests.Infrastructure;
 using SharpTS.Tests.SharedTests;
 using Xunit;
 
@@ -5,7 +6,7 @@ namespace SharpTS.Tests.CompilerTests;
 
 public partial class StandaloneDllTests
 {
-    [Theory, MemberData(nameof(AccessorMethodNameTests.Cases), MemberType = typeof(AccessorMethodNameTests))]
+    [Theory, DeploymentData(nameof(AccessorMethodNameTests.Cases), MemberType = typeof(AccessorMethodNameTests))]
     public void Isolated_Issue2109AccessorMethodNames_VerifyBeforeExecution(
         string name, string source, string expected)
     {

@@ -1,3 +1,4 @@
+using SharpTS.Tests.Infrastructure;
 using SharpTS.Tests.SharedTests;
 using Xunit;
 
@@ -5,7 +6,7 @@ namespace SharpTS.Tests.CompilerTests;
 
 public partial class StandaloneDllTests
 {
-    [Theory, MemberData(nameof(StringClassFieldAssignmentTests.Cases), MemberType = typeof(StringClassFieldAssignmentTests))]
+    [Theory, DeploymentData(nameof(StringClassFieldAssignmentTests.Cases), MemberType = typeof(StringClassFieldAssignmentTests))]
     public void Isolated_Issue2556StringClassFields_VerifyBeforeExecution(
         string name, string source, string expected)
     {

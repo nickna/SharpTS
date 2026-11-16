@@ -1,3 +1,4 @@
+using SharpTS.Tests.Infrastructure;
 using SharpTS.Tests.SharedTests;
 using Xunit;
 
@@ -5,7 +6,7 @@ namespace SharpTS.Tests.CompilerTests;
 
 public partial class StandaloneDllTests
 {
-    [Theory, MemberData(nameof(UndefinedClassFieldValueTests.Cases), MemberType = typeof(UndefinedClassFieldValueTests))]
+    [Theory, DeploymentData(nameof(UndefinedClassFieldValueTests.Cases), MemberType = typeof(UndefinedClassFieldValueTests))]
     public void Isolated_Issue2555UndefinedClassFields_VerifyBeforeExecution(
         string name, string source, string expected)
     {

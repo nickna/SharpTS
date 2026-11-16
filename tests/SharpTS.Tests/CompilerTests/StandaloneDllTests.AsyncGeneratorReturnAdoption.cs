@@ -1,3 +1,4 @@
+using SharpTS.Tests.Infrastructure;
 using SharpTS.Tests.SharedTests;
 using Xunit;
 
@@ -5,7 +6,7 @@ namespace SharpTS.Tests.CompilerTests;
 
 public partial class StandaloneDllTests
 {
-    [Theory, MemberData(nameof(AsyncGeneratorReturnAdoptionTests.Cases), MemberType = typeof(AsyncGeneratorReturnAdoptionTests))]
+    [Theory, DeploymentData(nameof(AsyncGeneratorReturnAdoptionTests.Cases), MemberType = typeof(AsyncGeneratorReturnAdoptionTests))]
     public void Isolated_Issue2401AsyncGeneratorReturnAdoption_VerifyBeforeExecution(
         string name, string source, string expected)
     {

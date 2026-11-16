@@ -1,3 +1,4 @@
+using SharpTS.Tests.Infrastructure;
 using SharpTS.Tests.SharedTests;
 using Xunit;
 
@@ -5,7 +6,7 @@ namespace SharpTS.Tests.CompilerTests;
 
 public partial class StandaloneDllTests
 {
-    [Theory, MemberData(nameof(AccessorVisibilityRuntimeTests.Cases), MemberType = typeof(AccessorVisibilityRuntimeTests))]
+    [Theory, DeploymentData(nameof(AccessorVisibilityRuntimeTests.Cases), MemberType = typeof(AccessorVisibilityRuntimeTests))]
     public void Isolated_Issue2204AccessorVisibility_VerifiesPermittedOperations(
         string name, string source, string expected)
     {

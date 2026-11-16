@@ -1,3 +1,4 @@
+using SharpTS.Tests.Infrastructure;
 using SharpTS.Tests.SharedTests;
 using Xunit;
 
@@ -5,7 +6,7 @@ namespace SharpTS.Tests.CompilerTests;
 
 public partial class StandaloneDllTests
 {
-    [Theory, MemberData(nameof(MixedLiteralUnionReturnTests.Cases), MemberType = typeof(MixedLiteralUnionReturnTests))]
+    [Theory, DeploymentData(nameof(MixedLiteralUnionReturnTests.Cases), MemberType = typeof(MixedLiteralUnionReturnTests))]
     public void Isolated_Issue2383MixedLiteralReturns_VerifyBeforeExecution(
         string name, string source, string expected)
     {

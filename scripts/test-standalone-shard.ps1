@@ -2,6 +2,7 @@ param(
     [Parameter(Mandatory)][ValidateRange(0, 31)][int]$ShardIndex,
     [ValidateRange(1, 32)][int]$ShardCount = 3,
     [switch]$ExpandToFit,
+    [ValidateSet('Full', 'Pr')][string]$Coverage = 'Full',
     [switch]$DescribeOnly,
     [ValidateSet('Debug', 'Release')][string]$Configuration = 'Release',
     [switch]$IncludeExternal,
@@ -23,35 +24,14 @@ if ($IncludeExternal) {
     $baseFilter = 'FullyQualifiedName~SharpTS.Tests.CompilerTests.StandaloneDllTests.'
 }
 
-# Discover from the built assembly so new methods automatically join a shard.
-# Keep all rows of a theory together; its test method is the stable identity.
-$start = [Diagnostics.ProcessStartInfo]::new('dotnet')
-$start.UseShellExecute = $false
-$start.CreateNoWindow = $true
-$start.RedirectStandardOutput = $true
-$start.RedirectStandardError = $true
-foreach ($argument in @('test', $project, '--no-build', '--configuration', $Configuration,
-    '--list-tests', '--verbosity', 'quiet', '--filter', $baseFilter)) { $start.ArgumentList.Add($argument) }
-$process = [Diagnostics.Process]::Start($start)
-$reads = [Threading.CancellationTokenSource]::new()
-$stdout = $process.StandardOutput.ReadToEndAsync($reads.Token)
-$stderr = $process.StandardError.ReadToEndAsync($reads.Token)
-try {
-    if (-not $process.WaitForExit(60000)) { throw 'Standalone test discovery exceeded 60 seconds.' }
-    if (-not [Threading.Tasks.Task]::WaitAll([Threading.Tasks.Task[]]@($stdout, $stderr), 5000)) {
-        throw 'Standalone test discovery output did not close within 5 seconds.'
-    }
-    $discovery = @([regex]::Split($stdout.Result + $stderr.Result, '\r?\n'))
-    if ($process.ExitCode -ne 0) {
-        throw "Standalone test discovery failed:`n$($discovery -join [Environment]::NewLine)"
-    }
-} finally {
-    if (-not $process.HasExited) { $process.Kill($true); [void]$process.WaitForExit(5000) }
-    $reads.Cancel()
-    try { [void][Threading.Tasks.Task]::WaitAll([Threading.Tasks.Task[]]@($stdout, $stderr), 5000) } catch { }
-    $process.Dispose()
-    $reads.Dispose()
-}
+# Discover both cadences from the same assembly. Every method remains on PRs;
+# every omitted row is explicitly retained in the full daily inventory.
+. (Join-Path $PSScriptRoot 'test-inventory.ps1')
+$fullEntries = @(Get-TestInventory -Project $project -Configuration $Configuration -Filter $baseFilter -Coverage Full)
+$prEntries = @(Get-TestInventory -Project $project -Configuration $Configuration -Filter $baseFilter -Coverage Pr)
+$cadence = New-TestCadenceProof -Full $fullEntries -Pr $prEntries
+$chosenEntries = if ($Coverage -eq 'Full') { $fullEntries } else { $prEntries }
+$discovery = @('The following Tests are available:') + @($chosenEntries | ForEach-Object { "    $_" })
 $listedMethods = [System.Collections.Generic.List[string]]::new()
 $inListing = $false
 foreach ($line in $discovery) {
@@ -73,6 +53,7 @@ $methods = $plan.Methods
 $selected = $partition.SelectedMethods
 $filter = $partition.Filter
 $description = [ordered]@{
+    Coverage = $Coverage
     ShardIndex = $ShardIndex
     ShardCount = $ShardCount
     BaseFilter = $baseFilter
@@ -105,6 +86,18 @@ if ($ResultsDirectory) {
     [IO.File]::WriteAllText((Join-Path $resolvedResultsDirectory "standalone-$ShardIndex-plan.json"), $descriptionJson)
 }
 
+if ($resolvedResultsDirectory) {
+    $cadence | ConvertTo-Json -Depth 5 | Set-Content (Join-Path $resolvedResultsDirectory 'cadence-proof.json')
+    $actual = @(Get-TestInventory -Project $project -Configuration $Configuration -Filter $filter -Coverage $Coverage)
+    $expected = @($chosenEntries | Where-Object { (($_ -split '\(', 2)[0]) -cin $selected })
+    Assert-SameTestInventory $expected $actual
+    [ordered]@{
+        Kind = 'standalone'; Coverage = $Coverage; ShardIndex = $ShardIndex; ShardCount = $ShardCount
+        InventoryDigest = $plan.InventoryDigest; DiscoveredEntries = $plan.DiscoveredEntries
+        AllUnits = $methods; SelectedUnits = $selected; SelectedEntries = $actual.Count; ExactOnce = $true
+    } | ConvertTo-Json -Depth 5 | Set-Content (Join-Path $resolvedResultsDirectory 'shard-proof.json')
+}
+
 if ($DescribeOnly) {
     $descriptionJson
     return
@@ -120,10 +113,16 @@ if ($resolvedResultsDirectory) {
 $started = [DateTimeOffset]::UtcNow
 $elapsed = [Diagnostics.Stopwatch]::StartNew()
 $testExitCode = $null
+$previousCoverage = $env:SHARPTS_DEPLOYMENT_COVERAGE
 try {
+    $env:SHARPTS_DEPLOYMENT_COVERAGE = $Coverage
     & dotnet @testArguments
     $testExitCode = $LASTEXITCODE
+    if ($testExitCode -eq 0 -and $resolvedResultsDirectory) {
+        Assert-TestResults (Join-Path $resolvedResultsDirectory "standalone-$ShardIndex.trx") $actual.Count $selected standalone
+    }
 } finally {
+    $env:SHARPTS_DEPLOYMENT_COVERAGE = $previousCoverage
     $elapsed.Stop()
     if ($resolvedResultsDirectory) {
         [ordered]@{

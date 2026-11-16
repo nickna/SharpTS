@@ -1,3 +1,4 @@
+using SharpTS.Tests.Infrastructure;
 using SharpTS.Tests.SharedTests;
 using Xunit;
 
@@ -5,7 +6,7 @@ namespace SharpTS.Tests.CompilerTests;
 
 public partial class StandaloneDllTests
 {
-    [Theory, MemberData(nameof(InheritedGenericConstructorTests.Cases), MemberType = typeof(InheritedGenericConstructorTests))]
+    [Theory, DeploymentData(nameof(InheritedGenericConstructorTests.Cases), MemberType = typeof(InheritedGenericConstructorTests))]
     public void Isolated_Issue2206InheritedGenericConstructors_VerifiesEverySubstitutionPath(
         string name, string source, string expected)
     {

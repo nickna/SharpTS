@@ -1,3 +1,4 @@
+using SharpTS.Tests.Infrastructure;
 using System.Security.Cryptography;
 using Xunit;
 
@@ -6,7 +7,7 @@ namespace SharpTS.Tests.CompilerTests;
 public partial class StandaloneDllTests
 {
     [Theory]
-    [MemberData(nameof(SharedTests.WeakMapAwaitTests.Cases), MemberType = typeof(SharedTests.WeakMapAwaitTests))]
+    [DeploymentData(nameof(SharedTests.WeakMapAwaitTests.Cases), MemberType = typeof(SharedTests.WeakMapAwaitTests))]
     public void Isolated_WeakMapAwait_PreservesReceiverAndArgumentSlots(
         string name, string source, string expected)
     {

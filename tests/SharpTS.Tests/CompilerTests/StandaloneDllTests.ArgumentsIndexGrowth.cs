@@ -1,3 +1,4 @@
+using SharpTS.Tests.Infrastructure;
 using System.Security.Cryptography;
 using SharpTS.Tests.SharedTests;
 using Xunit;
@@ -6,7 +7,7 @@ namespace SharpTS.Tests.CompilerTests;
 
 public partial class StandaloneDllTests
 {
-    [Theory, MemberData(nameof(ArgumentsIndexGrowthTests.Cases), MemberType = typeof(ArgumentsIndexGrowthTests))]
+    [Theory, DeploymentData(nameof(ArgumentsIndexGrowthTests.Cases), MemberType = typeof(ArgumentsIndexGrowthTests))]
     public void Isolated_ArgumentsIndexGrowth_VerifyBeforeExecution(string name, string source, string expected)
     {
         Assert.NotEmpty(name);

@@ -1,3 +1,4 @@
+using SharpTS.Tests.Infrastructure;
 using SharpTS.Tests.SharedTests;
 using Xunit;
 
@@ -5,7 +6,7 @@ namespace SharpTS.Tests.CompilerTests;
 
 public partial class StandaloneDllTests
 {
-    [Theory, MemberData(nameof(GroupedTaggedTemplateReferenceTests.Cases), MemberType = typeof(GroupedTaggedTemplateReferenceTests))]
+    [Theory, DeploymentData(nameof(GroupedTaggedTemplateReferenceTests.Cases), MemberType = typeof(GroupedTaggedTemplateReferenceTests))]
     public void Isolated_Issue2209GroupedTaggedTemplateReferences_VerifiesReceiverAndSuspension(
         string name, string source, string expected)
     {

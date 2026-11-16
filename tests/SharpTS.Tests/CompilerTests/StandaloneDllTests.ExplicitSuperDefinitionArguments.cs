@@ -1,3 +1,4 @@
+using SharpTS.Tests.Infrastructure;
 using SharpTS.Tests.SharedTests;
 using Xunit;
 
@@ -5,7 +6,7 @@ namespace SharpTS.Tests.CompilerTests;
 
 public partial class StandaloneDllTests
 {
-    [Theory, MemberData(nameof(ExplicitSuperDefinitionArgumentsTests.Cases),
+    [Theory, DeploymentData(nameof(ExplicitSuperDefinitionArgumentsTests.Cases),
         MemberType = typeof(ExplicitSuperDefinitionArgumentsTests))]
     public void Isolated_Issue2143ExplicitSuper_SeparatesGuestArgumentsFromMetadata(
         string name, string source, string expected)

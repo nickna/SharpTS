@@ -1,3 +1,4 @@
+using SharpTS.Tests.Infrastructure;
 using SharpTS.Tests.SharedTests;
 using Xunit;
 
@@ -5,7 +6,7 @@ namespace SharpTS.Tests.CompilerTests;
 
 public partial class StandaloneDllTests
 {
-    [Theory, MemberData(nameof(InheritedArrowBindingMembershipTests.Cases), MemberType = typeof(InheritedArrowBindingMembershipTests))]
+    [Theory, DeploymentData(nameof(InheritedArrowBindingMembershipTests.Cases), MemberType = typeof(InheritedArrowBindingMembershipTests))]
     public void Isolated_Issue2517InheritedArrowBindingMemberships_VerifyBeforeExecution(
         string name, string source, string expected)
     {

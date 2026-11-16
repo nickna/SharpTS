@@ -30,7 +30,7 @@ public partial class StandaloneDllTests
             "direct error true\ncoerced error true\nreads 0\n");
     }
 
-    [Theory, MemberData(nameof(ReflectSymbolDeletionTests.OrdinaryCases), MemberType = typeof(ReflectSymbolDeletionTests))]
+    [Theory, DeploymentData(nameof(ReflectSymbolDeletionTests.OrdinaryCases), MemberType = typeof(ReflectSymbolDeletionTests))]
     public void Isolated_Issue2160ReflectSymbolDeletion_VerifiesBeforeExecution(
         string name, string source, string expected)
     {
@@ -46,7 +46,7 @@ public partial class StandaloneDllTests
             .Where(row => (ExecutionMode)row[3] == ExecutionMode.Compiled)
             .Select(row => new object[] { row[0], row[1], row[2] });
 
-    [Theory, MemberData(nameof(Issue2160ProxyDeletionCompiledCases))]
+    [Theory, DeploymentData(nameof(Issue2160ProxyDeletionCompiledCases))]
     public void Saved_Issue2160ReflectSymbolDeletion_UsesDeclaredProxyRuntime(
         string name, string source, string expected)
     {

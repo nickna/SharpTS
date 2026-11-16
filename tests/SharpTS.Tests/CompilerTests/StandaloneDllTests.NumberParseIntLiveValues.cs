@@ -1,3 +1,4 @@
+using SharpTS.Tests.Infrastructure;
 using SharpTS.Tests.SharedTests;
 using Xunit;
 
@@ -5,7 +6,7 @@ namespace SharpTS.Tests.CompilerTests;
 
 public partial class StandaloneDllTests
 {
-    [Theory, MemberData(nameof(NumberParseIntLiveValueTests.SavedCases), MemberType = typeof(NumberParseIntLiveValueTests))]
+    [Theory, DeploymentData(nameof(NumberParseIntLiveValueTests.SavedCases), MemberType = typeof(NumberParseIntLiveValueTests))]
     public void Isolated_Issue2689NumberParseIntLiveValues_VerifyBeforeExecution(
         string name, string source, string expected)
     {

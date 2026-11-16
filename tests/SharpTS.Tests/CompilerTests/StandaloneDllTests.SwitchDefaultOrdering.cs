@@ -1,3 +1,4 @@
+using SharpTS.Tests.Infrastructure;
 using SharpTS.Tests.SharedTests;
 using Xunit;
 
@@ -9,7 +10,7 @@ public partial class StandaloneDllTests
         (string)row[0] is "case-effects-stop-after-match" or "awaited-tests-and-bodies" or "yielded-tests-and-bodies"
             or "generator-case-destructuring-spill");
 
-    [Theory, MemberData(nameof(SwitchDefaultOrderingPrograms))]
+    [Theory, DeploymentData(nameof(SwitchDefaultOrderingPrograms))]
     public void Isolated_SwitchDefaultOrdering_VerifyBeforeExecution(string name, string source, string expected)
     {
         using var directory = IntegrationTests.CliTestHelper.CreateTempDirectory();

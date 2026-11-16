@@ -1,3 +1,4 @@
+using SharpTS.Tests.Infrastructure;
 using SharpTS.Tests.SharedTests;
 using Xunit;
 
@@ -5,7 +6,7 @@ namespace SharpTS.Tests.CompilerTests;
 
 public partial class StandaloneDllTests
 {
-    [Theory, MemberData(nameof(SymbolUnionEqualityTests.Cases), MemberType = typeof(SymbolUnionEqualityTests))]
+    [Theory, DeploymentData(nameof(SymbolUnionEqualityTests.Cases), MemberType = typeof(SymbolUnionEqualityTests))]
     public void Isolated_Issue2256SymbolUnionEquality_VerifyBeforeExecution(
         string name, string source, string expected)
     {

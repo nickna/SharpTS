@@ -1,3 +1,4 @@
+using SharpTS.Tests.Infrastructure;
 using SharpTS.Tests.SharedTests;
 using Xunit;
 
@@ -5,7 +6,7 @@ namespace SharpTS.Tests.CompilerTests;
 
 public partial class StandaloneDllTests
 {
-    [Theory, MemberData(nameof(PrimitiveStringAccessorReceiverTests.SavedCases), MemberType = typeof(PrimitiveStringAccessorReceiverTests))]
+    [Theory, DeploymentData(nameof(PrimitiveStringAccessorReceiverTests.SavedCases), MemberType = typeof(PrimitiveStringAccessorReceiverTests))]
     public void Isolated_Issue2699PrimitiveStringAccessorReceivers_VerifyBeforeExecution(
         string name, string source, string expected)
     {

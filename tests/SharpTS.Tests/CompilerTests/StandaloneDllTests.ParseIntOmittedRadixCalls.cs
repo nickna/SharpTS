@@ -1,3 +1,4 @@
+using SharpTS.Tests.Infrastructure;
 using System.Security.Cryptography;
 using SharpTS.Tests.SharedTests;
 using Xunit;
@@ -6,7 +7,7 @@ namespace SharpTS.Tests.CompilerTests;
 
 public partial class StandaloneDllTests
 {
-    [Theory, MemberData(nameof(ParseIntOmittedRadixCallShapeTests.Cases), MemberType = typeof(ParseIntOmittedRadixCallShapeTests))]
+    [Theory, DeploymentData(nameof(ParseIntOmittedRadixCallShapeTests.Cases), MemberType = typeof(ParseIntOmittedRadixCallShapeTests))]
     public void Isolated_ParseIntOmittedRadixCallShapes_VerifyBeforeExecution(string name, string source, string expected)
     {
         Assert.NotEmpty(name);

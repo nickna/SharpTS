@@ -1,3 +1,4 @@
+using SharpTS.Tests.Infrastructure;
 using SharpTS.Tests.SharedTests;
 using Xunit;
 
@@ -5,7 +6,7 @@ namespace SharpTS.Tests.CompilerTests;
 
 public partial class StandaloneDllTests
 {
-    [Theory, MemberData(nameof(BlockGeneratorExpressionTests.Cases), MemberType = typeof(BlockGeneratorExpressionTests))]
+    [Theory, DeploymentData(nameof(BlockGeneratorExpressionTests.Cases), MemberType = typeof(BlockGeneratorExpressionTests))]
     public void Isolated_Issue2149BlockGeneratorExpressions_PreserveScopeAndInvocation(
         string name, string source, string expected)
     {

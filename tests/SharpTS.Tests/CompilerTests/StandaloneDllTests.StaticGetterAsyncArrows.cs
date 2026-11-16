@@ -1,3 +1,4 @@
+using SharpTS.Tests.Infrastructure;
 using SharpTS.Tests.SharedTests;
 using Xunit;
 
@@ -5,7 +6,7 @@ namespace SharpTS.Tests.CompilerTests;
 
 public partial class StandaloneDllTests
 {
-    [Theory, MemberData(nameof(StaticGetterAsyncArrowTests.Cases), MemberType = typeof(StaticGetterAsyncArrowTests))]
+    [Theory, DeploymentData(nameof(StaticGetterAsyncArrowTests.Cases), MemberType = typeof(StaticGetterAsyncArrowTests))]
     public void Isolated_Issue2243StaticGetterAsyncArrows_VerifyBeforeExecution(string name, string source, string expected)
     {
         using var directory = IntegrationTests.CliTestHelper.CreateTempDirectory();

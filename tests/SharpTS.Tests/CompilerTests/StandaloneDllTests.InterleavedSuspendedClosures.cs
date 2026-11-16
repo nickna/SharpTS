@@ -1,3 +1,4 @@
+using SharpTS.Tests.Infrastructure;
 using SharpTS.Tests.SharedTests;
 using Xunit;
 
@@ -5,7 +6,7 @@ namespace SharpTS.Tests.CompilerTests;
 
 public partial class StandaloneDllTests
 {
-    [Theory, MemberData(nameof(InterleavedSuspendedClosureTests.Cases), MemberType = typeof(InterleavedSuspendedClosureTests))]
+    [Theory, DeploymentData(nameof(InterleavedSuspendedClosureTests.Cases), MemberType = typeof(InterleavedSuspendedClosureTests))]
     public void Isolated_Issue2155SuspendedMethods_RetainCapturedClosures(
         string name, string source, string expected)
     {

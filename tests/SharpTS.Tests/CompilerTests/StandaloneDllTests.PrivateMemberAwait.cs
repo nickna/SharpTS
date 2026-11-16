@@ -1,3 +1,4 @@
+using SharpTS.Tests.Infrastructure;
 using System.Security.Cryptography;
 using Xunit;
 
@@ -6,7 +7,7 @@ namespace SharpTS.Tests.CompilerTests;
 public partial class StandaloneDllTests
 {
     [Theory]
-    [MemberData(nameof(SharedTests.PrivateMemberAwaitSpillTests.Cases), MemberType = typeof(SharedTests.PrivateMemberAwaitSpillTests))]
+    [DeploymentData(nameof(SharedTests.PrivateMemberAwaitSpillTests.Cases), MemberType = typeof(SharedTests.PrivateMemberAwaitSpillTests))]
     public void Isolated_PrivateMemberAwait_PreservesOperandsAndEvaluationOrder(
         string name, string source, string expected)
     {

@@ -1,3 +1,4 @@
+using SharpTS.Tests.Infrastructure;
 using SharpTS.Tests.SharedTests;
 using Xunit;
 
@@ -5,7 +6,7 @@ namespace SharpTS.Tests.CompilerTests;
 
 public partial class StandaloneDllTests
 {
-    [Theory, MemberData(nameof(ArrayLargeCanonicalStringIndexReadTests.Cases), MemberType = typeof(ArrayLargeCanonicalStringIndexReadTests))]
+    [Theory, DeploymentData(nameof(ArrayLargeCanonicalStringIndexReadTests.Cases), MemberType = typeof(ArrayLargeCanonicalStringIndexReadTests))]
     public void Isolated_Issue2783ArrayLargeCanonicalStringIndexReads_VerifyBeforeExecution(
         string name, string source, string expected)
     {

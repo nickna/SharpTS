@@ -1,3 +1,4 @@
+using SharpTS.Tests.Infrastructure;
 using SharpTS.Tests.SharedTests;
 using Xunit;
 
@@ -5,7 +6,7 @@ namespace SharpTS.Tests.CompilerTests;
 
 public partial class StandaloneDllTests
 {
-    [Theory, MemberData(nameof(ClassPrototypeOwnKeyReflectionTests.PrototypeCreationOrderCases), MemberType = typeof(ClassPrototypeOwnKeyReflectionTests))]
+    [Theory, DeploymentData(nameof(ClassPrototypeOwnKeyReflectionTests.PrototypeCreationOrderCases), MemberType = typeof(ClassPrototypeOwnKeyReflectionTests))]
     public void Isolated_Issue2675ClassPrototypeCreationOrder_VerifyBeforeExecution(
         string name, string source, string expected)
     {

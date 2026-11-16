@@ -1,3 +1,4 @@
+using SharpTS.Tests.Infrastructure;
 using System.Diagnostics;
 using SharpTS.HostedInitializationFixture;
 using SharpTS.Testing;
@@ -15,7 +16,7 @@ public partial class StandaloneDllTests
         select new object[] { program[0], program[1], hosted };
 
     [Theory]
-    [MemberData(nameof(MapGroupByDeploymentPrograms))]
+    [DeploymentData(nameof(MapGroupByDeploymentPrograms))]
     public void Isolated_Issue1928MapGroupBy_ExecutesStandaloneAndHosted(string name, string source, bool hosted)
     {
         using var directory = CliTestHelper.CreateTempDirectory();

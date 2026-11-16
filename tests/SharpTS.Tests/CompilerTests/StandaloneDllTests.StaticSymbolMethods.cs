@@ -1,3 +1,4 @@
+using SharpTS.Tests.Infrastructure;
 using SharpTS.Tests.SharedTests;
 using Xunit;
 
@@ -24,13 +25,13 @@ public partial class StandaloneDllTests
     }
 
     [Theory]
-    [MemberData(nameof(StaticSymbolMethodIdentityTests.ClosedGenericCases), MemberType = typeof(StaticSymbolMethodIdentityTests))]
+    [DeploymentData(nameof(StaticSymbolMethodIdentityTests.ClosedGenericCases), MemberType = typeof(StaticSymbolMethodIdentityTests))]
     public void Isolated_Issue2122ClosedGenericStaticSymbolMethods_PreserveCanonicalValues(
         string name, string source, string expected)
         => AssertStaticSymbolMethodSource("closed-generic-" + name, source, expected);
 
     [Theory]
-    [MemberData(nameof(StaticSymbolMethodAssignmentTests.DescriptorCases), MemberType = typeof(StaticSymbolMethodAssignmentTests))]
+    [DeploymentData(nameof(StaticSymbolMethodAssignmentTests.DescriptorCases), MemberType = typeof(StaticSymbolMethodAssignmentTests))]
     public void Isolated_Issue2213StaticSymbolMethods_HaveLiveOwnDescriptors(
         string name, string source, string expected)
     {

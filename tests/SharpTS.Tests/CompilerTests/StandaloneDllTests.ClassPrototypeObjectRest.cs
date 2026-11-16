@@ -1,3 +1,4 @@
+using SharpTS.Tests.Infrastructure;
 using Xunit;
 
 namespace SharpTS.Tests.CompilerTests;
@@ -34,7 +35,7 @@ public partial class StandaloneDllTests
     }
 
     // #2671 separately owns the interpreter's missing class-prototype copy path.
-    [Theory, MemberData(nameof(ClassPrototypeObjectRestCases))]
+    [Theory, DeploymentData(nameof(ClassPrototypeObjectRestCases))]
     public void Isolated_Issue2757ClassPrototypeObjectRest_VerifyBeforeExecution(
         string name, string source, string expected)
     {

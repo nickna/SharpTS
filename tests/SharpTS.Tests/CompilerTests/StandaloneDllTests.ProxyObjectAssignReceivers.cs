@@ -9,7 +9,7 @@ namespace SharpTS.Tests.CompilerTests;
 
 public partial class StandaloneDllTests
 {
-    [Theory, MemberData(nameof(ProxyObjectAssignReceiverTests.Cases), MemberType = typeof(ProxyObjectAssignReceiverTests))]
+    [Theory, DeploymentData(nameof(ProxyObjectAssignReceiverTests.Cases), MemberType = typeof(ProxyObjectAssignReceiverTests))]
     public void Isolated_ProxyObjectAssignReceiver_VerifyBeforeExecution(
         string name, string source, string expected)
     {

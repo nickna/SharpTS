@@ -1,3 +1,4 @@
+using SharpTS.Tests.Infrastructure;
 using SharpTS.Tests.SharedTests;
 using Xunit;
 
@@ -5,7 +6,7 @@ namespace SharpTS.Tests.CompilerTests;
 
 public partial class StandaloneDllTests
 {
-    [Theory, MemberData(nameof(PristineParseIntArgumentOrderTests.SavedCases), MemberType = typeof(PristineParseIntArgumentOrderTests))]
+    [Theory, DeploymentData(nameof(PristineParseIntArgumentOrderTests.SavedCases), MemberType = typeof(PristineParseIntArgumentOrderTests))]
     public void Isolated_Issue2697PristineParseIntArgumentOrder_VerifyBeforeExecution(
         string name, string source, string expected)
     {

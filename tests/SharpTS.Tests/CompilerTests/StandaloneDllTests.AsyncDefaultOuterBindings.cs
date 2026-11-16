@@ -1,3 +1,4 @@
+using SharpTS.Tests.Infrastructure;
 using SharpTS.Tests.SharedTests;
 using Xunit;
 
@@ -5,7 +6,7 @@ namespace SharpTS.Tests.CompilerTests;
 
 public partial class StandaloneDllTests
 {
-    [Theory, MemberData(nameof(AsyncDefaultOuterBindingTests.StandaloneCases), MemberType = typeof(AsyncDefaultOuterBindingTests))]
+    [Theory, DeploymentData(nameof(AsyncDefaultOuterBindingTests.StandaloneCases), MemberType = typeof(AsyncDefaultOuterBindingTests))]
     public void Isolated_Issue2661AsyncDefaultOuterBinding_VerifyBeforeExecution(
         string name, string source, string expected)
     {

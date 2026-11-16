@@ -1,3 +1,4 @@
+using SharpTS.Tests.Infrastructure;
 using System.Reflection;
 using System.Reflection.Metadata;
 using System.Reflection.PortableExecutable;
@@ -8,7 +9,7 @@ namespace SharpTS.Tests.CompilerTests;
 
 public partial class StandaloneDllTests
 {
-    [Theory, MemberData(nameof(AbstractClassPrototypeTests.Cases), MemberType = typeof(AbstractClassPrototypeTests))]
+    [Theory, DeploymentData(nameof(AbstractClassPrototypeTests.Cases), MemberType = typeof(AbstractClassPrototypeTests))]
     public void Isolated_Issue2428AbstractClassPrototypes_VerifyBeforeExecution(
         string name, string source, string expected)
     {

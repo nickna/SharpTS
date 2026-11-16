@@ -1,3 +1,4 @@
+using SharpTS.Tests.Infrastructure;
 using SharpTS.Tests.SharedTests;
 using Xunit;
 
@@ -5,7 +6,7 @@ namespace SharpTS.Tests.CompilerTests;
 
 public partial class StandaloneDllTests
 {
-    [Theory, MemberData(nameof(GlobalParseIntBindingTests.SavedCases), MemberType = typeof(GlobalParseIntBindingTests))]
+    [Theory, DeploymentData(nameof(GlobalParseIntBindingTests.SavedCases), MemberType = typeof(GlobalParseIntBindingTests))]
     public void Isolated_Issue2693GlobalParseIntDescriptorCalls_VerifyBeforeExecution(
         string name, string source, string expected)
     {

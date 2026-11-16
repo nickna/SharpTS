@@ -1,3 +1,4 @@
+using SharpTS.Tests.Infrastructure;
 using SharpTS.Tests.SharedTests;
 using Xunit;
 
@@ -5,7 +6,7 @@ namespace SharpTS.Tests.CompilerTests;
 
 public partial class StandaloneDllTests
 {
-    [Theory, MemberData(nameof(PromiseAbsentPropertyReadTests.SavedCases), MemberType = typeof(PromiseAbsentPropertyReadTests))]
+    [Theory, DeploymentData(nameof(PromiseAbsentPropertyReadTests.SavedCases), MemberType = typeof(PromiseAbsentPropertyReadTests))]
     public void Isolated_Issue2704PromiseAbsentPropertyReads_VerifyBeforeExecution(
         string name, string source, string expected)
     {

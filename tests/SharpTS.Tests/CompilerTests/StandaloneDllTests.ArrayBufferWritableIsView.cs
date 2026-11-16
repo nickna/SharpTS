@@ -1,3 +1,4 @@
+using SharpTS.Tests.Infrastructure;
 using System.Security.Cryptography;
 using SharpTS.Tests.SharedTests;
 using Xunit;
@@ -6,7 +7,7 @@ namespace SharpTS.Tests.CompilerTests;
 
 public partial class StandaloneDllTests
 {
-    [Theory, MemberData(nameof(ArrayBufferWritableIsViewTests.Cases), MemberType = typeof(ArrayBufferWritableIsViewTests))]
+    [Theory, DeploymentData(nameof(ArrayBufferWritableIsViewTests.Cases), MemberType = typeof(ArrayBufferWritableIsViewTests))]
     public void Isolated_ArrayBufferWritableIsView_VerifyBeforeExecution(string name, string source, string expected)
     {
         Assert.NotEmpty(name);

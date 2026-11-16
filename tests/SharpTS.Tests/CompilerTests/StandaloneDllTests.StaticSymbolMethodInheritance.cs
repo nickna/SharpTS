@@ -1,3 +1,4 @@
+using SharpTS.Tests.Infrastructure;
 using SharpTS.Tests.SharedTests;
 using Xunit;
 
@@ -6,7 +7,7 @@ namespace SharpTS.Tests.CompilerTests;
 public partial class StandaloneDllTests
 {
     [Theory]
-    [MemberData(nameof(StaticSymbolMethodInheritanceTests.Cases), MemberType = typeof(StaticSymbolMethodInheritanceTests))]
+    [DeploymentData(nameof(StaticSymbolMethodInheritanceTests.Cases), MemberType = typeof(StaticSymbolMethodInheritanceTests))]
     public void Saved_Issue2094StaticSymbolMethodInheritance_VerifyBeforeExecution(
         string name, string source, string expected)
     {

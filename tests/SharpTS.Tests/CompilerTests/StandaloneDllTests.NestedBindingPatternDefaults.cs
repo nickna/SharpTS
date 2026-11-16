@@ -1,3 +1,4 @@
+using SharpTS.Tests.Infrastructure;
 using SharpTS.Tests.SharedTests;
 using Xunit;
 
@@ -5,7 +6,7 @@ namespace SharpTS.Tests.CompilerTests;
 
 public partial class StandaloneDllTests
 {
-    [Theory, MemberData(nameof(NestedBindingPatternDefaultTests.Cases), MemberType = typeof(NestedBindingPatternDefaultTests))]
+    [Theory, DeploymentData(nameof(NestedBindingPatternDefaultTests.Cases), MemberType = typeof(NestedBindingPatternDefaultTests))]
     public void Isolated_Issue2748NestedBindingPatternDefaults_VerifyBeforeExecution(
         string name, string source, string expected)
     {

@@ -1,3 +1,4 @@
+using SharpTS.Tests.Infrastructure;
 using SharpTS.Tests.SharedTests;
 using Xunit;
 
@@ -5,7 +6,7 @@ namespace SharpTS.Tests.CompilerTests;
 
 public partial class StandaloneDllTests
 {
-    [Theory, MemberData(nameof(GeneratorForOfAcquisitionTests.Cases), MemberType = typeof(GeneratorForOfAcquisitionTests))]
+    [Theory, DeploymentData(nameof(GeneratorForOfAcquisitionTests.Cases), MemberType = typeof(GeneratorForOfAcquisitionTests))]
     public void Isolated_Issue2135GeneratorForOfAcquisition_PreservesProtocolsAndNativeValues(
         string name, string source, string expected)
     {

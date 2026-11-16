@@ -1,3 +1,4 @@
+using SharpTS.Tests.Infrastructure;
 using SharpTS.Tests.SharedTests;
 using Xunit;
 
@@ -5,7 +6,7 @@ namespace SharpTS.Tests.CompilerTests;
 
 public partial class StandaloneDllTests
 {
-    [Theory, MemberData(nameof(AsyncGeneratorFinallyExceptionStateTests.Cases), MemberType = typeof(AsyncGeneratorFinallyExceptionStateTests))]
+    [Theory, DeploymentData(nameof(AsyncGeneratorFinallyExceptionStateTests.Cases), MemberType = typeof(AsyncGeneratorFinallyExceptionStateTests))]
     public void Isolated_Issue2846AsyncGeneratorFinallyException_VerifyBeforeExecution(
         string name, string source, string expected)
     {

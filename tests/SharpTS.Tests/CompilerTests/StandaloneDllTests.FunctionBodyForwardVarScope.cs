@@ -1,3 +1,4 @@
+using SharpTS.Tests.Infrastructure;
 using SharpTS.Tests.SharedTests;
 using Xunit;
 
@@ -5,7 +6,7 @@ namespace SharpTS.Tests.CompilerTests;
 
 public partial class StandaloneDllTests
 {
-    [Theory, MemberData(nameof(FunctionBodyForwardVarScopeTests.Cases), MemberType = typeof(FunctionBodyForwardVarScopeTests))]
+    [Theory, DeploymentData(nameof(FunctionBodyForwardVarScopeTests.Cases), MemberType = typeof(FunctionBodyForwardVarScopeTests))]
     public void Isolated_Issue25FunctionBodyForwardVarScope_VerifyBeforeExecution(
         string name, string source, string expected)
     {

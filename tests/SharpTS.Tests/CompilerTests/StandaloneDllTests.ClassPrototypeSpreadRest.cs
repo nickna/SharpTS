@@ -1,3 +1,4 @@
+using SharpTS.Tests.Infrastructure;
 using SharpTS.Tests.SharedTests;
 using Xunit;
 
@@ -5,7 +6,7 @@ namespace SharpTS.Tests.CompilerTests;
 
 public partial class StandaloneDllTests
 {
-    [Theory, MemberData(nameof(ClassPrototypeSpreadRestTests.Cases), MemberType = typeof(ClassPrototypeSpreadRestTests))]
+    [Theory, DeploymentData(nameof(ClassPrototypeSpreadRestTests.Cases), MemberType = typeof(ClassPrototypeSpreadRestTests))]
     public void Isolated_Issue2671ClassPrototypeSpreadRest_VerifyBeforeExecution(
         string name, string source, string expected)
     {

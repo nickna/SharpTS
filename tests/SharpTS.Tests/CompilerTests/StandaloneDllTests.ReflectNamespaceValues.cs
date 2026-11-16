@@ -1,3 +1,4 @@
+using SharpTS.Tests.Infrastructure;
 using SharpTS.Tests.SharedTests;
 using Xunit;
 
@@ -5,7 +6,7 @@ namespace SharpTS.Tests.CompilerTests;
 
 public partial class StandaloneDllTests
 {
-    [Theory, MemberData(nameof(ReflectNamespaceValueTests.Cases), MemberType = typeof(ReflectNamespaceValueTests))]
+    [Theory, DeploymentData(nameof(ReflectNamespaceValueTests.Cases), MemberType = typeof(ReflectNamespaceValueTests))]
     public void Isolated_Issue2803ReflectNamespaceValues_VerifyBeforeExecution(
         string name, string source, string expected)
     {

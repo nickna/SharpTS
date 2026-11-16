@@ -8,7 +8,7 @@ namespace SharpTS.Tests.CompilerTests;
 
 public partial class StandaloneDllTests
 {
-    [Theory, MemberData(nameof(ComputedDeclarationMetadataFieldTests.SavedCases), MemberType = typeof(ComputedDeclarationMetadataFieldTests))]
+    [Theory, DeploymentData(nameof(ComputedDeclarationMetadataFieldTests.SavedCases), MemberType = typeof(ComputedDeclarationMetadataFieldTests))]
     public void Isolated_Issue2719ComputedDeclarationMetadataFields_VerifyBeforeExecution(
         string name, string source, string expected)
     {

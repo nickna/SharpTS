@@ -1,3 +1,4 @@
+using SharpTS.Tests.Infrastructure;
 using SharpTS.Tests.SharedTests;
 using Xunit;
 
@@ -5,7 +6,7 @@ namespace SharpTS.Tests.CompilerTests;
 
 public partial class StandaloneDllTests
 {
-    [Theory, MemberData(nameof(NonNullCallReferenceTests.Cases), MemberType = typeof(NonNullCallReferenceTests))]
+    [Theory, DeploymentData(nameof(NonNullCallReferenceTests.Cases), MemberType = typeof(NonNullCallReferenceTests))]
     public void Isolated_Issue2210NonNullCallReferences_VerifiesReceiverAndArgumentOrder(
         string name, string source, string expected)
     {

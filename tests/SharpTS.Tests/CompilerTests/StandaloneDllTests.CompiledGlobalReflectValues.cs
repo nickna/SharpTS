@@ -1,3 +1,4 @@
+using SharpTS.Tests.Infrastructure;
 using SharpTS.Tests.SharedTests;
 using Xunit;
 
@@ -5,7 +6,7 @@ namespace SharpTS.Tests.CompilerTests;
 
 public partial class StandaloneDllTests
 {
-    [Theory, MemberData(nameof(CompiledGlobalReflectValueTests.Cases), MemberType = typeof(CompiledGlobalReflectValueTests))]
+    [Theory, DeploymentData(nameof(CompiledGlobalReflectValueTests.Cases), MemberType = typeof(CompiledGlobalReflectValueTests))]
     public void Isolated_Issue2863GlobalReflectValues_VerifyBeforeExecution(
         string name, string source, string expected)
     {

@@ -1,3 +1,4 @@
+using SharpTS.Tests.Infrastructure;
 using SharpTS.Tests.SharedTests;
 using Xunit;
 
@@ -5,7 +6,7 @@ namespace SharpTS.Tests.CompilerTests;
 
 public partial class StandaloneDllTests
 {
-    [Theory, MemberData(nameof(AsyncExceptionPresenceTests.Cases), MemberType = typeof(AsyncExceptionPresenceTests))]
+    [Theory, DeploymentData(nameof(AsyncExceptionPresenceTests.Cases), MemberType = typeof(AsyncExceptionPresenceTests))]
     public void Isolated_Issue2847AsyncExceptionPresence_VerifyBeforeExecution(
         string name, string source, string expected)
     {

@@ -1,10 +1,11 @@
+using SharpTS.Tests.Infrastructure;
 using Xunit;
 
 namespace SharpTS.Tests.CompilerTests;
 
 public partial class StandaloneDllTests
 {
-    [Theory, MemberData(nameof(ReflectArrayLikeArgumentListTests.Cases),
+    [Theory, DeploymentData(nameof(ReflectArrayLikeArgumentListTests.Cases),
         MemberType = typeof(ReflectArrayLikeArgumentListTests))]
     public void Isolated_Issue3110ReflectArrayLikeArguments_VerifyBeforeExecution(
         string name, string source, string expected)

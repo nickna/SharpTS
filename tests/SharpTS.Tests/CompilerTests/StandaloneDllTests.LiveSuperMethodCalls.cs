@@ -25,7 +25,7 @@ public partial class StandaloneDllTests
                 verifyStandardError: error => Assert.Empty(error), standardInput: ""));
     }
 
-    [Theory, MemberData(nameof(LiveSuperMethodCallTests.Cases), MemberType = typeof(LiveSuperMethodCallTests))]
+    [Theory, DeploymentData(nameof(LiveSuperMethodCallTests.Cases), MemberType = typeof(LiveSuperMethodCallTests))]
     public void Isolated_Issue2099SuperCalls_ReadLivePropertiesBeforeArguments(
         string name, string source, string expected)
     {

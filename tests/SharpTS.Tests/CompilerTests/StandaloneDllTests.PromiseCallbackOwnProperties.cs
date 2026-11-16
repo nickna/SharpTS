@@ -1,3 +1,4 @@
+using SharpTS.Tests.Infrastructure;
 using SharpTS.Tests.SharedTests;
 using Xunit;
 
@@ -5,7 +6,7 @@ namespace SharpTS.Tests.CompilerTests;
 
 public partial class StandaloneDllTests
 {
-    [Theory, MemberData(nameof(PromiseCallbackOwnPropertyTests.Cases), MemberType = typeof(PromiseCallbackOwnPropertyTests))]
+    [Theory, DeploymentData(nameof(PromiseCallbackOwnPropertyTests.Cases), MemberType = typeof(PromiseCallbackOwnPropertyTests))]
     public void Isolated_Issue2756PromiseCallbackOwnProperties_VerifyBeforeExecution(
         string name, string source, string expected)
     {

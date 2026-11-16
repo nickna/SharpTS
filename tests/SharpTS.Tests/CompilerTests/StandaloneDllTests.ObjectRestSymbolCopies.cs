@@ -1,3 +1,4 @@
+using SharpTS.Tests.Infrastructure;
 using SharpTS.Tests.SharedTests;
 using Xunit;
 
@@ -5,7 +6,7 @@ namespace SharpTS.Tests.CompilerTests;
 
 public partial class StandaloneDllTests
 {
-    [Theory, MemberData(nameof(ObjectRestSymbolCopyTests.Cases), MemberType = typeof(ObjectRestSymbolCopyTests))]
+    [Theory, DeploymentData(nameof(ObjectRestSymbolCopyTests.Cases), MemberType = typeof(ObjectRestSymbolCopyTests))]
     public void Isolated_Issue2577ObjectRestSymbolCopies_VerifyBeforeExecution(
         string name, string source, string expected)
     {

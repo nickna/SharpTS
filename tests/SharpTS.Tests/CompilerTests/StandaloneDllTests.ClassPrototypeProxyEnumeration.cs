@@ -1,3 +1,4 @@
+using SharpTS.Tests.Infrastructure;
 using System.Security.Cryptography;
 using SharpTS.Tests.SharedTests;
 using SharpTS.TypeSystem;
@@ -7,7 +8,7 @@ namespace SharpTS.Tests.CompilerTests;
 
 public partial class StandaloneDllTests
 {
-    [Theory, MemberData(nameof(ClassPrototypeProxyEnumerationTests.SavedCases), MemberType = typeof(ClassPrototypeProxyEnumerationTests))]
+    [Theory, DeploymentData(nameof(ClassPrototypeProxyEnumerationTests.SavedCases), MemberType = typeof(ClassPrototypeProxyEnumerationTests))]
     public void Saved_Issue2676ClassPrototypeProxyEnumeration_DeploysMatchingManagedRuntime(
         string name, string source, string expected)
     {

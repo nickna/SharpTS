@@ -8,7 +8,7 @@ namespace SharpTS.Tests.CompilerTests;
 
 public partial class StandaloneDllTests
 {
-    [Theory, MemberData(nameof(ClassPrototypeIntegrityTests.SavedCases), MemberType = typeof(ClassPrototypeIntegrityTests))]
+    [Theory, DeploymentData(nameof(ClassPrototypeIntegrityTests.SavedCases), MemberType = typeof(ClassPrototypeIntegrityTests))]
     public void Isolated_Issue2715ClassPrototypeIntegrity_VerifyBeforeExecution(
         string name, string source, string expected)
     {

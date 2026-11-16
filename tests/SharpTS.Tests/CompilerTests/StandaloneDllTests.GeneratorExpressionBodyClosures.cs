@@ -1,3 +1,4 @@
+using SharpTS.Tests.Infrastructure;
 using SharpTS.Tests.SharedTests;
 using Xunit;
 
@@ -5,7 +6,7 @@ namespace SharpTS.Tests.CompilerTests;
 
 public partial class StandaloneDllTests
 {
-    [Theory, MemberData(nameof(GeneratorExpressionBodyClosureTests.Cases), MemberType = typeof(GeneratorExpressionBodyClosureTests))]
+    [Theory, DeploymentData(nameof(GeneratorExpressionBodyClosureTests.Cases), MemberType = typeof(GeneratorExpressionBodyClosureTests))]
     public void Isolated_Issue2754GeneratorExpressionBodyClosures_VerifyBeforeExecution(
         string name, string source, string expected)
     {

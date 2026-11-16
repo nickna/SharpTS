@@ -1,3 +1,4 @@
+using SharpTS.Tests.Infrastructure;
 using SharpTS.Tests.SharedTests;
 using Xunit;
 
@@ -13,7 +14,7 @@ public partial class StandaloneDllTests
         "0\nTypeError true 0 1\n1 true 1 2\n")]
     [InlineData("async-generator-reader", StaticPrivateMethodCallBrandTests.AsyncGeneratorNullInstanceReceiverSource,
         "0\nTypeError true 0 1\ntrue|1 true 1 2\n")]
-    [MemberData(nameof(StaticPrivateMethodCallBrandTests.TypedNullInstanceReceiverCases), MemberType = typeof(StaticPrivateMethodCallBrandTests))]
+    [DeploymentData(nameof(StaticPrivateMethodCallBrandTests.TypedNullInstanceReceiverCases), MemberType = typeof(StaticPrivateMethodCallBrandTests))]
     public void Isolated_Issue2150NullPrivateCalls_RejectBeforeArguments(
         string name, string source, string expected)
     {

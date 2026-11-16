@@ -1,3 +1,4 @@
+using SharpTS.Tests.Infrastructure;
 using SharpTS.Tests.SharedTests;
 using Xunit;
 
@@ -5,7 +6,7 @@ namespace SharpTS.Tests.CompilerTests;
 
 public partial class StandaloneDllTests
 {
-    [Theory, MemberData(nameof(MathOwnPresenceTests.Cases), MemberType = typeof(MathOwnPresenceTests))]
+    [Theory, DeploymentData(nameof(MathOwnPresenceTests.Cases), MemberType = typeof(MathOwnPresenceTests))]
     public void Isolated_Issue2790MathOwnPresence_VerifyBeforeExecution(
         string name, string source, string expected)
     {
