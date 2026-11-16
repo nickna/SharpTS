@@ -28,7 +28,7 @@ public abstract partial class ExpressionEmitterBase
     /// After this, the stack has the current value and control flows to either
     /// skipLabel (keep current) or falls through (assign new value).
     /// </summary>
-    private void EmitLogicalConditionCheck(TokenType operatorType, Label skipLabel)
+    protected void EmitLogicalConditionCheck(TokenType operatorType, Label skipLabel)
     {
         switch (operatorType)
         {

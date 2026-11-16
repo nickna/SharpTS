@@ -31,10 +31,11 @@ public partial class Interpreter
     /// </summary>
     private async ValueTask<RuntimeValue> EvaluateCompoundAssignCore(IEvaluationContext ctx, Expr.CompoundAssign compound)
     {
+        var selected = SelectVariableAssignment(compound.Name, compound);
         RuntimeValue currentValue = LookupVariableRV(compound.Name, compound);
         RuntimeValue addValue = await ctx.EvaluateExprAsync(compound.Value);
         RuntimeValue newValue = ApplyCompoundOperatorRV(compound.Operator.Type, currentValue, addValue);
-        AssignVariableValue(compound.Name, newValue);
+        AssignSelectedVariable(selected, compound.Name, newValue);
         return newValue;
     }
 
@@ -320,6 +321,7 @@ public partial class Interpreter
     /// </summary>
     private async ValueTask<RuntimeValue> EvaluateLogicalAssignCore(IEvaluationContext ctx, Expr.LogicalAssign logical)
     {
+        var selected = SelectVariableAssignment(logical.Name, logical);
         RuntimeValue currentValue = LookupVariableRV(logical.Name, logical);
 
         switch (logical.Operator.Type)
@@ -337,7 +339,7 @@ public partial class Interpreter
 
         // Short-circuit condition not met, evaluate and assign
         RuntimeValue newValue = await ctx.EvaluateExprAsync(logical.Value);
-        AssignVariableValue(logical.Name, newValue);
+        AssignSelectedVariable(selected, logical.Name, newValue);
         return newValue;
     }
 

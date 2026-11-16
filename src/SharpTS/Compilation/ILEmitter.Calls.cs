@@ -190,7 +190,16 @@ public partial class ILEmitter
                 return true;
             case Stmt.Var { IsVar: true } declaration:
                 // EvalDeclarationInstantiation reuses an existing var-env slot.
-                if (_resolver.HasVariable(declaration.Name.Lexeme))
+                if (!_ctx.IsStrictMode && !HasOwnEvalVariable(declaration.Name.Lexeme))
+                {
+                    InstantiateEvalVar(declaration.Name.Lexeme);
+                    if (declaration.Initializer is { } evalInitializer)
+                    {
+                        EmitAssign(new Expr.Assign(declaration.Name, evalInitializer));
+                        IL.Emit(OpCodes.Pop);
+                    }
+                }
+                else if (_resolver.HasVariable(declaration.Name.Lexeme))
                 {
                     if (declaration.Initializer is { } initializer)
                     {

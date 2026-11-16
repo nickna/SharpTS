@@ -196,6 +196,7 @@ public partial class ILEmitter : StatementEmitterBase, IEmitterContext
 
     protected override void EmitStatementCore(Stmt stmt)
     {
+        PrepareEvalVarBindings(stmt);
         bool fieldFactBoundary = stmt switch
         {
             Stmt.Expression { Expr: Expr.Set } => false,

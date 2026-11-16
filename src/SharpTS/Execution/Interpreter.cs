@@ -1291,7 +1291,7 @@ public partial class Interpreter : IDisposable
         // Fast path: resolved locals with known depth
         if (_locals.TryGetValue(expr, out int distance))
         {
-            return _environment.GetAt(distance, name.Lexeme);
+            return _environment.GetAt(_environment.ResolveEvalBindingDistance(name.Lexeme, distance), name.Lexeme);
         }
 
         // Scope chain traversal for user-defined variables
@@ -1388,6 +1388,18 @@ public partial class Interpreter : IDisposable
             WriteClassicGlobalVariable(name.Lexeme, value, _environment.IsStrictMode);
         else
             _environment.Assign(name, value);
+    }
+
+    private (RuntimeEnvironment Environment, int? Distance) SelectVariableAssignment(Token name, Expr expression)
+        => (_environment, _locals.TryGetValue(expression, out int distance)
+            ? _environment.ResolveEvalBindingDistance(name.Lexeme, distance)
+            : _environment.FindBindingDistance(name.Lexeme));
+
+    private void AssignSelectedVariable(
+        (RuntimeEnvironment Environment, int? Distance) selected, Token name, RuntimeValue value)
+    {
+        if (selected.Distance is { } distance) selected.Environment.AssignAt(distance, name, value);
+        else AssignVariableValue(name, value);
     }
 
     private bool IsGlobalFunctionBinding(string name)
@@ -1620,7 +1632,21 @@ public partial class Interpreter : IDisposable
             throw new ThrowException(new SharpTSError($"SyntaxError: {detail}"));
         }
 
-        return InterpretScriptCompletion(parseResult.Statements);
+        var previous = _environment;
+        bool strict = previous.IsStrictMode || DirectivePrologue.HasUseStrict(parseResult.Statements);
+        var variableEnvironment = strict ? new RuntimeEnvironment(previous, strictMode: true)
+            : previous.EvalVariableEnvironment;
+        if (strict) variableEnvironment.EvalVariableEnvironment = variableEnvironment;
+        foreach (var (name, _) in Runtime.ParameterBinder.BodyVarDeclarations(parseResult.Statements))
+            variableEnvironment.InstantiateEvalVar(name.Lexeme);
+        _environment = new RuntimeEnvironment(previous, strictMode: strict)
+        {
+            VarDeclarationTarget = variableEnvironment,
+            EvalVariableEnvironment = variableEnvironment
+        };
+        if (strict) _environment = variableEnvironment;
+        try { return InterpretScriptCompletion(parseResult.Statements); }
+        finally { _environment = previous; }
     }
 
     /// <summary>

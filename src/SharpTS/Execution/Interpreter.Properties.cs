@@ -3678,18 +3678,12 @@ public partial class Interpreter
     /// <seealso href="https://www.typescriptlang.org/docs/handbook/variable-declarations.html">TypeScript Variable Declarations</seealso>
     private RuntimeValue EvaluateAssign(Expr.Assign assign)
     {
+        var selected = SelectVariableAssignment(assign.Name, assign);
         RuntimeValue value = assign.IsVarRedeclaration
             ? EvaluateVariableInitializerCore(_syncContext, assign.Value, assign.Name).GetAwaiter().GetResult()
             : EvaluateRV(assign.Value);
 
-        if (_locals.TryGetValue(assign, out int distance))
-        {
-            _environment.AssignAt(distance, assign.Name, value);
-        }
-        else
-        {
-            AssignVariableValue(assign.Name, value);
-        }
+        AssignSelectedVariable(selected, assign.Name, value);
 
         if (value.IsObject) ObserveDiscardedReactionResult(value.ToObject());
         return value;

@@ -820,19 +820,13 @@ public partial class Interpreter
 
     private async ValueTask<RuntimeValue> EvaluateAssignAsync(Expr.Assign assign)
     {
+        var selected = SelectVariableAssignment(assign.Name, assign);
         var rv = assign.IsVarRedeclaration
             ? await EvaluateVariableInitializerCore(_asyncContext, assign.Value, assign.Name)
             : await EvaluateAsync(assign.Value);
         object? value = rv.ToObject();
 
-        if (_locals.TryGetValue(assign, out int distance))
-        {
-            _environment.AssignAt(distance, assign.Name, value);
-        }
-        else
-        {
-            AssignVariableValue(assign.Name, rv);
-        }
+        AssignSelectedVariable(selected, assign.Name, rv);
 
         ObserveDiscardedReactionResult(value);
         return rv;

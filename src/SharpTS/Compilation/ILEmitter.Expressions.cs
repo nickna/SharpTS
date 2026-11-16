@@ -59,6 +59,7 @@ public partial class ILEmitter
 
     protected override void EmitVariable(Expr.Variable v)
     {
+        if (TryEmitEvalVariableRead(v)) return;
         var name = v.Name.Lexeme;
         // Synthetic parameter properties run at super(), possibly inside a block
         // that shadows the parameter. Read the parameter's current binding, not
@@ -440,6 +441,7 @@ public partial class ILEmitter
 
     protected override void EmitAssign(Expr.Assign a)
     {
+        if (TryEmitEvalVariableAssignment(a)) return;
         if (TryEmitArrayGlobalAssignment(a)) return;
         if (_ctx.HasLoopBodyBindingAccess(a.Name.Lexeme))
         {

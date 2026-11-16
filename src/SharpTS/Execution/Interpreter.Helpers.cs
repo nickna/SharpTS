@@ -395,13 +395,14 @@ public partial class Interpreter
     /// <summary>Increments a variable l-value, returning the old or new value.</summary>
     private RuntimeValue IncrementVariable(Expr.Variable variable, double delta, bool returnOld)
     {
+        var selected = SelectVariableAssignment(variable.Name, variable);
         RuntimeValue oldValue = LookupVariableRV(variable.Name, variable);
         if (TryEvaluateDotNetIncrement(
                 oldValue,
                 delta > 0 ? TokenType.PLUS_PLUS : TokenType.MINUS_MINUS,
                 out var clrValue))
         {
-            AssignVariableValue(variable.Name, clrValue);
+            AssignSelectedVariable(selected, variable.Name, clrValue);
             return returnOld ? oldValue : clrValue;
         }
         oldValue = ToNumericRV(oldValue);
@@ -409,13 +410,13 @@ public partial class Interpreter
         {
             var newBigInt = new SharpTSBigInt(
                 oldValue.AsBigInt().Value + (delta > 0 ? 1 : -1));
-            AssignVariableValue(variable.Name, RuntimeValue.FromBigInt(newBigInt));
+            AssignSelectedVariable(selected, variable.Name, RuntimeValue.FromBigInt(newBigInt));
             return returnOld ? oldValue : RuntimeValue.FromBigInt(newBigInt);
         }
 
         double current = oldValue.AsNumber();
         double newValue = current + delta;
-        AssignVariableValue(variable.Name, RuntimeValue.FromNumber(newValue));
+        AssignSelectedVariable(selected, variable.Name, RuntimeValue.FromNumber(newValue));
         return RuntimeValue.FromNumber(returnOld ? current : newValue);
     }
 
