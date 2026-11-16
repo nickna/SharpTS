@@ -776,6 +776,11 @@ public partial class ILEmitter
         if (TryGetClassDefinitionCaptureSlot(ca.Name.Lexeme, out _)) { base.EmitCompoundAssign(ca); return; }
         if (TryEmitExternalCompoundAssign(ca))
             return;
+        if (!IsKnownVariable(ca.Name.Lexeme))
+        {
+            EmitGlobalCompoundAssignment(ca);
+            return;
+        }
 
         // Promoted string-accumulator append (#857): `s += E` where `s` is a StringBuilder slot →
         // `sb.Append(E)`. Promotion guarantees statement position, so the Append-returned builder on the
@@ -1006,16 +1011,9 @@ public partial class ILEmitter
         if (TryEmitEvalVariableLogical(la)) return;
         if (_ctx.HasLoopBodyBindingAccess(la.Name.Lexeme)) { base.EmitLogicalAssign(la); return; }
         if (TryGetClassDefinitionCaptureSlot(la.Name.Lexeme, out _)) { base.EmitLogicalAssign(la); return; }
-        // An unresolvable reference throws before the logical operator can
-        // inspect its value.  Letting the generic store path handle this left
-        // incompatible stack shapes at the join label (the failed store does
-        // not consume a value), producing InvalidProgramException instead of
-        // the required ReferenceError.
         if (!IsKnownVariable(la.Name.Lexeme))
         {
-            IL.Emit(OpCodes.Ldstr, la.Name.Lexeme);
-            IL.Emit(OpCodes.Call, _ctx.Runtime!.Errors.ThrowUndefinedVariable);
-            EmitNullConstant(); // unreachable expression result
+            EmitGlobalLogicalAssignment(la);
             return;
         }
 
