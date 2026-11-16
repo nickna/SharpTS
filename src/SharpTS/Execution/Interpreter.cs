@@ -1615,6 +1615,9 @@ public partial class Interpreter : IDisposable
     /// wrong scope depths. A parse failure throws a <c>SyntaxError</c>.
     /// </remarks>
     public object? Eval(string source)
+        => Eval(source, null);
+
+    internal object? Eval(string source, IReadOnlyList<EvalObjectEnvironment>? objectEnvironments)
     {
         if (_vmCodeGenerationStringsDisabled)
             throw new ThrowException(new SharpTSError(
@@ -1632,12 +1635,13 @@ public partial class Interpreter : IDisposable
             throw new ThrowException(new SharpTSError($"SyntaxError: {detail}"));
         }
 
+        var statements = WithStatementLowering.ApplyEvalEnvironments(parseResult.Statements, objectEnvironments);
         var previous = _environment;
-        bool strict = previous.IsStrictMode || DirectivePrologue.HasUseStrict(parseResult.Statements);
+        bool strict = previous.IsStrictMode || DirectivePrologue.HasUseStrict(statements);
         var variableEnvironment = strict ? new RuntimeEnvironment(previous, strictMode: true)
             : previous.EvalVariableEnvironment;
         if (strict) variableEnvironment.EvalVariableEnvironment = variableEnvironment;
-        foreach (var (name, _) in Runtime.ParameterBinder.BodyVarDeclarations(parseResult.Statements))
+        foreach (var (name, _) in Runtime.ParameterBinder.BodyVarDeclarations(statements))
             variableEnvironment.InstantiateEvalVar(name.Lexeme);
         _environment = new RuntimeEnvironment(previous, strictMode: strict)
         {
@@ -1645,7 +1649,7 @@ public partial class Interpreter : IDisposable
             EvalVariableEnvironment = variableEnvironment
         };
         if (strict) _environment = variableEnvironment;
-        try { return InterpretScriptCompletion(parseResult.Statements); }
+        try { return InterpretScriptCompletion(statements); }
         finally { _environment = previous; }
     }
 

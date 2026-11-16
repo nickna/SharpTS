@@ -25,6 +25,15 @@ public class ClosureAnalyzer : AstVisitorBase
         _runtimeClassDeclarations = runtimeClassDeclarations;
     }
 
+    protected override void VisitCall(Expr.Call expression)
+    {
+        base.VisitCall(expression);
+        // With lowering prepares literal eval early so its closures capture
+        // the same lexical object temporary as ordinary source closures.
+        if (expression.PreparedEvalStatements is { } statements)
+            foreach (var statement in statements) Visit(statement);
+    }
+
     // Maps each function AST node to the set of variable names it captures
     private readonly Dictionary<object, HashSet<string>> _captures = [];
 

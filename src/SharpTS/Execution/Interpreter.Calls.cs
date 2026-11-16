@@ -259,6 +259,16 @@ public partial class Interpreter
             var gvName = globalVar.Name.Lexeme;
             if (CanUseGlobalFunctionHandler(globalVar))
             {
+                if (gvName == "eval" && call.EvalObjectEnvironments is { } environments)
+                {
+                    var argument = RuntimeValue.Undefined;
+                    for (int index = 0; index < call.Arguments.Count; index++)
+                    {
+                        var evaluated = await ctx.EvaluateExprAsync(call.Arguments[index]);
+                        if (index == 0) argument = evaluated;
+                    }
+                    return argument.IsString ? Eval(argument.AsString(), environments) : argument.ToObject();
+                }
                 if (GlobalFunctionRegistry.Instance.TryGetHandlerV2(gvName, out var handlerV2))
                 {
                     Func<Expr, ValueTask<RuntimeValue>> evalWrapper = expr => ctx.EvaluateExprAsync(expr);
@@ -467,6 +477,8 @@ public partial class Interpreter
     /// <seealso href="https://www.typescriptlang.org/docs/handbook/2/functions.html">TypeScript Functions</seealso>
     private RuntimeValue EvaluateCall(Expr.Call call)
     {
+        if (call.EvalObjectEnvironments is not null)
+            return RuntimeValue.FromBoxed(EvaluateCallCore(_syncContext, call).GetAwaiter().GetResult());
         using var errorOrigin = EnterVmErrorOrigin(call);
         // Handle console.* methods
         if (call.Callee is Expr.Variable v && v.Name.Lexeme.StartsWith(BuiltInNames.ConsolePrefix, StringComparison.Ordinal))

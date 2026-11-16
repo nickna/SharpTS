@@ -107,6 +107,10 @@ public abstract record Expr
         // Source-only checker metadata: lifting must preserve an IIFE's declaration-order flow.
         public ArrowFunction? OriginalGeneratorCallee { get; init; }
 
+        // Direct eval retains the object environments selected by with lowering.
+        internal List<EvalObjectEnvironment>? EvalObjectEnvironments { get; init; }
+        internal List<Stmt>? PreparedEvalStatements { get; init; }
+
         /// <summary>
         /// Non-null when this call was produced by JSX lowering. The type checker dispatches
         /// JSX-origin calls to its JSX pipeline (tsc-shaped diagnostics, JSX.Element result)

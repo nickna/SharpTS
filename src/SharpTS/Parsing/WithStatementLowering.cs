@@ -1,10 +1,30 @@
 namespace SharpTS.Parsing;
 
+internal sealed record EvalObjectEnvironment(Token Storage, HashSet<string> MaskedNames);
+
 // Keeping the object environment in a lexical temporary makes its lifetime follow the
 // existing closure and suspension machinery. Rewrite references, rather than values:
 // choosing a binding must precede the RHS/arguments and calls retain their receiver.
 internal sealed class WithStatementLowering(Token storage, SpanTable spans, Func<Token> fresh)
 {
+    private static long _evalRewriteId;
+
+    internal static List<Stmt> ApplyEvalEnvironments(List<Stmt> statements,
+        IReadOnlyList<EvalObjectEnvironment>? environments)
+    {
+        if (environments is null) return statements;
+        long rewriteId = Interlocked.Increment(ref _evalRewriteId);
+        int temporary = 0;
+        foreach (var environment in environments)
+        {
+            var lowering = new WithStatementLowering(environment.Storage, new SpanTable(), () =>
+                new Token(TokenType.IDENTIFIER, $"<with:eval:{rewriteId}:{temporary++}>", null, environment.Storage.Line)
+                { IsGeneratedTemporary = true });
+            lowering._scopes.Push(environment.MaskedNames);
+            statements = statements.Select(lowering.Rewrite).ToList();
+        }
+        return statements;
+    }
     internal const string ToObject = "<with:object>";
     internal const string HasBinding = "<with:has>";
     internal const string CheckGet = "<with:get>";
@@ -351,10 +371,28 @@ internal sealed class WithStatementLowering(Token storage, SpanTable spans, Func
         // expression would turn it into indirect eval, lose caller bindings and
         // introduce a runtime dependency for otherwise standalone literal eval.
         if (Reference(expression.Callee) is { Name.Lexeme: "eval" } eval)
+        {
+            var environments = new List<EvalObjectEnvironment>(expression.EvalObjectEnvironments ?? []);
+            environments.Add(new(storage, _scopes.SelectMany(scope => scope).ToHashSet(StringComparer.Ordinal)));
+            var direct = expression with { Arguments = expression.Arguments.Select(Expression).ToList(),
+                EvalObjectEnvironments = environments, PreparedEvalStatements = null };
+            if (direct.Arguments.FirstOrDefault() is Expr.Literal { Value: string source })
+            {
+                try
+                {
+                    direct = direct with { PreparedEvalStatements = ApplyEvalEnvironments(
+                        new Parser(new Lexer(source).ScanTokens()).ParseOrThrow(), environments) };
+                }
+                catch
+                {
+                    // Eval owns syntax errors when this branch executes.
+                }
+            }
             return Resolve(eval.Name, p => Read(p,
                 property => expression with { Callee = property, Arguments = expression.Arguments.Select(Expression).ToList() },
                 expression with { Callee = new Expr.Literal(SharpTS.Runtime.Types.SharpTSUndefined.Instance), Arguments = expression.Arguments.Select(Expression).ToList() }),
-                expression with { Arguments = expression.Arguments.Select(Expression).ToList() });
+                direct);
+        }
         return expression with { Callee = Callable(expression.Callee),
             Arguments = expression.Arguments.Select(Expression).ToList() };
     }

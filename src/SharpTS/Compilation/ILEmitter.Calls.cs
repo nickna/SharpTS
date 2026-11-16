@@ -31,6 +31,7 @@ public partial class ILEmitter
             try
             {
                 var reparsed = new Parser(new Lexer(source).ScanTokens()).ParseOrThrow();
+                reparsed = WithStatementLowering.ApplyEvalEnvironments(reparsed, call.EvalObjectEnvironments);
                 if (reparsed.All(statement =>
                         statement is Stmt.Var { IsVar: true }
                         || statement is Stmt.Directive
