@@ -11,6 +11,8 @@ public partial class StandaloneDllTests
     [InlineData(WithStatementTests.DirectEvalFallbackSource, "7\n1\n")]
     [InlineData(WithStatementTests.AmbiguousMethodGuardSource, WithStatementTests.AmbiguousMethodGuardExpected)]
     [InlineData(WithStatementTests.ParentOperandSource, WithStatementTests.ParentOperandExpected)]
+    [InlineData(WithStatementTests.SuspendedLookupSource, WithStatementTests.SuspendedLookupExpected)]
+    [InlineData(MathFixedArityArgumentTests.Source, MathFixedArityArgumentTests.Expected)]
     public void Isolated_WithBindingsAndGeneratorSuspension(string input, string expected)
     {
         using var directory = IntegrationTests.CliTestHelper.CreateTempDirectory();

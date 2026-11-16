@@ -2731,19 +2731,27 @@ public abstract partial class ExpressionEmitterBase
     {
         EmitExpression(obj);
         EnsureBoxed();
-        var objLocal = _helpers.SpillStoreObject();
+        bool capturesMethod = methodName is "slice" or "concat" or "indexOf" or "includes";
+        // Lowered arguments can contain statement boundaries before a yield;
+        // keep both parts of the selected reference live until invocation.
+        var objLocal = _helpers.SpillStoreObject(retainAcrossStatements: capturesMethod);
 
-        if (methodName is "slice" or "concat" or "indexOf" or "includes")
+        if (capturesMethod)
         {
             // Mutually exclusive type branches must not emit the same source await twice.
             // Select the method before arguments and retain both receiver and callable.
             // Arguments can also open a with-binding exception guard without
             // suspending, so argument evaluation always starts with an empty stack.
-            EmitThrowIfReceiverUndefined(objLocal, methodName);
-            IL.Emit(OpCodes.Ldloc, objLocal);
-            IL.Emit(OpCodes.Ldstr, methodName);
-            IL.Emit(OpCodes.Call, Ctx.Runtime!.ObjectRead.Property);
-            var callee = _helpers.SpillStoreObject();
+            IL.Emit(OpCodes.Ldsfld, Ctx.Runtime!.Sentinels.UndefinedInstance);
+            var callee = _helpers.SpillStoreObject(retainAcrossStatements: true);
+            EmitPropertyWriteOperation(() =>
+            {
+                EmitThrowIfReceiverUndefined(objLocal, methodName);
+                IL.Emit(OpCodes.Ldloc, objLocal);
+                IL.Emit(OpCodes.Ldstr, methodName);
+                IL.Emit(OpCodes.Call, Ctx.Runtime.ObjectRead.Property);
+                IL.Emit(OpCodes.Stloc, callee);
+            });
             EmitArgsArrayWithSpread(arguments);
             var argumentValues = IL.DeclareLocal(Types.ObjectArray);
             IL.Emit(OpCodes.Stloc, argumentValues);
@@ -2756,6 +2764,8 @@ public abstract partial class ExpressionEmitterBase
                 IL.Emit(OpCodes.Call, Ctx.Runtime.Invocation.Method);
                 IL.Emit(OpCodes.Stloc, result);
             });
+            _helpers.ReleaseSpill(callee);
+            _helpers.ReleaseSpill(objLocal);
             IL.Emit(OpCodes.Ldloc, result);
             SetStackUnknown();
             return;

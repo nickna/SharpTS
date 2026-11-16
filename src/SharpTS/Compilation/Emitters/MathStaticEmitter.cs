@@ -38,6 +38,8 @@ public sealed class MathStaticEmitter : IStaticTypeEmitterStrategy
 
         if (methodName == "random")
         {
+            emitter.EmitArgsArrayWithSpread(arguments);
+            il.Emit(OpCodes.Pop);
             il.Emit(OpCodes.Call, ctx.Runtime!.Math.Random);
             il.Emit(OpCodes.Box, ctx.Types.Double);
             return true;
@@ -95,23 +97,10 @@ public sealed class MathStaticEmitter : IStaticTypeEmitterStrategy
         // not a number, so it bypasses the ToNumber-coercion loop below.
         if (methodName == "sumPrecise")
         {
-            var input = il.DeclareLocal(ctx.Types.Object);
-            if (arguments.Count == 0)
-            {
-                il.Emit(OpCodes.Ldsfld, ctx.Runtime!.Sentinels.UndefinedInstance);
-            }
-            else
-            {
-                emitter.EmitExpression(arguments[0]);
-                emitter.EnsureBoxed();
-            }
-            il.Emit(OpCodes.Stloc, input);
-            for (int i = 1; i < arguments.Count; i++)
-            {
-                emitter.EmitExpression(arguments[i]);
-                il.Emit(OpCodes.Pop);
-            }
-            il.Emit(OpCodes.Ldloc, input);
+            emitter.EmitArgsArrayWithSpread(arguments);
+            var values = il.DeclareLocal(ctx.Types.ObjectArray);
+            il.Emit(OpCodes.Stloc, values);
+            EmitExpandedArgument(emitter, values, 0);
             il.Emit(OpCodes.Call, ctx.Runtime!.Math.SumPrecise);
             return true;
         }
@@ -129,8 +118,8 @@ public sealed class MathStaticEmitter : IStaticTypeEmitterStrategy
             return true;
         }
 
-        // Emit all arguments as doubles. Per ECMA-262, Math.* methods coerce
-        // each arg via ToNumber — undefined → NaN, null → +0, "abc" → NaN, etc.
+        // Fixed-arity Math methods coerce only their required arguments; all
+        // supplied expressions are evaluated, but surplus values are ignored.
         // Pre-fix EmitExpressionAsDouble used Convert.ToDouble(object) which
         // threw InvalidCastException on $Undefined.Instance. Routing through
         // $Runtime.ToNumber gives spec semantics for all primitives.
@@ -139,11 +128,15 @@ public sealed class MathStaticEmitter : IStaticTypeEmitterStrategy
         emitter.EmitArgsArrayWithSpread(arguments);
         var argumentValues = il.DeclareLocal(ctx.Types.ObjectArray);
         il.Emit(OpCodes.Stloc, argumentValues);
-        for (int index = 0; index < arguments.Count; index++)
+        int parameterCount = methodName switch
         {
-            il.Emit(OpCodes.Ldloc, argumentValues);
-            il.Emit(OpCodes.Ldc_I4, index);
-            il.Emit(OpCodes.Ldelem_Ref);
+            "hypot" => arguments.Count,
+            "pow" or "atan2" or "imul" => 2,
+            _ => 1
+        };
+        for (int index = 0; index < parameterCount; index++)
+        {
+            EmitExpandedArgument(emitter, argumentValues, index);
             il.Emit(OpCodes.Call, ctx.Runtime!.NumericCoercion.ToNumber);
         }
 
@@ -354,7 +347,7 @@ public sealed class MathStaticEmitter : IStaticTypeEmitterStrategy
         }
 
         // Math.fround(x) — round to nearest float32 then back to double.
-        if (methodName == "fround" && arguments.Count == 1)
+        if (methodName == "fround")
         {
             il.Emit(OpCodes.Conv_R4);
             il.Emit(OpCodes.Conv_R8);
@@ -367,7 +360,7 @@ public sealed class MathStaticEmitter : IStaticTypeEmitterStrategy
         // double→Half (op_Explicit) + Half→double (op_Explicit returning double)
         // conversions. Both directions are op_Explicit on Half; need to filter
         // by signature to disambiguate.
-        if (methodName == "f16round" && arguments.Count == 1)
+        if (methodName == "f16round")
         {
             var halfFromDouble = typeof(System.Half).GetMethods()
                 .First(m => m.Name == "op_Explicit"
@@ -390,7 +383,7 @@ public sealed class MathStaticEmitter : IStaticTypeEmitterStrategy
         // [0, 2^32). Conv_U4 from double is undefined for values outside
         // [0, 2^32); JsToInt32 handles NaN/Infinity → 0 + reduction. Cast
         // its int32 result to uint32 by reinterpretation (same bit pattern).
-        if (methodName == "clz32" && arguments.Count == 1)
+        if (methodName == "clz32")
         {
             // Stack: [double]. Box, JsToInt32 → int32, then uint32 view.
             il.Emit(OpCodes.Box, ctx.Types.Double);
@@ -407,7 +400,7 @@ public sealed class MathStaticEmitter : IStaticTypeEmitterStrategy
         // returned as int32. Conv_I4 from double is undefined for values outside
         // [-2^31, 2^31); JsToInt32 handles NaN/Infinity → 0 and modular reduction
         // properly. Box/JsToInt32 round-trip is acceptable for spec-correctness.
-        if (methodName == "imul" && arguments.Count == 2)
+        if (methodName == "imul")
         {
             // Stack: [a_double, b_double]. Stash b → local; box a, call JsToInt32 → int32 a.
             var bDoubleLocal = il.DeclareLocal(ctx.Types.Double);
@@ -426,6 +419,30 @@ public sealed class MathStaticEmitter : IStaticTypeEmitterStrategy
         }
 
         return false;
+    }
+
+    // A source spread can contribute zero or many arguments. Load from the
+    // expanded list using the target arity, with the guest undefined value for
+    // absent parameters. Reusing the direct numeric path preserves its signed
+    // zero and pow edge semantics without coercing ignored extra arguments.
+    private static void EmitExpandedArgument(IEmitterContext emitter, LocalBuilder values, int index)
+    {
+        var ctx = emitter.Context;
+        var il = ctx.IL;
+        var missing = il.DefineLabel();
+        var done = il.DefineLabel();
+        il.Emit(OpCodes.Ldloc, values);
+        il.Emit(OpCodes.Ldlen);
+        il.Emit(OpCodes.Conv_I4);
+        il.Emit(OpCodes.Ldc_I4, index);
+        il.Emit(OpCodes.Ble, missing);
+        il.Emit(OpCodes.Ldloc, values);
+        il.Emit(OpCodes.Ldc_I4, index);
+        il.Emit(OpCodes.Ldelem_Ref);
+        il.Emit(OpCodes.Br, done);
+        il.MarkLabel(missing);
+        il.Emit(OpCodes.Ldsfld, ctx.Runtime!.Sentinels.UndefinedInstance);
+        il.MarkLabel(done);
     }
 
     internal static bool EmitsUnboxedFixedArityMinMax(
