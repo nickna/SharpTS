@@ -13,7 +13,7 @@ public static class IteratorBuiltIns
 {
     private static readonly BuiltInTypeMemberLookup<SharpTSIterator> _lookup =
         BuiltInTypeBuilder<SharpTSIterator>.ForInstanceType()
-            .MethodV2("next", 0, NextV2)
+            .MethodV2("next", 0, int.MaxValue, NextV2)
             .MethodV2("return", 0, 1, ReturnV2)
             .MethodV2("map", 1, MapV2)
             .MethodV2("filter", 1, FilterV2)
