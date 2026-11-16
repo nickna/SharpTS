@@ -678,15 +678,18 @@ public abstract partial class ExpressionEmitterBase
         IL.Emit(OpCodes.Call, Ctx.Runtime!.ObjectRead.Property); // → fn
         var fnLocal = _helpers.SpillStoreObject();
 
-        // When the caller hasn't pre-spilled the arguments and one can suspend, spill them now
-        // (after the lookup) so the suspension happens with a clear stack (#614/#413).
-        argLocals ??= AnyContainsSuspension(arguments)
-            ? arguments.Select(SpillBoxed).ToArray()
-            : null;
-
+        // An argument may open a resumed-generator exception guard without
+        // containing a suspension itself. Finish argument evaluation before
+        // placing any invocation operands on the stack.
+        if (argLocals is null)
+            EmitArgsArrayWithSpread(arguments);
+        else
+            EmitBoxedArgsArray(arguments, argLocals);
+        var argumentValues = IL.DeclareLocal(Types.ObjectArray);
+        IL.Emit(OpCodes.Stloc, argumentValues);
         IL.Emit(OpCodes.Ldloc, objLocal);                // receiver for InvokeMethodValue
         IL.Emit(OpCodes.Ldloc, fnLocal);                 // resolved fn
-        EmitBoxedArgsArray(arguments, argLocals);
+        IL.Emit(OpCodes.Ldloc, argumentValues);
         IL.Emit(OpCodes.Call, Ctx.Runtime!.Invocation.Method);
     }
 

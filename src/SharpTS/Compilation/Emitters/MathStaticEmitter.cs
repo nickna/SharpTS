@@ -58,43 +58,32 @@ public sealed class MathStaticEmitter : IStaticTypeEmitterStrategy
                 return true;
             }
 
-            // Spread args (\`Math.max(...arr)\`) have a runtime-unknown count, so the
-            // inline per-arg loop below can't expand them. Route to the variadic
-            // \`object[]\`-taking adapter, feeding a spread-expanded args array — the
-            // adapter applies ToNumber per element with the same empty→∓∞ / NaN
-            // short-circuit semantics as the inline path (#951).
-            if (arguments.Any(a => a is Expr.Spread))
+            emitter.EmitArgsArrayWithSpread(arguments);
+            if (arguments.Any(argument => argument is Expr.Spread))
             {
-                emitter.EmitArgsArrayWithSpread(arguments);
                 il.Emit(OpCodes.Call, methodName == "min"
                     ? ctx.Runtime!.Math.MinAdapter
                     : ctx.Runtime!.Math.MaxAdapter);
                 return true;
             }
 
-            var minMaxMethod = methodName == "min"
+            // Complete argument evaluation before coercion/folding: an argument
+            // can enter a generator try guard, so no earlier numeric operand may
+            // remain on the stack while emitting that source expression.
+            var values = il.DeclareLocal(ctx.Types.ObjectArray);
+            il.Emit(OpCodes.Stloc, values);
+            var fold = methodName == "min"
                 ? ctx.Types.GetMethod(ctx.Types.Math, "Min", ctx.Types.Double, ctx.Types.Double)
                 : ctx.Types.GetMethod(ctx.Types.Math, "Max", ctx.Types.Double, ctx.Types.Double);
-
             if (arguments.Count == 0)
-            {
-                // No args: min() returns Infinity, max() returns -Infinity
                 il.Emit(OpCodes.Ldc_R8, methodName == "min" ? double.PositiveInfinity : double.NegativeInfinity);
-            }
-            else
+            for (int index = 0; index < arguments.Count; index++)
             {
-                // Same ToNumber routing as the unary-Math loop below — handles
-                // \`Math.max(undefined, 1)\` returning NaN (spec) instead of crashing.
-                emitter.EmitExpression(arguments[0]);
-                emitter.EnsureBoxed();
+                il.Emit(OpCodes.Ldloc, values);
+                il.Emit(OpCodes.Ldc_I4, index);
+                il.Emit(OpCodes.Ldelem_Ref);
                 il.Emit(OpCodes.Call, ctx.Runtime!.NumericCoercion.ToNumber);
-                for (int i = 1; i < arguments.Count; i++)
-                {
-                    emitter.EmitExpression(arguments[i]);
-                    emitter.EnsureBoxed();
-                    il.Emit(OpCodes.Call, ctx.Runtime!.NumericCoercion.ToNumber);
-                    il.Emit(OpCodes.Call, minMaxMethod);
-                }
+                if (index > 0) il.Emit(OpCodes.Call, fold);
             }
             il.Emit(OpCodes.Box, ctx.Types.Double);
             return true;
@@ -145,10 +134,16 @@ public sealed class MathStaticEmitter : IStaticTypeEmitterStrategy
         // Pre-fix EmitExpressionAsDouble used Convert.ToDouble(object) which
         // threw InvalidCastException on $Undefined.Instance. Routing through
         // $Runtime.ToNumber gives spec semantics for all primitives.
-        foreach (var arg in arguments)
+        // Evaluate before loading numeric operands: nested calls can open a
+        // resumed-generator exception guard even without containing await/yield.
+        emitter.EmitArgsArrayWithSpread(arguments);
+        var argumentValues = il.DeclareLocal(ctx.Types.ObjectArray);
+        il.Emit(OpCodes.Stloc, argumentValues);
+        for (int index = 0; index < arguments.Count; index++)
         {
-            emitter.EmitExpression(arg);
-            emitter.EnsureBoxed();
+            il.Emit(OpCodes.Ldloc, argumentValues);
+            il.Emit(OpCodes.Ldc_I4, index);
+            il.Emit(OpCodes.Ldelem_Ref);
             il.Emit(OpCodes.Call, ctx.Runtime!.NumericCoercion.ToNumber);
         }
 

@@ -64,4 +64,35 @@ public sealed partial class WithStatementTests
     [Theory, ModeData]
     public void With_AmbiguousMethodArgumentsEnterGuardsWithEmptyStack(ExecutionMode mode) =>
         Assert.Equal(AmbiguousMethodGuardExpected, TestHarness.RunUnchecked(AmbiguousMethodGuardSource, mode));
+
+    public const string ParentOperandSource = """
+        function* arrayValue(receiver, x) { try { return (yield 0, [1, receiver.concat(x)]); } catch(e) { return 'caught'; } }
+        function* binaryValue(receiver, x) { try { return (yield 0, 1 + receiver.indexOf(x)); } catch(e) { return 'caught'; } }
+        function* objectValue(receiver, x) { try { return (yield 0, { value: receiver.concat(x) }); } catch(e) { return 'caught'; } }
+        function* parentArgument(receiver, x) { try { return (yield 0, receiver.startsWith(receiver.concat(x))); } catch(e) { return 'caught'; } }
+        function* literalArgument(receiver, x) { try { return (yield 0, 'abc'.startsWith(receiver.concat(x))); } catch(e) { return 'caught'; } }
+        function* mathArgument(receiver, x) { try { return (yield 0, Math.max(1,receiver.indexOf(x))); } catch(e) { return 'caught'; } }
+        function* mathPower(receiver, x) { try { return (yield 0, Math.pow(2,receiver.indexOf(x))); } catch(e) { return 'caught'; } }
+        function identity(value) { return value; }
+        function* directArgument(receiver, x) { try { return (yield 0, identity(receiver.concat(x))); } catch(e) { return 'caught'; } }
+        function* indexRead(receiver, x) { try { return (yield 0, [7,8][receiver.indexOf(x)]); } catch(e) { return 'caught'; } }
+        function* indexWrite(receiver, x) { const a=[7,8]; try { return (yield 0, a[receiver.indexOf(x)] = 9); } catch(e) { return 'caught'; } }
+        function* withArray(receiver) { with ({x:'b'}) { try { return (yield 0, [1, receiver.concat(x)]); } catch(e) { return 'caught'; } } }
+        function* withBinary(receiver) { with ({x:'b'}) { try { return (yield 0, 1 + receiver.indexOf(x)); } catch(e) { return 'caught'; } } }
+        function* withObject(receiver) { with ({x:'b'}) { try { return (yield 0, { value: receiver.concat(x) }); } catch(e) { return 'caught'; } } }
+        function* withArgument(receiver) { with ({x:'b'}) { try { return (yield 0, receiver.startsWith(receiver.concat(x))); } catch(e) { return 'caught'; } } }
+        for (const factory of [arrayValue,binaryValue,objectValue,parentArgument,literalArgument,mathArgument,mathPower,directArgument,indexRead,indexWrite,withArray,withBinary,withObject,withArgument]) {
+            const generator = factory('abc','b');
+            generator.next();
+            console.log(JSON.stringify(generator.next().value));
+        }
+        """;
+
+    public const string ParentOperandExpected = "[1,\"abcb\"]\n2\n{\"value\":\"abcb\"}\nfalse\nfalse\n"
+        + "1\n2\n\"abcb\"\n8\n9\n"
+        + "[1,\"abcb\"]\n2\n{\"value\":\"abcb\"}\nfalse\n";
+
+    [Theory, ModeData]
+    public void With_GuardedCallsLeaveParentOperandsOffTheStack(ExecutionMode mode) =>
+        Assert.Equal(ParentOperandExpected, TestHarness.RunUnchecked(ParentOperandSource, mode));
 }
