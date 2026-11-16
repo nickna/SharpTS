@@ -2704,16 +2704,38 @@ public abstract partial class ExpressionEmitterBase
 
     protected void EmitAmbiguousMethodCall(Expr obj, string methodName, List<Expr> arguments)
     {
+        if (ExprContainsSuspension(obj) || AnyContainsSuspension(arguments))
+        {
+            EmitAmbiguousMethodCallCore(obj, methodName, arguments);
+            return;
+        }
+
+        // A resumed enclosing expression is outside the statement's synchronous
+        // try segment. Guard this complete non-suspending call with an empty stack,
+        // including receiver/method/argument getters and the final invocation.
+        var result = IL.DeclareLocal(Types.Object);
+        EmitPropertyWriteOperation(() =>
+        {
+            EmitAmbiguousMethodCallCore(obj, methodName, arguments);
+            EnsureBoxed();
+            IL.Emit(OpCodes.Stloc, result);
+        });
+        IL.Emit(OpCodes.Ldloc, result);
+        SetStackUnknown();
+    }
+
+    private void EmitAmbiguousMethodCallCore(Expr obj, string methodName, List<Expr> arguments)
+    {
         EmitExpression(obj);
         EnsureBoxed();
         var objLocal = _helpers.SpillStoreObject();
 
-        if (methodName == "slice" || ((methodName is "indexOf" or "includes") && AnyContainsSuspension(arguments)))
+        if (methodName is "slice" or "concat" or "indexOf" or "includes")
         {
             // Mutually exclusive type branches must not emit the same source await twice.
             // Select the method before arguments and retain both receiver and callable.
-            // Slice arguments can also open a with-binding exception guard without
-            // suspending, so its argument evaluation always starts with an empty stack.
+            // Arguments can also open a with-binding exception guard without
+            // suspending, so argument evaluation always starts with an empty stack.
             EmitThrowIfReceiverUndefined(objLocal, methodName);
             IL.Emit(OpCodes.Ldloc, objLocal);
             IL.Emit(OpCodes.Ldstr, methodName);
@@ -2722,10 +2744,16 @@ public abstract partial class ExpressionEmitterBase
             EmitArgsArrayWithSpread(arguments);
             var argumentValues = IL.DeclareLocal(Types.ObjectArray);
             IL.Emit(OpCodes.Stloc, argumentValues);
-            IL.Emit(OpCodes.Ldloc, objLocal);
-            IL.Emit(OpCodes.Ldloc, callee);
-            IL.Emit(OpCodes.Ldloc, argumentValues);
-            IL.Emit(OpCodes.Call, Ctx.Runtime.Invocation.Method);
+            var result = IL.DeclareLocal(Types.Object);
+            EmitPropertyWriteOperation(() =>
+            {
+                IL.Emit(OpCodes.Ldloc, objLocal);
+                IL.Emit(OpCodes.Ldloc, callee);
+                IL.Emit(OpCodes.Ldloc, argumentValues);
+                IL.Emit(OpCodes.Call, Ctx.Runtime.Invocation.Method);
+                IL.Emit(OpCodes.Stloc, result);
+            });
+            IL.Emit(OpCodes.Ldloc, result);
             SetStackUnknown();
             return;
         }

@@ -9,6 +9,7 @@ public partial class StandaloneDllTests
     [InlineData(WithStatementTests.StandaloneSource, WithStatementTests.StandaloneExpected)]
     [InlineData(WithStatementTests.CapturedCallSuspensionSource, "0 bc 5\n7\n")]
     [InlineData(WithStatementTests.DirectEvalFallbackSource, "7\n1\n")]
+    [InlineData(WithStatementTests.AmbiguousMethodGuardSource, WithStatementTests.AmbiguousMethodGuardExpected)]
     public void Isolated_WithBindingsAndGeneratorSuspension(string input, string expected)
     {
         using var directory = IntegrationTests.CliTestHelper.CreateTempDirectory();
