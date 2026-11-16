@@ -87,10 +87,9 @@ Direct `eval` carries the active object environments and intervening lexical mas
 parsed source. Literal programs are prepared before closure analysis so evaluated functions
 retain the live object. The interpreter also applies this to dynamic source; compiled dynamic
 source retains the existing global-only `EvalBridge` boundary.
-Direct `eval` also retains syntactic branch lowering to preserve caller bindings and literal
-standalone compilation. Nested direct-eval arguments can still cause exponential AST growth
-([#3710](https://github.com/nickna/SharpTS/issues/3710)); ordinary calls and tags share one lowered
-argument/interpolation tree.
+Direct `eval` captures its selected callable and intrinsic identity before a shared argument
+prelude. Its intrinsic branch retains direct-call syntax and literal source, preserving caller
+bindings and standalone compilation while nested argument trees grow linearly.
 
 ### Compile-time and runtime environments
 

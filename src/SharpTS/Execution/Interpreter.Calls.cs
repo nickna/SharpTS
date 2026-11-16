@@ -257,15 +257,31 @@ public partial class Interpreter
         if (call.Callee is Expr.Variable globalVar)
         {
             var gvName = globalVar.Name.Lexeme;
-            if (CanUseGlobalFunctionHandler(globalVar))
+            if (call.IsCapturedIntrinsicEval || CanUseGlobalFunctionHandler(globalVar))
             {
                 if (gvName == "eval" && call.EvalObjectEnvironments is { } environments)
                 {
                     var argument = RuntimeValue.Undefined;
-                    for (int index = 0; index < call.Arguments.Count; index++)
+                    bool hasArgument = false;
+                    foreach (var input in call.Arguments)
                     {
-                        var evaluated = await ctx.EvaluateExprAsync(call.Arguments[index]);
-                        if (index == 0) argument = evaluated;
+                        if (input is Expr.Spread spread)
+                        {
+                            object? value = (await ctx.EvaluateExprAsync(spread.Expression)).ToObject();
+                            var values = spread.IsMaterializedArguments
+                                ? (IEnumerable<object?>)(SharpTSArray)value! : GetIterableElements(value);
+                            foreach (var item in values)
+                            {
+                                if (!hasArgument) argument = RuntimeValue.FromBoxed(item);
+                                hasArgument = true;
+                            }
+                        }
+                        else
+                        {
+                            var evaluated = await ctx.EvaluateExprAsync(input);
+                            if (!hasArgument) argument = evaluated;
+                            hasArgument = true;
+                        }
                     }
                     return argument.IsString ? Eval(argument.AsString(), environments) : argument.ToObject();
                 }
@@ -296,7 +312,8 @@ public partial class Interpreter
                 {
                     object? spreadValue = (await ctx.EvaluateExprAsync(spread.Expression)).ToObject();
                     // Use GetIterableElements to support custom iterables with Symbol.iterator
-                    argumentsList.AddRange(GetIterableElements(spreadValue));
+                    argumentsList.AddRange(spread.IsMaterializedArguments
+                        ? (IEnumerable<object?>)(SharpTSArray)spreadValue! : GetIterableElements(spreadValue));
                 }
                 else
                 {
@@ -593,7 +610,8 @@ public partial class Interpreter
                 {
                     object? spreadValue = Evaluate(spread.Expression);
                     // Use GetIterableElements to support custom iterables with Symbol.iterator
-                    argumentsList.AddRange(GetIterableElements(spreadValue));
+                    argumentsList.AddRange(spread.IsMaterializedArguments
+                        ? (IEnumerable<object?>)(SharpTSArray)spreadValue! : GetIterableElements(spreadValue));
                 }
                 else
                 {

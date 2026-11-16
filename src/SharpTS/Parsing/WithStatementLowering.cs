@@ -30,6 +30,8 @@ internal sealed class WithStatementLowering(Token storage, SpanTable spans, Func
     internal const string CheckGet = "<with:get>";
     internal const string SetBinding = "<with:set>";
     internal const string CaptureCall = "<with:call-reference>";
+    internal const string IsIntrinsicEval = "<with:is-intrinsic-eval>";
+    internal const string CaptureLexicalCall = "<with:lexical-call-reference>";
     private readonly Stack<HashSet<string>> _scopes = new();
     private bool _strict;
 
@@ -363,6 +365,12 @@ internal sealed class WithStatementLowering(Token storage, SpanTable spans, Func
 
     private Expr Call(Expr.Call expression)
     {
+        // Keep an inner with's fallback as a Reference until every enclosing
+        // object environment has had the chance to supply its call receiver.
+        if (expression.Callee is Expr.Variable { Name.Lexeme: CaptureLexicalCall }
+            && Reference(expression.Arguments[0]) is { } fallbackReference)
+            return Resolve(fallbackReference.Name, p => Helper(CaptureCall, fallbackReference.Name,
+                p.Object, new Expr.Literal(fallbackReference.Name.Lexeme), new Expr.Literal(_strict)), expression);
         // The parser encodes console intrinsics as dotted pseudo-identifiers;
         // they are complete calls, not identifier References that can be captured.
         if (Reference(expression.Callee) is { } intrinsic && intrinsic.Name.Lexeme.Contains('.'))
@@ -370,31 +378,71 @@ internal sealed class WithStatementLowering(Token storage, SpanTable spans, Func
         // Direct eval is syntactic: moving its fallback callee into a value
         // expression would turn it into indirect eval, lose caller bindings and
         // introduce a runtime dependency for otherwise standalone literal eval.
-        if (Reference(expression.Callee) is { Name.Lexeme: "eval" } eval)
+        if (!expression.Optional && Reference(expression.Callee) is { Name.Lexeme: "eval" } eval)
         {
-            var environments = new List<EvalObjectEnvironment>(expression.EvalObjectEnvironments ?? []);
-            environments.Add(new(storage, _scopes.SelectMany(scope => scope).ToHashSet(StringComparer.Ordinal)));
-            var direct = expression with { Arguments = expression.Arguments.Select(Expression).ToList(),
-                EvalObjectEnvironments = environments, PreparedEvalStatements = null };
-            if (direct.Arguments.FirstOrDefault() is Expr.Literal { Value: string source })
+            // An outer with adds its environment to a branch whose intrinsic
+            // identity was already captured by an inner with before the arguments.
+            if (expression.IsCapturedIntrinsicEval)
+                return PrepareDirectEval(expression, expression.Arguments.Select(Expression).ToList());
+            Token directFlag = fresh();
+            Token selected = fresh();
+            Token lexical = fresh();
+            var fallback = new Expr.DestructuringAssign([
+                new Stmt.Var(lexical, null, Helper(CaptureLexicalCall, eval.Name, expression.Callee)),
+                new Stmt.Expression(new Expr.Assign(directFlag,
+                    Helper(IsIntrinsicEval, eval.Name, new Expr.Variable(lexical))))
+            ], new Expr.Variable(lexical));
+            List<Stmt> prelude = [
+                new Stmt.Var(directFlag, null, new Expr.Literal(false)),
+                new Stmt.Var(selected, null, Resolve(eval.Name,
+                    p => Helper(CaptureCall, eval.Name, p.Object,
+                        new Expr.Literal(eval.Name.Lexeme), new Expr.Literal(_strict)), fallback))
+            ];
+            List<Expr> arguments = [];
+            foreach (var argument in expression.Arguments)
             {
-                try
+                // Constants have no effects and must stay literal for standalone eval.
+                if (argument is Expr.Literal) { arguments.Add(argument); continue; }
+                Token value = fresh();
+                if (argument is Expr.Spread spread)
                 {
-                    direct = direct with { PreparedEvalStatements = ApplyEvalEnvironments(
-                        new Parser(new Lexer(source).ScanTokens()).ParseOrThrow(), environments) };
+                    prelude.Add(new Stmt.Var(value, null,
+                        new Expr.ArrayLiteral([new Expr.Spread(Expression(spread.Expression))])));
+                    arguments.Add(new Expr.Spread(new Expr.Variable(value)) { IsMaterializedArguments = true });
                 }
-                catch
+                else
                 {
-                    // Eval owns syntax errors when this branch executes.
+                    prelude.Add(new Stmt.Var(value, null, Expression(argument)));
+                    arguments.Add(new Expr.Variable(value));
                 }
             }
-            return Resolve(eval.Name, p => Read(p,
-                property => expression with { Callee = property, Arguments = expression.Arguments.Select(Expression).ToList() },
-                expression with { Callee = new Expr.Literal(SharpTS.Runtime.Types.SharpTSUndefined.Instance), Arguments = expression.Arguments.Select(Expression).ToList() }),
-                direct);
+            var direct = PrepareDirectEval(expression with { Callee = new Expr.Variable(eval.Name) }, arguments);
+            return new Expr.DestructuringAssign(prelude, new Expr.Ternary(new Expr.Variable(directFlag),
+                direct, expression with { Callee = new Expr.Variable(selected), Arguments = arguments }));
         }
         return expression with { Callee = Callable(expression.Callee),
             Arguments = expression.Arguments.Select(Expression).ToList() };
+    }
+
+    private Expr.Call PrepareDirectEval(Expr.Call expression, List<Expr> arguments)
+    {
+        var environments = new List<EvalObjectEnvironment>(expression.EvalObjectEnvironments ?? []);
+        environments.Add(new(storage, _scopes.SelectMany(scope => scope).ToHashSet(StringComparer.Ordinal)));
+        var direct = expression with { Arguments = arguments,
+            EvalObjectEnvironments = environments, PreparedEvalStatements = null, IsCapturedIntrinsicEval = true };
+        if (arguments.FirstOrDefault() is Expr.Literal { Value: string source })
+        {
+            try
+            {
+                direct = direct with { PreparedEvalStatements = ApplyEvalEnvironments(
+                    new Parser(new Lexer(source).ScanTokens()).ParseOrThrow(), environments) };
+            }
+            catch
+            {
+                // Eval owns syntax errors when this branch executes.
+            }
+        }
+        return direct;
     }
 
     private Expr Tagged(Expr.TaggedTemplateLiteral expression)
