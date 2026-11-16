@@ -7,6 +7,11 @@ namespace SharpTS.TypeSystem;
 /// </summary>
 public partial class TypeChecker
 {
+    private bool IsUndefinedValue(Expr expression)
+        => expression is Expr.Literal { Value: Runtime.Types.SharpTSUndefined }
+            || expression is Expr.Variable { Name.Lexeme: "undefined" }
+                && _environment.Get("undefined") is null or TypeInfo.Undefined;
+
     private static Expr FinalConditionOperand(Expr expression)
     {
         while (true)
@@ -88,11 +93,11 @@ public partial class TypeChecker
         // Note: Property null checks (x.prop !== null) are handled by the
         // NarrowingPath-based AnalyzePathTypeGuard below
 
-        // Pattern 6: x === undefined (undefined is a literal, not a variable)
+        // Pattern 6: x === undefined (a lexical binding can shadow the global)
         if (condition is Expr.Binary bin6 &&
             bin6.Operator.Type is TokenType.EQUAL_EQUAL or TokenType.EQUAL_EQUAL_EQUAL &&
             bin6.Left is Expr.Variable v6 &&
-            bin6.Right is Expr.Literal { Value: Runtime.Types.SharpTSUndefined })
+            IsUndefinedValue(bin6.Right))
         {
             return AnalyzeNullCheck(v6.Name.Lexeme, checkingForNull: false, negated: false, checkBoth: bin6.Operator.Type == TokenType.EQUAL_EQUAL);
         }
@@ -101,7 +106,7 @@ public partial class TypeChecker
         if (condition is Expr.Binary bin6b &&
             bin6b.Operator.Type is TokenType.EQUAL_EQUAL or TokenType.EQUAL_EQUAL_EQUAL &&
             bin6b.Right is Expr.Variable v6b &&
-            bin6b.Left is Expr.Literal { Value: Runtime.Types.SharpTSUndefined })
+            IsUndefinedValue(bin6b.Left))
         {
             return AnalyzeNullCheck(v6b.Name.Lexeme, checkingForNull: false, negated: false, checkBoth: bin6b.Operator.Type == TokenType.EQUAL_EQUAL);
         }
@@ -110,7 +115,7 @@ public partial class TypeChecker
         if (condition is Expr.Binary bin7 &&
             bin7.Operator.Type is TokenType.BANG_EQUAL or TokenType.BANG_EQUAL_EQUAL &&
             bin7.Left is Expr.Variable v7 &&
-            bin7.Right is Expr.Literal { Value: Runtime.Types.SharpTSUndefined })
+            IsUndefinedValue(bin7.Right))
         {
             return AnalyzeNullCheck(v7.Name.Lexeme, checkingForNull: false, negated: true, checkBoth: bin7.Operator.Type == TokenType.BANG_EQUAL);
         }
@@ -847,7 +852,7 @@ public partial class TypeChecker
         // Pattern: path !== undefined or path != undefined
         if (condition is Expr.Binary bin5 &&
             bin5.Operator.Type is TokenType.BANG_EQUAL or TokenType.BANG_EQUAL_EQUAL &&
-            bin5.Right is Expr.Literal { Value: Runtime.Types.SharpTSUndefined })
+            IsUndefinedValue(bin5.Right))
         {
             var path = ExtractNarrowingPath(bin5.Left);
             if (path != null && Narrowing.NarrowingPathExtractor.IsWithinDepthLimit(path))
@@ -859,7 +864,7 @@ public partial class TypeChecker
         // Pattern: undefined !== path (reversed)
         if (condition is Expr.Binary bin6 &&
             bin6.Operator.Type is TokenType.BANG_EQUAL or TokenType.BANG_EQUAL_EQUAL &&
-            bin6.Left is Expr.Literal { Value: Runtime.Types.SharpTSUndefined })
+            IsUndefinedValue(bin6.Left))
         {
             var path = ExtractNarrowingPath(bin6.Right);
             if (path != null && Narrowing.NarrowingPathExtractor.IsWithinDepthLimit(path))
@@ -871,7 +876,7 @@ public partial class TypeChecker
         // Pattern: path === undefined
         if (condition is Expr.Binary bin7 &&
             bin7.Operator.Type is TokenType.EQUAL_EQUAL or TokenType.EQUAL_EQUAL_EQUAL &&
-            bin7.Right is Expr.Literal { Value: Runtime.Types.SharpTSUndefined })
+            IsUndefinedValue(bin7.Right))
         {
             var path = ExtractNarrowingPath(bin7.Left);
             if (path != null && Narrowing.NarrowingPathExtractor.IsWithinDepthLimit(path))
@@ -883,7 +888,7 @@ public partial class TypeChecker
         // Pattern: undefined === path (reversed)
         if (condition is Expr.Binary bin8 &&
             bin8.Operator.Type is TokenType.EQUAL_EQUAL or TokenType.EQUAL_EQUAL_EQUAL &&
-            bin8.Left is Expr.Literal { Value: Runtime.Types.SharpTSUndefined })
+            IsUndefinedValue(bin8.Left))
         {
             var path = ExtractNarrowingPath(bin8.Right);
             if (path != null && Narrowing.NarrowingPathExtractor.IsWithinDepthLimit(path))

@@ -504,13 +504,13 @@ public class ClosureAnalyzer : AstVisitorBase
     {
         if (_currentFunction == null) return;
 
-        // The intrinsic Math object needs no capture, but a lexical declaration with that name
+        // Intrinsic values need no capture, but a lexical declaration with the same name
         // must reach the ordinary self/local/outer ownership checks below.
-        if (name == "Math" && !_scopeStack.Any(scope => scope.Contains(name)))
+        if (name is "Math" or "undefined" && !_scopeStack.Any(scope => scope.Contains(name)))
             return;
 
         // Skip other built-ins.
-        if (name is "console.log" or "console" or "undefined" or "NaN" or "Infinity" or "Symbol")
+        if (name is "console.log" or "console" or "NaN" or "Infinity" or "Symbol")
             return;
 
         // Namespace members have namespace-owned static storage. Treating them
