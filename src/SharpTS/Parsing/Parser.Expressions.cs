@@ -572,6 +572,10 @@ public partial class Parser
         if (Match(TokenType.YIELD))
         {
             Token keyword = Previous();
+            // Reject here rather than leaving '*' for the multiplicative parser:
+            // an unparenthesized bare yield cannot be its left operand either.
+            if (Check(TokenType.STAR) && HasLineTerminatorBeforeCurrent())
+                throw new ParseError("A line terminator is not allowed between 'yield' and '*'.", "TS1109");
             bool isDelegating = Match(TokenType.STAR);  // yield* delegates to another iterable
 
             // yield can be bare (yields undefined) or have an expression
@@ -898,7 +902,7 @@ public partial class Parser
         if (Match(TokenType.FALSE)) return new Expr.Literal(false);
         if (Match(TokenType.TRUE)) return new Expr.Literal(true);
         if (Match(TokenType.NULL)) return new Expr.Literal(null);
-        if (Match(TokenType.UNDEFINED)) return new Expr.Literal(SharpTS.Runtime.Types.SharpTSUndefined.Instance);
+        if (Match(TokenType.UNDEFINED)) return new Expr.Variable(Previous());
         if (Match(TokenType.NUMBER, TokenType.STRING, TokenType.BIGINT_LITERAL)) return new Expr.Literal(Previous().Literal);
         if (Match(TokenType.REGEX))
         {

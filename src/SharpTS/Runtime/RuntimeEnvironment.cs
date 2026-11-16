@@ -74,6 +74,41 @@ public class RuntimeEnvironment : ScopeChain<RuntimeValue, RuntimeEnvironment>
     // Invocation and ordinary block environments start unmarked.
     internal RuntimeEnvironment? VarDeclarationTarget { get; set; }
 
+    private RuntimeEnvironment? _evalVariableEnvironment;
+    internal RuntimeEnvironment EvalVariableEnvironment
+    {
+        get => _evalVariableEnvironment ?? Enclosing?.EvalVariableEnvironment ?? this;
+        set => _evalVariableEnvironment = value;
+    }
+
+    private HashSet<string>? _evalVarNames;
+
+    internal void InstantiateEvalVar(string name)
+    {
+        if (IsDefinedLocally(name)) return;
+        Define(name, RuntimeValue.Undefined);
+        (_evalVarNames ??= new(StringComparer.Ordinal)).Add(name);
+    }
+
+    internal int ResolveEvalBindingDistance(string name, int resolvedDistance)
+    {
+        RuntimeEnvironment? environment = this;
+        for (int distance = 0; distance < resolvedDistance && environment is not null; distance++)
+        {
+            if (environment._evalVarNames?.Contains(name) == true) return distance;
+            environment = environment.Enclosing;
+        }
+        return resolvedDistance;
+    }
+
+    internal int? FindBindingDistance(string name)
+    {
+        RuntimeEnvironment? environment = this;
+        for (int distance = 0; environment is not null; distance++, environment = environment.Enclosing)
+            if (environment.IsDefinedLocally(name)) return distance;
+        return null;
+    }
+
     // VM closures retain realm-owned intrinsic data, never their evaluating host.
     private Execution.PromiseIntrinsicState? _vmPromiseRealm;
     internal Execution.PromiseIntrinsicState? VmPromiseRealm

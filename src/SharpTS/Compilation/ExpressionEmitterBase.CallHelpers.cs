@@ -450,14 +450,18 @@ public abstract partial class ExpressionEmitterBase
             return false;
         }
 
-        List<Stmt> statements;
-        try
+        List<Stmt>? statements = null;
+        Ctx.StaticDirectEvalStatements?.TryGetValue(call, out statements);
+        if (statements is null)
         {
-            statements = new Parser(new Lexer(source).ScanTokens()).ParseOrThrow();
-        }
-        catch
-        {
-            return false;
+            try
+            {
+                statements = new Parser(new Lexer(source).ScanTokens()).ParseOrThrow();
+            }
+            catch
+            {
+                return false;
+            }
         }
 
         if (Ctx.IsScriptTopLevel && this is ILEmitter syncEmitter
@@ -1078,7 +1082,15 @@ public abstract partial class ExpressionEmitterBase
                 continue;
             }
             var value = SpillBoxed(argument is Expr.Spread spread ? spread.Expression : argument);
-            if (argument is Expr.Spread)
+            if (argument is Expr.Spread { IsMaterializedArguments: true })
+            {
+                IL.Emit(OpCodes.Ldloc, target);
+                IL.Emit(OpCodes.Castclass, Types.ListOfObject);
+                IL.Emit(OpCodes.Ldloc, value);
+                IL.Emit(OpCodes.Castclass, Types.IEnumerableOfObject);
+                IL.Emit(OpCodes.Callvirt, Types.GetMethod(Types.ListOfObject, "AddRange", Types.IEnumerableOfObject));
+            }
+            else if (argument is Expr.Spread)
             {
                 IL.Emit(OpCodes.Ldloc, value);
                 IL.Emit(OpCodes.Ldsfld, Ctx.Runtime.Symbols.Iterator);

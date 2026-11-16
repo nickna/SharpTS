@@ -24,6 +24,18 @@ public sealed class EmittedTypedArrayRuntime
         }
     }
 
+    private MethodBuilder? _isInvalidCanonicalIndex;
+    public MethodBuilder IsInvalidCanonicalIndex
+    {
+        get => _isInvalidCanonicalIndex ?? throw new InvalidOperationException("TypedArray metadata 'IsInvalidCanonicalIndex' has not been declared.");
+        internal set
+        {
+            EnsureMutable();
+            ArgumentNullException.ThrowIfNull(value);
+            _isInvalidCanonicalIndex = value;
+        }
+    }
+
     public EmittedTypedArrayImplementation? Implementation { get; private set; }
 
     public EmittedTypedArrayImplementation RequireImplementation() => Implementation
@@ -41,6 +53,7 @@ public sealed class EmittedTypedArrayRuntime
     {
         EnsureMutable();
         _ = IsTypedArray;
+        _ = IsInvalidCanonicalIndex;
         Implementation?.CompleteEmission();
         IsComplete = true;
     }

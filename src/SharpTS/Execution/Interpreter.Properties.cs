@@ -1008,7 +1008,7 @@ public partial class Interpreter
                         : BindAccessorToObject(getter, receiver).CallBoxed(this, []);
                 if (symbolBag.HasSymbolProperty(symbol))
                     return symbolBag.GetBySymbol(symbol);
-                if (UsesExplicitPrimitivePrototypeLink(current))
+                if (UsesPrimitivePrototypePropertyReads(current))
                 {
                     current = ObjectBuiltIns.PrototypeOf(this, current);
                     continue;
@@ -1310,7 +1310,7 @@ public partial class Interpreter
             }
             if (current is ISharpTSSymbolPropertyBag symbolBag
                 && symbolBag.HasSymbolProperty(symbol)) return true;
-            if (UsesExplicitPrimitivePrototypeLink(current))
+            if (UsesPrimitivePrototypePropertyReads(current))
             {
                 current = ObjectBuiltIns.PrototypeOf(this, current);
                 continue;
@@ -3551,6 +3551,8 @@ public partial class Interpreter
                     throw StrictModeErrors.TypeError($"Proxy set trap rejected property '{name}'");
                 return true;
             }
+            if (current is SharpTSTypedArray array && array.IsInvalidCanonicalIndex(name))
+                return true;
             if (ObjectBuiltIns.OwnPropertyDescriptorOf(this, current, name) is { } descriptor)
                 return TryAssignThroughDescriptor(descriptor, receiver, name, value, strictMode);
             current = ObjectBuiltIns.PrototypeOf(this, current);
@@ -3676,18 +3678,12 @@ public partial class Interpreter
     /// <seealso href="https://www.typescriptlang.org/docs/handbook/variable-declarations.html">TypeScript Variable Declarations</seealso>
     private RuntimeValue EvaluateAssign(Expr.Assign assign)
     {
+        var selected = SelectVariableAssignment(assign.Name, assign);
         RuntimeValue value = assign.IsVarRedeclaration
             ? EvaluateVariableInitializerCore(_syncContext, assign.Value, assign.Name).GetAwaiter().GetResult()
             : EvaluateRV(assign.Value);
 
-        if (_locals.TryGetValue(assign, out int distance))
-        {
-            _environment.AssignAt(distance, assign.Name, value);
-        }
-        else
-        {
-            AssignVariableValue(assign.Name, value);
-        }
+        AssignSelectedVariable(selected, assign.Name, value);
 
         if (value.IsObject) ObserveDiscardedReactionResult(value.ToObject());
         return value;

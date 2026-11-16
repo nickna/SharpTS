@@ -1484,6 +1484,8 @@ public abstract partial class ExpressionEmitterBase : IEmitterContext
     protected virtual void EmitTaggedTemplateLiteral(Expr.TaggedTemplateLiteral ttl)
     {
         var (tagTemp, receiverTemp) = SpillTaggedTemplateReference(ttl.Tag);
+        EmitTemplateObject(ttl);
+        var templateTemp = _helpers.SpillStoreObject();
 
         var exprTemps = new List<LocalBuilder>();
         for (int i = 0; i < ttl.Expressions.Count; i++)
@@ -1492,29 +1494,7 @@ public abstract partial class ExpressionEmitterBase : IEmitterContext
         // Phase 2: Build arrays and call from temps
         IL.Emit(OpCodes.Ldloc, tagTemp);
         if (receiverTemp is not null) IL.Emit(OpCodes.Ldloc, receiverTemp);
-
-        IL.Emit(OpCodes.Ldc_I4, ttl.CookedStrings.Count);
-        IL.Emit(OpCodes.Newarr, typeof(object));
-        for (int i = 0; i < ttl.CookedStrings.Count; i++)
-        {
-            IL.Emit(OpCodes.Dup);
-            IL.Emit(OpCodes.Ldc_I4, i);
-            if (ttl.CookedStrings[i] != null)
-                IL.Emit(OpCodes.Ldstr, ttl.CookedStrings[i]!);
-            else
-                IL.Emit(OpCodes.Ldnull);
-            IL.Emit(OpCodes.Stelem_Ref);
-        }
-
-        IL.Emit(OpCodes.Ldc_I4, ttl.RawStrings.Count);
-        IL.Emit(OpCodes.Newarr, typeof(string));
-        for (int i = 0; i < ttl.RawStrings.Count; i++)
-        {
-            IL.Emit(OpCodes.Dup);
-            IL.Emit(OpCodes.Ldc_I4, i);
-            IL.Emit(OpCodes.Ldstr, ttl.RawStrings[i]);
-            IL.Emit(OpCodes.Stelem_Ref);
-        }
+        IL.Emit(OpCodes.Ldloc, templateTemp);
 
         IL.Emit(OpCodes.Ldc_I4, ttl.Expressions.Count);
         IL.Emit(OpCodes.Newarr, typeof(object));
@@ -1528,6 +1508,57 @@ public abstract partial class ExpressionEmitterBase : IEmitterContext
 
         IL.Emit(OpCodes.Call, receiverTemp is null
             ? Ctx.Runtime!.Templates.Invoke : Ctx.Runtime!.Templates.InvokeWithThis);
+        SetStackUnknown();
+    }
+
+    private void EmitTemplateObject(Expr.TaggedTemplateLiteral ttl)
+    {
+        if (!Ctx.TemplateObjectFields.TryGetValue(ttl.RawStrings, out var field))
+        {
+            field = Ctx.ProgramType!.DefineField($"$templateSite{Ctx.TemplateObjectFields.Count}",
+                Ctx.Runtime!.Templates.StringsListType, FieldAttributes.Public | FieldAttributes.Static);
+            Ctx.TemplateObjectFields.Add(ttl.RawStrings, field);
+        }
+        var ready = IL.DefineLabel();
+        IL.Emit(OpCodes.Ldsfld, field);
+        IL.Emit(OpCodes.Dup);
+        IL.Emit(OpCodes.Brtrue, ready);
+        IL.Emit(OpCodes.Pop);
+
+        IL.Emit(OpCodes.Ldc_I4, ttl.CookedStrings.Count);
+        IL.Emit(OpCodes.Newarr, typeof(object));
+        for (int i = 0; i < ttl.CookedStrings.Count; i++)
+        {
+            IL.Emit(OpCodes.Dup);
+            IL.Emit(OpCodes.Ldc_I4, i);
+            if (ttl.CookedStrings[i] != null)
+                IL.Emit(OpCodes.Ldstr, ttl.CookedStrings[i]!);
+            else
+                IL.Emit(OpCodes.Ldsfld, Ctx.Runtime!.Sentinels.UndefinedInstance);
+            IL.Emit(OpCodes.Stelem_Ref);
+        }
+
+        IL.Emit(OpCodes.Ldc_I4, ttl.RawStrings.Count);
+        IL.Emit(OpCodes.Newarr, typeof(string));
+        for (int i = 0; i < ttl.RawStrings.Count; i++)
+        {
+            IL.Emit(OpCodes.Dup);
+            IL.Emit(OpCodes.Ldc_I4, i);
+            IL.Emit(OpCodes.Ldstr, ttl.RawStrings[i]);
+            IL.Emit(OpCodes.Stelem_Ref);
+        }
+
+        IL.Emit(OpCodes.Newobj, Ctx.Runtime!.Templates.StringsListCtor);
+        IL.Emit(OpCodes.Dup);
+        IL.Emit(OpCodes.Call, Ctx.Runtime.ObjectState.Freeze);
+        IL.Emit(OpCodes.Pop);
+        IL.Emit(OpCodes.Dup);
+        IL.Emit(OpCodes.Callvirt, Ctx.Runtime.Templates.RawGetter);
+        IL.Emit(OpCodes.Call, Ctx.Runtime.ObjectState.Freeze);
+        IL.Emit(OpCodes.Pop);
+        IL.Emit(OpCodes.Dup);
+        IL.Emit(OpCodes.Stsfld, field);
+        IL.MarkLabel(ready);
         SetStackUnknown();
     }
 

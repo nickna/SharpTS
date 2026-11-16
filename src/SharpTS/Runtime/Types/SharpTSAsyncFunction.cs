@@ -176,7 +176,7 @@ public class SharpTSAsyncFunction : ISharpTSAsyncCallable, ISharpTSFunctionObjec
         RuntimeEnvironment closure = isClassMethod && !_receiverBound
             ? new RuntimeEnvironment(_closure, strictMode: true) : _closure;
         RuntimeEnvironment environment = new(closure,
-            strictMode: isClassMethod || _declaration.IsPrivate ? true : null)
+            strictMode: isClassMethod || _declaration.IsPrivate || ParameterBinder.HasUseStrict(_declaration.Body) ? true : null)
             { PrivateClass = PrivateOwner, StaticSuper = _declaration.IsStatic };
         environment.NewTarget = RuntimeValue.Undefined;
         environment.ConstructionFrame = null;
@@ -347,7 +347,8 @@ public class SharpTSAsyncArrowFunction : ISharpTSAsyncCallable, ISharpTSFunction
 
     private async Task<object?> ExecuteBodyAsync(Interpreter interpreter, List<object?> arguments)
     {
-        RuntimeEnvironment environment = new(_closure);
+        RuntimeEnvironment environment = new(_closure,
+            strictMode: ParameterBinder.HasUseStrict(_declaration.BlockBody) ? true : null);
         if (HasOwnThis)
         {
             environment.NewTarget = RuntimeValue.Undefined;

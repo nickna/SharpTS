@@ -796,7 +796,7 @@ public partial class Interpreter
             SharpTSMap map => map.Entries().Elements,      // yields [key, value] arrays
             SharpTSSet set => set.Values().Elements,       // yields values
             SharpTSIterator iter => iter.Elements,
-            SharpTSGenerator gen => gen,                   // generators implement IEnumerable<object?>
+            SharpTSGenerator => throw new ThrowException(new SharpTSTypeError("[Symbol.iterator] must be a function")),
             string s => StringBuiltIns.IterateCodePoints(s),
             List<object?> list => list,                    // plain List<object?>
             IEnumerable<object?> enumerable => enumerable, // IEnumerable<object?> (e.g., SharpTSIntlSegments)
@@ -945,10 +945,10 @@ public partial class Interpreter
             return EnumerateWithIteratorProtocol(BindMemberCallReceiver(iteratorFn, iterable)!);
         }
 
-        if (iterable is SharpTSGenerator generator
-            && ((ISharpTSOwnPropertyObject)generator).OwnProperties.HasSymbolProperty(SharpTSSymbol.Iterator))
+        if (iterable is SharpTSGenerator generator)
         {
-            var iteratorFn = PerformIndexGet(null!, generator, SharpTSSymbol.Iterator).ToObject();
+            var iteratorFn = GetSymbolPropertyValue(generator, SharpTSSymbol.Iterator);
+            if (iteratorFn is null or SharpTSUndefined) return null;
             if (iteratorFn is not ISharpTSCallable)
                 throw new ThrowException(new SharpTSTypeError("[Symbol.iterator] must be a function"));
             return EnumerateWithIteratorProtocol(BindMemberCallReceiver(iteratorFn, generator)!);
@@ -1266,6 +1266,10 @@ public partial class Interpreter
         if (elements != null)
             return true;
 
+        // The ordinary GetMethod above is authoritative for generators, even
+        // though their host carrier also implements IEnumerable.
+        if (value is SharpTSGenerator) return false;
+
         // Fall back to known iterable types
         elements = value switch
         {
@@ -1273,7 +1277,6 @@ public partial class Interpreter
             SharpTSMap map => map.Entries().Elements,      // yields [key, value] arrays
             SharpTSSet set => set.Values().Elements,       // yields values
             SharpTSIterator iter => iter.Elements,
-            SharpTSGenerator gen => gen,                   // generators implement IEnumerable<object?>
             // Typed arrays and Buffers are iterable in JS (%TypedArray%.prototype[@@iterator]),
             // and the compiled path expands them, but they carry no Symbol.iterator in this
             // runtime so TryGetSymbolIterator above misses them. Read their elements directly

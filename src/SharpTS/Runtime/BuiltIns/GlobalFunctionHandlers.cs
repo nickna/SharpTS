@@ -65,6 +65,9 @@ internal static class GlobalFunctionHandlers
         registry.RegisterV2(WithStatementLowering.CheckGet, HandleWithGetCheck);
         registry.RegisterV2(WithStatementLowering.SetBinding, HandleWithSet);
         registry.RegisterV2(WithStatementLowering.CaptureCall, HandleWithCaptureCall);
+        registry.RegisterV2(WithStatementLowering.IsIntrinsicEval, async (evaluate, arguments, _) =>
+            RuntimeValue.FromBoolean((await evaluate(arguments[0])).ToObject() is SharpTSGlobalFunction { Name: "eval" }));
+        registry.RegisterV2(WithStatementLowering.CaptureLexicalCall, (evaluate, arguments, _) => evaluate(arguments[0]));
         registry.RegisterV2(BuiltInNames.ArrayBinding, HandleArrayBinding);
 
         // Note: Error constructors are handled by SharpTSErrorClass (registered as globals).

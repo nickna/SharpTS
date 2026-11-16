@@ -105,6 +105,10 @@ public abstract class SharpTSTypedArray : ITypeCategorized
             System.Globalization.CultureInfo.InvariantCulture, out double number)
             || Compilation.RuntimeTypes.FormatNumber(number) != name);
 
+    internal bool IsInvalidCanonicalIndex(string name)
+        => !IsOrdinaryNamedPropertyKey(name)
+            && (!PropertySemantics.TryGetArrayIndex(name, out uint index) || index >= Length);
+
     private SharpTSObject GetOrdinaryProperties()
     {
         var properties = _ordinaryProperties ??= new SharpTSObject([]);

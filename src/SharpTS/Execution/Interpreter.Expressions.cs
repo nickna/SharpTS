@@ -435,10 +435,7 @@ public partial class Interpreter
     {
         object? tag = EvaluateMemberCallReference(_syncContext, tagged.Tag).GetAwaiter().GetResult();
 
-        // Create template strings array with raw property
-        // Cooked values: null becomes undefined (or just null in our runtime)
-        var cookedList = tagged.CookedStrings.Cast<object?>().ToList();
-        var stringsArray = new SharpTSTemplateStringsArray(cookedList, tagged.RawStrings);
+        var stringsArray = GetTemplateObject(tagged);
 
         // Evaluate all expression arguments
         List<object?> args = [stringsArray];
@@ -449,6 +446,22 @@ public partial class Interpreter
             throw new ThrowException(new SharpTSTypeError($"{GetTypeofString(tag)} is not a function"));
 
         return RuntimeValue.FromBoxed(callable.Call(this, args));
+    }
+
+    // Lowering preserves the literal's raw-segment list even when it rewrites
+    // the tag or substitutions. Its identity denotes the source site, not its text.
+    private readonly Dictionary<List<string>, SharpTSTemplateStringsArray> _templateObjects =
+        new(System.Collections.Generic.ReferenceEqualityComparer.Instance);
+
+    private SharpTSTemplateStringsArray GetTemplateObject(Expr.TaggedTemplateLiteral tagged)
+    {
+        if (!_templateObjects.TryGetValue(tagged.RawStrings, out var template))
+        {
+            template = new SharpTSTemplateStringsArray(tagged.CookedStrings
+                .Select(value => value is null ? (object?)SharpTSUndefined.Instance : value).ToList(), tagged.RawStrings);
+            _templateObjects.Add(tagged.RawStrings, template);
+        }
+        return template;
     }
 
     /// <summary>
@@ -1330,6 +1343,9 @@ public partial class Interpreter
         if (obj is SharpTSDate date && index is SharpTSSymbol dateSymbol)
             return RuntimeValue.FromBoxed(GetSymbolPropertyValue(date, dateSymbol));
 
+        if (UsesPrimitivePrototypePropertyReads(obj) && index is SharpTSSymbol prototypeSymbolKey)
+            return RuntimeValue.FromBoxed(GetSymbolPropertyValue(obj!, prototypeSymbolKey));
+
         if (obj is ISharpTSSymbolPropertyBag symbolBag
             && index is SharpTSSymbol bagSymbol)
         {
@@ -1821,6 +1837,7 @@ public partial class Interpreter
                 SharpTSFunctionPrototype functionPrototype => functionPrototype.GetOwnPropertyDescriptor(bagSymbol),
                 SharpTSNumberPrototype numberPrototype => numberPrototype.GetOwnSymbolPropertyDescriptor(bagSymbol),
                 SharpTSBooleanPrototype booleanPrototype => booleanPrototype.GetOwnSymbolPropertyDescriptor(bagSymbol),
+                SharpTSObjectPrototype objectPrototype => objectPrototype.GetOwnSymbolPropertyDescriptor(bagSymbol),
                 _ => null
             };
             if (!TryAssignThroughDescriptor(descriptor, obj, bagSymbol.ToString(), value, strictMode))
@@ -2066,18 +2083,7 @@ public partial class Interpreter
                 break;
 
             case IndexTarget.ObjectSymbol t:
-                if (t.Target.TryGetSymbolAccessor(t.Key, out _, out var symbolSetter))
-                {
-                    if (symbolSetter != null)
-                        BindAccessorToObject(symbolSetter, t.Target).CallBoxed(this, [value]);
-                    else if (strictMode)
-                        throw new InterpreterException(
-                            $"Cannot set symbol property '{t.Key}' which has only a getter.");
-                }
-                else if (strictMode)
-                    t.Target.SetBySymbolStrict(t.Key, value, strictMode);
-                else
-                    t.Target.SetBySymbol(t.Key, value);
+                SetOwnPropertyObjectValue(t.Target, t.Key, value, strictMode);
                 break;
 
             case IndexTarget.InstanceString t:

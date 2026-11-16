@@ -83,12 +83,13 @@ machines retain the object through the ordinary capture machinery. Binding looku
 selected object remains fixed across RHS evaluation, including when that evaluation deletes a
 property. Strict code rejects `with`; strict functions created inside a non-strict `with` still
 apply strict binding-read/write rules. Lowered helpers are emitted into standalone output.
-Direct `eval` source does not yet inherit the lowered object environment; that limitation is
-tracked in [#3705](https://github.com/nickna/SharpTS/issues/3705).
-Direct `eval` also retains syntactic branch lowering to preserve caller bindings and literal
-standalone compilation. Nested direct-eval arguments can still cause exponential AST growth
-([#3710](https://github.com/nickna/SharpTS/issues/3710)); ordinary calls and tags share one lowered
-argument/interpolation tree.
+Direct `eval` carries the active object environments and intervening lexical masks into its
+parsed source. Literal programs are prepared before closure analysis so evaluated functions
+retain the live object. The interpreter also applies this to dynamic source; compiled dynamic
+source retains the existing global-only `EvalBridge` boundary.
+Direct `eval` captures its selected callable and intrinsic identity before a shared argument
+prelude. Its intrinsic branch retains direct-call syntax and literal source, preserving caller
+bindings and standalone compilation while nested argument trees grow linearly.
 
 ### Compile-time and runtime environments
 

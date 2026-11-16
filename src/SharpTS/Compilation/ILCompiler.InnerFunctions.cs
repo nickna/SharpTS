@@ -1065,7 +1065,7 @@ public partial class ILCompiler
         FieldBuilder? funcDCStoreField = null;
         bool storeInFunctionDC = ctx.CapturedFunctionLocals?.Contains(funcName) == true &&
             ctx.FunctionDisplayClassFields?.TryGetValue(funcName, out funcDCStoreField) == true &&
-            ctx.FunctionDisplayClassLocal != null;
+            (ctx.FunctionDisplayClassLocal != null || ctx.OuterFunctionDCField != null);
 
         // Parallel check for the enclosing *arrow's* scope display class. Named function
         // expressions compile as arrows, so when an inner `function X()` is declared inside
@@ -1129,6 +1129,14 @@ public partial class ILCompiler
                     il.Emit(OpCodes.Ldfld, parentFunctionDC);
                     il.Emit(OpCodes.Stfld, funcDCField);
                 }
+                else if (ctx.OuterFunctionDCField is { } stateMachineFunctionDC
+                    && stateMachineFunctionDC.FieldType == funcDCField.FieldType)
+                {
+                    il.Emit(OpCodes.Dup);
+                    il.Emit(OpCodes.Ldarg_0);
+                    il.Emit(OpCodes.Ldfld, stateMachineFunctionDC);
+                    il.Emit(OpCodes.Stfld, funcDCField);
+                }
             }
 
             // Populate $arrowScopeDC (and any extra ancestor refs) with live
@@ -1180,7 +1188,13 @@ public partial class ILCompiler
             // Store in the enclosing function's display class field
             var temp = il.DeclareLocal(_types.Object);
             il.Emit(OpCodes.Stloc, temp);
-            il.Emit(OpCodes.Ldloc, ctx.FunctionDisplayClassLocal!);
+            if (ctx.FunctionDisplayClassLocal != null)
+                il.Emit(OpCodes.Ldloc, ctx.FunctionDisplayClassLocal);
+            else
+            {
+                il.Emit(OpCodes.Ldarg_0);
+                il.Emit(OpCodes.Ldfld, ctx.OuterFunctionDCField!);
+            }
             il.Emit(OpCodes.Ldloc, temp);
             il.Emit(OpCodes.Stfld, funcDCStoreField!);
         }
@@ -1258,6 +1272,12 @@ public partial class ILCompiler
                 if (ctx.FunctionDisplayClassLocal != null)
                 {
                     il.Emit(OpCodes.Ldloc, ctx.FunctionDisplayClassLocal);
+                    il.Emit(OpCodes.Ldfld, funcField);
+                }
+                else if (ctx.OuterFunctionDCField != null)
+                {
+                    il.Emit(OpCodes.Ldarg_0);
+                    il.Emit(OpCodes.Ldfld, ctx.OuterFunctionDCField);
                     il.Emit(OpCodes.Ldfld, funcField);
                 }
                 else

@@ -1,7 +1,7 @@
 using SharpTS.Tests.Infrastructure;
 using Xunit;
 
-namespace SharpTS.Tests.CompilerTests;
+namespace SharpTS.Tests.SharedTests;
 
 public sealed class MathFixedArityArgumentTests
 {
@@ -31,10 +31,25 @@ public sealed class MathFixedArityArgumentTests
     public const string Expected = "NaN 3\n8 NaN NaN\n8 8\nNaN NaN 4 8\n5\nfirst,spread,last,coerce\n"
         + "8 0 12\nNaN NaN 32 0\n2 2 31\nNaN NaN\ntrue true\nrandom\n6\nTypeError\n";
 
-    // Compiler-specific until #3714 removes the interpreter's exact-arity
-    // rejection of missing/surplus Math arguments. Supported canonical-arity
-    // spread calls remain dual-mode in MathFixedAritySpreadTests.
-    [Fact]
-    public void ExpandedArgumentsRespectFixedArityAndEvaluationOrder() =>
-        Assert.Equal(Expected, TestHarness.RunUnchecked(Source, ExecutionMode.Compiled));
+    [Theory, ModeData]
+    public void ExpandedArgumentsRespectFixedArityAndEvaluationOrder(ExecutionMode mode) =>
+        Assert.Equal(Expected, TestHarness.RunUnchecked(Source, mode));
+
+    [Theory, ModeData]
+    public void FixedMethodsKeepTheirSpecifiedLengthsAndPadMissingValues(ExecutionMode mode)
+    {
+        const string source = """
+            console.log(Math.abs.length, Math.pow.length, Math.atan2.length, Math.imul.length, Math.random.length);
+            console.log(Math.sin(), Math.log(), Math.sqrt(), Math.sign(), Math.trunc(), Math.atan2(1));
+            const extra = { valueOf() { throw 'surplus coercion'; } };
+            console.log(Math.sin(0, extra), Math.log(1, extra), Math.sqrt(4, extra), Math.sign(-2, extra));
+            """;
+        Assert.Equal("1 2 2 2 0\nNaN NaN NaN NaN NaN NaN\n0 0 2 -1\n",
+            TestHarness.RunUnchecked(source, mode));
+    }
+
+    [Theory, InterpretedOnlyData]
+    public void AliasedMethodsUseTheSameArgumentNormalization(ExecutionMode mode) =>
+        Assert.Equal("NaN 3\n", TestHarness.RunUnchecked(
+            "const abs = Math.abs; console.log(abs(), abs(-3, { valueOf(){ throw 'extra'; } }));", mode));
 }

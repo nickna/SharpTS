@@ -1607,7 +1607,6 @@ public partial class RuntimeEmitter
                 runtime.DescriptorStorage,
                 runtime.FunctionPrototypes.Prototype,
                 runtime.FunctionPrototypes.Populate,
-                runtime.Generators,
                 runtime.GlobalObject.GetProperty,
                 runtime.GlobalObject.SingletonField,
                 runtime.ReflectedMethods.InvokeUnwrapped,
@@ -2963,9 +2962,9 @@ public partial class RuntimeEmitter
         runtime.Enums.CompleteEmission();
         EmitConcatTemplate(typeBuilder, runtime.Templates, runtime.StringCoercion.StringifyCoerce);
         EmitInvokeTaggedTemplate(typeBuilder, runtime.Templates,
-            runtime.ObjectState.Freeze, runtime.Invocation.Value, runtime.Errors.CreateException, runtime.Errors.TypeErrorConstructor);
+            runtime.Invocation.Value, runtime.Errors.CreateException, runtime.Errors.TypeErrorConstructor);
         EmitInvokeTaggedTemplateWithThis(typeBuilder, runtime.Templates,
-            runtime.ObjectState.Freeze, runtime.Invocation.Method, runtime.Errors.CreateException, runtime.Errors.TypeErrorConstructor);
+            runtime.Invocation.Method, runtime.Errors.CreateException, runtime.Errors.TypeErrorConstructor);
         EmitObjectRest(
             typeBuilder,
             runtime.ObjectConstruction,

@@ -680,7 +680,11 @@ public partial class ILEmitter
 
             case TokenType.TYPEOF:
                 // typeof never throws on undeclared variables - returns "undefined"
-                if (TryEmitMutableGlobalFunctionTypeOf(u.Right))
+                if (TryEmitEvalVariableTypeOf(u))
+                {
+                    break;
+                }
+                else if (TryEmitMutableGlobalFunctionTypeOf(u.Right))
                 {
                     break;
                 }
@@ -767,6 +771,7 @@ public partial class ILEmitter
 
     protected override void EmitCompoundAssign(Expr.CompoundAssign ca)
     {
+        if (TryEmitEvalVariableCompound(ca)) return;
         if (_ctx.HasLoopBodyBindingAccess(ca.Name.Lexeme)) { base.EmitCompoundAssign(ca); return; }
         if (TryGetClassDefinitionCaptureSlot(ca.Name.Lexeme, out _)) { base.EmitCompoundAssign(ca); return; }
         if (TryEmitExternalCompoundAssign(ca))
@@ -998,6 +1003,7 @@ public partial class ILEmitter
 
     protected override void EmitLogicalAssign(Expr.LogicalAssign la)
     {
+        if (TryEmitEvalVariableLogical(la)) return;
         if (_ctx.HasLoopBodyBindingAccess(la.Name.Lexeme)) { base.EmitLogicalAssign(la); return; }
         if (TryGetClassDefinitionCaptureSlot(la.Name.Lexeme, out _)) { base.EmitLogicalAssign(la); return; }
         // An unresolvable reference throws before the logical operator can
@@ -2195,6 +2201,18 @@ public partial class ILEmitter
             if (isTypedDouble) IL.Emit(OpCodes.Box, _ctx.Types.Double);
             IL.Emit(OpCodes.Stsfld, topLevelField);
         }
+        else
+        {
+            // The preceding read resolved this identifier through the global
+            // object (and already rejected an absent binding). Consume only the
+            // pending store value, retaining the prefix/postfix result beneath it.
+            if (isTypedDouble) IL.Emit(OpCodes.Box, _ctx.Types.Double);
+            var value = IL.DeclareLocal(_ctx.Types.Object);
+            IL.Emit(OpCodes.Stloc, value);
+            IL.Emit(OpCodes.Ldstr, name);
+            IL.Emit(OpCodes.Ldloc, value);
+            EmitGlobalPropertyStore();
+        }
 
         // Result is on the stack; keep an unboxed double as-is for lazy boxing by consumers.
         if (resultIsUnboxedDouble)
@@ -2205,6 +2223,7 @@ public partial class ILEmitter
 
     protected override void EmitPrefixIncrement(Expr.PrefixIncrement pi)
     {
+        if (TryEmitEvalVariableUpdate(pi.Operand, pi.Operator.Type, prefix: true)) return;
         if (pi.Operand is Expr.GetPrivate privateField)
         {
             EmitPrivateIncrement(privateField, pi.Operator.Type, isPrefix: true);
@@ -2384,6 +2403,7 @@ public partial class ILEmitter
 
     protected override void EmitPostfixIncrement(Expr.PostfixIncrement pi)
     {
+        if (TryEmitEvalVariableUpdate(pi.Operand, pi.Operator.Type, prefix: false)) return;
         if (pi.Operand is Expr.GetPrivate privateField)
         {
             EmitPrivateIncrement(privateField, pi.Operator.Type, isPrefix: false);

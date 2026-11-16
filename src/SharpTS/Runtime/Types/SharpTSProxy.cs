@@ -690,6 +690,12 @@ public class SharpTSProxy : ISharpTSCallable
         if (target is SharpTSProxy targetProxy)
             return targetProxy.TrapSetProperty(prop, value, interpreter, receiver);
 
+        // Integer-indexed [[Set]] stops here for an invalid index on a
+        // different Receiver, without converting the value or probing Receiver.
+        if (!ReferenceEquals(target, receiver) && target is SharpTSTypedArray array
+            && prop is string indexKey && array.IsInvalidCanonicalIndex(indexKey))
+            return true;
+
         SharpTSPropertyDescriptor? ownDescriptor =
             GetOwnPropertyDescriptorForSet(interpreter, target, prop);
         // Implicit TypedArray metadata is inherited and read-only. Own
@@ -807,6 +813,11 @@ public class SharpTSProxy : ISharpTSCallable
             && target is SharpTSBooleanPrototype booleanPrototype)
         {
             return booleanPrototype.GetOwnSymbolPropertyDescriptor(booleanSymbol);
+        }
+        else if (prop is SharpTSSymbol prototypeSymbol
+            && target is SharpTSObjectPrototype objectPrototype)
+        {
+            return objectPrototype.GetOwnSymbolPropertyDescriptor(prototypeSymbol);
         }
         else if (prop is string name)
         {

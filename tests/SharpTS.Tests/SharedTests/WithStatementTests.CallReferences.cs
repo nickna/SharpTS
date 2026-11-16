@@ -28,6 +28,67 @@ public sealed partial class WithStatementTests
         public override void Visit(Stmt statement) { Count++; base.Visit(statement); }
     }
 
+    [Fact]
+    public void With_NestedDirectEvalHasLinearLoweredSize()
+    {
+        int Count(int depth)
+        {
+            string expression = "0";
+            for (int i = 0; i < depth; i++) expression = "eval(" + expression + ")";
+            var counter = new NodeCounter();
+            foreach (var statement in TestHarness.ParseOrThrow("with ({}) { " + expression + "; }"))
+                counter.Visit(statement);
+            return counter.Count;
+        }
+        Assert.InRange(Count(24), 1, 1500);
+        Assert.True(Count(24) < 3 * Count(8));
+    }
+
+    [Theory, ModeData]
+    public void With_DirectEvalSelectsCalleeBeforeSharedArguments(ExecutionMode mode)
+    {
+        const string source = """
+            const log = [];
+            const object = { get eval() {
+                log.push('get'); return function(value) { log.push(this === object); return value; };
+            }};
+            function argument() { log.push('arg'); delete object.eval; return 7; }
+            with (object) console.log(eval(argument()));
+            let eval = function(value) { return 'original ' + value; };
+            with ({}) console.log(eval((eval = function() { return 'replacement'; }, 8)));
+            with ({eval: null}) eval?.(log.push('bad'));
+            console.log(log.join(','));
+            """;
+        Assert.Equal("7\noriginal 8\nget,arg,true\n", TestHarness.RunUnchecked(source, mode));
+    }
+
+    [Theory, ModeData]
+    public void With_DirectEvalConsumesSpreadsOnceBeforeLaterArguments(ExecutionMode mode)
+    {
+        const string source = """
+            const log = [];
+            const values = { [Symbol.iterator]() {
+                log.push('iterate'); let done = false;
+                return { next() { if (done) return {done:true}; done = true; return {value:7, done:false}; } };
+            }};
+            with ({eval: function(...args) { return args.join(','); }})
+                console.log(eval(...values, (log.push('last'), 8)));
+            with ({}) console.log(eval('9', ...values, log.push('extra')));
+            console.log(log.join(','));
+            """;
+        Assert.Equal("7,8\n9\niterate,last,iterate,extra\n", TestHarness.RunUnchecked(source, mode));
+    }
+
+    [Theory, ModeData]
+    public void With_NestedEvalFallbackRetainsTheOuterObjectReceiver(ExecutionMode mode)
+    {
+        const string source = """
+            const outer = { eval: function(value) { console.log(this === outer); return value; } };
+            with (outer) { with ({}) { with ({}) console.log(eval('x')); } }
+            """;
+        Assert.Equal("true\nx\n", TestHarness.RunUnchecked(source, mode));
+    }
+
     [Theory]
     [InlineData("'use strict'\n+ ''; with ({}) {}")]
     [InlineData("'use strict'\n[0]; with ({}) {}")]

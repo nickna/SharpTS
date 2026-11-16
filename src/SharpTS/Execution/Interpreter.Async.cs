@@ -157,7 +157,7 @@ public partial class Interpreter
             SharpTSMap map => map.Entries().Elements,
             SharpTSSet set => set.Values().Elements,
             SharpTSIterator iter => iter.Elements,
-            SharpTSGenerator gen => gen,
+            SharpTSGenerator => throw new ThrowException(new SharpTSTypeError("[Symbol.iterator] must be a function")),
             string s => StringBuiltIns.IterateCodePoints(s),
             _ => throw new ThrowException(new SharpTSTypeError(
                 "for...of requires an iterable (array, Map, Set, or iterator)."))
@@ -820,19 +820,13 @@ public partial class Interpreter
 
     private async ValueTask<RuntimeValue> EvaluateAssignAsync(Expr.Assign assign)
     {
+        var selected = SelectVariableAssignment(assign.Name, assign);
         var rv = assign.IsVarRedeclaration
             ? await EvaluateVariableInitializerCore(_asyncContext, assign.Value, assign.Name)
             : await EvaluateAsync(assign.Value);
         object? value = rv.ToObject();
 
-        if (_locals.TryGetValue(assign, out int distance))
-        {
-            _environment.AssignAt(distance, assign.Name, value);
-        }
-        else
-        {
-            AssignVariableValue(assign.Name, rv);
-        }
+        AssignSelectedVariable(selected, assign.Name, rv);
 
         ObserveDiscardedReactionResult(value);
         return rv;
@@ -877,8 +871,7 @@ public partial class Interpreter
     {
         object? tag = await EvaluateMemberCallReference(_asyncContext, tagged.Tag);
 
-        var cookedList = tagged.CookedStrings.Cast<object?>().ToList();
-        var stringsArray = new Runtime.Types.SharpTSTemplateStringsArray(cookedList, tagged.RawStrings);
+        var stringsArray = GetTemplateObject(tagged);
 
         List<object?> args = [stringsArray];
         foreach (var expr in tagged.Expressions)

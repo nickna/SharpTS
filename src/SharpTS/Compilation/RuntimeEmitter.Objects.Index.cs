@@ -51,7 +51,6 @@ public partial class RuntimeEmitter
         EmittedDescriptorStorageRuntime DescriptorStorage,
         FieldBuilder FunctionPrototypeField,
         MethodBuilder FunctionPrototypePopulateMethod,
-        EmittedGeneratorRuntime Generators,
         MethodBuilder GlobalThisGetProperty,
         FieldBuilder GlobalThisSingletonField,
         MethodBuilder InvokeMethodUnwrapped,
@@ -667,22 +666,6 @@ public partial class RuntimeEmitter
             il.Emit(OpCodes.Br, symbolFoundLabel);
             il.MarkLabel(notTypeForSymbolLabel);
         }
-
-        // Generators inherit an intrinsic @@iterator from their protocol.
-        // Use the same interface method used by ordinary iteration, wrapped
-        // as a callable so a captured read also exposes call/apply/bind.
-        var notGeneratorIteratorLabel = il.DefineLabel();
-        il.Emit(OpCodes.Ldarg_1);
-        il.Emit(OpCodes.Ldsfld, inputs.Symbols.Iterator);
-        il.Emit(OpCodes.Bne_Un, notGeneratorIteratorLabel);
-        il.Emit(OpCodes.Ldarg_0);
-        il.Emit(OpCodes.Isinst, inputs.Generators.Type);
-        il.Emit(OpCodes.Brfalse, notGeneratorIteratorLabel);
-        il.Emit(OpCodes.Ldarg_0);
-        var generatorParameterProducer = EmitReflectedMethodLiteral(il, inputs.Generators.Iterator);
-        EmitReflectedFunctionConstructor(il, inputs.TSFunctionCtor, generatorParameterProducer, cached: false);
-        il.Emit(OpCodes.Ret);
-        il.MarkLabel(notGeneratorIteratorLabel);
 
         // Return undefined for missing symbol properties (JavaScript semantics)
         il.Emit(OpCodes.Ldsfld, inputs.UndefinedInstance);
@@ -1728,7 +1711,7 @@ public partial class RuntimeEmitter
         il.Emit(OpCodes.Callvirt, inputs.ArrayStorage.HasIndex);
         il.Emit(OpCodes.Brtrue, tsArraySetRawStorage);
         EmitArrayIndexPrototypeSetPolicy(
-            il, new ArrayIndexPrototypeSetInputs(inputs.DescriptorStorage,
+            il, new ArrayIndexPrototypeSetInputs(inputs.DescriptorStorage, inputs.TypedArrays,
                 inputs.InvokeMethodUnwrapped, inputs.InvokeMethodValue, inputs.ObjectDescriptors,
                 inputs.ObjectPrototypes, inputs.ObjectRead, inputs.ProxySelected,
                 inputs.ReflectAssignment, inputs.UndefinedType, NativeProxyRejection: inputs.NativeProxyRejection),
@@ -1848,7 +1831,7 @@ public partial class RuntimeEmitter
             {
                 var listCheckExtensible = il.DefineLabel();
                 EmitArgumentsIndexPrototypeSetPolicy(il, inputs.ArgumentsType, inputs.ObjectOwnProperties.HasOwnProperty,
-                    new ArrayIndexPrototypeSetInputs(inputs.DescriptorStorage, inputs.InvokeMethodUnwrapped,
+                    new ArrayIndexPrototypeSetInputs(inputs.DescriptorStorage, inputs.TypedArrays, inputs.InvokeMethodUnwrapped,
                         inputs.InvokeMethodValue, inputs.ObjectDescriptors, inputs.ObjectPrototypes, inputs.ObjectRead,
                         inputs.ProxySelected, inputs.ReflectAssignment, inputs.UndefinedType, inputs.NativeProxyRejection),
                     listSetKeyLocal, listCheckExtensible, nullLabel);

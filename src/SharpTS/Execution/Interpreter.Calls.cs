@@ -257,8 +257,34 @@ public partial class Interpreter
         if (call.Callee is Expr.Variable globalVar)
         {
             var gvName = globalVar.Name.Lexeme;
-            if (CanUseGlobalFunctionHandler(globalVar))
+            if (call.IsCapturedIntrinsicEval || CanUseGlobalFunctionHandler(globalVar))
             {
+                if (gvName == "eval" && call.EvalObjectEnvironments is { } environments)
+                {
+                    var argument = RuntimeValue.Undefined;
+                    bool hasArgument = false;
+                    foreach (var input in call.Arguments)
+                    {
+                        if (input is Expr.Spread spread)
+                        {
+                            object? value = (await ctx.EvaluateExprAsync(spread.Expression)).ToObject();
+                            var values = spread.IsMaterializedArguments
+                                ? (IEnumerable<object?>)(SharpTSArray)value! : GetIterableElements(value);
+                            foreach (var item in values)
+                            {
+                                if (!hasArgument) argument = RuntimeValue.FromBoxed(item);
+                                hasArgument = true;
+                            }
+                        }
+                        else
+                        {
+                            var evaluated = await ctx.EvaluateExprAsync(input);
+                            if (!hasArgument) argument = evaluated;
+                            hasArgument = true;
+                        }
+                    }
+                    return argument.IsString ? Eval(argument.AsString(), environments) : argument.ToObject();
+                }
                 if (GlobalFunctionRegistry.Instance.TryGetHandlerV2(gvName, out var handlerV2))
                 {
                     Func<Expr, ValueTask<RuntimeValue>> evalWrapper = expr => ctx.EvaluateExprAsync(expr);
@@ -286,7 +312,8 @@ public partial class Interpreter
                 {
                     object? spreadValue = (await ctx.EvaluateExprAsync(spread.Expression)).ToObject();
                     // Use GetIterableElements to support custom iterables with Symbol.iterator
-                    argumentsList.AddRange(GetIterableElements(spreadValue));
+                    argumentsList.AddRange(spread.IsMaterializedArguments
+                        ? (IEnumerable<object?>)(SharpTSArray)spreadValue! : GetIterableElements(spreadValue));
                 }
                 else
                 {
@@ -467,6 +494,8 @@ public partial class Interpreter
     /// <seealso href="https://www.typescriptlang.org/docs/handbook/2/functions.html">TypeScript Functions</seealso>
     private RuntimeValue EvaluateCall(Expr.Call call)
     {
+        if (call.EvalObjectEnvironments is not null)
+            return RuntimeValue.FromBoxed(EvaluateCallCore(_syncContext, call).GetAwaiter().GetResult());
         using var errorOrigin = EnterVmErrorOrigin(call);
         // Handle console.* methods
         if (call.Callee is Expr.Variable v && v.Name.Lexeme.StartsWith(BuiltInNames.ConsolePrefix, StringComparison.Ordinal))
@@ -581,7 +610,8 @@ public partial class Interpreter
                 {
                     object? spreadValue = Evaluate(spread.Expression);
                     // Use GetIterableElements to support custom iterables with Symbol.iterator
-                    argumentsList.AddRange(GetIterableElements(spreadValue));
+                    argumentsList.AddRange(spread.IsMaterializedArguments
+                        ? (IEnumerable<object?>)(SharpTSArray)spreadValue! : GetIterableElements(spreadValue));
                 }
                 else
                 {

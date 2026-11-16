@@ -20,7 +20,7 @@ public class GlobalFunctionHandler : ICallHandler
         var il = emitter.IL;
         var ctx = emitter.Context;
 
-        if (emitter.HasVariable(v.Name.Lexeme))
+        if (!call.IsCapturedIntrinsicEval && emitter.HasVariable(v.Name.Lexeme))
             return false;
 
         if (v.Name.Lexeme == "parseInt" && ctx.HasVisibleValueBinding("parseInt"))
@@ -117,13 +117,35 @@ public class GlobalFunctionHandler : ICallHandler
         // Evaluate every argument before performing eval. Only arg0 supplies source,
         // but ordinary ArgumentListEvaluation still observes side effects from extras.
         var argLocal = il.DeclareLocal(ctx.Types.Object);
-        emitter.EmitExpression(call.Arguments[0]);
-        emitter.EmitBoxIfNeeded(call.Arguments[0]);
-        il.Emit(System.Reflection.Emit.OpCodes.Stloc, argLocal);
-        for (int i = 1; i < call.Arguments.Count; i++)
+        if (call.Arguments.Any(argument => argument is Expr.Spread))
         {
-            emitter.EmitExpression(call.Arguments[i]);
-            il.Emit(System.Reflection.Emit.OpCodes.Pop);
+            emitter.EmitArgsArrayWithSpread(call.Arguments);
+            var arguments = il.DeclareLocal(ctx.Types.ObjectArray);
+            il.Emit(System.Reflection.Emit.OpCodes.Stloc, arguments);
+            var empty = il.DefineLabel();
+            var ready = il.DefineLabel();
+            il.Emit(System.Reflection.Emit.OpCodes.Ldloc, arguments);
+            il.Emit(System.Reflection.Emit.OpCodes.Ldlen);
+            il.Emit(System.Reflection.Emit.OpCodes.Brfalse, empty);
+            il.Emit(System.Reflection.Emit.OpCodes.Ldloc, arguments);
+            il.Emit(System.Reflection.Emit.OpCodes.Ldc_I4_0);
+            il.Emit(System.Reflection.Emit.OpCodes.Ldelem_Ref);
+            il.Emit(System.Reflection.Emit.OpCodes.Br, ready);
+            il.MarkLabel(empty);
+            il.Emit(System.Reflection.Emit.OpCodes.Ldsfld, ctx.Runtime!.Sentinels.UndefinedInstance);
+            il.MarkLabel(ready);
+            il.Emit(System.Reflection.Emit.OpCodes.Stloc, argLocal);
+        }
+        else
+        {
+            emitter.EmitExpression(call.Arguments[0]);
+            emitter.EmitBoxIfNeeded(call.Arguments[0]);
+            il.Emit(System.Reflection.Emit.OpCodes.Stloc, argLocal);
+            for (int i = 1; i < call.Arguments.Count; i++)
+            {
+                emitter.EmitExpression(call.Arguments[i]);
+                il.Emit(System.Reflection.Emit.OpCodes.Pop);
+            }
         }
 
         // A literal expression-only source can be lowered into the current sync

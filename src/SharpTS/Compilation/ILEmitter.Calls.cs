@@ -31,6 +31,7 @@ public partial class ILEmitter
             try
             {
                 var reparsed = new Parser(new Lexer(source).ScanTokens()).ParseOrThrow();
+                reparsed = WithStatementLowering.ApplyEvalEnvironments(reparsed, call.EvalObjectEnvironments);
                 if (reparsed.All(statement =>
                         statement is Stmt.Var { IsVar: true }
                         || statement is Stmt.Directive
@@ -190,7 +191,16 @@ public partial class ILEmitter
                 return true;
             case Stmt.Var { IsVar: true } declaration:
                 // EvalDeclarationInstantiation reuses an existing var-env slot.
-                if (_resolver.HasVariable(declaration.Name.Lexeme))
+                if (!_ctx.IsStrictMode && !HasOwnEvalVariable(declaration.Name.Lexeme))
+                {
+                    InstantiateEvalVar(declaration.Name.Lexeme);
+                    if (declaration.Initializer is { } evalInitializer)
+                    {
+                        EmitAssign(new Expr.Assign(declaration.Name, evalInitializer));
+                        IL.Emit(OpCodes.Pop);
+                    }
+                }
+                else if (_resolver.HasVariable(declaration.Name.Lexeme))
                 {
                     if (declaration.Initializer is { } initializer)
                     {

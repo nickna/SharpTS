@@ -784,6 +784,11 @@ public partial class ILCompiler
                 foreach (var binding in u.Bindings)
                     CollectArrowsFromExpr(binding.Initializer);
                 break;
+            case Stmt.Enum { IsAmbient: false, IsConst: false } enumeration:
+                foreach (var member in enumeration.Members)
+                    if (member.Value is { } initializer)
+                        CollectArrowsFromExpr(initializer);
+                break;
             case Stmt.Namespace ns:
                 // Recurse into namespace members so arrows and nested function declarations
                 // inside namespace member functions get collected. Without this the collection
@@ -1005,8 +1010,10 @@ public partial class ILCompiler
                 {
                     try
                     {
-                        var evalStatements = new Parser(new Lexer(evalSource).ScanTokens())
-                            .ParseOrThrow();
+                        var evalStatements = c.PreparedEvalStatements
+                            ?? new Parser(new Lexer(evalSource).ScanTokens()).ParseOrThrow();
+                        if (isDirectEval && c.PreparedEvalStatements is null)
+                            evalStatements = WithStatementLowering.ApplyEvalEnvironments(evalStatements, c.EvalObjectEnvironments);
                         if (evalStatements.All(statement =>
                                 statement is Stmt.Expression
                                     or Stmt.Var { IsVar: true }

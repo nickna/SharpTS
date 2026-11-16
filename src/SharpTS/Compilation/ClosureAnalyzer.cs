@@ -25,6 +25,15 @@ public class ClosureAnalyzer : AstVisitorBase
         _runtimeClassDeclarations = runtimeClassDeclarations;
     }
 
+    protected override void VisitCall(Expr.Call expression)
+    {
+        base.VisitCall(expression);
+        // With lowering prepares literal eval early so its closures capture
+        // the same lexical object temporary as ordinary source closures.
+        if (expression.PreparedEvalStatements is { } statements)
+            foreach (var statement in statements) Visit(statement);
+    }
+
     // Maps each function AST node to the set of variable names it captures
     private readonly Dictionary<object, HashSet<string>> _captures = [];
 
@@ -504,13 +513,13 @@ public class ClosureAnalyzer : AstVisitorBase
     {
         if (_currentFunction == null) return;
 
-        // The intrinsic Math object needs no capture, but a lexical declaration with that name
+        // Intrinsic values need no capture, but a lexical declaration with the same name
         // must reach the ordinary self/local/outer ownership checks below.
-        if (name == "Math" && !_scopeStack.Any(scope => scope.Contains(name)))
+        if (name is "Math" or "undefined" && !_scopeStack.Any(scope => scope.Contains(name)))
             return;
 
         // Skip other built-ins.
-        if (name is "console.log" or "console" or "undefined" or "NaN" or "Infinity" or "Symbol")
+        if (name is "console.log" or "console" or "NaN" or "Infinity" or "Symbol")
             return;
 
         // Namespace members have namespace-owned static storage. Treating them

@@ -571,6 +571,7 @@ public static class ReflectBuiltIns
                         SharpTSStringPrototype prototype => prototype.DefineProperty(symbolKey, descriptor),
                         SharpTSNumberPrototype prototype => prototype.DefineOwnSymbolProperty(symbolKey, descriptor),
                         SharpTSBooleanPrototype prototype => prototype.DefineOwnSymbolProperty(symbolKey, descriptor),
+                        SharpTSObjectPrototype prototype => prototype.DefineOwnSymbolProperty(symbolKey, descriptor),
                         SharpTSBigIntPrototype prototype => prototype.DefineProperty(symbolKey, descriptor),
                         _ => false
                     });
@@ -726,6 +727,10 @@ public static class ReflectBuiltIns
                     case SharpTSBooleanPrototype booleanPrototype:
                         keys.AddRange(booleanPrototype.OwnStringKeys().Cast<object?>());
                         keys.AddRange(booleanPrototype.GetSymbolPropertyNames().Cast<object?>());
+                        break;
+                    case SharpTSObjectPrototype objectPrototype:
+                        keys.AddRange(objectPrototype.OwnStringKeys().Cast<object?>());
+                        keys.AddRange(objectPrototype.GetSymbolPropertyNames().Cast<object?>());
                         break;
                     case SharpTSArrayPrototype arrayPrototype:
                         keys.AddRange(arrayPrototype.OwnStringKeys().Cast<object?>());

@@ -431,7 +431,7 @@ public class Lexer(string source)
                     // honor tsc-style directives.
                     int commentStart = _current;
                     int commentLine = _line;
-                    while (Peek() != '\n' && !IsAtEnd()) Advance();
+                    while (!IsLineTerminator(Peek()) && !IsAtEnd()) Advance();
                     ScanForTsPragma(commentStart, _current, commentLine);
                     ScanForJsxPragmas(commentStart, _current);
                 }
@@ -466,10 +466,15 @@ public class Lexer(string source)
                 }
                 break;
             case ' ':
-            case '\r':
             case '\t':
                 break;
+            case '\r':
+                Match('\n');
+                _line++;
+                break;
             case '\n':
+            case '\u2028':
+            case '\u2029':
                 _line++;
                 break;
             case '"': StringLiteral('"'); break;
@@ -491,6 +496,8 @@ public class Lexer(string source)
                 break;
         }
     }
+
+    private static bool IsLineTerminator(char value) => value is '\r' or '\n' or '\u2028' or '\u2029';
 
     private bool LooksLikeJsxClosingTag()
     {
@@ -969,8 +976,12 @@ public class Lexer(string source)
                 Advance(); // consume /
                 return;
             }
-            if (Peek() == '\n') _line++;
-            Advance();
+            char character = Advance();
+            if (IsLineTerminator(character))
+            {
+                if (character == '\r') Match('\n');
+                _line++;
+            }
         }
         throw new Exception($"Unterminated block comment at line {_line}");
     }

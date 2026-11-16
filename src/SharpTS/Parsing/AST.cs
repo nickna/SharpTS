@@ -107,6 +107,11 @@ public abstract record Expr
         // Source-only checker metadata: lifting must preserve an IIFE's declaration-order flow.
         public ArrowFunction? OriginalGeneratorCallee { get; init; }
 
+        // Direct eval retains the object environments selected by with lowering.
+        internal List<EvalObjectEnvironment>? EvalObjectEnvironments { get; init; }
+        internal List<Stmt>? PreparedEvalStatements { get; init; }
+        internal bool IsCapturedIntrinsicEval { get; init; }
+
         /// <summary>
         /// Non-null when this call was produced by JSX lowering. The type checker dispatches
         /// JSX-origin calls to its JSX pipeline (tsc-shaped diagnostics, JSX.Element result)
@@ -256,7 +261,11 @@ public abstract record Expr
         List<Expr> Expressions        // Interpolated expressions
     ) : Expr;
     // Spread expression for calls and array literals
-    public record Spread(Expr Expression) : Expr;
+    public record Spread(Expr Expression) : Expr
+    {
+        // Lowering has already consumed this argument's iterator into private storage.
+        internal bool IsMaterializedArguments { get; init; }
+    }
     // Type assertion: value as Type. TargetTypeNode is the structured form of TargetType (type-AST
     // migration) when the parser could build one; the checker resolves it node-first so a composite
     // target (e.g. a conditional type with a function-type extends clause) bypasses the string

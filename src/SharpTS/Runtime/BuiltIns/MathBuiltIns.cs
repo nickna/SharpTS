@@ -25,15 +25,15 @@ public static class MathBuiltIns
             .Constant("SQRT1_2", Math.Sqrt(0.5))
             .Constant("SQRT2", Math.Sqrt(2))
             // Single argument methods (V2 — no boxing)
-            .MethodV2("abs", 1, (_, _, args) =>
-                RuntimeValue.FromNumber(Math.Abs(Interpreter.ToNumber(args[0]))))
-            .MethodV2("floor", 1, (_, _, args) =>
-                RuntimeValue.FromNumber(Math.Floor(Interpreter.ToNumber(args[0]))))
-            .MethodV2("ceil", 1, (_, _, args) =>
-                RuntimeValue.FromNumber(Math.Ceiling(Interpreter.ToNumber(args[0]))))
-            .MethodV2("round", 1, (_, _, args) =>
+            .MethodV2("abs", 0, int.MaxValue, 1, (interpreter, _, args) =>
+                RuntimeValue.FromNumber(Math.Abs(NumberArgument(interpreter, args, 0))))
+            .MethodV2("floor", 0, int.MaxValue, 1, (interpreter, _, args) =>
+                RuntimeValue.FromNumber(Math.Floor(NumberArgument(interpreter, args, 0))))
+            .MethodV2("ceil", 0, int.MaxValue, 1, (interpreter, _, args) =>
+                RuntimeValue.FromNumber(Math.Ceiling(NumberArgument(interpreter, args, 0))))
+            .MethodV2("round", 0, int.MaxValue, 1, (interpreter, _, args) =>
             {
-                double x = Interpreter.ToNumber(args[0]);
+                double x = NumberArgument(interpreter, args, 0);
                 // Adding 0.5 first can round a value just below a half-integer
                 // up to the half-integer before Floor sees it. Compare the
                 // fractional part instead, preserving the spec's ties-to-+∞ rule.
@@ -41,95 +41,95 @@ public static class MathBuiltIns
                 double rounded = x - floor < 0.5 ? floor : floor + 1;
                 return RuntimeValue.FromNumber(rounded == 0 && double.IsNegative(x) ? -0.0 : rounded);
             })
-            .MethodV2("sqrt", 1, (_, _, args) =>
-                RuntimeValue.FromNumber(Math.Sqrt(Interpreter.ToNumber(args[0]))))
-            .MethodV2("sin", 1, (_, _, args) =>
-                RuntimeValue.FromNumber(Math.Sin(Interpreter.ToNumber(args[0]))))
-            .MethodV2("cos", 1, (_, _, args) =>
-                RuntimeValue.FromNumber(Math.Cos(Interpreter.ToNumber(args[0]))))
-            .MethodV2("tan", 1, (_, _, args) =>
-                RuntimeValue.FromNumber(Math.Tan(Interpreter.ToNumber(args[0]))))
-            .MethodV2("log", 1, (_, _, args) =>
-                RuntimeValue.FromNumber(Math.Log(Interpreter.ToNumber(args[0]))))
-            .MethodV2("exp", 1, (_, _, args) =>
-                RuntimeValue.FromNumber(Math.Exp(Interpreter.ToNumber(args[0]))))
-            .MethodV2("acos", 1, (_, _, args) =>
-                RuntimeValue.FromNumber(Math.Acos(Interpreter.ToNumber(args[0]))))
-            .MethodV2("asin", 1, (_, _, args) =>
-                RuntimeValue.FromNumber(Math.Asin(Interpreter.ToNumber(args[0]))))
-            .MethodV2("atan", 1, (_, _, args) =>
-                RuntimeValue.FromNumber(Math.Atan(Interpreter.ToNumber(args[0]))))
-            .MethodV2("cbrt", 1, (_, _, args) =>
-                RuntimeValue.FromNumber(Math.Cbrt(Interpreter.ToNumber(args[0]))))
-            .MethodV2("log2", 1, (_, _, args) =>
-                RuntimeValue.FromNumber(Math.Log2(Interpreter.ToNumber(args[0]))))
-            .MethodV2("log10", 1, (_, _, args) =>
-                RuntimeValue.FromNumber(Math.Log10(Interpreter.ToNumber(args[0]))))
-            .MethodV2("sign", 1, (_, _, args) =>
+            .MethodV2("sqrt", 0, int.MaxValue, 1, (interpreter, _, args) =>
+                RuntimeValue.FromNumber(Math.Sqrt(NumberArgument(interpreter, args, 0))))
+            .MethodV2("sin", 0, int.MaxValue, 1, (interpreter, _, args) =>
+                RuntimeValue.FromNumber(Math.Sin(NumberArgument(interpreter, args, 0))))
+            .MethodV2("cos", 0, int.MaxValue, 1, (interpreter, _, args) =>
+                RuntimeValue.FromNumber(Math.Cos(NumberArgument(interpreter, args, 0))))
+            .MethodV2("tan", 0, int.MaxValue, 1, (interpreter, _, args) =>
+                RuntimeValue.FromNumber(Math.Tan(NumberArgument(interpreter, args, 0))))
+            .MethodV2("log", 0, int.MaxValue, 1, (interpreter, _, args) =>
+                RuntimeValue.FromNumber(Math.Log(NumberArgument(interpreter, args, 0))))
+            .MethodV2("exp", 0, int.MaxValue, 1, (interpreter, _, args) =>
+                RuntimeValue.FromNumber(Math.Exp(NumberArgument(interpreter, args, 0))))
+            .MethodV2("acos", 0, int.MaxValue, 1, (interpreter, _, args) =>
+                RuntimeValue.FromNumber(Math.Acos(NumberArgument(interpreter, args, 0))))
+            .MethodV2("asin", 0, int.MaxValue, 1, (interpreter, _, args) =>
+                RuntimeValue.FromNumber(Math.Asin(NumberArgument(interpreter, args, 0))))
+            .MethodV2("atan", 0, int.MaxValue, 1, (interpreter, _, args) =>
+                RuntimeValue.FromNumber(Math.Atan(NumberArgument(interpreter, args, 0))))
+            .MethodV2("cbrt", 0, int.MaxValue, 1, (interpreter, _, args) =>
+                RuntimeValue.FromNumber(Math.Cbrt(NumberArgument(interpreter, args, 0))))
+            .MethodV2("log2", 0, int.MaxValue, 1, (interpreter, _, args) =>
+                RuntimeValue.FromNumber(Math.Log2(NumberArgument(interpreter, args, 0))))
+            .MethodV2("log10", 0, int.MaxValue, 1, (interpreter, _, args) =>
+                RuntimeValue.FromNumber(Math.Log10(NumberArgument(interpreter, args, 0))))
+            .MethodV2("sign", 0, int.MaxValue, 1, (interpreter, _, args) =>
             {
-                double x = Interpreter.ToNumber(args[0]);
+                double x = NumberArgument(interpreter, args, 0);
                 return RuntimeValue.FromNumber(double.IsNaN(x) || x == 0 ? x : x < 0 ? -1 : 1);
             })
-            .MethodV2("trunc", 1, (_, _, args) =>
-                RuntimeValue.FromNumber(Math.Truncate(Interpreter.ToNumber(args[0]))))
+            .MethodV2("trunc", 0, int.MaxValue, 1, (interpreter, _, args) =>
+                RuntimeValue.FromNumber(Math.Truncate(NumberArgument(interpreter, args, 0))))
             // Hyperbolic + area-hyperbolic (ECMA-262 21.3.2). The compiled backend
             // has emitted these all along (Compilation/Emitters/MathStaticEmitter);
             // the interpreter reported them `undefined`.
-            .MethodV2("sinh", 1, (_, _, args) =>
-                RuntimeValue.FromNumber(Math.Sinh(Interpreter.ToNumber(args[0]))))
-            .MethodV2("cosh", 1, (_, _, args) =>
-                RuntimeValue.FromNumber(Math.Cosh(Interpreter.ToNumber(args[0]))))
-            .MethodV2("tanh", 1, (_, _, args) =>
-                RuntimeValue.FromNumber(Math.Tanh(Interpreter.ToNumber(args[0]))))
-            .MethodV2("asinh", 1, (_, _, args) =>
-                RuntimeValue.FromNumber(Math.Asinh(Interpreter.ToNumber(args[0]))))
-            .MethodV2("acosh", 1, (_, _, args) =>
-                RuntimeValue.FromNumber(Math.Acosh(Interpreter.ToNumber(args[0]))))
-            .MethodV2("atanh", 1, (_, _, args) =>
-                RuntimeValue.FromNumber(Math.Atanh(Interpreter.ToNumber(args[0]))))
+            .MethodV2("sinh", 0, int.MaxValue, 1, (interpreter, _, args) =>
+                RuntimeValue.FromNumber(Math.Sinh(NumberArgument(interpreter, args, 0))))
+            .MethodV2("cosh", 0, int.MaxValue, 1, (interpreter, _, args) =>
+                RuntimeValue.FromNumber(Math.Cosh(NumberArgument(interpreter, args, 0))))
+            .MethodV2("tanh", 0, int.MaxValue, 1, (interpreter, _, args) =>
+                RuntimeValue.FromNumber(Math.Tanh(NumberArgument(interpreter, args, 0))))
+            .MethodV2("asinh", 0, int.MaxValue, 1, (interpreter, _, args) =>
+                RuntimeValue.FromNumber(Math.Asinh(NumberArgument(interpreter, args, 0))))
+            .MethodV2("acosh", 0, int.MaxValue, 1, (interpreter, _, args) =>
+                RuntimeValue.FromNumber(Math.Acosh(NumberArgument(interpreter, args, 0))))
+            .MethodV2("atanh", 0, int.MaxValue, 1, (interpreter, _, args) =>
+                RuntimeValue.FromNumber(Math.Atanh(NumberArgument(interpreter, args, 0))))
             // §21.3.2.21 / .16: log1p(-0) is -0 and expm1(-0) is -0, which the
             // naive log(x+1) / exp(x)-1 forms lose, so ±0 short-circuits.
-            .MethodV2("log1p", 1, (_, _, args) =>
+            .MethodV2("log1p", 0, int.MaxValue, 1, (interpreter, _, args) =>
             {
-                double x = Interpreter.ToNumber(args[0]);
+                double x = NumberArgument(interpreter, args, 0);
                 return RuntimeValue.FromNumber(x == 0 ? x : Math.Log(x + 1));
             })
-            .MethodV2("expm1", 1, (_, _, args) =>
+            .MethodV2("expm1", 0, int.MaxValue, 1, (interpreter, _, args) =>
             {
-                double x = Interpreter.ToNumber(args[0]);
+                double x = NumberArgument(interpreter, args, 0);
                 return RuntimeValue.FromNumber(x == 0 ? x : Math.Exp(x) - 1);
             })
             // §21.3.2.17: round to the nearest float32 (binary32) and widen back.
-            .MethodV2("fround", 1, (_, _, args) =>
-                RuntimeValue.FromNumber((float)Interpreter.ToNumber(args[0])))
+            .MethodV2("fround", 0, int.MaxValue, 1, (interpreter, _, args) =>
+                RuntimeValue.FromNumber((float)NumberArgument(interpreter, args, 0)))
             // Float16Array proposal: round to the nearest binary16 and widen back.
-            .MethodV2("f16round", 1, (_, _, args) =>
-                RuntimeValue.FromNumber((double)(Half)Interpreter.ToNumber(args[0])))
+            .MethodV2("f16round", 0, int.MaxValue, 1, (interpreter, _, args) =>
+                RuntimeValue.FromNumber((double)(Half)NumberArgument(interpreter, args, 0)))
             // §21.3.2.7: LeadingZeroCount over ToUint32(x).
-            .MethodV2("clz32", 1, (_, _, args) =>
+            .MethodV2("clz32", 0, int.MaxValue, 1, (interpreter, _, args) =>
                 RuntimeValue.FromNumber(
-                    System.Numerics.BitOperations.LeadingZeroCount(ToUint32(Interpreter.ToNumber(args[0])))))
+                    System.Numerics.BitOperations.LeadingZeroCount(ToUint32(NumberArgument(interpreter, args, 0)))))
             // §21.3.2.18: (ToInt32(x) * ToInt32(y)) wrapped to int32.
-            .MethodV2("imul", 2, (_, _, args) =>
+            .MethodV2("imul", 0, int.MaxValue, 2, (interpreter, _, args) =>
                 RuntimeValue.FromNumber(
-                    unchecked(ToInt32(Interpreter.ToNumber(args[0])) * ToInt32(Interpreter.ToNumber(args[1])))))
+                    unchecked(ToInt32(NumberArgument(interpreter, args, 0)) * ToInt32(NumberArgument(interpreter, args, 1)))))
             // §21.3.2.31: exact sum over an iterable of Numbers.
             // Missing input is a guest TypeError produced by SumPrecise itself;
             // do not let the host arity guard surface a generic Error first.
             .MethodV2("sumPrecise", 0, int.MaxValue, 1, SumPrecise)
             // Two argument methods
-            .MethodV2("pow", 2, (_, _, args) =>
+            .MethodV2("pow", 0, int.MaxValue, 2, (interpreter, _, args) =>
             {
-                double baseValue = Interpreter.ToNumber(args[0]);
-                double exponent = Interpreter.ToNumber(args[1]);
+                double baseValue = NumberArgument(interpreter, args, 0);
+                double exponent = NumberArgument(interpreter, args, 1);
                 // ECMA-262 differs from System.Math.Pow for these two cases.
                 if (double.IsNaN(exponent)
                     || Math.Abs(baseValue) == 1 && double.IsInfinity(exponent))
                     return RuntimeValue.FromNumber(double.NaN);
                 return RuntimeValue.FromNumber(Math.Pow(baseValue, exponent));
             })
-            .MethodV2("atan2", 2, (_, _, args) =>
-                RuntimeValue.FromNumber(Math.Atan2(Interpreter.ToNumber(args[0]), Interpreter.ToNumber(args[1]))))
+            .MethodV2("atan2", 0, int.MaxValue, 2, (interpreter, _, args) =>
+                RuntimeValue.FromNumber(Math.Atan2(NumberArgument(interpreter, args, 0), NumberArgument(interpreter, args, 1))))
             // Variable arity methods
             // min-arity 0 (Math.min()/max()/hypot() are legal -> Infinity / -Infinity / 0),
             // spec length 2 (the .length property each exposes per ECMA-262).
@@ -137,9 +137,12 @@ public static class MathBuiltIns
             .MethodV2("max", 0, int.MaxValue, 2, Max)
             .MethodV2("hypot", 0, int.MaxValue, 2, Hypot)
             // No argument methods
-            .MethodV2("random", 0, (_, _, _) =>
+            .MethodV2("random", 0, int.MaxValue, 0, (_, _, _) =>
                 RuntimeValue.FromNumber(_random.NextDouble()))
             .Build();
+
+    private static double NumberArgument(Interpreter interpreter, ReadOnlySpan<RuntimeValue> arguments, int index) =>
+        interpreter.ToNumberWithPrimitive((index < arguments.Length ? arguments[index] : RuntimeValue.Undefined).ToObject());
 
     public static object? GetMember(string name)
         => _lookup.GetMember(name);

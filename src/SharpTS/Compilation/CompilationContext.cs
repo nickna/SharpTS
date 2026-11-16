@@ -148,6 +148,9 @@ public partial class CompilationContext
     /// </summary>
     public RuntimeFeatureSet? RuntimeFeatures { get; set; }
 
+    internal Dictionary<List<string>, FieldBuilder> TemplateObjectFields { get; set; } =
+        new(ReferenceEqualityComparer.Instance);
+
     /// <summary>
     /// Expression-only literal eval programs parsed during callable discovery.
     /// Reusing these exact AST nodes during emission is required because arrow

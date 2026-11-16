@@ -41,7 +41,13 @@ public class SharpTSAsyncGenerator : ITypeCategorized, ISharpTSOwnPropertyObject
     private SharpTSObject? _ownProperties;
     SharpTSObject ISharpTSOwnPropertyObject.OwnProperties => _ownProperties ??= new([]);
 
-    internal object? Prototype { get; init; }
+    private object? _prototype;
+    internal bool HasExplicitPrototype { get; private set; }
+    internal object? Prototype
+    {
+        get => _prototype;
+        set { _prototype = value; HasExplicitPrototype = true; }
+    }
     /// <inheritdoc />
     public TypeCategory RuntimeCategory => TypeCategory.AsyncGenerator;
 

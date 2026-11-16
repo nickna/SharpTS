@@ -5,6 +5,9 @@ namespace SharpTS.Compilation;
 
 public abstract partial class StateMachineExitRoutingEmitter
 {
+    protected override bool IsKnownVariable(string name) =>
+        TryGetFunctionDCField(GetFunctionDCField(), name, out _) || base.IsKnownVariable(name);
+
     protected void RegisterInitializedParameterNames(List<Stmt.Parameter> parameters, List<Stmt>? body)
     {
         Ctx.InitializedParameterNames = parameters.Select(parameter => parameter.Name.Lexeme)

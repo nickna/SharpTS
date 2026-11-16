@@ -249,6 +249,7 @@ internal static class ParameterBinder
     private static void ReserveParameterBindings(List<Stmt.Parameter> parameters, List<Stmt>? body,
         RuntimeEnvironment environment)
     {
+        environment.EvalVariableEnvironment = environment;
         if (!HasParameterExpressions(parameters)) return;
         // Every formal binding owns its TDZ before any default runs. A formal named
         // arguments also masks the invocation's already-materialized arguments object.
@@ -319,6 +320,7 @@ internal static class ParameterBinder
         var environment = separateBody
             ? new RuntimeEnvironment(parameterEnvironment)
             : parameterEnvironment;
+        environment.EvalVariableEnvironment = environment;
         if (bindings.Declarations.Count == 0) return (statements, environment);
         var parameterNames = parameters.Select(parameter => parameter.Name.Lexeme).ToHashSet(StringComparer.Ordinal);
         if (parameterEnvironment.IsDefinedLocally("arguments")) parameterNames.Add("arguments");

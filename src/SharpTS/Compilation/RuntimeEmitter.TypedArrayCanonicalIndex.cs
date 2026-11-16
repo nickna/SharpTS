@@ -5,6 +5,42 @@ namespace SharpTS.Compilation;
 
 public partial class RuntimeEmitter
 {
+    private void EmitIsInvalidTypedArrayCanonicalIndexHelper(TypeBuilder runtimeType,
+        EmittedTypedArrayRuntime arrays, MethodInfo toNumber, MethodInfo toJsString)
+    {
+        var method = runtimeType.DefineMethod("IsInvalidTypedArrayCanonicalIndex",
+            MethodAttributes.Public | MethodAttributes.Static, _types.Boolean, [_types.Object, _types.Object]);
+        arrays.IsInvalidCanonicalIndex = method;
+        var il = method.GetILGenerator();
+        if (arrays.Implementation is not null)
+        {
+            var ordinary = il.DefineLabel();
+            var invalid = il.DefineLabel();
+            EmitTypedArrayCanonicalIndexGuard(il, arrays, toNumber, toJsString,
+                il.DeclareLocal(_types.Int32), ordinary, invalid);
+            il.MarkLabel(ordinary);
+            il.Emit(OpCodes.Ldc_I4_0);
+            il.Emit(OpCodes.Ret);
+            il.MarkLabel(invalid);
+            il.Emit(OpCodes.Ldc_I4_1);
+        }
+        else
+            il.Emit(OpCodes.Ldc_I4_0);
+        il.Emit(OpCodes.Ret);
+    }
+
+    private static void EmitInheritedTypedArrayIndexSetGuard(ILGenerator il,
+        EmittedTypedArrayRuntime arrays, LocalBuilder prototype, Action loadKey)
+    {
+        var ordinary = il.DefineLabel();
+        il.Emit(OpCodes.Ldloc, prototype);
+        loadKey();
+        il.Emit(OpCodes.Call, arrays.IsInvalidCanonicalIndex);
+        il.Emit(OpCodes.Brfalse, ordinary);
+        il.Emit(OpCodes.Ret);
+        il.MarkLabel(ordinary);
+    }
+
     // Callers have already performed ToPropertyKey and dispatched actual Proxies
     // and Symbols. Noncanonical names retain the existing ordinary/legacy route.
     private void EmitTypedArrayCanonicalIndexGuard(ILGenerator il,
