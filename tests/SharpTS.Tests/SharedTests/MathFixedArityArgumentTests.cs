@@ -48,8 +48,26 @@ public sealed class MathFixedArityArgumentTests
             TestHarness.RunUnchecked(source, mode));
     }
 
-    [Theory, InterpretedOnlyData]
+    [Theory, ModeData]
     public void AliasedMethodsUseTheSameArgumentNormalization(ExecutionMode mode) =>
         Assert.Equal("NaN 3\n", TestHarness.RunUnchecked(
             "const abs = Math.abs; console.log(abs(), abs(-3, { valueOf(){ throw 'extra'; } }));", mode));
+
+    [Theory, ModeData]
+    public void MathFunctionValuesDistinguishOmissionFromNullAcrossInvocationForms(ExecutionMode mode)
+    {
+        const string source = """
+            const abs = Math.abs, pow = Math.pow, atan2 = Math.atan2;
+            console.log(abs(), abs(undefined), abs(null), abs.length);
+            console.log(abs.call(null), abs.apply(null, []), abs.bind(null)());
+            console.log(pow(2), pow.apply(null, [2]), pow.bind(null, 2)(), pow(2, null), pow.length);
+            console.log(atan2(1), atan2(1, null));
+            const m = Math;
+            console.log(m.sin(), m.sqrt(), m.fround(), m.clz32(), m.imul());
+            const min = Math.min, max = Math.max, hypot = Math.hypot;
+            console.log(min(), max(), hypot(), min(null), max(undefined));
+            """;
+        Assert.Equal("NaN NaN 0 1\nNaN NaN NaN\nNaN NaN NaN 1 2\nNaN 1.5707963267948966\n"
+            + "NaN NaN NaN 32 0\nInfinity -Infinity 0 0 NaN\n", TestHarness.RunUnchecked(source, mode));
+    }
 }

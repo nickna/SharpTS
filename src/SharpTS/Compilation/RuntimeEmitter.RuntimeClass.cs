@@ -3136,7 +3136,8 @@ public partial class RuntimeEmitter
         // EmitMathAdapters (Math.*Adapter) and the JSON methods above — so their
         // backing MethodBuilders are resolved. JSON helpers are null when JSON is
         // unused; EmitBuiltinSingletonPopulate skips null backings. (#276)
-        EmitMathSingletonPopulate(runtime.Math, builtinSingletonInputs, installBuiltinSingletonDataProperty);
+        EmitMathSingletonPopulate(runtime.Math, builtinSingletonInputs, installBuiltinSingletonDataProperty,
+            runtime.FunctionAttributes.PadUndefinedCtor);
         EmitJsonSingletonPopulate(runtime.Json, builtinSingletonInputs, installBuiltinSingletonDataProperty);
         // BigInt methods — gated on UsesBigInt. Detector flips it on for any
         // `123n` literal, bare `BigInt` identifier, or BigInt64Array/BigUint64Array
