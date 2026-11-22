@@ -6,10 +6,11 @@ using SharpTS.Compilation;
 using SharpTS.Parsing;
 using SharpTS.TypeSystem;
 using Xunit;
+using Xunit.Abstractions;
 
 namespace SharpTS.Tests.CompilerTests;
 
-public class PromiseRuntimeFeatureGatingTests
+public class PromiseRuntimeFeatureGatingTests(ITestOutputHelper output)
 {
     [Theory]
     [InlineData("console.log(1);", false)]
@@ -41,6 +42,7 @@ public class PromiseRuntimeFeatureGatingTests
     public void SynchronousProgramOmitsPromiseRuntimeAndStaysBelowSizeRatchet()
     {
         byte[] assemblyBytes = Compile("console.log(1);");
+        output.WriteLine($"Promise-free assembly size: {assemblyBytes.Length:N0} bytes.");
         Assembly assembly = Assembly.Load(assemblyBytes);
         Type[] types = assembly.GetTypes();
 

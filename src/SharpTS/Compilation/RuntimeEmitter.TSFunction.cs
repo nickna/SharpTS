@@ -342,14 +342,15 @@ public partial class RuntimeEmitter
         functionValues.CapturesArgumentsField = capturesArgumentsField;
         // Bitmask of parameter positions that AdjustArgs pads with the `undefined`
         // sentinel (instead of CLR null) when the argument is omitted. Bit i is set iff
-        // the wrapped method carries the $PadUndefined marker (i.e. is a user TS function)
+        // the wrapped method carries the $PadUndefined marker (a source function or
+        // a built-in that distinguishes omitted arguments from explicit null)
         // AND parameter i has an `object` slot. Object slots can hold the sentinel, so
         // `typeof`/`=== undefined`/default-firing all work. An optional or *defaulted*
         // param is widened to an `object` slot upstream (ParameterTypeResolver), so it
         // lands here with its bit set and behaves correctly across the boundary (#925).
         // A still-typed slot (string/double) is a genuinely *required* typed parameter —
         // it can't coerce the sentinel, so it stays null-padded (an omitted required arg
-        // is a type error anyway). Built-ins have an all-zero mask and keep pure null
+        // is a type error anyway). Unmarked built-ins have an all-zero mask and keep null
         // padding (their bodies use null-checks for optional-arg absence). Positions >= 32
         // are not tracked (such arity is never reached in practice) and pad null. (#640, #925)
         var padUndefinedMaskField = typeBuilder.DefineField("_padUndefinedMask", _types.Int32, FieldAttributes.Private);
@@ -372,6 +373,15 @@ public partial class RuntimeEmitter
         functionValues.ParamCountField = paramCountField;
         var hasListRestField = typeBuilder.DefineField("_hasListRest", _types.Boolean, FieldAttributes.Private);
         var hasArrayRestField = typeBuilder.DefineField("_hasArrayRest", _types.Boolean, FieldAttributes.Private);
+        // All constructor variants need the same padding/rest metadata. Emit
+        // these scans once so function-value support stays within the PE size
+        // budget on both Windows and Linux. ExpectsThis is initialized first.
+        var initializeArgumentShape = typeBuilder.DefineMethod("InitializeArgumentShape",
+            MethodAttributes.Private, _types.Void, [_types.MethodInfo]);
+        var argumentShapeIL = initializeArgumentShape.GetILGenerator();
+        EmitComputePadUndefinedMask(argumentShapeIL, padUndefinedMaskField, inputs.FunctionAttributes, methodArgIndex: 1);
+        EmitComputeAdjustArgsCache(argumentShapeIL, paramCountField, hasListRestField, hasArrayRestField, expectsThisField, methodArgIndex: 1);
+        argumentShapeIL.Emit(OpCodes.Ret);
         // Bits 1/2 select union/primitive conversion independently. Keep metadata
         // only for wrappers that need conversion; AdjustArgs already materializes rest.
         var needsArgConversionField = typeBuilder.DefineField("_argConversionKinds", _types.Int32, FieldAttributes.Private);
@@ -541,10 +551,7 @@ public partial class RuntimeEmitter
         EmitComputeExpectsThis(ctorIL, expectsThisField, inputs.FunctionAttributes, methodArgIndex: 2);
         // this._capturesArguments = method.IsDefined($CapturesArguments)
         EmitComputeCapturesArguments(ctorIL, capturesArgumentsField, inputs.FunctionAttributes, methodArgIndex: 2);
-        // this._padUndefinedMask = $PadUndefined ? (object-param bits) : 0
-        EmitComputePadUndefinedMask(ctorIL, padUndefinedMaskField, inputs.FunctionAttributes, methodArgIndex: 2);
-        // this._paramCount, _hasListRest, _hasArrayRest: cached by AdjustArgs.
-        EmitComputeAdjustArgsCache(ctorIL, paramCountField, hasListRestField, hasArrayRestField, expectsThisField, methodArgIndex: 2);
+        EmitInitializeArgumentShape(ctorIL);
         EmitComputeNeedsArgConversion(ctorIL, needsArgConversionField, conversionParametersField, hasListRestField, methodArgIndex: 2);
         EmitUnionDispatch(ctorIL, inputs.Policy.NativeUnionConverter);
         // this._invoker = LookupOrAdd(_invokerCache, method)  [pseudocode]
@@ -589,8 +596,7 @@ public partial class RuntimeEmitter
         EmitComputeReturnsVoid(ctorCacheIL, returnsVoidField, methodArgIndex: 2);
         EmitComputeExpectsThis(ctorCacheIL, expectsThisField, inputs.FunctionAttributes, methodArgIndex: 2);
         EmitComputeCapturesArguments(ctorCacheIL, capturesArgumentsField, inputs.FunctionAttributes, methodArgIndex: 2);
-        EmitComputePadUndefinedMask(ctorCacheIL, padUndefinedMaskField, inputs.FunctionAttributes, methodArgIndex: 2);
-        EmitComputeAdjustArgsCache(ctorCacheIL, paramCountField, hasListRestField, hasArrayRestField, expectsThisField, methodArgIndex: 2);
+        EmitInitializeArgumentShape(ctorCacheIL);
         EmitComputeNeedsArgConversion(ctorCacheIL, needsArgConversionField, conversionParametersField, hasListRestField, methodArgIndex: 2);
         EmitUnionDispatch(ctorCacheIL, inputs.Policy.NativeUnionConverter);
         // this._invoker = LookupOrAdd(_invokerCache, method)
@@ -639,8 +645,7 @@ public partial class RuntimeEmitter
             }
             EmitComputeExpectsThis(il, expectsThisField, inputs.FunctionAttributes, methodArgIndex: 2);
             EmitComputeCapturesArguments(il, capturesArgumentsField, inputs.FunctionAttributes, methodArgIndex: 2);
-            EmitComputePadUndefinedMask(il, padUndefinedMaskField, inputs.FunctionAttributes, methodArgIndex: 2);
-            EmitComputeAdjustArgsCache(il, paramCountField, hasListRestField, hasArrayRestField, expectsThisField, methodArgIndex: 2);
+            EmitInitializeArgumentShape(il);
             var parameterConversion = nativeSources!.ParameterConversion;
             var capture = EmitComputeNeedsArgConversion(il, needsArgConversionField, conversionParametersField, hasListRestField,
                 methodArgIndex: 2, emitParameterMethod: parameterConversion is null || reflected ? null : () =>
@@ -656,6 +661,13 @@ public partial class RuntimeEmitter
             if (inputs.Policy.BindNumericRest4) EmitComputeNumericRest4(il, numericRest4Field, inputs.FunctionAttributes, inputs.Policy.NativeNumericRest4Binder);
             il.Emit(OpCodes.Ret);
             return constructor;
+        }
+
+        void EmitInitializeArgumentShape(ILGenerator il)
+        {
+            il.Emit(OpCodes.Ldarg_0);
+            il.Emit(OpCodes.Ldarg_2);
+            il.Emit(OpCodes.Call, initializeArgumentShape);
         }
 
         EmitFunctionConstructor(
@@ -1983,9 +1995,9 @@ public partial class RuntimeEmitter
 
     /// <summary>
     /// Emits computation of <c>this._padUndefinedMask</c>. Zero unless the method carries the
-    /// <c>$PadUndefined</c> marker (i.e. is a user TS function), in which case bit <c>i</c> is set
+    /// <c>$PadUndefined</c> marker, in which case bit <c>i</c> is set
     /// for every parameter <c>i &lt; 32</c> whose slot is <c>object</c>. <c>AdjustArgs</c> pads only
-    /// those positions with the <c>undefined</c> sentinel; typed slots and built-ins keep null
+    /// those positions with the <c>undefined</c> sentinel; typed slots and unmarked built-ins keep null
     /// padding. See <see cref="EmitPadUndefinedAttribute"/>. (#640)
     /// </summary>
     private void EmitComputePadUndefinedMask(ILGenerator il, FieldBuilder padUndefinedMaskField, EmittedFunctionAttributesRuntime attributes, int methodArgIndex)
