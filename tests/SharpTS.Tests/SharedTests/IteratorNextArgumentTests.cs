@@ -40,8 +40,7 @@ public sealed class IteratorNextArgumentTests
             Assert.Equal("1\n", TestHarness.RunUnchecked("const iterator = [1].values();" + read, mode));
     }
 
-    // Interpreter intrinsic identity and invalid-receiver errors are tracked by #3726.
-    [Theory, CompiledOnlyData]
+    [Theory, ModeData]
     public void ArrayIteratorNextSharesIdentityAndValidatesTheCallReceiver(ExecutionMode mode)
     {
         const string source = """
@@ -71,7 +70,7 @@ public sealed class IteratorNextArgumentTests
         Assert.Equal("9 1\n10 2\ntrue\n", TestHarness.RunUnchecked(source, mode));
     }
 
-    [Theory, CompiledOnlyData]
+    [Theory, ModeData]
     public void ArrayIteratorNextRespectsReplacedPrototype(ExecutionMode mode)
     {
         const string source = """

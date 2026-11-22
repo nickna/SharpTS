@@ -63,3 +63,12 @@ public class SharpTSIterator : ITypeCategorized
 
     public override string ToString() => "[object Iterator]";
 }
+
+/// <summary>An Array iterator carries its own cursor and its creation realm's prototype.</summary>
+internal sealed class SharpTSArrayIterator(IEnumerable<object?> source, object prototype)
+    : SharpTSIterator(source), ISharpTSOwnPropertyObject
+{
+    public object? Prototype { get; set; } = prototype;
+    private SharpTSObject? _ownProperties;
+    SharpTSObject ISharpTSOwnPropertyObject.OwnProperties => _ownProperties ??= new([]);
+}

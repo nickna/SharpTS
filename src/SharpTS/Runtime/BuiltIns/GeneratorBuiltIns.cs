@@ -90,7 +90,12 @@ public static class GeneratorBuiltIns
         return BuiltInMethod.CreateV2(name, minArity, maxArity, (interp, receiver, args) =>
         {
             // Wrap the generator as an iterator, then delegate to IteratorBuiltIns
-            var iter = WrapAsIterator((SharpTSGenerator)receiver.ToObject()!);
+            var iter = receiver.ToObject() switch
+            {
+                SharpTSIterator iterator => iterator,
+                SharpTSGenerator generator => WrapAsIterator(generator),
+                _ => throw new ThrowException(new SharpTSTypeError("Incompatible iterator helper receiver"))
+            };
             var method = IteratorBuiltIns.GetMember(iter, name);
             if (method is BuiltInMethod bm)
                 return bm.CallV2(interp, args);
