@@ -14,6 +14,21 @@ namespace SharpTS.Tests.SharedTests;
 public class EvalTests
 {
     [Theory, ModeData]
+    public void StrictEvalOwnsDeclarationsAndEscapingClosures(ExecutionMode mode)
+    {
+        const string source = """
+            var x = 10;
+            function run() { 'use strict'; eval('var x = 3;'); console.log(x); }
+            run(); console.log(x);
+            console.log(eval('"use strict"; x; var x;') === undefined);
+            function make(seed) { return eval('"use strict"; var x = seed; () => ++x;'); }
+            var a = make(1), b = make(10);
+            console.log(a(), b(), a(), x);
+            """;
+        Assert.Equal("10\n10\ntrue\n2 11 3 10\n", TestHarness.RunUnchecked(source, mode));
+    }
+
+    [Theory, ModeData]
     public void Eval_WhitespaceTolerance_ResolvesGlobals(ExecutionMode mode)
     {
         // Test262 S11.2.1_A1.1-style: eval tolerates interior whitespace and resolves globals.

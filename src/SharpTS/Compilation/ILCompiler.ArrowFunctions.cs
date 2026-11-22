@@ -1015,14 +1015,7 @@ public partial class ILCompiler
                         if (isDirectEval && c.PreparedEvalStatements is null && !_staticDirectEvalStatements.ContainsKey(c))
                             evalStatements = WithStatementLowering.ApplyEvalEnvironments(evalStatements, c.EvalObjectEnvironments);
                         evalStatements = StaticEvalLowering.LowerAsyncDeclarations(evalStatements);
-                        if (evalStatements.All(statement =>
-                                statement is Stmt.Expression
-                                    or Stmt.Var { IsVar: true }
-                                    or Stmt.Function { Body: not null }
-                                    or Stmt.Directive
-                                    or Stmt.Block
-                                    or Stmt.Class
-                                    or Stmt.For))
+                        if (evalStatements.All(StaticEvalLowering.CanEmitStatement))
                         {
                             _staticDirectEvalStatements[c] = evalStatements;
                             var savedEvalStrict = _currentCollectStrict;

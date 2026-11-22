@@ -6,6 +6,17 @@ namespace SharpTS.Tests.SharedTests;
 public sealed class EvalClosureBindingTests
 {
     [Theory, ModeData]
+    public void NestedEvalInheritsStrictnessFromItsEvalCaller(ExecutionMode mode)
+    {
+        const string source = """
+            var x = 10;
+            eval('"use strict"; eval("var x = 3;");');
+            console.log(x);
+            """;
+        Assert.Equal("10\n", TestHarness.RunUnchecked(source, mode));
+    }
+
+    [Theory, ModeData]
     public void ClosuresCreatedInsideEvalCaptureTheSameCallerBinding(ExecutionMode mode)
     {
         const string source = """

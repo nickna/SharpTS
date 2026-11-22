@@ -48,14 +48,7 @@ public partial class ILEmitter
         if (statements is null)
             return false;
 
-        if (statements.Any(statement =>
-                statement is not Stmt.Expression
-                    and not Stmt.Var { IsVar: true }
-                    and not Stmt.Function { Body: not null }
-                    and not Stmt.Directive
-                    and not Stmt.Block
-                    and not Stmt.Class
-                    and not Stmt.For))
+        if (!statements.All(StaticEvalLowering.CanEmitStatement))
             return false;
 
         _ctx.NativeClrAdmission?.RecordUnclassifiedSourceBoundary(call,

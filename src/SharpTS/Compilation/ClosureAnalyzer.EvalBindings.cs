@@ -45,7 +45,7 @@ public partial class ClosureAnalyzer
     {
         // Static caller-scope eval is currently lowered by the synchronous
         // emitter. State machines retain their existing eval bridge boundary.
-        if (_currentFunction is Stmt.Function { IsAsync: true } or Stmt.Function { IsGenerator: true }
+        if (_strictContext || _currentFunction is Stmt.Function { IsAsync: true } or Stmt.Function { IsGenerator: true }
             or Expr.ArrowFunction { IsAsync: true } or Expr.ArrowFunction { IsGenerator: true }) return;
         var scanner = new BodyEvalBindingScanner(GetEvalProgram);
         foreach (var statement in Runtime.ParameterBinder.BodyStatements(body)) scanner.Visit(statement);
