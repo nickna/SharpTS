@@ -870,7 +870,7 @@ public partial class ClosureAnalyzer : AstVisitorBase
     protected override void VisitVar(Stmt.Var stmt)
     {
         if (stmt.IsDeclare) return;
-        if (!_visitingEvalProgram || !stmt.IsVar || _currentFunction is null)
+        if (!_visitingEvalProgram || !stmt.IsVar)
             DeclareVariable(stmt.Name.Lexeme, isPerIterationBinding: !stmt.IsVar);
         base.VisitVar(stmt);
     }

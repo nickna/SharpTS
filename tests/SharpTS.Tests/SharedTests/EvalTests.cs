@@ -14,6 +14,31 @@ namespace SharpTS.Tests.SharedTests;
 public class EvalTests
 {
     [Theory, ModeData]
+    public void GlobalEvalFunctionReadsTheSameArrayAsItsCaller(ExecutionMode mode)
+    {
+        const string source = """
+            eval('var values = []; function add() { values.push(1); } add(); console.log(values.length);');
+            console.log(globalThis.values === values);
+            """;
+        Assert.Equal("1\ntrue\n", TestHarness.RunUnchecked(source, mode));
+    }
+
+    // The interpreter's global eval write-through behavior is tracked by #3735.
+    [Theory, CompiledOnlyData]
+    public void GlobalEvalClosureObservesWritesThroughEitherReference(ExecutionMode mode)
+    {
+        const string source = """
+            var action = eval('var n = 1; function bump() { n = n + 1; return n; } bump;');
+            console.log(action(), n, globalThis.n);
+            globalThis.n = 10;
+            console.log(action(), n, globalThis.n);
+            eval('var n;');
+            console.log(n);
+            """;
+        Assert.Equal("2 2 2\n11 11 11\n11\n", TestHarness.RunUnchecked(source, mode));
+    }
+
+    [Theory, ModeData]
     public void StrictEvalOwnsDeclarationsAndEscapingClosures(ExecutionMode mode)
     {
         const string source = """
