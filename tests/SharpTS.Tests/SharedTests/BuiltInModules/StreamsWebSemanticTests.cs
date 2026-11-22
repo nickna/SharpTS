@@ -1,4 +1,3 @@
-using System.Diagnostics;
 using SharpTS.Execution;
 using SharpTS.Runtime;
 using SharpTS.Runtime.BuiltIns;
@@ -536,110 +535,92 @@ public class StreamsWebSemanticTests
     }
 
     /// <remarks>
-    /// White-box regression for #325, the product fix behind the (load-flaky)
-    /// guest-level test above. The pipeTo pump runs its abort/cancel/reject
-    /// teardown as un-Ref'd thread-pool continuations; before the fix, a program
-    /// whose only remaining work was that teardown could hit the interpreter's
-    /// 250ms quiescence give-up after <c>dest.abort()</c> but before the source
-    /// <c>cancel()</c> callback flushed "source-canceled". The fix
-    /// (<c>WebStreamsHelpers.PipeTo</c>) scopes an event-loop Ref to the whole
-    /// teardown sequence.
-    ///
-    /// A guest-level test can't pin this deterministically: every guest async
-    /// delay is either a scheduled virtual timer (which
-    /// <c>HasPendingEventLoopWork</c> already counts as pending work) or an
-    /// active handle, so none reproduces the invisible thread-pool continuation
-    /// window the fix closes. So this drives <c>PipeTo</c> directly and gates the
-    /// dest <c>abort()</c> on a TaskCompletionSource, freezing the pump in the
-    /// middle of the teardown. That lets us assert the event loop stays Ref'd for
-    /// the entire abort→cancel→reject sequence with no wall-clock window — the
-    /// assertion fails deterministically if the teardown Ref is removed, and is
-    /// load-independent (the gate, not a timer, drives ordering).
+    /// Regression for #325: teardown must hold an event-loop Ref through both
+    /// abort and cancel, then release it on rejection. A manually pumped context
+    /// owns the await continuations so thread-pool load cannot determine ordering
+    /// or make this synchronous test time out (#3722).
     /// </remarks>
     [Fact]
     public void PipeTo_MidPipeAbort_RefsEventLoopAcrossTeardown()
     {
-        var interp = new Interpreter(TextWriter.Null, TextWriter.Null);
-
-        // dest.abort() returns a promise we hold open, freezing the pump inside
-        // the teardown right after it takes the Ref and before it reaches
-        // source.cancel().
+        using var interp = new Interpreter(TextWriter.Null, TextWriter.Null);
+        var context = new TeardownSynchronizationContext();
         var abortGate = new TaskCompletionSource<object?>(TaskCreationOptions.RunContinuationsAsynchronously);
-        using var abortInvoked = new ManualResetEventSlim(false);
-        using var cancelInvoked = new ManualResetEventSlim(false);
-
+        var cancelGate = new TaskCompletionSource<object?>(TaskCreationOptions.RunContinuationsAsynchronously);
+        bool abortInvoked = false;
+        bool cancelInvoked = false;
         var destSink = new Dictionary<string, object?>
         {
             ["write"] = BuiltInMethod.CreateV2("write", 1, static (_, _, _) => RuntimeValue.Undefined),
             ["abort"] = BuiltInMethod.CreateV2("abort", 1, (_, _, _) =>
             {
-                abortInvoked.Set();
+                abortInvoked = true;
                 return RuntimeValue.FromObject(new SharpTSPromise(abortGate.Task));
             }),
         };
-        var dest = new SharpTSWritableStream(interp, destSink, strategy: null);
-
         var sourceSink = new Dictionary<string, object?>
         {
             ["cancel"] = BuiltInMethod.CreateV2("cancel", 1, (_, _, _) =>
             {
-                cancelInvoked.Set();
-                return RuntimeValue.Undefined;
+                cancelInvoked = true;
+                return RuntimeValue.FromObject(new SharpTSPromise(cancelGate.Task));
             }),
         };
+        var dest = new SharpTSWritableStream(interp, destSink, strategy: null);
         var source = new SharpTSReadableStream(interp, sourceSink, strategy: null);
-
-        // Already-aborted signal → the pump goes straight to the teardown branch
-        // on its first iteration without needing any real reads.
         var signal = new SharpTSAbortSignal(new CancellationToken(canceled: true));
         var opts = new Dictionary<string, object?> { ["signal"] = signal };
+        Assert.False(interp.HasActiveHandles);
 
-        Assert.False(interp.HasActiveHandles, "no active handles before piping starts");
-
-        // The pump's awaits capture the ambient SynchronizationContext;
-        // null it so the gated teardown runs free on the thread
-        // pool rather than on any xUnit-installed context that this synchronous
-        // test thread would never pump.
-        SharpTSPromise pipe;
-        var prevContext = SynchronizationContext.Current;
-        SynchronizationContext.SetSynchronizationContext(null);
+        var previousContext = SynchronizationContext.Current;
+        SynchronizationContext.SetSynchronizationContext(context);
         try
         {
-            pipe = WebStreamsHelpers.PipeTo(interp, source, dest, opts);
+            // An already-aborted signal enters teardown synchronously, then
+            // suspends at the abort gate before any source cancellation.
+            var pipe = WebStreamsHelpers.PipeTo(interp, source, dest, opts);
+            Assert.True(abortInvoked, "pump never reached the abort teardown");
+            Assert.True(interp.HasActiveHandles, "abort teardown must hold the Ref (#325)");
+            Assert.False(cancelInvoked);
+            Assert.False(pipe.Task.IsCompleted);
+
+            abortGate.SetResult(null);
+            context.Drain();
+            Assert.True(cancelInvoked, "source cancel() was dropped");
+            Assert.True(interp.HasActiveHandles, "cancel teardown must retain the Ref (#325)");
+            Assert.False(pipe.Task.IsCompleted);
+
+            cancelGate.SetResult(null);
+            context.Drain();
+            // Cancellation queues a guest promise reaction. Drive the same
+            // checkpoint a host would, then drain the resulting await chain.
+            interp.TickEventLoop();
+            context.Drain();
+            Assert.True(pipe.Task.IsCompleted, "pipe teardown did not complete");
+            Assert.Throws<SharpTSPromiseRejectedException>(() => pipe.Task.GetAwaiter().GetResult());
+            Assert.False(interp.HasActiveHandles, "teardown must release its Ref after rejection");
         }
         finally
         {
-            SynchronizationContext.SetSynchronizationContext(prevContext);
+            SynchronizationContext.SetSynchronizationContext(previousContext);
         }
+    }
 
-        // The pump reached dest.abort() and parked on our gate. The teardown Ref
-        // is taken before the abort await, so the handle is already active here.
-        // Without the #325 fix this stays false and the next assert fails.
-        Assert.True(abortInvoked.Wait(TimeSpan.FromSeconds(5)), "pump never reached the abort teardown");
-        Assert.True(interp.HasActiveHandles, "teardown must keep the event loop Ref'd (#325)");
-        Assert.False(cancelInvoked.IsSet, "source cancel() must not run until dest.abort() resolves");
+    private sealed class TeardownSynchronizationContext : SynchronizationContext
+    {
+        private readonly System.Collections.Concurrent.ConcurrentQueue<(SendOrPostCallback Callback, object? State)> _jobs = new();
 
-        // Release the gate: the pump runs source.cancel(), then rejects.
-        abortGate.SetResult(null);
+        public override void Post(SendOrPostCallback callback, object? state) => _jobs.Enqueue((callback, state));
 
-        Assert.True(cancelInvoked.Wait(TimeSpan.FromSeconds(5)), "source cancel() was dropped");
-
-        // This direct-runtime test owns the event loop. Cancellation completion
-        // is a promise reaction and must be driven just as the host drives it.
-        Assert.True(SpinWait.SpinUntil(() =>
+        public void Drain()
         {
-            interp.TickEventLoop();
-            return pipe.Task.IsCompleted;
-        }, TimeSpan.FromSeconds(5)), "pipe teardown did not complete");
-
-        // The pipe promise rejects with the abort reason once the pump unwinds.
-        var fault = Assert.Throws<AggregateException>(() => pipe.Task.Wait(TimeSpan.FromSeconds(5)));
-        Assert.IsType<SharpTSPromiseRejectedException>(fault.InnerException);
-
-        // The teardown Ref is released exactly once, so the loop can quiesce.
-        var sw = Stopwatch.StartNew();
-        while (interp.HasActiveHandles && sw.Elapsed < TimeSpan.FromSeconds(5)) Thread.Sleep(5);
-        Assert.False(interp.HasActiveHandles, "teardown Ref must be released after the pump settles");
+            int count = 0;
+            while (_jobs.TryDequeue(out var job))
+            {
+                Assert.True(++count <= 100, "teardown continuation queue did not quiesce");
+                job.Callback(job.State);
+            }
+        }
     }
 
     #endregion

@@ -272,8 +272,11 @@ public class LocalVariableResolver : IVariableResolver
     {
         if (_ctx.CellBindingLocals.ContainsKey(name)) return true;
         if (_ctx.TryGetParameter(name, out _)) return true;
-        if (_ctx.CapturedFunctionLocals?.Contains(name) == true &&
-            _ctx.FunctionDisplayClassFields?.ContainsKey(name) == true) return true;
+        // Match the load/store path for captured block shadows. Their source
+        // name differs from the display-class field's renamed storage (#3721).
+        string dcName = _ctx.ResolveFunctionDCFieldName(name);
+        if (_ctx.CapturedFunctionLocals?.Contains(dcName) == true &&
+            _ctx.FunctionDisplayClassFields?.ContainsKey(dcName) == true) return true;
         if (_ctx.CapturedArrowLocals?.Contains(name) == true &&
             _ctx.ArrowScopeDisplayClassFields?.ContainsKey(name) == true) return true;
         if (_ctx.ParentArrowCapturedLocals?.Contains(name) == true &&

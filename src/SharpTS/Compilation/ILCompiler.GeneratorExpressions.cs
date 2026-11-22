@@ -176,7 +176,8 @@ public partial class ILCompiler
                     continue;
                 }
             }
-            if (name is CompilationContext.SuperOwnerCaptureName or CompilationContext.NewTargetCaptureName or "this"
+            if ((name is CompilationContext.SuperOwnerCaptureName or CompilationContext.NewTargetCaptureName or "this"
+                    || _closures.Analyzer.IsEvalTemplateCacheStorage(name))
                 && fields.TryGetValue(name, out var metadata))
             {
                 paths[name] = new([metadata], false);

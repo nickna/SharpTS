@@ -929,6 +929,7 @@ public partial class ILCompiler
         // Body vars exist before their source initializer executes. Parameter
         // copies keep separate storage from closures created by defaults.
         emitter.InitializeFunctionBodyVarBindings(body);
+        emitter.InitializeEvalBindingStorage(body);
     }
 
     /// <summary>
