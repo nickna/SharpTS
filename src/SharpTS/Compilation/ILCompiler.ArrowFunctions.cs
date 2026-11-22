@@ -1014,7 +1014,7 @@ public partial class ILCompiler
                             ?? new Parser(new Lexer(evalSource).ScanTokens()).ParseOrThrow();
                         if (isDirectEval && c.PreparedEvalStatements is null && !_staticDirectEvalStatements.ContainsKey(c))
                             evalStatements = WithStatementLowering.ApplyEvalEnvironments(evalStatements, c.EvalObjectEnvironments);
-                        evalStatements = StaticEvalLowering.LowerAsyncDeclarations(evalStatements);
+                        evalStatements = StaticEvalLowering.LowerFunctionDeclarations(evalStatements, isDirectEval);
                         if (evalStatements.All(StaticEvalLowering.CanEmitStatement))
                         {
                             _staticDirectEvalStatements[c] = evalStatements;

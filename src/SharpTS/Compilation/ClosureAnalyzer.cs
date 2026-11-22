@@ -532,9 +532,9 @@ public partial class ClosureAnalyzer : AstVisitorBase
     // DeclareVariable records them as loop bindings rather than ordinary locals.
     private readonly HashSet<string> _pendingLoopBindings = [];
 
-    private void ReferenceVariable(string name)
+    private void ReferenceVariable(string name, Expr.Variable? reference = null)
     {
-        ReferenceEvalBindings(name);
+        ReferenceEvalBindings(name, reference);
         if (_currentFunction == null) return;
 
         // Intrinsic values need no capture, but a lexical declaration with the same name
@@ -1175,7 +1175,7 @@ public partial class ClosureAnalyzer : AstVisitorBase
     {
         if (TryGetClassSelfOwner(expr, out _)) return;
         if (IsModuleClrImportReference(expr)) return;
-        ReferenceVariable(expr.Name.Lexeme);
+        ReferenceVariable(expr.Name.Lexeme, expr);
     }
 
     private bool IsModuleClrImportReference(Expr.Variable expression)

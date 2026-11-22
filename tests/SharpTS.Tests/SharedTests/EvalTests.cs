@@ -14,6 +14,35 @@ namespace SharpTS.Tests.SharedTests;
 public class EvalTests
 {
     [Theory, ModeData]
+    public void SuspendedEvalFunctionsCallLaterSiblings(ExecutionMode mode)
+    {
+        const string source = """
+            function make() {
+                return eval('function* entries() { yield later(); } async function read() { await 0; return later(); } function later() { return 9; } [entries, read];');
+            }
+            const pair = make();
+            console.log(pair[0]().next().value);
+            pair[1]().then(value => console.log(value));
+            """;
+        Assert.Equal("9\n9\n", TestHarness.RunUnchecked(source, mode));
+    }
+
+    [Theory, ModeData]
+    public void EvalFunctionsShareForwardAndRecursiveBindings(ExecutionMode mode)
+    {
+        const string source = """
+            function make() {
+                return eval('function first() { return second; } function second(n) { return n ? first()(n-1) : second; } [first, second, value => { second = value; }];');
+            }
+            var pair = make();
+            console.log(pair[0]() === pair[1], pair[1](2) === pair[1]);
+            pair[2](() => 9);
+            console.log(pair[0]()());
+            """;
+        Assert.Equal("true true\n9\n", TestHarness.RunUnchecked(source, mode));
+    }
+
+    [Theory, ModeData]
     public void GlobalEvalFunctionReadsTheSameArrayAsItsCaller(ExecutionMode mode)
     {
         const string source = """
