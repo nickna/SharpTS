@@ -686,6 +686,7 @@ public partial class Parser
                 {
                     Token name = ConsumeEditorMemberName("Expect property name after '.'.");
                     expr = receiver is Expr.Variable v && v.Name.Lexeme == "console" && name.Lexeme == "log"
+                        && Check(TokenType.LEFT_PAREN)
                         ? new Expr.Variable(new Token(TokenType.IDENTIFIER, "console.log", null, name.Line))
                         : new Expr.Get(receiver, name);
                     CompleteRecoveredExpression(expr, start, name.Start < 0 && EditorRecoveryEnabled);

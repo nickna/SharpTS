@@ -8,7 +8,8 @@ public partial class RuntimeEmitter
     /// <summary>
     /// Emits globalThis helper methods (GetProperty, SetProperty).
     /// </summary>
-    private void EmitGlobalThisMethods(TypeBuilder typeBuilder, EmittedRuntime runtime, bool allowInterpreterBridge)
+    private void EmitGlobalThisMethods(TypeBuilder typeBuilder, EmittedRuntime runtime, bool allowInterpreterBridge,
+        FieldBuilder? consoleSingleton)
     {
         // Static field to cache the fetch TSFunction for reference equality
         runtime.Fetch.CachedFunction = typeBuilder.DefineField(
@@ -42,6 +43,7 @@ public partial class RuntimeEmitter
             new UriComponentInputs(runtime.FunctionAttributes.PadUndefinedCtor, runtime.StringCoercion.ToJsString));
         runtime.UriComponents.CompleteEmission();
         var optional = new GlobalPropertyOptionalInputs(
+            consoleSingleton,
             runtime.Dates.Implementation is not null ? runtime.Dates.RequireImplementation().Type : null,
             runtime.RegExps.Implementation is not null ? runtime.RegExps.RequireImplementation().Type : null,
             runtime.Reflect.Namespace is not null ? runtime.Reflect.RequireNamespace().SingletonField : null,
@@ -71,7 +73,7 @@ public partial class RuntimeEmitter
     }
 
     private readonly record struct GlobalPropertyOptionalInputs(
-        Type? DateType, Type? RegExpType, FieldBuilder? ReflectSingleton, MethodBuilder? PopulateReflectSingleton,
+        FieldBuilder? ConsoleSingleton,        Type? DateType, Type? RegExpType, FieldBuilder? ReflectSingleton, MethodBuilder? PopulateReflectSingleton,
         Type? BufferType, Type? ArrayBufferType, Type? EncoderType, Type? DecoderType,
         MethodBuilder? GetCryptoObject, MethodBuilder? FetchInvoke,
         MethodBuilder? GetAbortControllerConstructor, MethodBuilder? StructuredClone);
@@ -469,6 +471,7 @@ public partial class RuntimeEmitter
         }
         EmitSingletonBranch("Math", inputs.MathSingleton);
         EmitSingletonBranch("JSON", inputs.JsonSingleton);
+        if (inputs.Optional.ConsoleSingleton is { } console) EmitSingletonBranch("console", console);
         if (inputs.Optional.ReflectSingleton is not null)
             EmitSingletonBranch("Reflect", inputs.Optional.ReflectSingleton, inputs.Optional.PopulateReflectSingleton);
 

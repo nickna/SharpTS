@@ -11,6 +11,19 @@ namespace SharpTS.Tests.SharedTests;
 /// </summary>
 public class ConsoleTests
 {
+    [Theory, ModeData]
+    public void LogCanBeExtractedAndPassedAsACallback(ExecutionMode mode)
+    {
+        const string source = """
+            const log = console.log;
+            console.log(typeof log, log === console["log"], log === globalThis.console.log);
+            log(1, 2);
+            console.log(log("value") === undefined);
+            Promise.resolve(3).then(console.log);
+            """;
+        Assert.Equal("function true true\n1 2\nvalue\ntrue\n3\n", TestHarness.RunUnchecked(source, mode));
+    }
+
     #region Basic Output
 
     [Theory, ModeData]

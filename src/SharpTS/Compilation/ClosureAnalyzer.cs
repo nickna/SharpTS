@@ -539,11 +539,11 @@ public partial class ClosureAnalyzer : AstVisitorBase
 
         // Intrinsic values need no capture, but a lexical declaration with the same name
         // must reach the ordinary self/local/outer ownership checks below.
-        if (name is "Math" or "undefined" && !_scopeStack.Any(scope => scope.Contains(name)))
+        if (name is "Math" or "console" or "undefined" && !_scopeStack.Any(scope => scope.Contains(name)))
             return;
 
         // Skip other built-ins.
-        if (name is "console.log" or "console" or "NaN" or "Infinity" or "Symbol")
+        if (name is "console.log" or "NaN" or "Infinity" or "Symbol")
             return;
 
         // Namespace members have namespace-owned static storage. Treating them

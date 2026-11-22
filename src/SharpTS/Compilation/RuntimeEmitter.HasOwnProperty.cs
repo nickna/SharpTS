@@ -12,6 +12,7 @@ public partial class RuntimeEmitter
         EmittedErrorRuntime Errors,
         MethodBuilder GetProperty,
         FieldBuilder GlobalThisSingletonField,
+        MethodBuilder GlobalThisIntrinsicDescriptorKind,
         MethodInfo IHasFieldsHasProperty,
         Type IHasFieldsInterface,
         MethodBuilder LookupBuiltInStaticMember,
@@ -180,22 +181,9 @@ public partial class RuntimeEmitter
         il.Emit(OpCodes.Ldloc, nameLocal);
         il.Emit(OpCodes.Call, inputs.ObjectState.IsBuiltinDeleted);
         il.Emit(OpCodes.Brtrue, falseLabel);
-        foreach (var globalName in new[]
-        {
-            "globalThis", "undefined", "NaN", "Infinity", "parseInt",
-            "parseFloat", "isNaN", "isFinite", "eval", "Array", "Date",
-            "RegExp", "Map", "Set", "WeakMap", "WeakSet", "Promise",
-            "Function", "Object", "Number", "String", "Boolean", "Symbol",
-            "Error", "TypeError", "RangeError", "ReferenceError", "SyntaxError",
-            "URIError", "EvalError", "AggregateError", "Math", "JSON"
-        })
-        {
-            il.Emit(OpCodes.Ldloc, nameLocal);
-            il.Emit(OpCodes.Ldstr, globalName);
-            il.Emit(OpCodes.Call, _types.GetMethod(_types.String, "op_Equality",
-                _types.String, _types.String));
-            il.Emit(OpCodes.Brtrue, trueLabel);
-        }
+        il.Emit(OpCodes.Ldloc, nameLocal);
+        il.Emit(OpCodes.Call, inputs.GlobalThisIntrinsicDescriptorKind);
+        il.Emit(OpCodes.Brtrue, trueLabel);
         il.Emit(OpCodes.Br, falseLabel);
         il.MarkLabel(notGlobalObject);
 

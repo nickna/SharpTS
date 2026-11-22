@@ -2716,6 +2716,14 @@ public abstract partial class ExpressionEmitterBase : IEmitterContext
     /// </summary>
     protected bool TryEmitNamespaceSingleton(string name)
     {
+        if (name == "console")
+        {
+            IL.Emit(OpCodes.Ldstr, name);
+            IL.Emit(OpCodes.Call, Ctx.Runtime!.GlobalObject.GetBinding);
+            SetStackUnknown();
+            return true;
+        }
+
         if (name == "Math")
         {
             IL.Emit(OpCodes.Ldsfld, Ctx.Runtime!.Math.SingletonField);
