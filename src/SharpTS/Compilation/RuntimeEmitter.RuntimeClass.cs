@@ -744,6 +744,11 @@ public partial class RuntimeEmitter
             cctorIL.Emit(OpCodes.Call, promiseSpeciesInitializer);
 
         MethodBuilder? globalTimerInitializer = null;
+        var globalBufferInitializer = _features.UsesBuffer
+            ? typeBuilder.DefineMethod("_InitializeGlobalBuffer", MethodAttributes.Private | MethodAttributes.Static,
+                _types.Void, Type.EmptyTypes)
+            : null;
+        if (globalBufferInitializer is not null) cctorIL.Emit(OpCodes.Call, globalBufferInitializer);
         if (_features.UsesTimerFunctionValues || _features.UsesMicrotaskFunctionValues)
         {
             globalTimerInitializer = typeBuilder.DefineMethod("_InitializeGlobalTimers",
@@ -3509,6 +3514,8 @@ public partial class RuntimeEmitter
             EmitDgramModuleMethods(typeBuilder, runtime);
         // globalThis methods (ES2020) - must be after HTTP for fetch reference
         EmitGlobalThisMethods(typeBuilder, runtime, allowInterpreterBridge, consoleSingleton);
+        if (globalBufferInitializer is not null)
+            EmitGlobalBufferInitializer(typeBuilder, globalBufferInitializer, runtime);
         // Define util inspect method signatures before ConsoleExtensions (ConsoleDir uses UtilInspectValue)
         DefineUtilInspectSignatures(typeBuilder, runtime.Inspection);
         // Console extensions (error, warn, clear, time, timeEnd, timeLog)

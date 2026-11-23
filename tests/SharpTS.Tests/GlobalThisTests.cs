@@ -169,6 +169,27 @@ public class GlobalThisTests
     }
 
     [Theory, ModeData]
+    public void GlobalThis_BufferAccessorKeepsItsValueAndIdentity(ExecutionMode mode)
+    {
+        const string source = """
+            const root: any = globalThis;
+            const d = Object.getOwnPropertyDescriptor(root, "Buffer");
+            const next = Object.getOwnPropertyDescriptor(root, "Buffer");
+            console.log(typeof d.get, typeof d.set, d.enumerable, d.configurable, "value" in d);
+            console.log(d.get === next.get, d.set === next.set, d.get() === Buffer);
+            d.set(17);
+            console.log(root.Buffer, globalThis.Buffer, Buffer);
+            root.Buffer = null;
+            console.log(d.get(), root.Buffer);
+            Object.defineProperty(root, "Buffer", { value: 5 });
+            d.set(9);
+            console.log(root.Buffer, d.get(), delete root.Buffer, "Buffer" in root);
+            """;
+        Assert.Equal("function function false true false\ntrue true true\n17 17 17\nnull null\n5 9 true false\n",
+            TestHarness.RunUnchecked(source, mode));
+    }
+
+    [Theory, ModeData]
     public void GlobalThis_BufferPresenceFollowsDeletionAndRecreation(ExecutionMode mode)
     {
         var result = TestHarness.Run("""

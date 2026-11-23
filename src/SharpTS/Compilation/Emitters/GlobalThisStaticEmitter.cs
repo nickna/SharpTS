@@ -99,7 +99,7 @@ public sealed class GlobalThisStaticEmitter : IStaticTypeEmitterStrategy
         var il = ctx.IL;
 
         // Self-reference: globalThis.globalThis (and the Node alias global).
-        if (propertyName == "Array" && ctx.RuntimeFeatures?.UsesArrayConstructorMutation == true)
+        if (propertyName == "Buffer" || (propertyName == "Array" && ctx.RuntimeFeatures?.UsesArrayConstructorMutation == true))
         {
             il.Emit(OpCodes.Ldstr, propertyName);
             il.Emit(OpCodes.Call, ctx.Runtime!.GlobalObject.GetProperty);
@@ -219,7 +219,6 @@ public sealed class GlobalThisStaticEmitter : IStaticTypeEmitterStrategy
             "WeakMap" => ctx.Types.ConditionalWeakTableObjectObject,
             "WeakSet" => ctx.Types.ConditionalWeakTableObjectObject,
             "Promise" => ctx.Types.TaskOfObject,
-            "Buffer" => ctx.Runtime!.Buffer?.Type,
             "Function" => ctx.Runtime!.FunctionValues.Type,
             "TextEncoder" => ctx.Runtime!.RequireTextEncoding().EncoderType,
             "TextDecoder" => ctx.Runtime!.RequireTextEncoding().DecoderType,

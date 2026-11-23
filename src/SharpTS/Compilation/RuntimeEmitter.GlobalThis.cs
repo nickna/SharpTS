@@ -48,7 +48,6 @@ public partial class RuntimeEmitter
             runtime.RegExps.Implementation is not null ? runtime.RegExps.RequireImplementation().Type : null,
             runtime.Reflect.Namespace is not null ? runtime.Reflect.RequireNamespace().SingletonField : null,
             runtime.Reflect.Namespace is not null ? runtime.Reflect.RequireNamespace().SingletonPopulateMethod : null,
-            _features.UsesBuffer ? runtime.RequireBuffer().Type : null,
             runtime.ArrayBuffer?.Type,
             _features.UsesTextEncoding ? runtime.RequireTextEncoding().EncoderType : null,
             _features.UsesTextEncoding ? runtime.RequireTextEncoding().DecoderType : null,
@@ -74,7 +73,7 @@ public partial class RuntimeEmitter
 
     private readonly record struct GlobalPropertyOptionalInputs(
         FieldBuilder? ConsoleSingleton,        Type? DateType, Type? RegExpType, FieldBuilder? ReflectSingleton, MethodBuilder? PopulateReflectSingleton,
-        Type? BufferType, Type? ArrayBufferType, Type? EncoderType, Type? DecoderType,
+        Type? ArrayBufferType, Type? EncoderType, Type? DecoderType,
         MethodBuilder? GetCryptoObject, MethodBuilder? FetchInvoke,
         MethodBuilder? GetAbortControllerConstructor, MethodBuilder? StructuredClone);
 
@@ -92,6 +91,50 @@ public partial class RuntimeEmitter
         MethodBuilder IntrinsicDescriptorKind, MethodBuilder InvokeMethod, EmittedErrorRuntime Errors);
 
     private readonly record struct UriComponentInputs(ConstructorBuilder? PadUndefinedCtor, MethodBuilder ToJsString);
+
+    private void EmitGlobalBufferInitializer(TypeBuilder owner, MethodBuilder initializer, EmittedRuntime runtime)
+    {
+        var il = initializer.GetILGenerator();
+        var value = owner.DefineField("_globalBufferValue", _types.Object, FieldAttributes.Private | FieldAttributes.Static);
+        NativeConstructorActivationLookup.EmitValue(_nativeConstructorActivation, _types, il, runtime.RequireBuffer().Type,
+            NativeConstructorValueProducerKind.GlobalConstructorProperty);
+        il.Emit(OpCodes.Stsfld, value);
+
+        const MethodAttributes attributes = MethodAttributes.Public | MethodAttributes.Static;
+        var getter = owner.DefineMethod("GetGlobalBuffer", attributes, _types.Object, Type.EmptyTypes);
+        var get = getter.GetILGenerator();
+        get.Emit(OpCodes.Ldsfld, value);
+        get.Emit(OpCodes.Ret);
+        var setter = owner.DefineMethod("SetGlobalBuffer", attributes, _types.Object, [_types.Object]);
+        if (runtime.FunctionAttributes.PadUndefinedCtor is { } pad)
+            setter.SetCustomAttribute(pad, CustomAttributeEncoder.EmptyBlob);
+        var set = setter.GetILGenerator();
+        set.Emit(OpCodes.Ldarg_0);
+        set.Emit(OpCodes.Stsfld, value);
+        set.Emit(OpCodes.Ldsfld, runtime.Sentinels.UndefinedInstance);
+        set.Emit(OpCodes.Ret);
+
+        var storage = runtime.DescriptorStorage;
+        il.Emit(OpCodes.Ldsfld, runtime.GlobalObject.SingletonField);
+        il.Emit(OpCodes.Ldstr, "Buffer");
+        il.Emit(OpCodes.Newobj, storage.DescriptorConstructor);
+        foreach (var (method, name, length, property) in new[] {
+            (getter, "get", 0, storage.DescriptorGetter), (setter, "set", 1, storage.DescriptorSetter) })
+        {
+            il.Emit(OpCodes.Dup);
+            var parameters = EmitReflectedMethodLiteralViaHandle(il, method);
+            il.Emit(OpCodes.Ldstr, name);
+            il.Emit(OpCodes.Ldc_I4, length);
+            EmitReflectedFunctionFactory(il, runtime.FunctionConstruction.GetOrCreate, parameters);
+            il.Emit(OpCodes.Callvirt, property.GetSetMethod()!);
+        }
+        il.Emit(OpCodes.Dup);
+        il.Emit(OpCodes.Ldc_I4_0);
+        il.Emit(OpCodes.Callvirt, storage.DescriptorEnumerable.GetSetMethod()!);
+        il.Emit(OpCodes.Call, storage.DefineProperty);
+        il.Emit(OpCodes.Pop);
+        il.Emit(OpCodes.Ret);
+    }
 
     private void EmitGlobalThisGetBinding(
         EmittedGlobalObjectRuntime globalObject,
@@ -409,8 +452,6 @@ public partial class RuntimeEmitter
         EmitTypeBranch("WeakMap", _types.ConditionalWeakTableObjectObject);
         EmitTypeBranch("WeakSet", _types.ConditionalWeakTableObjectObject);
         EmitTypeBranch("Promise", _types.TaskOfObject);
-        if (inputs.Optional.BufferType is not null)
-            EmitTypeBranch("Buffer", inputs.Optional.BufferType!);
         if (inputs.Optional.ArrayBufferType is not null)
             EmitTypeBranch("ArrayBuffer", inputs.Optional.ArrayBufferType);
         EmitTypeBranch("Function", inputs.FunctionType);
