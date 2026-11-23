@@ -48,6 +48,14 @@ public partial class ILEmitter
         if (statements is null)
             return false;
 
+        if (_ctx.ClosureAnalyzer?.GetEvalDeclarationConflict(call) is { } conflict)
+        {
+            GuestErrorEmitter.ThrowSyntaxError(IL, _ctx.Runtime!, $"Identifier '{conflict}' has already been declared");
+            IL.Emit(OpCodes.Ldsfld, _ctx.Runtime!.Sentinels.UndefinedInstance);
+            SetStackUnknown();
+            return true;
+        }
+
         if (!statements.All(StaticEvalLowering.CanEmitStatement))
             return false;
 

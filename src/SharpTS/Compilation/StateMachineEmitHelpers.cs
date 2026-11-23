@@ -1486,14 +1486,7 @@ public class StateMachineEmitHelpers
                 return true;
 
             case "timeLog":
-                if (call.Arguments.Count >= 1)
-                {
-                    emitArgumentBoxed(call.Arguments[0]);
-                }
-                else
-                {
-                    _il.Emit(OpCodes.Ldnull);
-                }
+                emitArgumentsWithSpread(call.Arguments);
                 _il.Emit(OpCodes.Call, console.TimeLog);
                 _il.Emit(OpCodes.Ldnull);
                 SetStackUnknown();

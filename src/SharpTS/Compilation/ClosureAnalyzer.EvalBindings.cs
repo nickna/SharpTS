@@ -5,6 +5,28 @@ namespace SharpTS.Compilation;
 
 public partial class ClosureAnalyzer
 {
+    private readonly Dictionary<HashSet<string>, HashSet<string>> _evalLexicalNames = [];
+    private readonly Dictionary<Expr.Call, string> _evalDeclarationConflicts = new(ReferenceEqualityComparer.Instance);
+
+    internal string? GetEvalDeclarationConflict(Expr.Call call) => _evalDeclarationConflicts.GetValueOrDefault(call);
+
+    private void RecordEvalDeclarationConflict(Expr.Call call, List<Stmt> statements)
+    {
+        // Only lexical declarations between the call and its variable environment
+        // block sloppy eval vars. An outer function's lexicals and a simple catch
+        // parameter are both legal to cross.
+        foreach (var (name, _) in Runtime.ParameterBinder.BodyVarDeclarations(statements))
+            foreach (var scope in _scopeStack)
+            {
+                if (!ReferenceEquals(_scopeOwners[scope], _currentFunction)) break;
+                if (_evalLexicalNames.TryGetValue(scope, out var names) && names.Contains(name.Lexeme))
+                {
+                    _evalDeclarationConflicts[call] = name.Lexeme;
+                    return;
+                }
+            }
+    }
+
     private List<Stmt>? GetEvalProgram(Expr.Call call)
     {
         if (_evalPrograms is null) return call.PreparedEvalStatements;
@@ -72,22 +94,44 @@ public partial class ClosureAnalyzer
     internal IReadOnlyList<string>? GetSuspendedEvalRead(Expr.Variable reference) =>
         _suspendedEvalReads.GetValueOrDefault(reference);
 
-    private void ReferenceEvalBindings(string name, Expr.Variable? reference)
+    private readonly Dictionary<Expr.Variable, List<string>> _evalDeleteBindings = new(ReferenceEqualityComparer.Instance);
+    internal IReadOnlyList<string>? GetEvalDeleteBindings(Expr.Variable reference) => _evalDeleteBindings.GetValueOrDefault(reference);
+
+    protected override void VisitDelete(Expr.Delete expression)
+    {
+        Expr operand = expression.Operand;
+        while (operand is Expr.Grouping grouping) operand = grouping.Expression;
+        if (operand is Expr.Variable variable)
+        {
+            var candidates = VisibleEvalBindings(variable.Name.Lexeme).ToList();
+            if (candidates.Count > 0) _evalDeleteBindings[variable] = candidates;
+        }
+        base.VisitDelete(expression);
+    }
+
+    private IEnumerable<string> VisibleEvalBindings(string name)
     {
         foreach (var scope in _scopeStack)
         {
-            if (scope.Contains(name)) break;
+            if (scope.Contains(name)) yield break;
             if (_evalScopeBindings.TryGetValue(scope, out var bindings)
                 && bindings.TryGetValue(name, out var storage))
+                yield return storage;
+        }
+    }
+
+    private void ReferenceEvalBindings(string name, Expr.Variable? reference)
+    {
+        if (_evalScopeBindings.Count == 0) return;
+        foreach (var storage in VisibleEvalBindings(name))
+        {
+            ReferenceVariable(storage);
+            if (reference is not null && _currentFunction is Expr.ArrowFunction { IsAsync: true }
+                or Expr.ArrowFunction { IsGenerator: true })
             {
-                ReferenceVariable(storage);
-                if (reference is not null && _currentFunction is Expr.ArrowFunction { IsAsync: true }
-                    or Expr.ArrowFunction { IsGenerator: true })
-                {
-                    if (!_suspendedEvalReads.TryGetValue(reference, out var candidates))
-                        _suspendedEvalReads[reference] = candidates = [];
-                    candidates.Add(storage);
-                }
+                if (!_suspendedEvalReads.TryGetValue(reference, out var candidates))
+                    _suspendedEvalReads[reference] = candidates = [];
+                candidates.Add(storage);
             }
         }
     }

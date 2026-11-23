@@ -13,6 +13,48 @@ namespace SharpTS.Tests.SharedTests;
 /// </summary>
 public class EvalTests
 {
+    [Theory, ModeData]
+    public void EvalVarInitializerWritesToTheNearestCatchParameter(ExecutionMode mode)
+    {
+        const string source = """
+            function run() {
+                try { throw 1; } catch (err) {
+                    eval("var err = 2;");
+                    console.log(err);
+                    try { throw 3; } catch (err) {
+                        eval("var err = err + 1;");
+                        console.log(err);
+                    }
+                    console.log(err);
+                }
+                console.log(typeof err);
+            }
+            run();
+            """;
+        Assert.Equal("2\n4\n2\nundefined\n", TestHarness.RunUnchecked(source, mode));
+    }
+
+    [Theory, ModeData]
+    public void LiteralEvalRejectsLexicalCollisionsBeforeExecuting(ExecutionMode mode)
+    {
+        const string source = """
+            {
+                let x = 1;
+                try { eval("var x = 2"); } catch (e) { console.log(e.name); }
+                console.log(x);
+            }
+            console.log(typeof x);
+            function run() {
+                try { eval("console.log('ran'); var other; function later() {}"); }
+                catch (e) { console.log(e.name); }
+                const later = 2;
+                console.log(later, typeof other);
+            }
+            run();
+            """;
+        Assert.Equal("SyntaxError\n1\nundefined\nSyntaxError\n2 undefined\n", TestHarness.RunUnchecked(source, mode));
+    }
+
     [Theory, InterpretedOnlyData]
     public void SloppyEvalChecksEveryDeclarationBeforeCreatingBindings(ExecutionMode mode)
     {
@@ -171,6 +213,24 @@ public class EvalTests
             """;
         Assert.Equal("false 2 1\ntrue undefined false\ntrue undefined\nfalse 3 true false\ntrue undefined\ntrue undefined false 5\nReferenceError\n",
             TestHarness.RunUnchecked(source, mode));
+    }
+
+    [Theory, ModeData]
+    public void DeleteResolvesEvalGlobalsAndShadowingLocals(ExecutionMode mode)
+    {
+        const string source = """
+            eval("var item = 1;");
+            { let item = 9; console.log(delete item, item, globalThis.item); }
+            function run() {
+                eval("var item = 2;");
+                console.log(delete item, globalThis.item);
+            }
+            run();
+            console.log(delete (item), typeof item, "item" in globalThis);
+            eval("var item = 3;");
+            console.log(item, delete item, delete missing);
+            """;
+        Assert.Equal("false 9 1\ntrue 1\ntrue undefined false\n3 true true\n", TestHarness.RunUnchecked(source, mode));
     }
 
     [Theory, ModeData]

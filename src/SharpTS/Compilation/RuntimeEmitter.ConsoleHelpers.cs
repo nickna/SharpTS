@@ -19,7 +19,7 @@ public partial class RuntimeEmitter
             ("clear", Adapt(console.Clear, []), 0),
             ("time", Adapt(console.Time, [_types.Object]), 0),
             ("timeEnd", Adapt(console.TimeEnd, [_types.Object]), 0),
-            ("timeLog", Adapt(console.TimeLog, [_types.Object]), 0),
+            ("timeLog", Adapt(console.TimeLog, [_types.ObjectArray]), 0),
             ("assert", Adapt(console.AssertMultiple, [_types.Object, _types.ObjectArray]), 0),
             ("count", Adapt(console.Count, [_types.Object]), 0),
             ("countReset", Adapt(console.CountReset, [_types.Object]), 0),
@@ -374,7 +374,7 @@ public partial class RuntimeEmitter
     }
 
     /// <summary>
-    /// Emits: public static void ConsoleTimeLog(object label)
+    /// Emits: public static void ConsoleTimeLog(object[] args)
     /// Prints elapsed time without stopping the timer.
     /// </summary>
     private void EmitConsoleTimeLog(TypeBuilder typeBuilder, EmittedRuntime runtime)
@@ -383,7 +383,7 @@ public partial class RuntimeEmitter
             "ConsoleTimeLog",
             MethodAttributes.Public | MethodAttributes.Static,
             _types.Void,
-            [_types.Object]
+            [_types.ObjectArray]
         );
         runtime.Console.TimeLog = method;
 
@@ -393,8 +393,15 @@ public partial class RuntimeEmitter
         var notNullLabel = il.DefineLabel();
         var labelLocal = il.DeclareLocal(_types.String);
 
+        var defaultLabel = il.DefineLabel();
         il.Emit(OpCodes.Ldarg_0);
+        il.Emit(OpCodes.Ldlen);
+        il.Emit(OpCodes.Brfalse_S, defaultLabel);
+        il.Emit(OpCodes.Ldarg_0);
+        il.Emit(OpCodes.Ldc_I4_0);
+        il.Emit(OpCodes.Ldelem_Ref);
         il.Emit(OpCodes.Brtrue_S, notNullLabel);
+        il.MarkLabel(defaultLabel);
         // arg is null - use "default"
         il.Emit(OpCodes.Ldstr, "default");
         il.Emit(OpCodes.Stloc, labelLocal);
@@ -404,6 +411,8 @@ public partial class RuntimeEmitter
         // arg is not null - stringify it
         il.MarkLabel(notNullLabel);
         il.Emit(OpCodes.Ldarg_0);
+        il.Emit(OpCodes.Ldc_I4_0);
+        il.Emit(OpCodes.Ldelem_Ref);
         il.Emit(OpCodes.Call, runtime.StringCoercion.Stringify);
         il.Emit(OpCodes.Stloc, labelLocal);
         il.MarkLabel(afterLabelInit);
@@ -446,6 +455,19 @@ public partial class RuntimeEmitter
         il.Emit(OpCodes.Call, _types.GetMethodNoParams(_types.Double, "ToString"));
         il.Emit(OpCodes.Ldstr, "ms");
         il.Emit(OpCodes.Call, _types.GetMethod(_types.String, "Concat", _types.String, _types.String, _types.String, _types.String));
+        var writeLine = il.DefineLabel();
+        il.Emit(OpCodes.Ldarg_0);
+        il.Emit(OpCodes.Ldlen);
+        il.Emit(OpCodes.Conv_I4);
+        il.Emit(OpCodes.Ldc_I4_1);
+        il.Emit(OpCodes.Ble, writeLine);
+        il.Emit(OpCodes.Ldstr, " ");
+        il.Emit(OpCodes.Ldstr, " ");
+        il.Emit(OpCodes.Ldarg_0);
+        il.Emit(OpCodes.Ldc_I4_1);
+        il.Emit(OpCodes.Call, runtime.Console.JoinWithStringify);
+        il.Emit(OpCodes.Call, _types.GetMethod(_types.String, "Concat", _types.String, _types.String, _types.String));
+        il.MarkLabel(writeLine);
         il.Emit(OpCodes.Call, _types.GetMethod(_types.Console, "WriteLine", _types.String));
 
         il.MarkLabel(doneLabel);
@@ -1407,11 +1429,12 @@ public partial class RuntimeEmitter
         il.Emit(OpCodes.Ret);
 
         // No format specifiers: join with spaces using Stringify for JS-compatible output
-        // Console.WriteLine(GetConsoleIndent() + JoinWithStringify(" ", args))
+        // Console.WriteLine(GetConsoleIndent() + JoinWithStringify(" ", args, 0))
         il.MarkLabel(noFormatLabel);
         il.Emit(OpCodes.Call, console.GetIndent);
         il.Emit(OpCodes.Ldstr, " ");
         il.Emit(OpCodes.Ldarg_0);
+        il.Emit(OpCodes.Ldc_I4_0);
         il.Emit(OpCodes.Call, console.JoinWithStringify);
         il.Emit(OpCodes.Call, _types.GetMethod(_types.String, "Concat", _types.String, _types.String));
         il.Emit(OpCodes.Call, _types.GetMethod(_types.Console, "WriteLine", _types.String));
@@ -1420,7 +1443,7 @@ public partial class RuntimeEmitter
 
     /// <summary>
     /// Emits JoinWithStringify: joins array elements with separator using Stringify for JS-compatible output.
-    /// Signature: string JoinWithStringify(string separator, object[] args)
+    /// Signature: string JoinWithStringify(string separator, object[] args, int start)
     /// </summary>
     private void EmitJoinWithStringify(TypeBuilder typeBuilder, EmittedRuntime runtime)
     {
@@ -1428,7 +1451,7 @@ public partial class RuntimeEmitter
             "JoinWithStringify",
             MethodAttributes.Public | MethodAttributes.Static,
             _types.String,
-            [_types.String, _types.ObjectArray]
+            [_types.String, _types.ObjectArray, _types.Int32]
         );
         runtime.Console.JoinWithStringify = method;
 
@@ -1439,9 +1462,9 @@ public partial class RuntimeEmitter
         il.Emit(OpCodes.Newobj, _types.GetConstructor(_types.StringBuilder, _types.EmptyTypes));
         il.Emit(OpCodes.Stloc, resultLocal);
 
-        // int i = 0
+        // int i = start
         var indexLocal = il.DeclareLocal(_types.Int32);
-        il.Emit(OpCodes.Ldc_I4_0);
+        il.Emit(OpCodes.Ldarg_2);
         il.Emit(OpCodes.Stloc, indexLocal);
 
         // Loop
@@ -1456,10 +1479,10 @@ public partial class RuntimeEmitter
         il.Emit(OpCodes.Conv_I4);
         il.Emit(OpCodes.Bge, loopEnd);
 
-        // if (i > 0) result.Append(separator)
+        // if (i > start) result.Append(separator)
         var skipSeparator = il.DefineLabel();
         il.Emit(OpCodes.Ldloc, indexLocal);
-        il.Emit(OpCodes.Ldc_I4_0);
+        il.Emit(OpCodes.Ldarg_2);
         il.Emit(OpCodes.Ble, skipSeparator);
         il.Emit(OpCodes.Ldloc, resultLocal);
         il.Emit(OpCodes.Ldarg_0); // separator

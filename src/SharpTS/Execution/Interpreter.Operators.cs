@@ -1221,16 +1221,21 @@ public partial class Interpreter
         bool strictMode = _environment.IsStrictMode;
         var operand = delete.Operand;
         while (operand is Expr.Grouping grouping) operand = grouping.Expression;
-        return operand switch
+        switch (operand)
         {
-            Expr.Get get => await DeletePropertyCore(ctx, get, strictMode),
-            Expr.GetIndex getIndex => await DeleteIndexedPropertyCore(ctx, getIndex, strictMode),
-            Expr.Variable v when strictMode =>
-                throw StrictModeErrors.SyntaxError($"Delete of unqualified identifier '{v.Name.Lexeme}' in strict mode"),
-            Expr.Variable v => DeleteIdentifier(v.Name.Lexeme)
-                || SloppyModeWarnings.WarnAndReturn(false, "delete variable", $"delete {v.Name.Lexeme} returns false in sloppy mode"),
-            _ => true // Deleting other expressions returns true but does nothing
-        };
+            case Expr.Get get:
+                return await DeletePropertyCore(ctx, get, strictMode);
+            case Expr.GetIndex getIndex:
+                return await DeleteIndexedPropertyCore(ctx, getIndex, strictMode);
+            case Expr.Variable v when strictMode:
+                throw StrictModeErrors.SyntaxError($"Delete of unqualified identifier '{v.Name.Lexeme}' in strict mode");
+            case Expr.Variable v:
+                return DeleteIdentifier(v.Name.Lexeme)
+                    || SloppyModeWarnings.WarnAndReturn(false, "delete variable", $"delete {v.Name.Lexeme} returns false in sloppy mode");
+            default:
+                await ctx.EvaluateExprAsync(operand);
+                return true;
+        }
     }
 
     private bool DeleteIdentifier(string name)
@@ -1308,7 +1313,8 @@ public partial class Interpreter
             SharpTSRegExp regex => regex.DeleteProperty(name),
             SharpTSArrayGlobal arrayGlobal => arrayGlobal.DeleteProperty(name),
             SharpTSObjectNamespace objectNamespace => objectNamespace.DeleteProperty(name),
-            SharpTSGlobalThis globalThis => globalThis.DeleteProperty(name),
+            SharpTSGlobalThis globalThis =>
+                CompletePropertyDeletion(globalThis.DeleteProperty(name), name, strictMode, "global object"),
             ISharpTSPrimitiveConstructor constructor => constructor.DeletePropertyStrict(name, strictMode),
             SharpTSFunctionPrototype functionPrototype => functionPrototype.DeleteProperty(name),
             SharpTSArrayPrototype arrayPrototype => arrayPrototype.DeleteProperty(name),
@@ -1328,13 +1334,13 @@ public partial class Interpreter
                 when name == "prototype" =>
                     DeleteNonConfigurableClassPrototype(name, strictMode),
             SharpTSBuiltInConstructor constructor =>
-                CompleteFunctionPropertyDeletion(
+                CompletePropertyDeletion(
                     DeleteBuiltInConstructorProperty(constructor, name), name, strictMode),
             IBuiltInFunctionMetadata builtInFn => builtInFn.DeleteMetadataProperty(name),
             SharpTSFunction function => function.GetOwnPropertyDescriptor(name) is null
-                || CompleteFunctionPropertyDeletion(function.DeleteProperty(name), name, strictMode),
+                || CompletePropertyDeletion(function.DeleteProperty(name), name, strictMode),
             SharpTSArrowFunction arrow => arrow.GetOwnPropertyDescriptor(name) is null
-                || CompleteFunctionPropertyDeletion(arrow.DeleteProperty(name), name, strictMode),
+                || CompletePropertyDeletion(arrow.DeleteProperty(name), name, strictMode),
             Dictionary<string, object?> dict => dict.Remove(name),
             _ => true // Deleting non-existent property on primitive returns true
         };
@@ -1434,11 +1440,11 @@ public partial class Interpreter
         return deleted;
     }
 
-    private static bool CompleteFunctionPropertyDeletion(bool deleted, string name, bool strictMode)
+    private static bool CompletePropertyDeletion(bool deleted, string name, bool strictMode, string owner = "function")
     {
         if (!deleted && strictMode)
             throw new ThrowException(new SharpTSTypeError(
-                $"Cannot delete non-configurable property '{name}' of function"));
+                $"Cannot delete non-configurable property '{name}' of {owner}"));
         return deleted;
     }
 
