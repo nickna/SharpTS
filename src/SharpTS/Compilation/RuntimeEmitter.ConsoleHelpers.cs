@@ -7,6 +7,7 @@ namespace SharpTS.Compilation;
 public partial class RuntimeEmitter
 {
     private void EmitConsoleSingletonPopulate(TypeBuilder owner, EmittedConsoleRuntime console, FieldInfo undefined,
+        ConstructorInfo padUndefined,
         MethodBuilder populate, FieldBuilder singleton, BuiltinSingletonInputs inputs, MethodBuilder install)
     {
         var log = Adapt(console.LogMultiple, [_types.ObjectArray]);
@@ -21,8 +22,8 @@ public partial class RuntimeEmitter
             ("timeEnd", Adapt(console.TimeEnd, [_types.Object]), 0),
             ("timeLog", Adapt(console.TimeLog, [_types.ObjectArray]), 0),
             ("assert", Adapt(console.AssertMultiple, [_types.Object, _types.ObjectArray]), 0),
-            ("count", Adapt(console.Count, [_types.Object]), 0),
-            ("countReset", Adapt(console.CountReset, [_types.Object]), 0),
+            ("count", Adapt(console.Count, [_types.Object], defaultToUndefined: true), 0),
+            ("countReset", Adapt(console.CountReset, [_types.Object], defaultToUndefined: true), 0),
             ("table", Adapt(console.Table, [_types.Object, _types.Object]), 1),
             ("dir", Adapt(console.Dir, [_types.Object]), 1),
             ("group", group, 0), ("groupCollapsed", group, 0),
@@ -32,10 +33,12 @@ public partial class RuntimeEmitter
 
         // Let the normal function invocation path pack rest arguments and pad missing
         // parameters. All console helpers return void, which JS observes as undefined.
-        MethodBuilder Adapt(MethodInfo backing, Type[] parameters, MethodInfo? single = null)
+        MethodBuilder Adapt(MethodInfo backing, Type[] parameters, MethodInfo? single = null, bool defaultToUndefined = false)
         {
             var method = owner.DefineMethod(backing.Name + "Value", MethodAttributes.Public | MethodAttributes.Static,
                 _types.Object, parameters);
+            if (defaultToUndefined)
+                method.SetCustomAttribute(padUndefined, CustomAttributeEncoder.EmptyBlob);
             if (parameters.Length > 0 && parameters[^1] == _types.ObjectArray)
                 method.DefineParameter(parameters.Length, ParameterAttributes.None, "args").SetCustomAttribute(
                     typeof(ParamArrayAttribute).GetConstructor(Type.EmptyTypes)!, CustomAttributeEncoder.EmptyBlob);
@@ -568,23 +571,9 @@ public partial class RuntimeEmitter
 
         var il = method.GetILGenerator();
 
-        // Get label (default to "default" if null)
-        var notNullLabel = il.DefineLabel();
         var labelLocal = il.DeclareLocal(_types.String);
-
-        il.Emit(OpCodes.Ldarg_0);
-        il.Emit(OpCodes.Brtrue_S, notNullLabel);
-        il.Emit(OpCodes.Ldstr, "default");
+        EmitConsoleCounterLabel(il, runtime);
         il.Emit(OpCodes.Stloc, labelLocal);
-        var afterLabelInit = il.DefineLabel();
-        il.Emit(OpCodes.Br_S, afterLabelInit);
-
-        il.MarkLabel(notNullLabel);
-        il.Emit(OpCodes.Ldarg_0);
-        il.Emit(OpCodes.Call, runtime.StringCoercion.Stringify);
-        il.Emit(OpCodes.Stloc, labelLocal);
-
-        il.MarkLabel(afterLabelInit);
 
         // Initialize counts dictionary if null
         var dictInitialized = il.DefineLabel();
@@ -662,23 +651,9 @@ public partial class RuntimeEmitter
 
         var il = method.GetILGenerator();
 
-        // Get label (default to "default" if null)
-        var notNullLabel = il.DefineLabel();
         var labelLocal = il.DeclareLocal(_types.String);
-
-        il.Emit(OpCodes.Ldarg_0);
-        il.Emit(OpCodes.Brtrue_S, notNullLabel);
-        il.Emit(OpCodes.Ldstr, "default");
+        EmitConsoleCounterLabel(il, runtime);
         il.Emit(OpCodes.Stloc, labelLocal);
-        var afterLabelInit = il.DefineLabel();
-        il.Emit(OpCodes.Br_S, afterLabelInit);
-
-        il.MarkLabel(notNullLabel);
-        il.Emit(OpCodes.Ldarg_0);
-        il.Emit(OpCodes.Call, runtime.StringCoercion.Stringify);
-        il.Emit(OpCodes.Stloc, labelLocal);
-
-        il.MarkLabel(afterLabelInit);
 
         // Initialize counts dictionary if null
         var dictInitialized = il.DefineLabel();
@@ -696,6 +671,21 @@ public partial class RuntimeEmitter
         il.Emit(OpCodes.Callvirt, _types.GetMethod(_types.DictionaryStringObject, "set_Item"));
 
         il.Emit(OpCodes.Ret);
+    }
+
+    private static void EmitConsoleCounterLabel(ILGenerator il, EmittedRuntime runtime)
+    {
+        var stringify = il.DefineLabel();
+        var done = il.DefineLabel();
+        il.Emit(OpCodes.Ldarg_0);
+        il.Emit(OpCodes.Ldsfld, runtime.Sentinels.UndefinedInstance);
+        il.Emit(OpCodes.Bne_Un_S, stringify);
+        il.Emit(OpCodes.Ldstr, "default");
+        il.Emit(OpCodes.Br_S, done);
+        il.MarkLabel(stringify);
+        il.Emit(OpCodes.Ldarg_0);
+        il.Emit(OpCodes.Call, runtime.StringCoercion.Stringify);
+        il.MarkLabel(done);
     }
 
     /// <summary>

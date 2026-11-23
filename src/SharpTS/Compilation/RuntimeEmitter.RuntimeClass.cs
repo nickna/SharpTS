@@ -3520,7 +3520,8 @@ public partial class RuntimeEmitter
         EmitConsoleExtensions(typeBuilder, runtime);
         if (consoleSingleton is not null)
             EmitConsoleSingletonPopulate(typeBuilder, runtime.Console, runtime.Sentinels.UndefinedInstance,
-                populateConsole!, consoleSingleton, builtinSingletonInputs, installBuiltinSingletonDataProperty);
+                runtime.FunctionAttributes.PadUndefinedCtor, populateConsole!, consoleSingleton, builtinSingletonInputs,
+                installBuiltinSingletonDataProperty);
         // Crypto module methods — gated alongside the crypto type emissions.
         if (_features.UsesCrypto)
         {
