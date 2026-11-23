@@ -148,6 +148,20 @@ public class GlobalThisTests
     }
 
     [Theory, ModeData]
+    public void GlobalThis_BufferPresenceFollowsDeletionAndRecreation(ExecutionMode mode)
+    {
+        var result = TestHarness.Run("""
+            const root: any = globalThis;
+            const key = "Buf" + "fer";
+            console.log(key in root, Object.hasOwn(root, key), Reflect.has(root, key), typeof root[key]);
+            console.log(delete root[key], key in root);
+            root[key] = undefined;
+            console.log(key in root, Object.hasOwn(root, key), typeof root[key]);
+            """, mode);
+        Assert.Equal("true true true function\ntrue false\ntrue true undefined\n", result);
+    }
+
+    [Theory, ModeData]
     public void GlobalThis_HasPropertyChecksPresenceWithoutReadingValues(ExecutionMode mode)
     {
         var result = TestHarness.Run("""
