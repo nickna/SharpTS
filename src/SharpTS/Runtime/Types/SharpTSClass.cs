@@ -571,11 +571,7 @@ public partial class SharpTSClass(
         // The intrinsic slot is separate from mutable statics. Compatible
         // redefinitions preserve its identity without creating an overlay.
         if (name == "prototype")
-            return !descriptor.HasGet && !descriptor.HasSet
-                && !(descriptor.HasWritable && descriptor.Writable)
-                && !(descriptor.HasEnumerable && descriptor.Enumerable)
-                && !(descriptor.HasConfigurable && descriptor.Configurable)
-                && (!descriptor.HasValue || PropertySemantics.SameValue(descriptor.Value, Prototype));
+            return descriptor.CanRedefineFixedDataProperty(Prototype);
         MaterializeStaticAccessors();
         if (!HasOwnStaticMember(name) && !Compilation.PropertyDescriptorStore.IsExtensible(this))
             return false;
