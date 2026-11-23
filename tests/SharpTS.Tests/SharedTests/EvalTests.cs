@@ -14,6 +14,20 @@ namespace SharpTS.Tests.SharedTests;
 public class EvalTests
 {
     [Theory, ModeData]
+    public void StrictEvalHoistsCallableFunctionsInItsOwnScope(ExecutionMode mode)
+    {
+        const string source = """
+            eval('"use strict"; console.log(f()); function f() { return 3; }');
+            function run() {
+                'use strict';
+                return eval('var f; function f() { return 4; } () => f();');
+            }
+            console.log(run()(), typeof f);
+            """;
+        Assert.Equal("3\n4 undefined\n", TestHarness.RunUnchecked(source, mode));
+    }
+
+    [Theory, ModeData]
     public void SuspendedEvalFunctionsCallLaterSiblings(ExecutionMode mode)
     {
         const string source = """

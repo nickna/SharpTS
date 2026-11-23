@@ -1652,7 +1652,15 @@ public partial class Interpreter : IDisposable
         bool strict = previous.IsStrictMode || DirectivePrologue.HasUseStrict(statements);
         var variableEnvironment = strict ? new RuntimeEnvironment(previous, strictMode: true)
             : previous.EvalVariableEnvironment;
-        if (strict) variableEnvironment.EvalVariableEnvironment = variableEnvironment;
+        if (strict)
+        {
+            variableEnvironment.EvalVariableEnvironment = variableEnvironment;
+            // Initialize functions before var placeholders. For repeated declarations
+            // the last function supplies the value, even to calls before its declaration.
+            foreach (var statement in statements)
+                if (statement is Stmt.Function { Body: not null } function)
+                    variableEnvironment.Define(function.Name.Lexeme, CreateHoistedFunction(function, variableEnvironment));
+        }
         foreach (var (name, _) in Runtime.ParameterBinder.BodyVarDeclarations(statements))
             variableEnvironment.InstantiateEvalVar(name.Lexeme);
         _environment = new RuntimeEnvironment(previous, strictMode: strict)
