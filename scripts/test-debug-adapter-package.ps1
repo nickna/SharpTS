@@ -43,6 +43,7 @@ $environment = @{
     NUGET_PACKAGES = (Join-Path $runDirectory 'package-cache')
     NUGET_HTTP_CACHE_PATH = (Join-Path $runDirectory 'http-cache')
     DOTNET_CLI_HOME = (Join-Path $runDirectory 'cli-home')
+    DOTNET_ADD_GLOBAL_TOOLS_TO_PATH = 'false'
     DOTNET_CLI_TELEMETRY_OPTOUT = '1'
     DOTNET_SKIP_FIRST_TIME_EXPERIENCE = '1'
 }
@@ -93,6 +94,6 @@ try {
 }
 finally {
     foreach ($name in $previousEnvironment.Keys) {
-        [Environment]::SetEnvironmentVariable($name, $previousEnvironment[$name])
+        Set-Item -LiteralPath "Env:$name" -Value $previousEnvironment[$name]
     }
 }

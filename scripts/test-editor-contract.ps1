@@ -254,6 +254,7 @@ try {
         Set-Content -LiteralPath $nugetConfig -Encoding utf8NoBOM
     $isolatedEnvironment = @{
         NUGET_PACKAGES = $packages; NUGET_HTTP_CACHE_PATH = $httpCache; DOTNET_CLI_HOME = $cliHome
+        DOTNET_ADD_GLOBAL_TOOLS_TO_PATH = 'false'
         DOTNET_CLI_TELEMETRY_OPTOUT = '1'; DOTNET_SKIP_FIRST_TIME_EXPERIENCE = '1'
     }
     $null = Invoke-RequiredProcess 'install-exact-language-server' 'dotnet' @('tool', 'install',
