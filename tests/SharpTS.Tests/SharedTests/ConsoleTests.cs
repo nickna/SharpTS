@@ -11,7 +11,7 @@ namespace SharpTS.Tests.SharedTests;
 /// </summary>
 public class ConsoleTests
 {
-    [Theory, CompiledOnlyData]
+    [Theory, ModeData]
     public void FixedArityCallsEvaluateAllArgumentsBeforeRunning(ExecutionMode mode)
     {
         const string source = """
