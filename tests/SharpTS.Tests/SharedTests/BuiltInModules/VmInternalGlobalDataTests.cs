@@ -62,6 +62,20 @@ public sealed class VmInternalGlobalDataTests
 
     public static IEnumerable<object[]> Cases()
     {
+        yield return ["empty-sandbox-descriptor", """
+            import { createContext, runInContext } from "node:vm";
+            const ctx: any = createContext({ x: 44, y: 1 });
+            Object.defineProperty(ctx, "fixed", { value: 8 });
+            runInContext("var y = 12", ctx);
+            console.log(runInContext('Reflect.defineProperty(globalThis, "x", {})', ctx),
+                        runInContext('Object.defineProperty(globalThis, "y", {}) === globalThis', ctx),
+                        runInContext('Reflect.defineProperty(globalThis, "fixed", {})', ctx));
+            const d = Object.getOwnPropertyDescriptor(ctx, "x");
+            console.log(ctx.x, ctx.y, ctx.fixed, d.writable, d.enumerable, d.configurable);
+            delete ctx.x;
+            delete ctx.y;
+            console.log(runInContext('"x" in globalThis', ctx), runInContext("y", ctx));
+            """, "true true true\nundefined undefined 8 true true true\nfalse 12\n"];
         yield return ["original", "import * as vm from \"node:vm\";const ctx:any=vm.createContext({});vm.runInContext(\"globalThis.foo=1\",ctx);ctx.foo=7;console.log(vm.runInContext(\"String(foo)\",ctx));delete ctx.foo;console.log(vm.runInContext(\"String(globalThis.foo)\",ctx));", "7\n1\n"];
         yield return ["successive-writes", "import * as vm from 'node:vm';const ctx:any=vm.createContext({});vm.runInContext('globalThis.foo=1',ctx);vm.runInContext('foo=3',ctx);ctx.foo=7;delete ctx.foo;console.log(vm.runInContext('String(foo)',ctx));", "3\n"];
         yield return ["inside-delete", "import * as vm from 'node:vm';const ctx:any=vm.createContext({});vm.runInContext('globalThis.foo=1',ctx);ctx.foo=7;console.log(vm.runInContext('String(delete globalThis.foo)+\":\"+typeof foo',ctx),Object.prototype.hasOwnProperty.call(ctx,'foo'));", "true:undefined false\n"];

@@ -11,6 +11,24 @@ public sealed partial class SharpTSGlobalThis
 
     private SharpTSPropertyDescriptor? ContextDescriptor(string name) => _vmContext?.GetDescriptor(name);
 
+    private bool DefineEmptySandboxProperty(string name, SharpTSPropertyDescriptor sandboxProperty)
+    {
+        // Node's contextified global forwards an empty descriptor to the sandbox
+        // as { value: undefined }. The internal binding keeps its original value
+        // and becomes visible again if the caller later deletes the sandbox slot.
+        var internalProperty = _properties.GetOwnPropertyDescriptor(name);
+        if (internalProperty is { HasValue: true, Configurable: false, Writable: false }
+            || (internalProperty is null && IsNonConfigurableIntrinsic(name))
+            || (!sandboxProperty.Configurable && !sandboxProperty.Writable))
+            return true;
+
+        return _vmContext!.Define(name, new SharpTSPropertyDescriptor
+        {
+            HasValue = true,
+            Value = SharpTSUndefined.Instance
+        });
+    }
+
     internal bool TryGetContextIntrinsic(string name, out object? value)
     {
         value = null;
