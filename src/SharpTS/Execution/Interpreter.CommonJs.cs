@@ -163,6 +163,7 @@ public partial class Interpreter
 
         using (PushModuleContext(moduleEnv, module, moduleInstance))
         {
+            RecordScriptLexicals(module.Statements);
             HoistFunctionDeclarations(module.Statements);
             HoistLocalLoopVarDeclarations(module.Statements);
 

@@ -260,9 +260,21 @@ public partial class Interpreter
         return blockResult;
     }
 
+    private static IEnumerable<Token> ScopeLexicalNames(IEnumerable<Stmt> statements) =>
+        LexicalDeclarationBindings.Collect(statements).Concat(
+            statements.OfType<Stmt.Class>().Where(declaration => !declaration.IsDeclare).Select(declaration => declaration.Name));
+
+    // Script entry points materialize their slots in source order. Eval needs the
+    // declaration names from the start without changing ordinary identifier reads.
+    private void RecordScriptLexicals(IEnumerable<Stmt> statements)
+    {
+        foreach (var name in ScopeLexicalNames(statements))
+            _environment.RecordVariableScopeLexical(name.Lexeme);
+    }
+
     private void ReserveLexicalDeclarations(IEnumerable<Stmt> statements)
     {
-        foreach (var name in LexicalDeclarationBindings.Collect(statements))
+        foreach (var name in ScopeLexicalNames(statements))
         {
             if (name.IsGeneratedTemporary && _environment.VmLexicalBindings is not null) continue;
             _environment.ReserveLexical(name.Lexeme);
@@ -429,8 +441,6 @@ public partial class Interpreter
         {
             var statements = statement.Clauses.SelectMany(clause => clause.Body);
             ReserveLexicalDeclarations(statements);
-            foreach (var declaration in statements.OfType<Stmt.Class>())
-                _environment.ReserveLexical(declaration.Name.Lexeme);
             HoistFunctionDeclarations(statements);
             return scope;
         }

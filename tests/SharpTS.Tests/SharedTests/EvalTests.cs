@@ -13,6 +13,33 @@ namespace SharpTS.Tests.SharedTests;
 /// </summary>
 public class EvalTests
 {
+    [Theory, InterpretedOnlyData]
+    public void SloppyEvalChecksEveryDeclarationBeforeCreatingBindings(ExecutionMode mode)
+    {
+        const string source = """
+            {
+                let x = 1;
+                for (const code of ["var x = 2", "var leaked; function x() {}"]) {
+                    try { eval(code); } catch (e) { console.log(e.name); }
+                }
+                console.log(x, "leaked" in globalThis);
+            }
+            try { eval("function later() {}"); } catch (e) { console.log(e.name); }
+            const later = 3;
+            function run(p) {
+                let local = 4;
+                try { eval("var local;"); } catch (e) { console.log(e.name); }
+                eval("var p = 5;");
+                try { throw 1; } catch (caught) { eval("var caught;"); }
+                console.log(local, p, typeof caught);
+            }
+            run(1);
+            console.log(typeof x, later);
+            """;
+        Assert.Equal("SyntaxError\nSyntaxError\n1 false\nSyntaxError\nSyntaxError\n4 5 undefined\nundefined 3\n",
+            TestHarness.RunUnchecked(source, mode));
+    }
+
     [Theory, ModeData]
     public void SloppyEvalFunctionsRemainInTheCallersVariableEnvironment(ExecutionMode mode)
     {

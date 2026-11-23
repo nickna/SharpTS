@@ -1454,6 +1454,7 @@ public partial class Interpreter : IDisposable
             // `var` declarations are instantiated before any top-level code runs;
             // their initializer still executes in source order.
             HoistTopLevelVarDeclarations(statements);
+            RecordScriptLexicals(statements);
 
             // Hoist function declarations first
             HoistFunctionDeclarations(statements);
@@ -1543,6 +1544,7 @@ public partial class Interpreter : IDisposable
     {
         _typeMap = typeMap;
         object? lastExprValue = null;
+        RecordScriptLexicals(statements);
 
         // Hoist function declarations first
         HoistFunctionDeclarations(statements);
@@ -1656,9 +1658,16 @@ public partial class Interpreter : IDisposable
         bool strict = _environment.IsStrictMode || DirectivePrologue.HasUseStrict(statements);
         var lexical = new RuntimeEnvironment(_environment, strictMode: strict);
         var variables = strict ? lexical : _environment.EvalVariableEnvironment;
+        var declarations = Runtime.ParameterBinder.InterpreterBodyVarDeclarations(statements);
+        if (!strict)
+            foreach (var (name, _) in declarations)
+                if (_environment.ConflictsWithEvalVar(name.Lexeme, variables))
+                    throw new ThrowException(new SharpTSSyntaxError($"Identifier '{name.Lexeme}' has already been declared"));
+
         lexical.VarDeclarationTarget = lexical.EvalVariableEnvironment = variables;
         using var scope = PushScope(lexical);
-        foreach (var (name, isFunction) in Runtime.ParameterBinder.InterpreterBodyVarDeclarations(statements))
+        ReserveLexicalDeclarations(statements);
+        foreach (var (name, isFunction) in declarations)
             if (!isFunction)
                 InstantiateEvalVariable(variables, name.Lexeme);
         foreach (var statement in statements)
@@ -1822,6 +1831,7 @@ public partial class Interpreter : IDisposable
 
             // Hoist function declarations first
             HoistFunctionDeclarations(script.Statements);
+            RecordScriptLexicals(script.Statements);
             HoistLocalLoopVarDeclarations(script.Statements);
 
             // Execute all statements in the shared environment
