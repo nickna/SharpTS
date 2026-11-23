@@ -75,6 +75,7 @@ public class RuntimeEnvironment : ScopeChain<RuntimeValue, RuntimeEnvironment>
     internal RuntimeEnvironment? VarDeclarationTarget { get; set; }
 
     private RuntimeEnvironment? _evalVariableEnvironment;
+    internal bool IsEvalScope { get; init; }
     internal bool IsGlobalVariableEnvironment { get; init; }
     internal RuntimeEnvironment EvalVariableEnvironment
     {
@@ -263,6 +264,20 @@ public class RuntimeEnvironment : ScopeChain<RuntimeValue, RuntimeEnvironment>
     }
 
     internal bool HasObjectBinding(string name) => _objectBindings?.ContainsKey(name) == true;
+
+    internal bool DeleteLocalBinding(string name, SharpTSGlobalThis global)
+    {
+        if (HasObjectBinding(name))
+        {
+            if (!global.DeleteProperty(name)) return false;
+            _objectBindings!.Remove(name);
+        }
+        else if (_evalVarNames?.Remove(name) != true)
+            return false;
+
+        _values!.Remove(name);
+        return true;
+    }
 
     private void SetLocalValue(string name, RuntimeValue value, bool? strictMode = null)
     {

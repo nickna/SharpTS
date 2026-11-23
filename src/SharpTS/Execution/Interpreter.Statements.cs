@@ -2058,6 +2058,10 @@ public partial class Interpreter
     internal ExecutionResult VisitVar(Stmt.Var varStmt)
     {
         if (varStmt.IsDeclare) return ExecutionResult.Success();
+        // Eval instantiated every var before execution. A later declaration
+        // without an initializer must not recreate a binding deleted in the meantime.
+        if (_environment.IsEvalScope && varStmt.IsVar && varStmt.Initializer is null)
+            return ExecutionResult.Success();
         object? value = SharpTSUndefined.Instance;
         if (varStmt.Initializer != null)
         {

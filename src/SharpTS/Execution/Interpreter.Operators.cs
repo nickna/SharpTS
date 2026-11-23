@@ -1219,17 +1219,37 @@ public partial class Interpreter
     private async ValueTask<bool> DeleteCore(IEvaluationContext ctx, Expr.Delete delete)
     {
         bool strictMode = _environment.IsStrictMode;
-
-        return delete.Operand switch
+        var operand = delete.Operand;
+        while (operand is Expr.Grouping grouping) operand = grouping.Expression;
+        return operand switch
         {
             Expr.Get get => await DeletePropertyCore(ctx, get, strictMode),
             Expr.GetIndex getIndex => await DeleteIndexedPropertyCore(ctx, getIndex, strictMode),
             Expr.Variable v when strictMode =>
                 throw StrictModeErrors.SyntaxError($"Delete of unqualified identifier '{v.Name.Lexeme}' in strict mode"),
-            Expr.Variable v =>
-                SloppyModeWarnings.WarnAndReturn(false, "delete variable", $"delete {v.Name.Lexeme} returns false in sloppy mode"),
+            Expr.Variable v => DeleteIdentifier(v.Name.Lexeme)
+                || SloppyModeWarnings.WarnAndReturn(false, "delete variable", $"delete {v.Name.Lexeme} returns false in sloppy mode"),
             _ => true // Deleting other expressions returns true but does nothing
         };
+    }
+
+    private bool DeleteIdentifier(string name)
+    {
+        var global = _environment.VmGlobalObject ?? GlobalThis;
+        for (var scope = _environment; scope is not null; scope = scope.Enclosing)
+        {
+            if (scope.HasVariableScopeLexical(name)) return false;
+            if (scope.IsDefinedLocally(name))
+                return scope.DeleteLocalBinding(name, global);
+        }
+
+        if (name is BuiltInNames.Undefined or BuiltInNames.NaN or BuiltInNames.Infinity)
+            return false;
+        // An unresolvable reference also deletes successfully. Avoid creating
+        // a deletion marker on the global object for a name it never exposed.
+        if (global.HasProperty(name) || IsMutableGlobalObjectBinding(name) || name == "global")
+            return global.DeleteProperty(name);
+        return true;
     }
 
     /// <summary>

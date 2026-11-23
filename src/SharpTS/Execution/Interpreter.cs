@@ -1656,7 +1656,7 @@ public partial class Interpreter : IDisposable
 
         var statements = WithStatementLowering.ApplyEvalEnvironments(parseResult.Statements, objectEnvironments);
         bool strict = _environment.IsStrictMode || DirectivePrologue.HasUseStrict(statements);
-        var lexical = new RuntimeEnvironment(_environment, strictMode: strict);
+        var lexical = new RuntimeEnvironment(_environment, strictMode: strict) { IsEvalScope = true };
         var variables = strict ? lexical : _environment.EvalVariableEnvironment;
         var declarations = Runtime.ParameterBinder.InterpreterBodyVarDeclarations(statements);
         if (!strict)
