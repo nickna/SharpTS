@@ -3401,6 +3401,12 @@ public partial class RuntimeEmitter
                 )
             );
         }
+        if (runtime.Buffer is { } buffer)
+        {
+            if (buffer.HasTypedArrayCopy)
+                EmitBufferCopyBytesFrom(typeBuilder, runtime);
+            EmitBufferFromValue(typeBuilder, runtime, buffer);
+        }
         // Fill the forward-declared lookup only after all backing statics,
         // including optional Map.groupBy, have been declared. Earlier property
         // and descriptor bodies retain the same forward MethodBuilder.
@@ -3413,7 +3419,7 @@ public partial class RuntimeEmitter
                 runtime.Symbols.Type, runtime.Symbols.For, runtime.Symbols.KeyFor,
                 runtime.BigInt.Implementation, _features.UsesPromise ? runtime.RequirePromise() : null,
                 runtime.Errors.Type, runtime.Errors.IsError, runtime.Dates.Implementation, runtime.Map,
-                runtime.ArrayBuffer));
+                runtime.ArrayBuffer, runtime.Buffer));
         runtime.BuiltInStatics.CompleteEmission();
         // Set methods — gated on UsesSet.
         if (runtime.Set is not null)

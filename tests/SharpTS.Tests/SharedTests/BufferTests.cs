@@ -37,6 +37,33 @@ public class BufferTests
     }
 
     [Theory, ModeData]
+    public void Buffer_FromResolvesTheCurrentReceiverBeforeEvaluatingArguments(ExecutionMode mode)
+    {
+        const string source = """
+            const root = globalThis;
+            const original = root.Buffer;
+            console.log(Buffer.from("6869", "hex").toString());
+            const replacement = {
+                get from() {
+                    console.log("get");
+                    return function (value) { return this === replacement && value === "ascii"; };
+                }
+            };
+            root.Buffer = replacement;
+            function reset() { console.log("arg"); root.Buffer = original; return "ascii"; }
+            console.log(Buffer.from(...[reset()]));
+            console.log(Buffer.from("restored").toString());
+            function* callFrom() { return Buffer.from(yield "waiting"); }
+            root.Buffer = replacement;
+            const call = callFrom();
+            console.log(call.next().value);
+            root.Buffer = original;
+            console.log(call.next("ascii").value);
+            """;
+        Assert.Equal("hi\nget\narg\ntrue\nrestored\nget\nwaiting\ntrue\n", TestHarness.RunUnchecked(source, mode));
+    }
+
+    [Theory, ModeData]
     public void Buffer_Alloc_Works(ExecutionMode mode)
     {
         var source = """
@@ -1126,6 +1153,19 @@ public class BufferTests
     #endregion
 
     #region buffer module exports (#1160)
+
+    [Theory, ModeData]
+    public void BufferModule_ImportedConstructorCanCallFromThroughAnAlias(ExecutionMode mode)
+    {
+        var files = new Dictionary<string, string>
+        {
+            ["main.ts"] = """
+                import { Buffer as ImportedBuffer } from 'node:buffer';
+                console.log(typeof ImportedBuffer, ImportedBuffer.from('hi').toString());
+                """
+        };
+        Assert.Equal("function hi\n", TestHarness.RunModules(files, "main.ts", mode));
+    }
 
     [Theory, ModeData]
     public void BufferModule_AtobBtoa_RoundTrip(ExecutionMode mode)

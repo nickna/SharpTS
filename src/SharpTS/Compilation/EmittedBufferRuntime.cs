@@ -63,6 +63,13 @@ public sealed class EmittedBufferRuntime
         internal set => Set(ref _fromBuffer, value);
     }
 
+    private MethodBuilder? _fromValue;
+    public MethodBuilder FromValue
+    {
+        get => Require(_fromValue);
+        internal set => Set(ref _fromValue, value);
+    }
+
     private MethodBuilder? _alloc;
     public MethodBuilder Alloc
     {
@@ -608,6 +615,7 @@ public sealed class EmittedBufferRuntime
         _ = FromString;
         _ = FromArray;
         _ = FromBuffer;
+        _ = FromValue;
         _ = Alloc;
         _ = AllocUnsafe;
         _ = Concat;

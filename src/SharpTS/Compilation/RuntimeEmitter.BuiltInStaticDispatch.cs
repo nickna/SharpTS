@@ -32,7 +32,7 @@ public partial class RuntimeEmitter
         Type SymbolType, MethodInfo SymbolFor, MethodInfo SymbolKeyFor,
         EmittedBigIntImplementation? BigInt, EmittedPromiseRuntime? Promise,
         Type ErrorType, MethodInfo ErrorIsError, EmittedDateImplementation? Dates,
-        EmittedMapRuntime? Map, EmittedArrayBufferRuntime? ArrayBuffer);
+        EmittedMapRuntime? Map, EmittedArrayBufferRuntime? ArrayBuffer, EmittedBufferRuntime? Buffer);
 
     /// <summary>
     /// Defines the <c>LookupBuiltInStaticMember</c> <see cref="MethodBuilder"/>
@@ -112,6 +112,9 @@ public partial class RuntimeEmitter
 
         if (inputs.ArrayBuffer is { } arrayBuffer)
             EmitLookup(arrayBuffer.Type, "isView", arrayBuffer.IsView, 1);
+
+        if (inputs.Buffer is { } buffer)
+            EmitLookup(buffer.Type, "from", buffer.FromValue, 1);
 
         if (inputs.Map is { } map)
             EmitLookup(_types.DictionaryObjectObject, "groupBy", map.GroupBy, 2);

@@ -5,6 +5,73 @@ namespace SharpTS.Compilation;
 
 public partial class RuntimeEmitter
 {
+    private void EmitBufferFromValue(TypeBuilder owner, EmittedRuntime runtime, EmittedBufferRuntime buffer)
+    {
+        var method = owner.DefineMethod("BufferFromValue", MethodAttributes.Public | MethodAttributes.Static,
+            _types.Object, [_types.Object, _types.Object]);
+        buffer.FromValue = method;
+        var il = method.GetILGenerator();
+
+        var text = il.DeclareLocal(_types.String);
+        var notString = il.DefineLabel();
+        il.Emit(OpCodes.Ldarg_0);
+        il.Emit(OpCodes.Isinst, _types.String);
+        il.Emit(OpCodes.Stloc, text);
+        il.Emit(OpCodes.Ldloc, text);
+        il.Emit(OpCodes.Brfalse, notString);
+        var hasEncoding = il.DefineLabel();
+        il.Emit(OpCodes.Ldloc, text);
+        il.Emit(OpCodes.Ldarg_1);
+        il.Emit(OpCodes.Isinst, _types.String);
+        il.Emit(OpCodes.Dup);
+        il.Emit(OpCodes.Brtrue, hasEncoding);
+        il.Emit(OpCodes.Pop);
+        il.Emit(OpCodes.Ldstr, "utf8");
+        il.MarkLabel(hasEncoding);
+        il.Emit(OpCodes.Call, buffer.FromString);
+        il.Emit(OpCodes.Ret);
+        il.MarkLabel(notString);
+
+        EmitTypedCase(buffer.Type, () => il.Emit(OpCodes.Call, buffer.FromBuffer));
+        if (runtime.ArrayBuffer is { } arrayBuffer)
+        {
+            // ArrayBuffer input shares the underlying bytes.
+            EmitTypedCase(arrayBuffer.Type, () =>
+            {
+                il.Emit(OpCodes.Callvirt, arrayBuffer.GetBuffer);
+                il.Emit(OpCodes.Newobj, buffer.Ctor);
+            });
+        }
+        if (buffer.HasTypedArrayCopy)
+        {
+            EmitTypedCase(runtime.TypedArrays.RequireImplementation().BaseType, () =>
+            {
+                il.Emit(OpCodes.Ldnull);
+                il.Emit(OpCodes.Ldnull);
+                il.Emit(OpCodes.Call, buffer.CopyBytesFrom);
+            });
+        }
+        EmitTypedCase(_types.ListOfObject, () => il.Emit(OpCodes.Call, buffer.FromArray));
+
+        il.Emit(OpCodes.Ldarg_0);
+        il.Emit(OpCodes.Call, runtime.ObjectOperations.Values);
+        il.Emit(OpCodes.Call, buffer.FromArray);
+        il.Emit(OpCodes.Ret);
+
+        void EmitTypedCase(Type type, Action emitConversion)
+        {
+            var next = il.DefineLabel();
+            il.Emit(OpCodes.Ldarg_0);
+            il.Emit(OpCodes.Isinst, type);
+            il.Emit(OpCodes.Brfalse, next);
+            il.Emit(OpCodes.Ldarg_0);
+            il.Emit(OpCodes.Castclass, type);
+            emitConversion();
+            il.Emit(OpCodes.Ret);
+            il.MarkLabel(next);
+        }
+    }
+
     /// <summary>
     /// Emits: public static $Buffer FromString(string data, string encoding)
     /// </summary>
