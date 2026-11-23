@@ -27,6 +27,18 @@ public class ConsoleTests
     #region Basic Output
 
     [Theory, ModeData]
+    public void InfoCanBeExtractedAndPassedAsACallback(ExecutionMode mode)
+    {
+        const string source = """
+            const info = console.info;
+            console.log(info === globalThis.console["info"], info === console.log);
+            console.log(info("%s %d", "value", 2) === undefined);
+            Promise.resolve(3).then(info);
+            """;
+        Assert.Equal("true false\nvalue 2\ntrue\n3\n", TestHarness.RunUnchecked(source, mode));
+    }
+
+    [Theory, ModeData]
     public void Console_Log_OutputsToStdout(ExecutionMode mode)
     {
         var source = """

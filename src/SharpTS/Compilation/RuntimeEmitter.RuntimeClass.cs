@@ -3165,7 +3165,7 @@ public partial class RuntimeEmitter
             logIL.Emit(OpCodes.Ldsfld, runtime.Sentinels.UndefinedInstance);
             logIL.Emit(OpCodes.Ret);
             EmitBuiltinSingletonPopulate(populateConsole!, consoleSingleton, builtinSingletonInputs,
-                installBuiltinSingletonDataProperty, [("log", log, 0)], "console");
+                installBuiltinSingletonDataProperty, [("log", log, 0), ("info", log, 0)], "console");
         }
         // BigInt methods — gated on UsesBigInt. Detector flips it on for any
         // `123n` literal, bare `BigInt` identifier, or BigInt64Array/BigUint64Array
