@@ -6,6 +6,67 @@ namespace SharpTS.Compilation;
 
 public partial class RuntimeEmitter
 {
+    private void EmitConsoleSingletonPopulate(TypeBuilder owner, EmittedConsoleRuntime console, FieldInfo undefined,
+        MethodBuilder populate, FieldBuilder singleton, BuiltinSingletonInputs inputs, MethodBuilder install)
+    {
+        var log = Adapt(console.LogMultiple, [_types.ObjectArray]);
+        var group = Adapt(console.GroupMultiple, [_types.ObjectArray], console.Group);
+        EmitBuiltinSingletonPopulate(populate, singleton, inputs, install,
+        [
+            ("log", log, 0), ("info", log, 0), ("debug", log, 0),
+            ("error", Adapt(console.ErrorMultiple, [_types.ObjectArray], console.Error), 0),
+            ("warn", Adapt(console.WarnMultiple, [_types.ObjectArray], console.Warn), 0),
+            ("clear", Adapt(console.Clear, []), 0),
+            ("time", Adapt(console.Time, [_types.Object]), 0),
+            ("timeEnd", Adapt(console.TimeEnd, [_types.Object]), 0),
+            ("timeLog", Adapt(console.TimeLog, [_types.Object]), 0),
+            ("assert", Adapt(console.AssertMultiple, [_types.Object, _types.ObjectArray]), 0),
+            ("count", Adapt(console.Count, [_types.Object]), 0),
+            ("countReset", Adapt(console.CountReset, [_types.Object]), 0),
+            ("table", Adapt(console.Table, [_types.Object, _types.Object]), 1),
+            ("dir", Adapt(console.Dir, [_types.Object]), 1),
+            ("group", group, 0), ("groupCollapsed", group, 0),
+            ("groupEnd", Adapt(console.GroupEnd, []), 0),
+            ("trace", Adapt(console.TraceMultiple, [_types.ObjectArray], console.Trace), 0)
+        ], "console");
+
+        // Let the normal function invocation path pack rest arguments and pad missing
+        // parameters. All console helpers return void, which JS observes as undefined.
+        MethodBuilder Adapt(MethodInfo backing, Type[] parameters, MethodInfo? single = null)
+        {
+            var method = owner.DefineMethod(backing.Name + "Value", MethodAttributes.Public | MethodAttributes.Static,
+                _types.Object, parameters);
+            if (parameters.Length > 0 && parameters[^1] == _types.ObjectArray)
+                method.DefineParameter(parameters.Length, ParameterAttributes.None, "args").SetCustomAttribute(
+                    typeof(ParamArrayAttribute).GetConstructor(Type.EmptyTypes)!, CustomAttributeEncoder.EmptyBlob);
+            var il = method.GetILGenerator();
+            var done = il.DefineLabel();
+            if (single is not null)
+            {
+                // Direct calls use JS stringification for a single value.
+                var multiple = il.DefineLabel();
+                il.Emit(OpCodes.Ldarg_0);
+                il.Emit(OpCodes.Ldlen);
+                il.Emit(OpCodes.Conv_I4);
+                il.Emit(OpCodes.Ldc_I4_1);
+                il.Emit(OpCodes.Bne_Un_S, multiple);
+                il.Emit(OpCodes.Ldarg_0);
+                il.Emit(OpCodes.Ldc_I4_0);
+                il.Emit(OpCodes.Ldelem_Ref);
+                il.Emit(OpCodes.Call, single);
+                il.Emit(OpCodes.Br_S, done);
+                il.MarkLabel(multiple);
+            }
+            for (short i = 0; i < parameters.Length; i++)
+                il.Emit(OpCodes.Ldarg, i);
+            il.Emit(OpCodes.Call, backing);
+            il.MarkLabel(done);
+            il.Emit(OpCodes.Ldsfld, undefined);
+            il.Emit(OpCodes.Ret);
+            return method;
+        }
+    }
+
     /// <summary>
     /// Emits console extension methods (error, warn, info, debug, clear, time, timeEnd, timeLog, and Phase 2 methods).
     /// </summary>
@@ -440,6 +501,16 @@ public partial class RuntimeEmitter
 
         var il = method.GetILGenerator();
         var isTruthyLabel = il.DefineLabel();
+
+        var hasMessage = il.DefineLabel();
+        il.Emit(OpCodes.Ldarg_1);
+        il.Emit(OpCodes.Ldlen);
+        il.Emit(OpCodes.Brtrue_S, hasMessage);
+        il.Emit(OpCodes.Ldarg_0);
+        il.Emit(OpCodes.Ldarg_1);
+        il.Emit(OpCodes.Call, runtime.Console.Assert);
+        il.Emit(OpCodes.Ret);
+        il.MarkLabel(hasMessage);
 
         // Check if condition is truthy
         il.Emit(OpCodes.Ldarg_0);
@@ -986,12 +1057,17 @@ public partial class RuntimeEmitter
         var il = method.GetILGenerator();
 
         // Print string.Join(" ", args)
+        var increment = il.DefineLabel();
+        il.Emit(OpCodes.Ldarg_0);
+        il.Emit(OpCodes.Ldlen);
+        il.Emit(OpCodes.Brfalse_S, increment);
         il.Emit(OpCodes.Ldstr, " ");
         il.Emit(OpCodes.Ldarg_0);
         il.Emit(OpCodes.Call, _types.GetMethod(_types.String, "Join", _types.String, _types.ObjectArray));
         il.Emit(OpCodes.Call, _types.GetMethod(_types.Console, "WriteLine", _types.String));
 
         // _consoleGroupLevel++
+        il.MarkLabel(increment);
         il.Emit(OpCodes.Ldsfld, console.GroupLevelField);
         il.Emit(OpCodes.Ldc_I4_1);
         il.Emit(OpCodes.Add);

@@ -3153,20 +3153,6 @@ public partial class RuntimeEmitter
         EmitMathSingletonPopulate(runtime.Math, builtinSingletonInputs, installBuiltinSingletonDataProperty,
             runtime.FunctionAttributes.PadUndefinedCtor);
         EmitJsonSingletonPopulate(runtime.Json, builtinSingletonInputs, installBuiltinSingletonDataProperty);
-        if (consoleSingleton is not null)
-        {
-            var log = typeBuilder.DefineMethod("ConsoleLogValue", MethodAttributes.Public | MethodAttributes.Static,
-                _types.Object, [_types.ObjectArray]);
-            log.DefineParameter(1, ParameterAttributes.None, "args").SetCustomAttribute(
-                typeof(ParamArrayAttribute).GetConstructor(Type.EmptyTypes)!, CustomAttributeEncoder.EmptyBlob);
-            var logIL = log.GetILGenerator();
-            logIL.Emit(OpCodes.Ldarg_0);
-            logIL.Emit(OpCodes.Call, runtime.Console.LogMultiple);
-            logIL.Emit(OpCodes.Ldsfld, runtime.Sentinels.UndefinedInstance);
-            logIL.Emit(OpCodes.Ret);
-            EmitBuiltinSingletonPopulate(populateConsole!, consoleSingleton, builtinSingletonInputs,
-                installBuiltinSingletonDataProperty, [("log", log, 0), ("info", log, 0)], "console");
-        }
         // BigInt methods — gated on UsesBigInt. Detector flips it on for any
         // `123n` literal, bare `BigInt` identifier, or BigInt64Array/BigUint64Array
         // typed-array reference. EmitBigIntBinary in ILEmitter.Operators.cs only
@@ -3526,6 +3512,9 @@ public partial class RuntimeEmitter
         DefineUtilInspectSignatures(typeBuilder, runtime.Inspection);
         // Console extensions (error, warn, clear, time, timeEnd, timeLog)
         EmitConsoleExtensions(typeBuilder, runtime);
+        if (consoleSingleton is not null)
+            EmitConsoleSingletonPopulate(typeBuilder, runtime.Console, runtime.Sentinels.UndefinedInstance,
+                populateConsole!, consoleSingleton, builtinSingletonInputs, installBuiltinSingletonDataProperty);
         // Crypto module methods — gated alongside the crypto type emissions.
         if (_features.UsesCrypto)
         {
