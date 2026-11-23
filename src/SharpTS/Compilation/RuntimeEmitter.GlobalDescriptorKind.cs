@@ -5,6 +5,10 @@ namespace SharpTS.Compilation;
 
 public partial class RuntimeEmitter
 {
+    private IEnumerable<string> ConfigurableGlobalIntrinsicNames => _features.UsesConsoleObject
+        ? BuiltInNames.ConfigurableGlobalIntrinsicNames.Append(BuiltInNames.Console)
+        : BuiltInNames.ConfigurableGlobalIntrinsicNames;
+
     private void EmitGlobalThisIntrinsicDescriptorKind(EmittedGlobalObjectRuntime globalObject)
     {
         var il = globalObject.IntrinsicDescriptorKind.GetILGenerator();
@@ -12,13 +16,8 @@ public partial class RuntimeEmitter
         var constant = il.DefineLabel();
         // This is the existing JavaScript descriptor-name table. It carries
         // property attributes only, with no CLR type or callable admission.
-        foreach (var name in new[] { "parseInt", "parseFloat", "isNaN", "isFinite", "eval",
-            "globalThis", "Array", "ArrayBuffer", "Date", "RegExp", "Map", "Set", "WeakMap", "WeakSet",
-            "Promise", "Function", "Object", "Number", "String", "Boolean", "Symbol", "Error", "TypeError",
-            "RangeError", "ReferenceError", "SyntaxError", "URIError", "EvalError", "AggregateError", "Math",
-            "JSON", "AbortController" })
+        foreach (var name in ConfigurableGlobalIntrinsicNames)
             EmitName(name, writable);
-        if (_features.UsesConsoleObject) EmitName("console", writable);
         foreach (var name in BuiltInNames.GlobalConstantNames) EmitName(name, constant);
         il.Emit(OpCodes.Ldc_I4_0);
         il.Emit(OpCodes.Ret);

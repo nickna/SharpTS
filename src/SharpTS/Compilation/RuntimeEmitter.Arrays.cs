@@ -1376,6 +1376,7 @@ public partial class RuntimeEmitter
         il.Emit(OpCodes.Ldsfld, inputs.GlobalSingleton);
         il.Emit(OpCodes.Bne_Un, notGlobal);
         foreach (var name in BuiltInNames.GlobalConstantNames) AddName(name);
+        foreach (var name in ConfigurableGlobalIntrinsicNames) AddInitialOwnName(name);
         il.MarkLabel(notGlobal);
 
         // Intrinsic slots are created with the function, before user expandos.
