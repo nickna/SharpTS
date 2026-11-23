@@ -1185,27 +1185,7 @@ public partial class ILEmitter
                 break;
 
             case Expr.Variable v:
-                if (_ctx.IsStrictMode)
-                {
-                    // Strict mode: throw SyntaxError
-                    IL.Emit(OpCodes.Ldstr, $"Delete of unqualified identifier '{v.Name.Lexeme}' in strict mode");
-                    EmitCallUnknown(_ctx.Runtime!.Errors.ThrowStrictSyntaxError);
-                    // ThrowStrictSyntaxError throws, but we need a value on stack for IL verification
-                    EmitBoolConstant(false);
-                }
-                else
-                {
-                    // Deleting an unresolvable reference succeeds; deleting a
-                    // resolvable environment binding returns false.
-                    if (!IsKnownVariable(v.Name.Lexeme))
-                        EmitBoolConstant(true);
-                    else
-                    {
-                        IL.Emit(OpCodes.Ldstr, v.Name.Lexeme);
-                        EmitCallUnknown(_ctx.Runtime!.Operators.WarnSloppyDeleteVariable);
-                    }
-                }
-                SetStackType(StackType.Boolean);
+                EmitDeleteIdentifier(v);
                 break;
 
             default:

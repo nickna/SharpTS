@@ -94,22 +94,44 @@ public partial class ClosureAnalyzer
     internal IReadOnlyList<string>? GetSuspendedEvalRead(Expr.Variable reference) =>
         _suspendedEvalReads.GetValueOrDefault(reference);
 
-    private void ReferenceEvalBindings(string name, Expr.Variable? reference)
+    private readonly Dictionary<Expr.Variable, List<string>> _evalDeleteBindings = new(ReferenceEqualityComparer.Instance);
+    internal IReadOnlyList<string>? GetEvalDeleteBindings(Expr.Variable reference) => _evalDeleteBindings.GetValueOrDefault(reference);
+
+    protected override void VisitDelete(Expr.Delete expression)
+    {
+        Expr operand = expression.Operand;
+        while (operand is Expr.Grouping grouping) operand = grouping.Expression;
+        if (operand is Expr.Variable variable)
+        {
+            var candidates = VisibleEvalBindings(variable.Name.Lexeme).ToList();
+            if (candidates.Count > 0) _evalDeleteBindings[variable] = candidates;
+        }
+        base.VisitDelete(expression);
+    }
+
+    private IEnumerable<string> VisibleEvalBindings(string name)
     {
         foreach (var scope in _scopeStack)
         {
-            if (scope.Contains(name)) break;
+            if (scope.Contains(name)) yield break;
             if (_evalScopeBindings.TryGetValue(scope, out var bindings)
                 && bindings.TryGetValue(name, out var storage))
+                yield return storage;
+        }
+    }
+
+    private void ReferenceEvalBindings(string name, Expr.Variable? reference)
+    {
+        if (_evalScopeBindings.Count == 0) return;
+        foreach (var storage in VisibleEvalBindings(name))
+        {
+            ReferenceVariable(storage);
+            if (reference is not null && _currentFunction is Expr.ArrowFunction { IsAsync: true }
+                or Expr.ArrowFunction { IsGenerator: true })
             {
-                ReferenceVariable(storage);
-                if (reference is not null && _currentFunction is Expr.ArrowFunction { IsAsync: true }
-                    or Expr.ArrowFunction { IsGenerator: true })
-                {
-                    if (!_suspendedEvalReads.TryGetValue(reference, out var candidates))
-                        _suspendedEvalReads[reference] = candidates = [];
-                    candidates.Add(storage);
-                }
+                if (!_suspendedEvalReads.TryGetValue(reference, out var candidates))
+                    _suspendedEvalReads[reference] = candidates = [];
+                candidates.Add(storage);
             }
         }
     }

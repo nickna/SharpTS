@@ -195,6 +195,24 @@ public class EvalTests
     }
 
     [Theory, ModeData]
+    public void DeleteResolvesEvalGlobalsAndShadowingLocals(ExecutionMode mode)
+    {
+        const string source = """
+            eval("var item = 1;");
+            { let item = 9; console.log(delete item, item, globalThis.item); }
+            function run() {
+                eval("var item = 2;");
+                console.log(delete item, globalThis.item);
+            }
+            run();
+            console.log(delete (item), typeof item, "item" in globalThis);
+            eval("var item = 3;");
+            console.log(item, delete item, delete missing);
+            """;
+        Assert.Equal("false 9 1\ntrue 1\ntrue undefined false\n3 true true\n", TestHarness.RunUnchecked(source, mode));
+    }
+
+    [Theory, ModeData]
     public void StrictEvalOwnsDeclarationsAndEscapingClosures(ExecutionMode mode)
     {
         const string source = """

@@ -2171,25 +2171,7 @@ public abstract partial class StatementEmitterBase : ExpressionEmitterBase
                 break;
 
             case Expr.Variable v:
-                if (Ctx.IsStrictMode)
-                {
-                    // Strict mode: throw SyntaxError
-                    IL.Emit(OpCodes.Ldstr, $"Delete of unqualified identifier '{v.Name.Lexeme}' in strict mode");
-                    IL.Emit(OpCodes.Call, Ctx.Runtime!.Errors.ThrowStrictSyntaxError);
-                    // ThrowStrictSyntaxError throws, but we need a value on stack for IL verification
-                    EmitBoolConstant(false);
-                }
-                else
-                {
-                    if (!IsKnownVariable(v.Name.Lexeme))
-                        EmitBoolConstant(true);
-                    else
-                    {
-                        IL.Emit(OpCodes.Ldstr, v.Name.Lexeme);
-                        IL.Emit(OpCodes.Call, Ctx.Runtime!.Operators.WarnSloppyDeleteVariable);
-                    }
-                }
-                SetStackType(StackType.Boolean);
+                EmitDeleteIdentifier(v);
                 break;
 
             default:
@@ -2200,6 +2182,55 @@ public abstract partial class StatementEmitterBase : ExpressionEmitterBase
                 EmitBoolConstant(true);
                 break;
         }
+    }
+
+    protected void EmitDeleteIdentifier(Expr.Variable variable)
+    {
+        string name = variable.Name.Lexeme;
+        if (Ctx.IsStrictMode)
+        {
+            IL.Emit(OpCodes.Ldstr, $"Delete of unqualified identifier '{name}' in strict mode");
+            IL.Emit(OpCodes.Call, Ctx.Runtime!.Errors.ThrowStrictSyntaxError);
+            EmitBoolConstant(false);
+            return;
+        }
+
+        var done = IL.DefineLabel();
+        if (Ctx.ClosureAnalyzer?.GetEvalDeleteBindings(variable) is { } candidates)
+        {
+            // An eval-created local shadows the global only after instantiation.
+            // Clear the holder so existing closures see the binding disappear.
+            foreach (var storage in candidates)
+            {
+                var next = IL.DefineLabel();
+                EmitVariable(new Expr.Variable(new Token(TokenType.IDENTIFIER, storage, null, variable.Name.Line)));
+                IL.Emit(OpCodes.Castclass, Types.StrongBoxOfObject);
+                IL.Emit(OpCodes.Dup);
+                IL.Emit(OpCodes.Ldfld, Types.StrongBoxOfObjectValueField);
+                IL.Emit(OpCodes.Brfalse, next);
+                IL.Emit(OpCodes.Ldnull);
+                IL.Emit(OpCodes.Stfld, Types.StrongBoxOfObjectValueField);
+                EmitBoolConstant(true);
+                IL.Emit(OpCodes.Br, done);
+                IL.MarkLabel(next);
+                IL.Emit(OpCodes.Pop);
+            }
+        }
+        if (IsKnownVariable(name))
+        {
+            IL.Emit(OpCodes.Ldstr, name);
+            IL.Emit(OpCodes.Call, Ctx.Runtime!.Operators.WarnSloppyDeleteVariable);
+        }
+        else
+        {
+            // The object environment owns dynamically created script globals.
+            // Property deletion also succeeds when the name is absent.
+            IL.Emit(OpCodes.Ldsfld, Ctx.Runtime!.GlobalObject.SingletonField);
+            IL.Emit(OpCodes.Ldstr, name);
+            IL.Emit(OpCodes.Call, Ctx.Runtime.ObjectDeletion.Property);
+        }
+        IL.MarkLabel(done);
+        SetStackType(StackType.Boolean);
     }
 
     #endregion
