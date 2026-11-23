@@ -146,6 +146,27 @@ public class GlobalThisTests
     }
 
     [Theory, ModeData]
+    public void GlobalThis_HasPropertyChecksPresenceWithoutReadingValues(ExecutionMode mode)
+    {
+        var result = TestHarness.Run("""
+            let reads = 0;
+            Object.defineProperty(globalThis, "trap", {
+                get() { reads++; return undefined; }, configurable: true
+            });
+            Object.defineProperty(globalThis, "writeOnly", { set(value) {} });
+            globalThis.empty = null;
+            globalThis.ownUndefined = undefined;
+            console.log("undefined" in globalThis, "trap" in globalThis, "empty" in globalThis,
+                        "ownUndefined" in globalThis, "writeOnly" in globalThis, "missing" in globalThis);
+            console.log(Reflect.has(globalThis, "undefined"), Reflect.has(globalThis, "trap"), reads);
+            console.log("Array" in globalThis, "Infinity" in globalThis, "toString" in globalThis);
+            delete globalThis.trap;
+            console.log("trap" in globalThis);
+            """, mode);
+        Assert.Equal("true true true true true false\ntrue true 0\ntrue true true\nfalse\n", result);
+    }
+
+    [Theory, ModeData]
     public void GlobalThis_Process(ExecutionMode mode)
     {
         var result = TestHarness.Run("""
