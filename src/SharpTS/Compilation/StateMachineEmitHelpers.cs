@@ -1494,7 +1494,7 @@ public class StateMachineEmitHelpers
 
             case "group":
             case "groupCollapsed":
-                EmitConsoleGroup(call, emitArgumentBoxed, console);
+                EmitConsoleOutputMethod(call, emitArgumentBoxed, emitArgumentsWithSpread, console.Group, console.GroupMultiple);
                 return true;
 
             case "groupEnd":
@@ -1579,34 +1579,6 @@ public class StateMachineEmitHelpers
             _il.Emit(OpCodes.Ldloc, temps[0]);
             EmitArgsArrayFromLocals(temps.GetRange(1, temps.Count - 1));
             _il.Emit(OpCodes.Call, console.AssertMultiple);
-        }
-        _il.Emit(OpCodes.Ldnull);
-        SetStackUnknown();
-    }
-
-    /// <summary>
-    /// Emits console.group(label?) or console.groupCollapsed(label?) call.
-    /// </summary>
-    private void EmitConsoleGroup(
-        SharpTS.Parsing.Expr.Call call,
-        Action<SharpTS.Parsing.Expr> emitArgumentBoxed,
-        EmittedConsoleRuntime console)
-    {
-        if (call.Arguments.Count == 0)
-        {
-            _il.Emit(OpCodes.Ldnull);
-            _il.Emit(OpCodes.Call, console.Group);
-        }
-        else if (call.Arguments.Count == 1)
-        {
-            emitArgumentBoxed(call.Arguments[0]);
-            _il.Emit(OpCodes.Call, console.Group);
-        }
-        else
-        {
-            // Multiple arguments (spilled for await-safety)
-            EmitArgsArrayFromLocals(SpillArgumentsToLocals(call, emitArgumentBoxed));
-            _il.Emit(OpCodes.Call, console.GroupMultiple);
         }
         _il.Emit(OpCodes.Ldnull);
         SetStackUnknown();

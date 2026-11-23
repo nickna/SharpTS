@@ -560,6 +560,24 @@ public class ConsoleTests
     }
 
     [Theory, ModeData]
+    public void Console_NestedGroupHeadersUseTheCurrentIndent(ExecutionMode mode)
+    {
+        const string source = """
+            console.group("outer");
+            console.groupCollapsed(...["inner", 1]);
+            const group = console.group;
+            group(null);
+            console.log("body");
+            console.groupEnd();
+            console.groupEnd();
+            console.groupEnd();
+            console.log("after");
+            """;
+        Assert.Equal("outer\n  inner 1\n    null\n      body\nafter\n",
+            TestHarness.RunUnchecked(source, mode));
+    }
+
+    [Theory, ModeData]
     public void Console_Group_IncreasesIndentation(ExecutionMode mode)
     {
         var source = """
