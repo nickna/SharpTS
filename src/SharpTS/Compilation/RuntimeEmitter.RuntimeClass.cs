@@ -1909,6 +1909,7 @@ public partial class RuntimeEmitter
             runtime.ObjectKeys,
             new GetOwnPropertyNamesInputs(
                 runtime.Arguments.Type,
+                runtime.GlobalObject.SingletonField,
                 runtime.ArrayStorage,
                 runtime.Booleans,
                 runtime.DescriptorStorage,

@@ -177,6 +177,7 @@ public static class BuiltInNames
     public const string Undefined = "undefined";
     public const string NaN = "NaN";
     public const string Infinity = "Infinity";
+    internal static readonly string[] GlobalConstantNames = [Infinity, NaN, Undefined];
 
     /// <summary>
     /// Internal helper function names used by the compiler/interpreter.

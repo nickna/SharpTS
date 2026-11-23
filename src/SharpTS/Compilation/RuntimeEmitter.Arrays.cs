@@ -1,6 +1,7 @@
 using System.Reflection;
 using System.Reflection.Emit;
 using System.Text;
+using SharpTS.Runtime.BuiltIns;
 
 namespace SharpTS.Compilation;
 
@@ -38,6 +39,7 @@ public partial class RuntimeEmitter
 
     private readonly record struct GetOwnPropertyNamesInputs(
         Type ArgumentsType,
+        FieldBuilder GlobalSingleton,
         EmittedArrayStorageRuntime ArrayStorage,
         EmittedBooleanRuntime Booleans,
         EmittedDescriptorStorageRuntime DescriptorStorage,
@@ -1368,6 +1370,13 @@ public partial class RuntimeEmitter
             AddOwnName(name);
             il.MarkLabel(recreated);
         }
+
+        var notGlobal = il.DefineLabel();
+        il.Emit(OpCodes.Ldarg_0);
+        il.Emit(OpCodes.Ldsfld, inputs.GlobalSingleton);
+        il.Emit(OpCodes.Bne_Un, notGlobal);
+        foreach (var name in BuiltInNames.GlobalConstantNames) AddName(name);
+        il.MarkLabel(notGlobal);
 
         // Intrinsic slots are created with the function, before user expandos.
         // Attribute changes preserve that position; deletion and recreation do not.

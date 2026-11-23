@@ -77,6 +77,23 @@ public class GlobalThisTests
     }
 
     [Theory, ModeData]
+    public void GlobalThis_OwnKeysIncludeNonEnumerableConstants(ExecutionMode mode)
+    {
+        const string source = """
+            globalThis[3] = 3;
+            globalThis.extra = 1;
+            const names = Object.getOwnPropertyNames(globalThis);
+            const constants = ["Infinity", "NaN", "undefined"];
+            for (const key of constants) {
+                console.log(names.includes(key), Reflect.ownKeys(globalThis).includes(key), Object.keys(globalThis).includes(key));
+            }
+            console.log(names.filter(k => k === "3" || constants.includes(k) || k === "extra").join(" "));
+            """;
+        Assert.Equal("true true false\ntrue true false\ntrue true false\n3 Infinity NaN undefined extra\n",
+            TestHarness.RunUnchecked(source, mode));
+    }
+
+    [Theory, ModeData]
     public void GlobalThis_IndexAccess(ExecutionMode mode)
     {
         var result = TestHarness.Run("""

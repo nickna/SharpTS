@@ -1,4 +1,5 @@
 using System.Reflection.Emit;
+using SharpTS.Runtime.BuiltIns;
 
 namespace SharpTS.Compilation;
 
@@ -18,7 +19,7 @@ public partial class RuntimeEmitter
             "JSON", "AbortController" })
             EmitName(name, writable);
         if (_features.UsesConsoleObject) EmitName("console", writable);
-        foreach (var name in new[] { "NaN", "Infinity", "undefined" }) EmitName(name, constant);
+        foreach (var name in BuiltInNames.GlobalConstantNames) EmitName(name, constant);
         il.Emit(OpCodes.Ldc_I4_0);
         il.Emit(OpCodes.Ret);
         il.MarkLabel(writable);

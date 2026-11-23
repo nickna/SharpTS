@@ -339,15 +339,14 @@ public sealed partial class SharpTSGlobalThis : ISharpTSPropertyAccessor
 
     internal IEnumerable<string> OwnStringKeys()
     {
-        if (_vmContext is not { } context) return _properties.OwnVisibleStringKeys();
-
         // A contextified global preserves the two stores' ordering separately:
         // internal indices, sandbox-only indices, internal names, sandbox-only names.
         // Each actual store already orders its own indices and creation-ordered names.
         var internalKeys = _properties.OwnVisibleStringKeys().ToArray();
-        var contextKeys = context.OwnNames().ToArray();
+        var contextKeys = _vmContext?.OwnNames().ToArray() ?? [];
         return internalKeys.Where(IsIndex)
             .Concat(contextKeys.Where(IsIndex))
+            .Concat(BuiltInNames.GlobalConstantNames)
             .Concat(internalKeys.Where(name => !IsIndex(name)))
             .Concat(contextKeys.Where(name => !IsIndex(name)))
             .Distinct(StringComparer.Ordinal);
