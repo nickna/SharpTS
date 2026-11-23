@@ -275,6 +275,26 @@ public class ConsoleTests
     }
 
     [Theory, ModeData]
+    public void Console_TimeLog_PrintsAllDataInOrder(ExecutionMode mode)
+    {
+        const string source = """
+            let n = 0;
+            console.time("steps");
+            console.timeLog("steps", "checkpoint", ++n, ++n);
+            const log = console.timeLog;
+            log(...["steps", false, null, ++n]);
+            console.timeLog(...["steps", ++n]);
+            console.timeEnd("steps");
+            """;
+        var lines = TestHarness.RunUnchecked(source, mode).TrimEnd().Split('\n');
+        Assert.Equal(4, lines.Length);
+        Assert.EndsWith("ms checkpoint 1 2", lines[0]);
+        Assert.EndsWith("ms false null 3", lines[1]);
+        Assert.EndsWith("ms 4", lines[2]);
+        Assert.EndsWith("ms", lines[3]);
+    }
+
+    [Theory, ModeData]
     public void Console_TimeEnd_NoMatchingTimer_DoesNotCrash(ExecutionMode mode)
     {
         var source = """

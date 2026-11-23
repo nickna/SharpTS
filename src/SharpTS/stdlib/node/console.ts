@@ -35,9 +35,7 @@ export function clear(): void { console.clear(); }
 export function time(label?: string): void { console.time(label); }
 export function timeEnd(label?: string): void { console.timeEnd(label); }
 export function timeLog(label?: string, ...args: any[]): void {
-    if (args.length === 0) console.timeLog(label);
-    else if (args.length === 1) console.timeLog(label, args[0]);
-    else console.timeLog(label, args[0], args[1]);
+    console.timeLog(label, ...args);
 }
 export function assert(condition?: boolean, ...args: any[]): void {
     if (args.length === 0) console.assert(condition);
