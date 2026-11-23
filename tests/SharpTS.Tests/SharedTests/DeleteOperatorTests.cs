@@ -9,6 +9,22 @@ namespace SharpTS.Tests.SharedTests;
 public class DeleteOperatorTests
 {
     [Theory, ModeData]
+    public void GlobalDeletionHonorsNonconfigurableConstants(ExecutionMode mode)
+    {
+        const string source = """
+            console.log(delete globalThis.Infinity, globalThis.Infinity);
+            console.log(delete globalThis["NaN"], Number.isNaN(globalThis.NaN));
+            console.log(Reflect.deleteProperty(globalThis, "undefined"));
+            globalThis.checkpoint = 1;
+            console.log(Reflect.deleteProperty(globalThis, "checkpoint"), typeof globalThis.checkpoint);
+            function strictDelete() { "use strict"; delete globalThis.Infinity; }
+            try { strictDelete(); } catch (e) { console.log(e.name); }
+            """;
+        Assert.Equal("false Infinity\nfalse true\nfalse\ntrue undefined\nTypeError\n",
+            TestHarness.RunUnchecked(source, mode));
+    }
+
+    [Theory, ModeData]
     public void DeleteEvaluatesNonReferenceOperandsOnce(ExecutionMode mode)
     {
         const string source = """

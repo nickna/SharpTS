@@ -1313,7 +1313,8 @@ public partial class Interpreter
             SharpTSRegExp regex => regex.DeleteProperty(name),
             SharpTSArrayGlobal arrayGlobal => arrayGlobal.DeleteProperty(name),
             SharpTSObjectNamespace objectNamespace => objectNamespace.DeleteProperty(name),
-            SharpTSGlobalThis globalThis => globalThis.DeleteProperty(name),
+            SharpTSGlobalThis globalThis =>
+                CompletePropertyDeletion(globalThis.DeleteProperty(name), name, strictMode, "global object"),
             ISharpTSPrimitiveConstructor constructor => constructor.DeletePropertyStrict(name, strictMode),
             SharpTSFunctionPrototype functionPrototype => functionPrototype.DeleteProperty(name),
             SharpTSArrayPrototype arrayPrototype => arrayPrototype.DeleteProperty(name),
@@ -1333,13 +1334,13 @@ public partial class Interpreter
                 when name == "prototype" =>
                     DeleteNonConfigurableClassPrototype(name, strictMode),
             SharpTSBuiltInConstructor constructor =>
-                CompleteFunctionPropertyDeletion(
+                CompletePropertyDeletion(
                     DeleteBuiltInConstructorProperty(constructor, name), name, strictMode),
             IBuiltInFunctionMetadata builtInFn => builtInFn.DeleteMetadataProperty(name),
             SharpTSFunction function => function.GetOwnPropertyDescriptor(name) is null
-                || CompleteFunctionPropertyDeletion(function.DeleteProperty(name), name, strictMode),
+                || CompletePropertyDeletion(function.DeleteProperty(name), name, strictMode),
             SharpTSArrowFunction arrow => arrow.GetOwnPropertyDescriptor(name) is null
-                || CompleteFunctionPropertyDeletion(arrow.DeleteProperty(name), name, strictMode),
+                || CompletePropertyDeletion(arrow.DeleteProperty(name), name, strictMode),
             Dictionary<string, object?> dict => dict.Remove(name),
             _ => true // Deleting non-existent property on primitive returns true
         };
@@ -1439,11 +1440,11 @@ public partial class Interpreter
         return deleted;
     }
 
-    private static bool CompleteFunctionPropertyDeletion(bool deleted, string name, bool strictMode)
+    private static bool CompletePropertyDeletion(bool deleted, string name, bool strictMode, string owner = "function")
     {
         if (!deleted && strictMode)
             throw new ThrowException(new SharpTSTypeError(
-                $"Cannot delete non-configurable property '{name}' of function"));
+                $"Cannot delete non-configurable property '{name}' of {owner}"));
         return deleted;
     }
 

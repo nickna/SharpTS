@@ -168,6 +168,8 @@ public static class ReflectBuiltIns
                     case SharpTSBuiltInConstructor constructor:
                         return RuntimeValue.FromBoolean(
                             interpreter.DeleteProperty(constructor, propertyKey, strictMode: false));
+                    case SharpTSGlobalThis globalThis:
+                        return RuntimeValue.FromBoolean(globalThis.DeleteProperty(propertyKey));
                     case BoundFunction bound:
                         return RuntimeValue.FromBoolean(bound.DeleteProperty(propertyKey, false));
                     case SharpTSFunction ordinaryFunction:

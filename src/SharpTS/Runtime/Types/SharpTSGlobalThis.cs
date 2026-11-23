@@ -129,7 +129,7 @@ public sealed partial class SharpTSGlobalThis : ISharpTSPropertyAccessor
             return userDescriptor;
         if (!HasProperty(name)) return null;
 
-        if (name is BuiltInNames.Undefined or BuiltInNames.NaN or BuiltInNames.Infinity)
+        if (IsNonConfigurableIntrinsic(name))
         {
             return new SharpTSPropertyDescriptor
             {
@@ -304,6 +304,9 @@ public sealed partial class SharpTSGlobalThis : ISharpTSPropertyAccessor
         _vmWrittenProperties?.Add(name);
     }
 
+    private static bool IsNonConfigurableIntrinsic(string name) =>
+        name is BuiltInNames.Undefined or BuiltInNames.NaN or BuiltInNames.Infinity;
+
     internal bool DeleteProperty(string name)
     {
         if (_vmContext is { } context)
@@ -312,6 +315,9 @@ public sealed partial class SharpTSGlobalThis : ISharpTSPropertyAccessor
         }
         if (_properties.HasProperty(name) && !_properties.DeleteProperty(name))
             return false;
+        // Removing a configurable VM context property can reveal the underlying
+        // intrinsic. Its presence must survive deletion of the context overlay.
+        if (IsNonConfigurableIntrinsic(name)) return false;
         _deletedProperties.Add(name);
         return true;
     }
