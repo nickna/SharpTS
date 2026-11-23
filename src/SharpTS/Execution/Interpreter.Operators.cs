@@ -1221,16 +1221,21 @@ public partial class Interpreter
         bool strictMode = _environment.IsStrictMode;
         var operand = delete.Operand;
         while (operand is Expr.Grouping grouping) operand = grouping.Expression;
-        return operand switch
+        switch (operand)
         {
-            Expr.Get get => await DeletePropertyCore(ctx, get, strictMode),
-            Expr.GetIndex getIndex => await DeleteIndexedPropertyCore(ctx, getIndex, strictMode),
-            Expr.Variable v when strictMode =>
-                throw StrictModeErrors.SyntaxError($"Delete of unqualified identifier '{v.Name.Lexeme}' in strict mode"),
-            Expr.Variable v => DeleteIdentifier(v.Name.Lexeme)
-                || SloppyModeWarnings.WarnAndReturn(false, "delete variable", $"delete {v.Name.Lexeme} returns false in sloppy mode"),
-            _ => true // Deleting other expressions returns true but does nothing
-        };
+            case Expr.Get get:
+                return await DeletePropertyCore(ctx, get, strictMode);
+            case Expr.GetIndex getIndex:
+                return await DeleteIndexedPropertyCore(ctx, getIndex, strictMode);
+            case Expr.Variable v when strictMode:
+                throw StrictModeErrors.SyntaxError($"Delete of unqualified identifier '{v.Name.Lexeme}' in strict mode");
+            case Expr.Variable v:
+                return DeleteIdentifier(v.Name.Lexeme)
+                    || SloppyModeWarnings.WarnAndReturn(false, "delete variable", $"delete {v.Name.Lexeme} returns false in sloppy mode");
+            default:
+                await ctx.EvaluateExprAsync(operand);
+                return true;
+        }
     }
 
     private bool DeleteIdentifier(string name)

@@ -9,6 +9,23 @@ namespace SharpTS.Tests.SharedTests;
 public class DeleteOperatorTests
 {
     [Theory, ModeData]
+    public void DeleteEvaluatesNonReferenceOperandsOnce(ExecutionMode mode)
+    {
+        const string source = """
+            let calls = 0;
+            function bump() { return ++calls; }
+            function fail() { throw "stop"; }
+            console.log(delete (bump()), calls);
+            try { delete fail(); } catch (e) { console.log(e); }
+            async function run() {
+                console.log(delete (await Promise.resolve(bump())), calls);
+            }
+            run();
+            """;
+        Assert.Equal("true 1\nstop\ntrue 2\n", TestHarness.RunUnchecked(source, mode));
+    }
+
+    [Theory, ModeData]
     public void Delete_ObjectProperty_ReturnsTrue(ExecutionMode mode)
     {
         var source = """
