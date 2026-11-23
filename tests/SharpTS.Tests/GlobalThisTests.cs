@@ -56,6 +56,27 @@ public class GlobalThisTests
     }
 
     [Theory, ModeData]
+    public void GlobalThis_AssignmentPreservesReadOnlyConstants(ExecutionMode mode)
+    {
+        const string source = """
+            let calls = 0;
+            globalThis.Infinity = ++calls;
+            globalThis.NaN = ++calls;
+            globalThis.undefined = ++calls;
+            console.log(globalThis.Infinity, Number.isNaN(globalThis.NaN), globalThis.undefined, calls);
+            function strictWrite() {
+                "use strict";
+                try { globalThis.Infinity = ++calls; } catch (e) { console.log(e.name); }
+            }
+            strictWrite();
+            console.log(globalThis.Infinity, calls, Object.getOwnPropertyDescriptor(globalThis, "Infinity").writable);
+            console.log(Reflect.set(globalThis, "Infinity", 3));
+            """;
+        Assert.Equal("Infinity true undefined 3\nTypeError\nInfinity 4 false\nfalse\n",
+            TestHarness.RunUnchecked(source, mode));
+    }
+
+    [Theory, ModeData]
     public void GlobalThis_IndexAccess(ExecutionMode mode)
     {
         var result = TestHarness.Run("""
