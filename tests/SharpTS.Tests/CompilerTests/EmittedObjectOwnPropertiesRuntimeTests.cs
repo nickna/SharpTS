@@ -158,6 +158,7 @@ public sealed class EmittedObjectOwnPropertiesRuntimeTests
             if (name == "OwnPrototype") return Activator.CreateInstance(parameter.ParameterType,
                 runtime.FunctionValues, runtime.FunctionAttributes, runtime.GeneratorPrototypes.Kind)!;
             if (name == "GlobalThisSingletonField") return runtime.GlobalObject.SingletonField;
+            if (name == "GlobalThisIntrinsicDescriptorKind") return runtime.GlobalObject.IntrinsicDescriptorKind;
             if (name == "LookupBuiltInStaticMember") return runtime.BuiltInStatics.Lookup;
             if (name == "NativeProxyRejection") return runtime.ReflectedMethods.NativeProxyRejection;
             if (name == "SourceOwners") return runtime.ClassInitialization.SourceOwners;
