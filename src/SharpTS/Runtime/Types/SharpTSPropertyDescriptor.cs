@@ -52,6 +52,15 @@ public class SharpTSPropertyDescriptor
     public bool HasEnumerable { get; set; }
     public bool HasConfigurable { get; set; }
 
+    // A non-writable, non-enumerable, non-configurable data property can
+    // only be redefined by leaving its value and attributes intact.
+    internal bool CanRedefineFixedDataProperty(object? currentValue) =>
+        !HasGet && !HasSet
+        && !(HasWritable && Writable)
+        && !(HasEnumerable && Enumerable)
+        && !(HasConfigurable && Configurable)
+        && (!HasValue || PropertySemantics.SameValue(Value, currentValue));
+
     public SharpTSPropertyDescriptor() { }
 
     public SharpTSPropertyDescriptor(

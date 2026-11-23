@@ -1073,6 +1073,13 @@ public partial class Interpreter
             if (obj is SharpTSProxy prototypeProxy)
                 return prototypeProxy.TrapHas(name, this);
 
+            if (obj is SharpTSGlobalThis global)
+            {
+                if (global.HasProperty(name)) return true;
+                obj = ObjectBuiltIns.PrototypeOf(this, global);
+                continue;
+            }
+
             if (obj is ISharpTSOwnPropertyObject ownPropertyObject)
             {
                 if (ownPropertyObject.OwnProperties.GetOwnPropertyDescriptor(name) is not null)

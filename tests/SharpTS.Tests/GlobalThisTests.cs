@@ -110,6 +110,31 @@ public class GlobalThisTests
         Assert.Contains("true", result);
     }
 
+    [Theory, InterpretedOnlyData] // Compiled property definitions are tracked in #3758.
+    public void GlobalThis_DefinePropertyPreservesFixedConstants(ExecutionMode mode)
+    {
+        var result = TestHarness.Run("""
+            for (const key of ["Infinity", "NaN", "undefined"]) {
+                const value = globalThis[key];
+                try {
+                    Object.defineProperty(globalThis, key, { value: 7 });
+                } catch (e) { console.log(e.name); }
+                console.log(Reflect.defineProperty(globalThis, key, {}),
+                            Reflect.defineProperty(globalThis, key, { value }));
+                console.log(Reflect.defineProperty(globalThis, key, { get: undefined }),
+                            Reflect.defineProperty(globalThis, key, { set: undefined }),
+                            Reflect.defineProperty(globalThis, key, { writable: true }),
+                            Reflect.defineProperty(globalThis, key, { enumerable: true }),
+                            Reflect.defineProperty(globalThis, key, { configurable: true }));
+                const d = Object.getOwnPropertyDescriptor(globalThis, key);
+                console.log(Object.is(value, globalThis[key]), Object.is(value, d.value),
+                            d.writable, d.enumerable, d.configurable);
+            }
+            """, mode);
+        const string expected = "TypeError\ntrue true\nfalse false false false false\ntrue true false false false\n";
+        Assert.Equal(expected + expected + expected, result);
+    }
+
     [Theory, ModeData]
     public void GlobalThis_ChainedSelfReference(ExecutionMode mode)
     {
@@ -118,6 +143,27 @@ public class GlobalThisTests
             console.log(globalThis.globalThis.Math.PI === Math.PI);
             """, mode);
         Assert.Contains("true", result);
+    }
+
+    [Theory, ModeData]
+    public void GlobalThis_HasPropertyChecksPresenceWithoutReadingValues(ExecutionMode mode)
+    {
+        var result = TestHarness.Run("""
+            let reads = 0;
+            Object.defineProperty(globalThis, "trap", {
+                get() { reads++; return undefined; }, configurable: true
+            });
+            Object.defineProperty(globalThis, "writeOnly", { set(value) {} });
+            globalThis.empty = null;
+            globalThis.ownUndefined = undefined;
+            console.log("undefined" in globalThis, "trap" in globalThis, "empty" in globalThis,
+                        "ownUndefined" in globalThis, "writeOnly" in globalThis, "missing" in globalThis);
+            console.log(Reflect.has(globalThis, "undefined"), Reflect.has(globalThis, "trap"), reads);
+            console.log("Array" in globalThis, "Infinity" in globalThis, "toString" in globalThis);
+            delete globalThis.trap;
+            console.log("trap" in globalThis);
+            """, mode);
+        Assert.Equal("true true true true true false\ntrue true 0\ntrue true true\nfalse\n", result);
     }
 
     [Theory, ModeData]

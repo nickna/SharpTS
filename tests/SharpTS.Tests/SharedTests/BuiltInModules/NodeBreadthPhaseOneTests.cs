@@ -75,6 +75,24 @@ public class NodeBreadthPhaseOneTests
     }
 
     [Theory, ModeData]
+    public void ConsoleModulePreservesVariadicArguments(ExecutionMode mode)
+    {
+        var files = new Dictionary<string, string>
+        {
+            ["main.ts"] = """
+                import con, { info, group, groupEnd } from 'node:console';
+                info("first", 2, 3, "last");
+                con.log("%s %d", "value", 42, "a", "b", "c");
+                group("header", 1, 2, "three");
+                con.debug("debug", 1, 2, 3, 4);
+                groupEnd();
+                """
+        };
+        Assert.Equal("first 2 3 last\nvalue 42 a b c\nheader 1 2 three\n  debug 1 2 3 4\n",
+            TestHarness.RunModules(files, "main.ts", mode));
+    }
+
+    [Theory, ModeData]
     public void AssertStrict_CommonJsExportIsCallable(ExecutionMode mode)
     {
         var files = new Dictionary<string, string>

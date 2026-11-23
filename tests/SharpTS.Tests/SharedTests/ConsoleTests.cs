@@ -11,6 +11,31 @@ namespace SharpTS.Tests.SharedTests;
 /// </summary>
 public class ConsoleTests
 {
+    [Theory, CompiledOnlyData]
+    public void FixedArityCallsEvaluateAllArgumentsBeforeRunning(ExecutionMode mode)
+    {
+        const string source = """
+            let calls = 0;
+            function next() { return ++calls; }
+            function fail() { throw "stop"; }
+            console.count("fixed", next());
+            console.time("timer", next());
+            console.timeEnd("timer", next());
+            try { console.count("fixed", fail()); } catch (e) { console.log(e); }
+            console.count(...["fixed", next()], next());
+            async function run() {
+                console.countReset("fixed", await Promise.resolve(next()));
+                console.count("fixed");
+                console.log(calls);
+            }
+            run();
+            """;
+        var lines = TestHarness.RunUnchecked(source, mode).TrimEnd().Split('\n');
+        Assert.Equal("fixed: 1", lines[0]);
+        Assert.StartsWith("timer: ", lines[1]);
+        Assert.Equal(["stop", "fixed: 2", "fixed: 1", "6"], lines[2..]);
+    }
+
     [Theory, ModeData]
     public void LogCanBeExtractedAndPassedAsACallback(ExecutionMode mode)
     {
