@@ -11,7 +11,7 @@ namespace SharpTS.Tests.SharedTests;
 /// </summary>
 public class ConsoleTests
 {
-    [Theory, CompiledOnlyData]
+    [Theory, ModeData]
     public void FixedArityCallsEvaluateAllArgumentsBeforeRunning(ExecutionMode mode)
     {
         const string source = """
@@ -557,6 +557,24 @@ public class ConsoleTests
             console.groupEnd();
             """;
         Assert.Equal("group\n  \n  \n", TestHarness.RunUnchecked(source, mode));
+    }
+
+    [Theory, ModeData]
+    public void Console_NestedGroupHeadersUseTheCurrentIndent(ExecutionMode mode)
+    {
+        const string source = """
+            console.group("outer");
+            console.groupCollapsed(...["inner", 1]);
+            const group = console.group;
+            group(null);
+            console.log("body");
+            console.groupEnd();
+            console.groupEnd();
+            console.groupEnd();
+            console.log("after");
+            """;
+        Assert.Equal("outer\n  inner 1\n    null\n      body\nafter\n",
+            TestHarness.RunUnchecked(source, mode));
     }
 
     [Theory, ModeData]

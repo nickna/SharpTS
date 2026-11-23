@@ -18,6 +18,7 @@ public partial class RuntimeEmitter
             "JSON", "AbortController" })
             EmitName(name, writable);
         if (_features.UsesConsoleObject) EmitName("console", writable);
+        if (_features.UsesBuffer) EmitName("Buffer", writable);
         foreach (var name in new[] { "NaN", "Infinity", "undefined" }) EmitName(name, constant);
         il.Emit(OpCodes.Ldc_I4_0);
         il.Emit(OpCodes.Ret);

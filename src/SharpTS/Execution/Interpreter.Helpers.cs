@@ -268,7 +268,7 @@ public partial class Interpreter
         }
         if (ResolveGlobalIndexTarget(obj, index) is { } global)
         {
-            SetGlobalIndexValue(global, value, _environment.IsStrictMode);
+            SetGlobalPropertyValue(global.Target, global.Key, value, _environment.IsStrictMode);
             return true;
         }
         if (HasCanonicalIndexProperties(obj) || UsesNonextensibleBuiltInPrototypeStringIndex(obj, index)

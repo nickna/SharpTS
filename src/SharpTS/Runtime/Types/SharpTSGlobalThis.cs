@@ -66,7 +66,11 @@ public sealed partial class SharpTSGlobalThis : ISharpTSPropertyAccessor
 
     internal bool DefineProperty(string name, SharpTSPropertyDescriptor descriptor)
     {
-        var current = ContextDescriptor(name) ?? _properties.GetOwnPropertyDescriptor(name);
+        var sandboxProperty = ContextDescriptor(name);
+        if (sandboxProperty is not null && descriptor.IsEmpty)
+            return DefineEmptySandboxProperty(name, sandboxProperty);
+
+        var current = sandboxProperty ?? _properties.GetOwnPropertyDescriptor(name);
         if (current is null && IsNonConfigurableIntrinsic(name))
             return descriptor.CanRedefineFixedDataProperty(GetProperty(name));
 

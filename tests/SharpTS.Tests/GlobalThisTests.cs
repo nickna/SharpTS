@@ -56,6 +56,27 @@ public class GlobalThisTests
     }
 
     [Theory, ModeData]
+    public void GlobalThis_AssignmentPreservesReadOnlyConstants(ExecutionMode mode)
+    {
+        const string source = """
+            let calls = 0;
+            globalThis.Infinity = ++calls;
+            globalThis.NaN = ++calls;
+            globalThis.undefined = ++calls;
+            console.log(globalThis.Infinity, Number.isNaN(globalThis.NaN), globalThis.undefined, calls);
+            function strictWrite() {
+                "use strict";
+                try { globalThis.Infinity = ++calls; } catch (e) { console.log(e.name); }
+            }
+            strictWrite();
+            console.log(globalThis.Infinity, calls, Object.getOwnPropertyDescriptor(globalThis, "Infinity").writable);
+            console.log(Reflect.set(globalThis, "Infinity", 3));
+            """;
+        Assert.Equal("Infinity true undefined 3\nTypeError\nInfinity 4 false\nfalse\n",
+            TestHarness.RunUnchecked(source, mode));
+    }
+
+    [Theory, ModeData]
     public void GlobalThis_IndexAccess(ExecutionMode mode)
     {
         var result = TestHarness.Run("""
@@ -110,12 +131,13 @@ public class GlobalThisTests
         Assert.Contains("true", result);
     }
 
-    [Theory, InterpretedOnlyData] // Compiled property definitions are tracked in #3758.
+    [Theory, ModeData]
     public void GlobalThis_DefinePropertyPreservesFixedConstants(ExecutionMode mode)
     {
         var result = TestHarness.Run("""
             for (const key of ["Infinity", "NaN", "undefined"]) {
                 const value = globalThis[key];
+                const keyCount = Object.getOwnPropertyNames(globalThis).length;
                 try {
                     Object.defineProperty(globalThis, key, { value: 7 });
                 } catch (e) { console.log(e.name); }
@@ -129,9 +151,10 @@ public class GlobalThisTests
                 const d = Object.getOwnPropertyDescriptor(globalThis, key);
                 console.log(Object.is(value, globalThis[key]), Object.is(value, d.value),
                             d.writable, d.enumerable, d.configurable);
+                console.log(Object.getOwnPropertyNames(globalThis).length === keyCount);
             }
             """, mode);
-        const string expected = "TypeError\ntrue true\nfalse false false false false\ntrue true false false false\n";
+        const string expected = "TypeError\ntrue true\nfalse false false false false\ntrue true false false false\ntrue\n";
         Assert.Equal(expected + expected + expected, result);
     }
 
@@ -143,6 +166,20 @@ public class GlobalThisTests
             console.log(globalThis.globalThis.Math.PI === Math.PI);
             """, mode);
         Assert.Contains("true", result);
+    }
+
+    [Theory, ModeData]
+    public void GlobalThis_BufferPresenceFollowsDeletionAndRecreation(ExecutionMode mode)
+    {
+        var result = TestHarness.Run("""
+            const root: any = globalThis;
+            const key = "Buf" + "fer";
+            console.log(key in root, Object.hasOwn(root, key), Reflect.has(root, key), typeof root[key]);
+            console.log(delete root[key], key in root);
+            root[key] = undefined;
+            console.log(key in root, Object.hasOwn(root, key), typeof root[key]);
+            """, mode);
+        Assert.Equal("true true true function\ntrue false\ntrue true undefined\n", result);
     }
 
     [Theory, ModeData]
