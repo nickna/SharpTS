@@ -53,8 +53,13 @@ public sealed partial class SharpTSGlobalThis : ISharpTSPropertyAccessor
     internal bool TryGetUserAccessor(
         string name, out ISharpTSCallable? getter, out ISharpTSCallable? setter)
     {
-        if (ContextDescriptor(name) is { } descriptor && (descriptor.HasGet || descriptor.HasSet))
+        if (ContextDescriptor(name) is { } descriptor)
         {
+            if (descriptor.HasValue)
+            {
+                getter = setter = null;
+                return false;
+            }
             getter = _vmContext!.HasExternalStorage ? VmContext.ReadContextAccessor(descriptor.RawGet ?? descriptor.Get) : descriptor.Get;
             setter = _vmContext!.HasExternalStorage ? VmContext.ReadContextAccessor(descriptor.RawSet ?? descriptor.Set) : descriptor.Set;
             return true;
@@ -66,12 +71,23 @@ public sealed partial class SharpTSGlobalThis : ISharpTSPropertyAccessor
 
     internal bool DefineProperty(string name, SharpTSPropertyDescriptor descriptor)
     {
-        _deletedProperties.Remove(name);
+        var sandboxProperty = ContextDescriptor(name);
+        if (sandboxProperty is not null && HasOriginalFixedIntrinsic(name))
+            return DefineOverShadowedIntrinsic(name, descriptor);
+        if (sandboxProperty is not null && descriptor.IsEmpty)
+            return DefineEmptySandboxProperty(name, sandboxProperty);
+        if (sandboxProperty is { HasValue: true } && !descriptor.HasValue && !descriptor.HasGet && !descriptor.HasSet)
+            return DefineSandboxDataAttributes(name, descriptor);
+
+        var current = sandboxProperty ?? _properties.GetOwnPropertyDescriptor(name);
+        if (current is null && HasOriginalFixedIntrinsic(name))
+            return descriptor.CanRedefineFixedDataProperty(GetProperty(name));
+
         // Global object properties use the same ValidateAndApplyPropertyDescriptor
         // merge as ordinary objects. Preserve omitted attributes explicitly here;
         // global declarations can pre-populate the backing slot before a later
         // Object.defineProperties attribute-only update reaches this facade.
-        if ((ContextDescriptor(name) ?? _properties.GetOwnPropertyDescriptor(name)) is { } current)
+        if (current is not null)
         {
             if (!descriptor.HasWritable && !current.HasGet && !current.HasSet)
             {
@@ -103,6 +119,7 @@ public sealed partial class SharpTSGlobalThis : ISharpTSPropertyAccessor
         else applied = _properties.DefineProperty(name, descriptor);
         if (applied)
         {
+            _deletedProperties.Remove(name);
             _vmWrittenProperties?.Add(name);
         }
         return applied;
@@ -183,6 +200,13 @@ public sealed partial class SharpTSGlobalThis : ISharpTSPropertyAccessor
         if (_deletedProperties.Contains(name))
             return SharpTSUndefined.Instance;
 
+        return GetIntrinsicProperty(name) ?? SharpTSUndefined.Instance;
+    }
+
+    // A missing intrinsic returns null. The global named "undefined" has an
+    // actual value (SharpTSUndefined.Instance), so presence remains observable.
+    private object? GetIntrinsicProperty(string name)
+    {
         // The default self property is mutable and configurable. An actual
         // own override or deletion above takes precedence over this value.
         if (name == "globalThis") return this;
@@ -222,24 +246,14 @@ public sealed partial class SharpTSGlobalThis : ISharpTSPropertyAccessor
 
         // Error class hierarchy — exposed as globals so that CommonJS packages
         // can look up `global.Error`, `global.TypeError`, etc.
-        foreach (var errTypeName in BuiltInNames.ErrorTypeNames)
-        {
-            if (errTypeName == name)
-            {
-                return new SharpTSErrorClass(errTypeName, null);
-            }
-        }
+        if (BuiltInNames.IsErrorTypeName(name))
+            return new SharpTSErrorClass(name, null);
 
         // Constructor-like globals surfaced through BuiltInConstructorFactory so that
         // `globalThis.Map`, `globalThis.Date`, etc. resolve for CommonJS packages
         // (lodash aliases all constructors from the context object).
-        foreach (var (ctorName, factory) in BuiltInConstructorFactory.GetConstructors())
-        {
-            if (ctorName == name)
-            {
-                return new SharpTSBuiltInConstructor(ctorName, factory);
-            }
-        }
+        if (BuiltInConstructorFactory.GetConstructors().TryGetValue(name, out var factory))
+            return new SharpTSBuiltInConstructor(name, factory);
 
         // Function constructor placeholder — lodash uses this only for `.prototype`
         // access via `funcProto = Function.prototype` and `funcToString = funcProto.toString`.
@@ -269,8 +283,7 @@ public sealed partial class SharpTSGlobalThis : ISharpTSPropertyAccessor
             return double.PositiveInfinity;
         }
 
-        // Return undefined for unknown properties
-        return SharpTSUndefined.Instance;
+        return null;
     }
 
     /// <summary>
@@ -307,17 +320,20 @@ public sealed partial class SharpTSGlobalThis : ISharpTSPropertyAccessor
     private static bool IsNonConfigurableIntrinsic(string name) =>
         name is BuiltInNames.Undefined or BuiltInNames.NaN or BuiltInNames.Infinity;
 
+    private bool HasOriginalFixedIntrinsic(string name) => IsNonConfigurableIntrinsic(name)
+        && !_deletedProperties.Contains(name) && !_properties.HasProperty(name);
+
     internal bool DeleteProperty(string name)
     {
         if (_vmContext is { } context)
         {
             if (!context.Delete(name)) return false;
         }
-        if (_properties.HasProperty(name) && !_properties.DeleteProperty(name))
-            return false;
         // Removing a configurable VM context property can reveal the underlying
         // intrinsic. Its presence must survive deletion of the context overlay.
-        if (IsNonConfigurableIntrinsic(name)) return false;
+        if (HasOriginalFixedIntrinsic(name)) return false;
+        if (_properties.HasProperty(name) && !_properties.DeleteProperty(name))
+            return false;
         _deletedProperties.Add(name);
         return true;
     }
@@ -335,15 +351,14 @@ public sealed partial class SharpTSGlobalThis : ISharpTSPropertyAccessor
 
     internal IEnumerable<string> OwnStringKeys()
     {
-        if (_vmContext is not { } context) return _properties.OwnVisibleStringKeys();
-
         // A contextified global preserves the two stores' ordering separately:
         // internal indices, sandbox-only indices, internal names, sandbox-only names.
         // Each actual store already orders its own indices and creation-ordered names.
         var internalKeys = _properties.OwnVisibleStringKeys().ToArray();
-        var contextKeys = context.OwnNames().ToArray();
+        var contextKeys = _vmContext?.OwnNames().ToArray() ?? [];
         return internalKeys.Where(IsIndex)
             .Concat(contextKeys.Where(IsIndex))
+            .Concat(BuiltInNames.GlobalConstantNames.Where(name => !_deletedProperties.Contains(name)))
             .Concat(internalKeys.Where(name => !IsIndex(name)))
             .Concat(contextKeys.Where(name => !IsIndex(name)))
             .Distinct(StringComparer.Ordinal);
@@ -383,22 +398,7 @@ public sealed partial class SharpTSGlobalThis : ISharpTSPropertyAccessor
     private bool HasInternalProperty(string name)
     {
         if (_properties.HasProperty(name) || _properties.HasSetter(name)) return true;
-        if (_deletedProperties.Contains(name)) return false;
-        if (name == "globalThis") return true;
-
-        if (ResolveIntrinsic(name) is not null) return true;
-
-        // Check if it's a built-in singleton
-        var singleton = BuiltInRegistry.Instance.GetSingleton(name);
-        if (singleton != null) return true;
-
-        // Check global functions
-        if (name == "parseInt" || name == "parseFloat" || name == "isNaN" || name == "isFinite" || name == "fetch")
-        {
-            return true;
-        }
-
-        return false;
+        return !_deletedProperties.Contains(name) && GetIntrinsicProperty(name) is not null;
     }
 
     /// <summary>

@@ -48,19 +48,15 @@ public partial class RuntimeEmitter
             runtime.RegExps.Implementation is not null ? runtime.RegExps.RequireImplementation().Type : null,
             runtime.Reflect.Namespace is not null ? runtime.Reflect.RequireNamespace().SingletonField : null,
             runtime.Reflect.Namespace is not null ? runtime.Reflect.RequireNamespace().SingletonPopulateMethod : null,
-            _features.UsesBuffer ? runtime.RequireBuffer().Type : null,
             runtime.ArrayBuffer?.Type,
-            _features.UsesTextEncoding ? runtime.RequireTextEncoding().EncoderType : null,
-            _features.UsesTextEncoding ? runtime.RequireTextEncoding().DecoderType : null,
             _features.UsesCrypto ? runtime.WebCrypto.GetObject : null,
             _features.UsesFetch ? runtime.Fetch.RequireImplementation().Invoke : null,
-            runtime.Abort?.GetControllerConstructor,
-            (_emitHosted || _features.UsesStructuredClone) ? runtime.StructuredClone.GuestClone : null);
+            runtime.Abort?.GetControllerConstructor);
         EmitGlobalThisGetProperty(runtime.GlobalObject,
             new GlobalPropertyReadInputs(runtime.DescriptorStorage, runtime.Invocation.Method,
                 runtime.ObjectState.IsBuiltinDeleted, runtime.Sentinels.UndefinedInstance,
                 runtime.FunctionValues.Type, runtime.Numbers, runtime.Errors,
-                runtime.Math.SingletonField, runtime.Json.SingletonField, runtime.Process.GetObject,
+                runtime.Math.SingletonField, runtime.Json.SingletonField,
                 runtime.Symbols.Type, runtime.UriComponents, runtime.FunctionConstruction.GetOrCreate,
                 runtime.FunctionConstruction.Constructor, runtime.Fetch.CachedFunction, optional));
         EmitGlobalThisIntrinsicDescriptorKind(runtime.GlobalObject);
@@ -73,16 +69,16 @@ public partial class RuntimeEmitter
     }
 
     private readonly record struct GlobalPropertyOptionalInputs(
-        FieldBuilder? ConsoleSingleton,        Type? DateType, Type? RegExpType, FieldBuilder? ReflectSingleton, MethodBuilder? PopulateReflectSingleton,
-        Type? BufferType, Type? ArrayBufferType, Type? EncoderType, Type? DecoderType,
+        FieldBuilder? ConsoleSingleton, Type? DateType, Type? RegExpType, FieldBuilder? ReflectSingleton, MethodBuilder? PopulateReflectSingleton,
+        Type? ArrayBufferType,
         MethodBuilder? GetCryptoObject, MethodBuilder? FetchInvoke,
-        MethodBuilder? GetAbortControllerConstructor, MethodBuilder? StructuredClone);
+        MethodBuilder? GetAbortControllerConstructor);
 
     private readonly record struct GlobalPropertyReadInputs(
         EmittedDescriptorStorageRuntime Descriptors, MethodBuilder InvokeMethod,
         MethodBuilder IsBuiltinDeleted, FieldInfo UndefinedInstance,
         Type FunctionType, EmittedNumberRuntime Numbers, EmittedErrorRuntime Errors,
-        FieldBuilder MathSingleton, FieldBuilder JsonSingleton, MethodBuilder GetProcess,
+        FieldBuilder MathSingleton, FieldBuilder JsonSingleton,
         Type SymbolType, EmittedUriComponentRuntime UriComponents, MethodBuilder GetOrCreateFunction,
         ConstructorBuilder FunctionConstructor, FieldBuilder CachedFetchFunction,
         GlobalPropertyOptionalInputs Optional);
@@ -92,6 +88,101 @@ public partial class RuntimeEmitter
         MethodBuilder IntrinsicDescriptorKind, MethodBuilder InvokeMethod, EmittedErrorRuntime Errors);
 
     private readonly record struct UriComponentInputs(ConstructorBuilder? PadUndefinedCtor, MethodBuilder ToJsString);
+
+    private void EmitGlobalIntrinsicInitializer(TypeBuilder owner, MethodBuilder initializer, EmittedRuntime runtime)
+    {
+        var il = initializer.GetILGenerator();
+        EmitGlobalAccessor(owner, il, runtime, "process", get => get.Emit(OpCodes.Call, runtime.Process.GetObject));
+        if (_features.UsesBuffer)
+            EmitGlobalAccessor(owner, il, runtime, "Buffer", get => EmitConstructor(get, runtime.RequireBuffer().Type));
+        if (_features.UsesTextEncoding)
+        {
+            var text = runtime.RequireTextEncoding();
+            InstallData("TextEncoder", false, () => EmitConstructor(il, text.EncoderType));
+            InstallData("TextDecoder", false, () => EmitConstructor(il, text.DecoderType));
+        }
+        if (_emitHosted || _features.UsesStructuredClone)
+        {
+            InstallData("structuredClone", true, () =>
+            {
+                var parameters = EmitReflectedMethodLiteralViaHandle(il, runtime.StructuredClone.GuestClone);
+                il.Emit(OpCodes.Ldstr, "structuredClone");
+                il.Emit(OpCodes.Ldc_I4_2);
+                EmitReflectedFunctionFactory(il, runtime.FunctionConstruction.GetOrCreate, parameters);
+            });
+        }
+        il.Emit(OpCodes.Ret);
+
+        void EmitConstructor(ILGenerator target, Type type) =>
+            NativeConstructorActivationLookup.EmitValue(_nativeConstructorActivation, _types, target, type,
+                NativeConstructorValueProducerKind.GlobalConstructorProperty);
+
+        void InstallData(string name, bool enumerable, Action emitValue)
+        {
+            var storage = runtime.DescriptorStorage;
+            il.Emit(OpCodes.Ldsfld, runtime.GlobalObject.SingletonField);
+            il.Emit(OpCodes.Ldstr, name);
+            il.Emit(OpCodes.Newobj, storage.DescriptorConstructor);
+            il.Emit(OpCodes.Dup);
+            emitValue();
+            il.Emit(OpCodes.Callvirt, storage.DescriptorValue.GetSetMethod()!);
+            il.Emit(OpCodes.Dup);
+            il.Emit(enumerable ? OpCodes.Ldc_I4_1 : OpCodes.Ldc_I4_0);
+            il.Emit(OpCodes.Callvirt, storage.DescriptorEnumerable.GetSetMethod()!);
+            il.Emit(OpCodes.Call, storage.DefineProperty);
+            il.Emit(OpCodes.Pop);
+        }
+    }
+
+    private void EmitGlobalAccessor(TypeBuilder owner, ILGenerator il, EmittedRuntime runtime,
+        string key, Action<ILGenerator> emitDefault)
+    {
+        // Delay construction of process until it is read. A detached setter can
+        // override the default with any JS value, including null and undefined.
+        var value = owner.DefineField("_globalValue_" + key, _types.Object, FieldAttributes.Private | FieldAttributes.Static);
+        il.Emit(OpCodes.Ldsfld, runtime.Sentinels.LexicalUninitializedInstance);
+        il.Emit(OpCodes.Stsfld, value);
+        const MethodAttributes attributes = MethodAttributes.Public | MethodAttributes.Static;
+        var getter = owner.DefineMethod("GetGlobal_" + key, attributes, _types.Object, Type.EmptyTypes);
+        var get = getter.GetILGenerator();
+        var loaded = get.DefineLabel();
+        get.Emit(OpCodes.Ldsfld, value);
+        get.Emit(OpCodes.Dup);
+        get.Emit(OpCodes.Ldsfld, runtime.Sentinels.LexicalUninitializedInstance);
+        get.Emit(OpCodes.Bne_Un, loaded);
+        get.Emit(OpCodes.Pop);
+        emitDefault(get);
+        get.MarkLabel(loaded);
+        get.Emit(OpCodes.Ret);
+        var setter = owner.DefineMethod("SetGlobal_" + key, attributes, _types.Object, [_types.Object]);
+        if (runtime.FunctionAttributes.PadUndefinedCtor is { } pad)
+            setter.SetCustomAttribute(pad, CustomAttributeEncoder.EmptyBlob);
+        var set = setter.GetILGenerator();
+        set.Emit(OpCodes.Ldarg_0);
+        set.Emit(OpCodes.Stsfld, value);
+        set.Emit(OpCodes.Ldsfld, runtime.Sentinels.UndefinedInstance);
+        set.Emit(OpCodes.Ret);
+
+        var storage = runtime.DescriptorStorage;
+        il.Emit(OpCodes.Ldsfld, runtime.GlobalObject.SingletonField);
+        il.Emit(OpCodes.Ldstr, key);
+        il.Emit(OpCodes.Newobj, storage.DescriptorConstructor);
+        foreach (var (method, name, length, property) in new[] {
+            (getter, "get", 0, storage.DescriptorGetter), (setter, "set", 1, storage.DescriptorSetter) })
+        {
+            il.Emit(OpCodes.Dup);
+            var parameters = EmitReflectedMethodLiteralViaHandle(il, method);
+            il.Emit(OpCodes.Ldstr, name);
+            il.Emit(OpCodes.Ldc_I4, length);
+            EmitReflectedFunctionFactory(il, runtime.FunctionConstruction.GetOrCreate, parameters);
+            il.Emit(OpCodes.Callvirt, property.GetSetMethod()!);
+        }
+        il.Emit(OpCodes.Dup);
+        il.Emit(OpCodes.Ldc_I4_0);
+        il.Emit(OpCodes.Callvirt, storage.DescriptorEnumerable.GetSetMethod()!);
+        il.Emit(OpCodes.Call, storage.DefineProperty);
+        il.Emit(OpCodes.Pop);
+    }
 
     private void EmitGlobalThisGetBinding(
         EmittedGlobalObjectRuntime globalObject,
@@ -213,7 +304,6 @@ public partial class RuntimeEmitter
         var encodeURIComponentLabel = il.DefineLabel();
         var decodeURIComponentLabel = il.DefineLabel();
         var evalLabel = il.DefineLabel();
-        var structuredCloneLabel = il.DefineLabel();
         var returnLabel = il.DefineLabel();
         var checkBuiltInsLabel = il.DefineLabel();
         var checkDeletedLabel = il.DefineLabel();
@@ -352,14 +442,6 @@ public partial class RuntimeEmitter
         il.Emit(OpCodes.Call, _types.GetMethod(_types.String, "op_Equality", _types.String, _types.String));
         il.Emit(OpCodes.Brtrue, isFiniteLabel);
 
-        if (inputs.Optional.StructuredClone is not null)
-        {
-            il.Emit(OpCodes.Ldarg_0);
-            il.Emit(OpCodes.Ldstr, "structuredClone");
-            il.Emit(OpCodes.Call, _types.GetMethod(_types.String, "op_Equality", _types.String, _types.String));
-            il.Emit(OpCodes.Brtrue, structuredCloneLabel);
-        }
-
         // URI functions are ordinary first-class globals as well as recognized
         // direct-call intrinsics.
         il.Emit(OpCodes.Ldarg_0);
@@ -409,16 +491,9 @@ public partial class RuntimeEmitter
         EmitTypeBranch("WeakMap", _types.ConditionalWeakTableObjectObject);
         EmitTypeBranch("WeakSet", _types.ConditionalWeakTableObjectObject);
         EmitTypeBranch("Promise", _types.TaskOfObject);
-        if (inputs.Optional.BufferType is not null)
-            EmitTypeBranch("Buffer", inputs.Optional.BufferType!);
         if (inputs.Optional.ArrayBufferType is not null)
             EmitTypeBranch("ArrayBuffer", inputs.Optional.ArrayBufferType);
         EmitTypeBranch("Function", inputs.FunctionType);
-        if (inputs.Optional.EncoderType is not null)
-        {
-            EmitTypeBranch("TextEncoder", inputs.Optional.EncoderType!);
-            EmitTypeBranch("TextDecoder", inputs.Optional.DecoderType!);
-        }
         // `Object` — return System.Object's Type token so `globalThis.Object === Object`
         // holds (bare `Object` lowers to this same helper via ILEmitter.Expressions.cs,
         // so both sides produce the canonical Type instance). The compile-time static
@@ -485,20 +560,6 @@ public partial class RuntimeEmitter
             il.Emit(OpCodes.Call, inputs.Optional.GetAbortControllerConstructor);
             il.Emit(OpCodes.Br, returnLabel);
             il.MarkLabel(notAbortController);
-        }
-
-        // globalThis.process → the live $Process singleton (epic #1078), same
-        // object as the bare `process` identifier and the module facade's
-        // default export.
-        {
-            var notProcess = il.DefineLabel();
-            il.Emit(OpCodes.Ldarg_0);
-            il.Emit(OpCodes.Ldstr, "process");
-            il.Emit(OpCodes.Call, strEquals);
-            il.Emit(OpCodes.Brfalse, notProcess);
-            il.Emit(OpCodes.Call, inputs.GetProcess);
-            il.Emit(OpCodes.Br, returnLabel);
-            il.MarkLabel(notProcess);
         }
 
         // globalThis.crypto → the $WebCrypto singleton (#1063), same object as
@@ -597,13 +658,6 @@ public partial class RuntimeEmitter
         il.MarkLabel(isFiniteLabel);
         EmitGetOrCreateTSFn(inputs.Numbers.IsFinite, "isFinite", 1);
         il.Emit(OpCodes.Br, returnLabel);
-
-        if (inputs.Optional.StructuredClone is { } structuredClone)
-        {
-            il.MarkLabel(structuredCloneLabel);
-            EmitGetOrCreateTSFn(structuredClone, "structuredClone", 2);
-            il.Emit(OpCodes.Br, returnLabel);
-        }
 
         il.MarkLabel(encodeURIComponentLabel);
         EmitGetOrCreateTSFn(inputs.UriComponents.Encode, "encodeURIComponent", 1);

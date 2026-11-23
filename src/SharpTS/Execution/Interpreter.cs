@@ -2533,10 +2533,14 @@ public partial class Interpreter : IDisposable
     {
         if (strictMode && !target.HasProperty(name))
             throw new InterpreterException($"ReferenceError: Undefined variable '{name}'.");
-        object? boxed = value.ToObject();
+        SetGlobalPropertyValue(target, name, value.ToObject(), strictMode);
+    }
+
+    private void SetGlobalPropertyValue(SharpTSGlobalThis target, string name, object? value, bool strictMode)
+    {
         if (!TryAssignThroughDescriptor(target.GetOwnPropertyDescriptor(name),
-                target, name, boxed, strictMode))
-            target.SetProperty(name, boxed);
+                target, name, value, strictMode))
+            target.SetProperty(name, value);
     }
 
     /// <summary>

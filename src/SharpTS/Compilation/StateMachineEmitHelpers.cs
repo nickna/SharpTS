@@ -1298,7 +1298,7 @@ public class StateMachineEmitHelpers
     #region Console Intrinsics
 
     /// <summary>
-    /// Evaluates call arguments (from <paramref name="start"/>) into temp locals, in order.
+    /// Evaluates all call arguments in order, retaining the prefix used by the callee.
     /// State-machine emitters can suspend (await) inside emitArgumentBoxed; a value left on
     /// the IL evaluation stack across a suspension produces invalid IL, so arguments must be
     /// spilled to locals before the args array is assembled.
@@ -1306,15 +1306,16 @@ public class StateMachineEmitHelpers
     private List<LocalBuilder> SpillArgumentsToLocals(
         SharpTS.Parsing.Expr.Call call,
         Action<SharpTS.Parsing.Expr> emitArgumentBoxed,
-        int start = 0)
+        int maximumSaved = int.MaxValue)
     {
         var temps = new List<LocalBuilder>();
-        for (int i = start; i < call.Arguments.Count; i++)
+        foreach (var argument in call.Arguments)
         {
-            emitArgumentBoxed(call.Arguments[i]);
+            emitArgumentBoxed(argument);
             // Register each arg temp so a suspension in a later arg persists the earlier
             // ones across the MoveNext re-entry (#400).
-            temps.Add(SpillStoreObject());
+            if (temps.Count < maximumSaved) temps.Add(SpillStoreObject());
+            else _il.Emit(OpCodes.Pop);
         }
         return temps;
     }
@@ -1452,37 +1453,15 @@ public class StateMachineEmitHelpers
                 return true;
 
             case "clear":
-                _il.Emit(OpCodes.Call, console.Clear);
-                _il.Emit(OpCodes.Ldnull);
-                SetStackUnknown();
+                EmitFixedCall(console.Clear, 0);
                 return true;
 
             case "time":
-                if (call.Arguments.Count >= 1)
-                {
-                    emitArgumentBoxed(call.Arguments[0]);
-                }
-                else
-                {
-                    _il.Emit(OpCodes.Ldnull);
-                }
-                _il.Emit(OpCodes.Call, console.Time);
-                _il.Emit(OpCodes.Ldnull);
-                SetStackUnknown();
+                EmitFixedCall(console.Time, 1);
                 return true;
 
             case "timeEnd":
-                if (call.Arguments.Count >= 1)
-                {
-                    emitArgumentBoxed(call.Arguments[0]);
-                }
-                else
-                {
-                    _il.Emit(OpCodes.Ldnull);
-                }
-                _il.Emit(OpCodes.Call, console.TimeEnd);
-                _il.Emit(OpCodes.Ldnull);
-                SetStackUnknown();
+                EmitFixedCall(console.TimeEnd, 1);
                 return true;
 
             case "timeLog":
@@ -1498,50 +1477,28 @@ public class StateMachineEmitHelpers
                 return true;
 
             case "count":
-                if (call.Arguments.Count >= 1)
-                {
-                    emitArgumentBoxed(call.Arguments[0]);
-                }
-                else
-                {
-                    _il.Emit(OpCodes.Ldnull);
-                }
-                _il.Emit(OpCodes.Call, console.Count);
-                _il.Emit(OpCodes.Ldnull);
-                SetStackUnknown();
+                EmitFixedCall(console.Count, 1);
                 return true;
 
             case "countReset":
-                if (call.Arguments.Count >= 1)
-                {
-                    emitArgumentBoxed(call.Arguments[0]);
-                }
-                else
-                {
-                    _il.Emit(OpCodes.Ldnull);
-                }
-                _il.Emit(OpCodes.Call, console.CountReset);
-                _il.Emit(OpCodes.Ldnull);
-                SetStackUnknown();
+                EmitFixedCall(console.CountReset, 1);
                 return true;
 
             case "table":
-                EmitConsoleTable(call, emitArgumentBoxed, console);
+                EmitFixedCall(console.Table, 2);
                 return true;
 
             case "dir":
-                EmitConsoleDir(call, emitArgumentBoxed, console);
+                EmitFixedCall(console.Dir, 1);
                 return true;
 
             case "group":
             case "groupCollapsed":
-                EmitConsoleGroup(call, emitArgumentBoxed, console);
+                EmitConsoleOutputMethod(call, emitArgumentBoxed, emitArgumentsWithSpread, console.Group, console.GroupMultiple);
                 return true;
 
             case "groupEnd":
-                _il.Emit(OpCodes.Call, console.GroupEnd);
-                _il.Emit(OpCodes.Ldnull);
-                SetStackUnknown();
+                EmitFixedCall(console.GroupEnd, 0);
                 return true;
 
             case "trace":
@@ -1550,6 +1507,46 @@ public class StateMachineEmitHelpers
 
             default:
                 return false;
+        }
+
+        void EmitFixedCall(MethodInfo method, int parameterCount)
+        {
+            if (call.Arguments.Any(argument => argument is Expr.Spread))
+            {
+                // Fully consume iterators even when the helper uses only a prefix.
+                emitArgumentsWithSpread(call.Arguments);
+                var args = _il.DeclareLocal(_types.ObjectArray);
+                _il.Emit(OpCodes.Stloc, args);
+                for (int i = 0; i < parameterCount; i++)
+                {
+                    var missing = _il.DefineLabel();
+                    var ready = _il.DefineLabel();
+                    _il.Emit(OpCodes.Ldloc, args);
+                    _il.Emit(OpCodes.Ldlen);
+                    _il.Emit(OpCodes.Conv_I4);
+                    _il.Emit(OpCodes.Ldc_I4, i);
+                    _il.Emit(OpCodes.Ble, missing);
+                    _il.Emit(OpCodes.Ldloc, args);
+                    _il.Emit(OpCodes.Ldc_I4, i);
+                    _il.Emit(OpCodes.Ldelem_Ref);
+                    _il.Emit(OpCodes.Br, ready);
+                    _il.MarkLabel(missing);
+                    _il.Emit(OpCodes.Ldnull);
+                    _il.MarkLabel(ready);
+                }
+            }
+            else
+            {
+                var arguments = SpillArgumentsToLocals(call, emitArgumentBoxed, parameterCount);
+                for (int i = 0; i < parameterCount; i++)
+                {
+                    if (i < arguments.Count) _il.Emit(OpCodes.Ldloc, arguments[i]);
+                    else _il.Emit(OpCodes.Ldnull);
+                }
+            }
+            _il.Emit(OpCodes.Call, method);
+            _il.Emit(OpCodes.Ldnull);
+            SetStackUnknown();
         }
     }
 
@@ -1582,80 +1579,6 @@ public class StateMachineEmitHelpers
             _il.Emit(OpCodes.Ldloc, temps[0]);
             EmitArgsArrayFromLocals(temps.GetRange(1, temps.Count - 1));
             _il.Emit(OpCodes.Call, console.AssertMultiple);
-        }
-        _il.Emit(OpCodes.Ldnull);
-        SetStackUnknown();
-    }
-
-    /// <summary>
-    /// Emits console.table(data, columns?) call.
-    /// </summary>
-    private void EmitConsoleTable(
-        SharpTS.Parsing.Expr.Call call,
-        Action<SharpTS.Parsing.Expr> emitArgumentBoxed,
-        EmittedConsoleRuntime console)
-    {
-        // Both operands spilled for await-safety (data must not sit on the stack across
-        // a suspension inside the columns argument).
-        var tableTemps = SpillArgumentsToLocals(call, emitArgumentBoxed);
-        if (tableTemps.Count >= 1)
-            _il.Emit(OpCodes.Ldloc, tableTemps[0]);
-        else
-            _il.Emit(OpCodes.Ldnull);
-
-        if (tableTemps.Count >= 2)
-            _il.Emit(OpCodes.Ldloc, tableTemps[1]);
-        else
-            _il.Emit(OpCodes.Ldnull);
-        _il.Emit(OpCodes.Call, console.Table);
-        _il.Emit(OpCodes.Ldnull);
-        SetStackUnknown();
-    }
-
-    /// <summary>
-    /// Emits console.dir(obj, options?) call.
-    /// </summary>
-    private void EmitConsoleDir(
-        SharpTS.Parsing.Expr.Call call,
-        Action<SharpTS.Parsing.Expr> emitArgumentBoxed,
-        EmittedConsoleRuntime console)
-    {
-        if (call.Arguments.Count >= 1)
-        {
-            emitArgumentBoxed(call.Arguments[0]);
-        }
-        else
-        {
-            _il.Emit(OpCodes.Ldnull);
-        }
-        _il.Emit(OpCodes.Call, console.Dir);
-        _il.Emit(OpCodes.Ldnull);
-        SetStackUnknown();
-    }
-
-    /// <summary>
-    /// Emits console.group(label?) or console.groupCollapsed(label?) call.
-    /// </summary>
-    private void EmitConsoleGroup(
-        SharpTS.Parsing.Expr.Call call,
-        Action<SharpTS.Parsing.Expr> emitArgumentBoxed,
-        EmittedConsoleRuntime console)
-    {
-        if (call.Arguments.Count == 0)
-        {
-            _il.Emit(OpCodes.Ldnull);
-            _il.Emit(OpCodes.Call, console.Group);
-        }
-        else if (call.Arguments.Count == 1)
-        {
-            emitArgumentBoxed(call.Arguments[0]);
-            _il.Emit(OpCodes.Call, console.Group);
-        }
-        else
-        {
-            // Multiple arguments (spilled for await-safety)
-            EmitArgsArrayFromLocals(SpillArgumentsToLocals(call, emitArgumentBoxed));
-            _il.Emit(OpCodes.Call, console.GroupMultiple);
         }
         _il.Emit(OpCodes.Ldnull);
         SetStackUnknown();

@@ -2833,7 +2833,7 @@ public abstract partial class ExpressionEmitterBase : IEmitterContext
     /// </summary>
     protected bool TryEmitBuiltInClassType(string name)
     {
-        if (name == "Array" && Ctx.RuntimeFeatures?.UsesArrayConstructorMutation == true)
+        if (name == "Buffer" || (name == "Array" && Ctx.RuntimeFeatures?.UsesArrayConstructorMutation == true))
         {
             IL.Emit(OpCodes.Ldstr, name);
             IL.Emit(OpCodes.Call, Ctx.Runtime!.GlobalObject.GetBinding);
@@ -2846,7 +2846,6 @@ public abstract partial class ExpressionEmitterBase : IEmitterContext
             "RegExp" => Ctx.Runtime!.RegExps.Implementation?.Type,
             "TextEncoder" => Ctx.Runtime!.RequireTextEncoding().EncoderType,
             "TextDecoder" => Ctx.Runtime!.RequireTextEncoding().DecoderType,
-            "Buffer" => Ctx.Runtime!.Buffer?.Type,
             "Array" => Types.IListOfObject, // covers both List<object> and $Array
             "Map" => Types.DictionaryObjectObject,
             "Set" => Types.HashSetOfObject,

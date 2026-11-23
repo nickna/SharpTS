@@ -1034,12 +1034,6 @@ public partial class Interpreter
         => obj is SharpTSGlobalThis global && ToPropertyKey(index) is string key
             ? new IndexTarget.GlobalThis(global, key) : null;
 
-    private void SetGlobalIndexValue(IndexTarget.GlobalThis target, object? value, bool strictMode)
-    {
-        if (!TryAssignThroughDescriptor(target.Target.GetOwnPropertyDescriptor(target.Key),
-                target.Target, target.Key, value, strictMode))
-            target.Target.SetProperty(target.Key, value);
-    }
     /// <summary>
     /// Resolves an (object, index) pair to a typed IndexTarget for dispatch.
     /// </summary>
@@ -2169,7 +2163,7 @@ public partial class Interpreter
                 break;
 
             case IndexTarget.GlobalThis t:
-                SetGlobalIndexValue(t, value, strictMode);
+                SetGlobalPropertyValue(t.Target, t.Key, value, strictMode);
                 break;
 
             case IndexTarget.BuiltInPrototypeString t:

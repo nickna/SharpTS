@@ -105,7 +105,7 @@ public partial class RuntimeEmitter
         EmitConsoleCountReset(typeBuilder, runtime);
         EmitConsoleTable(typeBuilder, runtime);
         EmitConsoleDir(typeBuilder, runtime.Console, runtime.Inspection);
-        EmitConsoleGroup(typeBuilder, runtime);
+        EmitConsoleGroup(typeBuilder, runtime.Console);
         EmitConsoleGroupMultiple(typeBuilder, runtime.Console);
         EmitConsoleGroupEnd(typeBuilder, runtime.Console);
         EmitConsoleTrace(typeBuilder, runtime);
@@ -1031,7 +1031,7 @@ public partial class RuntimeEmitter
     /// Emits: public static void ConsoleGroup(object label)
     /// Prints label and increases indent level.
     /// </summary>
-    private void EmitConsoleGroup(TypeBuilder typeBuilder, EmittedRuntime runtime)
+    private void EmitConsoleGroup(TypeBuilder typeBuilder, EmittedConsoleRuntime console)
     {
         var method = typeBuilder.DefineMethod(
             "ConsoleGroup",
@@ -1039,25 +1039,17 @@ public partial class RuntimeEmitter
             _types.Void,
             [_types.Object]
         );
-        runtime.Console.Group = method;
+        console.Group = method;
 
         var il = method.GetILGenerator();
-        var skipLabel = il.DefineLabel();
-
-        // If label is not null, print it
         il.Emit(OpCodes.Ldarg_0);
-        il.Emit(OpCodes.Brfalse, skipLabel);
-        il.Emit(OpCodes.Ldarg_0);
-        il.Emit(OpCodes.Call, runtime.StringCoercion.Stringify);
-        il.Emit(OpCodes.Call, _types.GetMethod(_types.Console, "WriteLine", _types.String));
-
-        il.MarkLabel(skipLabel);
+        il.Emit(OpCodes.Call, console.Log);
 
         // _consoleGroupLevel++
-        il.Emit(OpCodes.Ldsfld, runtime.Console.GroupLevelField);
+        il.Emit(OpCodes.Ldsfld, console.GroupLevelField);
         il.Emit(OpCodes.Ldc_I4_1);
         il.Emit(OpCodes.Add);
-        il.Emit(OpCodes.Stsfld, runtime.Console.GroupLevelField);
+        il.Emit(OpCodes.Stsfld, console.GroupLevelField);
 
         il.Emit(OpCodes.Ret);
     }
@@ -1078,15 +1070,12 @@ public partial class RuntimeEmitter
 
         var il = method.GetILGenerator();
 
-        // Print string.Join(" ", args)
         var increment = il.DefineLabel();
         il.Emit(OpCodes.Ldarg_0);
         il.Emit(OpCodes.Ldlen);
         il.Emit(OpCodes.Brfalse_S, increment);
-        il.Emit(OpCodes.Ldstr, " ");
         il.Emit(OpCodes.Ldarg_0);
-        il.Emit(OpCodes.Call, _types.GetMethod(_types.String, "Join", _types.String, _types.ObjectArray));
-        il.Emit(OpCodes.Call, _types.GetMethod(_types.Console, "WriteLine", _types.String));
+        il.Emit(OpCodes.Call, console.LogMultiple);
 
         // _consoleGroupLevel++
         il.MarkLabel(increment);

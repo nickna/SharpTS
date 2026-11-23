@@ -36,19 +36,19 @@ public static class ConsoleBuiltIns
             .MethodV2("debug", 0, int.MaxValue, DebugV2)
             .MethodV2("error", 0, int.MaxValue, ErrorV2)
             .MethodV2("warn", 0, int.MaxValue, WarnV2)
-            .MethodV2("clear", 0, ClearV2)
-            .MethodV2("time", 0, 1, TimeV2)
-            .MethodV2("timeEnd", 0, 1, TimeEndV2)
+            .MethodV2("clear", 0, int.MaxValue, ClearV2)
+            .MethodV2("time", 0, int.MaxValue, TimeV2)
+            .MethodV2("timeEnd", 0, int.MaxValue, TimeEndV2)
             .MethodV2("timeLog", 0, int.MaxValue, TimeLogV2)
             // Phase 2: New methods
             .MethodV2("assert", 0, int.MaxValue, AssertV2)
-            .MethodV2("count", 0, 1, CountV2)
-            .MethodV2("countReset", 0, 1, CountResetV2)
-            .MethodV2("table", 1, 2, TableV2)
-            .MethodV2("dir", 1, 2, DirV2)
+            .MethodV2("count", 0, int.MaxValue, CountV2)
+            .MethodV2("countReset", 0, int.MaxValue, CountResetV2)
+            .MethodV2("table", 1, int.MaxValue, TableV2)
+            .MethodV2("dir", 1, int.MaxValue, DirV2)
             .MethodV2("group", 0, int.MaxValue, GroupV2)
             .MethodV2("groupCollapsed", 0, int.MaxValue, GroupCollapsedV2)
-            .MethodV2("groupEnd", 0, GroupEndV2)
+            .MethodV2("groupEnd", 0, int.MaxValue, GroupEndV2)
             .MethodV2("trace", 0, int.MaxValue, TraceV2)
             .Build();
 
@@ -105,6 +105,9 @@ public static class ConsoleBuiltIns
     /// </summary>
     private static string StringifyRV(RuntimeValue value)
         => Stringify(value.ToObject());
+
+    private static string GetLabel(ReadOnlySpan<RuntimeValue> args)
+        => args.IsEmpty || args[0].IsUndefined ? "default" : StringifyRV(args[0]);
 
     /// <summary>
     /// Joins a span of RuntimeValue arguments with space separator, stringifying each.
@@ -377,14 +380,14 @@ public static class ConsoleBuiltIns
 
     private static RuntimeValue TimeV2(Interpreter _, RuntimeValue receiver, ReadOnlySpan<RuntimeValue> args)
     {
-        string label = args.Length > 0 && args[0].ToObject() != null ? StringifyRV(args[0]) : "default";
+        string label = GetLabel(args);
         _timers[label] = Stopwatch.StartNew();
         return RuntimeValue.Undefined;
     }
 
     private static RuntimeValue TimeEndV2(Interpreter i, RuntimeValue receiver, ReadOnlySpan<RuntimeValue> args)
     {
-        string label = args.Length > 0 && args[0].ToObject() != null ? StringifyRV(args[0]) : "default";
+        string label = GetLabel(args);
         if (_timers.TryGetValue(label, out var sw))
         {
             sw.Stop();
@@ -396,7 +399,7 @@ public static class ConsoleBuiltIns
 
     private static RuntimeValue TimeLogV2(Interpreter i, RuntimeValue receiver, ReadOnlySpan<RuntimeValue> args)
     {
-        string label = args.Length > 0 && args[0].ToObject() != null ? StringifyRV(args[0]) : "default";
+        string label = GetLabel(args);
         if (_timers.TryGetValue(label, out var sw))
         {
             var elapsed = sw.Elapsed.TotalMilliseconds;
@@ -446,7 +449,7 @@ public static class ConsoleBuiltIns
 
     private static RuntimeValue CountV2(Interpreter i, RuntimeValue receiver, ReadOnlySpan<RuntimeValue> args)
     {
-        string label = args.Length > 0 && args[0].ToObject() != null ? StringifyRV(args[0]) : "default";
+        string label = GetLabel(args);
         if (!_counts.TryGetValue(label, out var count))
         {
             count = 0;
@@ -459,7 +462,7 @@ public static class ConsoleBuiltIns
 
     private static RuntimeValue CountResetV2(Interpreter _, RuntimeValue receiver, ReadOnlySpan<RuntimeValue> args)
     {
-        string label = args.Length > 0 && args[0].ToObject() != null ? StringifyRV(args[0]) : "default";
+        string label = GetLabel(args);
         _counts[label] = 0;
         return RuntimeValue.Undefined;
     }

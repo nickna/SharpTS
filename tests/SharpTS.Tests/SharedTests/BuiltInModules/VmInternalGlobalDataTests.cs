@@ -62,6 +62,58 @@ public sealed class VmInternalGlobalDataTests
 
     public static IEnumerable<object[]> Cases()
     {
+        yield return ["shadowed-fixed-global", """
+            import { createContext, runInContext } from "node:vm";
+            const ctx: any = createContext({ Infinity: 44, NaN: 45, undefined: 46 });
+            console.log(runInContext('Reflect.defineProperty(globalThis,"Infinity",{value:7})', ctx),
+                        runInContext('Reflect.defineProperty(globalThis,"NaN",{get(){return 9}})', ctx),
+                        runInContext('Reflect.defineProperty(globalThis,"undefined",{writable:false})', ctx));
+            console.log(ctx.Infinity, ctx.NaN, ctx.undefined, runInContext('globalThis.NaN', ctx));
+            delete ctx.Infinity; delete ctx.NaN; delete ctx.undefined;
+            console.log(runInContext('globalThis.Infinity', ctx), runInContext('globalThis.NaN', ctx),
+                        runInContext('globalThis.undefined', ctx), runInContext('Object.getOwnPropertyDescriptor(globalThis,"undefined").writable', ctx));
+            console.log(runInContext('Reflect.deleteProperty(globalThis,"Infinity")', ctx), runInContext('"Infinity" in globalThis', ctx));
+            """, "true true true\n44 45 46 45\n7 9 46 false\ntrue false\n"];
+        yield return ["unchanged-fixed-global-shadow", """
+            import { createContext, runInContext } from "node:vm";
+            const ctx: any = createContext({ Infinity: 44, undefined: 46 });
+            Object.defineProperty(ctx, "NaN", {value: 5});
+            console.log(runInContext('Reflect.defineProperty(globalThis,"Infinity",{value:44})', ctx),
+                        runInContext('Reflect.defineProperty(globalThis,"NaN",{value:6})', ctx),
+                        runInContext('Reflect.defineProperty(globalThis,"undefined",{writable:true})', ctx));
+            delete ctx.Infinity; delete ctx.undefined;
+            console.log(runInContext('globalThis.Infinity', ctx), ctx.NaN, runInContext('globalThis.undefined', ctx));
+            """, "true false true\n44 5 undefined\n"];
+        yield return ["writability-only", """
+            import { createContext, runInContext } from "node:vm";
+            const ctx: any = createContext({ x: 44, y: 12 });
+            Object.defineProperty(ctx, "fixed", { value: 8 });
+            Object.defineProperty(ctx, "editable", { value: 7, configurable: true });
+            console.log(runInContext('Reflect.defineProperty(globalThis,"x",{writable:false})', ctx),
+                        runInContext('Reflect.defineProperty(globalThis,"y",{writable:true})', ctx),
+                        runInContext('Reflect.defineProperty(globalThis,"fixed",{writable:true})', ctx),
+                        runInContext('Reflect.defineProperty(globalThis,"editable",{writable:true})', ctx));
+            const d = Object.getOwnPropertyDescriptor(ctx, "x");
+            console.log(d.value, d.writable, d.enumerable, d.configurable, ctx.y, ctx.fixed, ctx.editable);
+            delete ctx.x;
+            delete ctx.y;
+            console.log(runInContext('x', ctx), runInContext('Object.getOwnPropertyDescriptor(globalThis,"x").writable', ctx),
+                        runInContext('"y" in globalThis', ctx));
+            """, "true true false true\nundefined false true true undefined 8 7\n44 false false\n"];
+        yield return ["empty-sandbox-descriptor", """
+            import { createContext, runInContext } from "node:vm";
+            const ctx: any = createContext({ x: 44, y: 1 });
+            Object.defineProperty(ctx, "fixed", { value: 8 });
+            runInContext("var y = 12", ctx);
+            console.log(runInContext('Reflect.defineProperty(globalThis, "x", {})', ctx),
+                        runInContext('Object.defineProperty(globalThis, "y", {}) === globalThis', ctx),
+                        runInContext('Reflect.defineProperty(globalThis, "fixed", {})', ctx));
+            const d = Object.getOwnPropertyDescriptor(ctx, "x");
+            console.log(ctx.x, ctx.y, ctx.fixed, d.writable, d.enumerable, d.configurable);
+            delete ctx.x;
+            delete ctx.y;
+            console.log(runInContext('"x" in globalThis', ctx), runInContext("y", ctx));
+            """, "true true true\nundefined undefined 8 true true true\nfalse 12\n"];
         yield return ["original", "import * as vm from \"node:vm\";const ctx:any=vm.createContext({});vm.runInContext(\"globalThis.foo=1\",ctx);ctx.foo=7;console.log(vm.runInContext(\"String(foo)\",ctx));delete ctx.foo;console.log(vm.runInContext(\"String(globalThis.foo)\",ctx));", "7\n1\n"];
         yield return ["successive-writes", "import * as vm from 'node:vm';const ctx:any=vm.createContext({});vm.runInContext('globalThis.foo=1',ctx);vm.runInContext('foo=3',ctx);ctx.foo=7;delete ctx.foo;console.log(vm.runInContext('String(foo)',ctx));", "3\n"];
         yield return ["inside-delete", "import * as vm from 'node:vm';const ctx:any=vm.createContext({});vm.runInContext('globalThis.foo=1',ctx);ctx.foo=7;console.log(vm.runInContext('String(delete globalThis.foo)+\":\"+typeof foo',ctx),Object.prototype.hasOwnProperty.call(ctx,'foo'));", "true:undefined false\n"];

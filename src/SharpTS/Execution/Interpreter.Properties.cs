@@ -1073,6 +1073,13 @@ public partial class Interpreter
             if (obj is SharpTSProxy prototypeProxy)
                 return prototypeProxy.TrapHas(name, this);
 
+            if (obj is SharpTSGlobalThis global)
+            {
+                if (global.HasProperty(name)) return true;
+                obj = ObjectBuiltIns.PrototypeOf(this, global);
+                continue;
+            }
+
             if (obj is ISharpTSOwnPropertyObject ownPropertyObject)
             {
                 if (ownPropertyObject.OwnProperties.GetOwnPropertyDescriptor(name) is not null)
@@ -3359,7 +3366,7 @@ public partial class Interpreter
                 return value;
 
             default:
-                return EvaluateSetFallback(obj, memberName, value);
+                return EvaluateSetFallback(obj, memberName, value, strictMode);
         }
     }
 
@@ -3603,17 +3610,11 @@ public partial class Interpreter
     /// Fallback for property assignment on types without TypeCategory dispatch
     /// (GlobalThis, process, Agent, AbortSignal).
     /// </summary>
-    private object? EvaluateSetFallback(object? obj, string memberName, object? value)
+    private object? EvaluateSetFallback(object? obj, string memberName, object? value, bool strictMode)
     {
         if (obj is SharpTSGlobalThis globalThis)
         {
-            if (globalThis.TryGetUserAccessor(memberName, out _, out var setter))
-            {
-                if (setter != null)
-                    BindAccessorToObject(setter, globalThis.AccessorReceiver).CallBoxed(this, [value]);
-                return value;
-            }
-            globalThis.SetProperty(memberName, value);
+            SetGlobalPropertyValue(globalThis, memberName, value, strictMode);
             return value;
         }
 

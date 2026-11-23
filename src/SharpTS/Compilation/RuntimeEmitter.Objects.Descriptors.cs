@@ -57,6 +57,7 @@ public partial class RuntimeEmitter
         EmittedNumericCoercionRuntime NumericCoercion,
         MethodBuilder ObjectIs,
         EmittedObjectPrototypeRuntime ObjectPrototypes,
+        FieldBuilder GlobalThisSingleton,
         EmittedObjectStateRuntime ObjectState,
         EmittedObjectStorageRuntime ObjectStorage,
         EmittedOperatorRuntime Operators,
@@ -741,6 +742,7 @@ public partial class RuntimeEmitter
                 inputs.UndefinedType,
                 inputs.OwnPrototype,
                 inputs.Operators.TypeOf,
+                inputs.GlobalThisSingleton,
                 SourceOwners: inputs.SourceOwners
             ),
             propNameLocal
@@ -1302,11 +1304,12 @@ public partial class RuntimeEmitter
         // (a) skip the check (was previous fix — regressed 4-162 etc.) or
         // (b) compare against undefined and falsely throw on same-length redefine.
         var valueKeyLocal = il.DeclareLocal(_types.Object);
+        var fixedDataUnchanged = il.DefineLabel();
         il.Emit(OpCodes.Ldloc, dictLocal);
         il.Emit(OpCodes.Ldstr, "value");
         il.Emit(OpCodes.Ldloca, valueKeyLocal);
         il.Emit(OpCodes.Callvirt, dictTryGetValue);
-        il.Emit(OpCodes.Brfalse, skipWritableCheck);
+        il.Emit(OpCodes.Brfalse, fixedDataUnchanged);
         var existingValueForCompare = il.DeclareLocal(_types.Object);
         il.Emit(OpCodes.Ldloc, existingDescLocal);
         il.Emit(OpCodes.Callvirt, inputs.DescriptorStorage.DescriptorValue.GetGetMethod()!);
@@ -1341,6 +1344,11 @@ public partial class RuntimeEmitter
         il.Emit(OpCodes.Ldloc, existingValueForCompare);
         il.Emit(OpCodes.Call, inputs.ObjectIs);
         il.Emit(OpCodes.Brfalse, throwRedefineLabel);
+        // A compatible definition of a fixed data property is a no-op. In
+        // particular, a synthesized intrinsic must not acquire a storage slot.
+        il.MarkLabel(fixedDataUnchanged);
+        il.Emit(OpCodes.Ldarg_0);
+        il.Emit(OpCodes.Ret);
         il.MarkLabel(skipWritableCheck);
 
         // Validation passed.

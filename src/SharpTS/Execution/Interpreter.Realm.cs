@@ -792,6 +792,19 @@ public partial class Interpreter
     private SharpTSGlobalThis CreateRealmGlobalThis()
     {
         var globalThis = new SharpTSGlobalThis(ResolveGlobalObjectIntrinsic);
+        var buffer = RuntimeValue.FromObject(SharpTSBufferConstructor.Instance);
+        var getter = BuiltInMethod.CreateV2("get", 0, int.MaxValue, (_, _, _) => buffer);
+        var setter = BuiltInMethod.CreateV2("set", 0, int.MaxValue, (_, _, args) =>
+        {
+            buffer = args.IsEmpty ? RuntimeValue.Undefined : args[0];
+            return RuntimeValue.Undefined;
+        }).WithSpecLength(1);
+        globalThis.DefineProperty("Buffer", new SharpTSPropertyDescriptor
+        {
+            HasGet = true, Get = getter, RawGet = getter,
+            HasSet = true, Set = setter, RawSet = setter,
+            HasEnumerable = true, HasConfigurable = true, Configurable = true
+        });
         // Node timer globals are enumerable, mutable own data slots. Use the
         // same actual function values as bare-name lookup, so descriptors,
         // replacement and deletion share the global object's storage.
@@ -855,15 +868,4 @@ public partial class Interpreter
         }
     }
 
-    /// <summary>
-    /// Reads a property off <c>globalThis</c> honoring per-realm intrinsics: a
-    /// guest own-assignment (<c>globalThis.Math = x</c>) wins, then the realm
-    /// intrinsic (so <c>globalThis.Math === Math</c> within a realm), then the
-    /// normal built-in/global resolution. Behaviour is identical to
-    /// <c>globalThis.GetProperty</c> for every non-intrinsic name.
-    /// </summary>
-    private object? ResolveGlobalThisRead(Runtime.Types.SharpTSGlobalThis globalThis, string key)
-        => !globalThis.HasUserProperty(key) && TryGetRealmIntrinsic(key, out var intrinsic)
-            ? intrinsic
-            : globalThis.GetProperty(key);
 }
