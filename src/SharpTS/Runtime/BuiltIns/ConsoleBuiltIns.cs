@@ -106,6 +106,9 @@ public static class ConsoleBuiltIns
     private static string StringifyRV(RuntimeValue value)
         => Stringify(value.ToObject());
 
+    private static string GetLabel(ReadOnlySpan<RuntimeValue> args)
+        => args.IsEmpty || args[0].IsUndefined ? "default" : StringifyRV(args[0]);
+
     /// <summary>
     /// Joins a span of RuntimeValue arguments with space separator, stringifying each.
     /// </summary>
@@ -377,14 +380,14 @@ public static class ConsoleBuiltIns
 
     private static RuntimeValue TimeV2(Interpreter _, RuntimeValue receiver, ReadOnlySpan<RuntimeValue> args)
     {
-        string label = args.Length > 0 && args[0].ToObject() != null ? StringifyRV(args[0]) : "default";
+        string label = GetLabel(args);
         _timers[label] = Stopwatch.StartNew();
         return RuntimeValue.Undefined;
     }
 
     private static RuntimeValue TimeEndV2(Interpreter i, RuntimeValue receiver, ReadOnlySpan<RuntimeValue> args)
     {
-        string label = args.Length > 0 && args[0].ToObject() != null ? StringifyRV(args[0]) : "default";
+        string label = GetLabel(args);
         if (_timers.TryGetValue(label, out var sw))
         {
             sw.Stop();
@@ -396,7 +399,7 @@ public static class ConsoleBuiltIns
 
     private static RuntimeValue TimeLogV2(Interpreter i, RuntimeValue receiver, ReadOnlySpan<RuntimeValue> args)
     {
-        string label = args.Length > 0 && args[0].ToObject() != null ? StringifyRV(args[0]) : "default";
+        string label = GetLabel(args);
         if (_timers.TryGetValue(label, out var sw))
         {
             var elapsed = sw.Elapsed.TotalMilliseconds;
@@ -446,7 +449,7 @@ public static class ConsoleBuiltIns
 
     private static RuntimeValue CountV2(Interpreter i, RuntimeValue receiver, ReadOnlySpan<RuntimeValue> args)
     {
-        string label = args.Length > 0 && args[0].ToObject() != null ? StringifyRV(args[0]) : "default";
+        string label = GetLabel(args);
         if (!_counts.TryGetValue(label, out var count))
         {
             count = 0;
@@ -459,7 +462,7 @@ public static class ConsoleBuiltIns
 
     private static RuntimeValue CountResetV2(Interpreter _, RuntimeValue receiver, ReadOnlySpan<RuntimeValue> args)
     {
-        string label = args.Length > 0 && args[0].ToObject() != null ? StringifyRV(args[0]) : "default";
+        string label = GetLabel(args);
         _counts[label] = 0;
         return RuntimeValue.Undefined;
     }

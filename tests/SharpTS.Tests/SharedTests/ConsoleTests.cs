@@ -438,6 +438,25 @@ public class ConsoleTests
         Assert.Contains("default: 2\n", output);
     }
 
+    [Theory, InterpretedOnlyData]
+    public void Console_Count_DefaultsOnlyOmittedAndUndefinedLabels(ExecutionMode mode)
+    {
+        const string source = """
+            console.countReset();
+            console.countReset("null");
+            console.count(undefined);
+            console.count(null);
+            console.count();
+            console.countReset(null);
+            console.count("null");
+            console.countReset(undefined);
+            console.count();
+            console.countReset();
+            """;
+        Assert.Equal("default: 1\nnull: 1\ndefault: 2\nnull: 1\ndefault: 1\n",
+            TestHarness.RunUnchecked(source, mode));
+    }
+
     [Theory, ModeData]
     public void Console_CountReset_ResetsCounter(ExecutionMode mode)
     {
