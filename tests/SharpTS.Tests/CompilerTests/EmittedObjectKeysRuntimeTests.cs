@@ -159,6 +159,7 @@ public sealed class EmittedObjectKeysRuntimeTests
             return name switch
             {
                 "ArgumentsType" => runtime.Arguments.Type,
+                "GlobalSingleton" => runtime.GlobalObject.SingletonField,
                 "OwnKeys" => runtime.ObjectKeys.Ordinary,
                 "CreateList" => runtime.ObjectKeys.CreateProxyList,
                 "GetOwnPropertyDescriptor" => runtime.ObjectDescriptors.GetOwnPropertyDescriptor,
