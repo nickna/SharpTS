@@ -116,6 +116,29 @@ public class GlobalThisTests
     }
 
     [Theory, ModeData]
+    public void GlobalThis_BareProcessReadsTheCurrentBinding(ExecutionMode mode)
+    {
+        const string source = """
+            const root = globalThis;
+            const original = root.process;
+            console.log(process === original);
+            root.process = 7;
+            function* read() { yield process; yield process; }
+            const values = read();
+            console.log(root.process, process === root.process, values.next().value);
+            root.process = null;
+            console.log(process === null, values.next().value === null);
+            delete root.process;
+            console.log(typeof process);
+            try { console.log(process); } catch (error) { console.log(error.name); }
+            root.process = original;
+            console.log(process === original);
+            """;
+        Assert.Equal("true\n7 true 7\ntrue true\nundefined\nReferenceError\ntrue\n",
+            TestHarness.RunUnchecked(source, mode));
+    }
+
+    [Theory, ModeData]
     public void GlobalThis_IndexAccess(ExecutionMode mode)
     {
         var result = TestHarness.Run("""

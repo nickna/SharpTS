@@ -172,17 +172,6 @@ public partial class ILEmitter
         // shared with the state-machine emitters via the base helper.
         if (TryEmitNamespaceSingleton(name)) return;
 
-        if (name == "process")
-        {
-            // Value-position process resolves to the live $Process singleton
-            // (epic #1078): `const p = process; p.on(...)` and the module
-            // facade's default export share one object. The syntactic
-            // `process.X` form still takes ProcessStaticEmitter's fast path.
-            IL.Emit(OpCodes.Call, _ctx.Runtime!.Process.GetObject);
-            SetStackUnknown();
-            return;
-        }
-
         // globalThis / global (a Node alias) in value position resolve to the
         // runtime sentinel (#271) so `var root = globalThis || global` is a real
         // object whose dynamic GetProperty routes to GlobalThisGetProperty —
