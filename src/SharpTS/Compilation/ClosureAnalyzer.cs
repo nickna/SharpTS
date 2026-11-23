@@ -45,6 +45,8 @@ public partial class ClosureAnalyzer : AstVisitorBase
             {
                 if (_evalPrograms is not null && _strictContext)
                     _evalPrograms[expression] = statements = StaticEvalLowering.IsolateStrictDeclarations(statements, expression.Paren);
+                if (!_strictContext && expression.Callee is Expr.Variable { Name.Lexeme: "eval" })
+                    RecordEvalDeclarationConflict(expression, statements);
                 PrepareEvalTemplateCache(statements);
                 foreach (var statement in statements) Visit(statement);
             }
@@ -482,7 +484,12 @@ public partial class ClosureAnalyzer : AstVisitorBase
         _scopeOwners.Add(scope, _currentFunction);
     }
 
-    private void ExitScope() => _scopeOwners.Remove(_scopeStack.Pop());
+    private void ExitScope()
+    {
+        var scope = _scopeStack.Pop();
+        _scopeOwners.Remove(scope);
+        _evalLexicalNames.Remove(scope);
+    }
 
     /// <param name="name">The declared identifier.</param>
     /// <param name="isPerIterationBinding">True when the declaration creates a fresh
@@ -491,8 +498,16 @@ public partial class ClosureAnalyzer : AstVisitorBase
     /// <see cref="_loopBodyDepth"/>) or a <c>for-of</c>/<c>for-in</c> loop variable.</param>
     private void DeclareVariable(string name, bool isPerIterationBinding = false)
     {
-        if (_scopeStack.Count > 0)
-            _scopeStack.Peek().Add(name);
+        if (_scopeStack.TryPeek(out var scope))
+        {
+            scope.Add(name);
+            if (isPerIterationBinding && !_strictContext)
+            {
+                if (!_evalLexicalNames.TryGetValue(scope, out var names))
+                    _evalLexicalNames[scope] = names = new(StringComparer.Ordinal);
+                names.Add(name);
+            }
+        }
 
         // Track local variables for the current function
         if (_currentFunction != null && _localVars.TryGetValue(_currentFunction, out var locals))

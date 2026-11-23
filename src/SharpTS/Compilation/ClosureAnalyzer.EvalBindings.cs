@@ -5,6 +5,28 @@ namespace SharpTS.Compilation;
 
 public partial class ClosureAnalyzer
 {
+    private readonly Dictionary<HashSet<string>, HashSet<string>> _evalLexicalNames = [];
+    private readonly Dictionary<Expr.Call, string> _evalDeclarationConflicts = new(ReferenceEqualityComparer.Instance);
+
+    internal string? GetEvalDeclarationConflict(Expr.Call call) => _evalDeclarationConflicts.GetValueOrDefault(call);
+
+    private void RecordEvalDeclarationConflict(Expr.Call call, List<Stmt> statements)
+    {
+        // Only lexical declarations between the call and its variable environment
+        // block sloppy eval vars. An outer function's lexicals and a simple catch
+        // parameter are both legal to cross.
+        foreach (var (name, _) in Runtime.ParameterBinder.BodyVarDeclarations(statements))
+            foreach (var scope in _scopeStack)
+            {
+                if (!ReferenceEquals(_scopeOwners[scope], _currentFunction)) break;
+                if (_evalLexicalNames.TryGetValue(scope, out var names) && names.Contains(name.Lexeme))
+                {
+                    _evalDeclarationConflicts[call] = name.Lexeme;
+                    return;
+                }
+            }
+    }
+
     private List<Stmt>? GetEvalProgram(Expr.Call call)
     {
         if (_evalPrograms is null) return call.PreparedEvalStatements;

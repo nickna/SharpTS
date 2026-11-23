@@ -13,6 +13,27 @@ namespace SharpTS.Tests.SharedTests;
 /// </summary>
 public class EvalTests
 {
+    [Theory, ModeData]
+    public void LiteralEvalRejectsLexicalCollisionsBeforeExecuting(ExecutionMode mode)
+    {
+        const string source = """
+            {
+                let x = 1;
+                try { eval("var x = 2"); } catch (e) { console.log(e.name); }
+                console.log(x);
+            }
+            console.log(typeof x);
+            function run() {
+                try { eval("console.log('ran'); var other; function later() {}"); }
+                catch (e) { console.log(e.name); }
+                const later = 2;
+                console.log(later, typeof other);
+            }
+            run();
+            """;
+        Assert.Equal("SyntaxError\n1\nundefined\nSyntaxError\n2 undefined\n", TestHarness.RunUnchecked(source, mode));
+    }
+
     [Theory, InterpretedOnlyData]
     public void SloppyEvalChecksEveryDeclarationBeforeCreatingBindings(ExecutionMode mode)
     {
