@@ -69,6 +69,8 @@ public sealed partial class SharpTSGlobalThis : ISharpTSPropertyAccessor
         var sandboxProperty = ContextDescriptor(name);
         if (sandboxProperty is not null && descriptor.IsEmpty)
             return DefineEmptySandboxProperty(name, sandboxProperty);
+        if (sandboxProperty is { HasValue: true } && !descriptor.HasValue && !descriptor.HasGet && !descriptor.HasSet)
+            return DefineSandboxDataAttributes(name, descriptor);
 
         var current = sandboxProperty ?? _properties.GetOwnPropertyDescriptor(name);
         if (current is null && IsNonConfigurableIntrinsic(name))

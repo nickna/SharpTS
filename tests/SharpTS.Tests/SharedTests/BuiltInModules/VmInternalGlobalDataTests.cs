@@ -62,6 +62,22 @@ public sealed class VmInternalGlobalDataTests
 
     public static IEnumerable<object[]> Cases()
     {
+        yield return ["writability-only", """
+            import { createContext, runInContext } from "node:vm";
+            const ctx: any = createContext({ x: 44, y: 12 });
+            Object.defineProperty(ctx, "fixed", { value: 8 });
+            Object.defineProperty(ctx, "editable", { value: 7, configurable: true });
+            console.log(runInContext('Reflect.defineProperty(globalThis,"x",{writable:false})', ctx),
+                        runInContext('Reflect.defineProperty(globalThis,"y",{writable:true})', ctx),
+                        runInContext('Reflect.defineProperty(globalThis,"fixed",{writable:true})', ctx),
+                        runInContext('Reflect.defineProperty(globalThis,"editable",{writable:true})', ctx));
+            const d = Object.getOwnPropertyDescriptor(ctx, "x");
+            console.log(d.value, d.writable, d.enumerable, d.configurable, ctx.y, ctx.fixed, ctx.editable);
+            delete ctx.x;
+            delete ctx.y;
+            console.log(runInContext('x', ctx), runInContext('Object.getOwnPropertyDescriptor(globalThis,"x").writable', ctx),
+                        runInContext('"y" in globalThis', ctx));
+            """, "true true false true\nundefined false true true undefined 8 7\n44 false false\n"];
         yield return ["empty-sandbox-descriptor", """
             import { createContext, runInContext } from "node:vm";
             const ctx: any = createContext({ x: 44, y: 1 });
