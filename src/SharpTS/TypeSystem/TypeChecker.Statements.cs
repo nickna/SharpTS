@@ -816,7 +816,18 @@ public partial class TypeChecker
         {
             if (stmt.Value != null)
             {
-                TypeInfo actualType = CheckExpr(stmt.Value);
+                TypeInfo actualType;
+                try
+                {
+                    actualType = CheckExpr(stmt.Value);
+                }
+                catch (TypeCheckException) when (_recoveryMode)
+                {
+                    // The return still produces a value if this program is emitted
+                    // (for example, unchecked JS reading a name introduced by eval).
+                    _inferredReturnTypes.Add(TypeInfo.Any.Shared);
+                    throw;
+                }
                 _inferredReturnTypes.Add(actualType);
                 MarkIfUndefinedReachableTypedReturn(stmt.Value, actualType);
             }

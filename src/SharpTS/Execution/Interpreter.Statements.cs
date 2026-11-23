@@ -2057,6 +2057,16 @@ public partial class Interpreter
         var target = varStmt.IsVar ? _environment.VarDeclarationTarget ?? _environment : _environment;
         if (target.TryDefineVmTemporary(varStmt.Name, RuntimeValue.FromBoxed(value)))
             return ExecutionResult.Success();
+        if (varStmt.IsVar && target != _environment && target.IsGlobalVariableEnvironment
+            && !target.IsDefinedLocally(varStmt.Name.Lexeme))
+        {
+            // Eval already instantiated the property. Only an initializer writes it.
+            if (varStmt.Initializer is not null)
+                WriteGlobalObjectVariable(target.VmGlobalObject ?? GlobalThis, varStmt.Name.Lexeme,
+                    RuntimeValue.FromBoxed(value), _environment.IsStrictMode);
+            ObserveDiscardedReactionResult(value);
+            return ExecutionResult.Success();
+        }
         if (varStmt.IsVar && varStmt.Initializer is null && target.IsDefinedLocally(varStmt.Name.Lexeme))
             return ExecutionResult.Success();
         target.Define(varStmt.Name.Lexeme, value);

@@ -68,7 +68,7 @@ public partial class Interpreter
         _moduleResolver = resolver;
         SetDecoratorMode(decoratorMode);
         EmitProcessLifecycleEvents = true;
-        _hostedScriptEnvironment = new RuntimeEnvironment(_environment);
+        _hostedScriptEnvironment = new RuntimeEnvironment(_environment) { IsGlobalVariableEnvironment = true };
 
         if (modules.Count > 0)
             EntryModulePath ??= modules[^1].Path;

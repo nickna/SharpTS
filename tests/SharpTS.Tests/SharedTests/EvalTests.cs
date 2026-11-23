@@ -14,6 +14,39 @@ namespace SharpTS.Tests.SharedTests;
 public class EvalTests
 {
     [Theory, ModeData]
+    public void SloppyEvalFunctionsRemainInTheCallersVariableEnvironment(ExecutionMode mode)
+    {
+        const string source = """
+            eval("function f() { return 7; }");
+            console.log(typeof f, f === globalThis.f, f());
+            function make() {
+                const before = () => f();
+                { let n = 8; eval("function f() { return n; }"); }
+                console.log(typeof f, f(), before());
+                eval("function f() { return 9; }");
+                console.log(before());
+            }
+            make();
+            console.log(f());
+            """;
+        Assert.Equal("function true 7\nfunction 8 8\n9\n7\n", TestHarness.RunUnchecked(source, mode));
+    }
+
+    [Theory, ModeData]
+    public void StrictEvalHoistsCallableFunctionsInItsOwnScope(ExecutionMode mode)
+    {
+        const string source = """
+            eval('"use strict"; console.log(f()); function f() { return 3; }');
+            function run() {
+                'use strict';
+                return eval('var f; function f() { return 4; } () => f();');
+            }
+            console.log(run()(), typeof f);
+            """;
+        Assert.Equal("3\n4 undefined\n", TestHarness.RunUnchecked(source, mode));
+    }
+
+    [Theory, ModeData]
     public void SuspendedEvalFunctionsCallLaterSiblings(ExecutionMode mode)
     {
         const string source = """
@@ -52,8 +85,7 @@ public class EvalTests
         Assert.Equal("1\ntrue\n", TestHarness.RunUnchecked(source, mode));
     }
 
-    // The interpreter's global eval write-through behavior is tracked by #3735.
-    [Theory, CompiledOnlyData]
+    [Theory, ModeData]
     public void GlobalEvalClosureObservesWritesThroughEitherReference(ExecutionMode mode)
     {
         const string source = """
@@ -65,6 +97,24 @@ public class EvalTests
             console.log(n);
             """;
         Assert.Equal("2 2 2\n11 11 11\n11\n", TestHarness.RunUnchecked(source, mode));
+    }
+
+    [Theory, ModeData]
+    public void NewGlobalEvalVarFollowsPropertyDeletionAndRedeclaration(ExecutionMode mode)
+    {
+        const string source = """
+            eval("var n;");
+            console.log(Object.getOwnPropertyDescriptor(globalThis, "n").configurable);
+            n = 2;
+            console.log(n, globalThis.n);
+            globalThis.n = 3;
+            eval("var n;");
+            console.log(n, globalThis.n);
+            console.log(delete globalThis.n, typeof n);
+            eval("var n = 4;");
+            console.log(n, globalThis.n);
+            """;
+        Assert.Equal("true\n2 2\n3 3\ntrue undefined\n4 4\n", TestHarness.RunUnchecked(source, mode));
     }
 
     [Theory, ModeData]

@@ -245,6 +245,33 @@ public class CliCompileTests
     }
 
     [Fact]
+    public void Compile_JavaScriptReturnsArrayContainingEvalVariable()
+    {
+        using var directory = CliTestHelper.CreateTempDirectory();
+        directory.CreateFile("main.js", """
+            function make() {
+                eval("var x = 7;");
+                return [x];
+            }
+            console.log(make()[0]);
+            """);
+        var compile = CliTestHelper.RunCli(
+            "--no-tsconfig --noLib --compile main.js --standalone --verify -o result.dll", directory.Path);
+        Assert.True(compile.ExitCode == 0, compile.StandardOutput + compile.StandardError);
+        Assert.Contains("IL verification passed.", compile.StandardOutput);
+
+        var run = TestProcess.Run(new System.Diagnostics.ProcessStartInfo("dotnet", "result.dll")
+        {
+            WorkingDirectory = directory.Path,
+            RedirectStandardOutput = true,
+            RedirectStandardError = true,
+            UseShellExecute = false
+        }, CliTestHelper.DefaultTimeout);
+        Assert.True(run.ExitCode == 0, run.StandardError);
+        Assert.Equal("7\n", CliTestHelper.NormalizeOutput(run.StandardOutput));
+    }
+
+    [Fact]
     public void Compile_NumericScript_CanExecuteOutput()
     {
         using var tempDir = CliTestHelper.CreateTempDirectory();
