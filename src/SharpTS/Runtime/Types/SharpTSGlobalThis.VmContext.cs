@@ -18,7 +18,7 @@ public sealed partial class SharpTSGlobalThis
         // and becomes visible again if the caller later deletes the sandbox slot.
         var internalProperty = _properties.GetOwnPropertyDescriptor(name);
         if (internalProperty is { HasValue: true, Configurable: false, Writable: false }
-            || (internalProperty is null && IsNonConfigurableIntrinsic(name))
+            || HasOriginalFixedIntrinsic(name)
             || (!sandboxProperty.Configurable && !sandboxProperty.Writable))
             return true;
 
@@ -27,6 +27,22 @@ public sealed partial class SharpTSGlobalThis
             HasValue = true,
             Value = SharpTSUndefined.Instance
         });
+    }
+
+    private bool DefineOverShadowedIntrinsic(string name, SharpTSPropertyDescriptor request)
+    {
+        // The sandbox shadows an immutable internal global. Node leaves that
+        // sandbox slot alone, but uses its descriptor to validate the definition
+        // that will become visible if the caller removes the shadow.
+        var current = GetOwnPropertyDescriptor(name)!;
+        var completed = CompleteSandboxDefinition(name, current, request);
+        if (completed is null) return false;
+        if (request.HasValue || completed.HasValue != current.HasValue || completed.Writable != current.Writable
+            || completed.Enumerable != current.Enumerable || completed.Configurable != current.Configurable
+            || !PropertySemantics.SameValue(completed.Get, current.Get)
+            || !PropertySemantics.SameValue(completed.Set, current.Set))
+            RememberInternalDefinition(name, completed);
+        return true;
     }
 
     private bool DefineSandboxDataAttributes(string name, SharpTSPropertyDescriptor request)
@@ -83,7 +99,7 @@ public sealed partial class SharpTSGlobalThis
     internal object AccessorReceiver => _vmContext?.Context ?? this;
 
     internal bool HasRestrictedVmLexicalProperty(string name) =>
-        IsNonConfigurableIntrinsic(name)
+        HasOriginalFixedIntrinsic(name)
         || _properties.GetOwnPropertyDescriptor(name) is { Configurable: false };
 
     internal bool RejectsVmInternalDataWrite(string name) => _vmContext is not null

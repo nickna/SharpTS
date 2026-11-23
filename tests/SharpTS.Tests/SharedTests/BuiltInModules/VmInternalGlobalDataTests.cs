@@ -62,6 +62,28 @@ public sealed class VmInternalGlobalDataTests
 
     public static IEnumerable<object[]> Cases()
     {
+        yield return ["shadowed-fixed-global", """
+            import { createContext, runInContext } from "node:vm";
+            const ctx: any = createContext({ Infinity: 44, NaN: 45, undefined: 46 });
+            console.log(runInContext('Reflect.defineProperty(globalThis,"Infinity",{value:7})', ctx),
+                        runInContext('Reflect.defineProperty(globalThis,"NaN",{get(){return 9}})', ctx),
+                        runInContext('Reflect.defineProperty(globalThis,"undefined",{writable:false})', ctx));
+            console.log(ctx.Infinity, ctx.NaN, ctx.undefined, runInContext('globalThis.NaN', ctx));
+            delete ctx.Infinity; delete ctx.NaN; delete ctx.undefined;
+            console.log(runInContext('globalThis.Infinity', ctx), runInContext('globalThis.NaN', ctx),
+                        runInContext('globalThis.undefined', ctx), runInContext('Object.getOwnPropertyDescriptor(globalThis,"undefined").writable', ctx));
+            console.log(runInContext('Reflect.deleteProperty(globalThis,"Infinity")', ctx), runInContext('"Infinity" in globalThis', ctx));
+            """, "true true true\n44 45 46 45\n7 9 46 false\ntrue false\n"];
+        yield return ["unchanged-fixed-global-shadow", """
+            import { createContext, runInContext } from "node:vm";
+            const ctx: any = createContext({ Infinity: 44, undefined: 46 });
+            Object.defineProperty(ctx, "NaN", {value: 5});
+            console.log(runInContext('Reflect.defineProperty(globalThis,"Infinity",{value:44})', ctx),
+                        runInContext('Reflect.defineProperty(globalThis,"NaN",{value:6})', ctx),
+                        runInContext('Reflect.defineProperty(globalThis,"undefined",{writable:true})', ctx));
+            delete ctx.Infinity; delete ctx.undefined;
+            console.log(runInContext('globalThis.Infinity', ctx), ctx.NaN, runInContext('globalThis.undefined', ctx));
+            """, "true false true\n44 5 undefined\n"];
         yield return ["writability-only", """
             import { createContext, runInContext } from "node:vm";
             const ctx: any = createContext({ x: 44, y: 12 });
