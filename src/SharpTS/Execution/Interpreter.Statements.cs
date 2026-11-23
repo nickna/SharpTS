@@ -2058,10 +2058,18 @@ public partial class Interpreter
     internal ExecutionResult VisitVar(Stmt.Var varStmt)
     {
         if (varStmt.IsDeclare) return ExecutionResult.Success();
-        // Eval instantiated every var before execution. A later declaration
-        // without an initializer must not recreate a binding deleted in the meantime.
-        if (_environment.IsEvalScope && varStmt.IsVar && varStmt.Initializer is null)
-            return ExecutionResult.Success();
+        // Eval has already instantiated this var in its variable environment.
+        // The initializer resolves a reference in the current lexical environment,
+        // which may bind the name to a nearer simple catch parameter.
+        if (_environment.IsEvalScope && varStmt.IsVar)
+        {
+            if (varStmt.Initializer is null) return ExecutionResult.Success();
+            if (!varStmt.Name.IsGeneratedTemporary)
+            {
+                EvaluateAssign(new Expr.Assign(varStmt.Name, varStmt.Initializer, IsVarRedeclaration: true));
+                return ExecutionResult.Success();
+            }
+        }
         object? value = SharpTSUndefined.Instance;
         if (varStmt.Initializer != null)
         {

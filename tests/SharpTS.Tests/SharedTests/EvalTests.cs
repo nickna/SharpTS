@@ -14,6 +14,27 @@ namespace SharpTS.Tests.SharedTests;
 public class EvalTests
 {
     [Theory, ModeData]
+    public void EvalVarInitializerWritesToTheNearestCatchParameter(ExecutionMode mode)
+    {
+        const string source = """
+            function run() {
+                try { throw 1; } catch (err) {
+                    eval("var err = 2;");
+                    console.log(err);
+                    try { throw 3; } catch (err) {
+                        eval("var err = err + 1;");
+                        console.log(err);
+                    }
+                    console.log(err);
+                }
+                console.log(typeof err);
+            }
+            run();
+            """;
+        Assert.Equal("2\n4\n2\nundefined\n", TestHarness.RunUnchecked(source, mode));
+    }
+
+    [Theory, ModeData]
     public void LiteralEvalRejectsLexicalCollisionsBeforeExecuting(ExecutionMode mode)
     {
         const string source = """
