@@ -2163,6 +2163,7 @@ public partial class RuntimeEmitter
                 runtime.NumericCoercion,
                 runtime.ObjectOperations.Is,
                 runtime.ObjectPrototypes,
+                runtime.GlobalObject.SingletonField,
                 runtime.ObjectState,
                 runtime.ObjectStorage,
                 runtime.Operators,

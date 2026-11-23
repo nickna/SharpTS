@@ -110,12 +110,13 @@ public class GlobalThisTests
         Assert.Contains("true", result);
     }
 
-    [Theory, InterpretedOnlyData] // Compiled property definitions are tracked in #3758.
+    [Theory, ModeData]
     public void GlobalThis_DefinePropertyPreservesFixedConstants(ExecutionMode mode)
     {
         var result = TestHarness.Run("""
             for (const key of ["Infinity", "NaN", "undefined"]) {
                 const value = globalThis[key];
+                const keyCount = Object.getOwnPropertyNames(globalThis).length;
                 try {
                     Object.defineProperty(globalThis, key, { value: 7 });
                 } catch (e) { console.log(e.name); }
@@ -129,9 +130,10 @@ public class GlobalThisTests
                 const d = Object.getOwnPropertyDescriptor(globalThis, key);
                 console.log(Object.is(value, globalThis[key]), Object.is(value, d.value),
                             d.writable, d.enumerable, d.configurable);
+                console.log(Object.getOwnPropertyNames(globalThis).length === keyCount);
             }
             """, mode);
-        const string expected = "TypeError\ntrue true\nfalse false false false false\ntrue true false false false\n";
+        const string expected = "TypeError\ntrue true\nfalse false false false false\ntrue true false false false\ntrue\n";
         Assert.Equal(expected + expected + expected, result);
     }
 

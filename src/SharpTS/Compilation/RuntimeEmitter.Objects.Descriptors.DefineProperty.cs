@@ -24,6 +24,7 @@ public partial class RuntimeEmitter
         Type UndefinedType,
         FunctionOwnPrototypeInputs OwnPrototype,
         MethodBuilder TypeOf,
+        FieldBuilder GlobalThisSingleton,
         NativeSourceOwnerCatalog? SourceOwners = null
     );
 
@@ -38,13 +39,14 @@ public partial class RuntimeEmitter
         EmittedErrorRuntime Errors
     );
 
-    private readonly record struct DefinePropertyExistingConstructorInputs(
+    private readonly record struct DefinePropertyReflectedDescriptorInputs(
         EmittedDescriptorStorageRuntime DescriptorStorage,
         MethodBuilder GetOwnPropertyDescriptor,
         MethodBuilder HasOwnPropertyHelperMethod,
         MethodBuilder TypeOf,
         Type ObjectStorageType,
-        Type IHasFieldsType
+        Type IHasFieldsType,
+        FieldBuilder GlobalThisSingleton
     );
 
     private readonly record struct DefinePropertyExistingFunctionPrototypeInputs(
@@ -196,15 +198,16 @@ public partial class RuntimeEmitter
             skipSynthExistingLabel
         );
 
-        EmitDefinePropertyExistingConstructor(
+        EmitDefinePropertyReflectedDescriptor(
             il,
-            new DefinePropertyExistingConstructorInputs(
+            new DefinePropertyReflectedDescriptorInputs(
                 inputs.DescriptorStorage,
                 inputs.GetOwnPropertyDescriptor,
                 inputs.HasOwnPropertyHelperMethod,
                 inputs.TypeOf,
                 inputs.ObjectStorage.Type,
-                inputs.IHasFieldsInterface
+                inputs.IHasFieldsInterface,
+                inputs.GlobalThisSingleton
             ),
             propNameLocal,
             existingDescLocal,
@@ -320,34 +323,37 @@ public partial class RuntimeEmitter
         return existingDescLocal;
     }
 
-    // Callable metadata and literal accessors are reported by own-descriptor
-    // lookup before PDS stores their first mutation. Preserve those descriptors
+    // Global intrinsics, callable metadata and literal accessors are reported by
+    // own-descriptor lookup before PDS stores their first mutation. Preserve them
     // without reading a property's value through an observable getter.
-    private void EmitDefinePropertyExistingConstructor(
+    private void EmitDefinePropertyReflectedDescriptor(
         ILGenerator il,
-        DefinePropertyExistingConstructorInputs inputs,
+        DefinePropertyReflectedDescriptorInputs inputs,
         LocalBuilder propNameLocal,
         LocalBuilder existingDescLocal,
         Label skipSynthExistingLabel
     )
     {
-        var notConstructor = il.DefineLabel();
-        var intrinsicCallable = il.DefineLabel();
+        var fallThrough = il.DefineLabel();
+        var reflectDescriptor = il.DefineLabel();
+        il.Emit(OpCodes.Ldarg_0);
+        il.Emit(OpCodes.Ldsfld, inputs.GlobalThisSingleton);
+        il.Emit(OpCodes.Beq, reflectDescriptor);
         il.Emit(OpCodes.Ldarg_0);
         il.Emit(OpCodes.Isinst, _types.Type);
-        il.Emit(OpCodes.Brtrue, intrinsicCallable);
+        il.Emit(OpCodes.Brtrue, reflectDescriptor);
         il.Emit(OpCodes.Ldarg_0);
         il.Emit(OpCodes.Isinst, inputs.ObjectStorageType);
-        il.Emit(OpCodes.Brtrue, intrinsicCallable);
+        il.Emit(OpCodes.Brtrue, reflectDescriptor);
         il.Emit(OpCodes.Ldarg_0);
         il.Emit(OpCodes.Isinst, inputs.IHasFieldsType);
-        il.Emit(OpCodes.Brtrue, intrinsicCallable);
+        il.Emit(OpCodes.Brtrue, reflectDescriptor);
         il.Emit(OpCodes.Ldarg_0);
         il.Emit(OpCodes.Call, inputs.TypeOf);
         il.Emit(OpCodes.Ldstr, "function");
         il.Emit(OpCodes.Call, _types.StringOpEquality);
-        il.Emit(OpCodes.Brfalse, notConstructor);
-        il.MarkLabel(intrinsicCallable);
+        il.Emit(OpCodes.Brfalse, fallThrough);
+        il.MarkLabel(reflectDescriptor);
         // A deleted or inherited member is a newly defined own property and
         // therefore retains defineProperty's default attributes.
         il.Emit(OpCodes.Ldarg_0);
@@ -389,7 +395,7 @@ public partial class RuntimeEmitter
             il.MarkLabel(absentField);
         }
         il.Emit(OpCodes.Br, skipSynthExistingLabel);
-        il.MarkLabel(notConstructor);
+        il.MarkLabel(fallThrough);
     }
 
     // On a match writes existingDescLocal and branches to the caller-owned empty-stack exit.
