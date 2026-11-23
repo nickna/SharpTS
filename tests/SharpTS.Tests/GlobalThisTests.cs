@@ -185,6 +185,25 @@ public class GlobalThisTests
         Assert.Contains("true", result);
     }
 
+    [Fact]
+    public void CompiledGlobalPresenceFollowsInstalledNodeProperties()
+    {
+        const string source = """
+            const root = globalThis;
+            for (const key of ["TextEncoder", "TextDecoder", "structuredClone", "process"]) {
+                const d = Object.getOwnPropertyDescriptor(root, key);
+                console.log(key in root, Object.hasOwn(root, key), typeof root[key], d.enumerable, d.configurable);
+                console.log(Reflect.deleteProperty(root, key), key in root);
+                root[key] = undefined;
+                console.log(key in root, typeof root[key]);
+            }
+            """;
+        const string tail = "true false\ntrue undefined\n";
+        Assert.Equal("true true function false true\n" + tail + "true true function false true\n" + tail
+            + "true true function true true\n" + tail + "true true object false true\n" + tail,
+            TestHarness.RunUnchecked(source, ExecutionMode.Compiled));
+    }
+
     [Theory, ModeData]
     public void GlobalThis_BufferAccessorKeepsItsValueAndIdentity(ExecutionMode mode)
     {

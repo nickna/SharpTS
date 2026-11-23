@@ -99,7 +99,8 @@ public sealed class GlobalThisStaticEmitter : IStaticTypeEmitterStrategy
         var il = ctx.IL;
 
         // Self-reference: globalThis.globalThis (and the Node alias global).
-        if (propertyName == "Buffer" || (propertyName == "Array" && ctx.RuntimeFeatures?.UsesArrayConstructorMutation == true))
+        if (propertyName is "Buffer" or "process" or "TextEncoder" or "TextDecoder" or "structuredClone"
+            || (propertyName == "Array" && ctx.RuntimeFeatures?.UsesArrayConstructorMutation == true))
         {
             il.Emit(OpCodes.Ldstr, propertyName);
             il.Emit(OpCodes.Call, ctx.Runtime!.GlobalObject.GetProperty);
