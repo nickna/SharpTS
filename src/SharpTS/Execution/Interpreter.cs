@@ -1658,9 +1658,9 @@ public partial class Interpreter : IDisposable
         var variables = strict ? lexical : _environment.EvalVariableEnvironment;
         lexical.VarDeclarationTarget = lexical.EvalVariableEnvironment = variables;
         using var scope = PushScope(lexical);
-        foreach (var (name, isFunction) in Runtime.ParameterBinder.BodyVarDeclarations(statements))
+        foreach (var (name, isFunction) in Runtime.ParameterBinder.InterpreterBodyVarDeclarations(statements))
             if (!isFunction)
-                variables.InstantiateEvalVar(name.Lexeme);
+                InstantiateEvalVariable(variables, name.Lexeme);
         foreach (var statement in statements)
         {
             if (statement is not Stmt.Function { Body: not null } function) continue;
@@ -1674,10 +1674,29 @@ public partial class Interpreter : IDisposable
                 variables.Define(name, value);
             }
         }
-        HoistLocalLoopVarDeclarations(statements);
         // Top-level functions have already been initialized in their variable
         // environment. Executing them again would shadow it in the lexical scope.
         return ExecuteScriptCompletion(statements.Where(statement => statement is not Stmt.Function));
+    }
+
+    private void InstantiateEvalVariable(RuntimeEnvironment variables, string name)
+    {
+        if (!variables.IsGlobalVariableEnvironment)
+        {
+            variables.InstantiateEvalVar(name);
+            return;
+        }
+        if (variables.IsDefinedLocally(name))
+        {
+            RegisterClassicGlobalVar(name, variables);
+            return;
+        }
+        // A new global eval var is configurable. Leave name resolution on the
+        // object so deleting or redefining the property also changes the binding.
+        var global = variables.VmGlobalObject ?? GlobalThis;
+        if (!global.HasProperty(name) && !global.DefineGlobalVariable(name,
+                new SharpTSPropertyDescriptor(SharpTSUndefined.Instance, writable: true, enumerable: true, configurable: true)))
+            throw new InterpreterException($"TypeError: Cannot declare global variable '{name}'.");
     }
 
     private void DefineGlobalEvalFunction(RuntimeEnvironment variables, string name, object value)
@@ -1691,8 +1710,7 @@ public partial class Interpreter : IDisposable
         if (!global.DefineProperty(name, descriptor))
             throw new InterpreterException($"TypeError: Cannot declare global function '{name}'.");
         if (variables.IsDefinedLocally(name))
-            variables.DefineObjectBinding(name, () => ReadClassicGlobalVariable(name),
-                (assigned, strict) => WriteClassicGlobalVariable(name, assigned, strict));
+            BindGlobalVariable(variables, global, name);
     }
 
     /// <summary>
@@ -2460,23 +2478,27 @@ public partial class Interpreter : IDisposable
         }
     }
 
-    private void RegisterClassicGlobalVar(string name)
+    private void RegisterClassicGlobalVar(string name, RuntimeEnvironment? owner = null)
     {
-        if (GlobalThis.GetOwnPropertyDescriptor(name) is null || GlobalThis.NeedsVmGlobalVariable(name))
+        owner ??= _environment;
+        var global = owner.VmGlobalObject ?? GlobalThis;
+        if (global.GetOwnPropertyDescriptor(name) is null || global.NeedsVmGlobalVariable(name))
         {
-            object? initialValue = _environment.IsDefinedLocally(name) && !_environment.HasObjectBinding(name)
-                ? _environment.GetAt(0, name).ToObject()
+            object? initialValue = owner.IsDefinedLocally(name) && !owner.HasObjectBinding(name)
+                ? owner.GetAt(0, name).ToObject()
                 : SharpTSUndefined.Instance;
-            if (!GlobalThis.DefineGlobalVariable(name, new SharpTSPropertyDescriptor(
+            if (!global.DefineGlobalVariable(name, new SharpTSPropertyDescriptor(
                     initialValue, writable: true, enumerable: true, configurable: false)
                     { HasValue = true }))
                 throw new InterpreterException($"TypeError: Cannot declare global variable '{name}'.");
         }
 
-        _environment.DefineObjectBinding(name,
-            () => ReadClassicGlobalVariable(name),
-            (value, strict) => WriteClassicGlobalVariable(name, value, strict));
+        BindGlobalVariable(owner, global, name);
     }
+
+    private void BindGlobalVariable(RuntimeEnvironment owner, SharpTSGlobalThis global, string name) =>
+        owner.DefineObjectBinding(name, () => ReadGlobalObjectVariable(global, name),
+            (value, strict) => WriteGlobalObjectVariable(global, name, value, strict));
 
     private void HoistLocalLoopVarDeclarations(IEnumerable<Stmt> statements)
     {
@@ -2487,11 +2509,11 @@ public partial class Interpreter : IDisposable
         }
     }
 
-    private RuntimeValue ReadClassicGlobalVariable(string name)
+    private RuntimeValue ReadGlobalObjectVariable(SharpTSGlobalThis global, string name)
     {
-        if (!GlobalThis.HasProperty(name))
+        if (!global.HasProperty(name))
             throw new InterpreterException($"ReferenceError: Undefined variable '{name}'.");
-        return RuntimeValue.FromBoxed(GetPropertyValue(GlobalThis, name));
+        return RuntimeValue.FromBoxed(GetPropertyValue(global, name));
     }
 
     private void WriteClassicGlobalVariable(string name, RuntimeValue value, bool strictMode)
