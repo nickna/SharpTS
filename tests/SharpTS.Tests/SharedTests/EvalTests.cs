@@ -13,6 +13,33 @@ namespace SharpTS.Tests.SharedTests;
 /// </summary>
 public class EvalTests
 {
+    [Theory, InterpretedOnlyData]
+    public void SloppyEvalChecksEveryDeclarationBeforeCreatingBindings(ExecutionMode mode)
+    {
+        const string source = """
+            {
+                let x = 1;
+                for (const code of ["var x = 2", "var leaked; function x() {}"]) {
+                    try { eval(code); } catch (e) { console.log(e.name); }
+                }
+                console.log(x, "leaked" in globalThis);
+            }
+            try { eval("function later() {}"); } catch (e) { console.log(e.name); }
+            const later = 3;
+            function run(p) {
+                let local = 4;
+                try { eval("var local;"); } catch (e) { console.log(e.name); }
+                eval("var p = 5;");
+                try { throw 1; } catch (caught) { eval("var caught;"); }
+                console.log(local, p, typeof caught);
+            }
+            run(1);
+            console.log(typeof x, later);
+            """;
+        Assert.Equal("SyntaxError\nSyntaxError\n1 false\nSyntaxError\nSyntaxError\n4 5 undefined\nundefined 3\n",
+            TestHarness.RunUnchecked(source, mode));
+    }
+
     [Theory, ModeData]
     public void SloppyEvalFunctionsRemainInTheCallersVariableEnvironment(ExecutionMode mode)
     {
@@ -115,6 +142,35 @@ public class EvalTests
             console.log(n, globalThis.n);
             """;
         Assert.Equal("true\n2 2\n3 3\ntrue undefined\n4 4\n", TestHarness.RunUnchecked(source, mode));
+    }
+
+    [Theory, InterpretedOnlyData]
+    public void UnqualifiedDeleteUsesTheNearestBindingAndItsConfigurability(ExecutionMode mode)
+    {
+        const string source = """
+            eval("var item = 1;");
+            { let item = 2; console.log(delete item, item, globalThis.item); }
+            console.log(delete item, typeof item, "item" in globalThis);
+            eval("function item() {}");
+            console.log(delete (item), typeof item);
+            var kept = 3;
+            eval("var kept;");
+            console.log(delete kept, kept, delete missing, delete later);
+            let later = 6;
+            Object.defineProperty(globalThis, "accessor", {
+                get() { throw 1; }, configurable: true
+            });
+            console.log(delete accessor, typeof accessor);
+            function run(kept) {
+                eval("var item = 4; var kept;");
+                console.log(delete item, typeof item, delete kept, kept);
+                eval("delete removed; var removed, other;");
+                try { console.log(removed); } catch (e) { console.log(e.name); }
+            }
+            run(5);
+            """;
+        Assert.Equal("false 2 1\ntrue undefined false\ntrue undefined\nfalse 3 true false\ntrue undefined\ntrue undefined false 5\nReferenceError\n",
+            TestHarness.RunUnchecked(source, mode));
     }
 
     [Theory, ModeData]

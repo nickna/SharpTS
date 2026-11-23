@@ -75,6 +75,7 @@ public class RuntimeEnvironment : ScopeChain<RuntimeValue, RuntimeEnvironment>
     internal RuntimeEnvironment? VarDeclarationTarget { get; set; }
 
     private RuntimeEnvironment? _evalVariableEnvironment;
+    internal bool IsEvalScope { get; init; }
     internal bool IsGlobalVariableEnvironment { get; init; }
     internal RuntimeEnvironment EvalVariableEnvironment
     {
@@ -83,6 +84,26 @@ public class RuntimeEnvironment : ScopeChain<RuntimeValue, RuntimeEnvironment>
     }
 
     private HashSet<string>? _evalVarNames;
+    private HashSet<string>? _variableScopeLexicals;
+
+    internal void RecordVariableScopeLexical(string name) =>
+        (_variableScopeLexicals ??= new(StringComparer.Ordinal)).Add(name);
+
+    internal bool HasVariableScopeLexical(string name) =>
+        _variableScopeLexicals?.Contains(name) == true || VmLexicalBindings?.Contains(name) == true;
+
+    internal bool ConflictsWithEvalVar(string name, RuntimeEnvironment variableEnvironment)
+    {
+        // The function body (or classic script) stores its lexical and var
+        // bindings in one environment. Parameters and existing vars can be redeclared.
+        for (var scope = this; scope != variableEnvironment; scope = scope.Enclosing!)
+        {
+            // The inline slot is a simple catch parameter (Annex B.3.4).
+            if (scope.IsDefinedLocally(name) && !(scope._hasDirectBinding && scope._directBindingName == name))
+                return true;
+        }
+        return variableEnvironment.HasVariableScopeLexical(name);
+    }
 
     internal void InstantiateEvalVar(string name)
     {
@@ -217,6 +238,8 @@ public class RuntimeEnvironment : ScopeChain<RuntimeValue, RuntimeEnvironment>
     {
         if (VmLexicalBindings?.Contains(name) == true) return;
         if (!replaceExisting && HasLocalBinding(name)) return;
+        if (!replaceExisting && (IsGlobalVariableEnvironment || _evalVariableEnvironment == this))
+            RecordVariableScopeLexical(name);
         Values[name] = RuntimeValue.Undefined;
         (_uninitializedLexicalNames ??= new(StringComparer.Ordinal)).Add(name);
     }
@@ -241,6 +264,20 @@ public class RuntimeEnvironment : ScopeChain<RuntimeValue, RuntimeEnvironment>
     }
 
     internal bool HasObjectBinding(string name) => _objectBindings?.ContainsKey(name) == true;
+
+    internal bool DeleteLocalBinding(string name, SharpTSGlobalThis global)
+    {
+        if (HasObjectBinding(name))
+        {
+            if (!global.DeleteProperty(name)) return false;
+            _objectBindings!.Remove(name);
+        }
+        else if (_evalVarNames?.Remove(name) != true)
+            return false;
+
+        _values!.Remove(name);
+        return true;
+    }
 
     private void SetLocalValue(string name, RuntimeValue value, bool? strictMode = null)
     {

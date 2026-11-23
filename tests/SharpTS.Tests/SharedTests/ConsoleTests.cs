@@ -27,6 +27,36 @@ public class ConsoleTests
     #region Basic Output
 
     [Theory, ModeData]
+    public void ExtractedConsoleMethodsAreCallableAndShareState(ExecutionMode mode)
+    {
+        const string source = """
+            const c = globalThis.console;
+            for (const key of ["log", "info", "debug", "error", "warn", "clear", "time", "timeEnd",
+                               "timeLog", "assert", "count", "countReset", "table", "dir",
+                               "group", "groupCollapsed", "groupEnd", "trace"]) {
+                if (typeof c[key] !== "function" || c[key] !== console[key]) console.log(key);
+            }
+            const debug = console.debug;
+            const start = c.groupCollapsed;
+            const end = c.groupEnd;
+            start();
+            debug("%s %d", "value", 2);
+            end();
+            const count = c.count;
+            const reset = c.countReset;
+            count("extracted");
+            console.count("extracted");
+            reset("extracted");
+            count("extracted");
+            const assert = c.assert;
+            console.log(assert(true, "unused") === undefined, debug === c.info);
+            Promise.resolve(3).then(debug);
+            """;
+        Assert.Equal("  value 2\nextracted: 1\nextracted: 2\nextracted: 1\ntrue false\n3\n",
+            TestHarness.RunUnchecked(source, mode));
+    }
+
+    [Theory, ModeData]
     public void InfoCanBeExtractedAndPassedAsACallback(ExecutionMode mode)
     {
         const string source = """

@@ -86,11 +86,14 @@ function Assert-AdaptiveGcProfile {
 
 $oldNuGetPackages = $env:NUGET_PACKAGES
 $oldCliHome = $env:DOTNET_CLI_HOME
+$oldAddGlobalToolsToPath = $env:DOTNET_ADD_GLOBAL_TOOLS_TO_PATH
 $oldPath = $env:PATH
 $oldTelemetry = $env:DOTNET_CLI_TELEMETRY_OPTOUT
 $oldFirstTimeExperience = $env:DOTNET_SKIP_FIRST_TIME_EXPERIENCE
 
 try {
+    # Prevent dotnet first-run setup from persisting the temporary CLI home's tools directory.
+    $env:DOTNET_ADD_GLOBAL_TOOLS_TO_PATH = "false"
     New-Item -ItemType Directory -Force -Path $feedPath, $consumerPath | Out-Null
 
     if ($PackagePath) {
@@ -349,6 +352,7 @@ try {
 finally {
     $env:NUGET_PACKAGES = $oldNuGetPackages
     $env:DOTNET_CLI_HOME = $oldCliHome
+    $env:DOTNET_ADD_GLOBAL_TOOLS_TO_PATH = $oldAddGlobalToolsToPath
     $env:PATH = $oldPath
     $env:DOTNET_CLI_TELEMETRY_OPTOUT = $oldTelemetry
     $env:DOTNET_SKIP_FIRST_TIME_EXPERIENCE = $oldFirstTimeExperience
