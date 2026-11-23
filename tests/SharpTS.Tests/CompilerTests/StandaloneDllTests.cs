@@ -14399,7 +14399,7 @@ public partial class StandaloneDllTests
             console.log('two'); console.groupEnd(); console.log('three'); console.groupEnd();
             console.groupEnd(); console.log('done');
             """,
-            "default: 1\ndefault: 2\ndefault: 1\nx: 1\nx: 2\nx: 1\nouter\n  one\ninner 2\n    two\n  three\ndone\n",
+            "default: 1\ndefault: 2\ndefault: 1\nx: 1\nx: 2\nx: 1\nouter\n  one\n  inner 2\n    two\n  three\ndone\n",
             ""
         },
         new object[]
