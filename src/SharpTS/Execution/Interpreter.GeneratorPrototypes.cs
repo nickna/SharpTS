@@ -11,12 +11,35 @@ public partial class Interpreter
     private (SharpTSObject FunctionPrototype, SharpTSObject GeneratorPrototype)? _generatorIntrinsics;
     private (SharpTSObject FunctionPrototype, SharpTSObject GeneratorPrototype)? _asyncGeneratorIntrinsics;
 
+    private SharpTSObject? _arrayIteratorPrototype;
+
+    internal SharpTSObject GetArrayIteratorPrototype()
+    {
+        if (_arrayIteratorPrototype is not null) return _arrayIteratorPrototype;
+        var prototype = new SharpTSObject([])
+        {
+            Prototype = GetIteratorPrototype(),
+            PreserveCallableValueIdentity = true
+        };
+        var next = BuiltInMethod.CreateV2("next", 0, int.MaxValue, static (_, receiver, _) =>
+            receiver.ToObject() is SharpTSArrayIterator iterator
+                ? RuntimeValue.FromObject(iterator.Next())
+                : throw new ThrowException(new SharpTSTypeError("Array iterator next called on an incompatible receiver")));
+        prototype.DefineProperty("next", SharpTSPropertyDescriptor.ForMethod(next.AsNonConstructor().MarkRealmOwned()));
+        prototype.DefineProperty(SharpTSSymbol.ToStringTag,
+            new SharpTSPropertyDescriptor(value: "Array Iterator", configurable: true));
+        return _arrayIteratorPrototype = prototype;
+    }
+
     internal (SharpTSObject FunctionPrototype, SharpTSObject GeneratorPrototype) GetGeneratorIntrinsics(bool isAsync)
         => isAsync
             ? _asyncGeneratorIntrinsics ??= CreateGeneratorIntrinsics(isAsync: true)
             : _generatorIntrinsics ??= CreateGeneratorIntrinsics(isAsync: false);
 
-    private (SharpTSObject FunctionPrototype, SharpTSObject GeneratorPrototype) CreateGeneratorIntrinsics(bool isAsync)
+    private SharpTSObject? _iteratorPrototype;
+    private SharpTSObject GetIteratorPrototype() => _iteratorPrototype ??= CreateIteratorPrototype(false);
+
+    private SharpTSObject CreateIteratorPrototype(bool isAsync)
     {
         var iteratorPrototype = new SharpTSObject([])
         { Prototype = GetObjectPrototype(), PreserveCallableValueIdentity = true };
@@ -32,6 +55,12 @@ public partial class Interpreter
                     ((BuiltInMethod)GeneratorBuiltIns.GetMember(null!, name)!).MarkRealmOwned()));
         }
 
+        return iteratorPrototype;
+    }
+
+    private (SharpTSObject FunctionPrototype, SharpTSObject GeneratorPrototype) CreateGeneratorIntrinsics(bool isAsync)
+    {
+        var iteratorPrototype = isAsync ? CreateIteratorPrototype(true) : GetIteratorPrototype();
         var generatorPrototype = new SharpTSObject([])
         { Prototype = iteratorPrototype, PreserveCallableValueIdentity = true };
         foreach (var name in new[] { "next", "return", "throw" })

@@ -242,7 +242,9 @@ public abstract partial class ExpressionEmitterBase : IEmitterContext
                 EmitLiteral(lit);
                 break;
             case Expr.Variable v:
-                EmitVariable(v);
+                if (Ctx.ClosureAnalyzer?.GetSuspendedEvalRead(v) is { } candidates)
+                    EmitSuspendedEvalRead(v, candidates);
+                else EmitVariable(v);
                 break;
             case Expr.Assign a:
                 EmitAssign(a);
@@ -867,6 +869,31 @@ public abstract partial class ExpressionEmitterBase : IEmitterContext
     {
         var receiver = SpillBoxed(new Expr.This(new Token(TokenType.THIS, "this", null, 0)));
         EmitGuestSuperValue(s.Method?.Lexeme ?? "constructor", receiver);
+    }
+
+    // Suspended function expressions capture the holder from the creating activation.
+    // Test each eligible environment before falling back to the ordinary lexical read.
+    private void EmitSuspendedEvalRead(Expr.Variable reference, IReadOnlyList<string> candidates)
+    {
+        var done = IL.DefineLabel();
+        foreach (string storage in candidates)
+        {
+            var next = IL.DefineLabel();
+            EmitVariable(new Expr.Variable(new Token(TokenType.IDENTIFIER, storage, null, reference.Name.Line)));
+            IL.Emit(OpCodes.Castclass, Types.StrongBoxOfObject);
+            IL.Emit(OpCodes.Ldfld, Types.StrongBoxOfObjectValueField);
+            IL.Emit(OpCodes.Castclass, Types.StrongBoxOfObject);
+            IL.Emit(OpCodes.Dup);
+            IL.Emit(OpCodes.Brfalse, next);
+            IL.Emit(OpCodes.Ldfld, Types.StrongBoxOfObjectValueField);
+            IL.Emit(OpCodes.Br, done);
+            IL.MarkLabel(next);
+            IL.Emit(OpCodes.Pop);
+        }
+        EmitVariable(reference);
+        EnsureBoxed();
+        IL.MarkLabel(done);
+        SetStackUnknown();
     }
 
     /// <summary>
@@ -2716,6 +2743,14 @@ public abstract partial class ExpressionEmitterBase : IEmitterContext
     /// </summary>
     protected bool TryEmitNamespaceSingleton(string name)
     {
+        if (name == "console")
+        {
+            IL.Emit(OpCodes.Ldstr, name);
+            IL.Emit(OpCodes.Call, Ctx.Runtime!.GlobalObject.GetBinding);
+            SetStackUnknown();
+            return true;
+        }
+
         if (name == "Math")
         {
             IL.Emit(OpCodes.Ldsfld, Ctx.Runtime!.Math.SingletonField);

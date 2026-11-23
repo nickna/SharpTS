@@ -48,14 +48,7 @@ public partial class ILEmitter
         if (statements is null)
             return false;
 
-        if (statements.Any(statement =>
-                statement is not Stmt.Expression
-                    and not Stmt.Var { IsVar: true }
-                    and not Stmt.Function { Body: not null }
-                    and not Stmt.Directive
-                    and not Stmt.Block
-                    and not Stmt.Class
-                    and not Stmt.For))
+        if (!statements.All(StaticEvalLowering.CanEmitStatement))
             return false;
 
         _ctx.NativeClrAdmission?.RecordUnclassifiedSourceBoundary(call,
@@ -104,6 +97,26 @@ public partial class ILEmitter
             IL.Emit(OpCodes.Newarr, _ctx.Types.Object);
             IL.Emit(OpCodes.Stloc, cacheLocal);
             _ctx.Locals.RegisterLocal(templateCache.Storage, cacheLocal);
+        }
+
+        if (_ctx.IsScriptTopLevel && !_ctx.IsStrictMode)
+        {
+            // A new script-global var is an ordinary global object property.
+            // Establish it before the body runs, without reading or resetting
+            // an existing property when the declaration has no initializer.
+            foreach (var (name, isFunction) in Runtime.ParameterBinder.BodyVarDeclarations(statements))
+            {
+                if (isFunction || _resolver.HasVariable(name.Lexeme)) continue;
+                var exists = IL.DefineLabel();
+                IL.Emit(OpCodes.Ldsfld, _ctx.Runtime!.GlobalObject.SingletonField);
+                IL.Emit(OpCodes.Ldstr, name.Lexeme);
+                IL.Emit(OpCodes.Call, _ctx.Runtime.ObjectOwnProperties.HasOwnProperty);
+                IL.Emit(OpCodes.Brtrue, exists);
+                IL.Emit(OpCodes.Ldstr, name.Lexeme);
+                IL.Emit(OpCodes.Ldsfld, _ctx.Runtime.Sentinels.UndefinedInstance);
+                IL.Emit(OpCodes.Call, _ctx.Runtime.GlobalObject.SetProperty);
+                IL.MarkLabel(exists);
+            }
         }
 
         // Function declarations are instantiated before the first eval
@@ -202,7 +215,15 @@ public partial class ILEmitter
                 return true;
             case Stmt.Var { IsVar: true } declaration:
                 // EvalDeclarationInstantiation reuses an existing var-env slot.
-                if (!_ctx.IsStrictMode && !HasOwnEvalVariable(declaration.Name.Lexeme))
+                if (_ctx.IsScriptTopLevel && !_ctx.IsStrictMode && !_resolver.HasVariable(declaration.Name.Lexeme))
+                {
+                    if (declaration.Initializer is { } globalInitializer)
+                    {
+                        EmitAssign(new Expr.Assign(declaration.Name, globalInitializer));
+                        IL.Emit(OpCodes.Pop);
+                    }
+                }
+                else if (!_ctx.IsStrictMode && !HasOwnEvalVariable(declaration.Name.Lexeme))
                 {
                     InstantiateEvalVar(declaration.Name.Lexeme);
                     if (declaration.Initializer is { } evalInitializer)

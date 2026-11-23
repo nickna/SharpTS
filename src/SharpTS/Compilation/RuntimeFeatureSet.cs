@@ -130,6 +130,7 @@ public sealed class RuntimeFeatureSet
     public bool UsesJSON { get; set; } = true;              // JSON.parse / JSON.stringify
     public bool UsesCompactObjectRecords { get; set; } = true; // compact slot-backed ordinary object literals
     public bool UsesIntl { get; set; } = true;              // Intl.NumberFormat, DateTimeFormat, Collator
+    public bool UsesConsoleObject { get; set; } = true;
     public bool UsesReflect { get; set; } = true;           // Reflect.set/get/deleteProperty/has/etc.
     public bool UsesIteratorHelpers { get; set; } = true;   // Iterator.prototype.map/filter/flatMap/take/drop
     public bool UsesPromise { get; set; } = true;           // Promise references, async/await, and Promise-returning host/module surfaces

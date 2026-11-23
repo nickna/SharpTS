@@ -18,7 +18,7 @@ public partial class ClosureAnalyzer
         {
             var statements = call.PreparedEvalStatements ?? WithStatementLowering.ApplyEvalEnvironments(
                 new Parser(new Lexer(source).ScanTokens()).ParseOrThrow(), call.EvalObjectEnvironments);
-            statements = StaticEvalLowering.LowerAsyncDeclarations(statements);
+            statements = StaticEvalLowering.LowerFunctionDeclarations(statements, direct: true);
             _evalPrograms[call] = statements;
             return statements;
         }
@@ -45,7 +45,7 @@ public partial class ClosureAnalyzer
     {
         // Static caller-scope eval is currently lowered by the synchronous
         // emitter. State machines retain their existing eval bridge boundary.
-        if (_currentFunction is Stmt.Function { IsAsync: true } or Stmt.Function { IsGenerator: true }
+        if (_strictContext || _currentFunction is Stmt.Function { IsAsync: true } or Stmt.Function { IsGenerator: true }
             or Expr.ArrowFunction { IsAsync: true } or Expr.ArrowFunction { IsGenerator: true }) return;
         var scanner = new BodyEvalBindingScanner(GetEvalProgram);
         foreach (var statement in Runtime.ParameterBinder.BodyStatements(body)) scanner.Visit(statement);
@@ -66,14 +66,29 @@ public partial class ClosureAnalyzer
         }
     }
 
-    private void ReferenceEvalBindings(string name)
+    private readonly Dictionary<Expr.Variable, List<string>> _suspendedEvalReads =
+        new(ReferenceEqualityComparer.Instance);
+
+    internal IReadOnlyList<string>? GetSuspendedEvalRead(Expr.Variable reference) =>
+        _suspendedEvalReads.GetValueOrDefault(reference);
+
+    private void ReferenceEvalBindings(string name, Expr.Variable? reference)
     {
         foreach (var scope in _scopeStack)
         {
             if (scope.Contains(name)) break;
             if (_evalScopeBindings.TryGetValue(scope, out var bindings)
                 && bindings.TryGetValue(name, out var storage))
+            {
                 ReferenceVariable(storage);
+                if (reference is not null && _currentFunction is Expr.ArrowFunction { IsAsync: true }
+                    or Expr.ArrowFunction { IsGenerator: true })
+                {
+                    if (!_suspendedEvalReads.TryGetValue(reference, out var candidates))
+                        _suspendedEvalReads[reference] = candidates = [];
+                    candidates.Add(storage);
+                }
+            }
         }
     }
 

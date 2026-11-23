@@ -59,9 +59,9 @@ public static class ArrayBuiltIns
             .MethodV2("at", 1, AtV2)
             .MethodV2("fill", 0, 3, specLength: 1, FillV2)
             .MethodV2("copyWithin", 0, 3, specLength: 2, CopyWithinV2)
-            .MethodV2("entries", 0, (interp, arr, _) => RuntimeValue.FromObject(new SharpTSIterator(EnumerateEntries(interp, arr))))
-            .MethodV2("keys", 0, (interp, arr, _) => RuntimeValue.FromObject(new SharpTSIterator(EnumerateKeys(interp, arr))))
-            .MethodV2("values", 0, (interp, arr, _) => RuntimeValue.FromObject(new SharpTSIterator(EnumerateValues(interp, arr))))
+            .MethodV2("entries", 0, (interp, arr, _) => RuntimeValue.FromObject(new SharpTSArrayIterator(EnumerateEntries(interp, arr), interp.GetArrayIteratorPrototype())))
+            .MethodV2("keys", 0, (interp, arr, _) => RuntimeValue.FromObject(new SharpTSArrayIterator(EnumerateKeys(interp, arr), interp.GetArrayIteratorPrototype())))
+            .MethodV2("values", 0, (interp, arr, _) => RuntimeValue.FromObject(new SharpTSArrayIterator(EnumerateValues(interp, arr), interp.GetArrayIteratorPrototype())))
             .Build();
 
     public static object? GetMember(SharpTSArray receiver, string name)

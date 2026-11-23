@@ -106,6 +106,7 @@ public sealed partial class RuntimeFeatureDetector
             UsesJSON = false,
             UsesCompactObjectRecords = false,
             UsesIntl = false,
+            UsesConsoleObject = false,
             UsesReflect = false,
             UsesIteratorHelpers = false,
             UsesPromise = false,
@@ -565,6 +566,8 @@ public sealed partial class RuntimeFeatureDetector
             // Bare JSON identifier — covers `globalThis.JSON`, `const j = JSON`,
             // and the more common `JSON.parse(...)` (which also passes through
             // HandleMemberAccess). Conservative — flag on any reference.
+            case "console":
+                _set.UsesConsoleObject = true; break;
             case "JSON":
                 _set.UsesJSON = true; break;
 
@@ -664,6 +667,7 @@ public sealed partial class RuntimeFeatureDetector
             // valve; the fine-grained ones still get set by their own triggers.
             case "globalThis":
             case "global":
+                _set.UsesConsoleObject = true;
                 _set.UsesStructuredClone = true;
                 _set.UsesTimerFunctionValues = true;
                 _set.UsesMicrotaskFunctionValues = true;

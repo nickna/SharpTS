@@ -14,6 +14,75 @@ namespace SharpTS.Tests.SharedTests;
 public class EvalTests
 {
     [Theory, ModeData]
+    public void SuspendedEvalFunctionsCallLaterSiblings(ExecutionMode mode)
+    {
+        const string source = """
+            function make() {
+                return eval('function* entries() { yield later(); } async function read() { await 0; return later(); } function later() { return 9; } [entries, read];');
+            }
+            const pair = make();
+            console.log(pair[0]().next().value);
+            pair[1]().then(value => console.log(value));
+            """;
+        Assert.Equal("9\n9\n", TestHarness.RunUnchecked(source, mode));
+    }
+
+    [Theory, ModeData]
+    public void EvalFunctionsShareForwardAndRecursiveBindings(ExecutionMode mode)
+    {
+        const string source = """
+            function make() {
+                return eval('function first() { return second; } function second(n) { return n ? first()(n-1) : second; } [first, second, value => { second = value; }];');
+            }
+            var pair = make();
+            console.log(pair[0]() === pair[1], pair[1](2) === pair[1]);
+            pair[2](() => 9);
+            console.log(pair[0]()());
+            """;
+        Assert.Equal("true true\n9\n", TestHarness.RunUnchecked(source, mode));
+    }
+
+    [Theory, ModeData]
+    public void GlobalEvalFunctionReadsTheSameArrayAsItsCaller(ExecutionMode mode)
+    {
+        const string source = """
+            eval('var values = []; function add() { values.push(1); } add(); console.log(values.length);');
+            console.log(globalThis.values === values);
+            """;
+        Assert.Equal("1\ntrue\n", TestHarness.RunUnchecked(source, mode));
+    }
+
+    // The interpreter's global eval write-through behavior is tracked by #3735.
+    [Theory, CompiledOnlyData]
+    public void GlobalEvalClosureObservesWritesThroughEitherReference(ExecutionMode mode)
+    {
+        const string source = """
+            var action = eval('var n = 1; function bump() { n = n + 1; return n; } bump;');
+            console.log(action(), n, globalThis.n);
+            globalThis.n = 10;
+            console.log(action(), n, globalThis.n);
+            eval('var n;');
+            console.log(n);
+            """;
+        Assert.Equal("2 2 2\n11 11 11\n11\n", TestHarness.RunUnchecked(source, mode));
+    }
+
+    [Theory, ModeData]
+    public void StrictEvalOwnsDeclarationsAndEscapingClosures(ExecutionMode mode)
+    {
+        const string source = """
+            var x = 10;
+            function run() { 'use strict'; eval('var x = 3;'); console.log(x); }
+            run(); console.log(x);
+            console.log(eval('"use strict"; x; var x;') === undefined);
+            function make(seed) { return eval('"use strict"; var x = seed; () => ++x;'); }
+            var a = make(1), b = make(10);
+            console.log(a(), b(), a(), x);
+            """;
+        Assert.Equal("10\n10\ntrue\n2 11 3 10\n", TestHarness.RunUnchecked(source, mode));
+    }
+
+    [Theory, ModeData]
     public void Eval_WhitespaceTolerance_ResolvesGlobals(ExecutionMode mode)
     {
         // Test262 S11.2.1_A1.1-style: eval tolerates interior whitespace and resolves globals.

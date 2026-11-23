@@ -17,6 +17,7 @@ public partial class RuntimeEmitter
             "RangeError", "ReferenceError", "SyntaxError", "URIError", "EvalError", "AggregateError", "Math",
             "JSON", "AbortController" })
             EmitName(name, writable);
+        if (_features.UsesConsoleObject) EmitName("console", writable);
         foreach (var name in new[] { "NaN", "Infinity", "undefined" }) EmitName(name, constant);
         il.Emit(OpCodes.Ldc_I4_0);
         il.Emit(OpCodes.Ret);

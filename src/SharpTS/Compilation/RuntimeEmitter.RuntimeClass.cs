@@ -151,6 +151,12 @@ public partial class RuntimeEmitter
             _types.DictionaryStringObject,
             FieldAttributes.Public | FieldAttributes.Static);
         runtime.Json.SingletonField = jsonSingletonField;
+        var consoleSingleton = _features.UsesConsoleObject
+            ? typeBuilder.DefineField("_consoleSingleton", _types.DictionaryStringObject,
+                FieldAttributes.Private | FieldAttributes.Static)
+            : null;
+        var populateConsole = consoleSingleton is null ? null : typeBuilder.DefineMethod(
+            "_ConsoleSingletonPopulate", MethodAttributes.Private | MethodAttributes.Static, _types.Void, Type.EmptyTypes);
         if (runtime.Reflect.Namespace is not null)
         {
             runtime.Reflect.RequireNamespace().SingletonField = typeBuilder.DefineField(
@@ -547,6 +553,11 @@ public partial class RuntimeEmitter
         cctorIL.Emit(OpCodes.Stsfld, symbolPrototypeField);
         cctorIL.Emit(OpCodes.Newobj, _types.GetDefaultConstructor(_types.DictionaryStringObject));
         cctorIL.Emit(OpCodes.Stsfld, jsonSingletonField);
+        if (consoleSingleton is not null)
+        {
+            cctorIL.Emit(OpCodes.Newobj, _types.GetDefaultConstructor(_types.DictionaryStringObject));
+            cctorIL.Emit(OpCodes.Stsfld, consoleSingleton);
+        }
         if (runtime.Reflect.Namespace is not null)
         {
             cctorIL.Emit(OpCodes.Newobj, _types.GetDefaultConstructor(_types.DictionaryStringObject));
@@ -655,6 +666,7 @@ public partial class RuntimeEmitter
         EmitLinkProto(globalThisSingletonField);
         EmitLinkProto(mathSingletonField);
         EmitLinkProto(jsonSingletonField);
+        if (consoleSingleton is not null) EmitLinkProto(consoleSingleton);
         EmitLinkProto(booleanPrototypeField);
         EmitLinkProto(numberPrototypeField);
         EmitLinkProto(stringPrototypeField);
@@ -724,6 +736,7 @@ public partial class RuntimeEmitter
         // unconditionally is safe even when the program doesn't use JSON (#276).
         cctorIL.Emit(OpCodes.Call, runtime.Math.SingletonPopulateMethod);
         cctorIL.Emit(OpCodes.Call, runtime.Json.SingletonPopulateMethod);
+        if (populateConsole is not null) cctorIL.Emit(OpCodes.Call, populateConsole);
         if (runtime.Reflect.Namespace is not null)
             cctorIL.Emit(OpCodes.Call, runtime.Reflect.RequireNamespace().SingletonPopulateMethod);
 
@@ -928,6 +941,7 @@ public partial class RuntimeEmitter
                 runtime.Errors,
                 runtime.ObjectRead.Property,
                 runtime.GlobalObject.SingletonField,
+                runtime.GlobalObject.IntrinsicDescriptorKind,
                 runtime.ObjectFields.HasProperty,
                 runtime.ObjectFields.Interface,
                 runtime.BuiltInStatics.Lookup,
@@ -3139,6 +3153,20 @@ public partial class RuntimeEmitter
         EmitMathSingletonPopulate(runtime.Math, builtinSingletonInputs, installBuiltinSingletonDataProperty,
             runtime.FunctionAttributes.PadUndefinedCtor);
         EmitJsonSingletonPopulate(runtime.Json, builtinSingletonInputs, installBuiltinSingletonDataProperty);
+        if (consoleSingleton is not null)
+        {
+            var log = typeBuilder.DefineMethod("ConsoleLogValue", MethodAttributes.Public | MethodAttributes.Static,
+                _types.Object, [_types.ObjectArray]);
+            log.DefineParameter(1, ParameterAttributes.None, "args").SetCustomAttribute(
+                typeof(ParamArrayAttribute).GetConstructor(Type.EmptyTypes)!, CustomAttributeEncoder.EmptyBlob);
+            var logIL = log.GetILGenerator();
+            logIL.Emit(OpCodes.Ldarg_0);
+            logIL.Emit(OpCodes.Call, runtime.Console.LogMultiple);
+            logIL.Emit(OpCodes.Ldsfld, runtime.Sentinels.UndefinedInstance);
+            logIL.Emit(OpCodes.Ret);
+            EmitBuiltinSingletonPopulate(populateConsole!, consoleSingleton, builtinSingletonInputs,
+                installBuiltinSingletonDataProperty, [("log", log, 0)], "console");
+        }
         // BigInt methods — gated on UsesBigInt. Detector flips it on for any
         // `123n` literal, bare `BigInt` identifier, or BigInt64Array/BigUint64Array
         // typed-array reference. EmitBigIntBinary in ILEmitter.Operators.cs only
@@ -3493,7 +3521,7 @@ public partial class RuntimeEmitter
         if (_features.UsesDgram)
             EmitDgramModuleMethods(typeBuilder, runtime);
         // globalThis methods (ES2020) - must be after HTTP for fetch reference
-        EmitGlobalThisMethods(typeBuilder, runtime, allowInterpreterBridge);
+        EmitGlobalThisMethods(typeBuilder, runtime, allowInterpreterBridge, consoleSingleton);
         // Define util inspect method signatures before ConsoleExtensions (ConsoleDir uses UtilInspectValue)
         DefineUtilInspectSignatures(typeBuilder, runtime.Inspection);
         // Console extensions (error, warn, clear, time, timeEnd, timeLog)

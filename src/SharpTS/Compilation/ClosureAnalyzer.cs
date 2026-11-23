@@ -21,6 +21,7 @@ public partial class ClosureAnalyzer : AstVisitorBase
     private readonly IReadOnlyDictionary<Stmt.Class, Expr.ClassExpr>? _runtimeClassDeclarations;
     private readonly Dictionary<Expr.Call, List<Stmt>>? _evalPrograms;
     private bool _visitingEvalProgram;
+    private bool _strictContext;
 
     public ClosureAnalyzer(IReadOnlyDictionary<Stmt.Class, Expr.ClassExpr>? runtimeClassDeclarations = null,
         Dictionary<Expr.Call, List<Stmt>>? evalPrograms = null)
@@ -36,11 +37,22 @@ public partial class ClosureAnalyzer : AstVisitorBase
         // the same lexical object temporary as ordinary source closures.
         if (GetEvalProgram(expression) is { } statements)
         {
-            PrepareEvalTemplateCache(statements);
-            bool previous = _visitingEvalProgram;
+            bool previousStrict = _strictContext;
+            bool previousEval = _visitingEvalProgram;
+            _strictContext |= DirectivePrologue.HasUseStrict(statements);
             _visitingEvalProgram = true;
-            try { foreach (var statement in statements) Visit(statement); }
-            finally { _visitingEvalProgram = previous; }
+            try
+            {
+                if (_evalPrograms is not null && _strictContext)
+                    _evalPrograms[expression] = statements = StaticEvalLowering.IsolateStrictDeclarations(statements, expression.Paren);
+                PrepareEvalTemplateCache(statements);
+                foreach (var statement in statements) Visit(statement);
+            }
+            finally
+            {
+                _visitingEvalProgram = previousEval;
+                _strictContext = previousStrict;
+            }
         }
     }
 
@@ -369,7 +381,7 @@ public partial class ClosureAnalyzer : AstVisitorBase
             foreach (var root in statements.GroupBy(
                          statement => moduleOwners.GetValueOrDefault(statement) ?? unowned,
                          ReferenceEqualityComparer.Instance))
-                AnalyzeRoot(root.ToList(), moduleClrImports);
+                AnalyzeRoot(root.ToList(), moduleClrImports, root.Key is Modules.ParsedModule);
         }
         _moduleClrImports = null;
         _checkedTypes = null;
@@ -390,8 +402,9 @@ public partial class ClosureAnalyzer : AstVisitorBase
     }
 
     private void AnalyzeRoot(List<Stmt> statements,
-        IReadOnlyDictionary<Stmt, IReadOnlySet<string>>? moduleClrImports)
+        IReadOnlyDictionary<Stmt, IReadOnlySet<string>>? moduleClrImports, bool module = false)
     {
+        _strictContext = module || DirectivePrologue.HasUseStrict(statements);
         EnterScope();
         HoistFunctionDeclarations(statements, hoistOwnedVars: true);
         foreach (var statement in statements)
@@ -519,18 +532,18 @@ public partial class ClosureAnalyzer : AstVisitorBase
     // DeclareVariable records them as loop bindings rather than ordinary locals.
     private readonly HashSet<string> _pendingLoopBindings = [];
 
-    private void ReferenceVariable(string name)
+    private void ReferenceVariable(string name, Expr.Variable? reference = null)
     {
-        ReferenceEvalBindings(name);
+        ReferenceEvalBindings(name, reference);
         if (_currentFunction == null) return;
 
         // Intrinsic values need no capture, but a lexical declaration with the same name
         // must reach the ordinary self/local/outer ownership checks below.
-        if (name is "Math" or "undefined" && !_scopeStack.Any(scope => scope.Contains(name)))
+        if (name is "Math" or "console" or "undefined" && !_scopeStack.Any(scope => scope.Contains(name)))
             return;
 
         // Skip other built-ins.
-        if (name is "console.log" or "console" or "NaN" or "Infinity" or "Symbol")
+        if (name is "console.log" or "NaN" or "Infinity" or "Symbol")
             return;
 
         // Namespace members have namespace-owned static storage. Treating them
@@ -857,7 +870,7 @@ public partial class ClosureAnalyzer : AstVisitorBase
     protected override void VisitVar(Stmt.Var stmt)
     {
         if (stmt.IsDeclare) return;
-        if (!_visitingEvalProgram || !stmt.IsVar || _currentFunction is null)
+        if (!_visitingEvalProgram || !stmt.IsVar)
             DeclareVariable(stmt.Name.Lexeme, isPerIterationBinding: !stmt.IsVar);
         base.VisitVar(stmt);
     }
@@ -892,6 +905,14 @@ public partial class ClosureAnalyzer : AstVisitorBase
     }
 
     protected override void VisitClass(Stmt.Class stmt)
+    {
+        bool previous = _strictContext;
+        _strictContext = true;
+        try { AnalyzeClass(stmt); }
+        finally { _strictContext = previous; }
+    }
+
+    private void AnalyzeClass(Stmt.Class stmt)
     {
         DeclareVariable(stmt.Name.Lexeme, isPerIterationBinding: true);
         if (_runtimeClassDeclarations?.TryGetValue(stmt, out var runtimeExpression) == true)
@@ -931,6 +952,14 @@ public partial class ClosureAnalyzer : AstVisitorBase
     }
 
     protected override void VisitClassExpr(Expr.ClassExpr expr)
+    {
+        bool previous = _strictContext;
+        _strictContext = true;
+        try { AnalyzeClass(expr); }
+        finally { _strictContext = previous; }
+    }
+
+    private void AnalyzeClass(Expr.ClassExpr expr)
     {
         foreach (var expression in ClassDefinitionExpressions.Enumerate(expr))
             Visit(expression);
@@ -1146,7 +1175,7 @@ public partial class ClosureAnalyzer : AstVisitorBase
     {
         if (TryGetClassSelfOwner(expr, out _)) return;
         if (IsModuleClrImportReference(expr)) return;
-        ReferenceVariable(expr.Name.Lexeme);
+        ReferenceVariable(expr.Name.Lexeme, expr);
     }
 
     private bool IsModuleClrImportReference(Expr.Variable expression)
@@ -1289,6 +1318,8 @@ public partial class ClosureAnalyzer : AstVisitorBase
 
     private void AnalyzeFunctionBody(object funcNode, List<Stmt.Parameter> parameters, List<Stmt> body)
     {
+        bool previousStrict = _strictContext;
+        _strictContext |= DirectivePrologue.HasUseStrict(body);
         bool previousEvalProgram = _visitingEvalProgram;
         _visitingEvalProgram = false;
         // Save current context
@@ -1349,6 +1380,7 @@ public partial class ClosureAnalyzer : AstVisitorBase
 
         // Restore context
         _currentFunction = previousFunction;
+        _strictContext = previousStrict;
         _visitingEvalProgram = previousEvalProgram;
         _loopBodyDepth = previousLoopBodyDepth;
         _outerVariables.Clear();
@@ -1358,6 +1390,8 @@ public partial class ClosureAnalyzer : AstVisitorBase
 
     private void AnalyzeArrowFunctionBody(Expr.ArrowFunction af)
     {
+        bool previousStrict = _strictContext;
+        _strictContext |= DirectivePrologue.HasUseStrict(af.BlockBody);
         bool previousEvalProgram = _visitingEvalProgram;
         _visitingEvalProgram = false;
         // Save current context
@@ -1441,6 +1475,7 @@ public partial class ClosureAnalyzer : AstVisitorBase
 
         // Restore context
         _currentFunction = previousFunction;
+        _strictContext = previousStrict;
         _visitingEvalProgram = previousEvalProgram;
         _currentFunctionName = previousFunctionName;
         _loopBodyDepth = previousLoopBodyDepth;

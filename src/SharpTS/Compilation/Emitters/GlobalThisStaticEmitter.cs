@@ -124,7 +124,7 @@ public sealed class GlobalThisStaticEmitter : IStaticTypeEmitterStrategy
         if (TryEmitBuiltInClassType(il, ctx, propertyName))
             return true;
 
-        if (propertyName is "Math" or "Reflect" or "ArrayBuffer")
+        if (propertyName is "console" or "Math" or "Reflect" or "ArrayBuffer")
         {
             il.Emit(OpCodes.Ldstr, propertyName);
             il.Emit(OpCodes.Call, ctx.Runtime!.GlobalObject.GetProperty);
@@ -144,7 +144,6 @@ public sealed class GlobalThisStaticEmitter : IStaticTypeEmitterStrategy
         // Known built-in namespaces without static emitters but with special handling
         switch (propertyName)
         {
-            case "console":
             case "Object":
             case "Error":
                 // These are accessed through property access chains
