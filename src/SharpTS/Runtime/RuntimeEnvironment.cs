@@ -75,9 +75,10 @@ public class RuntimeEnvironment : ScopeChain<RuntimeValue, RuntimeEnvironment>
     internal RuntimeEnvironment? VarDeclarationTarget { get; set; }
 
     private RuntimeEnvironment? _evalVariableEnvironment;
+    internal bool IsGlobalVariableEnvironment { get; init; }
     internal RuntimeEnvironment EvalVariableEnvironment
     {
-        get => _evalVariableEnvironment ?? Enclosing?.EvalVariableEnvironment ?? this;
+        get => _evalVariableEnvironment ?? (IsGlobalVariableEnvironment ? this : Enclosing?.EvalVariableEnvironment ?? this);
         set => _evalVariableEnvironment = value;
     }
 
@@ -173,6 +174,7 @@ public class RuntimeEnvironment : ScopeChain<RuntimeValue, RuntimeEnvironment>
     public RuntimeEnvironment(RuntimeEnvironment? enclosing = null, bool? strictMode = null)
         : base(enclosing, strictMode)
     {
+        IsGlobalVariableEnvironment = enclosing is null;
     }
 
     /// <summary>

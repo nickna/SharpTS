@@ -14,6 +14,25 @@ namespace SharpTS.Tests.SharedTests;
 public class EvalTests
 {
     [Theory, ModeData]
+    public void SloppyEvalFunctionsRemainInTheCallersVariableEnvironment(ExecutionMode mode)
+    {
+        const string source = """
+            eval("function f() { return 7; }");
+            console.log(typeof f, f === globalThis.f, f());
+            function make() {
+                const before = () => f();
+                { let n = 8; eval("function f() { return n; }"); }
+                console.log(typeof f, f(), before());
+                eval("function f() { return 9; }");
+                console.log(before());
+            }
+            make();
+            console.log(f());
+            """;
+        Assert.Equal("function true 7\nfunction 8 8\n9\n7\n", TestHarness.RunUnchecked(source, mode));
+    }
+
+    [Theory, ModeData]
     public void StrictEvalHoistsCallableFunctionsInItsOwnScope(ExecutionMode mode)
     {
         const string source = """

@@ -1592,6 +1592,11 @@ public partial class Interpreter : IDisposable
     {
         HoistFunctionDeclarations(statements);
         HoistLocalLoopVarDeclarations(statements);
+        return ExecuteScriptCompletion(statements);
+    }
+
+    private object? ExecuteScriptCompletion(IEnumerable<Stmt> statements)
+    {
         var completion = ExecutionResult.Success();
         foreach (var statement in statements)
         {
@@ -1648,29 +1653,46 @@ public partial class Interpreter : IDisposable
         }
 
         var statements = WithStatementLowering.ApplyEvalEnvironments(parseResult.Statements, objectEnvironments);
-        var previous = _environment;
-        bool strict = previous.IsStrictMode || DirectivePrologue.HasUseStrict(statements);
-        var variableEnvironment = strict ? new RuntimeEnvironment(previous, strictMode: true)
-            : previous.EvalVariableEnvironment;
-        if (strict)
+        bool strict = _environment.IsStrictMode || DirectivePrologue.HasUseStrict(statements);
+        var lexical = new RuntimeEnvironment(_environment, strictMode: strict);
+        var variables = strict ? lexical : _environment.EvalVariableEnvironment;
+        lexical.VarDeclarationTarget = lexical.EvalVariableEnvironment = variables;
+        using var scope = PushScope(lexical);
+        foreach (var (name, isFunction) in Runtime.ParameterBinder.BodyVarDeclarations(statements))
+            if (!isFunction)
+                variables.InstantiateEvalVar(name.Lexeme);
+        foreach (var statement in statements)
         {
-            variableEnvironment.EvalVariableEnvironment = variableEnvironment;
-            // Initialize functions before var placeholders. For repeated declarations
-            // the last function supplies the value, even to calls before its declaration.
-            foreach (var statement in statements)
-                if (statement is Stmt.Function { Body: not null } function)
-                    variableEnvironment.Define(function.Name.Lexeme, CreateHoistedFunction(function, variableEnvironment));
+            if (statement is not Stmt.Function { Body: not null } function) continue;
+            string name = function.Name.Lexeme;
+            var value = CreateHoistedFunction(function, lexical);
+            if (variables.IsGlobalVariableEnvironment)
+                DefineGlobalEvalFunction(variables, name, value);
+            else
+            {
+                variables.InstantiateEvalVar(name);
+                variables.Define(name, value);
+            }
         }
-        foreach (var (name, _) in Runtime.ParameterBinder.BodyVarDeclarations(statements))
-            variableEnvironment.InstantiateEvalVar(name.Lexeme);
-        _environment = new RuntimeEnvironment(previous, strictMode: strict)
-        {
-            VarDeclarationTarget = variableEnvironment,
-            EvalVariableEnvironment = variableEnvironment
-        };
-        if (strict) _environment = variableEnvironment;
-        try { return InterpretScriptCompletion(statements); }
-        finally { _environment = previous; }
+        HoistLocalLoopVarDeclarations(statements);
+        // Top-level functions have already been initialized in their variable
+        // environment. Executing them again would shadow it in the lexical scope.
+        return ExecuteScriptCompletion(statements.Where(statement => statement is not Stmt.Function));
+    }
+
+    private void DefineGlobalEvalFunction(RuntimeEnvironment variables, string name, object value)
+    {
+        var global = variables.VmGlobalObject ?? GlobalThis;
+        var current = global.GetOwnPropertyDescriptor(name);
+        if (current is { Configurable: false } && !(current.HasValue && current.Writable && current.Enumerable))
+            throw new InterpreterException($"TypeError: Cannot declare global function '{name}'.");
+        var descriptor = new SharpTSPropertyDescriptor(value, writable: true, enumerable: true,
+            configurable: current?.Configurable ?? !variables.IsDefinedLocally(name));
+        if (!global.DefineProperty(name, descriptor))
+            throw new InterpreterException($"TypeError: Cannot declare global function '{name}'.");
+        if (variables.IsDefinedLocally(name))
+            variables.DefineObjectBinding(name, () => ReadClassicGlobalVariable(name),
+                (assigned, strict) => WriteClassicGlobalVariable(name, assigned, strict));
     }
 
     /// <summary>
@@ -1694,7 +1716,7 @@ public partial class Interpreter : IDisposable
         try
         {
             // Create a shared script environment for script files (they share global scope)
-            var scriptEnv = new RuntimeEnvironment(_environment);
+            var scriptEnv = new RuntimeEnvironment(_environment) { IsGlobalVariableEnvironment = true };
 
             // Determine the entry module — the last one in topological order — so we can run
             // CJS modules lazily. Pre-emptive init of CJS modules would change visible execution

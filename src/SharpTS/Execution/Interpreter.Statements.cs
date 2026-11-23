@@ -2062,7 +2062,8 @@ public partial class Interpreter
         target.Define(varStmt.Name.Lexeme, value);
         // The REPL retains its legacy initial publication; classic Interpret
         // bindings were registered at instantiation and already wrote through.
-        if (varStmt.IsVar && target.Enclosing is null && !target.HasObjectBinding(varStmt.Name.Lexeme))
+        if (varStmt.IsVar && (target.Enclosing is null || target.IsGlobalVariableEnvironment && target != _environment)
+            && !target.HasObjectBinding(varStmt.Name.Lexeme))
             GlobalThis.SetProperty(varStmt.Name.Lexeme, value);
         ObserveDiscardedReactionResult(value);
         return ExecutionResult.Success();

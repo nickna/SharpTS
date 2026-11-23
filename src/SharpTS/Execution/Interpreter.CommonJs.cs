@@ -148,6 +148,7 @@ public partial class Interpreter
         {
             RequiresUnmappedArguments = Parsing.DirectivePrologue.HasUseStrict(module.Statements)
         };
+        moduleEnv.EvalVariableEnvironment = moduleEnv;
         moduleEnv.Define("module", moduleObj);
         moduleEnv.Define("exports", exportsObj);
         // `global` in Node is a reference to the global object (same as
