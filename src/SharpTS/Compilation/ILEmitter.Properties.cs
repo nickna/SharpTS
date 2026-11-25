@@ -395,10 +395,8 @@ public partial class ILEmitter
             // RequireObjectCoercible: a non-optional read on `undefined` throws a
             // guest TypeError instead of silently yielding undefined (#701). Also
             // rejects a genuine value-null (#735) now that sloppy `this` resolves to
-            // the globalThis sentinel. Null-placeholder globals (e.g. `process`)
-            // are exempt — uncovered properties there yield undefined, not a throw.
-            if (!IsNullPlaceholderGlobal(g.Object))
-                EmitThrowIfUndefinedReceiverOnStack(g.Name.Lexeme);
+            // the globalThis sentinel.
+            EmitThrowIfUndefinedReceiverOnStack(g.Name.Lexeme);
             IL.Emit(OpCodes.Ldstr, g.Name.Lexeme);
             IL.Emit(OpCodes.Call, _ctx.Runtime!.ObjectRead.Property);
         }
@@ -1509,11 +1507,9 @@ public partial class ILEmitter
         // into the TypeError message: `undefined[k]` throws instead of silently
         // yielding undefined (#701), and `null[k]` too now that sloppy `this` is the
         // globalThis sentinel (#735). The optional `o?.[k]` case returned early above.
-        // Null-placeholder globals (e.g. `process`) are exempt.
         var idxRecvLocal = SpillBoxed(gi.Object);
         var idxKeyLocal = SpillBoxed(gi.Index);
-        if (!IsNullPlaceholderGlobal(gi.Object))
-            EmitThrowIfUndefinedIndexReceiver(idxRecvLocal, idxKeyLocal);
+        EmitThrowIfUndefinedIndexReceiver(idxRecvLocal, idxKeyLocal);
         IL.Emit(OpCodes.Ldloc, idxRecvLocal);
         IL.Emit(OpCodes.Ldloc, idxKeyLocal);
         IL.Emit(OpCodes.Call, _ctx.Runtime!.ObjectRead.Index);

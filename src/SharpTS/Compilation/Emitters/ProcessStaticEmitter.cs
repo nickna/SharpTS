@@ -5,8 +5,8 @@ using SharpTS.Parsing;
 namespace SharpTS.Compilation.Emitters;
 
 /// <summary>
-/// Emitter strategy for process static method calls and property access.
-/// Handles process.cwd(), process.exit(), process.platform, process.env, etc.
+/// Emitter strategy for process static method calls.
+/// Handles process.cwd(), process.exit(), and other directly lowered calls.
 /// </summary>
 public sealed class ProcessStaticEmitter : IStaticTypeEmitterStrategy
 {
@@ -139,176 +139,8 @@ public sealed class ProcessStaticEmitter : IStaticTypeEmitterStrategy
         }
     }
 
-    /// <summary>
-    /// Attempts to emit IL for a process static property get.
-    /// </summary>
-    public bool TryEmitStaticPropertyGet(IEmitterContext emitter, string propertyName)
-    {
-        var ctx = emitter.Context;
-        var il = ctx.IL;
-
-        switch (propertyName)
-        {
-            case "platform":
-                // Emit platform string based on current OS
-                EmitPlatformString(il);
-                return true;
-
-            case "arch":
-                // Emit architecture string based on current architecture
-                EmitArchString(il);
-                return true;
-
-            case "pid":
-                // Environment.ProcessId
-                il.Emit(OpCodes.Call, ctx.Types.GetPropertyGetter(ctx.Types.Environment, "ProcessId"));
-                il.Emit(OpCodes.Conv_R8); // Convert to double for JS number
-                il.Emit(OpCodes.Box, ctx.Types.Double);
-                return true;
-
-            case "version":
-                // The emulated Node version (see ProcessBuiltIns.NodeVersion) —
-                // feature-detection code must not parse the CLR version here.
-                il.Emit(OpCodes.Ldstr, "v" + SharpTS.Runtime.BuiltIns.ProcessBuiltIns.NodeVersion);
-                return true;
-
-            case "env":
-                // Call runtime helper to create env object
-                il.Emit(OpCodes.Call, ctx.Runtime!.Process.GetEnv);
-                return true;
-
-            case "argv":
-                // Call runtime helper to create argv array
-                il.Emit(OpCodes.Call, ctx.Runtime!.Process.GetArgv);
-                return true;
-
-            case "exitCode":
-                // Environment.ExitCode
-                il.Emit(OpCodes.Call, ctx.Types.GetPropertyGetter(ctx.Types.Environment, "ExitCode"));
-                il.Emit(OpCodes.Conv_R8); // Convert to double for JS number
-                il.Emit(OpCodes.Box, ctx.Types.Double);
-                return true;
-
-            // Stream objects - return cached $Writable/$Readable singleton instances.
-            // Member access (`process.stdin`) flips UsesNodeStreams via the detector's
-            // HandleMemberAccess hook, so the helper is normally non-null when this
-            // path runs. Null-guard regardless for defense-in-depth, mirroring
-            // ProcessModuleEmitter's tolerant emission — emit Ldnull (-> JS undefined)
-            // if the helper somehow wasn't generated.
-            case "stdin":
-                {
-                    var m = ctx.Runtime?.Process.RequireStreams().GetStdin;
-                    if (m is null) il.Emit(OpCodes.Ldnull); else il.Emit(OpCodes.Call, m);
-                    return true;
-                }
-
-            case "stdout":
-                {
-                    var m = ctx.Runtime?.Process.RequireStreams().GetStdout;
-                    if (m is null) il.Emit(OpCodes.Ldnull); else il.Emit(OpCodes.Call, m);
-                    return true;
-                }
-
-            case "stderr":
-                {
-                    var m = ctx.Runtime?.Process.RequireStreams().GetStderr;
-                    if (m is null) il.Emit(OpCodes.Ldnull); else il.Emit(OpCodes.Call, m);
-                    return true;
-                }
-
-            // Methods accessible as properties (for typeof checks)
-            case "nextTick":
-                // Return a TSFunction wrapper for nextTick
-                il.Emit(OpCodes.Call, ctx.Runtime!.Process.GetNextTick);
-                return true;
-
-            // Function-with-members properties: process.hrtime.bigint(),
-            // process.memoryUsage.rss() work through these cached functions.
-            case "hrtime":
-                il.Emit(OpCodes.Call, ctx.Runtime!.Process.GetHrtimeFn);
-                return true;
-
-            case "memoryUsage":
-                il.Emit(OpCodes.Call, ctx.Runtime!.Process.GetMemoryUsageFn);
-                return true;
-
-            // Identity / info properties (#1085)
-            case "ppid":
-                il.Emit(OpCodes.Call, ctx.Runtime!.Process.GetPpid);
-                return true;
-
-            case "title":
-                il.Emit(OpCodes.Call, ctx.Runtime!.Process.GetTitle);
-                return true;
-
-            case "versions":
-                il.Emit(OpCodes.Call, ctx.Runtime!.Process.GetVersions);
-                return true;
-
-            case "execPath":
-                {
-                    var haveIt = il.DefineLabel();
-                    il.Emit(OpCodes.Call, ctx.Types.GetPropertyGetter(ctx.Types.Environment, "ProcessPath"));
-                    il.Emit(OpCodes.Dup);
-                    il.Emit(OpCodes.Brtrue, haveIt);
-                    il.Emit(OpCodes.Pop);
-                    il.Emit(OpCodes.Call, ctx.Types.GetMethodNoParams(ctx.Types.Environment, "GetCommandLineArgs"));
-                    il.Emit(OpCodes.Ldc_I4_0);
-                    il.Emit(OpCodes.Ldelem_Ref);
-                    il.MarkLabel(haveIt);
-                    return true;
-                }
-
-            case "execArgv":
-                il.Emit(OpCodes.Call, ctx.Runtime!.Process.GetExecArgv);
-                return true;
-
-            case "argv0":
-                il.Emit(OpCodes.Call, ctx.Types.GetMethodNoParams(ctx.Types.Environment, "GetCommandLineArgs"));
-                il.Emit(OpCodes.Ldc_I4_0);
-                il.Emit(OpCodes.Ldelem_Ref);
-                return true;
-
-            case "config":
-                il.Emit(OpCodes.Call, ctx.Runtime!.Process.GetConfig);
-                return true;
-
-            case "release":
-                il.Emit(OpCodes.Call, ctx.Runtime!.Process.GetRelease);
-                return true;
-
-            case "features":
-                il.Emit(OpCodes.Call, ctx.Runtime!.Process.GetFeatures);
-                return true;
-
-            case "debugPort":
-                il.Emit(OpCodes.Ldc_R8, 9229.0);
-                il.Emit(OpCodes.Box, ctx.Types.Double);
-                return true;
-
-            case "allowedNodeEnvironmentFlags":
-                il.Emit(OpCodes.Call, ctx.Runtime!.Process.GetAllowedFlags);
-                return true;
-
-            case "report":
-                il.Emit(OpCodes.Call, ctx.Runtime!.Process.GetReport);
-                return true;
-
-            // Deprecation / source-map flags and IPC state: read through the
-            // live $Process object's dynamic property path (single source of
-            // truth for coercion + expando semantics).
-            case "throwDeprecation" or "traceDeprecation" or "noDeprecation"
-                or "sourceMapsEnabled" or "connected" or "channel" or "send" or "disconnect":
-                il.Emit(OpCodes.Call, ctx.Runtime!.Process.GetObject);
-                il.Emit(OpCodes.Castclass, ctx.Runtime!.ObjectFields.Interface);
-                il.Emit(OpCodes.Ldstr, propertyName);
-                il.Emit(OpCodes.Callvirt, ctx.Runtime!.ObjectFields.GetProperty);
-                return true;
-
-            default:
-                return false;
-        }
-    }
+    // The ordinary property path reads the current process receiver.
+    public bool TryEmitStaticPropertyGet(IEmitterContext emitter, string propertyName) => false;
 
     /// <summary>Emits a call to a one-object-arg $Runtime helper (missing arg → null).</summary>
     private static void EmitOneArgHelperCall(IEmitterContext emitter, List<Expr> arguments, System.Reflection.Emit.MethodBuilder helper)
@@ -334,10 +166,6 @@ public sealed class ProcessStaticEmitter : IStaticTypeEmitterStrategy
         EmitterArgumentHelpers.EmitBoxedArgumentOrNull(emitter, arguments, 3);
         emitter.Context.IL.Emit(OpCodes.Call, helper);
     }
-
-    private static void EmitPlatformString(ILGenerator il) => ProcessHostEmitter.EmitPlatform(il);
-
-    private static void EmitArchString(ILGenerator il) => ProcessHostEmitter.EmitArchitecture(il);
 
     /// <summary>
     /// Emits IL for process.hrtime(prev?).

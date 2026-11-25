@@ -18,8 +18,8 @@ namespace SharpTS.Compilation;
 ///
 /// Property/method dispatch is reflection-based (camelCase name →
 /// PascalCase member via ToPascalCase), mirroring the generic emitted-class
-/// dispatch path; the hot static-receiver form (<c>process.platform</c>)
-/// still compiles to direct IL in <see cref="Emitters.ProcessStaticEmitter"/>.
+/// dispatch path. Direct method calls have separate lowering in
+/// <see cref="Emitters.ProcessStaticEmitter"/>.
 ///
 /// Everything here is standalone: BCL-backed members emit directly and the
 /// small process-identity OS seam is represented by P/Invoke methods embedded

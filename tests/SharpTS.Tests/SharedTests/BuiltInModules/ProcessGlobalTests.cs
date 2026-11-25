@@ -46,6 +46,30 @@ public class ProcessGlobalTests
     }
 
     [Theory, ModeData]
+    public void Process_MemberReadsUseTheCurrentGlobalBinding(ExecutionMode mode)
+    {
+        const string source = """
+            const original = process;
+            console.log(process.pid > 0, globalThis.process.pid === original.pid, typeof process.pid);
+            let reads = 0;
+            globalThis.process = { get pid() { return --reads; }, platform: 'custom', stdout: 'custom' };
+            console.log(globalThis.process.pid, process.pid, process['pid'], process.platform, typeof process.stdout);
+            async function read() {
+                await Promise.resolve();
+                console.log(globalThis.process.pid, process.pid);
+                globalThis.process = null;
+                console.log(process?.pid, globalThis.process?.pid);
+                try { process['pid']; } catch (error) { console.log(error instanceof TypeError); }
+                globalThis.process = original;
+                console.log(process.pid === original.pid);
+            }
+            read();
+            """;
+        Assert.Equal("true true number\n-1 -2 -3 custom string\n-4 -5\nundefined undefined\ntrue\ntrue\n",
+            TestHarness.RunUnchecked(source, mode));
+    }
+
+    [Theory, ModeData]
     public void Process_Version_ReturnsVersionString(ExecutionMode mode)
     {
         var source = """

@@ -707,11 +707,6 @@ public partial class ILEmitter
                     // Error constructors are functions
                     IL.Emit(OpCodes.Ldstr, "function");
                 }
-                else if (IsTypeofOnProcessStream(u.Right))
-                {
-                    // process.stdin/stdout/stderr are stream objects
-                    IL.Emit(OpCodes.Ldstr, "object");
-                }
                 else
                 {
                     EmitExpression(u.Right);
@@ -3976,29 +3971,13 @@ public partial class ILEmitter
         // which are not functions.
         // A local/captured value with a native type's spelling is still an ordinary receiver.
         // Keep the same strategy policy as property emission, after excluding real value bindings.
-        if (_ctx.TypeEmitterRegistry != null && CanUseStaticTypeStrategy(varName) &&
+        if (varName != "process" && _ctx.TypeEmitterRegistry != null && CanUseStaticTypeStrategy(varName) &&
             !Resolver.HasVariable(varName) && !_ctx.HasVisibleValueBinding(varName))
         {
             var staticStrategy = _ctx.TypeEmitterRegistry.GetStaticStrategy(varName);
             if (staticStrategy != null && !staticStrategy.HasStaticProperty(memberName))
                 return true;
         }
-
-        return false;
-    }
-
-    /// <summary>
-    /// Checks if an expression is process.stdin, process.stdout, or process.stderr,
-    /// which are represented as marker strings in compiled mode but should return "object" for typeof.
-    /// </summary>
-    private static bool IsTypeofOnProcessStream(Expr expr)
-    {
-        if (expr is not Expr.Get g)
-            return false;
-
-        if (g.Object is Expr.Variable v && v.Name.Lexeme == "process" &&
-            g.Name.Lexeme is "stdin" or "stdout" or "stderr")
-            return true;
 
         return false;
     }
