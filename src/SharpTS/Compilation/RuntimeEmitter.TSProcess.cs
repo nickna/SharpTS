@@ -1271,9 +1271,10 @@ public partial class RuntimeEmitter
 
         var eventField = tb.DefineField("_event", _types.String, FieldAttributes.Private);
         var argField = tb.DefineField("_arg", _types.Object, FieldAttributes.Private);
+        var warningLineField = tb.DefineField("_warningLine", _types.String, FieldAttributes.Private);
 
         var ctor = tb.DefineConstructor(MethodAttributes.Public, CallingConventions.Standard,
-            [_types.String, _types.Object]);
+            [_types.String, _types.Object, _types.String]);
         process.EmitClosureCtor = ctor;
         {
             var il = ctor.GetILGenerator();
@@ -1285,6 +1286,9 @@ public partial class RuntimeEmitter
             il.Emit(OpCodes.Ldarg_0);
             il.Emit(OpCodes.Ldarg_2);
             il.Emit(OpCodes.Stfld, argField);
+            il.Emit(OpCodes.Ldarg_0);
+            il.Emit(OpCodes.Ldarg_3);
+            il.Emit(OpCodes.Stfld, warningLineField);
             il.Emit(OpCodes.Ret);
         }
 
@@ -1292,6 +1296,16 @@ public partial class RuntimeEmitter
         process.EmitClosureInvoke = invoke;
         {
             var il = invoke.GetILGenerator();
+            var skipDefaultHandler = il.DefineLabel();
+            il.Emit(OpCodes.Ldarg_0);
+            il.Emit(OpCodes.Ldfld, warningLineField);
+            il.Emit(OpCodes.Brfalse, skipDefaultHandler);
+            il.Emit(OpCodes.Call, _types.GetPropertyGetter(_types.Console, "Error"));
+            il.Emit(OpCodes.Ldarg_0);
+            il.Emit(OpCodes.Ldfld, warningLineField);
+            il.Emit(OpCodes.Callvirt, _types.GetMethod(_types.TextWriter, "WriteLine", _types.String));
+            il.MarkLabel(skipDefaultHandler);
+
             // ((EventEmitter)GetProcessObject()).Emit(_event, [_arg]) — discard result
             il.Emit(OpCodes.Call, process.GetObject);
             il.Emit(OpCodes.Castclass, events.Type);
@@ -2156,7 +2170,7 @@ public partial class RuntimeEmitter
     /// <summary>
     /// ProcessEmitWarning(warning, typeOrOptions, code, ctor): builds the
     /// warning object, honors the deprecation flags, prints the Node default
-    /// line to stderr, and emits 'warning' asynchronously on the event loop.
+    /// line to stderr and emits 'warning' at the next-tick checkpoint.
     /// </summary>
     private void EmitProcessEmitWarningBody(EmittedRuntime runtime)
     {
@@ -2297,7 +2311,6 @@ public partial class RuntimeEmitter
 
         // stderr default line: "(node:<pid>) [code] <name>: <message>"
         var pidLocal = il.DeclareLocal(_types.Int32);
-        il.Emit(OpCodes.Call, _types.GetPropertyGetter(_types.Console, "Error"));
         il.Emit(OpCodes.Ldstr, "(node:");
         il.Emit(OpCodes.Call, _types.GetPropertyGetter(_types.Environment, "ProcessId"));
         il.Emit(OpCodes.Stloc, pidLocal);
@@ -2321,16 +2334,17 @@ public partial class RuntimeEmitter
         il.Emit(OpCodes.Ldloc, messageLocal);
         il.Emit(OpCodes.Call, _types.GetMethod(_types.String, "Concat", _types.String, _types.String, _types.String));
         il.Emit(OpCodes.Call, _types.GetMethod(_types.String, "Concat", _types.String, _types.String));
-        il.Emit(OpCodes.Callvirt, _types.GetMethod(_types.TextWriter, "WriteLine", _types.String));
+        var warningLine = il.DeclareLocal(_types.String);
+        il.Emit(OpCodes.Stloc, warningLine);
 
-        // Emit 'warning' on the next loop turn
-        il.Emit(OpCodes.Call, runtime.EventLoop.GetInstance);
+        // Queue the default handler together with guest event delivery.
         il.Emit(OpCodes.Ldstr, "warning");
         il.Emit(OpCodes.Ldloc, dictLocal);
+        il.Emit(OpCodes.Ldloc, warningLine);
         il.Emit(OpCodes.Newobj, runtime.Process.EmitClosureCtor);
         il.Emit(OpCodes.Ldftn, runtime.Process.EmitClosureInvoke);
         il.Emit(OpCodes.Newobj, typeof(Action).GetConstructor([_types.Object, typeof(IntPtr)])!);
-        il.Emit(OpCodes.Callvirt, runtime.EventLoop.Schedule);
+        il.Emit(OpCodes.Call, runtime.Microtasks.QueuePromiseJob);
 
         il.Emit(OpCodes.Ldnull);
         il.Emit(OpCodes.Ret);
@@ -2481,6 +2495,7 @@ public partial class RuntimeEmitter
             il.Emit(OpCodes.Call, eventLoop.GetInstance);
             il.Emit(OpCodes.Ldarg_0);
             il.Emit(OpCodes.Ldarg_0); // arg to the listener is the signal name
+            il.Emit(OpCodes.Ldnull); // Signals have no default warning line.
             il.Emit(OpCodes.Newobj, process.EmitClosureCtor);
             il.Emit(OpCodes.Ldftn, process.EmitClosureInvoke);
             il.Emit(OpCodes.Newobj, typeof(Action).GetConstructor([_types.Object, typeof(IntPtr)])!);
