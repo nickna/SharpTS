@@ -28,6 +28,7 @@ public sealed partial class SharpTSGlobalThis : ISharpTSPropertyAccessor
     /// </summary>
     private readonly SharpTSObject _properties = new([]);
     private readonly HashSet<string> _deletedProperties = new(StringComparer.Ordinal);
+    private HashSet<string>? _removedIntrinsicSlots;
     private HashSet<string>? _vmWrittenProperties;
     private readonly Func<string, object?>? _realmIntrinsicResolver;
 
@@ -334,6 +335,8 @@ public sealed partial class SharpTSGlobalThis : ISharpTSPropertyAccessor
         if (HasOriginalFixedIntrinsic(name)) return false;
         if (_properties.HasProperty(name) && !_properties.DeleteProperty(name))
             return false;
+        if (name == BuiltInNames.Console || BuiltInNames.ConfigurableGlobalIntrinsicNames.Contains(name))
+            (_removedIntrinsicSlots ??= new(StringComparer.Ordinal)).Add(name);
         _deletedProperties.Add(name);
         return true;
     }
@@ -359,6 +362,8 @@ public sealed partial class SharpTSGlobalThis : ISharpTSPropertyAccessor
         return internalKeys.Where(IsIndex)
             .Concat(contextKeys.Where(IsIndex))
             .Concat(BuiltInNames.GlobalConstantNames.Where(name => !_deletedProperties.Contains(name)))
+            .Concat(BuiltInNames.ConfigurableGlobalIntrinsicNames.Append(BuiltInNames.Console)
+                .Where(name => _removedIntrinsicSlots?.Contains(name) != true && HasInternalProperty(name)))
             .Concat(internalKeys.Where(name => !IsIndex(name)))
             .Concat(contextKeys.Where(name => !IsIndex(name)))
             .Distinct(StringComparer.Ordinal);

@@ -684,7 +684,7 @@ public partial class ILEmitter
                 {
                     break;
                 }
-                else if (TryEmitMutableGlobalFunctionTypeOf(u.Right))
+                else if (TryEmitMutableGlobalTypeOf(u.Right))
                 {
                     break;
                 }

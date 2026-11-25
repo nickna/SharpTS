@@ -94,6 +94,51 @@ public class GlobalThisTests
     }
 
     [Theory, ModeData]
+    public void GlobalThis_OwnKeysIncludeConfigurableIntrinsics(ExecutionMode mode)
+    {
+        const string source = """
+            const root = globalThis;
+            for (const key of ["Object", "Math", "parseInt"]) {
+                console.log(Object.hasOwn(root, key), Object.getOwnPropertyNames(root).includes(key),
+                            Reflect.ownKeys(root).includes(key), Object.keys(root).includes(key));
+            }
+            let reads = 0;
+            Object.defineProperty(root, "Math", { get() { reads++; }, configurable: true });
+            console.log(Object.getOwnPropertyNames(root).filter(key => key === "Math").length, reads);
+            console.log(delete root.Math, Object.hasOwn(root, "Math"), Reflect.ownKeys(root).includes("Math"));
+            root.extra = 1;
+            root.Math = 2;
+            console.log(Object.getOwnPropertyNames(root).filter(key => key === "Math" || key === "extra").join(" "));
+            """;
+        const string initial = "true true true false\n";
+        Assert.Equal(initial + initial + initial + "1 0\ntrue false false\nextra Math\n",
+            TestHarness.RunUnchecked(source, mode));
+    }
+
+    [Theory, ModeData]
+    public void GlobalThis_BareProcessReadsTheCurrentBinding(ExecutionMode mode)
+    {
+        const string source = """
+            const root = globalThis;
+            const original = root.process;
+            console.log(process === original);
+            root.process = 7;
+            function* read() { yield process; yield process; }
+            const values = read();
+            console.log(root.process, process === root.process, values.next().value);
+            root.process = null;
+            console.log(process === null, values.next().value === null);
+            delete root.process;
+            console.log(typeof process);
+            try { console.log(process); } catch (error) { console.log(error.name); }
+            root.process = original;
+            console.log(process === original);
+            """;
+        Assert.Equal("true\n7 true 7\ntrue true\nundefined\nReferenceError\ntrue\n",
+            TestHarness.RunUnchecked(source, mode));
+    }
+
+    [Theory, ModeData]
     public void GlobalThis_IndexAccess(ExecutionMode mode)
     {
         var result = TestHarness.Run("""

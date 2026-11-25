@@ -19,12 +19,6 @@ public partial class RuntimeEmitter
         EmitBufferTranscode(typeBuilder, runtime.RequireBuffer());
         EmitBufferSlowBuffer(typeBuilder, runtime.RequireBuffer());
         EmitBufferModuleConstants(typeBuilder, runtime);
-
-        // Buffer.copyBytesFrom needs the $TypedArray runtime type, which is only emitted
-        // when a typed array is used. Any caller passes a TypedArray, so HasAnyTypedArray
-        // is set whenever this helper is actually reachable.
-        if (_features.HasAnyTypedArray)
-            EmitBufferCopyBytesFrom(typeBuilder, runtime);
     }
 
     /// <summary>

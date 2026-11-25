@@ -1730,7 +1730,7 @@ public abstract partial class ExpressionEmitterBase
         // the receiver is now preserved. Strategy-resolved callees, detached `f()` (Expr.Variable),
         // and `arr[i]()` (Expr.Index) keep the null-receiver path below.
         LocalBuilder? receiverLocal = null;
-        if (callReference is Expr.Get methodGet && !ReceiverHasGetStrategy(methodGet.Object))
+        if (callReference is Expr.Get methodGet && !ReceiverHasGetStrategy(methodGet))
         {
             // Evaluate the receiver once, spill it (a MoveNext re-entry from a suspending argument
             // wipes plain IL locals, #400), enforce RequireObjectCoercible before the arguments'
@@ -1860,9 +1860,14 @@ public abstract partial class ExpressionEmitterBase
     /// resolved callee value stays identical to today for strategy-backed receivers (which keep the
     /// pre-existing null-receiver behavior) and only changes for genuinely dynamic receivers.
     /// </summary>
-    private bool ReceiverHasGetStrategy(Expr obj)
+    private bool ReceiverHasGetStrategy(Expr.Get member)
     {
         if (Ctx.TypeEmitterRegistry == null)
+            return false;
+        var obj = member.Object;
+        // Buffer.from is resolved from the actual receiver, including in a
+        // state machine that must preserve the receiver across argument suspension.
+        if (obj is Expr.Variable { Name.Lexeme: "Buffer" } && member.Name.Lexeme == "from")
             return false;
         // Math's property strategy declines live mutations. Its ordinary lookup must retain the
         // original namespace receiver, including when evaluating an argument suspends this call.

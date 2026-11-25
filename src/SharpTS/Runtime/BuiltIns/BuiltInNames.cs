@@ -179,6 +179,16 @@ public static class BuiltInNames
     public const string Infinity = "Infinity";
     internal static readonly string[] GlobalConstantNames = [Infinity, NaN, Undefined];
 
+    // Configurable globals whose properties can be supplied by intrinsic lookup.
+    // Globals installed directly in property storage are enumerated through that store.
+    internal static readonly string[] ConfigurableGlobalIntrinsicNames =
+    [
+        Object, Function, Array, Number, ParseFloat, ParseInt, Boolean, String, Symbol, Date,
+        Promise, RegExp, Error, AggregateError, EvalError, RangeError, ReferenceError, SyntaxError,
+        TypeError, URIError, GlobalThis, JSON, Math, ArrayBuffer, Map, Set, WeakMap, WeakSet,
+        Eval, IsFinite, IsNaN, AbortController
+    ];
+
     /// <summary>
     /// Internal helper function names used by the compiler/interpreter.
     /// </summary>

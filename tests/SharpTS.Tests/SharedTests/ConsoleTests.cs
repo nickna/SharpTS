@@ -438,7 +438,7 @@ public class ConsoleTests
         Assert.Contains("default: 2\n", output);
     }
 
-    [Theory, InterpretedOnlyData]
+    [Theory, ModeData]
     public void Console_Count_DefaultsOnlyOmittedAndUndefinedLabels(ExecutionMode mode)
     {
         const string source = """
@@ -454,6 +454,27 @@ public class ConsoleTests
             console.countReset();
             """;
         Assert.Equal("default: 1\nnull: 1\ndefault: 2\nnull: 1\ndefault: 1\n",
+            TestHarness.RunUnchecked(source, mode));
+    }
+
+    [Theory, ModeData]
+    public void Console_Count_UsesTheSameLabelsWithAliasedAndSpreadCalls(ExecutionMode mode)
+    {
+        const string source = """
+            const count = globalThis.console.count;
+            const reset = globalThis.console.countReset;
+            reset();
+            reset(null);
+            count();
+            count(null);
+            console.count(...[]);
+            console.count(...[null]);
+            console.countReset(...[]);
+            console.countReset(...[null]);
+            count(undefined);
+            count(null);
+            """;
+        Assert.Equal("default: 1\nnull: 1\ndefault: 2\nnull: 2\ndefault: 1\nnull: 1\n",
             TestHarness.RunUnchecked(source, mode));
     }
 

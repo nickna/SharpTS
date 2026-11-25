@@ -329,6 +329,10 @@ public partial class RuntimeEmitter
             "_globalThisSingleton",
             _types.Object,
             FieldAttributes.Public | FieldAttributes.Static);
+        runtime.GlobalObject.ConfigurableIntrinsicNames = typeBuilder.DefineField(
+            "_globalConfigurableIntrinsicNames",
+            _types.StringArray,
+            FieldAttributes.Private | FieldAttributes.Static | FieldAttributes.InitOnly);
         runtime.GlobalObject.CompleteDeclarations();
 
         // Global callable values need the clone wrapper before its worker-runtime

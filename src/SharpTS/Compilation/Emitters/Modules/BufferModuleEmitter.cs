@@ -11,9 +11,6 @@ namespace SharpTS.Compilation.Emitters.Modules;
 /// and the constants/kMaxLength/kStringMaxLength/INSPECT_MAX_BYTES values.
 /// </summary>
 /// <remarks>
-/// When you do `import { Buffer } from 'buffer'`, the Buffer variable is stored
-/// with a placeholder value. Actual method calls like `Buffer.from()` are dispatched
-/// via the TypeEmitterRegistry which looks up "Buffer" by name and uses BufferStaticEmitter.
 /// The helper functions/properties route to pure-BCL $Runtime.BufferXxx methods.
 /// </remarks>
 public sealed class BufferModuleEmitter : IBuiltInModuleEmitter
@@ -56,9 +53,9 @@ public sealed class BufferModuleEmitter : IBuiltInModuleEmitter
         switch (propertyName)
         {
             case "Buffer":
-                // Placeholder — static dispatch (Buffer.from/alloc/...) goes through
-                // BufferStaticEmitter by variable name, not this stored value.
-                il.Emit(OpCodes.Ldstr, "[Buffer]");
+                NativeConstructorActivationLookup.EmitValue(ctx.Runtime!.NativeConstructorActivation, ctx.Types, il,
+                    ctx.Runtime.RequireBuffer().Type, NativeConstructorValueProducerKind.BuiltInConstructor,
+                    ctx.CurrentMethod, ctx.CurrentClassBuilder);
                 return true;
             case "constants":
                 il.Emit(OpCodes.Call, ctx.Runtime!.RequireBuffer().ModuleConstants);

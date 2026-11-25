@@ -127,11 +127,14 @@ public class EmittedConsoleRuntimeTests
 
         // These calls initialize dictionaries without redirecting process-global console streams.
         first.GetMethod("ConsoleTime")!.Invoke(null, [null]);
+        var undefined = first.Assembly.GetType("$Undefined")!.GetField("Instance")!.GetValue(null);
+        first.GetMethod("ConsoleCountReset")!.Invoke(null, [undefined]);
         first.GetMethod("ConsoleCountReset")!.Invoke(null, [null]);
         var timers = Assert.IsType<Dictionary<string, object>>(Field(first, "_consoleTimers").GetValue(null));
         var counts = Assert.IsType<Dictionary<string, object>>(Field(first, "_consoleCounts").GetValue(null));
         Assert.True(Assert.IsType<System.Diagnostics.Stopwatch>(timers["default"]).IsRunning);
         Assert.Equal(0d, counts["default"]);
+        Assert.Equal(0d, counts["null"]);
         Assert.Null(Field(second, "_consoleTimers").GetValue(null));
         Assert.Null(Field(second, "_consoleCounts").GetValue(null));
         Field(first, "_consoleGroupLevel").SetValue(null, 2);

@@ -1477,11 +1477,11 @@ public class StateMachineEmitHelpers
                 return true;
 
             case "count":
-                EmitFixedCall(console.Count, 1);
+                EmitFixedCall(console.Count, 1, defaultToUndefined: true);
                 return true;
 
             case "countReset":
-                EmitFixedCall(console.CountReset, 1);
+                EmitFixedCall(console.CountReset, 1, defaultToUndefined: true);
                 return true;
 
             case "table":
@@ -1509,7 +1509,7 @@ public class StateMachineEmitHelpers
                 return false;
         }
 
-        void EmitFixedCall(MethodInfo method, int parameterCount)
+        void EmitFixedCall(MethodInfo method, int parameterCount, bool defaultToUndefined = false)
         {
             if (call.Arguments.Any(argument => argument is Expr.Spread))
             {
@@ -1531,7 +1531,7 @@ public class StateMachineEmitHelpers
                     _il.Emit(OpCodes.Ldelem_Ref);
                     _il.Emit(OpCodes.Br, ready);
                     _il.MarkLabel(missing);
-                    _il.Emit(OpCodes.Ldnull);
+                    EmitMissingArgument();
                     _il.MarkLabel(ready);
                 }
             }
@@ -1541,12 +1541,18 @@ public class StateMachineEmitHelpers
                 for (int i = 0; i < parameterCount; i++)
                 {
                     if (i < arguments.Count) _il.Emit(OpCodes.Ldloc, arguments[i]);
-                    else _il.Emit(OpCodes.Ldnull);
+                    else EmitMissingArgument();
                 }
             }
             _il.Emit(OpCodes.Call, method);
             _il.Emit(OpCodes.Ldnull);
             SetStackUnknown();
+
+            void EmitMissingArgument()
+            {
+                if (defaultToUndefined) EmitUndefinedConstant();
+                else _il.Emit(OpCodes.Ldnull);
+            }
         }
     }
 

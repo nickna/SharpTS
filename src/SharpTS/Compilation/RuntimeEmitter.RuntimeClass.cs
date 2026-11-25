@@ -534,6 +534,7 @@ public partial class RuntimeEmitter
         // Initialize _globalThisSingleton = new object() (#271 sentinel identity)
         cctorIL.Emit(OpCodes.Newobj, _types.GetDefaultConstructor(_types.Object));
         cctorIL.Emit(OpCodes.Stsfld, globalThisSingletonField);
+        EmitConfigurableGlobalIntrinsicNames(cctorIL, runtime.GlobalObject.ConfigurableIntrinsicNames);
         runtime.GlobalObject.MarkInitializerEmitted();
 
         // Initialize the symbol-keyed accessor registry (#266).
@@ -1908,6 +1909,7 @@ public partial class RuntimeEmitter
             new GetOwnPropertyNamesInputs(
                 runtime.Arguments.Type,
                 runtime.GlobalObject.SingletonField,
+                runtime.GlobalObject.ConfigurableIntrinsicNames,
                 runtime.ArrayStorage,
                 runtime.Booleans,
                 runtime.DescriptorStorage,
@@ -3401,6 +3403,12 @@ public partial class RuntimeEmitter
                 )
             );
         }
+        if (runtime.Buffer is { } buffer)
+        {
+            if (buffer.HasTypedArrayCopy)
+                EmitBufferCopyBytesFrom(typeBuilder, runtime);
+            EmitBufferFromValue(typeBuilder, runtime, buffer);
+        }
         // Fill the forward-declared lookup only after all backing statics,
         // including optional Map.groupBy, have been declared. Earlier property
         // and descriptor bodies retain the same forward MethodBuilder.
@@ -3413,7 +3421,7 @@ public partial class RuntimeEmitter
                 runtime.Symbols.Type, runtime.Symbols.For, runtime.Symbols.KeyFor,
                 runtime.BigInt.Implementation, _features.UsesPromise ? runtime.RequirePromise() : null,
                 runtime.Errors.Type, runtime.Errors.IsError, runtime.Dates.Implementation, runtime.Map,
-                runtime.ArrayBuffer));
+                runtime.ArrayBuffer, runtime.Buffer));
         runtime.BuiltInStatics.CompleteEmission();
         // Set methods — gated on UsesSet.
         if (runtime.Set is not null)
@@ -3520,7 +3528,8 @@ public partial class RuntimeEmitter
         EmitConsoleExtensions(typeBuilder, runtime);
         if (consoleSingleton is not null)
             EmitConsoleSingletonPopulate(typeBuilder, runtime.Console, runtime.Sentinels.UndefinedInstance,
-                populateConsole!, consoleSingleton, builtinSingletonInputs, installBuiltinSingletonDataProperty);
+                runtime.FunctionAttributes.PadUndefinedCtor, populateConsole!, consoleSingleton, builtinSingletonInputs,
+                installBuiltinSingletonDataProperty);
         // Crypto module methods — gated alongside the crypto type emissions.
         if (_features.UsesCrypto)
         {

@@ -2660,10 +2660,10 @@ public abstract partial class ExpressionEmitterBase : IEmitterContext
             : ctx.Runtime!.GlobalObject.GetBinding);
     }
 
-    protected bool TryEmitMutableGlobalFunctionTypeOf(Expr operand)
+    protected bool TryEmitMutableGlobalTypeOf(Expr operand)
     {
         if (ExpressionUnwrapper.Unwrap(operand) is not Expr.Variable variable
-            || variable.Name.Lexeme is not ("parseInt" or "queueMicrotask") &&
+            || variable.Name.Lexeme is not ("parseInt" or "queueMicrotask" or "process") &&
                 !(variable.Name.Lexeme == "Array" && Ctx.RuntimeFeatures?.UsesArrayConstructorMutation == true)
             || Resolver.HasVariable(variable.Name.Lexeme) || Ctx.HasVisibleValueBinding(variable.Name.Lexeme))
             return false;
@@ -2743,7 +2743,7 @@ public abstract partial class ExpressionEmitterBase : IEmitterContext
     /// </summary>
     protected bool TryEmitNamespaceSingleton(string name)
     {
-        if (name == "console")
+        if (name is "console" or "process")
         {
             IL.Emit(OpCodes.Ldstr, name);
             IL.Emit(OpCodes.Call, Ctx.Runtime!.GlobalObject.GetBinding);
@@ -3224,7 +3224,7 @@ public abstract partial class ExpressionEmitterBase : IEmitterContext
                 break;
             case TokenType.TYPEOF:
                 // typeof never throws on undeclared variables - returns "undefined"
-                if (TryEmitMutableGlobalFunctionTypeOf(u.Right))
+                if (TryEmitMutableGlobalTypeOf(u.Right))
                 {
                     break;
                 }

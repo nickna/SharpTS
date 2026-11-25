@@ -5,7 +5,7 @@ namespace SharpTS.Compilation.Emitters;
 
 /// <summary>
 /// Emitter strategy for Buffer static method calls.
-/// Handles Buffer.from(), Buffer.alloc(), Buffer.isBuffer(), etc.
+/// Handles Buffer.alloc(), Buffer.isBuffer(), and the other directly lowered statics.
 /// </summary>
 public sealed class BufferStaticEmitter : IStaticTypeEmitterStrategy
 {
@@ -73,115 +73,6 @@ public sealed class BufferStaticEmitter : IStaticTypeEmitterStrategy
                 }
                 il.Emit(OpCodes.Call, ctx.Runtime!.RequireBuffer().IsBuffer);
                 il.Emit(OpCodes.Box, ctx.Types.Boolean);
-                return true;
-
-            case "from":
-                // First argument: data (string, array, or buffer)
-                if (arguments.Count > 0)
-                {
-                    emitter.EmitExpression(arguments[0]);
-                    emitter.EmitBoxIfNeeded(arguments[0]);
-                }
-                else
-                {
-                    il.Emit(OpCodes.Ldnull);
-                }
-
-                // Check if it's a string - emit appropriate factory
-                // For simplicity, emit $Buffer.FromString for string, else FromArray
-                var isStringLabel = il.DefineLabel();
-                var endLabel = il.DefineLabel();
-                var notStringLabel = il.DefineLabel();
-
-                il.Emit(OpCodes.Dup);
-                il.Emit(OpCodes.Isinst, ctx.Types.String);
-                il.Emit(OpCodes.Brfalse, notStringLabel);
-
-                // String path: convert to string and call FromString
-                il.Emit(OpCodes.Castclass, ctx.Types.String);
-
-                // Second argument: encoding (default "utf8")
-                if (arguments.Count > 1)
-                {
-                    emitter.EmitExpression(arguments[1]);
-                    emitter.EmitBoxIfNeeded(arguments[1]);
-                    // Convert to string
-                    il.Emit(OpCodes.Callvirt, ctx.Types.GetMethod(ctx.Types.Object, "ToString")!);
-                }
-                else
-                {
-                    il.Emit(OpCodes.Ldstr, "utf8");
-                }
-
-                il.Emit(OpCodes.Call, ctx.Runtime!.RequireBuffer().FromString);
-                il.Emit(OpCodes.Br, endLabel);
-
-                // Non-string path: check for buffer, then array-like values
-                il.MarkLabel(notStringLabel);
-
-                // Check if it's a $Buffer - copy it
-                var notBufferLabel2 = il.DefineLabel();
-
-                il.Emit(OpCodes.Dup);
-                il.Emit(OpCodes.Isinst, ctx.Runtime!.RequireBuffer().Type);
-                il.Emit(OpCodes.Brfalse, notBufferLabel2);
-
-                // Buffer path: cast and call FromBuffer
-                il.Emit(OpCodes.Castclass, ctx.Runtime!.RequireBuffer().Type);
-                il.Emit(OpCodes.Call, ctx.Runtime!.RequireBuffer().FromBuffer);
-                il.Emit(OpCodes.Br, endLabel);
-
-                il.MarkLabel(notBufferLabel2);
-
-                // Buffer.from(arrayBuffer) (#1063): wrap the $ArrayBuffer backing array
-                // (Node shares the memory; $Buffer wraps the same byte[]).
-                if (ctx.Runtime!.ArrayBuffer is not null)
-                {
-                    var notArrayBufferLabel = il.DefineLabel();
-                    il.Emit(OpCodes.Dup);
-                    il.Emit(OpCodes.Isinst, ctx.Runtime!.RequireArrayBuffer().Type);
-                    il.Emit(OpCodes.Brfalse, notArrayBufferLabel);
-                    il.Emit(OpCodes.Castclass, ctx.Runtime!.RequireArrayBuffer().Type);
-                    il.Emit(OpCodes.Callvirt, ctx.Runtime!.RequireArrayBuffer().GetBuffer);
-                    il.Emit(OpCodes.Newobj, ctx.Runtime!.RequireBuffer().Ctor);
-                    il.Emit(OpCodes.Br, endLabel);
-                    il.MarkLabel(notArrayBufferLabel);
-                }
-
-                // Buffer.from(typedArray): copy the view window (Node copies here).
-                if (ctx.Runtime!.TypedArrays.Implementation is not null && ctx.Runtime!.RequireBuffer().HasTypedArrayCopy)
-                {
-                    var notTypedArrayLabel = il.DefineLabel();
-                    il.Emit(OpCodes.Dup);
-                    il.Emit(OpCodes.Isinst, ctx.Runtime!.TypedArrays.RequireImplementation().BaseType);
-                    il.Emit(OpCodes.Brfalse, notTypedArrayLabel);
-                    il.Emit(OpCodes.Ldnull); // offset
-                    il.Emit(OpCodes.Ldnull); // length
-                    il.Emit(OpCodes.Call, ctx.Runtime!.RequireBuffer().CopyBytesFrom);
-                    il.Emit(OpCodes.Br, endLabel);
-                    il.MarkLabel(notTypedArrayLabel);
-                }
-
-                // Check if it's already a List<object?> (array literal)
-                var isListLabel = il.DefineLabel();
-                var afterListCheckLabel = il.DefineLabel();
-
-                il.Emit(OpCodes.Dup);
-                il.Emit(OpCodes.Isinst, ctx.Types.ListOfObject);
-                il.Emit(OpCodes.Brtrue, isListLabel);
-
-                // Not a list - use GetValues to convert object to array
-                il.Emit(OpCodes.Call, ctx.Runtime!.ObjectOperations.Values);
-                il.Emit(OpCodes.Br, afterListCheckLabel);
-
-                // Already a list - cast directly
-                il.MarkLabel(isListLabel);
-                il.Emit(OpCodes.Castclass, ctx.Types.ListOfObject);
-
-                il.MarkLabel(afterListCheckLabel);
-                il.Emit(OpCodes.Call, ctx.Runtime!.RequireBuffer().FromArray);
-
-                il.MarkLabel(endLabel);
                 return true;
 
             case "alloc":

@@ -160,6 +160,7 @@ public sealed class EmittedObjectKeysRuntimeTests
             {
                 "ArgumentsType" => runtime.Arguments.Type,
                 "GlobalSingleton" => runtime.GlobalObject.SingletonField,
+                "ConfigurableGlobalIntrinsicNames" => runtime.GlobalObject.ConfigurableIntrinsicNames,
                 "OwnKeys" => runtime.ObjectKeys.Ordinary,
                 "CreateList" => runtime.ObjectKeys.CreateProxyList,
                 "GetOwnPropertyDescriptor" => runtime.ObjectDescriptors.GetOwnPropertyDescriptor,
