@@ -786,7 +786,7 @@ public partial class Interpreter
             : _globalConstants.TryGetValue(name, out var global)
                 && (global is SharpTSBuiltInConstructor or IBuiltInTypeConstructor || name is
                     BuiltInNames.ParseInt or BuiltInNames.ParseFloat or BuiltInNames.Eval or BuiltInNames.IsNaN
-                    or BuiltInNames.StructuredClone
+                    or BuiltInNames.StructuredClone or BuiltInNames.EncodeURIComponent or BuiltInNames.DecodeURIComponent
                     or BuiltInNames.Undefined or BuiltInNames.NaN or BuiltInNames.Infinity) ? global : null;
 
     private SharpTSGlobalThis CreateRealmGlobalThis()
