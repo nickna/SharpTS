@@ -1193,6 +1193,22 @@ public class BufferTests
     }
 
     [Theory, ModeData]
+    public void BufferModule_NamedImportsKeepTheirConstructorAfterGlobalReplacement(ExecutionMode mode)
+    {
+        var files = new Dictionary<string, string>
+        {
+            ["main.ts"] = """
+                import { Buffer, Buffer as ImportedBuffer } from 'node:buffer';
+                const root = globalThis as any;
+                root.Buffer = { from() { return 'replacement'; } };
+                console.log(typeof Buffer, typeof ImportedBuffer, ImportedBuffer === Buffer);
+                console.log(Buffer.from('hi').toString(), ImportedBuffer.from('hi').toString(), root.Buffer.from('hi'));
+                """
+        };
+        Assert.Equal("function function true\nhi hi replacement\n", TestHarness.RunModules(files, "main.ts", mode));
+    }
+
+    [Theory, ModeData]
     public void BufferModule_AtobBtoa_RoundTrip(ExecutionMode mode)
     {
         var files = new Dictionary<string, string>
