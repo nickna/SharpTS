@@ -9,6 +9,27 @@ namespace SharpTS.Tests.SharedTests.BuiltInModules;
 /// </summary>
 public class ProcessStdioTests
 {
+    [Theory, ModeData]
+    public void Process_StreamPropertiesUseTheirActualReceiver(ExecutionMode mode)
+    {
+        const string source = """
+            const original = process;
+            const output = globalThis.process.stdout;
+            console.log(process.stdout === output, process.stdout.writable === output.writable);
+            let reads = 0;
+            const replacement = { writable: false, writableEnded: true, isTTY: 'replacement' };
+            globalThis.process = { get stdout() { ++reads; return replacement; }, stdin: { readable: false } };
+            console.log(process.stdout.writable, globalThis.process.stdout.writable, reads);
+            console.log(process.stdout.writableEnded, process.stdout.isTTY, process.stdin.readable);
+            globalThis.process = null;
+            console.log(process?.stdout?.writable);
+            globalThis.process = original;
+            console.log(process.stdout === output);
+            """;
+        Assert.Equal("true true\nfalse false 2\ntrue replacement false\nundefined\ntrue\n",
+            TestHarness.RunUnchecked(source, mode));
+    }
+
     #region process.stdout
 
     [Theory, ModeData]
