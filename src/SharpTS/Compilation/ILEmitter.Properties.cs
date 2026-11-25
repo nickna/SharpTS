@@ -1243,7 +1243,7 @@ public partial class ILEmitter
         if (gi.Object is Expr.Variable gtGetIdx && gtGetIdx.Name.Lexeme == "globalThis"
             && CanUseStaticTypeStrategy(gtGetIdx.Name.Lexeme))
         {
-            if (gi.Index is not Expr.Literal { Value: string key } || key == "eval")
+            if (GlobalEvaluatorProvenanceAnalysis.CouldBeEvalKey(gi.Index, _ctx.TypeMap))
                 _ctx.Runtime!.Deployment.Require("indirect eval");
             EmitExpression(gi.Index);
             EmitBoxIfNeeded(gi.Index);
