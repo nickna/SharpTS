@@ -315,11 +315,15 @@ public class SharpTSBuffer : ITypeCategorized
 
         if (value is double d)
         {
-            fillBytes = [(byte)((int)d & 0xFF)];
+            fillBytes = [(byte)((int)(d % 256) & 0xFF)];
         }
         else if (value is int n)
         {
             fillBytes = [(byte)(n & 0xFF)];
+        }
+        else if (value is bool boolean)
+        {
+            fillBytes = [boolean ? (byte)1 : (byte)0];
         }
         else if (value is string s)
         {
@@ -329,6 +333,11 @@ public class SharpTSBuffer : ITypeCategorized
         else if (value is SharpTSBuffer buf)
         {
             fillBytes = buf._data;
+            if (fillBytes.Length == 0) return;
+        }
+        else if (value is SharpTSTypedArray view)
+        {
+            fillBytes = view.Buffer.AsSpan(view.ByteOffset, view.ByteLength).ToArray();
             if (fillBytes.Length == 0) return;
         }
         else

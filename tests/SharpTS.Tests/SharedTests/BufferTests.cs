@@ -101,6 +101,23 @@ public class BufferTests
     }
 
     [Theory, ModeData]
+    public void Buffer_AllocRepeatsFillBytes(ExecutionMode mode)
+    {
+        const string source = """
+            const bytes = new Uint8Array([9, 65, 66, 8]);
+            const alloc = Buffer.alloc;
+            console.log(Buffer.alloc(3, 'ab').toString());
+            console.log(alloc(5, '6162', 'hex').toString());
+            console.log(Buffer.alloc(3, Buffer.from('xy')).toString());
+            console.log(alloc(5, new Uint8Array(bytes.buffer, 1, 2)).toString());
+            console.log(Buffer.alloc(3, 257).toString('hex'), alloc(2, true).toString('hex'));
+            console.log(alloc(2, 4294967361).toString(), alloc(2, -1).toString('hex'));
+            console.log(alloc(2).toString('hex'), alloc(2, undefined).toString('hex'), alloc(0, 'ab').length);
+            """;
+        Assert.Equal("aba\nababa\nxyx\nABABA\n010101 0101\nAA ffff\n0000 0000 0\n", TestHarness.RunUnchecked(source, mode));
+    }
+
+    [Theory, ModeData]
     public void Buffer_Length_Property(ExecutionMode mode)
     {
         var source = """
