@@ -2661,7 +2661,7 @@ public abstract partial class ExpressionEmitterBase : IEmitterContext
     protected bool TryEmitMutableGlobalTypeOf(Expr operand)
     {
         if (ExpressionUnwrapper.Unwrap(operand) is not Expr.Variable variable
-            || variable.Name.Lexeme is not ("parseInt" or "queueMicrotask" or "process") &&
+            || variable.Name.Lexeme is not ("parseInt" or "queueMicrotask" or "process" or "Intl") &&
                 !(variable.Name.Lexeme == "Array" && Ctx.RuntimeFeatures?.UsesArrayConstructorMutation == true)
             || Resolver.HasVariable(variable.Name.Lexeme) || Ctx.HasVisibleValueBinding(variable.Name.Lexeme))
             return false;
@@ -2732,16 +2732,12 @@ public abstract partial class ExpressionEmitterBase : IEmitterContext
     }
 
     /// <summary>
-    /// AbortSignal / Intl in value position (#224) — resolve to the lazily
-    /// populated namespace singleton dicts. Direct static forms
-    /// (`AbortSignal.abort(x)`, `new Intl.NumberFormat(...)`) are still
-    /// intercepted at compile time before the receiver is evaluated, so these
-    /// arms only serve aliasing/typeof/argument-passing uses. Shared by
-    /// ILEmitter.EmitVariable and the state-machine emitters' global path.
+    /// Resolves namespace values for synchronous and state-machine emitters.
+    /// Globals with ordinary property descriptors use their current bindings.
     /// </summary>
     protected bool TryEmitNamespaceSingleton(string name)
     {
-        if (name is "console" or "process")
+        if (name is "console" or "process" or "Intl")
         {
             IL.Emit(OpCodes.Ldstr, name);
             IL.Emit(OpCodes.Call, Ctx.Runtime!.GlobalObject.GetBinding);
@@ -2774,14 +2770,6 @@ public abstract partial class ExpressionEmitterBase : IEmitterContext
         {
             IL.Emit(OpCodes.Call, Ctx.Runtime!.RequireAbort().NamespacePopulate);
             IL.Emit(OpCodes.Ldsfld, Ctx.Runtime!.RequireAbort().NamespaceField);
-            SetStackUnknown();
-            return true;
-        }
-
-        if (name == "Intl" && Ctx.Runtime!.Intl is not null)
-        {
-            IL.Emit(OpCodes.Call, Ctx.Runtime!.RequireIntl().NamespacePopulate);
-            IL.Emit(OpCodes.Ldsfld, Ctx.Runtime!.RequireIntl().NamespaceField);
             SetStackUnknown();
             return true;
         }

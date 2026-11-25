@@ -159,9 +159,8 @@ public class EmittedIntlRuntimeTests
         var type = assembly.GetType("$Runtime")!;
         var field = type.GetField("_IntlNamespace")!;
         var populate = type.GetMethod("_IntlNamespacePopulate")!;
-        Assert.Null(field.GetValue(null));
-        populate.Invoke(null, null);
         var value = Assert.IsType<Dictionary<string, object>>(field.GetValue(null));
+        Assert.Same(value, type.GetMethod("GlobalThisGetProperty")!.Invoke(null, ["Intl"]));
         Assert.Equal(NamespaceMembers, value.Keys);
         var wrappers = NamespaceMembers.Select(name => value[name]).ToArray();
         populate.Invoke(null, null);

@@ -3522,7 +3522,6 @@ public partial class RuntimeEmitter
             EmitDgramModuleMethods(typeBuilder, runtime);
         // globalThis methods (ES2020) - must be after HTTP for fetch reference
         EmitGlobalThisMethods(typeBuilder, runtime, allowInterpreterBridge, consoleSingleton);
-        EmitGlobalIntrinsicInitializer(typeBuilder, globalIntrinsicInitializer, runtime);
         // Define util inspect method signatures before ConsoleExtensions (ConsoleDir uses UtilInspectValue)
         DefineUtilInspectSignatures(typeBuilder, runtime.Inspection);
         // Crypto module methods — gated alongside the crypto type emissions.
@@ -3601,6 +3600,8 @@ public partial class RuntimeEmitter
             runtime.Deployment.Require("Intl");
             EmitIntlMethods(typeBuilder, runtime.RequireIntl());
         }
+        EmitNamespaceSingletons(typeBuilder, runtime.Abort, runtime.Intl, runtime.FunctionConstruction.GetOrCreate);
+        EmitGlobalIntrinsicInitializer(typeBuilder, globalIntrinsicInitializer, runtime);
 
         // (TLS handshake is now emitted as pure-BCL IL inside $TlsSocket/$TlsServer —
         //  no late-bind helpers, so a --compile'd tls program is genuinely standalone.)
