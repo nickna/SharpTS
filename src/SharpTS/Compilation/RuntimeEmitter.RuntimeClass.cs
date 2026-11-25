@@ -3408,6 +3408,7 @@ public partial class RuntimeEmitter
             if (buffer.HasTypedArrayCopy)
                 EmitBufferCopyBytesFrom(typeBuilder, runtime);
             EmitBufferFromValue(typeBuilder, runtime, buffer);
+            EmitBufferAllocValue(typeBuilder, runtime, buffer);
         }
         // Fill the forward-declared lookup only after all backing statics,
         // including optional Map.groupBy, have been declared. Earlier property

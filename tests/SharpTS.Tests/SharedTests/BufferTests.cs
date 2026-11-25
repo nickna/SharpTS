@@ -76,6 +76,31 @@ public class BufferTests
     }
 
     [Theory, ModeData]
+    public void Buffer_AllocResolvesAndRetainsTheCurrentReceiver(ExecutionMode mode)
+    {
+        const string source = """
+            const original = globalThis.Buffer;
+            const replacement = {
+                get alloc() {
+                    console.log('get');
+                    return function (size) { return this === replacement ? size : -1; };
+                }
+            };
+            globalThis.Buffer = replacement;
+            function restore() { console.log('arg'); globalThis.Buffer = original; return 42; }
+            console.log(Buffer.alloc(...[restore()]));
+            console.log(Buffer.alloc(3.9).length, original.alloc(2).length);
+            globalThis.Buffer = replacement;
+            function* callAlloc() { return Buffer.alloc(yield 'waiting'); }
+            const call = callAlloc();
+            console.log(call.next().value);
+            globalThis.Buffer = original;
+            console.log(call.next(17).value);
+            """;
+        Assert.Equal("get\narg\n42\n3 2\nget\nwaiting\n17\n", TestHarness.RunUnchecked(source, mode));
+    }
+
+    [Theory, ModeData]
     public void Buffer_Length_Property(ExecutionMode mode)
     {
         var source = """

@@ -5,7 +5,7 @@ namespace SharpTS.Compilation.Emitters;
 
 /// <summary>
 /// Emitter strategy for Buffer static method calls.
-/// Handles Buffer.alloc(), Buffer.isBuffer(), and the other directly lowered statics.
+/// Handles Buffer.isBuffer() and the other directly lowered statics.
 /// </summary>
 public sealed class BufferStaticEmitter : IStaticTypeEmitterStrategy
 {
@@ -73,22 +73,6 @@ public sealed class BufferStaticEmitter : IStaticTypeEmitterStrategy
                 }
                 il.Emit(OpCodes.Call, ctx.Runtime!.RequireBuffer().IsBuffer);
                 il.Emit(OpCodes.Box, ctx.Types.Boolean);
-                return true;
-
-            case "alloc":
-                // Size argument
-                if (arguments.Count > 0)
-                {
-                    emitter.EmitExpression(arguments[0]);
-                    emitter.EmitBoxIfNeeded(arguments[0]);
-                    il.Emit(OpCodes.Unbox_Any, ctx.Types.Double);
-                    il.Emit(OpCodes.Conv_I4);
-                }
-                else
-                {
-                    il.Emit(OpCodes.Ldc_I4_0);
-                }
-                il.Emit(OpCodes.Call, ctx.Runtime!.RequireBuffer().Alloc);
                 return true;
 
             case "allocUnsafe":

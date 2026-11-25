@@ -117,7 +117,13 @@ public partial class RuntimeEmitter
             EmitLookup(arrayBuffer.Type, "isView", arrayBuffer.IsView, 1);
 
         if (inputs.Buffer is { } buffer)
-            EmitLookup(buffer.Type, "from", buffer.FromValue, 1);
+        {
+            var skipBuffer = il.DefineLabel();
+            EmitTypeGuard(buffer.Type, skipBuffer);
+            EmitNamedLookup("from", buffer.FromValue, 1);
+            EmitNamedLookup("alloc", buffer.AllocValue, 3);
+            il.MarkLabel(skipBuffer);
+        }
 
         if (inputs.Map is { } map)
             EmitLookup(_types.DictionaryObjectObject, "groupBy", map.GroupBy, 2);

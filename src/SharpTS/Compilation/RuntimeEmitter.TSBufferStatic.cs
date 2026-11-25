@@ -5,6 +5,25 @@ namespace SharpTS.Compilation;
 
 public partial class RuntimeEmitter
 {
+    private void EmitBufferAllocValue(TypeBuilder owner, EmittedRuntime runtime, EmittedBufferRuntime buffer)
+    {
+        var method = owner.DefineMethod("BufferAllocValue", MethodAttributes.Public | MethodAttributes.Static,
+            _types.Object, [_types.Object]);
+        buffer.AllocValue = method;
+        var il = method.GetILGenerator();
+        var hasSize = il.DefineLabel();
+        il.Emit(OpCodes.Ldarg_0);
+        il.Emit(OpCodes.Isinst, _types.Double);
+        il.Emit(OpCodes.Brtrue, hasSize);
+        EmitThrowTypeError(il, runtime.Errors, "The Buffer.alloc size must be a number");
+        il.MarkLabel(hasSize);
+        il.Emit(OpCodes.Ldarg_0);
+        il.Emit(OpCodes.Unbox_Any, _types.Double);
+        il.Emit(OpCodes.Conv_I4);
+        il.Emit(OpCodes.Call, buffer.Alloc);
+        il.Emit(OpCodes.Ret);
+    }
+
     private void EmitBufferFromValue(TypeBuilder owner, EmittedRuntime runtime, EmittedBufferRuntime buffer)
     {
         var method = owner.DefineMethod("BufferFromValue", MethodAttributes.Public | MethodAttributes.Static,

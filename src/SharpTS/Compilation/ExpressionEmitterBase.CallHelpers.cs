@@ -1865,9 +1865,8 @@ public abstract partial class ExpressionEmitterBase
         if (Ctx.TypeEmitterRegistry == null)
             return false;
         var obj = member.Object;
-        // Buffer.from is resolved from the actual receiver, including in a
-        // state machine that must preserve the receiver across argument suspension.
-        if (obj is Expr.Variable { Name.Lexeme: "Buffer" } && member.Name.Lexeme == "from")
+        // These Buffer methods use ordinary lookup and retain the receiver across argument suspension.
+        if (obj is Expr.Variable { Name.Lexeme: "Buffer" } && member.Name.Lexeme is "from" or "alloc")
             return false;
         // Math's property strategy declines live mutations. Its ordinary lookup must retain the
         // original namespace receiver, including when evaluating an argument suspends this call.

@@ -204,7 +204,10 @@ public sealed class EmittedBuiltInStaticDispatchRuntimeTests
             date = Owner(typeof(EmittedDateImplementation), "Now", "StaticUTC", "StaticParse");
             typeof(EmittedDateImplementation).GetProperty("Type")!.SetValue(date, type);
             map = Owner(typeof(EmittedMapRuntime), "GroupBy");
-            buffer = new EmittedBufferRuntime(hasTypedArrayCopy: false) { Type = typeof(Guid), FromValue = Stub("BufferFrom") };
+            buffer = new EmittedBufferRuntime(hasTypedArrayCopy: false)
+            {
+                Type = typeof(Guid), FromValue = Stub("BufferFrom"), AllocValue = Stub("BufferAlloc")
+            };
         }
         var inputsType = typeof(RuntimeEmitter).GetNestedType("BuiltInStaticDispatchInputs", BindingFlags.NonPublic)!;
         var input = Assert.Single(inputsType.GetConstructors()).Invoke([
@@ -238,6 +241,7 @@ public sealed class EmittedBuiltInStaticDispatchRuntimeTests
             Assert.Equal("EmittedDateImplementation_StaticUTC:UTC:7", Lookup(loaded.GetType("Scoped")!, "UTC"));
             Assert.Equal("EmittedMapRuntime_GroupBy:groupBy:2", Lookup(typeof(Dictionary<object, object>), "groupBy"));
             Assert.Equal("BufferFrom:from:1", Lookup(typeof(Guid), "from"));
+            Assert.Equal("BufferAlloc:alloc:3", Lookup(typeof(Guid), "alloc"));
         }
         else
         {
@@ -246,6 +250,7 @@ public sealed class EmittedBuiltInStaticDispatchRuntimeTests
             Assert.Null(Lookup(loaded.GetType("Scoped")!, "UTC"));
             Assert.Null(Lookup(typeof(Dictionary<object, object>), "groupBy"));
             Assert.Null(Lookup(typeof(Guid), "from"));
+            Assert.Null(Lookup(typeof(Guid), "alloc"));
         }
     }
 

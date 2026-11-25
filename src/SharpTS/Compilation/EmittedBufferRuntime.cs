@@ -77,6 +77,13 @@ public sealed class EmittedBufferRuntime
         internal set => Set(ref _alloc, value);
     }
 
+    private MethodBuilder? _allocValue;
+    public MethodBuilder AllocValue
+    {
+        get => Require(_allocValue);
+        internal set => Set(ref _allocValue, value);
+    }
+
     private MethodBuilder? _allocUnsafe;
     public MethodBuilder AllocUnsafe
     {
@@ -617,6 +624,7 @@ public sealed class EmittedBufferRuntime
         _ = FromBuffer;
         _ = FromValue;
         _ = Alloc;
+        _ = AllocValue;
         _ = AllocUnsafe;
         _ = Concat;
         _ = CalculateTotalLength;
