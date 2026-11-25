@@ -1868,6 +1868,8 @@ public abstract partial class ExpressionEmitterBase
         // These Buffer methods use ordinary lookup and retain the receiver across argument suspension.
         if (obj is Expr.Variable { Name.Lexeme: "Buffer" } && member.Name.Lexeme is "from" or "alloc")
             return false;
+        if (obj is Expr.Variable { Name.Lexeme: "process" } && member.Name.Lexeme == "cwd")
+            return false;
         // Math's property strategy declines live mutations. Its ordinary lookup must retain the
         // original namespace receiver, including when evaluating an argument suspends this call.
         if (obj is Expr.Variable { Name.Lexeme: "Math" }

@@ -6,7 +6,7 @@ namespace SharpTS.Compilation.Emitters;
 
 /// <summary>
 /// Emitter strategy for process static method calls.
-/// Handles process.cwd(), process.exit(), and other directly lowered calls.
+/// Handles process.exit() and other directly lowered calls.
 /// </summary>
 public sealed class ProcessStaticEmitter : IStaticTypeEmitterStrategy
 {
@@ -20,11 +20,6 @@ public sealed class ProcessStaticEmitter : IStaticTypeEmitterStrategy
 
         switch (methodName)
         {
-            case "cwd":
-                // Directory.GetCurrentDirectory()
-                il.Emit(OpCodes.Call, ctx.Types.GetMethodNoParams(ctx.Types.Directory, "GetCurrentDirectory"));
-                return true;
-
             case "chdir":
                 // Directory.SetCurrentDirectory(path)
                 if (arguments.Count > 0)
