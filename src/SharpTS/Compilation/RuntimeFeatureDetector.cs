@@ -571,9 +571,7 @@ public sealed partial class RuntimeFeatureDetector
             case "JSON":
                 _set.UsesJSON = true; break;
 
-            // Intl namespace — `Intl.NumberFormat`, `Intl.DateTimeFormat`,
-            // `Intl.Collator`. Bare identifier covers `globalThis.Intl` and
-            // any value-form access.
+            // Bare Intl namespace references, including qualified constructors.
             case "Intl":
                 _set.UsesIntl = true; break;
 
@@ -683,7 +681,6 @@ public sealed partial class RuntimeFeatureDetector
                 _set.UsesBroadcastChannel = true;
                 _set.UsesFinalizationRegistry = true;
                 _set.UsesJSON = true;
-                _set.UsesIntl = true;
                 _set.UsesReflect = true;
                 _set.TypedArrays = RuntimeFeatureSet.TypedArrayKinds.All;
                 break;
@@ -1131,6 +1128,12 @@ public sealed partial class RuntimeFeatureDetector
                 // names regardless of receiver type. False positives just over-emit.
                 switch (g.Name.Lexeme)
                 {
+                    // Intl carries a deployment dependency. A plain reference to the
+                    // global object does not establish a reference to Intl.
+                    case "Intl" when IsGlobalObject(g.Object):
+                        _set.UsesIntl = true;
+                        break;
+
                     // A constructor reached through the global object (`this.Date`
                     // or `globalThis.Date`) still requires the Date runtime even
                     // though no bare Date identifier appears in the syntax.

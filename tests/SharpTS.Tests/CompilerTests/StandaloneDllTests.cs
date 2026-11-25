@@ -13592,6 +13592,23 @@ public partial class StandaloneDllTests
             verifyStandardError: error => Assert.Empty(error)));
     }
 
+    [Fact]
+    public void Isolated_OrdinaryGlobalAliasDoesNotWarnAboutIntl()
+    {
+        using var tempDir = IntegrationTests.CliTestHelper.CreateTempDirectory();
+        tempDir.CreateFile("main.js", "const root = globalThis; root.answer = 42; console.log(root.answer);");
+        var dllPath = tempDir.GetPath("global_alias.dll");
+        var compile = IntegrationTests.CliTestHelper.RunCli(
+            $"--no-tsconfig --noLib --compile \"{tempDir.GetPath("main.js")}\" --standalone --verify -o \"{dllPath}\"",
+            tempDir.Path);
+        Assert.True(compile.ExitCode == 0, compile.StandardOutput + compile.StandardError);
+        Assert.Contains("IL verification passed.", compile.StandardOutput);
+        Assert.DoesNotContain("Intl", compile.StandardOutput + compile.StandardError);
+        Assert.False(File.Exists(tempDir.GetPath("SharpTS.dll")));
+        Assert.Equal("42\n", ExecuteCompiledDllIsolated(dllPath, timeoutMs: 15000,
+            verifyStandardError: error => Assert.Empty(error)));
+    }
+
     public static IEnumerable<object[]> AsyncLocalStorageMetadataPrograms =>
     [
         new object[]
