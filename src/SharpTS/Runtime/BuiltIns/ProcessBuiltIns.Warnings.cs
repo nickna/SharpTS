@@ -34,6 +34,9 @@ public static partial class ProcessBuiltIns
     [System.Runtime.InteropServices.DllImport("libc", EntryPoint = "umask")]
     private static extern uint PosixUmask(uint mask);
 
+    internal static void EmitWarning(Interpreter interp, string message) =>
+        EmitWarning(interp, null, [message]);
+
     /// <summary>
     /// process.emitWarning(warning[, options | type[, code[, ctor]]]) —
     /// constructs the warning, emits 'warning' on the process (next tick), and

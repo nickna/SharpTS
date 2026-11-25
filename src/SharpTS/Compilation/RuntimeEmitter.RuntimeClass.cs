@@ -3524,12 +3524,6 @@ public partial class RuntimeEmitter
         EmitGlobalIntrinsicInitializer(typeBuilder, globalIntrinsicInitializer, runtime);
         // Define util inspect method signatures before ConsoleExtensions (ConsoleDir uses UtilInspectValue)
         DefineUtilInspectSignatures(typeBuilder, runtime.Inspection);
-        // Console extensions (error, warn, clear, time, timeEnd, timeLog)
-        EmitConsoleExtensions(typeBuilder, runtime);
-        if (consoleSingleton is not null)
-            EmitConsoleSingletonPopulate(typeBuilder, runtime.Console, runtime.Sentinels.UndefinedInstance,
-                runtime.FunctionAttributes.PadUndefinedCtor, populateConsole!, consoleSingleton, builtinSingletonInputs,
-                installBuiltinSingletonDataProperty);
         // Crypto module methods — gated alongside the crypto type emissions.
         if (_features.UsesCrypto)
         {
@@ -3579,6 +3573,12 @@ public partial class RuntimeEmitter
             EmitTimerPromisesModuleWrappers(typeBuilder, runtime);
         // Process global methods (env, argv, nextTick) - must be after timer methods for nextTick
         EmitProcessMethods(typeBuilder, runtime);
+        // Console countReset reuses the process warning helper.
+        EmitConsoleExtensions(typeBuilder, runtime);
+        if (consoleSingleton is not null)
+            EmitConsoleSingletonPopulate(typeBuilder, runtime.Console, runtime.Sentinels.UndefinedInstance,
+                runtime.FunctionAttributes.PadUndefinedCtor, populateConsole!, consoleSingleton, builtinSingletonInputs,
+                installBuiltinSingletonDataProperty);
         // Zlib module methods — gated.
         if (_features.UsesZlib)
             EmitZlibMethods(typeBuilder, runtime);
