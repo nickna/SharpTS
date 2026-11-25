@@ -195,6 +195,7 @@ public sealed class EmittedBuiltInStaticDispatchRuntimeTests
         var prototypes = Owner(typeof(EmittedObjectPrototypeRuntime), "GetPrototypeOf", "SetPrototypeOf", "CreateValueForm");
         var descriptors = Owner(typeof(EmittedObjectDescriptorRuntime), "DefineProperty", "DefineProperties", "GetOwnPropertyDescriptor", "GetOwnPropertyDescriptorValueForm", "GetOwnPropertyDescriptors");
         object? bigInt = null, promise = null, date = null, map = null;
+        EmittedBufferRuntime? buffer = null;
         if (optional)
         {
             bigInt = Owner(typeof(EmittedBigIntImplementation), "AsIntN", "AsUintN");
@@ -203,12 +204,13 @@ public sealed class EmittedBuiltInStaticDispatchRuntimeTests
             date = Owner(typeof(EmittedDateImplementation), "Now", "StaticUTC", "StaticParse");
             typeof(EmittedDateImplementation).GetProperty("Type")!.SetValue(date, type);
             map = Owner(typeof(EmittedMapRuntime), "GroupBy");
+            buffer = new EmittedBufferRuntime(hasTypedArrayCopy: false) { Type = typeof(Guid), FromValue = Stub("BufferFrom") };
         }
         var inputsType = typeof(RuntimeEmitter).GetNestedType("BuiltInStaticDispatchInputs", BindingFlags.NonPublic)!;
         var input = Assert.Single(inputsType.GetConstructors()).Invoke([
             typeof(EmittedBuiltInStaticDispatchRuntimeTests).GetMethod(nameof(DescribeSuppliedMethod))!, arrays, numbers,
             Stub("CharCode"), Stub("CodePoint"), Stub("Raw"), keys, operations, state, prototypes, descriptors, Stub("Own"),
-            typeof(Uri), Stub("SymbolFor"), Stub("SymbolKeyFor"), bigInt, promise, typeof(Version), Stub("ErrorCheck"), date, map, null]);
+            typeof(Uri), Stub("SymbolFor"), Stub("SymbolKeyFor"), bigInt, promise, typeof(Version), Stub("ErrorCheck"), date, map, null, buffer]);
         var emitter = new RuntimeEmitter(TypeProvider.Runtime);
         typeof(RuntimeEmitter).GetField("_features", Members)!.SetValue(emitter,
             new RuntimeFeatureSet { UsesPromise = !optional, UsesMap = !optional });
@@ -235,6 +237,7 @@ public sealed class EmittedBuiltInStaticDispatchRuntimeTests
             Assert.Equal("EmittedPromiseRuntime_ResolveStatic:resolve:1", Lookup(typeof(decimal), "resolve"));
             Assert.Equal("EmittedDateImplementation_StaticUTC:UTC:7", Lookup(loaded.GetType("Scoped")!, "UTC"));
             Assert.Equal("EmittedMapRuntime_GroupBy:groupBy:2", Lookup(typeof(Dictionary<object, object>), "groupBy"));
+            Assert.Equal("BufferFrom:from:1", Lookup(typeof(Guid), "from"));
         }
         else
         {
@@ -242,6 +245,7 @@ public sealed class EmittedBuiltInStaticDispatchRuntimeTests
             Assert.Null(Lookup(typeof(Task<object>), "resolve"));
             Assert.Null(Lookup(loaded.GetType("Scoped")!, "UTC"));
             Assert.Null(Lookup(typeof(Dictionary<object, object>), "groupBy"));
+            Assert.Null(Lookup(typeof(Guid), "from"));
         }
     }
 

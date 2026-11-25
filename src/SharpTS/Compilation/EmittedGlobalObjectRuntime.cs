@@ -19,6 +19,13 @@ public sealed class EmittedGlobalObjectRuntime
         internal set => SetDeclaration(ref _singletonField, value);
     }
 
+    private FieldBuilder? _configurableIntrinsicNames;
+    public FieldBuilder ConfigurableIntrinsicNames
+    {
+        get => Require(_configurableIntrinsicNames);
+        internal set => SetDeclaration(ref _configurableIntrinsicNames, value);
+    }
+
     private MethodBuilder? _getProperty;
     public MethodBuilder GetProperty
     {
@@ -114,6 +121,7 @@ public sealed class EmittedGlobalObjectRuntime
         if (IsDeclared)
             throw new InvalidOperationException("Global object declarations are already complete.");
         _ = SingletonField;
+        _ = ConfigurableIntrinsicNames;
         _ = GetProperty;
         _ = GetBinding;
         _ = SetProperty;

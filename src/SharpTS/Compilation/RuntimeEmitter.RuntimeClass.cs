@@ -534,6 +534,7 @@ public partial class RuntimeEmitter
         // Initialize _globalThisSingleton = new object() (#271 sentinel identity)
         cctorIL.Emit(OpCodes.Newobj, _types.GetDefaultConstructor(_types.Object));
         cctorIL.Emit(OpCodes.Stsfld, globalThisSingletonField);
+        EmitConfigurableGlobalIntrinsicNames(cctorIL, runtime.GlobalObject.ConfigurableIntrinsicNames);
         runtime.GlobalObject.MarkInitializerEmitted();
 
         // Initialize the symbol-keyed accessor registry (#266).
@@ -1908,6 +1909,7 @@ public partial class RuntimeEmitter
             new GetOwnPropertyNamesInputs(
                 runtime.Arguments.Type,
                 runtime.GlobalObject.SingletonField,
+                runtime.GlobalObject.ConfigurableIntrinsicNames,
                 runtime.ArrayStorage,
                 runtime.Booleans,
                 runtime.DescriptorStorage,

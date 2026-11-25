@@ -66,49 +66,51 @@ public partial class RuntimeEmitter
         var il = method.GetILGenerator();
         var notFoundLabel = il.DefineLabel();
 
-        // Pre-compute the MethodInfo object for op_Equality on System.Type and
-        // GetTypeFromHandle on RuntimeTypeHandle — both called many times below.
-        var strEquals = _types.GetMethod(_types.Type, "op_Equality", [_types.Type, _types.Type])!;
+        var typeOpEq = _types.GetMethod(_types.Type, "op_Equality", [_types.Type, _types.Type])!;
         var getTypeFromHandle = _types.GetMethod(_types.Type, "GetTypeFromHandle", [_types.RuntimeTypeHandle])!;
         var stringOpEq = _types.GetMethod(_types.String, "op_Equality", _types.String, _types.String);
 
-        // Emit one branch per (Type, name, runtimeMethod, specLength) tuple. Uses
-        // TSFunctionGetOrCreate so the returned wrapper has stable identity:
-        // bracket access (`Array["isArray"]`) and direct dispatch (`Array.isArray`)
-        // both hit the same MethodInfo-keyed cache → `===` holds. test262
-        // gOPD identity tests + verifyProperty(Object.assign) rely on this.
-        void EmitLookup(Type targetType, string memberName, MethodInfo backingMethod, int specLength)
+        void EmitTypeGuard(Type targetType, Label skip)
         {
-            var skipLabel = il.DefineLabel();
-
-            // Type check
             il.Emit(OpCodes.Ldarg_0);
             il.Emit(OpCodes.Ldtoken, targetType);
             il.Emit(OpCodes.Call, getTypeFromHandle);
-            il.Emit(OpCodes.Call, strEquals);
-            il.Emit(OpCodes.Brfalse, skipLabel);
+            il.Emit(OpCodes.Call, typeOpEq);
+            il.Emit(OpCodes.Brfalse, skip);
+        }
 
-            // Name check
+        // Bracket access, descriptor lookup, and direct dispatch share the wrapper cache.
+        void EmitNamedLookup(string memberName, MethodInfo backingMethod, int specLength)
+        {
+            var skip = il.DefineLabel();
             il.Emit(OpCodes.Ldarg_1);
             il.Emit(OpCodes.Ldstr, memberName);
             il.Emit(OpCodes.Call, stringOpEq);
-            il.Emit(OpCodes.Brfalse, skipLabel);
+            il.Emit(OpCodes.Brfalse_S, skip);
 
-            // Match — return TSFunctionGetOrCreate(method, name, length) so the
-            // wrapper identity matches the syntactic-dispatch path.
             var parameterProducer = EmitReflectedMethodLiteral(il, backingMethod);
             il.Emit(OpCodes.Ldstr, memberName);
             il.Emit(OpCodes.Ldc_I4, specLength);
             EmitReflectedFunctionFactory(il, inputs.GetOrCreate, parameterProducer);
             il.Emit(OpCodes.Ret);
+            il.MarkLabel(skip);
+        }
 
-            il.MarkLabel(skipLabel);
+        void EmitLookup(Type targetType, string memberName, MethodInfo backingMethod, int specLength)
+        {
+            var skip = il.DefineLabel();
+            EmitTypeGuard(targetType, skip);
+            EmitNamedLookup(memberName, backingMethod, specLength);
+            il.MarkLabel(skip);
         }
 
         // Array.* — stored-as-value Array reference accessing static members.
-        EmitLookup(_types.IListOfObject, "isArray", inputs.Arrays.IsArray, 1);
-        EmitLookup(_types.IListOfObject, "from", inputs.Arrays.FromAdapter, 1);
-        EmitLookup(_types.IListOfObject, "of", inputs.Arrays.Of, 0);
+        var skipArray = il.DefineLabel();
+        EmitTypeGuard(_types.IListOfObject, skipArray);
+        EmitNamedLookup("isArray", inputs.Arrays.IsArray, 1);
+        EmitNamedLookup("from", inputs.Arrays.FromAdapter, 1);
+        EmitNamedLookup("of", inputs.Arrays.Of, 0);
+        il.MarkLabel(skipArray);
 
         if (inputs.ArrayBuffer is { } arrayBuffer)
             EmitLookup(arrayBuffer.Type, "isView", arrayBuffer.IsView, 1);
@@ -121,28 +123,24 @@ public partial class RuntimeEmitter
 
         // Number.* — bare `Number` identifier now resolves to typeof(double)
         // via issue #62, so the value-form path lands here.
-        EmitLookup(_types.Double, "isNaN",         inputs.Numbers.IsNaN, 1);
-        EmitLookup(_types.Double, "isFinite",      inputs.Numbers.IsFinite, 1);
-        EmitLookup(_types.Double, "isInteger",     inputs.Numbers.IsInteger, 1);
-        EmitLookup(_types.Double, "isSafeInteger", inputs.Numbers.IsSafeInteger, 1);
-        EmitLookup(_types.Double, "parseInt",      inputs.Numbers.ParseInt, 2);
-        EmitLookup(_types.Double, "parseFloat",    inputs.Numbers.ParseFloat, 1);
+        var skipNumber = il.DefineLabel();
+        EmitTypeGuard(_types.Double, skipNumber);
+        EmitNamedLookup("isNaN",         inputs.Numbers.IsNaN, 1);
+        EmitNamedLookup("isFinite",      inputs.Numbers.IsFinite, 1);
+        EmitNamedLookup("isInteger",     inputs.Numbers.IsInteger, 1);
+        EmitNamedLookup("isSafeInteger", inputs.Numbers.IsSafeInteger, 1);
+        EmitNamedLookup("parseInt",      inputs.Numbers.ParseInt, 2);
+        EmitNamedLookup("parseFloat",    inputs.Numbers.ParseFloat, 1);
 
         // Number's constants are JavaScript own properties, not CLR field names.
         // In particular NaN must remain readable when native CLR probes are skipped.
-        var skipNumberConstants = il.DefineLabel();
-        il.Emit(OpCodes.Ldarg_0);
-        il.Emit(OpCodes.Ldtoken, _types.Double);
-        il.Emit(OpCodes.Call, getTypeFromHandle);
-        il.Emit(OpCodes.Call, strEquals);
-        il.Emit(OpCodes.Brfalse, skipNumberConstants);
         void EmitNumberConstant(string name, double value)
         {
             var skip = il.DefineLabel();
             il.Emit(OpCodes.Ldarg_1);
             il.Emit(OpCodes.Ldstr, name);
             il.Emit(OpCodes.Call, stringOpEq);
-            il.Emit(OpCodes.Brfalse, skip);
+            il.Emit(OpCodes.Brfalse_S, skip);
             il.Emit(OpCodes.Ldc_R8, value);
             il.Emit(OpCodes.Box, _types.Double);
             il.Emit(OpCodes.Ret);
@@ -156,69 +154,46 @@ public partial class RuntimeEmitter
         EmitNumberConstant("MAX_SAFE_INTEGER", 9007199254740991.0);
         EmitNumberConstant("MIN_SAFE_INTEGER", -9007199254740991.0);
         EmitNumberConstant("EPSILON", 2.220446049250313e-16);
-        il.MarkLabel(skipNumberConstants);
+        il.MarkLabel(skipNumber);
 
         // String.* — bare `String` identifier resolves to typeof(string).
-        EmitLookup(_types.String, "fromCharCode",  inputs.StringFromCharCode, 1);
-        EmitLookup(_types.String, "fromCodePoint", inputs.StringFromCodePoint, 1);
-        EmitLookup(_types.String, "raw",           inputs.StringRaw, 1);
+        var skipString = il.DefineLabel();
+        EmitTypeGuard(_types.String, skipString);
+        EmitNamedLookup("fromCharCode",  inputs.StringFromCharCode, 1);
+        EmitNamedLookup("fromCodePoint", inputs.StringFromCodePoint, 1);
+        EmitNamedLookup("raw",           inputs.StringRaw, 1);
+        il.MarkLabel(skipString);
 
-        // Object.* — bracket-form access (`Object["assign"]`) and value-form
-        // access (`let f = Object; f.assign`) both land here. Routes through
-        // TSFunctionGetOrCreate (not the bare ctor below) so identity matches
-        // the syntactic `Object.assign` dispatch — test262 `desc.value ===
-        // Object.X` and `Object.X === Object.X` rely on identity stability.
-        void EmitObjectMethodLookup(string memberName, MethodInfo backingMethod, int specLength)
-        {
-            var skipLabel = il.DefineLabel();
-            il.Emit(OpCodes.Ldarg_0);
-            il.Emit(OpCodes.Ldtoken, _types.Object);
-            il.Emit(OpCodes.Call, getTypeFromHandle);
-            il.Emit(OpCodes.Call, strEquals);
-            il.Emit(OpCodes.Brfalse, skipLabel);
-
-            il.Emit(OpCodes.Ldarg_1);
-            il.Emit(OpCodes.Ldstr, memberName);
-            il.Emit(OpCodes.Call, stringOpEq);
-            il.Emit(OpCodes.Brfalse, skipLabel);
-
-            // TSFunctionGetOrCreate(MethodInfo, name, length) — identity-stable
-            // wrapper (same MethodInfo key → same wrapper instance).
-            var parameterProducer = EmitReflectedMethodLiteral(il, backingMethod);
-            il.Emit(OpCodes.Ldstr, memberName);
-            il.Emit(OpCodes.Ldc_I4, specLength);
-            EmitReflectedFunctionFactory(il, inputs.GetOrCreate, parameterProducer);
-            il.Emit(OpCodes.Ret);
-
-            il.MarkLabel(skipLabel);
-        }
-
-        EmitObjectMethodLookup("keys",                    inputs.ObjectKeys.Keys, 1);
-        EmitObjectMethodLookup("values",                  inputs.ObjectOperations.Values, 1);
-        EmitObjectMethodLookup("entries",                 inputs.ObjectOperations.Entries, 1);
-        EmitObjectMethodLookup("fromEntries",             inputs.ObjectOperations.FromEntries, 1);
-        EmitObjectMethodLookup("freeze",                  inputs.ObjectState.Freeze, 1);
-        EmitObjectMethodLookup("seal",                    inputs.ObjectState.Seal, 1);
-        EmitObjectMethodLookup("preventExtensions",       inputs.ObjectState.PreventExtensions, 1);
-        EmitObjectMethodLookup("getOwnPropertyNames",     inputs.ObjectKeys.Names, 1);
-        EmitObjectMethodLookup("getOwnPropertySymbols",   inputs.ObjectKeys.Symbols, 1);
-        EmitObjectMethodLookup("getPrototypeOf",          inputs.ObjectPrototypes.GetPrototypeOf, 1);
-        EmitObjectMethodLookup("setPrototypeOf",          inputs.ObjectPrototypes.SetPrototypeOf, 2);
-        EmitObjectMethodLookup("defineProperty",          inputs.ObjectDescriptors.DefineProperty, 3);
-        EmitObjectMethodLookup("defineProperties",        inputs.ObjectDescriptors.DefineProperties, 2);
-        EmitObjectMethodLookup("getOwnPropertyDescriptor",  inputs.ObjectDescriptors.GetOwnPropertyDescriptorValueForm, 2);
-        EmitObjectMethodLookup("getOwnPropertyDescriptors", inputs.ObjectDescriptors.GetOwnPropertyDescriptors, 1);
+        // Object.* — one receiver check for bracket, value-form, and descriptor lookups.
+        var skipObject = il.DefineLabel();
+        EmitTypeGuard(_types.Object, skipObject);
+        EmitNamedLookup("keys",                      inputs.ObjectKeys.Keys, 1);
+        EmitNamedLookup("values",                    inputs.ObjectOperations.Values, 1);
+        EmitNamedLookup("entries",                   inputs.ObjectOperations.Entries, 1);
+        EmitNamedLookup("fromEntries",               inputs.ObjectOperations.FromEntries, 1);
+        EmitNamedLookup("freeze",                    inputs.ObjectState.Freeze, 1);
+        EmitNamedLookup("seal",                      inputs.ObjectState.Seal, 1);
+        EmitNamedLookup("preventExtensions",         inputs.ObjectState.PreventExtensions, 1);
+        EmitNamedLookup("getOwnPropertyNames",       inputs.ObjectKeys.Names, 1);
+        EmitNamedLookup("getOwnPropertySymbols",     inputs.ObjectKeys.Symbols, 1);
+        EmitNamedLookup("getPrototypeOf",            inputs.ObjectPrototypes.GetPrototypeOf, 1);
+        EmitNamedLookup("setPrototypeOf",            inputs.ObjectPrototypes.SetPrototypeOf, 2);
+        EmitNamedLookup("defineProperty",            inputs.ObjectDescriptors.DefineProperty, 3);
+        EmitNamedLookup("defineProperties",          inputs.ObjectDescriptors.DefineProperties, 2);
+        EmitNamedLookup("getOwnPropertyDescriptor",  inputs.ObjectDescriptors.GetOwnPropertyDescriptorValueForm, 2);
+        EmitNamedLookup("getOwnPropertyDescriptors", inputs.ObjectDescriptors.GetOwnPropertyDescriptors, 1);
         // create routes through the value-form wrapper: reflection dispatch
         // pads the missing props arg with null, which raw ObjectCreate must
         // treat as the explicit-null TypeError case.
-        EmitObjectMethodLookup("create",                  inputs.ObjectPrototypes.CreateValueForm, 2);
-        EmitObjectMethodLookup("assign",                  inputs.ObjectOperations.Assign, 2);
-        EmitObjectMethodLookup("is",                      inputs.ObjectOperations.Is, 2);
-        EmitObjectMethodLookup("hasOwn",                  inputs.ObjectHasOwn, 2);
-        EmitObjectMethodLookup("groupBy",                 inputs.ObjectOperations.GroupBy, 2);
-        EmitObjectMethodLookup("isExtensible",            inputs.ObjectState.IsExtensible, 1);
-        EmitObjectMethodLookup("isFrozen",                inputs.ObjectState.IsFrozen, 1);
-        EmitObjectMethodLookup("isSealed",                inputs.ObjectState.IsSealed, 1);
+        EmitNamedLookup("create",       inputs.ObjectPrototypes.CreateValueForm, 2);
+        EmitNamedLookup("assign",       inputs.ObjectOperations.Assign, 2);
+        EmitNamedLookup("is",           inputs.ObjectOperations.Is, 2);
+        EmitNamedLookup("hasOwn",       inputs.ObjectHasOwn, 2);
+        EmitNamedLookup("groupBy",      inputs.ObjectOperations.GroupBy, 2);
+        EmitNamedLookup("isExtensible", inputs.ObjectState.IsExtensible, 1);
+        EmitNamedLookup("isFrozen",     inputs.ObjectState.IsFrozen, 1);
+        EmitNamedLookup("isSealed",     inputs.ObjectState.IsSealed, 1);
+        il.MarkLabel(skipObject);
 
         // Symbol.* (#234) — bare `Symbol` resolves to the $TSSymbol Type token.
         // Well-known symbols (iterator, species, …) are public static FIELDS

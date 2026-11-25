@@ -40,6 +40,7 @@ public partial class RuntimeEmitter
     private readonly record struct GetOwnPropertyNamesInputs(
         Type ArgumentsType,
         FieldBuilder GlobalSingleton,
+        FieldBuilder ConfigurableGlobalIntrinsicNames,
         EmittedArrayStorageRuntime ArrayStorage,
         EmittedBooleanRuntime Booleans,
         EmittedDescriptorStorageRuntime DescriptorStorage,
@@ -1376,7 +1377,48 @@ public partial class RuntimeEmitter
         il.Emit(OpCodes.Ldsfld, inputs.GlobalSingleton);
         il.Emit(OpCodes.Bne_Un, notGlobal);
         foreach (var name in BuiltInNames.GlobalConstantNames) AddName(name);
-        foreach (var name in ConfigurableGlobalIntrinsicNames) AddInitialOwnName(name);
+
+        var globalNames = il.DeclareLocal(_types.StringArray);
+        var globalName = il.DeclareLocal(_types.String);
+        var globalNameIndex = il.DeclareLocal(_types.Int32);
+        var globalNameLoop = il.DefineLabel();
+        var nextGlobalName = il.DefineLabel();
+        var checkGlobalNameIndex = il.DefineLabel();
+        il.Emit(OpCodes.Ldsfld, inputs.ConfigurableGlobalIntrinsicNames);
+        il.Emit(OpCodes.Stloc, globalNames);
+        il.Emit(OpCodes.Ldc_I4_0);
+        il.Emit(OpCodes.Stloc, globalNameIndex);
+        il.Emit(OpCodes.Br_S, checkGlobalNameIndex);
+        il.MarkLabel(globalNameLoop);
+        il.Emit(OpCodes.Ldloc, globalNames);
+        il.Emit(OpCodes.Ldloc, globalNameIndex);
+        il.Emit(OpCodes.Ldelem_Ref);
+        il.Emit(OpCodes.Stloc, globalName);
+
+        // Deleted names are absent here. Recreated names come from descriptor storage.
+        il.Emit(OpCodes.Ldarg_0);
+        il.Emit(OpCodes.Ldloc, globalName);
+        il.Emit(OpCodes.Call, inputs.IsBuiltinDeleted);
+        il.Emit(OpCodes.Brtrue_S, nextGlobalName);
+        il.Emit(OpCodes.Ldarg_0);
+        il.Emit(OpCodes.Ldloc, globalName);
+        il.Emit(OpCodes.Call, inputs.HasOwnProperty);
+        il.Emit(OpCodes.Brfalse_S, nextGlobalName);
+        il.Emit(OpCodes.Ldloc, namesLocal);
+        il.Emit(OpCodes.Ldloc, globalName);
+        il.Emit(OpCodes.Callvirt, addToList);
+
+        il.MarkLabel(nextGlobalName);
+        il.Emit(OpCodes.Ldloc, globalNameIndex);
+        il.Emit(OpCodes.Ldc_I4_1);
+        il.Emit(OpCodes.Add);
+        il.Emit(OpCodes.Stloc, globalNameIndex);
+        il.MarkLabel(checkGlobalNameIndex);
+        il.Emit(OpCodes.Ldloc, globalNameIndex);
+        il.Emit(OpCodes.Ldloc, globalNames);
+        il.Emit(OpCodes.Ldlen);
+        il.Emit(OpCodes.Conv_I4);
+        il.Emit(OpCodes.Blt_S, globalNameLoop);
         il.MarkLabel(notGlobal);
 
         // Intrinsic slots are created with the function, before user expandos.
