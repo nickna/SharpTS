@@ -8,6 +8,31 @@ namespace SharpTS.Tests.SharedTests;
 [Collection("CompilationService")]
 public sealed class GlobalReflectDefinitionTests
 {
+    [Theory, ModeData]
+    public void IntrinsicGlobalDefinitionsPreserveOmittedAttributesAndValues(ExecutionMode mode)
+    {
+        const string source = """
+            const root = globalThis;
+            const key = 'parseFloat';
+            const original = root[key];
+            Object.defineProperty(root, key, {});
+            console.log(root[key] === original);
+            console.log(Reflect.defineProperty(root, key, { enumerable: true }), root[key] === original);
+            Object.defineProperty(root, key, { value: () => 42 });
+            let d = Object.getOwnPropertyDescriptor(root, key);
+            console.log(d.value(), d.writable, d.enumerable, d.configurable);
+            Object.defineProperty(root, key, { get() { return 17; } });
+            d = Object.getOwnPropertyDescriptor(root, key);
+            console.log(root[key], 'writable' in d, d.enumerable, d.configurable);
+            console.log(delete root[key]);
+            Object.defineProperty(root, key, { value: 3 });
+            d = Object.getOwnPropertyDescriptor(root, key);
+            console.log(d.value, d.writable, d.enumerable, d.configurable);
+            """;
+        Assert.Equal("true\ntrue true\n42 true true true\n17 false true true\ntrue\n3 false false false\n",
+            TestHarness.RunUnchecked(source, mode));
+    }
+
     public static IEnumerable<object[]> Cases()
     {
         var original = GlobalParseIntBindingTests.Cases().Single(row =>
