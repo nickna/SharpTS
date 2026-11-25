@@ -86,7 +86,8 @@ public partial class RuntimeEmitter
             il.Emit(OpCodes.Ldarg_1);
             il.Emit(OpCodes.Ldstr, memberName);
             il.Emit(OpCodes.Call, stringOpEq);
-            il.Emit(OpCodes.Brfalse_S, skip);
+            // A short branch here can corrupt the following method token in persisted native output.
+            il.Emit(OpCodes.Brfalse, skip);
 
             var parameterProducer = EmitReflectedMethodLiteral(il, backingMethod);
             il.Emit(OpCodes.Ldstr, memberName);
@@ -140,7 +141,7 @@ public partial class RuntimeEmitter
             il.Emit(OpCodes.Ldarg_1);
             il.Emit(OpCodes.Ldstr, name);
             il.Emit(OpCodes.Call, stringOpEq);
-            il.Emit(OpCodes.Brfalse_S, skip);
+            il.Emit(OpCodes.Brfalse, skip);
             il.Emit(OpCodes.Ldc_R8, value);
             il.Emit(OpCodes.Box, _types.Double);
             il.Emit(OpCodes.Ret);
