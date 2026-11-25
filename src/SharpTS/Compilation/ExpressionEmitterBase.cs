@@ -2616,7 +2616,7 @@ public abstract partial class ExpressionEmitterBase : IEmitterContext
         // including state-machine bodies; direct static eval keeps its own lowering.
         if (TryEmitIndirectEvalValue(name)) return true;
 
-        if (TryEmitGlobalTimerFunctionValue(name)) return true;
+        if (TryEmitGlobalFunctionBinding(name)) return true;
 
         if (name == "parseInt")
         {
@@ -2638,10 +2638,11 @@ public abstract partial class ExpressionEmitterBase : IEmitterContext
         return false;
     }
 
-    protected bool TryEmitGlobalTimerFunctionValue(string name)
+    protected bool TryEmitGlobalFunctionBinding(string name)
     {
         if (name is not ("setTimeout" or "clearTimeout" or "setInterval" or "clearInterval"
-            or "setImmediate" or "clearImmediate" or "queueMicrotask") || Ctx.HasVisibleValueBinding(name)) return false;
+            or "setImmediate" or "clearImmediate" or "queueMicrotask"
+            or "encodeURIComponent" or "decodeURIComponent") || Ctx.HasVisibleValueBinding(name)) return false;
         IL.Emit(OpCodes.Ldstr, name);
         IL.Emit(OpCodes.Call, Ctx.Runtime!.GlobalObject.GetBinding);
         SetStackUnknown();
@@ -2661,7 +2662,8 @@ public abstract partial class ExpressionEmitterBase : IEmitterContext
     protected bool TryEmitMutableGlobalTypeOf(Expr operand)
     {
         if (ExpressionUnwrapper.Unwrap(operand) is not Expr.Variable variable
-            || variable.Name.Lexeme is not ("parseInt" or "queueMicrotask" or "process" or "Intl") &&
+            || variable.Name.Lexeme is not ("parseInt" or "queueMicrotask" or "process" or "Intl"
+                or "encodeURIComponent" or "decodeURIComponent") &&
                 !(variable.Name.Lexeme == "Array" && Ctx.RuntimeFeatures?.UsesArrayConstructorMutation == true)
             || Resolver.HasVariable(variable.Name.Lexeme) || Ctx.HasVisibleValueBinding(variable.Name.Lexeme))
             return false;

@@ -239,16 +239,14 @@ public partial class ILEmitter
         // but must ALSO be addressable as values — lodash caches them: `var freeParseFloat = parseFloat`
         // then calls the alias later). Matches how `fetch` resolves the bare reference above.
         if (TryEmitIndirectEvalValue(name)) return;
-        if (TryEmitGlobalTimerFunctionValue(name)) return;
+        if (TryEmitGlobalFunctionBinding(name)) return;
         if (name == "parseInt" && !_ctx.HasVisibleValueBinding(name))
         {
             EmitGlobalParseIntRead(IL, _ctx);
             SetStackUnknown();
             return;
         }
-        if (name is "parseFloat" or "isNaN" or "isFinite"
-            or "encodeURIComponent" or "decodeURIComponent"
-            or "structuredClone")
+        if (name is "parseFloat" or "isNaN" or "isFinite" or "structuredClone")
         {
             IL.Emit(OpCodes.Ldstr, name);
             IL.Emit(OpCodes.Call, _ctx.Runtime!.GlobalObject.GetProperty);
