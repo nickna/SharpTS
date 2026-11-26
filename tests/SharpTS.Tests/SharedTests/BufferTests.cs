@@ -64,6 +64,23 @@ public class BufferTests
     }
 
     [Theory, ModeData]
+    public void Buffer_FromThrowsTypeErrorForUnknownStringEncodings(ExecutionMode mode)
+    {
+        const string source = """
+            for (const text of ['abc', '']) {
+                try { Buffer.from(text, 'No-Such-Encoding'); console.log('accepted'); }
+                catch (error) { console.log(error instanceof TypeError, error.name, error.code, error.message); }
+            }
+            for (const encoding of [undefined, null, 99, '', new String('hex'), 'UtF-8']) {
+                console.log(Buffer.from('é', encoding).toString('hex'));
+            }
+            console.log(Buffer.from([97], 'No-Such-Encoding').toString());
+            """;
+        const string unknown = "true TypeError ERR_UNKNOWN_ENCODING Unknown encoding: No-Such-Encoding\n";
+        Assert.Equal(unknown + unknown + "c3a9\nc3a9\nc3a9\nc3a9\nc3a9\nc3a9\na\n", TestHarness.RunUnchecked(source, mode));
+    }
+
+    [Theory, ModeData]
     public void Buffer_FromHexKeepsCompletePairsBeforeTheFirstInvalidDigit(ExecutionMode mode)
     {
         const string source = """

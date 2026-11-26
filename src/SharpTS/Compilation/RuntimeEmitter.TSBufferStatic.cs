@@ -115,7 +115,8 @@ public partial class RuntimeEmitter
         il.Emit(OpCodes.Pop);
         il.Emit(OpCodes.Ldstr, "utf8");
         il.MarkLabel(hasEncoding);
-        il.Emit(OpCodes.Call, buffer.FromString);
+        il.Emit(OpCodes.Ldc_I4_1); // rejectUnknownEncoding
+        il.Emit(OpCodes.Call, buffer.EncodeString);
         il.Emit(OpCodes.Ret);
         il.MarkLabel(notString);
 
@@ -171,12 +172,13 @@ public partial class RuntimeEmitter
             [_types.String, _types.String]
         );
         buffer.FromString = method;
-        var encode = typeBuilder.DefineMethod("EncodeString", MethodAttributes.Private | MethodAttributes.Static,
+        var encode = typeBuilder.DefineMethod("EncodeString", MethodAttributes.Assembly | MethodAttributes.Static,
             typeBuilder, [_types.String, _types.String, _types.Boolean]);
+        buffer.EncodeString = encode;
         var wrapper = method.GetILGenerator();
         wrapper.Emit(OpCodes.Ldarg_0);
         wrapper.Emit(OpCodes.Ldarg_1);
-        wrapper.Emit(OpCodes.Ldc_I4_0);
+        wrapper.Emit(OpCodes.Ldc_I4_0); // rejectUnknownEncoding
         wrapper.Emit(OpCodes.Call, encode);
         wrapper.Emit(OpCodes.Ret);
 
@@ -188,7 +190,7 @@ public partial class RuntimeEmitter
         allocIl.BeginExceptionBlock();
         allocIl.Emit(OpCodes.Ldarg_0);
         allocIl.Emit(OpCodes.Ldarg_1);
-        allocIl.Emit(OpCodes.Ldc_I4_1);
+        allocIl.Emit(OpCodes.Ldc_I4_1); // rejectUnknownEncoding
         allocIl.Emit(OpCodes.Call, encode);
         allocIl.Emit(OpCodes.Stloc, result);
         allocIl.BeginCatchBlock(typeof(FormatException));
@@ -232,7 +234,15 @@ public partial class RuntimeEmitter
         CheckStringEquals(il, encodingLocal, "hex", hexLabel);
         il.Emit(OpCodes.Ldarg_2);
         il.Emit(OpCodes.Brfalse, utf8Label);
-        EmitThrowTypeError(il, errors, "Unknown Buffer.alloc fill encoding");
+        il.Emit(OpCodes.Ldstr, "Unknown encoding: ");
+        il.Emit(OpCodes.Ldarg_1);
+        il.Emit(OpCodes.Call, _types.GetMethod(_types.String, "Concat", _types.String, _types.String));
+        il.Emit(OpCodes.Newobj, errors.TypeErrorConstructor);
+        il.Emit(OpCodes.Dup);
+        il.Emit(OpCodes.Ldstr, "ERR_UNKNOWN_ENCODING");
+        il.Emit(OpCodes.Callvirt, errors.CodeSetter);
+        il.Emit(OpCodes.Call, errors.CreateException);
+        il.Emit(OpCodes.Throw);
 
         // UTF-8
         il.MarkLabel(utf8Label);

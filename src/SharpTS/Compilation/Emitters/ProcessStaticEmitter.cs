@@ -53,10 +53,6 @@ public sealed class ProcessStaticEmitter : IStaticTypeEmitterStrategy
                 il.Emit(OpCodes.Ldnull);
                 return true;
 
-            case "hrtime":
-                EmitHrtime(emitter, arguments);
-                return true;
-
             case "nextTick":
                 EmitNextTick(emitter, arguments);
                 return true;
@@ -152,28 +148,6 @@ public sealed class ProcessStaticEmitter : IStaticTypeEmitterStrategy
         EmitterArgumentHelpers.EmitBoxedArgumentOrNull(emitter, arguments, 2);
         EmitterArgumentHelpers.EmitBoxedArgumentOrNull(emitter, arguments, 3);
         emitter.Context.IL.Emit(OpCodes.Call, helper);
-    }
-
-    /// <summary>
-    /// Emits IL for process.hrtime(prev?).
-    /// Returns a [seconds, nanoseconds] array.
-    /// </summary>
-    private static void EmitHrtime(IEmitterContext emitter, List<Expr> arguments)
-    {
-        var ctx = emitter.Context;
-        var il = ctx.IL;
-
-        // Call runtime helper that handles hrtime logic
-        // The helper takes an optional previous time array
-        if (arguments.Count > 0)
-        {
-            emitter.EmitExpression(arguments[0]);
-        }
-        else
-        {
-            il.Emit(OpCodes.Ldnull);
-        }
-        il.Emit(OpCodes.Call, ctx.Runtime!.Process.Hrtime);
     }
 
     /// <summary>

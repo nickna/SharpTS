@@ -244,6 +244,35 @@ public class ProcessGlobalTests
     // ============ PROCESS ENHANCEMENT TESTS ============
 
     [Theory, ModeData]
+    public void Process_HrtimeUsesTheLiveReceiverBeforeArguments(ExecutionMode mode)
+    {
+        const string source = """
+            const original = process;
+            const replacement = {
+                get hrtime() {
+                    console.log('get');
+                    return function (seconds = -42, nanos = -1) {
+                        return [this === replacement ? seconds : 0, nanos];
+                    };
+                }
+            };
+            globalThis.process = replacement;
+            console.log(process.hrtime()[0], globalThis.process.hrtime()[0]);
+            function restore() { console.log('arg'); globalThis.process = original; return [-43, -44]; }
+            console.log(process.hrtime(...restore()).join(','));
+            globalThis.process = replacement;
+            function* read() { return process.hrtime(yield 'waiting')[0]; }
+            const call = read();
+            console.log(call.next().value);
+            globalThis.process = original;
+            console.log(call.next(-45).value);
+            console.log(process.hrtime().length, typeof process.hrtime.bigint());
+            """;
+        Assert.Equal("get\nget\n-42 -42\nget\narg\n-43,-44\nget\nwaiting\n-45\n2 bigint\n",
+            TestHarness.RunUnchecked(source, mode));
+    }
+
+    [Theory, ModeData]
     public void Process_Hrtime_ReturnsArray(ExecutionMode mode)
     {
         var source = """
