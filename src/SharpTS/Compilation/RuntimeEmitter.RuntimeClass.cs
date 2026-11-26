@@ -3408,6 +3408,7 @@ public partial class RuntimeEmitter
             if (buffer.HasTypedArrayCopy)
                 EmitBufferCopyBytesFrom(typeBuilder, runtime);
             EmitBufferFromValue(typeBuilder, runtime, buffer);
+            EmitBufferAllocValue(typeBuilder, runtime, buffer);
         }
         // Fill the forward-declared lookup only after all backing statics,
         // including optional Map.groupBy, have been declared. Earlier property
@@ -3521,15 +3522,8 @@ public partial class RuntimeEmitter
             EmitDgramModuleMethods(typeBuilder, runtime);
         // globalThis methods (ES2020) - must be after HTTP for fetch reference
         EmitGlobalThisMethods(typeBuilder, runtime, allowInterpreterBridge, consoleSingleton);
-        EmitGlobalIntrinsicInitializer(typeBuilder, globalIntrinsicInitializer, runtime);
         // Define util inspect method signatures before ConsoleExtensions (ConsoleDir uses UtilInspectValue)
         DefineUtilInspectSignatures(typeBuilder, runtime.Inspection);
-        // Console extensions (error, warn, clear, time, timeEnd, timeLog)
-        EmitConsoleExtensions(typeBuilder, runtime);
-        if (consoleSingleton is not null)
-            EmitConsoleSingletonPopulate(typeBuilder, runtime.Console, runtime.Sentinels.UndefinedInstance,
-                runtime.FunctionAttributes.PadUndefinedCtor, populateConsole!, consoleSingleton, builtinSingletonInputs,
-                installBuiltinSingletonDataProperty);
         // Crypto module methods — gated alongside the crypto type emissions.
         if (_features.UsesCrypto)
         {
@@ -3579,6 +3573,12 @@ public partial class RuntimeEmitter
             EmitTimerPromisesModuleWrappers(typeBuilder, runtime);
         // Process global methods (env, argv, nextTick) - must be after timer methods for nextTick
         EmitProcessMethods(typeBuilder, runtime);
+        // Console countReset reuses the process warning helper.
+        EmitConsoleExtensions(typeBuilder, runtime);
+        if (consoleSingleton is not null)
+            EmitConsoleSingletonPopulate(typeBuilder, runtime.Console, runtime.Sentinels.UndefinedInstance,
+                runtime.FunctionAttributes.PadUndefinedCtor, populateConsole!, consoleSingleton, builtinSingletonInputs,
+                installBuiltinSingletonDataProperty);
         // Zlib module methods — gated.
         if (_features.UsesZlib)
             EmitZlibMethods(typeBuilder, runtime);
@@ -3600,6 +3600,8 @@ public partial class RuntimeEmitter
             runtime.Deployment.Require("Intl");
             EmitIntlMethods(typeBuilder, runtime.RequireIntl());
         }
+        EmitNamespaceSingletons(typeBuilder, runtime.Abort, runtime.Intl, runtime.FunctionConstruction.GetOrCreate);
+        EmitGlobalIntrinsicInitializer(typeBuilder, globalIntrinsicInitializer, runtime);
 
         // (TLS handshake is now emitted as pure-BCL IL inside $TlsSocket/$TlsServer —
         //  no late-bind helpers, so a --compile'd tls program is genuinely standalone.)

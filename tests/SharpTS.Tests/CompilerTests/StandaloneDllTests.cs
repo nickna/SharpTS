@@ -13592,6 +13592,23 @@ public partial class StandaloneDllTests
             verifyStandardError: error => Assert.Empty(error)));
     }
 
+    [Fact]
+    public void Isolated_OrdinaryGlobalAliasDoesNotWarnAboutIntl()
+    {
+        using var tempDir = IntegrationTests.CliTestHelper.CreateTempDirectory();
+        tempDir.CreateFile("main.js", "const root = globalThis; root.answer = 42; console.log(root.answer);");
+        var dllPath = tempDir.GetPath("global_alias.dll");
+        var compile = IntegrationTests.CliTestHelper.RunCli(
+            $"--no-tsconfig --noLib --compile \"{tempDir.GetPath("main.js")}\" --standalone --verify -o \"{dllPath}\"",
+            tempDir.Path);
+        Assert.True(compile.ExitCode == 0, compile.StandardOutput + compile.StandardError);
+        Assert.Contains("IL verification passed.", compile.StandardOutput);
+        Assert.DoesNotContain("Intl", compile.StandardOutput + compile.StandardError);
+        Assert.False(File.Exists(tempDir.GetPath("SharpTS.dll")));
+        Assert.Equal("42\n", ExecuteCompiledDllIsolated(dllPath, timeoutMs: 15000,
+            verifyStandardError: error => Assert.Empty(error)));
+    }
+
     public static IEnumerable<object[]> AsyncLocalStorageMetadataPrograms =>
     [
         new object[]
@@ -14547,6 +14564,38 @@ public partial class StandaloneDllTests
             Assert.Equal(expected, ExecuteCompiledDllIsolated(dllPath, timeoutMs: 15000));
         }
         finally { CleanupTempDir(tempDir); }
+    }
+
+    [Fact]
+    public void Isolated_ProcessWarningsWriteAndEmitAtTheNextTickCheckpoint()
+    {
+        const string source = """
+            process.on('warning', warning => console.error('listener', warning.message));
+            console.error('before');
+            process.nextTick(() => console.error('first tick'));
+            process.emitWarning('example', { code: 'TEST' });
+            console.countReset('never-started');
+            console.error('after');
+            """;
+        const string expected = "before\nafter\nfirst tick\n[TEST] Warning: example\nlistener example\n" +
+            "Warning: Count for 'never-started' does not exist\nlistener Count for 'never-started' does not exist\n";
+        void VerifyError(string error) => Assert.Equal(expected, System.Text.RegularExpressions.Regex.Replace(
+            error.ReplaceLineEndings("\n"), @"\(node:\d+\) ", ""));
+
+        using var tempDir = IntegrationTests.CliTestHelper.CreateTempDirectory();
+        tempDir.CreateFile("main.js", source);
+        var entry = tempDir.GetPath("main.js");
+        var interpreted = IntegrationTests.CliTestHelper.RunCli($"--no-tsconfig --noLib \"{entry}\"", tempDir.Path);
+        Assert.True(interpreted.ExitCode == 0, interpreted.StandardOutput + interpreted.StandardError);
+        Assert.Empty(interpreted.StandardOutput);
+        VerifyError(interpreted.StandardError);
+
+        var dllPath = tempDir.GetPath("warnings.dll");
+        var compile = IntegrationTests.CliTestHelper.RunCli(
+            $"--no-tsconfig --noLib --compile \"{entry}\" --standalone --verify -o \"{dllPath}\"", tempDir.Path);
+        Assert.True(compile.ExitCode == 0, compile.StandardOutput + compile.StandardError);
+        Assert.Contains("IL verification passed.", compile.StandardOutput);
+        Assert.Empty(ExecuteCompiledDllIsolated(dllPath, timeoutMs: 15000, verifyStandardError: VerifyError));
     }
 
     public static IEnumerable<object[]> ProcessMetadataPrograms

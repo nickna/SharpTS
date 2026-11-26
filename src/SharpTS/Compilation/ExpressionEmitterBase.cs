@@ -686,7 +686,7 @@ public abstract partial class ExpressionEmitterBase : IEmitterContext
         if (gi.Object is Expr.Variable gtGetIdx && gtGetIdx.Name.Lexeme == "globalThis"
             && CanUseStaticTypeStrategy(gtGetIdx.Name.Lexeme))
         {
-            if (gi.Index is not Expr.Literal { Value: string key } || key == "eval")
+            if (GlobalEvaluatorProvenanceAnalysis.CouldBeEvalKey(gi.Index, Ctx.TypeMap))
                 Ctx.Runtime!.Deployment.Require("indirect eval");
             EmitExpression(gi.Index);
             EnsureBoxed();
@@ -735,12 +735,10 @@ public abstract partial class ExpressionEmitterBase : IEmitterContext
             var idxLocal = SpillAwaitSafeArgument(gi.Index);
             // RequireObjectCoercible: `undefined[k]` throws a guest TypeError instead
             // of silently yielding undefined (#701), and `null[k]` too now that sloppy
-            // `this` is the globalThis sentinel (#735). Optional `o?.[k]` short-circuited
-            // above. Null-placeholder globals (e.g. `process`) are exempt.
+            // `this` is the globalThis sentinel (#735). Optional `o?.[k]` short-circuited above.
             EmitIndexReadCompletion(gi, () =>
             {
-                if (!IsNullPlaceholderGlobal(gi.Object))
-                    EmitThrowIfUndefinedIndexReceiver(objLocal, idxLocal);
+                EmitThrowIfUndefinedIndexReceiver(objLocal, idxLocal);
                 IL.Emit(OpCodes.Ldloc, objLocal);
                 IL.Emit(OpCodes.Ldloc, idxLocal);
                 IL.Emit(OpCodes.Call, Ctx.Runtime!.ObjectRead.Index);
@@ -2618,7 +2616,7 @@ public abstract partial class ExpressionEmitterBase : IEmitterContext
         // including state-machine bodies; direct static eval keeps its own lowering.
         if (TryEmitIndirectEvalValue(name)) return true;
 
-        if (TryEmitGlobalTimerFunctionValue(name)) return true;
+        if (TryEmitGlobalFunctionBinding(name)) return true;
 
         if (name == "parseInt")
         {
@@ -2640,10 +2638,11 @@ public abstract partial class ExpressionEmitterBase : IEmitterContext
         return false;
     }
 
-    protected bool TryEmitGlobalTimerFunctionValue(string name)
+    protected bool TryEmitGlobalFunctionBinding(string name)
     {
         if (name is not ("setTimeout" or "clearTimeout" or "setInterval" or "clearInterval"
-            or "setImmediate" or "clearImmediate" or "queueMicrotask") || Ctx.HasVisibleValueBinding(name)) return false;
+            or "setImmediate" or "clearImmediate" or "queueMicrotask"
+            or "encodeURIComponent" or "decodeURIComponent") || Ctx.HasVisibleValueBinding(name)) return false;
         IL.Emit(OpCodes.Ldstr, name);
         IL.Emit(OpCodes.Call, Ctx.Runtime!.GlobalObject.GetBinding);
         SetStackUnknown();
@@ -2663,7 +2662,8 @@ public abstract partial class ExpressionEmitterBase : IEmitterContext
     protected bool TryEmitMutableGlobalTypeOf(Expr operand)
     {
         if (ExpressionUnwrapper.Unwrap(operand) is not Expr.Variable variable
-            || variable.Name.Lexeme is not ("parseInt" or "queueMicrotask" or "process") &&
+            || variable.Name.Lexeme is not ("parseInt" or "queueMicrotask" or "process" or "Intl"
+                or "encodeURIComponent" or "decodeURIComponent") &&
                 !(variable.Name.Lexeme == "Array" && Ctx.RuntimeFeatures?.UsesArrayConstructorMutation == true)
             || Resolver.HasVariable(variable.Name.Lexeme) || Ctx.HasVisibleValueBinding(variable.Name.Lexeme))
             return false;
@@ -2734,16 +2734,12 @@ public abstract partial class ExpressionEmitterBase : IEmitterContext
     }
 
     /// <summary>
-    /// AbortSignal / Intl in value position (#224) — resolve to the lazily
-    /// populated namespace singleton dicts. Direct static forms
-    /// (`AbortSignal.abort(x)`, `new Intl.NumberFormat(...)`) are still
-    /// intercepted at compile time before the receiver is evaluated, so these
-    /// arms only serve aliasing/typeof/argument-passing uses. Shared by
-    /// ILEmitter.EmitVariable and the state-machine emitters' global path.
+    /// Resolves namespace values for synchronous and state-machine emitters.
+    /// Globals with ordinary property descriptors use their current bindings.
     /// </summary>
     protected bool TryEmitNamespaceSingleton(string name)
     {
-        if (name is "console" or "process")
+        if (name is "console" or "process" or "Intl")
         {
             IL.Emit(OpCodes.Ldstr, name);
             IL.Emit(OpCodes.Call, Ctx.Runtime!.GlobalObject.GetBinding);
@@ -2776,14 +2772,6 @@ public abstract partial class ExpressionEmitterBase : IEmitterContext
         {
             IL.Emit(OpCodes.Call, Ctx.Runtime!.RequireAbort().NamespacePopulate);
             IL.Emit(OpCodes.Ldsfld, Ctx.Runtime!.RequireAbort().NamespaceField);
-            SetStackUnknown();
-            return true;
-        }
-
-        if (name == "Intl" && Ctx.Runtime!.Intl is not null)
-        {
-            IL.Emit(OpCodes.Call, Ctx.Runtime!.RequireIntl().NamespacePopulate);
-            IL.Emit(OpCodes.Ldsfld, Ctx.Runtime!.RequireIntl().NamespaceField);
             SetStackUnknown();
             return true;
         }
@@ -3244,13 +3232,6 @@ public abstract partial class ExpressionEmitterBase : IEmitterContext
                     _helpers.IL.Emit(OpCodes.Ldstr, "function");
                     _helpers.SetStackUnknown();
                 }
-                // process.stdin/stdout/stderr are marker strings in compiled mode but should return "object"
-                else if (u.Right is Expr.Get tg && tg.Object is Expr.Variable tgv
-                    && tgv.Name.Lexeme == "process" && tg.Name.Lexeme is "stdin" or "stdout" or "stderr")
-                {
-                    _helpers.IL.Emit(OpCodes.Ldstr, "object");
-                    _helpers.SetStackUnknown();
-                }
                 else
                 {
                     _helpers.EmitUnaryTypeOf(() => EmitExpression(u.Right), Ctx.Runtime!.Operators.TypeOf);
@@ -3560,9 +3541,8 @@ public abstract partial class ExpressionEmitterBase : IEmitterContext
             // RequireObjectCoercible: a non-optional read on `undefined` throws a
             // guest TypeError instead of silently yielding undefined (#701), and on
             // a genuine value-null now that sloppy `this` is the globalThis sentinel
-            // (#735). Null-placeholder globals (e.g. `process`) are exempt.
-            if (!IsNullPlaceholderGlobal(g.Object))
-                EmitThrowIfUndefinedReceiverOnStack(g.Name.Lexeme);
+            // (#735).
+            EmitThrowIfUndefinedReceiverOnStack(g.Name.Lexeme);
             IL.Emit(OpCodes.Ldstr, g.Name.Lexeme);
             IL.Emit(OpCodes.Call, Ctx.Runtime!.ObjectRead.Property);
         }

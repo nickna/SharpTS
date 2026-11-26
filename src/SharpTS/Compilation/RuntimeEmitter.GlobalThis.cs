@@ -95,6 +95,14 @@ public partial class RuntimeEmitter
         EmitGlobalAccessor(owner, il, runtime, "process", get => get.Emit(OpCodes.Call, runtime.Process.GetObject));
         if (_features.UsesBuffer)
             EmitGlobalAccessor(owner, il, runtime, "Buffer", get => EmitConstructor(get, runtime.RequireBuffer().Type));
+        if (runtime.Intl is { } intl)
+        {
+            InstallData("Intl", false, () =>
+            {
+                il.Emit(OpCodes.Call, intl.NamespacePopulate);
+                il.Emit(OpCodes.Ldsfld, intl.NamespaceField);
+            });
+        }
         if (_features.UsesTextEncoding)
         {
             var text = runtime.RequireTextEncoding();

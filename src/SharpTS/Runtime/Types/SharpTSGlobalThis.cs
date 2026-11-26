@@ -84,13 +84,28 @@ public sealed partial class SharpTSGlobalThis : ISharpTSPropertyAccessor
         if (current is null && HasOriginalFixedIntrinsic(name))
             return descriptor.CanRedefineFixedDataProperty(GetProperty(name));
 
+        bool definesAccessor = descriptor.HasGet || descriptor.HasSet;
+        if (current is null && GetOwnPropertyDescriptor(name) is { } intrinsic)
+        {
+            if (descriptor.IsEmpty) return true;
+
+            // The intrinsic has no backing slot yet. Complete its data value
+            // before the ordinary definition creates the first stored overlay.
+            current = intrinsic;
+            if (!definesAccessor && !descriptor.HasValue)
+            {
+                descriptor.Value = intrinsic.Value;
+                descriptor.HasValue = true;
+            }
+        }
+
         // Global object properties use the same ValidateAndApplyPropertyDescriptor
         // merge as ordinary objects. Preserve omitted attributes explicitly here;
         // global declarations can pre-populate the backing slot before a later
         // Object.defineProperties attribute-only update reaches this facade.
         if (current is not null)
         {
-            if (!descriptor.HasWritable && !current.HasGet && !current.HasSet)
+            if (!definesAccessor && !descriptor.HasWritable && !current.HasGet && !current.HasSet)
             {
                 descriptor.Writable = current.Writable;
                 descriptor.HasWritable = true;

@@ -460,10 +460,11 @@ public static class ConsoleBuiltIns
         return RuntimeValue.Undefined;
     }
 
-    private static RuntimeValue CountResetV2(Interpreter _, RuntimeValue receiver, ReadOnlySpan<RuntimeValue> args)
+    private static RuntimeValue CountResetV2(Interpreter i, RuntimeValue receiver, ReadOnlySpan<RuntimeValue> args)
     {
         string label = GetLabel(args);
-        _counts[label] = 0;
+        if (!_counts.Remove(label))
+            ProcessBuiltIns.EmitWarning(i, $"Count for '{label}' does not exist");
         return RuntimeValue.Undefined;
     }
 

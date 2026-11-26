@@ -9,6 +9,25 @@ namespace SharpTS.Tests.SharedTests;
 /// </summary>
 public class IntlNumberFormatTests
 {
+    [Theory, ModeData]
+    public void Intl_GlobalNamespaceHasOneLiveObjectBinding(ExecutionMode mode)
+    {
+        const string source = """
+            const root = globalThis;
+            const original = root.Intl;
+            console.log(typeof globalThis.Intl, typeof root.Intl, Intl === original);
+            const d = Object.getOwnPropertyDescriptor(root, 'Intl');
+            console.log(d.value === original, d.writable, d.enumerable, d.configurable);
+            console.log(root['Intl'].NumberFormat === Intl.NumberFormat);
+            console.log(new root.Intl.NumberFormat('en-US', { useGrouping: false }).format(42));
+            root.Intl = { marker: 7 };
+            console.log(Intl.marker, globalThis.Intl.marker);
+            console.log(delete root.Intl, typeof Intl, Object.hasOwn(root, 'Intl'));
+            """;
+        Assert.Equal("object object true\ntrue true false true\ntrue\n42\n7 7\ntrue undefined false\n",
+            TestHarness.RunUnchecked(source, mode));
+    }
+
     // ========== Basic Decimal Formatting ==========
 
     [Theory, ModeData]

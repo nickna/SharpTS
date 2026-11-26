@@ -34,6 +34,9 @@ public static partial class ProcessBuiltIns
     [System.Runtime.InteropServices.DllImport("libc", EntryPoint = "umask")]
     private static extern uint PosixUmask(uint mask);
 
+    internal static void EmitWarning(Interpreter interp, string message) =>
+        EmitWarning(interp, null, [message]);
+
     /// <summary>
     /// process.emitWarning(warning[, options | type[, code[, ctor]]]) —
     /// constructs the warning, emits 'warning' on the process (next tick), and
@@ -98,16 +101,15 @@ public static partial class ProcessBuiltIns
         if (isDeprecation && ThrowDeprecation)
             throw new Exceptions.ThrowException(warningObject);
 
-        // Default handler prints to stderr regardless of listeners (Node prints
-        // unless --no-warnings, which SharpTS doesn't model).
         string codePart = warningObject.GetProperty("code") is string wc ? $"[{wc}] " : "";
-        interp.Error.WriteLine($"(node:{Environment.ProcessId}) {codePart}{name}: {message}");
-        if (isDeprecation && TraceDeprecation && warningObject.GetProperty("stack") is string stack)
-            interp.Error.WriteLine(stack);
-
-        // Emit 'warning' asynchronously (Node emits on the next tick).
-        interp.EnqueueCallback(() =>
-            SharpTSProcess.Instance.EmitWith(interp, "warning", warningObject));
+        string? stack = isDeprecation && TraceDeprecation ? warningObject.GetProperty("stack") as string : null;
+        // Run the default stderr handler and guest listeners at the next-tick checkpoint.
+        interp.EnqueuePromiseJob(() =>
+        {
+            interp.Error.WriteLine($"(node:{Environment.ProcessId}) {codePart}{name}: {message}");
+            if (stack is not null) interp.Error.WriteLine(stack);
+            SharpTSProcess.Instance.EmitWith(interp, "warning", warningObject);
+        });
 
         return null;
     }

@@ -497,6 +497,23 @@ public class ConsoleTests
         Assert.Equal("myCount: 1", lines[2]); // Third occurrence after reset
     }
 
+    [Theory, ModeData]
+    public void Console_CountReset_WarnsForMissingAndAlreadyResetCounters(ExecutionMode mode)
+    {
+        const string source = """
+            process.on('warning', warning => console.log(warning.name, warning.message));
+            console.countReset('never-started');
+            const reset = console.countReset;
+            console.count('reset-twice');
+            reset('reset-twice');
+            reset('reset-twice');
+            console.count('reset-twice');
+            reset('reset-twice');
+            """;
+        Assert.Equal("reset-twice: 1\nreset-twice: 1\nWarning Count for 'never-started' does not exist\n" +
+            "Warning Count for 'reset-twice' does not exist\n", TestHarness.RunUnchecked(source, mode));
+    }
+
     #endregion
 
     #region Table

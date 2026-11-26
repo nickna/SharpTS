@@ -982,10 +982,6 @@ public partial class RuntimeEmitter
         }
         runtime.AsyncGenerators?.CompleteEmission();
 
-        // AbortSignal / Intl value-position singletons (#224). Must follow
-        // EmitRuntimeClass — they wrap the AbortSignal*/CreateIntl* helpers
-        // emitted there.
-        EmitNamespaceSingletons(runtime.RuntimeClass.Type, runtime.Abort, runtime.Intl, runtime.FunctionConstruction.GetOrCreate);
         if (runtime.Abort is not null)
             EmitAbortControllerConstructor(runtime.RuntimeClass.Type, runtime.Abort,
                 new AbortControllerConstructorInputs(runtime.DescriptorStorage, runtime.Errors,

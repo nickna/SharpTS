@@ -571,9 +571,7 @@ public sealed partial class RuntimeFeatureDetector
             case "JSON":
                 _set.UsesJSON = true; break;
 
-            // Intl namespace — `Intl.NumberFormat`, `Intl.DateTimeFormat`,
-            // `Intl.Collator`. Bare identifier covers `globalThis.Intl` and
-            // any value-form access.
+            // Bare Intl namespace references, including qualified constructors.
             case "Intl":
                 _set.UsesIntl = true; break;
 
@@ -683,7 +681,6 @@ public sealed partial class RuntimeFeatureDetector
                 _set.UsesBroadcastChannel = true;
                 _set.UsesFinalizationRegistry = true;
                 _set.UsesJSON = true;
-                _set.UsesIntl = true;
                 _set.UsesReflect = true;
                 _set.TypedArrays = RuntimeFeatureSet.TypedArrayKinds.All;
                 break;
@@ -1041,6 +1038,7 @@ public sealed partial class RuntimeFeatureDetector
                 break;
 
             case Expr.Get g:
+                MarkProcessStreamRead(g.Object, g.Name.Lexeme);
                 if (_dateConstructorReceiverReads == 0 && IsDateConstructorEscape(g))
                     _set.UsesDateConstructorMutation = true;
                 // A held constructor or definition method can be reached without
@@ -1131,6 +1129,12 @@ public sealed partial class RuntimeFeatureDetector
                 // names regardless of receiver type. False positives just over-emit.
                 switch (g.Name.Lexeme)
                 {
+                    // Intl carries a deployment dependency. A plain reference to the
+                    // global object does not establish a reference to Intl.
+                    case "Intl" when IsGlobalObject(g.Object):
+                        _set.UsesIntl = true;
+                        break;
+
                     // A constructor reached through the global object (`this.Date`
                     // or `globalThis.Date`) still requires the Date runtime even
                     // though no bare Date identifier appears in the syntax.
@@ -1249,6 +1253,7 @@ public sealed partial class RuntimeFeatureDetector
                     _set.UsesStringPrototypeMutation = true;
                 if (gi.Index is Expr.Literal { Value: string computedGlobalName })
                 {
+                    MarkProcessStreamRead(gi.Object, computedGlobalName);
                     // Computed global-object constructor access, e.g.
                     // `this["Date"]`, is semantically the same feature trigger
                     // as the corresponding named member access.
@@ -2145,6 +2150,19 @@ public sealed partial class RuntimeFeatureDetector
 
     private bool IsOpaqueEvaluator(Expr owner, string memberName) =>
         IsGlobalObject(owner) && memberName is "eval" or "Function";
+
+    private void MarkProcessStreamRead(Expr receiver, string name)
+    {
+        if (name is not ("stdin" or "stdout" or "stderr")) return;
+        if (ExpressionUnwrapper.Unwrap(receiver) switch
+            {
+                Expr.Variable { Name.Lexeme: "process" } => true,
+                Expr.Get { Name.Lexeme: "process" } member => IsGlobalObject(member.Object),
+                Expr.GetIndex { Index: Expr.Literal { Value: "process" } } member => IsGlobalObject(member.Object),
+                _ => false,
+            })
+            _set.UsesNodeStreams = true;
+    }
 
     private void MarkOpaqueEvaluatorMutation()
     {

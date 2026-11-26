@@ -47,7 +47,7 @@ public partial class Interpreter
     /// The names of every global constant and built-in singleton, for REPL autocomplete.
     /// </summary>
     internal static IEnumerable<string> GlobalNames
-        => _globalConstants.Keys.Concat([BuiltInNames.Console]).Concat(BuiltInNames.ErrorTypeNames);
+        => _globalConstants.Keys.Concat([BuiltInNames.Console, BuiltInNames.Intl]).Concat(BuiltInNames.ErrorTypeNames);
 
     // The process-wide RegExp constructor singleton (a SharpTSBuiltInConstructor),
     // resolved once from the static globals table. ECMA-262 §22.2.6.1 requires
@@ -169,15 +169,9 @@ public partial class Interpreter
         // (#208): bare `AbortSignal`/`Intl`/`ReadableStream`/... otherwise
         // throw "Undefined variable".
         //
-        // AbortSignal and Intl are namespace-style globals: member access on
-        // SharpTSBuiltInConstructor routes through the namespace registry
-        // (AbortSignal.abort/timeout/any, Intl.NumberFormat/...), while
-        // direct construction throws per spec (AbortSignal has no public
-        // constructor; Intl is not a constructor).
+        // AbortSignal's static members route through the namespace registry.
         globals["AbortSignal"] = new SharpTSBuiltInConstructor("AbortSignal",
             _ => throw new Exception("Runtime Error: TypeError: AbortSignal cannot be constructed directly. Use AbortSignal.abort(), AbortSignal.timeout(), or AbortController."));
-        globals["Intl"] = new SharpTSBuiltInConstructor("Intl",
-            _ => throw new Exception("Runtime Error: TypeError: Intl is not a constructor."));
 
         // Web-streams constructors: the same singletons stream/web exports,
         // so `new ReadableStream(...)`, `ReadableStream.from(...)`, and
@@ -547,6 +541,11 @@ public partial class Interpreter
             value = GetJSON();
             return true;
         }
+        if (name == BuiltInNames.Intl)
+        {
+            value = GetIntlNamespace();
+            return true;
+        }
         if (name == BuiltInNames.Console)
         {
             value = GetConsoleNamespace();
@@ -599,7 +598,7 @@ public partial class Interpreter
     /// method identity holds (<c>Math.max === Math.max</c>).
     /// </summary>
     internal static bool IsRealmIntrinsicName(string name)
-        => name is BuiltInNames.Console or "Object" or "Math" or "JSON" or "String" or "Number" or "Boolean" or "Array" or "ArrayBuffer" or "RegExp" or "Promise"
+        => name is BuiltInNames.Console or BuiltInNames.Intl or "Object" or "Math" or "JSON" or "String" or "Number" or "Boolean" or "Array" or "ArrayBuffer" or "RegExp" or "Promise"
             || BuiltInNames.IsErrorTypeName(name);
 
     // Per-realm String/Number/Boolean.prototype. Each is an extensible ECMA-262
@@ -623,12 +622,29 @@ public partial class Interpreter
     private Runtime.Types.SharpTSDate? _datePrototype;
     private Runtime.Types.SharpTSObjectNamespace? _objectNamespace;
     private Runtime.Types.SharpTSObject? _consoleNamespace;
+    private SharpTSObject? _intlNamespace;
 
     // This actual console value contains only the existing static method objects.
     // Persistent VM realm data therefore keeps no evaluator or writer delegate.
     internal Runtime.Types.SharpTSObject GetConsoleNamespace() => _consoleNamespace ??= new(
         ConsoleBuiltIns.MemberNames.ToDictionary(static name => name,
             static name => ConsoleBuiltIns.GetMember(name), StringComparer.Ordinal));
+
+    private SharpTSObject GetIntlNamespace()
+    {
+        if (_intlNamespace is not null) return _intlNamespace;
+        var intl = new SharpTSObject([]);
+        foreach (var name in BuiltInNames.IntlConstructorNames)
+        {
+            intl.DefineProperty(name, new SharpTSPropertyDescriptor
+            {
+                Value = BuiltInRegistry.Instance.GetStaticMethod(BuiltInNames.Intl, name), HasValue = true,
+                Writable = true, HasWritable = true,
+                HasEnumerable = true, Configurable = true, HasConfigurable = true,
+            });
+        }
+        return _intlNamespace = intl;
+    }
     // The String/Number/Boolean constructor objects. Ordinary and extensible per ECMA-262,
     // so they carry a guest-writable expando bag and — like Math/JSON/Object — are held
     // per-Interpreter: `Number.foo = 1` in one program must not be visible to the next one
@@ -786,12 +802,18 @@ public partial class Interpreter
             : _globalConstants.TryGetValue(name, out var global)
                 && (global is SharpTSBuiltInConstructor or IBuiltInTypeConstructor || name is
                     BuiltInNames.ParseInt or BuiltInNames.ParseFloat or BuiltInNames.Eval or BuiltInNames.IsNaN
-                    or BuiltInNames.StructuredClone
+                    or BuiltInNames.StructuredClone or BuiltInNames.EncodeURIComponent or BuiltInNames.DecodeURIComponent
                     or BuiltInNames.Undefined or BuiltInNames.NaN or BuiltInNames.Infinity) ? global : null;
 
     private SharpTSGlobalThis CreateRealmGlobalThis()
     {
         var globalThis = new SharpTSGlobalThis(ResolveGlobalObjectIntrinsic);
+        globalThis.DefineProperty(BuiltInNames.Intl, new SharpTSPropertyDescriptor
+        {
+            Value = GetIntlNamespace(), HasValue = true,
+            Writable = true, HasWritable = true,
+            HasEnumerable = true, Configurable = true, HasConfigurable = true,
+        });
         var buffer = RuntimeValue.FromObject(SharpTSBufferConstructor.Instance);
         var getter = BuiltInMethod.CreateV2("get", 0, int.MaxValue, (_, _, _) => buffer);
         var setter = BuiltInMethod.CreateV2("set", 0, int.MaxValue, (_, _, args) =>

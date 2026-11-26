@@ -165,6 +165,8 @@ public static class BuiltInNames
     public const string Reflect = "Reflect";
     public const string Atomics = "Atomics";
     public const string Intl = "Intl";
+    internal static readonly string[] IntlConstructorNames =
+    ["NumberFormat", "DateTimeFormat", "Collator", "PluralRules", "RelativeTimeFormat", "ListFormat", "Segmenter", "DisplayNames"];
 
     #endregion
 
@@ -186,7 +188,7 @@ public static class BuiltInNames
         Object, Function, Array, Number, ParseFloat, ParseInt, Boolean, String, Symbol, Date,
         Promise, RegExp, Error, AggregateError, EvalError, RangeError, ReferenceError, SyntaxError,
         TypeError, URIError, GlobalThis, JSON, Math, ArrayBuffer, Map, Set, WeakMap, WeakSet,
-        Eval, IsFinite, IsNaN, AbortController
+        DecodeURIComponent, EncodeURIComponent, Eval, IsFinite, IsNaN, AbortController
     ];
 
     /// <summary>

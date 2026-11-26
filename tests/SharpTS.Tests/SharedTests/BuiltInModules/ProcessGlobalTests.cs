@@ -46,6 +46,30 @@ public class ProcessGlobalTests
     }
 
     [Theory, ModeData]
+    public void Process_MemberReadsUseTheCurrentGlobalBinding(ExecutionMode mode)
+    {
+        const string source = """
+            const original = process;
+            console.log(process.pid > 0, globalThis.process.pid === original.pid, typeof process.pid);
+            let reads = 0;
+            globalThis.process = { get pid() { return --reads; }, platform: 'custom', stdout: 'custom' };
+            console.log(globalThis.process.pid, process.pid, process['pid'], process.platform, typeof process.stdout);
+            async function read() {
+                await Promise.resolve();
+                console.log(globalThis.process.pid, process.pid);
+                globalThis.process = null;
+                console.log(process?.pid, globalThis.process?.pid);
+                try { process['pid']; } catch (error) { console.log(error instanceof TypeError); }
+                globalThis.process = original;
+                console.log(process.pid === original.pid);
+            }
+            read();
+            """;
+        Assert.Equal("true true number\n-1 -2 -3 custom string\n-4 -5\nundefined undefined\ntrue\ntrue\n",
+            TestHarness.RunUnchecked(source, mode));
+    }
+
+    [Theory, ModeData]
     public void Process_Version_ReturnsVersionString(ExecutionMode mode)
     {
         var source = """
@@ -70,6 +94,33 @@ public class ProcessGlobalTests
 
         var output = TestHarness.Run(source, mode);
         Assert.Equal("true\ntrue\n", output);
+    }
+
+    [Theory, ModeData]
+    public void Process_CwdUsesTheLiveReceiverBeforeArguments(ExecutionMode mode)
+    {
+        const string source = """
+            const original = process;
+            const host = original.cwd();
+            const replacement = {
+                get cwd() {
+                    console.log('get');
+                    return function (value) { return this === replacement ? value : 'wrong receiver'; };
+                }
+            };
+            globalThis.process = replacement;
+            console.log(globalThis.process.cwd('qualified'));
+            function restore() { console.log('arg'); globalThis.process = original; return 'bare'; }
+            console.log(process.cwd(...[restore()]));
+            console.log(process.cwd() === host);
+            globalThis.process = replacement;
+            function* read() { return process.cwd(yield 'waiting'); }
+            const call = read();
+            console.log(call.next().value);
+            globalThis.process = original;
+            console.log(call.next('resumed').value);
+            """;
+        Assert.Equal("get\nqualified\nget\narg\nbare\ntrue\nget\nwaiting\nresumed\n", TestHarness.RunUnchecked(source, mode));
     }
 
     [Theory, ModeData]

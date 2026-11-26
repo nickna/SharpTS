@@ -5,8 +5,7 @@ using SharpTS.TypeSystem;
 namespace SharpTS.Compilation.CallHandlers;
 
 /// <summary>
-/// Handles global built-in functions: parseInt, parseFloat, isNaN, isFinite, String, Number, Boolean,
-/// encodeURIComponent, decodeURIComponent.
+/// Handles direct lowering for global built-in functions such as parseInt, String, and Number.
 /// </summary>
 public class GlobalFunctionHandler : ICallHandler
 {
@@ -42,8 +41,6 @@ public class GlobalFunctionHandler : ICallHandler
             "String" => EmitStringConversion(emitter, il, ctx, call),
             "Number" => EmitNumberConversion(emitter, il, ctx, call),
             "Boolean" => EmitBooleanConversion(emitter, il, ctx, call),
-            "encodeURIComponent" => EmitEncodeURIComponent(emitter, il, ctx, call),
-            "decodeURIComponent" => EmitDecodeURIComponent(emitter, il, ctx, call),
             "atob" => EmitBase64Global(emitter, il, ctx, call, ctx.Runtime!.RequireBuffer().Atob),
             "btoa" => EmitBase64Global(emitter, il, ctx, call, ctx.Runtime!.RequireBuffer().Btoa),
             _ => false
@@ -364,35 +361,4 @@ public class GlobalFunctionHandler : ICallHandler
         return true;
     }
 
-    private static bool EmitEncodeURIComponent(IEmitterContext emitter, System.Reflection.Emit.ILGenerator il, CompilationContext ctx, Expr.Call call)
-    {
-        if (call.Arguments.Count == 0)
-        {
-            il.Emit(System.Reflection.Emit.OpCodes.Ldsfld, ctx.Runtime!.Sentinels.UndefinedInstance);
-        }
-        else
-        {
-            emitter.EmitExpression(call.Arguments[0]);
-            emitter.EmitBoxIfNeeded(call.Arguments[0]);
-        }
-        il.Emit(System.Reflection.Emit.OpCodes.Call, ctx.Runtime!.UriComponents.Encode);
-        emitter.SetStackType(StackType.String);
-        return true;
-    }
-
-    private static bool EmitDecodeURIComponent(IEmitterContext emitter, System.Reflection.Emit.ILGenerator il, CompilationContext ctx, Expr.Call call)
-    {
-        if (call.Arguments.Count == 0)
-        {
-            il.Emit(System.Reflection.Emit.OpCodes.Ldsfld, ctx.Runtime!.Sentinels.UndefinedInstance);
-        }
-        else
-        {
-            emitter.EmitExpression(call.Arguments[0]);
-            emitter.EmitBoxIfNeeded(call.Arguments[0]);
-        }
-        il.Emit(System.Reflection.Emit.OpCodes.Call, ctx.Runtime!.UriComponents.Decode);
-        emitter.SetStackType(StackType.String);
-        return true;
-    }
 }

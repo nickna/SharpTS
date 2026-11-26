@@ -5,6 +5,53 @@ namespace SharpTS.Tests.SharedTests;
 
 public sealed class UriComponentSemanticsTests
 {
+    [Theory, ModeData]
+    public void BareUriComponentCallsResolveTheLiveBindingBeforeArguments(ExecutionMode mode)
+    {
+        const string source = """
+            const original = encodeURIComponent;
+            globalThis.encodeURIComponent = () => 'replacement';
+            console.log(globalThis.encodeURIComponent('a b'), encodeURIComponent('a b'));
+            function restore() { globalThis.encodeURIComponent = original; return 'a b'; }
+            console.log(encodeURIComponent(...[restore()]), encodeURIComponent('a b'));
+            globalThis.decodeURIComponent = function (value) {
+                'use strict';
+                return this === undefined ? value : 'wrong receiver';
+            };
+            function* run() { return decodeURIComponent(yield 'waiting'); }
+            const call = run();
+            console.log(call.next().value);
+            delete globalThis.decodeURIComponent;
+            console.log(call.next('retained').value, typeof decodeURIComponent);
+            try { decodeURIComponent('a'); } catch (error) { console.log(error.name); }
+            """;
+        Assert.Equal("replacement replacement\nreplacement a%20b\nwaiting\nretained undefined\nReferenceError\n",
+            TestHarness.RunUnchecked(source, mode));
+    }
+
+    [Theory]
+    [InlineData(ExecutionMode.Interpreted, "encodeURIComponent", "a b", "a%20b")]
+    [InlineData(ExecutionMode.Compiled, "encodeURIComponent", "a b", "a%20b")]
+    [InlineData(ExecutionMode.Interpreted, "decodeURIComponent", "a%20b", "a b")]
+    [InlineData(ExecutionMode.Compiled, "decodeURIComponent", "a%20b", "a b")]
+    public void UriComponentGlobalsExposeConfigurableOwnDataProperties(
+        ExecutionMode mode, string name, string argument, string result)
+    {
+        string source = $$"""
+            const key = '{{name}}';
+            const initial = Object.getOwnPropertyDescriptor(globalThis, key);
+            const fn = globalThis[key];
+            console.log(Object.hasOwn(globalThis, key), initial.writable, initial.enumerable, initial.configurable);
+            console.log(initial.value === fn, fn === {{name}}, typeof globalThis.{{name}}, fn('{{argument}}'));
+            console.log(Reflect.ownKeys(globalThis).includes(key), Object.keys(globalThis).includes(key));
+            console.log(delete globalThis[key], Object.hasOwn(globalThis, key), typeof globalThis[key]);
+            Object.defineProperty(globalThis, key, { value: fn, enumerable: true });
+            console.log(Object.keys(globalThis).includes(key), globalThis[key] === fn);
+            """;
+        Assert.Equal($"true true false true\ntrue true function {result}\ntrue false\ntrue false undefined\ntrue true\n",
+            TestHarness.RunUnchecked(source, mode));
+    }
+
     public static IEnumerable<object[]> Cases()
     {
         yield return new object[] { "encode_punctuation", """

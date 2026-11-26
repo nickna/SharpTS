@@ -637,7 +637,7 @@ public partial class RuntimeEmitter
 
     /// <summary>
     /// Emits: public static void ConsoleCountReset(object label)
-    /// Resets counter for the label to 0.
+    /// Removes the counter so the next count starts at 1. Warns when the label has no counter.
     /// </summary>
     private void EmitConsoleCountReset(TypeBuilder typeBuilder, EmittedRuntime runtime)
     {
@@ -655,21 +655,26 @@ public partial class RuntimeEmitter
         EmitConsoleCounterLabel(il, runtime);
         il.Emit(OpCodes.Stloc, labelLocal);
 
-        // Initialize counts dictionary if null
-        var dictInitialized = il.DefineLabel();
+        var warn = il.DefineLabel();
+        var done = il.DefineLabel();
         il.Emit(OpCodes.Ldsfld, runtime.Console.CountsField);
-        il.Emit(OpCodes.Brtrue, dictInitialized);
-        il.Emit(OpCodes.Newobj, _types.GetDefaultConstructor(_types.DictionaryStringObject));
-        il.Emit(OpCodes.Stsfld, runtime.Console.CountsField);
-        il.MarkLabel(dictInitialized);
-
-        // Set count to 0
+        il.Emit(OpCodes.Brfalse, warn);
         il.Emit(OpCodes.Ldsfld, runtime.Console.CountsField);
         il.Emit(OpCodes.Ldloc, labelLocal);
-        il.Emit(OpCodes.Ldc_R8, 0.0);
-        il.Emit(OpCodes.Box, _types.Double);
-        il.Emit(OpCodes.Callvirt, _types.GetMethod(_types.DictionaryStringObject, "set_Item"));
+        il.Emit(OpCodes.Callvirt, _types.GetMethod(_types.DictionaryStringObject, "Remove", _types.String));
+        il.Emit(OpCodes.Brtrue, done);
 
+        il.MarkLabel(warn);
+        il.Emit(OpCodes.Ldstr, "Count for '");
+        il.Emit(OpCodes.Ldloc, labelLocal);
+        il.Emit(OpCodes.Ldstr, "' does not exist");
+        il.Emit(OpCodes.Call, _types.GetMethod(_types.String, "Concat", _types.String, _types.String, _types.String));
+        il.Emit(OpCodes.Ldnull);
+        il.Emit(OpCodes.Ldnull);
+        il.Emit(OpCodes.Ldnull);
+        il.Emit(OpCodes.Call, runtime.Process.EmitWarning);
+        il.Emit(OpCodes.Pop);
+        il.MarkLabel(done);
         il.Emit(OpCodes.Ret);
     }
 

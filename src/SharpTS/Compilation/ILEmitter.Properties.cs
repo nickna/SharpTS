@@ -125,12 +125,6 @@ public partial class ILEmitter
             }
         }
 
-        // Special case: process.stdin.isTTY, process.stdout.isTTY, process.stderr.isTTY
-        if (TryEmitProcessStreamProperty(g))
-        {
-            return;
-        }
-
         // Special case: globalThis.Math.PI, globalThis.JSON.parse, etc.
         if (TryEmitGlobalThisChainedProperty(g))
         {
@@ -395,10 +389,8 @@ public partial class ILEmitter
             // RequireObjectCoercible: a non-optional read on `undefined` throws a
             // guest TypeError instead of silently yielding undefined (#701). Also
             // rejects a genuine value-null (#735) now that sloppy `this` resolves to
-            // the globalThis sentinel. Null-placeholder globals (e.g. `process`)
-            // are exempt — uncovered properties there yield undefined, not a throw.
-            if (!IsNullPlaceholderGlobal(g.Object))
-                EmitThrowIfUndefinedReceiverOnStack(g.Name.Lexeme);
+            // the globalThis sentinel.
+            EmitThrowIfUndefinedReceiverOnStack(g.Name.Lexeme);
             IL.Emit(OpCodes.Ldstr, g.Name.Lexeme);
             IL.Emit(OpCodes.Call, _ctx.Runtime!.ObjectRead.Property);
         }
@@ -1245,7 +1237,7 @@ public partial class ILEmitter
         if (gi.Object is Expr.Variable gtGetIdx && gtGetIdx.Name.Lexeme == "globalThis"
             && CanUseStaticTypeStrategy(gtGetIdx.Name.Lexeme))
         {
-            if (gi.Index is not Expr.Literal { Value: string key } || key == "eval")
+            if (GlobalEvaluatorProvenanceAnalysis.CouldBeEvalKey(gi.Index, _ctx.TypeMap))
                 _ctx.Runtime!.Deployment.Require("indirect eval");
             EmitExpression(gi.Index);
             EmitBoxIfNeeded(gi.Index);
@@ -1509,11 +1501,9 @@ public partial class ILEmitter
         // into the TypeError message: `undefined[k]` throws instead of silently
         // yielding undefined (#701), and `null[k]` too now that sloppy `this` is the
         // globalThis sentinel (#735). The optional `o?.[k]` case returned early above.
-        // Null-placeholder globals (e.g. `process`) are exempt.
         var idxRecvLocal = SpillBoxed(gi.Object);
         var idxKeyLocal = SpillBoxed(gi.Index);
-        if (!IsNullPlaceholderGlobal(gi.Object))
-            EmitThrowIfUndefinedIndexReceiver(idxRecvLocal, idxKeyLocal);
+        EmitThrowIfUndefinedIndexReceiver(idxRecvLocal, idxKeyLocal);
         IL.Emit(OpCodes.Ldloc, idxRecvLocal);
         IL.Emit(OpCodes.Ldloc, idxKeyLocal);
         IL.Emit(OpCodes.Call, _ctx.Runtime!.ObjectRead.Index);
@@ -2959,86 +2949,6 @@ public partial class ILEmitter
         IL.Emit(OpCodes.Callvirt, setterTarget);
         if (!_ctx.Types.IsVoid(setterBuilder.ReturnType))
             IL.Emit(OpCodes.Pop);
-    }
-
-    /// <summary>
-    /// Tries to emit IL for process.stdin.isTTY, process.stdout.isTTY, process.stderr.isTTY property access.
-    /// Returns true if the property was handled.
-    /// </summary>
-    private bool TryEmitProcessStreamProperty(Expr.Get g)
-    {
-        // Pattern: process.stdin.X, process.stdout.X, process.stderr.X
-        // g.Object is Expr.Get { Object: Expr.Variable("process"), Name: "stdin/stdout/stderr" }
-
-        if (g.Object is not Expr.Get streamGet)
-            return false;
-
-        if (streamGet.Object is not Expr.Variable processVar || processVar.Name.Lexeme != "process")
-            return false;
-
-        string streamName = streamGet.Name.Lexeme;
-        string propertyName = g.Name.Lexeme;
-
-        // Handle isTTY for all streams
-        if (propertyName == "isTTY")
-        {
-            switch (streamName)
-            {
-                case "stdin":
-                    IL.Emit(OpCodes.Call, _ctx.Runtime!.Process.StdinIsTTY);
-                    SetStackUnknown();
-                    return true;
-                case "stdout":
-                    IL.Emit(OpCodes.Call, _ctx.Runtime!.Process.StdoutIsTTY);
-                    SetStackUnknown();
-                    return true;
-                case "stderr":
-                    IL.Emit(OpCodes.Call, _ctx.Runtime!.Process.StderrIsTTY);
-                    SetStackUnknown();
-                    return true;
-            }
-        }
-
-        // Handle writable stream properties for stdout/stderr
-        if (streamName is "stdout" or "stderr")
-        {
-            switch (propertyName)
-            {
-                case "writable":
-                    IL.Emit(OpCodes.Ldc_I4_1);
-                    IL.Emit(OpCodes.Box, _ctx.Types.Boolean);
-                    SetStackUnknown();
-                    return true;
-                case "writableEnded":
-                case "writableFinished":
-                case "destroyed":
-                    IL.Emit(OpCodes.Ldc_I4_0);
-                    IL.Emit(OpCodes.Box, _ctx.Types.Boolean);
-                    SetStackUnknown();
-                    return true;
-            }
-        }
-
-        // Handle readable stream properties for stdin
-        if (streamName == "stdin")
-        {
-            switch (propertyName)
-            {
-                case "readable":
-                    IL.Emit(OpCodes.Ldc_I4_1);
-                    IL.Emit(OpCodes.Box, _ctx.Types.Boolean);
-                    SetStackUnknown();
-                    return true;
-                case "readableEnded":
-                case "destroyed":
-                    IL.Emit(OpCodes.Ldc_I4_0);
-                    IL.Emit(OpCodes.Box, _ctx.Types.Boolean);
-                    SetStackUnknown();
-                    return true;
-            }
-        }
-
-        return false;
     }
 
     /// <summary>

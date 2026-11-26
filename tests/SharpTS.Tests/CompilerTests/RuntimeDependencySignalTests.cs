@@ -100,6 +100,17 @@ public class RuntimeDependencySignalTests
         Assert.DoesNotContain("vm module", reasons);
     }
 
+    [Theory]
+    [InlineData("const key: string = 'answer'; globalThis[key];", false)]
+    [InlineData("const part = 'ans'; const key = part + 'wer'; async function read() { await 0; return globalThis[key]; } read();", false)]
+    [InlineData("const key = 'answer'; { const key = 'ev' + 'al'; globalThis[key]; }", true)]
+    [InlineData("function read(key: string) { return globalThis[key]; } read('answer');", true)]
+    [InlineData("const key = (Date.now() ? 'eval' : 'answer') as 'answer'; globalThis[key];", true)]
+    public void ComputedGlobalKeyOnlyRequiresIndirectEvalWhenItCanNameEval(string source, bool requiresEval)
+    {
+        Assert.Equal(requiresEval, ReasonsFor(source).Contains("indirect eval"));
+    }
+
     [Fact]
     public void AbortSignalAny_RequiresRuntime()
     {

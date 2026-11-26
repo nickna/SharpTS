@@ -26,6 +26,31 @@ internal static class GlobalEvaluatorProvenanceAnalysis
         _ => value,
     };
 
+    internal static bool CouldBeEvalKey(Expr value, TypeMap? types) =>
+        ConstantPrimitive(value, types, depth: 0) is null or "eval";
+
+    private static object? ConstantPrimitive(Expr expression, TypeMap? types, int depth)
+    {
+        // Long or cyclic aliases conservatively retain the deployment dependency.
+        if (depth >= 32) return null;
+        switch (Unwrap(expression))
+        {
+            case Expr.Literal { Value: string or double } literal:
+                return literal.Value;
+            case Expr.Variable variable when types?.GetConstInitializer(variable.Name) is { } initializer:
+                return ConstantPrimitive(initializer, types, depth + 1);
+            case Expr.Binary { Operator.Type: TokenType.PLUS } binary:
+                var left = ConstantPrimitive(binary.Left, types, depth + 1);
+                var right = ConstantPrimitive(binary.Right, types, depth + 1);
+                if (left is double a && right is double b) return a + b;
+                if (left is not null && right is not null)
+                    return Runtime.PropertyKeyConverter.ToPropertyKeyString(left)
+                        + Runtime.PropertyKeyConverter.ToPropertyKeyString(right);
+                break;
+        }
+        return null;
+    }
+
     private static bool ReturnsReceiverValue(Expr value) => Unwrap(value) switch
     {
         Expr.This => true,
@@ -66,7 +91,7 @@ internal static class GlobalEvaluatorProvenanceAnalysis
                 }
             } while (changed);
             return _reads.Any(read => IsGlobal(read.Receiver) &&
-                (read.Name == "eval" || read.Index is not null && ConstantKey(read.Index) is null or "eval"));
+                (read.Name == "eval" || read.Index is not null && CouldBeEvalKey(read.Index, types)));
         }
 
         private bool IsReceiverFunction(Expr value) => Unwrap(value) is Expr.Variable variable &&
@@ -79,15 +104,6 @@ internal static class GlobalEvaluatorProvenanceAnalysis
             Expr.Call call => IsReceiverFunction(call.Callee),
             Expr.Ternary conditional => IsGlobal(conditional.ThenBranch) || IsGlobal(conditional.ElseBranch),
             _ => false,
-        };
-
-        private static string? ConstantKey(Expr value) => Unwrap(value) switch
-        {
-            Expr.Literal { Value: string text } => text,
-            Expr.Literal { Value: double number } => Runtime.PropertyKeyConverter.ToPropertyKeyString(number),
-            Expr.Binary { Operator.Type: TokenType.PLUS } binary when
-                ConstantKey(binary.Left) is { } left && ConstantKey(binary.Right) is { } right => left + right,
-            _ => null,
         };
 
         protected override void VisitFunction(Stmt.Function statement)

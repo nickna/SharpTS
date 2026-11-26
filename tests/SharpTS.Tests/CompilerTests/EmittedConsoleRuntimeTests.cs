@@ -125,16 +125,15 @@ public class EmittedConsoleRuntimeTests
         Assert.Equal(0, Field(first, "_consoleGroupLevel").GetValue(null));
         Assert.Equal("", first.GetMethod("GetConsoleIndent")!.Invoke(null, null));
 
-        // These calls initialize dictionaries without redirecting process-global console streams.
         first.GetMethod("ConsoleTime")!.Invoke(null, [null]);
         var undefined = first.Assembly.GetType("$Undefined")!.GetField("Instance")!.GetValue(null);
+        var timers = Assert.IsType<Dictionary<string, object>>(Field(first, "_consoleTimers").GetValue(null));
+        var counts = new Dictionary<string, object> { ["default"] = 2d, ["null"] = 3d };
+        Field(first, "_consoleCounts").SetValue(null, counts);
         first.GetMethod("ConsoleCountReset")!.Invoke(null, [undefined]);
         first.GetMethod("ConsoleCountReset")!.Invoke(null, [null]);
-        var timers = Assert.IsType<Dictionary<string, object>>(Field(first, "_consoleTimers").GetValue(null));
-        var counts = Assert.IsType<Dictionary<string, object>>(Field(first, "_consoleCounts").GetValue(null));
         Assert.True(Assert.IsType<System.Diagnostics.Stopwatch>(timers["default"]).IsRunning);
-        Assert.Equal(0d, counts["default"]);
-        Assert.Equal(0d, counts["null"]);
+        Assert.Empty(counts);
         Assert.Null(Field(second, "_consoleTimers").GetValue(null));
         Assert.Null(Field(second, "_consoleCounts").GetValue(null));
         Field(first, "_consoleGroupLevel").SetValue(null, 2);

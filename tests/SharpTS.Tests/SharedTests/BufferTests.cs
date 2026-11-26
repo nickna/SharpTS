@@ -76,6 +76,48 @@ public class BufferTests
     }
 
     [Theory, ModeData]
+    public void Buffer_AllocResolvesAndRetainsTheCurrentReceiver(ExecutionMode mode)
+    {
+        const string source = """
+            const original = globalThis.Buffer;
+            const replacement = {
+                get alloc() {
+                    console.log('get');
+                    return function (size) { return this === replacement ? size : -1; };
+                }
+            };
+            globalThis.Buffer = replacement;
+            function restore() { console.log('arg'); globalThis.Buffer = original; return 42; }
+            console.log(Buffer.alloc(...[restore()]));
+            console.log(Buffer.alloc(3.9).length, original.alloc(2).length);
+            globalThis.Buffer = replacement;
+            function* callAlloc() { return Buffer.alloc(yield 'waiting'); }
+            const call = callAlloc();
+            console.log(call.next().value);
+            globalThis.Buffer = original;
+            console.log(call.next(17).value);
+            """;
+        Assert.Equal("get\narg\n42\n3 2\nget\nwaiting\n17\n", TestHarness.RunUnchecked(source, mode));
+    }
+
+    [Theory, ModeData]
+    public void Buffer_AllocRepeatsFillBytes(ExecutionMode mode)
+    {
+        const string source = """
+            const bytes = new Uint8Array([9, 65, 66, 8]);
+            const alloc = Buffer.alloc;
+            console.log(Buffer.alloc(3, 'ab').toString());
+            console.log(alloc(5, '6162', 'hex').toString());
+            console.log(Buffer.alloc(3, Buffer.from('xy')).toString());
+            console.log(alloc(5, new Uint8Array(bytes.buffer, 1, 2)).toString());
+            console.log(Buffer.alloc(3, 257).toString('hex'), alloc(2, true).toString('hex'));
+            console.log(alloc(2, 4294967361).toString(), alloc(2, -1).toString('hex'));
+            console.log(alloc(2).toString('hex'), alloc(2, undefined).toString('hex'), alloc(0, 'ab').length);
+            """;
+        Assert.Equal("aba\nababa\nxyx\nABABA\n010101 0101\nAA ffff\n0000 0000 0\n", TestHarness.RunUnchecked(source, mode));
+    }
+
+    [Theory, ModeData]
     public void Buffer_Length_Property(ExecutionMode mode)
     {
         var source = """
@@ -1165,6 +1207,22 @@ public class BufferTests
                 """
         };
         Assert.Equal("function hi\n", TestHarness.RunModules(files, "main.ts", mode));
+    }
+
+    [Theory, ModeData]
+    public void BufferModule_NamedImportsKeepTheirConstructorAfterGlobalReplacement(ExecutionMode mode)
+    {
+        var files = new Dictionary<string, string>
+        {
+            ["main.ts"] = """
+                import { Buffer, Buffer as ImportedBuffer } from 'node:buffer';
+                const root = globalThis as any;
+                root.Buffer = { from() { return 'replacement'; } };
+                console.log(typeof Buffer, typeof ImportedBuffer, ImportedBuffer === Buffer);
+                console.log(Buffer.from('hi').toString(), ImportedBuffer.from('hi').toString(), root.Buffer.from('hi'));
+                """
+        };
+        Assert.Equal("function function true\nhi hi replacement\n", TestHarness.RunModules(files, "main.ts", mode));
     }
 
     [Theory, ModeData]
