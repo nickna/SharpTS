@@ -16,6 +16,8 @@ namespace SharpTS.Runtime.Types;
 /// </remarks>
 public static class BufferEncoding
 {
+    internal const string Base64Alphabet = "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789+/";
+
     /// <summary>Default encoding when none is supplied (Node uses utf8).</summary>
     public const string Default = "utf8";
 
@@ -27,8 +29,8 @@ public static class BufferEncoding
             case "utf8": return Encoding.UTF8.GetBytes(data);
             case "ascii": return Encoding.ASCII.GetBytes(data);
             case "latin1": return Encoding.Latin1.GetBytes(data);
-            case "base64": return DecodeBase64(data, urlSafe: false);
-            case "base64url": return DecodeBase64(data, urlSafe: true);
+            case "base64":
+            case "base64url": return DecodeBase64(data);
             case "hex": return HexToBytes(data);
             case "utf16le": return Encoding.Unicode.GetBytes(data);
             default: throw new ArgumentException($"Unknown encoding: {encoding}");
@@ -113,25 +115,26 @@ public static class BufferEncoding
     }
 
     /// <summary>
-    /// Decodes a base64 (or base64url) string to bytes, tolerating missing padding
-    /// and the URL-safe alphabet (matching Node's lenient base64 decoder).
+    /// Decodes a Buffer base64 string using either alphabet and ignoring invalid input.
     /// </summary>
-    private static byte[] DecodeBase64(string data, bool urlSafe)
+    private static byte[] DecodeBase64(string data)
     {
-        // Node ignores whitespace and accepts both alphabets; normalize to standard.
         var sb = new StringBuilder(data.Length);
-        foreach (var c in data)
+        foreach (var codeUnit in data)
         {
-            if (char.IsWhiteSpace(c)) continue;
-            sb.Append(c switch { '-' => '+', '_' => '/', _ => c });
+            // Node decodes the low byte of each UTF-16 code unit.
+            var c = unchecked((char)(byte)codeUnit);
+            if (c == '=') break;
+            c = c switch { '-' => '+', '_' => '/', _ => c };
+            if (Base64Alphabet.Contains(c)) sb.Append(c);
         }
-        var s = sb.ToString();
-        switch (s.Length % 4)
+        switch (sb.Length % 4)
         {
-            case 2: s += "=="; break;
-            case 3: s += "="; break;
+            case 1: sb.Length--; break; // One trailing sextet cannot form a byte.
+            case 2: sb.Append("=="); break;
+            case 3: sb.Append('='); break;
         }
-        return Convert.FromBase64String(s);
+        return Convert.FromBase64String(sb.ToString());
     }
 
     /// <summary>Decodes complete byte pairs up to the first non-hex digit.</summary>

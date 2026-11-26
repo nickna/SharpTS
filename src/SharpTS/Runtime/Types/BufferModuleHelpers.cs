@@ -1,3 +1,5 @@
+using System.Text;
+
 namespace SharpTS.Runtime.Types;
 
 /// <summary>
@@ -21,12 +23,23 @@ public static class BufferModuleHelpers
 
     /// <summary>
     /// atob(data): decodes a base64 string to a Latin-1 "binary string" (each output
-    /// char is one decoded byte), matching the WHATWG/Node global. Composed from
-    /// <see cref="BufferEncoding"/> so it is byte-identical to the compiled twin
-    /// (Buffer.from(data,'base64').toString('latin1')).
+    /// char is one decoded byte). Malformed input is checked by Convert.
     /// </summary>
     public static string Atob(string data)
-        => BufferEncoding.Decode(BufferEncoding.Encode(data, "base64"), "latin1");
+    {
+        var normalized = new StringBuilder(data.Length);
+        foreach (var c in data)
+        {
+            if (char.IsWhiteSpace(c)) continue;
+            normalized.Append(c switch { '-' => '+', '_' => '/', _ => c });
+        }
+        switch (normalized.Length % 4)
+        {
+            case 2: normalized.Append("=="); break;
+            case 3: normalized.Append('='); break;
+        }
+        return Encoding.Latin1.GetString(Convert.FromBase64String(normalized.ToString()));
+    }
 
     /// <summary>
     /// btoa(data): encodes a Latin-1 "binary string" to base64. Composed from

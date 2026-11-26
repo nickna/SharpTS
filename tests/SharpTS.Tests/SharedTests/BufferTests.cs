@@ -81,6 +81,25 @@ public class BufferTests
     }
 
     [Theory, ModeData]
+    public void Buffer_FromDecodesBase64Permissively(ExecutionMode mode)
+    {
+        const string source = """
+            for (const encoding of ['BaSe64', 'base64url']) {
+                for (const text of ['Y!WJj', 'Y W\tJ\nj', 'YQ', 'YWI', 'YQ==Yg==', 'YWJjA',
+                                    'Y', '!@#', '', '+///', '-___', '\u0159WJj', 'YQ\u013dYg', 'Y\ud83d\ude00WJj']) {
+                    const bytes = Buffer.from(text, encoding);
+                    console.log(bytes.length + ':' + bytes.toString('hex'));
+                }
+            }
+            try { atob('Y!WJj'); console.log('accepted'); }
+            catch { console.log('rejected'); }
+            """;
+        const string decoded = "3:616263\n3:616263\n1:61\n2:6162\n1:61\n3:616263\n" +
+                               "0:\n0:\n0:\n3:fbffff\n3:fbffff\n3:616263\n1:61\n0:\n";
+        Assert.Equal(decoded + decoded + "rejected\n", TestHarness.Run(source, mode));
+    }
+
+    [Theory, ModeData]
     public void Buffer_FromHexKeepsCompletePairsBeforeTheFirstInvalidDigit(ExecutionMode mode)
     {
         const string source = """
