@@ -112,7 +112,10 @@ public class GlobalThisTests
             console.log(parseFloat('7'));
             root.parseFloat = replacement;
             console.log(parseFloat(8), Number.parseFloat('8.5'));
-            function* read() { return parseFloat(yield 'waiting'); }
+            function* read() {
+                let value;
+                return parseFloat(([value = yield 'waiting'] = [], value));
+            }
             const call = read();
             console.log(call.next().value);
             root.parseFloat = original;

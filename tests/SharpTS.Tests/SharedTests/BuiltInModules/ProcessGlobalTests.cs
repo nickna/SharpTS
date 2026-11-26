@@ -162,7 +162,10 @@ public class ProcessGlobalTests
             function restore() { console.log('arg'); globalThis.process = original; return [-44]; }
             console.log(process.memoryUsage(...restore()).rss);
             globalThis.process = replacement;
-            function* read() { return process.memoryUsage(yield 'waiting').rss; }
+            function* read() {
+                let value;
+                return process.memoryUsage(([value = yield 'waiting'] = [], value)).rss;
+            }
             const call = read();
             console.log(call.next().value);
             globalThis.process = original;
