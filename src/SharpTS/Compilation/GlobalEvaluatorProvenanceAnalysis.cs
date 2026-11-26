@@ -6,14 +6,17 @@ namespace SharpTS.Compilation;
 
 internal static class GlobalEvaluatorProvenanceAnalysis
 {
-    internal static bool RequiresRuntime(List<Stmt> statements, TypeMap? types)
+    internal static bool RequiresRuntime(List<Stmt> statements, TypeMap? types) =>
+        ReadsGlobalProperty(statements, types, "eval", computedOnly: false);
+
+    internal static bool ReadsGlobalProperty(List<Stmt> statements, TypeMap? types, string name, bool computedOnly)
     {
         if (types is null) return false;
         bool module = statements.Any(statement => statement is Stmt.Import or Stmt.Export);
         bool strict = DirectivePrologue.HasUseStrict(statements) || module;
         var collector = new Collector(types, strict, !module);
         foreach (var statement in statements) collector.Visit(statement);
-        return collector.RequiresRuntime();
+        return collector.ReadsProperty(name, computedOnly);
     }
 
     private static Expr Unwrap(Expr value) => value switch
@@ -27,7 +30,13 @@ internal static class GlobalEvaluatorProvenanceAnalysis
     };
 
     internal static bool CouldBeEvalKey(Expr value, TypeMap? types) =>
-        ConstantPrimitive(value, types, depth: 0) is null or "eval";
+        CouldBePropertyKey(value, types, "eval");
+
+    internal static bool CouldBePropertyKey(Expr value, TypeMap? types, string name)
+    {
+        var constant = ConstantPrimitive(value, types, depth: 0);
+        return constant is null || constant is string text && text == name;
+    }
 
     private static object? ConstantPrimitive(Expr expression, TypeMap? types, int depth)
     {
@@ -76,7 +85,7 @@ internal static class GlobalEvaluatorProvenanceAnalysis
         private bool _strict = strictRoot;
         private bool _thisIsGlobal = rootThisIsGlobal;
 
-        internal bool RequiresRuntime()
+        internal bool ReadsProperty(string name, bool computedOnly)
         {
             // Binding identities keep unrelated shadows and ordinary any-valued objects
             // outside this provenance. Monotone propagation also covers alias chains.
@@ -90,8 +99,9 @@ internal static class GlobalEvaluatorProvenanceAnalysis
                     if (IsGlobal(value)) changed |= _globals.Add(binding);
                 }
             } while (changed);
-            return _reads.Any(read => IsGlobal(read.Receiver) &&
-                (read.Name == "eval" || read.Index is not null && CouldBeEvalKey(read.Index, types)));
+            return _reads.Any(read => IsGlobal(read.Receiver) && (read.Index is { } index
+                ? CouldBePropertyKey(index, types, name)
+                : !computedOnly && read.Name == name));
         }
 
         private bool IsReceiverFunction(Expr value) => Unwrap(value) is Expr.Variable variable &&

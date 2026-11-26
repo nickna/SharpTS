@@ -13571,6 +13571,36 @@ public partial class StandaloneDllTests
             const I=Intl;const value=new I.NumberFormat('en-US',{useGrouping:false});console.log(value.format(1234.5));
             """,
             "1234.5\n", "main.cjs", false
+        },
+        new object[]
+        {
+            """
+            const key = 'Intl';
+            console.log(typeof globalThis[key], typeof globalThis[key].NumberFormat);
+            """,
+            "object function\n", "main.js", true
+        },
+        new object[]
+        {
+            """
+            const root = globalThis;
+            const key = ['In', 'tl'].join('');
+            const intl = root[key];
+            console.log(new intl.NumberFormat('en-US', { useGrouping: false }).format(1234.5));
+            """,
+            "1234.5\n", "main.js", false
+        },
+        new object[]
+        {
+            """
+            function read(key) {
+                const alias = root;
+                return alias[key];
+            }
+            const root = globalThis;
+            console.log(typeof read('Intl'));
+            """,
+            "object\n", "main.js", true
         }
     ];
 
@@ -13585,6 +13615,10 @@ public partial class StandaloneDllTests
         var compile = IntegrationTests.CliTestHelper.RunCli(
             $"--no-tsconfig --compile \"{tempDir.GetPath(entryPoint)}\" -o \"{dllPath}\" --verify{deployment}", tempDir.Path);
         Assert.True(compile.ExitCode == 0, compile.StandardOutput + compile.StandardError);
+        Assert.Contains("IL verification passed.", compile.StandardOutput);
+        if (standalone)
+            Assert.Matches(@"features needing the SharpTS runtime \([^)]*\bIntl\b[^)]*\)",
+                compile.StandardOutput + compile.StandardError);
         Assert.DoesNotContain("SharpTS", GetAssemblyReferences(dllPath));
         // Intl constructors use the late-bound runtime; namespace reads alone work without it.
         Assert.Equal(!standalone, File.Exists(tempDir.GetPath("SharpTS.dll")));

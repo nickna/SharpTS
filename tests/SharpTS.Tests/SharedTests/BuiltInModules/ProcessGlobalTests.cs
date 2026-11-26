@@ -147,6 +147,36 @@ public class ProcessGlobalTests
     }
 
     [Theory, ModeData]
+    public void Process_MemoryUsageUsesTheLiveReceiverBeforeArguments(ExecutionMode mode)
+    {
+        const string source = """
+            const original = process;
+            const replacement = {
+                get memoryUsage() {
+                    console.log('get');
+                    return function (rss) { return { rss: this === replacement ? rss : -1 }; };
+                }
+            };
+            globalThis.process = replacement;
+            console.log(process.memoryUsage(-42).rss, globalThis.process.memoryUsage(-43).rss);
+            function restore() { console.log('arg'); globalThis.process = original; return [-44]; }
+            console.log(process.memoryUsage(...restore()).rss);
+            globalThis.process = replacement;
+            function* read() {
+                let value;
+                return process.memoryUsage(([value = yield 'waiting'] = [], value)).rss;
+            }
+            const call = read();
+            console.log(call.next().value);
+            globalThis.process = original;
+            console.log(call.next(-45).value);
+            console.log(process.memoryUsage().rss > 0, process.memoryUsage.rss() > 0);
+            """;
+        Assert.Equal("get\nget\n-42 -43\nget\narg\n-44\nget\nwaiting\n-45\ntrue true\n",
+            TestHarness.RunUnchecked(source, mode));
+    }
+
+    [Theory, ModeData]
     public void Process_Env_ReturnsEnvObject(ExecutionMode mode)
     {
         var source = """

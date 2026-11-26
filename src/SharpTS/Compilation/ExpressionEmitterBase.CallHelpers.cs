@@ -50,7 +50,7 @@ public abstract partial class ExpressionEmitterBase
             return;
         }
 
-        // Handler chain covers: console methods, fetch, parseInt/parseFloat/isNaN/isFinite,
+        // Handler chain covers: console methods, fetch, parseInt/isNaN/isFinite,
         // setTimeout/clearTimeout/setInterval/clearInterval/queueMicrotask, Symbol/BigInt/Date/Error,
         // Date.now(), Math/JSON/Object/Array/Number/Promise/Symbol statics, built-in module methods,
         // __objectRest
@@ -1717,19 +1717,12 @@ public abstract partial class ExpressionEmitterBase
         LocalBuilder calleeLocal;
         var callReference = UnwrapCallReference(c.Callee);
 
-        // #923: a direct method-style value-call `o.m(...)` must bind `this` to the receiver. The
-        // generic value-call below passes a null receiver (correct for a detached call like `f()`),
-        // which drops `this` — wrong for object-literal methods and the lifted generator /
-        // async-generator stubs that read `this` via the `_currentFunctionThis` thread-local
-        // InvokeWithThis sets (#775). The synchronous ILEmitter handles Expr.Get callees in its own
-        // EmitMethodCall, which threads the receiver; this base path is taken by the four
-        // state-machine emitters (async fn / async arrow / async gen / sync gen), so they need the
-        // same. Restrict to a non-optional Expr.Get whose receiver carries no TypeEmitter strategy —
-        // exactly the case EmitGet itself resolves through the plain dynamic GetProperty fallback
-        // (ExpressionEmitterBase.EmitGet) — so the resolved callee value is identical to today while
-        // the receiver is now preserved. Strategy-resolved callees, detached `f()` (Expr.Variable),
-        // and `arr[i]()` (Expr.Index) keep the null-receiver path below.
+        // Member references bind `this` to their receiver. Synchronous dot-method calls
+        // also have a dedicated EmitMethodCall path. A dot getter backed by a type
+        // strategy keeps its existing value-call behavior.
         LocalBuilder? receiverLocal = null;
+        // Lowered arguments can clear ordinary spills at a statement boundary before suspending.
+        // Keep the call reference live until invocation.
         if (callReference is Expr.Get methodGet && !ReceiverHasGetStrategy(methodGet))
         {
             // Evaluate the receiver once, spill it (a MoveNext re-entry from a suspending argument
@@ -1738,9 +1731,9 @@ public abstract partial class ExpressionEmitterBase
             // the method off the same receiver and pass it through to InvokeMethodValue below.
             EmitExpression(methodGet.Object);
             EnsureBoxed();
-            receiverLocal = _helpers.SpillStoreObject();
+            receiverLocal = _helpers.SpillStoreObject(retainAcrossStatements: true);
             IL.Emit(OpCodes.Ldsfld, Ctx.Runtime!.Sentinels.UndefinedInstance);
-            calleeLocal = _helpers.SpillStoreObject();
+            calleeLocal = _helpers.SpillStoreObject(retainAcrossStatements: true);
             Label? skippedRead = null;
             if (methodGet.Optional || HasOptionalLink(methodGet.Object))
             {
@@ -1768,9 +1761,9 @@ public abstract partial class ExpressionEmitterBase
             // example false["toString"]() and "x"["charAt"]()).
             EmitExpression(methodIndex.Object);
             EnsureBoxed();
-            receiverLocal = _helpers.SpillStoreObject();
+            receiverLocal = _helpers.SpillStoreObject(retainAcrossStatements: true);
             IL.Emit(OpCodes.Ldsfld, Ctx.Runtime!.Sentinels.UndefinedInstance);
-            calleeLocal = _helpers.SpillStoreObject();
+            calleeLocal = _helpers.SpillStoreObject(retainAcrossStatements: true);
             Label? skippedRead = null;
             if (methodIndex.Optional || HasOptionalLink(methodIndex.Object))
             {
@@ -1798,7 +1791,7 @@ public abstract partial class ExpressionEmitterBase
             // Store callee in temp (await-safe)
             EmitExpression(c.Callee);
             EnsureBoxed();
-            calleeLocal = _helpers.SpillStoreObject();
+            calleeLocal = _helpers.SpillStoreObject(retainAcrossStatements: true);
         }
 
         // Optional link in the callee chain (a?.[0](), (x?.f)()): a nullish
@@ -1839,6 +1832,9 @@ public abstract partial class ExpressionEmitterBase
             IL.Emit(OpCodes.Call, Ctx.Runtime!.Invocation.Method);
             SetStackUnknown();
         });
+        _helpers.ReleaseSpill(calleeLocal);
+        if (receiverLocal != null)
+            _helpers.ReleaseSpill(receiverLocal);
 
         if (optChainNullishLabel != null)
         {
@@ -1868,7 +1864,7 @@ public abstract partial class ExpressionEmitterBase
         // These Buffer methods use ordinary lookup and retain the receiver across argument suspension.
         if (obj is Expr.Variable { Name.Lexeme: "Buffer" } && member.Name.Lexeme is "from" or "alloc")
             return false;
-        if (obj is Expr.Variable { Name.Lexeme: "process" } && member.Name.Lexeme is "cwd" or "uptime")
+        if (obj is Expr.Variable { Name.Lexeme: "process" } && member.Name.Lexeme is "cwd" or "uptime" or "memoryUsage")
             return false;
         if (obj is Expr.Variable { Name.Lexeme: "globalThis" or "global" } && member.Name.Lexeme == "parseFloat")
             return false;

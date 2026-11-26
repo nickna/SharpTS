@@ -89,6 +89,47 @@ public class GlobalThisTests
     }
 
     [Theory, ModeData]
+    public void GlobalThis_BareParseFloatReadsTheLiveBindingBeforeArguments(ExecutionMode mode)
+    {
+        const string source = """
+            const root = globalThis;
+            const original = root.parseFloat;
+            console.log(parseFloat('5.5'), parseFloat === Number.parseFloat);
+            const replacement = function (value) {
+                "use strict";
+                return this === undefined ? value : -1;
+            };
+            Object.defineProperty(root, 'parseFloat', {
+                configurable: true,
+                get() { console.log('get'); return replacement; }
+            });
+            function restore() {
+                console.log('arg');
+                Object.defineProperty(root, 'parseFloat', { value: original, writable: true });
+                return [42];
+            }
+            console.log(parseFloat(...restore()));
+            console.log(parseFloat('7'));
+            root.parseFloat = replacement;
+            console.log(parseFloat(8), Number.parseFloat('8.5'));
+            function* read() {
+                let value;
+                return parseFloat(([value = yield 'waiting'] = [], value));
+            }
+            const call = read();
+            console.log(call.next().value);
+            root.parseFloat = original;
+            console.log(call.next(9).value);
+            delete root.parseFloat;
+            console.log(typeof parseFloat);
+            try { parseFloat('5'); } catch (error) { console.log(error.name); }
+            root.parseFloat = original;
+            """;
+        Assert.Equal("5.5 true\nget\narg\n42\n7\n8 8.5\nwaiting\n9\nundefined\nReferenceError\n",
+            TestHarness.RunUnchecked(source, mode));
+    }
+
+    [Theory, ModeData]
     public void GlobalThis_AssignmentPreservesReadOnlyConstants(ExecutionMode mode)
     {
         const string source = """

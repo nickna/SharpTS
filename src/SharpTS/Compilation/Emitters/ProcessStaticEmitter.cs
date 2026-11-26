@@ -57,10 +57,6 @@ public sealed class ProcessStaticEmitter : IStaticTypeEmitterStrategy
                 EmitHrtime(emitter, arguments);
                 return true;
 
-            case "memoryUsage":
-                EmitMemoryUsage(emitter);
-                return true;
-
             case "nextTick":
                 EmitNextTick(emitter, arguments);
                 return true;
@@ -178,19 +174,6 @@ public sealed class ProcessStaticEmitter : IStaticTypeEmitterStrategy
             il.Emit(OpCodes.Ldnull);
         }
         il.Emit(OpCodes.Call, ctx.Runtime!.Process.Hrtime);
-    }
-
-    /// <summary>
-    /// Emits IL for process.memoryUsage().
-    /// Returns an object with memory usage information.
-    /// </summary>
-    private static void EmitMemoryUsage(IEmitterContext emitter)
-    {
-        var ctx = emitter.Context;
-        var il = ctx.IL;
-
-        // Call runtime helper
-        il.Emit(OpCodes.Call, ctx.Runtime!.Process.MemoryUsage);
     }
 
     /// <summary>

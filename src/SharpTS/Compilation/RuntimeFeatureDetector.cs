@@ -71,6 +71,8 @@ public sealed partial class RuntimeFeatureDetector
     private readonly Dictionary<string, JsonSerializationShape.Record> _canonicalCompactRecordShapes = [];
     private TypeMap? _typeMap;
     private int _dateConstructorReceiverReads;
+    private bool _hasPossibleGlobalObjectSource;
+    private bool _hasComputedIntlCandidate;
 
     public RuntimeFeatureDetector() : this(nativeClassBodiesOnly: false) { }
 
@@ -170,6 +172,12 @@ public sealed partial class RuntimeFeatureDetector
         CollectCanonicalCompactRecordShapes(statements);
         foreach (var stmt in statements)
             VisitStmt(stmt);
+        if (!_set.UsesIntl && _hasPossibleGlobalObjectSource && _hasComputedIntlCandidate)
+        {
+            // Resolve global receivers and captured aliases using binding identities.
+            _set.UsesIntl = GlobalEvaluatorProvenanceAnalysis.ReadsGlobalProperty(
+                statements, typeMap, "Intl", computedOnly: true);
+        }
         ExpandStructuralMaterializationShapes();
         StableCompactRecordLocalAnalyzer.Analyze(statements, typeMap, _set);
         LocalRecordArrayAnalyzer.Analyze(statements, typeMap, _set);
@@ -665,6 +673,7 @@ public sealed partial class RuntimeFeatureDetector
             // valve; the fine-grained ones still get set by their own triggers.
             case "globalThis":
             case "global":
+                _hasPossibleGlobalObjectSource = true;
                 _set.UsesConsoleObject = true;
                 _set.UsesStructuredClone = true;
                 _set.UsesTimerFunctionValues = true;
@@ -1024,6 +1033,7 @@ public sealed partial class RuntimeFeatureDetector
                 break;
 
             case Expr.This:
+                _hasPossibleGlobalObjectSource = true;
                 _set.UsesArrayMethodValues = true;
                 _set.UsesObjectDefinitionRuntime = true;
                 // Script `this` can expose the global Array constructor to a
@@ -1258,6 +1268,14 @@ public sealed partial class RuntimeFeatureDetector
                     // `this["Date"]`, is semantically the same feature trigger
                     // as the corresponding named member access.
                     HandleIdentifier(computedGlobalName);
+                }
+                else if (gi.Index is not Expr.Literal && !_set.UsesIntl && !_hasComputedIntlCandidate
+                    && GlobalEvaluatorProvenanceAnalysis.CouldBePropertyKey(gi.Index, _typeMap, "Intl"))
+                {
+                    if (_typeMap is not null)
+                        _hasComputedIntlCandidate = true;
+                    else
+                        _set.UsesIntl = IsGlobalObject(gi.Object);
                 }
                 if (gi.Object is Expr.Variable indexedDescriptorOwner
                     && indexedDescriptorOwner.Name.Lexeme is "Object" or "Reflect")

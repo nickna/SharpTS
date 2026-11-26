@@ -35,7 +35,6 @@ public class GlobalFunctionHandler : ICallHandler
         {
             "eval" => EmitEval(emitter, il, ctx, call),
             "parseInt" => EmitParseInt(emitter, il, ctx, call),
-            "parseFloat" => EmitParseFloat(emitter, il, ctx, call),
             "isNaN" => EmitIsNaN(emitter, il, ctx, call),
             "isFinite" => EmitIsFinite(emitter, il, ctx, call),
             "String" => EmitStringConversion(emitter, il, ctx, call),
@@ -281,14 +280,6 @@ public class GlobalFunctionHandler : ICallHandler
         TypeInfo.Union union => union.Types.Count > 0 && union.Types.All(IsStaticallyString),
         _ => false
     };
-
-    private static bool EmitParseFloat(IEmitterContext emitter, System.Reflection.Emit.ILGenerator il, CompilationContext ctx, Expr.Call call)
-    {
-        if (call.Arguments.Count > 0) { emitter.EmitExpression(call.Arguments[0]); emitter.EmitBoxIfNeeded(call.Arguments[0]); } else { il.Emit(System.Reflection.Emit.OpCodes.Ldnull); }
-        il.Emit(System.Reflection.Emit.OpCodes.Call, ctx.Runtime!.Numbers.ParseFloat);
-        emitter.SetStackType(StackType.Double);
-        return true;
-    }
 
     private static bool EmitIsNaN(IEmitterContext emitter, System.Reflection.Emit.ILGenerator il, CompilationContext ctx, Expr.Call call)
     {

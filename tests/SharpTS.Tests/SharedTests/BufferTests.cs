@@ -64,6 +64,21 @@ public class BufferTests
     }
 
     [Theory, ModeData]
+    public void Buffer_FromHexKeepsCompletePairsBeforeTheFirstInvalidDigit(ExecutionMode mode)
+    {
+        const string source = """
+            const from = Buffer.from;
+            for (const text of ['616', 'aB09', '61x262', '61 62', '6a-62', '6', 'x161', '']) {
+                const bytes = from(text, 'HEX');
+                console.log(bytes.length + ':' + bytes.toString('hex'));
+            }
+            console.log(Buffer.alloc(3, '616', 'hex').toString('hex'));
+            """;
+        Assert.Equal("1:61\n2:ab09\n1:61\n1:61\n1:6a\n0:\n0:\n0:\n616161\n",
+            TestHarness.Run(source, mode));
+    }
+
+    [Theory, ModeData]
     public void Buffer_Alloc_Works(ExecutionMode mode)
     {
         var source = """
