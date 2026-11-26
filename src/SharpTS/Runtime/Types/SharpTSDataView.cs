@@ -434,5 +434,7 @@ public class SharpTSDataView : ITypeCategorized
 
     #endregion
 
-    public override string ToString() => $"DataView {{ byteLength: {ByteLength}, byteOffset: {ByteOffset} }}";
+    public override string ToString() => _arrayBuffer?.IsDetached == true
+        ? "DataView { detached }"
+        : $"DataView {{ byteLength: {_byteLength}, byteOffset: {_byteOffset} }}";
 }

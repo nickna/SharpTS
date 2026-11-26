@@ -136,11 +136,13 @@ public class BufferTests
     public void Buffer_ByteLengthAcceptsStandardLibraryBinaryTypes(ExecutionMode mode)
     {
         const string source = """
-            import { Buffer } from 'node:buffer';
+            import { Buffer as ImportedBuffer } from 'node:buffer';
             function measure(buffer: ArrayBuffer, shared: SharedArrayBuffer, words: Uint16Array, view: DataView): number {
-                return Buffer.byteLength(buffer) + Buffer.byteLength(shared) + Buffer.byteLength(words) + Buffer.byteLength(view);
+                return ImportedBuffer.byteLength(buffer) + ImportedBuffer.byteLength(shared)
+                     + ImportedBuffer.byteLength(words) + ImportedBuffer.byteLength(view);
             }
-            console.log(Buffer.byteLength(new Uint16Array(3)), Buffer.byteLength(new DataView(new ArrayBuffer(2))));
+            console.log(ImportedBuffer.byteLength(new Uint16Array(3)),
+                        ImportedBuffer.byteLength(new DataView(new ArrayBuffer(2))));
             """;
         var options = TypeScriptProgramOptions.Default with { Lib = ["lib.es2022.d.ts", "lib.dom.d.ts"] };
         Assert.Equal("6 2\n", TestHarness.RunWithLibraries(source, mode, options));
@@ -164,6 +166,32 @@ public class BufferTests
             }
             """;
         Assert.Equal("8 6 2\n0 0\ntrue\ntrue\n", TestHarness.RunUnchecked(source, mode));
+    }
+
+    [Theory]
+    [InlineData(true)]
+    [InlineData(false)]
+    public void Buffer_ByteLengthDistinguishesSameShapedBinaryDeclarations(bool libraryFirst)
+    {
+        const string declarations = """
+            import { Buffer as ImportedBuffer } from 'node:buffer';
+            namespace Local {
+                export interface ArrayBuffer {
+                    readonly byteLength: number;
+                    slice(begin?: number, end?: number): ArrayBuffer;
+                }
+            }
+            """;
+        const string library = "function library(value: ArrayBuffer) { return ImportedBuffer.byteLength(value); }";
+        const string local = "function local(value: Local.ArrayBuffer) { return ImportedBuffer.byteLength(value); }";
+        string source = declarations + "\n" + (libraryFirst ? library + "\n" + local : local + "\n" + library);
+        var options = TypeScriptProgramOptions.Default with { Lib = ["lib.es5.d.ts"] };
+
+        var error = Assert.Throws<TypeCheckDiagnosticException>(() =>
+            TestHarness.RunWithLibraries(source, ExecutionMode.Interpreted, options));
+        var diagnostic = Assert.Single(error.Diagnostics);
+        Assert.Equal("TS2345", diagnostic.TsCode);
+        Assert.Equal(libraryFirst ? 9 : 8, diagnostic.Line);
     }
 
     [Theory, ModeData]

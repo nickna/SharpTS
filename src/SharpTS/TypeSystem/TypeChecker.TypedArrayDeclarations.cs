@@ -34,6 +34,11 @@ public partial class TypeChecker
             RefreshCompletedInterfaceBinding(declaration));
     }
 
+    private static bool IsIntrinsicBinaryDeclarationPair(TypeInfo expected, TypeInfo actual) =>
+        expected is TypeInfo.ArrayBuffer or TypeInfo.SharedArrayBuffer or TypeInfo.DataView or TypeInfo.TypedArray
+        && actual is TypeInfo.Interface or TypeInfo.GenericInterface
+            or TypeInfo.InstantiatedGeneric { GenericDefinition: TypeInfo.GenericInterface };
+
     private bool TryGetDeclaredTypedArrayView(TypeInfo receiver, out TypeInfo.Interface view)
     {
         receiver = RefreshCompletedInterfaceBinding(receiver);
