@@ -21,24 +21,21 @@ public static class BufferModuleHelpers
     public const double MaxStringLength = 536870888.0;  // buffer.constants.MAX_STRING_LENGTH / kStringMaxLength
     public const double InspectMaxBytes = 50.0;         // buffer.INSPECT_MAX_BYTES default
 
-    /// <summary>
-    /// atob(data): decodes a base64 string to a Latin-1 "binary string" (each output
-    /// char is one decoded byte). Malformed input is checked by Convert.
-    /// </summary>
+    internal const string AtobWhitespace = " \t\n\f\r";
+
+    /// <summary>Decodes forgiving Base64 into a Latin-1 binary string.</summary>
     public static string Atob(string data)
     {
-        var normalized = new StringBuilder(data.Length);
-        foreach (var c in data)
-        {
-            if (char.IsWhiteSpace(c)) continue;
-            normalized.Append(c switch { '-' => '+', '_' => '/', _ => c });
-        }
-        switch (normalized.Length % 4)
-        {
-            case 2: normalized.Append("=="); break;
-            case 3: normalized.Append('='); break;
-        }
-        return Encoding.Latin1.GetString(Convert.FromBase64String(normalized.ToString()));
+        foreach (var whitespace in AtobWhitespace)
+            data = data.Replace(whitespace.ToString(), "");
+
+        // Convert validates the standard alphabet and padding. Supply missing padding only
+        // for unpadded input with two or three characters in its last group.
+        int remainder = data.Length % 4;
+        if (remainder >= 2 && !data.Contains('='))
+            data = data.PadRight(data.Length + 4 - remainder, '=');
+
+        return Encoding.Latin1.GetString(Convert.FromBase64String(data));
     }
 
     /// <summary>

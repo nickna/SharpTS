@@ -1347,6 +1347,27 @@ public class BufferTests
     }
 
     [Theory, ModeData]
+    public void BufferModule_AtobUsesForgivingBase64(ExecutionMode mode)
+    {
+        const string source = """
+            import { atob as moduleAtob } from 'node:buffer';
+            for (const decode of [(text: string) => moduleAtob(text), (text: string) => atob(text)]) {
+                for (const text of ['YQ', 'YWI', '+///', 'Y R\t\r\n\f', 'YQ= =\f', ' \t\r\n\f']) {
+                    console.log('hex:' + Buffer.from(decode(text), 'latin1').toString('hex'));
+                }
+                for (const text of ['YQ-_', '-___', 'YQ=', 'YQ===', 'YQ==Yg==', 'Y', 'YQ\v', 'YQ\u00a0']) {
+                    try { decode(text); console.log('accepted'); }
+                    catch { console.log('rejected'); }
+                }
+            }
+            """;
+        const string decoded = "hex:61\nhex:6162\nhex:fbffff\nhex:61\nhex:61\nhex:\n";
+        const string rejected = "rejected\nrejected\nrejected\nrejected\nrejected\nrejected\nrejected\nrejected\n";
+        var files = new Dictionary<string, string> { ["main.ts"] = source };
+        Assert.Equal(decoded + rejected + decoded + rejected, TestHarness.RunModules(files, "main.ts", mode));
+    }
+
+    [Theory, ModeData]
     public void BufferModule_GlobalAtobBtoa(ExecutionMode mode)
     {
         // atob/btoa are also globals (no import).

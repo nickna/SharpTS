@@ -1,4 +1,5 @@
 using System.Reflection.Emit;
+using SharpTS.Runtime.Types;
 
 namespace SharpTS.Compilation;
 
@@ -244,16 +245,51 @@ public partial class RuntimeEmitter
 
     private void EmitBufferAtobBtoa(TypeBuilder typeBuilder, EmittedBufferRuntime buffer)
     {
-        // Retain atob's validation independently of permissive Buffer decoding.
+        // Mirror BufferModuleHelpers.Atob with BCL calls in the standalone runtime.
         var atob = typeBuilder.DefineMethod(
             "BufferAtob",
             System.Reflection.MethodAttributes.Public | System.Reflection.MethodAttributes.Static,
             _types.String, [_types.Object]);
         buffer.Atob = atob;
         var ail = atob.GetILGenerator();
-        ail.Emit(OpCodes.Call, _types.GetProperty(_types.Encoding, "Latin1")!.GetGetMethod()!);
+        var data = ail.DeclareLocal(_types.String);
+        var remainder = ail.DeclareLocal(_types.Int32);
+        var decode = ail.DefineLabel();
+        var length = _types.GetProperty(_types.String, nameof(string.Length))!.GetGetMethod()!;
+
         ail.Emit(OpCodes.Ldarg_0);
         ail.Emit(OpCodes.Call, buffer.CoerceString);
+        foreach (var whitespace in BufferModuleHelpers.AtobWhitespace)
+            EmitStringReplace(ail, whitespace.ToString(), "");
+        ail.Emit(OpCodes.Stloc, data);
+
+        ail.Emit(OpCodes.Ldloc, data);
+        ail.Emit(OpCodes.Callvirt, length);
+        ail.Emit(OpCodes.Ldc_I4_4);
+        ail.Emit(OpCodes.Rem);
+        ail.Emit(OpCodes.Stloc, remainder);
+        ail.Emit(OpCodes.Ldloc, remainder);
+        ail.Emit(OpCodes.Ldc_I4_2);
+        ail.Emit(OpCodes.Blt, decode);
+        ail.Emit(OpCodes.Ldloc, data);
+        ail.Emit(OpCodes.Ldc_I4, (int)'=');
+        ail.Emit(OpCodes.Callvirt, _types.GetMethod(_types.String, nameof(string.Contains), _types.Char));
+        ail.Emit(OpCodes.Brtrue, decode);
+
+        ail.Emit(OpCodes.Ldloc, data);
+        ail.Emit(OpCodes.Ldloc, data);
+        ail.Emit(OpCodes.Callvirt, length);
+        ail.Emit(OpCodes.Ldc_I4_4);
+        ail.Emit(OpCodes.Add);
+        ail.Emit(OpCodes.Ldloc, remainder);
+        ail.Emit(OpCodes.Sub);
+        ail.Emit(OpCodes.Ldc_I4, (int)'=');
+        ail.Emit(OpCodes.Callvirt, _types.GetMethod(_types.String, nameof(string.PadRight), _types.Int32, _types.Char));
+        ail.Emit(OpCodes.Stloc, data);
+
+        ail.MarkLabel(decode);
+        ail.Emit(OpCodes.Call, _types.GetProperty(_types.Encoding, "Latin1")!.GetGetMethod()!);
+        ail.Emit(OpCodes.Ldloc, data);
         ail.Emit(OpCodes.Call, _types.ConvertFromBase64String);
         ail.Emit(OpCodes.Callvirt, _types.GetMethod(_types.Encoding, "GetString", _types.ByteArray));
         ail.Emit(OpCodes.Ret);
