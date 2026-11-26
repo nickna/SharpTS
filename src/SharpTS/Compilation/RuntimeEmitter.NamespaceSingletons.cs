@@ -8,19 +8,10 @@ public partial class RuntimeEmitter
     /// <summary>
     /// Value-position namespace singletons for AbortSignal and Intl (#224).
     ///
-    /// Direct forms (`AbortSignal.abort(x)`, `new Intl.NumberFormat(...)`) are
-    /// intercepted at compile time by AbortSignalStaticEmitter /
-    /// TryEmitIntlConstructor and never touch these. The singletons only
-    /// surface when the namespace is used as a VALUE — bare reference,
-    /// aliasing (`const I = Intl`), `typeof`, passing as an argument — the
-    /// same role MathSingletonField/JsonSingletonField play for Math/JSON.
-    /// Members are $TSFunction wrappers over the existing $Runtime helpers, so
-    /// aliased calls (`A.abort('r')`) and aliased construction
-    /// (`new I.NumberFormat(...)` via NewOnFunction + the IsConstructor
-    /// CreateIntl* exemption) reuse one implementation.
-    ///
-    /// Lazily populated: the populate shell is called before each bare-
-    /// reference load; the field doubles as the populated flag.
+    /// Members are $TSFunction wrappers over runtime helpers. Direct and
+    /// aliased Intl construction both resolve the factory through the namespace.
+    /// AbortSignal exposes the same helpers through its static emitter and its
+    /// namespace value.
     /// </summary>
     /// <summary>
     /// Pre-defines the namespace singleton fields so earlier $Runtime methods

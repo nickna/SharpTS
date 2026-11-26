@@ -96,7 +96,7 @@ public partial class ILEmitter
             return;
 
         // 2. Intl namespace constructors (Intl.NumberFormat, etc.) - handled by base
-        if (TryEmitIntlConstructor(namespaceParts, className, n.Arguments))
+        if (TryEmitIntlConstructor(namespaceParts, className, n))
             return;
 
         // 3. Module-qualified constructors (util.TextEncoder, etc.) - handled by base

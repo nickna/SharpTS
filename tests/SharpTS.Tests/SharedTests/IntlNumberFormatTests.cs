@@ -28,6 +28,32 @@ public class IntlNumberFormatTests
             TestHarness.RunUnchecked(source, mode));
     }
 
+    [Theory, ModeData]
+    public void Intl_ConstructionResolvesTheCurrentFactoryBeforeArguments(ExecutionMode mode)
+    {
+        const string source = """
+            const original = Intl;
+            console.log(new Intl.NumberFormat('en-US').format(1234));
+            const replacement = {
+                get NumberFormat() {
+                    console.log('get');
+                    return function (value) { this.marker = value; };
+                }
+            };
+            function restore() { console.log('arg'); globalThis.Intl = original; return ['value']; }
+            globalThis.Intl = replacement;
+            console.log(new Intl.NumberFormat(...restore()).marker);
+            globalThis.Intl = replacement;
+            function* construct() { return new Intl.NumberFormat(yield 'wait'); }
+            const call = construct();
+            console.log(call.next().value);
+            globalThis.Intl = original;
+            console.log(call.next('resumed').value.marker);
+            console.log(new Intl.NumberFormat('en-US').format(1234));
+            """;
+        Assert.Equal("1,234\nget\narg\nvalue\nget\nwait\nresumed\n1,234\n", TestHarness.RunUnchecked(source, mode));
+    }
+
     // ========== Basic Decimal Formatting ==========
 
     [Theory, ModeData]

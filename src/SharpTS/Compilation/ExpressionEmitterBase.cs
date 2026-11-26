@@ -2003,7 +2003,7 @@ public abstract partial class ExpressionEmitterBase : IEmitterContext
             && TryEmitBuiltInConstructor(className, n.Arguments))
             return;
 
-        if (TryEmitIntlConstructor(namespaceParts, className, n.Arguments))
+        if (TryEmitIntlConstructor(namespaceParts, className, n))
             return;
 
         if (TryEmitModuleQualifiedConstructor(namespaceParts, className, n.Arguments))
