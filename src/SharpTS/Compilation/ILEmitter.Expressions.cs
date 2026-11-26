@@ -235,9 +235,7 @@ public partial class ILEmitter
             return;
         }
 
-        // Other global functions routable through globalThis (they have fast-path call handlers
-        // but must ALSO be addressable as values — lodash caches them: `var freeParseFloat = parseFloat`
-        // then calls the alias later). Matches how `fetch` resolves the bare reference above.
+        // Resolve global function values before falling back to other name lookups.
         if (TryEmitIndirectEvalValue(name)) return;
         if (TryEmitGlobalFunctionBinding(name)) return;
         if (name == "parseInt" && !_ctx.HasVisibleValueBinding(name))
@@ -246,7 +244,7 @@ public partial class ILEmitter
             SetStackUnknown();
             return;
         }
-        if (name is "parseFloat" or "isNaN" or "isFinite" or "structuredClone")
+        if (name is "isNaN" or "isFinite" or "structuredClone")
         {
             IL.Emit(OpCodes.Ldstr, name);
             IL.Emit(OpCodes.Call, _ctx.Runtime!.GlobalObject.GetProperty);

@@ -50,7 +50,7 @@ public abstract partial class ExpressionEmitterBase
             return;
         }
 
-        // Handler chain covers: console methods, fetch, parseInt/parseFloat/isNaN/isFinite,
+        // Handler chain covers: console methods, fetch, parseInt/isNaN/isFinite,
         // setTimeout/clearTimeout/setInterval/clearInterval/queueMicrotask, Symbol/BigInt/Date/Error,
         // Date.now(), Math/JSON/Object/Array/Number/Promise/Symbol statics, built-in module methods,
         // __objectRest

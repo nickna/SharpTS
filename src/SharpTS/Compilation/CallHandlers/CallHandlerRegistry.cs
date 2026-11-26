@@ -32,7 +32,7 @@ public class CallHandlerRegistry
             new TimerHandler(),              // Priority 45 - setTimeout, clearTimeout
             new CookieJarHandler(),          // Priority 44 - fetch.cookieJar.{getCookies,setCookie,clear}
             new FetchHandler(),              // Priority 46 - fetch()
-            new GlobalFunctionHandler(),     // Priority 50 - parseInt, parseFloat, isNaN, isFinite
+            new GlobalFunctionHandler(),     // Priority 50 - parseInt, isNaN, isFinite
             new BuiltInConstructorHandler(), // Priority 60 - Symbol, BigInt, Date()
             new ImportedClassStaticHandler(),// Priority 72 - imported class statics
             new ClassExprStaticHandler(),    // Priority 74 - class expression statics
