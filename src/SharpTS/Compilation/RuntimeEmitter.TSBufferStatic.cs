@@ -169,11 +169,15 @@ public partial class RuntimeEmitter
         buffer.ByteLengthValue = method;
         var il = method.GetILGenerator();
         var text = il.DeclareLocal(_types.String);
+        var encoding = il.DeclareLocal(_types.String);
+        var length = il.DeclareLocal(_types.Int32);
         var notBuffer = il.DefineLabel();
         var isString = il.DefineLabel();
-        var emptyString = il.DefineLabel();
-        var defaultEncoding = il.DefineLabel();
-        var encode = il.DefineLabel();
+        var utf8 = il.DefineLabel();
+        var singleByte = il.DefineLabel();
+        var utf16le = il.DefineLabel();
+        var base64 = il.DefineLabel();
+        var hex = il.DefineLabel();
         var haveLength = il.DefineLabel();
 
         il.Emit(OpCodes.Ldarg_0);
@@ -195,31 +199,77 @@ public partial class RuntimeEmitter
         il.MarkLabel(isString);
         il.Emit(OpCodes.Ldloc, text);
         il.Emit(OpCodes.Callvirt, _types.GetProperty(_types.String, "Length")!.GetGetMethod()!);
-        il.Emit(OpCodes.Brfalse, emptyString);
-        il.Emit(OpCodes.Ldloc, text);
+        il.Emit(OpCodes.Stloc, length);
+        il.Emit(OpCodes.Ldloc, length);
+        il.Emit(OpCodes.Brfalse, singleByte);
         il.Emit(OpCodes.Ldarg_1);
         il.Emit(OpCodes.Call, runtime.Booleans.IsTruthy);
-        il.Emit(OpCodes.Brfalse, defaultEncoding);
+        il.Emit(OpCodes.Brfalse, utf8);
         // As in Node, encoding + "" uses default-hint primitive conversion.
         il.Emit(OpCodes.Ldarg_1);
         il.Emit(OpCodes.Ldstr, "");
         il.Emit(OpCodes.Call, runtime.Operators.Add);
         il.Emit(OpCodes.Castclass, _types.String);
-        il.Emit(OpCodes.Br, encode);
+        il.Emit(OpCodes.Callvirt, _types.GetMethod(_types.String, "ToLowerInvariant"));
+        il.Emit(OpCodes.Stloc, encoding);
+        EmitBufferEncodingChecks(il, encoding, (utf8, singleByte, singleByte, utf16le, base64, hex));
 
-        il.MarkLabel(defaultEncoding);
-        il.Emit(OpCodes.Ldnull);
-        il.MarkLabel(encode);
-        il.Emit(OpCodes.Call, buffer.FromString);
-        il.Emit(OpCodes.Callvirt, buffer.LengthGetter);
+        // Unknown encodings fall through to UTF-8.
+        il.MarkLabel(utf8);
+        il.Emit(OpCodes.Call, _types.GetProperty(_types.Encoding, "UTF8")!.GetGetMethod()!);
+        il.Emit(OpCodes.Ldloc, text);
+        il.Emit(OpCodes.Callvirt, _types.GetMethod(_types.Encoding, "GetByteCount", _types.String));
         il.Emit(OpCodes.Br, haveLength);
 
-        il.MarkLabel(emptyString);
-        il.Emit(OpCodes.Ldc_I4_0);
+        il.MarkLabel(utf16le);
+        il.Emit(OpCodes.Ldloc, length);
+        il.Emit(OpCodes.Ldc_I4_2);
+        il.Emit(OpCodes.Mul);
+        il.Emit(OpCodes.Br, haveLength);
+
+        il.MarkLabel(hex);
+        il.Emit(OpCodes.Ldloc, length);
+        il.Emit(OpCodes.Ldc_I4_2);
+        il.Emit(OpCodes.Div);
+        il.Emit(OpCodes.Br, haveLength);
+
+        il.MarkLabel(base64);
+        EmitTrimBase64Padding(0);
+        EmitTrimBase64Padding(1);
+        il.Emit(OpCodes.Ldloc, length);
+        il.Emit(OpCodes.Ldc_I4_3);
+        il.Emit(OpCodes.Mul);
+        il.Emit(OpCodes.Ldc_I4_2);
+        il.Emit(OpCodes.Shr_Un);
+        il.Emit(OpCodes.Br, haveLength);
+
+        il.MarkLabel(singleByte);
+        il.Emit(OpCodes.Ldloc, length);
         il.MarkLabel(haveLength);
         il.Emit(OpCodes.Conv_R8);
         il.Emit(OpCodes.Box, _types.Double);
         il.Emit(OpCodes.Ret);
+
+        // Mirrors BufferEncoding.GetBase64ByteLength's two padding checks.
+        void EmitTrimBase64Padding(int minimumLength)
+        {
+            var done = il.DefineLabel();
+            il.Emit(OpCodes.Ldloc, length);
+            il.Emit(OpCodes.Ldc_I4, minimumLength);
+            il.Emit(OpCodes.Ble, done);
+            il.Emit(OpCodes.Ldloc, text);
+            il.Emit(OpCodes.Ldloc, length);
+            il.Emit(OpCodes.Ldc_I4_1);
+            il.Emit(OpCodes.Sub);
+            il.Emit(OpCodes.Callvirt, _types.GetMethod(_types.String, "get_Chars", _types.Int32));
+            il.Emit(OpCodes.Ldc_I4, (int)'=');
+            il.Emit(OpCodes.Bne_Un, done);
+            il.Emit(OpCodes.Ldloc, length);
+            il.Emit(OpCodes.Ldc_I4_1);
+            il.Emit(OpCodes.Sub);
+            il.Emit(OpCodes.Stloc, length);
+            il.MarkLabel(done);
+        }
     }
 
     /// <summary>
@@ -280,19 +330,7 @@ public partial class RuntimeEmitter
         il.Emit(OpCodes.Callvirt, _types.GetMethod(_types.String, "ToLowerInvariant")!);
         il.Emit(OpCodes.Stloc, encodingLocal);
 
-        // Check encodings (must mirror Runtime/Types/BufferEncoding.Encode exactly).
-        CheckStringEquals(il, encodingLocal, "utf8", utf8Label);
-        CheckStringEquals(il, encodingLocal, "utf-8", utf8Label);
-        CheckStringEquals(il, encodingLocal, "ascii", asciiLabel);
-        CheckStringEquals(il, encodingLocal, "latin1", latin1Label);
-        CheckStringEquals(il, encodingLocal, "binary", latin1Label);
-        CheckStringEquals(il, encodingLocal, "utf16le", utf16leLabel);
-        CheckStringEquals(il, encodingLocal, "utf-16le", utf16leLabel);
-        CheckStringEquals(il, encodingLocal, "ucs2", utf16leLabel);
-        CheckStringEquals(il, encodingLocal, "ucs-2", utf16leLabel);
-        CheckStringEquals(il, encodingLocal, "base64", base64Label);
-        CheckStringEquals(il, encodingLocal, "base64url", base64Label);
-        CheckStringEquals(il, encodingLocal, "hex", hexLabel);
+        EmitBufferEncodingChecks(il, encodingLocal, (utf8Label, asciiLabel, latin1Label, utf16leLabel, base64Label, hexLabel));
         il.Emit(OpCodes.Ldarg_2);
         il.Emit(OpCodes.Brfalse, utf8Label);
         il.Emit(OpCodes.Ldstr, "Unknown encoding: ");
@@ -336,6 +374,24 @@ public partial class RuntimeEmitter
         EmitBufferHexBytes(il);
         il.Emit(OpCodes.Newobj, buffer.Ctor);
         il.Emit(OpCodes.Ret);
+    }
+
+    // Keep the aliases in sync with BufferEncoding.Normalize.
+    private void EmitBufferEncodingChecks(ILGenerator il, LocalBuilder encoding,
+        (Label Utf8, Label Ascii, Label Latin1, Label Utf16le, Label Base64, Label Hex) target)
+    {
+        CheckStringEquals(il, encoding, "utf8", target.Utf8);
+        CheckStringEquals(il, encoding, "utf-8", target.Utf8);
+        CheckStringEquals(il, encoding, "ascii", target.Ascii);
+        CheckStringEquals(il, encoding, "latin1", target.Latin1);
+        CheckStringEquals(il, encoding, "binary", target.Latin1);
+        CheckStringEquals(il, encoding, "utf16le", target.Utf16le);
+        CheckStringEquals(il, encoding, "utf-16le", target.Utf16le);
+        CheckStringEquals(il, encoding, "ucs2", target.Utf16le);
+        CheckStringEquals(il, encoding, "ucs-2", target.Utf16le);
+        CheckStringEquals(il, encoding, "base64", target.Base64);
+        CheckStringEquals(il, encoding, "base64url", target.Base64);
+        CheckStringEquals(il, encoding, "hex", target.Hex);
     }
 
     private void EmitBufferHexBytes(ILGenerator il)

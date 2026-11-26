@@ -54,6 +54,24 @@ public static class BufferEncoding
         }
     }
 
+    internal static int GetByteLength(string data, string? encoding) => Normalize(encoding) switch
+    {
+        "ascii" or "latin1" => data.Length,
+        "utf16le" => data.Length * 2,
+        "hex" => data.Length / 2,
+        "base64" or "base64url" => GetBase64ByteLength(data),
+        _ => Encoding.UTF8.GetByteCount(data)
+    };
+
+    private static int GetBase64ByteLength(string data)
+    {
+        // Node estimates the size of valid input by discounting trailing padding.
+        int length = data.Length;
+        if (length > 0 && data[length - 1] == '=') length--;
+        if (length > 1 && data[length - 1] == '=') length--;
+        return (int)(((uint)length * 3) >> 2);
+    }
+
     /// <summary>
     /// Converts a write payload to raw bytes: a Buffer or TypedArray view contributes
     /// its bytes verbatim (offset/length aware); a string is encoded with

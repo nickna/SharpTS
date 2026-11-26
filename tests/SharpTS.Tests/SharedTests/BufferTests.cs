@@ -99,6 +99,19 @@ public class BufferTests
     }
 
     [Theory, ModeData]
+    public void Buffer_ByteLengthUsesEncodedLengthRules(ExecutionMode mode)
+    {
+        const string source = """
+            for (const encoding of ['base64', 'BaSe64Url']) {
+                console.log(Buffer.byteLength('YQ==Yg==', encoding), Buffer.byteLength('YQ==', encoding));
+                console.log(Buffer.byteLength('Y W J j', encoding), Buffer.byteLength('=', encoding));
+            }
+            console.log(Buffer.byteLength('61x2', 'hex'), Buffer.byteLength('61x', 'HEX'));
+            """;
+        Assert.Equal("4 1\n5 0\n4 1\n5 0\n2 1\n", TestHarness.Run(source, mode));
+    }
+
+    [Theory, ModeData]
     public void Buffer_FromDecodesBase64Permissively(ExecutionMode mode)
     {
         const string source = """

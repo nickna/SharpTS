@@ -210,9 +210,7 @@ public sealed class SharpTSBufferConstructor
         var encoding = args.Length > 1 && args[1].IsTruthy()
             ? (string)interpreter.EvaluatePlus(args[1].ToObject(), "")
             : BufferEncoding.Default;
-        if (!BufferEncoding.IsSupported(encoding))
-            encoding = BufferEncoding.Default;
-        return RuntimeValue.FromNumber(BufferEncoding.Encode(text, encoding).Length);
+        return RuntimeValue.FromNumber(BufferEncoding.GetByteLength(text, encoding));
     }
 
     /// <summary>
