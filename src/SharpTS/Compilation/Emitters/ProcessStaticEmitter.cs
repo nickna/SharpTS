@@ -57,10 +57,6 @@ public sealed class ProcessStaticEmitter : IStaticTypeEmitterStrategy
                 EmitHrtime(emitter, arguments);
                 return true;
 
-            case "uptime":
-                EmitUptime(emitter);
-                return true;
-
             case "memoryUsage":
                 EmitMemoryUsage(emitter);
                 return true;
@@ -182,20 +178,6 @@ public sealed class ProcessStaticEmitter : IStaticTypeEmitterStrategy
             il.Emit(OpCodes.Ldnull);
         }
         il.Emit(OpCodes.Call, ctx.Runtime!.Process.Hrtime);
-    }
-
-    /// <summary>
-    /// Emits IL for process.uptime().
-    /// Returns the number of seconds the process has been running.
-    /// </summary>
-    private static void EmitUptime(IEmitterContext emitter)
-    {
-        var ctx = emitter.Context;
-        var il = ctx.IL;
-
-        // Call runtime helper
-        il.Emit(OpCodes.Call, ctx.Runtime!.Process.Uptime);
-        il.Emit(OpCodes.Box, ctx.Types.Double);
     }
 
     /// <summary>
