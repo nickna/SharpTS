@@ -1259,6 +1259,12 @@ public sealed partial class RuntimeFeatureDetector
                     // as the corresponding named member access.
                     HandleIdentifier(computedGlobalName);
                 }
+                else if (gi.Index is not Expr.Literal && IsGlobalObject(gi.Object)
+                    && GlobalEvaluatorProvenanceAnalysis.CouldBePropertyKey(gi.Index, _typeMap, "Intl"))
+                {
+                    // A computed key can select Intl without a named reference.
+                    _set.UsesIntl = true;
+                }
                 if (gi.Object is Expr.Variable indexedDescriptorOwner
                     && indexedDescriptorOwner.Name.Lexeme is "Object" or "Reflect")
                 {

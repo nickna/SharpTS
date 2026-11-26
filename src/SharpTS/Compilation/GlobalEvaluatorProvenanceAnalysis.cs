@@ -27,7 +27,13 @@ internal static class GlobalEvaluatorProvenanceAnalysis
     };
 
     internal static bool CouldBeEvalKey(Expr value, TypeMap? types) =>
-        ConstantPrimitive(value, types, depth: 0) is null or "eval";
+        CouldBePropertyKey(value, types, "eval");
+
+    internal static bool CouldBePropertyKey(Expr value, TypeMap? types, string name)
+    {
+        var constant = ConstantPrimitive(value, types, depth: 0);
+        return constant is null || constant is string text && text == name;
+    }
 
     private static object? ConstantPrimitive(Expr expression, TypeMap? types, int depth)
     {
