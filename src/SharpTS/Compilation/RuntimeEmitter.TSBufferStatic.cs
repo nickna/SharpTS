@@ -270,10 +270,41 @@ public partial class RuntimeEmitter
 
         // Hex
         il.MarkLabel(hexLabel);
-        il.Emit(OpCodes.Ldarg_0);
-        il.Emit(OpCodes.Call, _types.ConvertFromHexString);
+        EmitBufferHexBytes(il);
         il.Emit(OpCodes.Newobj, buffer.Ctor);
         il.Emit(OpCodes.Ret);
+    }
+
+    private void EmitBufferHexBytes(ILGenerator il)
+    {
+        var bytes = il.DeclareLocal(_types.ByteArray);
+        var charsConsumed = il.DeclareLocal(_types.Int32);
+        var bytesWritten = il.DeclareLocal(_types.Int32);
+        var byRefInt = _types.Int32.MakeByRefType();
+        var decode = _types.GetMethod(_types.Convert, "FromHexString",
+            [_types.String, _types.SpanOfByte, byRefInt, byRefInt])!;
+        var resize = EmitGenerics.MakeGenericMethod(typeof(Array).GetMethod(nameof(Array.Resize))!, _types.Byte);
+
+        // Allocate only for complete byte pairs, then retain the valid prefix.
+        il.Emit(OpCodes.Ldarg_0);
+        il.Emit(OpCodes.Callvirt, _types.GetProperty(_types.String, "Length")!.GetGetMethod()!);
+        il.Emit(OpCodes.Ldc_I4_2);
+        il.Emit(OpCodes.Div);
+        il.Emit(OpCodes.Newarr, _types.Byte);
+        il.Emit(OpCodes.Stloc, bytes);
+
+        il.Emit(OpCodes.Ldarg_0);
+        il.Emit(OpCodes.Ldloc, bytes);
+        il.Emit(OpCodes.Call, _types.GetMethod(_types.SpanOfByte, "op_Implicit", [_types.ByteArray])!);
+        il.Emit(OpCodes.Ldloca, charsConsumed);
+        il.Emit(OpCodes.Ldloca, bytesWritten);
+        il.Emit(OpCodes.Call, decode);
+        il.Emit(OpCodes.Pop);
+
+        il.Emit(OpCodes.Ldloca, bytes);
+        il.Emit(OpCodes.Ldloc, bytesWritten);
+        il.Emit(OpCodes.Call, resize);
+        il.Emit(OpCodes.Ldloc, bytes);
     }
 
     /// <summary>
