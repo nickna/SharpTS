@@ -31,7 +31,7 @@ public partial class RuntimeEmitter
         EmitDataViewConstructor(typeBuilder, runtime);
 
         // Properties: ByteLength, ByteOffset, Buffer
-        EmitDataViewProperties(typeBuilder, view);
+        EmitDataViewProperties(typeBuilder, runtime);
 
         // Getter methods: GetInt8, GetUint8, GetInt16, GetUint16, GetInt32, GetUint32, GetFloat32, GetFloat64
         EmitDataViewGetters(typeBuilder, view);
@@ -204,14 +204,31 @@ public partial class RuntimeEmitter
 
     private void EmitDataViewProperties(
         TypeBuilder typeBuilder,
-        EmittedDataViewRuntime view)
+        EmittedRuntime runtime)
     {
+        var view = runtime.RequireDataView();
+        var arrayBuffer = runtime.RequireArrayBuffer();
+
         // ByteLength property
         var byteLengthProp = typeBuilder.DefineProperty("ByteLength", PropertyAttributes.None, _types.Int32, Type.EmptyTypes);
         var byteLengthGetter = typeBuilder.DefineMethod("get_ByteLength",
             MethodAttributes.Public | MethodAttributes.SpecialName | MethodAttributes.HideBySig,
             _types.Int32, Type.EmptyTypes);
         var il = byteLengthGetter.GetILGenerator();
+        var backingBuffer = il.DeclareLocal(arrayBuffer.Type);
+        var readLength = il.DefineLabel();
+        il.Emit(OpCodes.Ldarg_0);
+        il.Emit(OpCodes.Ldfld, view.ArrayBufferField);
+        il.Emit(OpCodes.Isinst, arrayBuffer.Type);
+        il.Emit(OpCodes.Stloc, backingBuffer);
+        il.Emit(OpCodes.Ldloc, backingBuffer);
+        il.Emit(OpCodes.Brfalse, readLength);
+        il.Emit(OpCodes.Ldloc, backingBuffer);
+        il.Emit(OpCodes.Ldfld, arrayBuffer.DetachedField);
+        il.Emit(OpCodes.Brfalse, readLength);
+        EmitThrowTypeError(il, runtime.Errors, "Cannot read byteLength of a DataView with a detached ArrayBuffer");
+
+        il.MarkLabel(readLength);
         il.Emit(OpCodes.Ldarg_0);
         il.Emit(OpCodes.Ldfld, view.ByteLengthField);
         il.Emit(OpCodes.Ret);

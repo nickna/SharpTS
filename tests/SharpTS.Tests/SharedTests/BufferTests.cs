@@ -1,3 +1,4 @@
+using SharpTS.Modules;
 using SharpTS.Tests.Infrastructure;
 using Xunit;
 
@@ -109,6 +110,60 @@ public class BufferTests
             console.log(Buffer.byteLength('61x2', 'hex'), Buffer.byteLength('61x', 'HEX'));
             """;
         Assert.Equal("4 1\n5 0\n4 1\n5 0\n2 1\n", TestHarness.Run(source, mode));
+    }
+
+    [Theory, ModeData]
+    public void Buffer_ByteLengthAcceptsArrayBuffersAndViews(ExecutionMode mode)
+    {
+        const string source = """
+            import { Buffer as ImportedBuffer } from 'node:buffer';
+            const buffer = new ArrayBuffer(8);
+            const shared = new SharedArrayBuffer(10);
+            const words = new Uint16Array(buffer, 2, 3);
+            const view = new DataView(buffer, 1, 2);
+            const sharedView = new DataView(shared, 3, 5);
+            const bigInts = new BigInt64Array(2);
+            const precise: number = Buffer.byteLength(words);
+            console.log(Buffer.byteLength(buffer), Buffer.byteLength(shared), precise, Buffer.byteLength(view));
+            console.log(ImportedBuffer.byteLength(sharedView), ImportedBuffer.byteLength(bigInts));
+            console.log(ImportedBuffer.byteLength(new Uint8Array(0)), ImportedBuffer.byteLength(new ArrayBuffer(0)));
+            """;
+        var files = new Dictionary<string, string> { ["main.ts"] = source };
+        Assert.Equal("8 10 6 2\n5 16\n0 0\n", TestHarness.RunModules(files, "main.ts", mode));
+    }
+
+    [Theory, ModeData]
+    public void Buffer_ByteLengthAcceptsStandardLibraryBinaryTypes(ExecutionMode mode)
+    {
+        const string source = """
+            import { Buffer } from 'node:buffer';
+            function measure(buffer: ArrayBuffer, shared: SharedArrayBuffer, words: Uint16Array, view: DataView): number {
+                return Buffer.byteLength(buffer) + Buffer.byteLength(shared) + Buffer.byteLength(words) + Buffer.byteLength(view);
+            }
+            console.log(Buffer.byteLength(new Uint16Array(3)), Buffer.byteLength(new DataView(new ArrayBuffer(2))));
+            """;
+        var options = TypeScriptProgramOptions.Default with { Lib = ["lib.es2022.d.ts", "lib.dom.d.ts"] };
+        Assert.Equal("6 2\n", TestHarness.RunWithLibraries(source, mode, options));
+    }
+
+    [Theory, ModeData]
+    public void Buffer_ByteLengthChecksBinaryBrandsAndIgnoresEncoding(ExecutionMode mode)
+    {
+        const string source = """
+            const byteLength = Buffer.byteLength;
+            const buffer = new ArrayBuffer(8);
+            const words = new Uint16Array(buffer, 2, 3);
+            const view = new DataView(buffer, 1, 2);
+            const encoding = { [Symbol.toPrimitive]() { throw new Error('encoding must not be coerced'); } };
+            console.log(byteLength(buffer, encoding), byteLength(words, encoding), byteLength(view, encoding));
+            structuredClone(buffer, { transfer: [buffer] });
+            console.log(byteLength(buffer), byteLength(words));
+            for (const value of [view, { byteLength: 20 }]) {
+                try { byteLength(value); console.log('accepted'); }
+                catch (error) { console.log(error instanceof TypeError); }
+            }
+            """;
+        Assert.Equal("8 6 2\n0 0\ntrue\ntrue\n", TestHarness.RunUnchecked(source, mode));
     }
 
     [Theory, ModeData]

@@ -909,6 +909,18 @@ public partial class TypeChecker
             return true;
         }
 
+        // Built-in signatures use intrinsic binary types even when source
+        // values are described by the loaded standard library declarations.
+        if (expected is TypeInfo.ArrayBuffer { ByteLength: null }
+            && (actual is TypeInfo.ArrayBuffer || IsCapturedBinaryDeclaration(actual, _typedArrayArrayBufferDeclaration)))
+            return true;
+        if (expected is TypeInfo.SharedArrayBuffer { ByteLength: null }
+            && (actual is TypeInfo.SharedArrayBuffer || IsCapturedBinaryDeclaration(actual, _typedArraySharedBufferDeclaration)))
+            return true;
+        if (expected is TypeInfo.DataView { ByteLength: null, ByteOffset: null }
+            && (actual is TypeInfo.DataView || IsCapturedBinaryDeclaration(actual, _defaultLibraryDataViewType)))
+            return true;
+
         // Date / RegExp identity (these only became reachable as TYPE-position types once the
         // global names stopped resolving to `any`).
         if (expected is TypeInfo.Date && actual is TypeInfo.Date) return true;
@@ -921,6 +933,10 @@ public partial class TypeChecker
             return expTa.ElementType == actTa.ElementType
                 && (expTa.BufferType is null || actTa.BufferType is { } actualBuffer
                     && IsCompatible(expTa.BufferType, actualBuffer));
+        if (expected is TypeInfo.TypedArray { BufferType: null } intrinsicArray
+            && _typedArrayDeclarations.TryGetValue(intrinsicArray.ElementType + "Array", out var arrayDeclaration)
+            && IsCapturedBinaryDeclaration(actual, arrayDeclaration.Definition))
+            return true;
 
         // Error-family compatibility (reachable since Error/TypeError/… stopped resolving to `any`,
         // #528). Every built-in error shares the same structural shape (name/message/stack/cause), so

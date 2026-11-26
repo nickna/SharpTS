@@ -26,6 +26,14 @@ public partial class TypeChecker
         _typedArraySharedBufferDeclaration = environment.GetTypeBinding("SharedArrayBuffer");
     }
 
+    private bool IsCapturedBinaryDeclaration(TypeInfo actual, TypeInfo? declaration)
+    {
+        if (declaration is null) return false;
+        var definition = actual is TypeInfo.InstantiatedGeneric instance ? instance.GenericDefinition : actual;
+        return ReferenceEquals(RefreshCompletedInterfaceBinding(definition),
+            RefreshCompletedInterfaceBinding(declaration));
+    }
+
     private bool TryGetDeclaredTypedArrayView(TypeInfo receiver, out TypeInfo.Interface view)
     {
         receiver = RefreshCompletedInterfaceBinding(receiver);

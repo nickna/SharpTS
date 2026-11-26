@@ -191,16 +191,18 @@ public sealed class SharpTSBufferConstructor
     }
 
     /// <summary>
-    /// Buffer.byteLength(string, encoding?)
-    /// Returns the byte length of a string when encoded.
+    /// Returns the byte length of an encoded string, buffer, or buffer view.
     /// </summary>
     private static RuntimeValue BufferByteLength(Interp interpreter, RuntimeValue receiver, ReadOnlySpan<RuntimeValue> args)
     {
-        if (args.Length > 0 && args[0].ToObject() is SharpTSBuffer buf)
+        var input = args.Length > 0 ? args[0].ToObject() : null;
+        if (input is SharpTSBuffer buf)
             return RuntimeValue.FromNumber(buf.Length);
+        if (input is SharpTSArrayBuffer or SharpTSSharedArrayBuffer or SharpTSTypedArray or SharpTSDataView)
+            return RuntimeValue.FromBoxed(interpreter.GetPropertyValue(input, "byteLength"));
 
         if (args.Length == 0 || !args[0].IsString)
-            throw new ThrowException(new SharpTSTypeError("Buffer.byteLength requires a string or Buffer argument"));
+            throw new ThrowException(new SharpTSTypeError("Buffer.byteLength requires a string, Buffer, ArrayBuffer, or ArrayBuffer view"));
 
         var text = args[0].AsStringUnsafe();
         if (text.Length == 0)
