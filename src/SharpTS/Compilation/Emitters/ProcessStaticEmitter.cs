@@ -65,27 +65,6 @@ public sealed class ProcessStaticEmitter : IStaticTypeEmitterStrategy
                 EmitOneArgHelperCall(emitter, arguments, ctx.Runtime!.Process.Umask);
                 return true;
 
-            case "cpuUsage":
-                EmitOneArgHelperCall(emitter, arguments, ctx.Runtime!.Process.CpuUsage);
-                return true;
-
-            case "resourceUsage":
-                il.Emit(OpCodes.Call, ctx.Runtime!.Process.ResourceUsage);
-                return true;
-
-            case "availableMemory":
-                il.Emit(OpCodes.Call, ctx.Runtime!.Process.AvailableMemory);
-                return true;
-
-            case "constrainedMemory":
-                il.Emit(OpCodes.Ldc_R8, 0.0);
-                il.Emit(OpCodes.Box, ctx.Types.Double);
-                return true;
-
-            case "getActiveResourcesInfo":
-                il.Emit(OpCodes.Call, ctx.Runtime!.Process.GetActiveResourcesInfo);
-                return true;
-
             case "emitWarning":
                 EmitFourArgHelperCall(emitter, arguments, ctx.Runtime!.Process.EmitWarning);
                 return true;

@@ -122,6 +122,7 @@ public partial class RuntimeEmitter
             EmitTypeGuard(buffer.Type, skipBuffer);
             EmitNamedLookup("from", buffer.FromValue, 1);
             EmitNamedLookup("alloc", buffer.AllocValue, 3);
+            EmitNamedLookup("byteLength", buffer.ByteLengthValue, 2);
             il.MarkLabel(skipBuffer);
         }
 

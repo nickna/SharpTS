@@ -1862,9 +1862,11 @@ public abstract partial class ExpressionEmitterBase
             return false;
         var obj = member.Object;
         // These Buffer methods use ordinary lookup and retain the receiver across argument suspension.
-        if (obj is Expr.Variable { Name.Lexeme: "Buffer" } && member.Name.Lexeme is "from" or "alloc")
+        if (obj is Expr.Variable { Name.Lexeme: "Buffer" } && member.Name.Lexeme is "from" or "alloc" or "byteLength")
             return false;
-        if (obj is Expr.Variable { Name.Lexeme: "process" } && member.Name.Lexeme is "cwd" or "uptime" or "memoryUsage" or "hrtime")
+        if (obj is Expr.Variable { Name.Lexeme: "process" } &&
+            member.Name.Lexeme is "cwd" or "uptime" or "memoryUsage" or "hrtime" or "cpuUsage" or "resourceUsage"
+                or "availableMemory" or "constrainedMemory" or "getActiveResourcesInfo")
             return false;
         if (obj is Expr.Variable { Name.Lexeme: "globalThis" or "global" } && member.Name.Lexeme == "parseFloat")
             return false;

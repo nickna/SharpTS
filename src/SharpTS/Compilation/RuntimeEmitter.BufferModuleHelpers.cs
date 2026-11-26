@@ -6,9 +6,8 @@ public partial class RuntimeEmitter
 {
     /// <summary>
     /// Emits the standalone <c>buffer</c> module helper functions (#1160): atob/btoa,
-    /// isUtf8/isAscii, transcode, SlowBuffer, and the constants object. All pure-BCL —
-    /// atob/btoa/transcode compose the existing $Buffer FromString/ToEncodedString
-    /// helpers so they stay byte-identical to <c>BufferModuleHelpers</c> (interpreter).
+    /// isUtf8/isAscii, transcode, SlowBuffer, and the constants object. Uses BCL and
+    /// emitted Buffer helpers so these functions work in standalone output.
     /// </summary>
     private void EmitBufferModuleMethods(TypeBuilder typeBuilder, EmittedRuntime runtime)
     {
@@ -245,19 +244,18 @@ public partial class RuntimeEmitter
 
     private void EmitBufferAtobBtoa(TypeBuilder typeBuilder, EmittedBufferRuntime buffer)
     {
-        // atob(data) = Buffer.from(data, 'base64').toString('latin1')
+        // Retain atob's validation independently of permissive Buffer decoding.
         var atob = typeBuilder.DefineMethod(
             "BufferAtob",
             System.Reflection.MethodAttributes.Public | System.Reflection.MethodAttributes.Static,
             _types.String, [_types.Object]);
         buffer.Atob = atob;
         var ail = atob.GetILGenerator();
+        ail.Emit(OpCodes.Call, _types.GetProperty(_types.Encoding, "Latin1")!.GetGetMethod()!);
         ail.Emit(OpCodes.Ldarg_0);
         ail.Emit(OpCodes.Call, buffer.CoerceString);
-        ail.Emit(OpCodes.Ldstr, "base64");
-        ail.Emit(OpCodes.Call, buffer.FromString);
-        ail.Emit(OpCodes.Ldstr, "latin1");
-        ail.Emit(OpCodes.Callvirt, buffer.ToStringMethod);
+        ail.Emit(OpCodes.Call, _types.ConvertFromBase64String);
+        ail.Emit(OpCodes.Callvirt, _types.GetMethod(_types.Encoding, "GetString", _types.ByteArray));
         ail.Emit(OpCodes.Ret);
 
         // btoa(data) = Buffer.from(data, 'latin1').toString('base64')
