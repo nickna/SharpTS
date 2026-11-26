@@ -13589,6 +13589,18 @@ public partial class StandaloneDllTests
             console.log(new intl.NumberFormat('en-US', { useGrouping: false }).format(1234.5));
             """,
             "1234.5\n", "main.js", false
+        },
+        new object[]
+        {
+            """
+            function read(key) {
+                const alias = root;
+                return alias[key];
+            }
+            const root = globalThis;
+            console.log(typeof read('Intl'));
+            """,
+            "object\n", "main.js", true
         }
     ];
 

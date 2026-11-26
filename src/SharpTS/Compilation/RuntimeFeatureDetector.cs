@@ -71,6 +71,8 @@ public sealed partial class RuntimeFeatureDetector
     private readonly Dictionary<string, JsonSerializationShape.Record> _canonicalCompactRecordShapes = [];
     private TypeMap? _typeMap;
     private int _dateConstructorReceiverReads;
+    private bool _hasGlobalObjectReference;
+    private bool _hasUnresolvedComputedIntlRead;
 
     public RuntimeFeatureDetector() : this(nativeClassBodiesOnly: false) { }
 
@@ -170,6 +172,12 @@ public sealed partial class RuntimeFeatureDetector
         CollectCanonicalCompactRecordShapes(statements);
         foreach (var stmt in statements)
             VisitStmt(stmt);
+        if (!_set.UsesIntl && _hasGlobalObjectReference && _hasUnresolvedComputedIntlRead)
+        {
+            // Resolve captured aliases using the complete program, regardless of declaration order.
+            _set.UsesIntl = GlobalEvaluatorProvenanceAnalysis.ReadsGlobalProperty(
+                statements, typeMap, "Intl", computedOnly: true);
+        }
         ExpandStructuralMaterializationShapes();
         StableCompactRecordLocalAnalyzer.Analyze(statements, typeMap, _set);
         LocalRecordArrayAnalyzer.Analyze(statements, typeMap, _set);
@@ -665,6 +673,7 @@ public sealed partial class RuntimeFeatureDetector
             // valve; the fine-grained ones still get set by their own triggers.
             case "globalThis":
             case "global":
+                _hasGlobalObjectReference = true;
                 _set.UsesConsoleObject = true;
                 _set.UsesStructuredClone = true;
                 _set.UsesTimerFunctionValues = true;
@@ -1259,11 +1268,12 @@ public sealed partial class RuntimeFeatureDetector
                     // as the corresponding named member access.
                     HandleIdentifier(computedGlobalName);
                 }
-                else if (gi.Index is not Expr.Literal && IsGlobalObject(gi.Object)
-                    && GlobalEvaluatorProvenanceAnalysis.CouldBePropertyKey(gi.Index, _typeMap, "Intl"))
+                else if (gi.Index is not Expr.Literal && !_set.UsesIntl)
                 {
-                    // A computed key can select Intl without a named reference.
-                    _set.UsesIntl = true;
+                    if (IsGlobalObject(gi.Object))
+                        _set.UsesIntl = GlobalEvaluatorProvenanceAnalysis.CouldBePropertyKey(gi.Index, _typeMap, "Intl");
+                    else
+                        _hasUnresolvedComputedIntlRead = true;
                 }
                 if (gi.Object is Expr.Variable indexedDescriptorOwner
                     && indexedDescriptorOwner.Name.Lexeme is "Object" or "Reflect")
