@@ -43,7 +43,7 @@ public partial class RuntimeEmitter
 
     private void EmitNamespaceSingletons(
         TypeBuilder typeBuilder, EmittedAbortRuntime? abort, EmittedIntlRuntime? intl,
-        MethodBuilder functionGetOrCreate)
+        MethodBuilder functionGetOrCreate, EmittedDescriptorStorageRuntime descriptorStorage)
     {
         if (abort is not null)
         {
@@ -69,7 +69,7 @@ public partial class RuntimeEmitter
                     ("ListFormat", intl.CreateListFormat, 2),
                     ("Segmenter", intl.CreateSegmenter, 2),
                     ("DisplayNames", intl.CreateDisplayNames, 2),
-                ]);
+                ], descriptorStorage);
         }
     }
 
@@ -78,7 +78,8 @@ public partial class RuntimeEmitter
         MethodBuilder functionGetOrCreate,
         string namespaceName,
         FieldBuilder field,
-        (string JsName, MethodBuilder Helper, int JsLength)[] members)
+        (string JsName, MethodBuilder Helper, int JsLength)[] members,
+        EmittedDescriptorStorageRuntime? nonEnumerableMembers = null)
     {
         var method = typeBuilder.DefineMethod(
             $"_{namespaceName}NamespacePopulate",
@@ -98,6 +99,7 @@ public partial class RuntimeEmitter
         il.MarkLabel(doFillLabel);
 
         var dictLocal = il.DeclareLocal(_types.DictionaryStringObject);
+        var wrapperLocal = nonEnumerableMembers is null ? null : il.DeclareLocal(_types.Object);
         il.Emit(OpCodes.Newobj, _types.GetDefaultConstructor(_types.DictionaryStringObject));
         il.Emit(OpCodes.Stloc, dictLocal);
 
@@ -114,7 +116,19 @@ public partial class RuntimeEmitter
             il.Emit(OpCodes.Ldstr, jsName);
             il.Emit(OpCodes.Ldc_I4, jsLength);
             il.Emit(OpCodes.Call, functionGetOrCreate);
+            if (wrapperLocal is not null)
+            {
+                il.Emit(OpCodes.Dup);
+                il.Emit(OpCodes.Stloc, wrapperLocal);
+            }
             il.Emit(OpCodes.Callvirt, setItem);
+
+            if (nonEnumerableMembers is { } storage)
+            {
+                il.Emit(OpCodes.Ldloc, dictLocal);
+                il.Emit(OpCodes.Ldstr, jsName);
+                EmitIntrinsicDataProperty(il, storage, () => il.Emit(OpCodes.Ldloc, wrapperLocal!), enumerable: false);
+            }
         }
 
         // Publish last so a half-filled dict is never observable.

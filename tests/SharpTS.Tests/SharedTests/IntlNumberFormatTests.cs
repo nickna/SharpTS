@@ -54,6 +54,27 @@ public class IntlNumberFormatTests
         Assert.Equal("1,234\nget\narg\nvalue\nget\nwait\nresumed\n1,234\n", TestHarness.RunUnchecked(source, mode));
     }
 
+    [Theory, ModeData]
+    public void Intl_FactoriesAreNonEnumerableOwnProperties(ExecutionMode mode)
+    {
+        const string source = """
+            const intl = globalThis.Intl;
+            const names = ['NumberFormat', 'DateTimeFormat', 'Collator', 'PluralRules',
+                'RelativeTimeFormat', 'ListFormat', 'Segmenter', 'DisplayNames'];
+            const ownNames = Object.getOwnPropertyNames(intl);
+            for (const name of names) {
+                const descriptor = Object.getOwnPropertyDescriptor(intl, name);
+                console.log(ownNames.includes(name), descriptor.value === intl[name],
+                    descriptor.writable, descriptor.enumerable, descriptor.configurable);
+            }
+            console.log(Object.keys(intl).length);
+            intl.NumberFormat = () => 42;
+            console.log(intl.NumberFormat(), Object.keys(intl).includes('NumberFormat'));
+            """;
+        Assert.Equal(string.Concat(Enumerable.Repeat("true true true false true\n", 8)) + "0\n42 false\n",
+            TestHarness.RunUnchecked(source, mode));
+    }
+
     // ========== Basic Decimal Formatting ==========
 
     [Theory, ModeData]

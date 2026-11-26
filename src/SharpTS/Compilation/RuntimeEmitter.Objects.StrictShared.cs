@@ -102,6 +102,21 @@ public partial class RuntimeEmitter
         il.Emit(OpCodes.Pop);
     }
 
+    // The receiver and property name are already on the stack.
+    private static void EmitIntrinsicDataProperty(ILGenerator il, EmittedDescriptorStorageRuntime storage,
+        Action emitValue, bool enumerable)
+    {
+        il.Emit(OpCodes.Newobj, storage.DescriptorConstructor);
+        il.Emit(OpCodes.Dup);
+        emitValue();
+        il.Emit(OpCodes.Callvirt, storage.DescriptorValue.GetSetMethod()!);
+        il.Emit(OpCodes.Dup);
+        il.Emit(enumerable ? OpCodes.Ldc_I4_1 : OpCodes.Ldc_I4_0);
+        il.Emit(OpCodes.Callvirt, storage.DescriptorEnumerable.GetSetMethod()!);
+        il.Emit(OpCodes.Call, storage.DefineProperty);
+        il.Emit(OpCodes.Pop);
+    }
+
     /// <summary>
     /// Emits the "invoke PDS accessor setter and return" tail shared by the
     /// SetProperty family: <c>InvokeMethodValue(obj, setter, [value]); return;</c>

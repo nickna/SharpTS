@@ -3600,7 +3600,8 @@ public partial class RuntimeEmitter
             runtime.Deployment.Require("Intl");
             EmitIntlMethods(typeBuilder, runtime.RequireIntl());
         }
-        EmitNamespaceSingletons(typeBuilder, runtime.Abort, runtime.Intl, runtime.FunctionConstruction.GetOrCreate);
+        EmitNamespaceSingletons(typeBuilder, runtime.Abort, runtime.Intl, runtime.FunctionConstruction.GetOrCreate,
+            runtime.DescriptorStorage);
         EmitGlobalIntrinsicInitializer(typeBuilder, globalIntrinsicInitializer, runtime);
 
         // (TLS handshake is now emitted as pure-BCL IL inside $TlsSocket/$TlsServer —
