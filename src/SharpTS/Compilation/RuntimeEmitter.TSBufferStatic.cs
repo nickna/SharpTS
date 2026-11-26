@@ -25,6 +25,9 @@ public partial class RuntimeEmitter
         il.Emit(OpCodes.Stloc, result);
 
         var done = il.DefineLabel();
+        il.Emit(OpCodes.Ldloc, result);
+        il.Emit(OpCodes.Call, buffer.LengthGetter);
+        il.Emit(OpCodes.Brfalse, done);
         il.Emit(OpCodes.Ldarg_1);
         il.Emit(OpCodes.Brfalse, done);
         il.Emit(OpCodes.Ldarg_1);
@@ -48,18 +51,39 @@ public partial class RuntimeEmitter
             il.MarkLabel(notView);
         }
 
-        var hasEncoding = il.DefineLabel();
+        var stringFill = il.DeclareLocal(_types.String);
+        var notString = il.DefineLabel();
+        il.Emit(OpCodes.Ldloc, fill);
+        il.Emit(OpCodes.Isinst, _types.String);
+        il.Emit(OpCodes.Stloc, stringFill);
+        il.Emit(OpCodes.Ldloc, stringFill);
+        il.Emit(OpCodes.Brfalse, notString);
+        il.Emit(OpCodes.Ldloc, stringFill);
+        il.Emit(OpCodes.Ldarg_2);
+        il.Emit(OpCodes.Isinst, _types.String);
+        il.Emit(OpCodes.Call, buffer.FromStringForAlloc);
+        il.Emit(OpCodes.Stloc, fill);
+        il.Emit(OpCodes.Ldloc, stringFill);
+        il.Emit(OpCodes.Call, _types.GetProperty(_types.String, "Length")!.GetGetMethod()!);
+        il.Emit(OpCodes.Brfalse, done);
+        il.MarkLabel(notString);
+
+        var applyFill = il.DefineLabel();
+        il.Emit(OpCodes.Ldloc, fill);
+        il.Emit(OpCodes.Isinst, buffer.Type);
+        il.Emit(OpCodes.Brfalse, applyFill);
+        il.Emit(OpCodes.Ldloc, fill);
+        il.Emit(OpCodes.Castclass, buffer.Type);
+        il.Emit(OpCodes.Call, buffer.LengthGetter);
+        il.Emit(OpCodes.Brtrue, applyFill);
+        EmitThrowTypeError(il, runtime.Errors, "Invalid Buffer.alloc fill value");
+
+        il.MarkLabel(applyFill);
         il.Emit(OpCodes.Ldloc, result);
         il.Emit(OpCodes.Ldloc, fill);
         il.Emit(OpCodes.Ldc_I4_0);
         il.Emit(OpCodes.Ldc_I4, int.MaxValue);
-        il.Emit(OpCodes.Ldarg_2);
-        il.Emit(OpCodes.Isinst, _types.String);
-        il.Emit(OpCodes.Dup);
-        il.Emit(OpCodes.Brtrue, hasEncoding);
-        il.Emit(OpCodes.Pop);
         il.Emit(OpCodes.Ldstr, "utf8");
-        il.MarkLabel(hasEncoding);
         il.Emit(OpCodes.Call, buffer.Fill);
         il.Emit(OpCodes.Ret);
 
@@ -138,7 +162,7 @@ public partial class RuntimeEmitter
     /// <summary>
     /// Emits: public static $Buffer FromString(string data, string encoding)
     /// </summary>
-    private void EmitTSBufferFromString(TypeBuilder typeBuilder, EmittedBufferRuntime buffer)
+    private void EmitTSBufferFromString(TypeBuilder typeBuilder, EmittedBufferRuntime buffer, EmittedErrorRuntime errors)
     {
         var method = typeBuilder.DefineMethod(
             "FromString",
@@ -147,8 +171,34 @@ public partial class RuntimeEmitter
             [_types.String, _types.String]
         );
         buffer.FromString = method;
+        var encode = typeBuilder.DefineMethod("EncodeString", MethodAttributes.Private | MethodAttributes.Static,
+            typeBuilder, [_types.String, _types.String, _types.Boolean]);
+        var wrapper = method.GetILGenerator();
+        wrapper.Emit(OpCodes.Ldarg_0);
+        wrapper.Emit(OpCodes.Ldarg_1);
+        wrapper.Emit(OpCodes.Ldc_I4_0);
+        wrapper.Emit(OpCodes.Call, encode);
+        wrapper.Emit(OpCodes.Ret);
 
-        var il = method.GetILGenerator();
+        var forAlloc = typeBuilder.DefineMethod("FromStringForAlloc", MethodAttributes.Assembly | MethodAttributes.Static,
+            typeBuilder, [_types.String, _types.String]);
+        buffer.FromStringForAlloc = forAlloc;
+        var allocIl = forAlloc.GetILGenerator();
+        var result = allocIl.DeclareLocal(typeBuilder);
+        allocIl.BeginExceptionBlock();
+        allocIl.Emit(OpCodes.Ldarg_0);
+        allocIl.Emit(OpCodes.Ldarg_1);
+        allocIl.Emit(OpCodes.Ldc_I4_1);
+        allocIl.Emit(OpCodes.Call, encode);
+        allocIl.Emit(OpCodes.Stloc, result);
+        allocIl.BeginCatchBlock(typeof(FormatException));
+        allocIl.Emit(OpCodes.Pop);
+        EmitThrowTypeError(allocIl, errors, "Invalid Buffer.alloc fill value");
+        allocIl.EndExceptionBlock();
+        allocIl.Emit(OpCodes.Ldloc, result);
+        allocIl.Emit(OpCodes.Ret);
+
+        var il = encode.GetILGenerator();
 
         var encodingLocal = il.DeclareLocal(_types.String);
         var utf8Label = il.DefineLabel();
@@ -158,9 +208,11 @@ public partial class RuntimeEmitter
         var base64Label = il.DefineLabel();
         var base64urlLabel = il.DefineLabel();
         var hexLabel = il.DefineLabel();
-        var defaultLabel = il.DefineLabel();
 
-        // Lowercase the encoding
+        // Use UTF-8 when no encoding is specified, including the empty string.
+        il.Emit(OpCodes.Ldarg_1);
+        il.Emit(OpCodes.Call, _types.GetMethod(_types.String, "IsNullOrEmpty", [_types.String])!);
+        il.Emit(OpCodes.Brtrue, utf8Label);
         il.Emit(OpCodes.Ldarg_1);
         il.Emit(OpCodes.Callvirt, _types.GetMethod(_types.String, "ToLowerInvariant")!);
         il.Emit(OpCodes.Stloc, encodingLocal);
@@ -178,7 +230,9 @@ public partial class RuntimeEmitter
         CheckStringEquals(il, encodingLocal, "base64", base64Label);
         CheckStringEquals(il, encodingLocal, "base64url", base64urlLabel);
         CheckStringEquals(il, encodingLocal, "hex", hexLabel);
-        il.Emit(OpCodes.Br, defaultLabel);
+        il.Emit(OpCodes.Ldarg_2);
+        il.Emit(OpCodes.Brfalse, utf8Label);
+        EmitThrowTypeError(il, errors, "Unknown Buffer.alloc fill encoding");
 
         // UTF-8
         il.MarkLabel(utf8Label);
@@ -219,11 +273,6 @@ public partial class RuntimeEmitter
         il.Emit(OpCodes.Ldarg_0);
         il.Emit(OpCodes.Call, _types.ConvertFromHexString);
         il.Emit(OpCodes.Newobj, buffer.Ctor);
-        il.Emit(OpCodes.Ret);
-
-        // Default to UTF-8
-        il.MarkLabel(defaultLabel);
-        EmitEncodingGetBytes(il, "UTF8", buffer.Ctor);
         il.Emit(OpCodes.Ret);
     }
 

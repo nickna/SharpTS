@@ -9,7 +9,7 @@ namespace SharpTS.Compilation;
 /// </summary>
 public partial class RuntimeEmitter
 {
-    private void EmitTSBufferClass(ModuleBuilder moduleBuilder, EmittedBufferRuntime buffer)
+    private void EmitTSBufferClass(ModuleBuilder moduleBuilder, EmittedBufferRuntime buffer, EmittedErrorRuntime errors)
     {
         // Define class: public sealed class $Buffer
         var typeBuilder = EmitTypeDefinitions.DefineType(moduleBuilder,
@@ -32,7 +32,7 @@ public partial class RuntimeEmitter
         EmitTSBufferLengthProperty(typeBuilder, buffer);
 
         // Static methods
-        EmitTSBufferFromString(typeBuilder, buffer);
+        EmitTSBufferFromString(typeBuilder, buffer, errors);
         EmitTSBufferFromArray(typeBuilder, buffer);
         EmitTSBufferFromBuffer(typeBuilder, buffer);
         EmitTSBufferAlloc(typeBuilder, buffer);

@@ -2,6 +2,7 @@ using System.Buffers.Binary;
 using System.Numerics;
 using System.Text;
 using SharpTS.Runtime.BuiltIns;
+using SharpTS.Runtime.Exceptions;
 using SharpTS.TypeSystem;
 
 namespace SharpTS.Runtime.Types;
@@ -121,7 +122,7 @@ public class SharpTSBuffer : ITypeCategorized
 
         if (fill != null)
         {
-            buffer.FillInternal(fill, 0, size, encoding);
+            buffer.FillInternal(fill, 0, size, encoding, allocating: true);
         }
 
         return buffer;
@@ -303,7 +304,7 @@ public class SharpTSBuffer : ITypeCategorized
         return this;
     }
 
-    private void FillInternal(object value, int start, int end, string encoding)
+    private void FillInternal(object value, int start, int end, string encoding, bool allocating = false)
     {
         // Clamp values
         start = Math.Max(0, Math.Min(start, _data.Length));
@@ -327,22 +328,36 @@ public class SharpTSBuffer : ITypeCategorized
         }
         else if (value is string s)
         {
-            fillBytes = EncodeString(s, encoding);
-            if (fillBytes.Length == 0) return;
+            if (allocating && !BufferEncoding.IsSupported(encoding))
+                throw new ThrowException(new SharpTSTypeError($"Unknown encoding: {encoding}"));
+            if (allocating && s.Length == 0) return;
+            try
+            {
+                fillBytes = EncodeString(s, encoding);
+            }
+            catch (FormatException) when (allocating)
+            {
+                throw new ThrowException(new SharpTSTypeError("Invalid Buffer.alloc fill value"));
+            }
         }
         else if (value is SharpTSBuffer buf)
         {
             fillBytes = buf._data;
-            if (fillBytes.Length == 0) return;
         }
         else if (value is SharpTSTypedArray view)
         {
             fillBytes = view.Buffer.AsSpan(view.ByteOffset, view.ByteLength).ToArray();
-            if (fillBytes.Length == 0) return;
         }
         else
         {
             fillBytes = [0];
+        }
+
+        if (fillBytes.Length == 0)
+        {
+            if (allocating)
+                throw new ThrowException(new SharpTSTypeError("Invalid Buffer.alloc fill value"));
+            return;
         }
 
         // Fill the buffer by repeating the fill bytes

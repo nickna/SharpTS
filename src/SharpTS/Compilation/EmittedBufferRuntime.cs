@@ -49,6 +49,13 @@ public sealed class EmittedBufferRuntime
         internal set => Set(ref _fromString, value);
     }
 
+    private MethodBuilder? _fromStringForAlloc;
+    internal MethodBuilder FromStringForAlloc
+    {
+        get => Require(_fromStringForAlloc);
+        set => Set(ref _fromStringForAlloc, value);
+    }
+
     private MethodBuilder? _fromArray;
     public MethodBuilder FromArray
     {
