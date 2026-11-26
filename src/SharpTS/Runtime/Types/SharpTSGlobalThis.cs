@@ -326,8 +326,19 @@ public sealed partial class SharpTSGlobalThis : ISharpTSPropertyAccessor
         }
         else
         {
+            // An intrinsic can have an own descriptor before it has a backing slot.
+            // The first assignment materializes that slot with the existing flags.
+            if (!_properties.HasProperty(name) && GetOwnPropertyDescriptor(name) is { } intrinsic)
+            {
+                if (!intrinsic.Writable) return;
+                intrinsic.Value = value;
+                _properties.MirrorCompletedPropertyDefinition(name, intrinsic);
+            }
+            else if (!_properties.TrySetProperty(name, value))
+            {
+                return;
+            }
             _deletedProperties.Remove(name);
-            _properties.SetProperty(name, value);
         }
         if (_vmContext is not null) _deletedProperties.Remove(name);
         _vmWrittenProperties?.Add(name);
