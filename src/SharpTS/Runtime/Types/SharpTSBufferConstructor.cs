@@ -1,4 +1,5 @@
 using SharpTS.Runtime.BuiltIns;
+using SharpTS.Runtime.Exceptions;
 using Interp = SharpTS.Execution.Interpreter;
 
 namespace SharpTS.Runtime.Types;
@@ -38,7 +39,7 @@ public sealed class SharpTSBufferConstructor
             "concat" => BuiltInMethod.CreateV2("concat", 1, 2, BufferConcat),
             "copyBytesFrom" => BuiltInMethod.CreateV2("copyBytesFrom", 1, 3, BufferCopyBytesFrom),
             "isBuffer" => BuiltInMethod.CreateV2("isBuffer", 1, BufferIsBuffer),
-            "byteLength" => BuiltInMethod.CreateV2("byteLength", 1, 2, BufferByteLength),
+            "byteLength" => BuiltInMethod.CreateV2("byteLength", 1, 2, BufferByteLength).WithSpecLength(2),
             "compare" => BuiltInMethod.CreateV2("compare", 2, BufferCompare),
             "isEncoding" => BuiltInMethod.CreateV2("isEncoding", 1, BufferIsEncoding),
             "poolSize" => PoolSize,
@@ -195,20 +196,23 @@ public sealed class SharpTSBufferConstructor
     /// </summary>
     private static RuntimeValue BufferByteLength(Interp interpreter, RuntimeValue receiver, ReadOnlySpan<RuntimeValue> args)
     {
-        if (args.Length == 0)
-            throw new Exception("Buffer.byteLength requires an argument");
-
-        if (args[0].ToObject() is SharpTSBuffer buf)
+        if (args.Length > 0 && args[0].ToObject() is SharpTSBuffer buf)
             return RuntimeValue.FromNumber(buf.Length);
 
-        if (!args[0].IsString)
-            throw new Exception("Buffer.byteLength requires a string or Buffer argument");
+        if (args.Length == 0 || !args[0].IsString)
+            throw new ThrowException(new SharpTSTypeError("Buffer.byteLength requires a string or Buffer argument"));
 
-        var encoding = args.Length > 1 ? args[1].ToObject()?.ToString() ?? "utf8" : "utf8";
+        var text = args[0].AsStringUnsafe();
+        if (text.Length == 0)
+            return RuntimeValue.FromNumber(0);
 
-        // Create a temporary buffer to get the byte length
-        var temp = SharpTSBuffer.FromString(args[0].AsStringUnsafe(), encoding);
-        return RuntimeValue.FromNumber(temp.Length);
+        // Node uses encoding + "" for a truthy non-string encoding.
+        var encoding = args.Length > 1 && args[1].IsTruthy()
+            ? (string)interpreter.EvaluatePlus(args[1].ToObject(), "")
+            : BufferEncoding.Default;
+        if (!BufferEncoding.IsSupported(encoding))
+            encoding = BufferEncoding.Default;
+        return RuntimeValue.FromNumber(BufferEncoding.Encode(text, encoding).Length);
     }
 
     /// <summary>

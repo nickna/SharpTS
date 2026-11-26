@@ -81,6 +81,24 @@ public class BufferTests
     }
 
     [Theory, ModeData]
+    public void Buffer_ByteLengthFallsBackToUtf8ForUnknownEncodings(ExecutionMode mode)
+    {
+        const string source = """
+            const byteLength = Buffer.byteLength;
+            console.log(byteLength.length);
+            console.log(Buffer.byteLength('é🙂', 'no-such-encoding'));
+            console.log(globalThis.Buffer.byteLength('é🙂', 'No-Such-Encoding'));
+            console.log(byteLength('é🙂'), byteLength('é🙂', ''), byteLength('é🙂', null));
+            console.log(byteLength('é🙂', 'LaTiN1'), byteLength('é🙂', 'UcS-2'));
+            console.log(byteLength('YQ==', 'base64'), byteLength('616263', 'HEX'));
+            const encoding = { [Symbol.toPrimitive](hint) { console.log(hint); return 'hex'; } };
+            console.log(byteLength('616263', encoding));
+            console.log(byteLength(Buffer.from('é'), encoding), byteLength('', encoding));
+            """;
+        Assert.Equal("2\n6\n6\n6 6 6\n3 6\n1 3\ndefault\n3\n2 0\n", TestHarness.RunUnchecked(source, mode));
+    }
+
+    [Theory, ModeData]
     public void Buffer_FromDecodesBase64Permissively(ExecutionMode mode)
     {
         const string source = """

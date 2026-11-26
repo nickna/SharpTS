@@ -522,7 +522,7 @@ public partial class Interpreter
     /// Otherwise performs numeric addition.
     /// </remarks>
     /// <seealso href="https://developer.mozilla.org/en-US/docs/Web/JavaScript/Reference/Operators/Addition">MDN Addition Operator</seealso>
-    private object EvaluatePlus(object? left, object? right)
+    internal object EvaluatePlus(object? left, object? right)
     {
         // ECMA-262 §13.15.3 ApplyStringOrNumericBinaryOperator: ToPrimitive both
         // operands (default hint) before deciding string-concat vs numeric add.

@@ -162,6 +162,66 @@ public partial class RuntimeEmitter
         }
     }
 
+    private void EmitBufferByteLengthValue(TypeBuilder owner, EmittedRuntime runtime, EmittedBufferRuntime buffer)
+    {
+        var method = owner.DefineMethod("BufferByteLengthValue", MethodAttributes.Public | MethodAttributes.Static,
+            _types.Object, [_types.Object, _types.Object]);
+        buffer.ByteLengthValue = method;
+        var il = method.GetILGenerator();
+        var text = il.DeclareLocal(_types.String);
+        var notBuffer = il.DefineLabel();
+        var isString = il.DefineLabel();
+        var emptyString = il.DefineLabel();
+        var defaultEncoding = il.DefineLabel();
+        var encode = il.DefineLabel();
+        var haveLength = il.DefineLabel();
+
+        il.Emit(OpCodes.Ldarg_0);
+        il.Emit(OpCodes.Isinst, buffer.Type);
+        il.Emit(OpCodes.Dup);
+        il.Emit(OpCodes.Brfalse, notBuffer);
+        il.Emit(OpCodes.Callvirt, buffer.LengthGetter);
+        il.Emit(OpCodes.Br, haveLength);
+
+        il.MarkLabel(notBuffer);
+        il.Emit(OpCodes.Pop);
+        il.Emit(OpCodes.Ldarg_0);
+        il.Emit(OpCodes.Isinst, _types.String);
+        il.Emit(OpCodes.Stloc, text);
+        il.Emit(OpCodes.Ldloc, text);
+        il.Emit(OpCodes.Brtrue, isString);
+        EmitThrowTypeError(il, runtime.Errors, "Buffer.byteLength requires a string or Buffer argument");
+
+        il.MarkLabel(isString);
+        il.Emit(OpCodes.Ldloc, text);
+        il.Emit(OpCodes.Callvirt, _types.GetProperty(_types.String, "Length")!.GetGetMethod()!);
+        il.Emit(OpCodes.Brfalse, emptyString);
+        il.Emit(OpCodes.Ldloc, text);
+        il.Emit(OpCodes.Ldarg_1);
+        il.Emit(OpCodes.Call, runtime.Booleans.IsTruthy);
+        il.Emit(OpCodes.Brfalse, defaultEncoding);
+        // As in Node, encoding + "" uses default-hint primitive conversion.
+        il.Emit(OpCodes.Ldarg_1);
+        il.Emit(OpCodes.Ldstr, "");
+        il.Emit(OpCodes.Call, runtime.Operators.Add);
+        il.Emit(OpCodes.Castclass, _types.String);
+        il.Emit(OpCodes.Br, encode);
+
+        il.MarkLabel(defaultEncoding);
+        il.Emit(OpCodes.Ldnull);
+        il.MarkLabel(encode);
+        il.Emit(OpCodes.Call, buffer.FromString);
+        il.Emit(OpCodes.Callvirt, buffer.LengthGetter);
+        il.Emit(OpCodes.Br, haveLength);
+
+        il.MarkLabel(emptyString);
+        il.Emit(OpCodes.Ldc_I4_0);
+        il.MarkLabel(haveLength);
+        il.Emit(OpCodes.Conv_R8);
+        il.Emit(OpCodes.Box, _types.Double);
+        il.Emit(OpCodes.Ret);
+    }
+
     /// <summary>
     /// Emits: public static $Buffer FromString(string data, string encoding)
     /// </summary>
