@@ -87,6 +87,42 @@ public class ProcessSurfaceTests
     // ---- #1082: diagnostics ----
 
     [Theory, ModeData]
+    public void Process_DiagnosticsResolveTheCurrentReceiver(ExecutionMode mode)
+    {
+        const string source = """
+            const original = process;
+            const replacement = {
+                get cpuUsage() {
+                    console.log('get');
+                    return function (user = -42) { return { user: this === replacement ? user : 0 }; };
+                },
+                resourceUsage() { return { userCPUTime: this === replacement ? -43 : 0 }; },
+                availableMemory() { return this === replacement ? -44 : 0; },
+                constrainedMemory() { return this === replacement ? -45 : 0; },
+                getActiveResourcesInfo() { return [this === replacement ? 'replacement' : 'wrong']; }
+            };
+            globalThis.process = replacement;
+            console.log(process.cpuUsage().user, globalThis.process.cpuUsage().user);
+            console.log(process.resourceUsage().userCPUTime, globalThis.process.resourceUsage().userCPUTime);
+            console.log(process.availableMemory(), globalThis.process.availableMemory());
+            console.log(process.constrainedMemory(), globalThis.process.constrainedMemory());
+            console.log(process.getActiveResourcesInfo()[0], globalThis.process.getActiveResourcesInfo()[0]);
+
+            function restore() { console.log('arg'); globalThis.process = original; return [-46]; }
+            console.log(process.cpuUsage(...restore()).user);
+            globalThis.process = replacement;
+            function* read() { return process.cpuUsage(yield 'waiting').user; }
+            const call = read();
+            console.log(call.next().value);
+            globalThis.process = original;
+            console.log(call.next(-47).value);
+            console.log(typeof process.cpuUsage().user);
+            """;
+        Assert.Equal("get\nget\n-42 -42\n-43 -43\n-44 -44\n-45 -45\nreplacement replacement\n" +
+                     "get\narg\n-46\nget\nwaiting\n-47\nnumber\n", TestHarness.RunUnchecked(source, mode));
+    }
+
+    [Theory, ModeData]
     public void Process_CpuUsage_ReturnsMicrosecondsAndSupportsDelta(ExecutionMode mode)
     {
         var source = """
