@@ -13523,7 +13523,7 @@ public partial class StandaloneDllTests
         {
             """
             const I:any=Intl;const J:any=Intl;console.log(typeof I,I===J);
-            console.log(Object.keys(I).join(','));console.log(typeof I.NumberFormat,I.NumberFormat.length,I.NumberFormat===J.NumberFormat);
+            console.log(Object.getOwnPropertyNames(I).join(','));console.log(typeof I.NumberFormat,I.NumberFormat.length,I.NumberFormat===J.NumberFormat);
             const value=new I.NumberFormat('en-US',{useGrouping:false});console.log(value.format(1234.5));
             """,
             "object true\nNumberFormat,DateTimeFormat,Collator,PluralRules,RelativeTimeFormat,ListFormat,Segmenter,DisplayNames\nfunction 2 true\n1234.5\n", "main.ts", false
@@ -13542,7 +13542,7 @@ public partial class StandaloneDllTests
             """
             const I:any=Intl;console.log(typeof I,I===Intl,typeof I.NumberFormat,Object.keys(I).length);
             """,
-            "object true function 8\n", "main.ts", true
+            "object true function 0\n", "main.ts", true
         },
         new object[]
         {
