@@ -49,6 +49,13 @@ public sealed class EmittedBufferRuntime
         internal set => Set(ref _fromString, value);
     }
 
+    private MethodBuilder? _encodeString;
+    internal MethodBuilder EncodeString
+    {
+        get => Require(_encodeString);
+        set => Set(ref _encodeString, value);
+    }
+
     private MethodBuilder? _fromStringForAlloc;
     internal MethodBuilder FromStringForAlloc
     {
@@ -627,6 +634,8 @@ public sealed class EmittedBufferRuntime
         _ = CtorSize;
         _ = LengthGetter;
         _ = FromString;
+        _ = EncodeString;
+        _ = FromStringForAlloc;
         _ = FromArray;
         _ = FromBuffer;
         _ = FromValue;

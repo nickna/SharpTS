@@ -11,7 +11,8 @@ namespace SharpTS.Tests.CompilerTests;
 
 public class EmittedBufferRuntimeTests
 {
-    private static IEnumerable<PropertyInfo> Handles => typeof(EmittedBufferRuntime).GetProperties()
+    private static IEnumerable<PropertyInfo> Handles => typeof(EmittedBufferRuntime)
+        .GetProperties(BindingFlags.Instance | BindingFlags.Public | BindingFlags.NonPublic)
         .Where(property => typeof(MemberInfo).IsAssignableFrom(property.PropertyType));
 
     public static IEnumerable<object[]> HandleNames => Handles.Select(property => new object[] { property.Name });
@@ -21,7 +22,7 @@ public class EmittedBufferRuntimeTests
     public void CompletionRejectsEveryMissingHandleAndCanBeRetried(string missingHandle)
     {
         var buffer = CreateDeclarations(missingHandle);
-        var property = typeof(EmittedBufferRuntime).GetProperty(missingHandle)!;
+        var property = Handles.Single(property => property.Name == missingHandle);
         var readError = Assert.Throws<TargetInvocationException>(() => property.GetValue(buffer));
         Assert.Contains($"'{missingHandle}'", Assert.IsType<InvalidOperationException>(readError.InnerException).Message);
         Assert.Contains($"'{missingHandle}'", Assert.Throws<InvalidOperationException>(buffer.CompleteEmission).Message);

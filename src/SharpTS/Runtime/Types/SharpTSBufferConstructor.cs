@@ -101,12 +101,16 @@ public sealed class SharpTSBufferConstructor
         if (args.Length == 0 || args[0].IsNull)
             throw new Exception("Buffer.from requires an argument");
 
-        var data = args[0].ToObject()!;  // Null check is above
-        var encoding = args.Length > 1 ? args[1].ToObject()?.ToString() ?? "utf8" : "utf8";
+        if (args[0].IsString)
+        {
+            var encoding = args.Length > 1 && args[1].IsString ? args[1].AsStringUnsafe() : BufferEncoding.Default;
+            SharpTSBuffer.ValidateStringEncoding(encoding);
+            return RuntimeValue.FromObject(SharpTSBuffer.FromString(args[0].AsStringUnsafe(), encoding));
+        }
 
+        var data = args[0].ToObject()!;  // Null check is above
         return RuntimeValue.FromObject(data switch
         {
-            string s => SharpTSBuffer.FromString(s, encoding),
             SharpTSBuffer buf => SharpTSBuffer.FromBuffer(buf),
             SharpTSArray arr => SharpTSBuffer.FromArray(arr),
             List<object?> list => SharpTSBuffer.FromArray(list),

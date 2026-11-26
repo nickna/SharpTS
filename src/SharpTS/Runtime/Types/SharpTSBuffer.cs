@@ -328,8 +328,8 @@ public class SharpTSBuffer : ITypeCategorized
         }
         else if (value is string s)
         {
-            if (allocating && !BufferEncoding.IsSupported(encoding))
-                throw new ThrowException(new SharpTSTypeError($"Unknown encoding: {encoding}"));
+            if (allocating)
+                ValidateStringEncoding(encoding);
             if (allocating && s.Length == 0) return;
             try
             {
@@ -1299,6 +1299,12 @@ public class SharpTSBuffer : ITypeCategorized
 
     // Encoding conversions delegate to the shared BufferEncoding table so Buffer
     // and fs agree on every encoding name (and the compiled IL twin stays in sync).
+    internal static void ValidateStringEncoding(string encoding)
+    {
+        if (!BufferEncoding.IsSupported(encoding))
+            throw new ThrowException(new SharpTSTypeError($"Unknown encoding: {encoding}") { Code = "ERR_UNKNOWN_ENCODING" });
+    }
+
     private static byte[] EncodeString(string data, string encoding) => BufferEncoding.Encode(data, encoding);
 
     private static string DecodeBytes(byte[] data, string encoding) => BufferEncoding.Decode(data, encoding);
