@@ -1870,6 +1870,8 @@ public abstract partial class ExpressionEmitterBase
             return false;
         if (obj is Expr.Variable { Name.Lexeme: "process" } && member.Name.Lexeme is "cwd" or "uptime")
             return false;
+        if (obj is Expr.Variable { Name.Lexeme: "globalThis" or "global" } && member.Name.Lexeme == "parseFloat")
+            return false;
         // Math's property strategy declines live mutations. Its ordinary lookup must retain the
         // original namespace receiver, including when evaluating an argument suspends this call.
         if (obj is Expr.Variable { Name.Lexeme: "Math" }
