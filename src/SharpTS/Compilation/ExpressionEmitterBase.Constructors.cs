@@ -649,32 +649,16 @@ public abstract partial class ExpressionEmitterBase
         && parameter.Type is null or "any" or "unknown" or "object";
 
     /// <summary>
-    /// Attempts to emit an Intl namespace constructor.
-    /// Returns true if handled.
+    /// Resolves an Intl constructor from the current namespace before evaluating arguments.
     /// </summary>
-    protected bool TryEmitIntlConstructor(List<string> namespaceParts, string className, List<Expr> arguments)
+    protected bool TryEmitIntlConstructor(List<string> namespaceParts, string className, Expr.New expression)
     {
-        if (namespaceParts is not ["Intl"])
+        if (namespaceParts is not [BuiltInNames.Intl] || className is not
+            ("NumberFormat" or "DateTimeFormat" or "Collator" or "PluralRules"
+            or "RelativeTimeFormat" or "ListFormat" or "Segmenter" or "DisplayNames"))
             return false;
 
-        var intl = Ctx.Runtime!.RequireIntl();
-        System.Reflection.MethodInfo? method = className switch
-        {
-            "NumberFormat" => intl.CreateNumberFormat,
-            "DateTimeFormat" => intl.CreateDateTimeFormat,
-            "Collator" => intl.CreateCollator,
-            "PluralRules" => intl.CreatePluralRules,
-            "RelativeTimeFormat" => intl.CreateRelativeTimeFormat,
-            "ListFormat" => intl.CreateListFormat,
-            "Segmenter" => intl.CreateSegmenter,
-            "DisplayNames" => intl.CreateDisplayNames,
-            _ => null
-        };
-
-        if (method == null)
-            return false;
-
-        EmitTwoArgConstructor(arguments, method);
+        EmitDynamicConstruction(expression);
         return true;
     }
 

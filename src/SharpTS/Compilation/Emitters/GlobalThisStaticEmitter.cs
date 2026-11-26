@@ -19,7 +19,7 @@ public sealed class GlobalThisStaticEmitter : IStaticTypeEmitterStrategy
 
     /// <summary>
     /// Attempts to emit IL for a globalThis method call.
-    /// Emits direct runtime calls for parseInt/parseFloat/isNaN/isFinite.
+    /// Emits direct runtime calls for parseInt/isNaN/isFinite.
     /// </summary>
     public bool TryEmitStaticCall(IEmitterContext emitter, string methodName, List<Expr> arguments)
     {
@@ -66,12 +66,6 @@ public sealed class GlobalThisStaticEmitter : IStaticTypeEmitterStrategy
                 il.Emit(OpCodes.Box, ctx.Types.Double);
                 return true;
             }
-
-            case "parseFloat":
-                if (arguments.Count > 0) { emitter.EmitExpression(arguments[0]); emitter.EmitBoxIfNeeded(arguments[0]); } else { il.Emit(OpCodes.Ldnull); }
-                il.Emit(OpCodes.Call, ctx.Runtime!.Numbers.ParseFloat);
-                il.Emit(OpCodes.Box, ctx.Types.Double);
-                return true;
 
             case "isNaN":
                 if (arguments.Count > 0) { emitter.EmitExpression(arguments[0]); emitter.EmitBoxIfNeeded(arguments[0]); } else { il.Emit(OpCodes.Ldsfld, ctx.Runtime!.Sentinels.UndefinedInstance); }

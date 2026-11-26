@@ -28,6 +28,53 @@ public class IntlNumberFormatTests
             TestHarness.RunUnchecked(source, mode));
     }
 
+    [Theory, ModeData]
+    public void Intl_ConstructionResolvesTheCurrentFactoryBeforeArguments(ExecutionMode mode)
+    {
+        const string source = """
+            const original = Intl;
+            console.log(new Intl.NumberFormat('en-US').format(1234));
+            const replacement = {
+                get NumberFormat() {
+                    console.log('get');
+                    return function (value) { this.marker = value; };
+                }
+            };
+            function restore() { console.log('arg'); globalThis.Intl = original; return ['value']; }
+            globalThis.Intl = replacement;
+            console.log(new Intl.NumberFormat(...restore()).marker);
+            globalThis.Intl = replacement;
+            function* construct() { return new Intl.NumberFormat(yield 'wait'); }
+            const call = construct();
+            console.log(call.next().value);
+            globalThis.Intl = original;
+            console.log(call.next('resumed').value.marker);
+            console.log(new Intl.NumberFormat('en-US').format(1234));
+            """;
+        Assert.Equal("1,234\nget\narg\nvalue\nget\nwait\nresumed\n1,234\n", TestHarness.RunUnchecked(source, mode));
+    }
+
+    [Theory, ModeData]
+    public void Intl_FactoriesAreNonEnumerableOwnProperties(ExecutionMode mode)
+    {
+        const string source = """
+            const intl = globalThis.Intl;
+            const names = ['NumberFormat', 'DateTimeFormat', 'Collator', 'PluralRules',
+                'RelativeTimeFormat', 'ListFormat', 'Segmenter', 'DisplayNames'];
+            const ownNames = Object.getOwnPropertyNames(intl);
+            for (const name of names) {
+                const descriptor = Object.getOwnPropertyDescriptor(intl, name);
+                console.log(ownNames.includes(name), descriptor.value === intl[name],
+                    descriptor.writable, descriptor.enumerable, descriptor.configurable);
+            }
+            console.log(Object.keys(intl).length);
+            intl.NumberFormat = () => 42;
+            console.log(intl.NumberFormat(), Object.keys(intl).includes('NumberFormat'));
+            """;
+        Assert.Equal(string.Concat(Enumerable.Repeat("true true true false true\n", 8)) + "0\n42 false\n",
+            TestHarness.RunUnchecked(source, mode));
+    }
+
     // ========== Basic Decimal Formatting ==========
 
     [Theory, ModeData]

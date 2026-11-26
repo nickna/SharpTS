@@ -108,7 +108,7 @@ public class EmittedAbortRuntimeTests
         Assert.Throws<InvalidOperationException>(abort.CompleteEmission);
         Assert.Throws<InvalidOperationException>(() => abort.NamespacePopulate);
         Assert.False(abort.IsComplete);
-        Emit("EmitNamespaceSingletons", type, abort, null!, getOrCreate);
+        Emit("EmitNamespaceSingletons", type, abort, null!, getOrCreate, new EmittedDescriptorStorageRuntime());
         Assert.True(abort.NamespacePopulate.GetILGenerator().ILOffset > 0);
         // The constructor value has a separate late emission stage; this probe
         // isolates namespace/helper staging and supplies its declared stub.

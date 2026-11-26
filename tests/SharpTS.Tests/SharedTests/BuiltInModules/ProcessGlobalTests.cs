@@ -124,6 +124,29 @@ public class ProcessGlobalTests
     }
 
     [Theory, ModeData]
+    public void Process_UptimeUsesTheLiveReceiverBeforeArguments(ExecutionMode mode)
+    {
+        const string source = """
+            const original = process;
+            const replacement = {
+                get uptime() {
+                    console.log('get');
+                    return function (value) { return this === replacement ? value : -1; };
+                }
+            };
+            globalThis.process = replacement;
+            console.log(globalThis.process.uptime(-42));
+            function* read() { return process.uptime(yield 'waiting'); }
+            const call = read();
+            console.log(call.next().value);
+            globalThis.process = original;
+            console.log(call.next(-43).value);
+            console.log(process.uptime() >= 0);
+            """;
+        Assert.Equal("get\n-42\nget\nwaiting\n-43\ntrue\n", TestHarness.RunUnchecked(source, mode));
+    }
+
+    [Theory, ModeData]
     public void Process_Env_ReturnsEnvObject(ExecutionMode mode)
     {
         var source = """

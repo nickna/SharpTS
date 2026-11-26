@@ -8,19 +8,10 @@ public partial class RuntimeEmitter
     /// <summary>
     /// Value-position namespace singletons for AbortSignal and Intl (#224).
     ///
-    /// Direct forms (`AbortSignal.abort(x)`, `new Intl.NumberFormat(...)`) are
-    /// intercepted at compile time by AbortSignalStaticEmitter /
-    /// TryEmitIntlConstructor and never touch these. The singletons only
-    /// surface when the namespace is used as a VALUE — bare reference,
-    /// aliasing (`const I = Intl`), `typeof`, passing as an argument — the
-    /// same role MathSingletonField/JsonSingletonField play for Math/JSON.
-    /// Members are $TSFunction wrappers over the existing $Runtime helpers, so
-    /// aliased calls (`A.abort('r')`) and aliased construction
-    /// (`new I.NumberFormat(...)` via NewOnFunction + the IsConstructor
-    /// CreateIntl* exemption) reuse one implementation.
-    ///
-    /// Lazily populated: the populate shell is called before each bare-
-    /// reference load; the field doubles as the populated flag.
+    /// Members are $TSFunction wrappers over runtime helpers. Direct and
+    /// aliased Intl construction both resolve the factory through the namespace.
+    /// AbortSignal exposes the same helpers through its static emitter and its
+    /// namespace value.
     /// </summary>
     /// <summary>
     /// Pre-defines the namespace singleton fields so earlier $Runtime methods
@@ -52,7 +43,7 @@ public partial class RuntimeEmitter
 
     private void EmitNamespaceSingletons(
         TypeBuilder typeBuilder, EmittedAbortRuntime? abort, EmittedIntlRuntime? intl,
-        MethodBuilder functionGetOrCreate)
+        MethodBuilder functionGetOrCreate, EmittedDescriptorStorageRuntime descriptorStorage)
     {
         if (abort is not null)
         {
@@ -78,7 +69,7 @@ public partial class RuntimeEmitter
                     ("ListFormat", intl.CreateListFormat, 2),
                     ("Segmenter", intl.CreateSegmenter, 2),
                     ("DisplayNames", intl.CreateDisplayNames, 2),
-                ]);
+                ], descriptorStorage);
         }
     }
 
@@ -87,7 +78,8 @@ public partial class RuntimeEmitter
         MethodBuilder functionGetOrCreate,
         string namespaceName,
         FieldBuilder field,
-        (string JsName, MethodBuilder Helper, int JsLength)[] members)
+        (string JsName, MethodBuilder Helper, int JsLength)[] members,
+        EmittedDescriptorStorageRuntime? nonEnumerableMembers = null)
     {
         var method = typeBuilder.DefineMethod(
             $"_{namespaceName}NamespacePopulate",
@@ -107,6 +99,7 @@ public partial class RuntimeEmitter
         il.MarkLabel(doFillLabel);
 
         var dictLocal = il.DeclareLocal(_types.DictionaryStringObject);
+        var wrapperLocal = nonEnumerableMembers is null ? null : il.DeclareLocal(_types.Object);
         il.Emit(OpCodes.Newobj, _types.GetDefaultConstructor(_types.DictionaryStringObject));
         il.Emit(OpCodes.Stloc, dictLocal);
 
@@ -123,7 +116,19 @@ public partial class RuntimeEmitter
             il.Emit(OpCodes.Ldstr, jsName);
             il.Emit(OpCodes.Ldc_I4, jsLength);
             il.Emit(OpCodes.Call, functionGetOrCreate);
+            if (wrapperLocal is not null)
+            {
+                il.Emit(OpCodes.Dup);
+                il.Emit(OpCodes.Stloc, wrapperLocal);
+            }
             il.Emit(OpCodes.Callvirt, setItem);
+
+            if (nonEnumerableMembers is { } storage)
+            {
+                il.Emit(OpCodes.Ldloc, dictLocal);
+                il.Emit(OpCodes.Ldstr, jsName);
+                EmitIntrinsicDataProperty(il, storage, () => il.Emit(OpCodes.Ldloc, wrapperLocal!), enumerable: false);
+            }
         }
 
         // Publish last so a half-filled dict is never observable.

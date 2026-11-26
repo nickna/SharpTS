@@ -9,6 +9,22 @@ namespace SharpTS.Tests.SharedTests;
 public sealed class GlobalReflectDefinitionTests
 {
     [Theory, ModeData]
+    public void IntrinsicGlobalAssignmentPreservesAttributesUntilDeletion(ExecutionMode mode)
+    {
+        const string source = """
+            const root = globalThis;
+            root.parseFloat = () => 42;
+            const descriptor = Object.getOwnPropertyDescriptor(root, 'parseFloat');
+            console.log(root.parseFloat(), descriptor.writable, descriptor.enumerable, descriptor.configurable);
+            console.log(Object.keys(root).includes('parseFloat'));
+            delete root.parseFloat;
+            root.parseFloat = () => 7;
+            console.log(root.parseFloat(), Object.getOwnPropertyDescriptor(root, 'parseFloat').enumerable);
+            """;
+        Assert.Equal("42 true false true\nfalse\n7 true\n", TestHarness.RunUnchecked(source, mode));
+    }
+
+    [Theory, ModeData]
     public void IntrinsicGlobalDefinitionsPreserveOmittedAttributesAndValues(ExecutionMode mode)
     {
         const string source = """

@@ -127,18 +127,9 @@ public partial class RuntimeEmitter
 
         void InstallData(string name, bool enumerable, Action emitValue)
         {
-            var storage = runtime.DescriptorStorage;
             il.Emit(OpCodes.Ldsfld, runtime.GlobalObject.SingletonField);
             il.Emit(OpCodes.Ldstr, name);
-            il.Emit(OpCodes.Newobj, storage.DescriptorConstructor);
-            il.Emit(OpCodes.Dup);
-            emitValue();
-            il.Emit(OpCodes.Callvirt, storage.DescriptorValue.GetSetMethod()!);
-            il.Emit(OpCodes.Dup);
-            il.Emit(enumerable ? OpCodes.Ldc_I4_1 : OpCodes.Ldc_I4_0);
-            il.Emit(OpCodes.Callvirt, storage.DescriptorEnumerable.GetSetMethod()!);
-            il.Emit(OpCodes.Call, storage.DefineProperty);
-            il.Emit(OpCodes.Pop);
+            EmitIntrinsicDataProperty(il, runtime.DescriptorStorage, emitValue, enumerable);
         }
     }
 

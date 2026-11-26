@@ -118,6 +118,28 @@ public class BufferTests
     }
 
     [Theory, ModeData]
+    public void Buffer_AllocValidatesNonemptyFillPatternsAndStringEncodings(ExecutionMode mode)
+    {
+        const string source = """
+            for (const [fill, encoding] of [
+                [Buffer.alloc(0), undefined],
+                [new Uint8Array(0), undefined],
+                ['ab', 'unknown-encoding'],
+                ['', 'unknown-encoding'],
+                ['zz', 'hex']
+            ]) {
+                try { Buffer.alloc(3, fill, encoding); console.log('accepted'); }
+                catch (error) { console.log(error.name); }
+                console.log(Buffer.alloc(0, fill, encoding).length);
+            }
+            console.log(Buffer.alloc(2, '').toString('hex'), Buffer.alloc(2, 'a', '').toString('hex'));
+            console.log(Buffer.alloc(2, 7, 'unknown-encoding').toString('hex'));
+            """;
+        Assert.Equal(string.Concat(Enumerable.Repeat("TypeError\n0\n", 5)) + "0000 6161\n0707\n",
+            TestHarness.RunUnchecked(source, mode));
+    }
+
+    [Theory, ModeData]
     public void Buffer_Length_Property(ExecutionMode mode)
     {
         var source = """

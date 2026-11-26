@@ -66,7 +66,8 @@ public class EmittedIntlRuntimeTests
     public void EarlyNamespaceFieldAndFactoriesRemainReadableBeforeLatePopulation()
     {
         var assembly = new PersistedAssemblyBuilder(new AssemblyName("intl_staged"), typeof(object).Assembly);
-        var type = assembly.DefineDynamicModule("main").DefineType("Runtime", TypeAttributes.Public);
+        var module = assembly.DefineDynamicModule("main");
+        var type = module.DefineType("Runtime", TypeAttributes.Public);
         var getOrCreate = type.DefineMethod("GetOrCreate", MethodAttributes.Public | MethodAttributes.Static,
             typeof(object), [typeof(MethodInfo), typeof(string), typeof(int)]);
         getOrCreate.GetILGenerator().Emit(OpCodes.Ldnull);
@@ -89,7 +90,14 @@ public class EmittedIntlRuntimeTests
         }
         Assert.Throws<InvalidOperationException>(intl.CompleteEmission);
         Assert.False(intl.IsComplete);
-        Emit("EmitNamespaceSingletons", type, null, intl, getOrCreate);
+        var descriptors = new EmittedDescriptorStorageRuntime();
+        Emit("EmitCompiledPropertyDescriptorClass", module, descriptors);
+        var defineProperty = type.DefineMethod("DefineProperty", MethodAttributes.Public | MethodAttributes.Static,
+            typeof(bool), [typeof(object), typeof(string), descriptors.DescriptorType]);
+        defineProperty.GetILGenerator().Emit(OpCodes.Ldc_I4_1);
+        defineProperty.GetILGenerator().Emit(OpCodes.Ret);
+        descriptors.DefineProperty = defineProperty;
+        Emit("EmitNamespaceSingletons", type, null, intl, getOrCreate, descriptors);
         Assert.True(intl.NamespacePopulate.GetILGenerator().ILOffset > 0);
         Assert.False(type.IsCreated());
         Assert.False(intl.IsComplete);

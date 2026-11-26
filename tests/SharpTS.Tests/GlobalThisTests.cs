@@ -56,6 +56,39 @@ public class GlobalThisTests
     }
 
     [Theory, ModeData]
+    public void GlobalThis_ParseFloatCallsResolveTheLivePropertyBeforeArguments(ExecutionMode mode)
+    {
+        const string source = """
+            const root = globalThis;
+            const original = root.parseFloat;
+            console.log(globalThis.parseFloat('5.5'));
+            const replacement = function (value) {
+                "use strict";
+                return this === root ? value : -1;
+            };
+            Object.defineProperty(root, 'parseFloat', {
+                configurable: true,
+                get() { console.log('get'); return replacement; }
+            });
+            function restore() {
+                console.log('arg');
+                Object.defineProperty(root, 'parseFloat', { value: original, writable: true });
+                return [42];
+            }
+            console.log(globalThis.parseFloat(...restore()));
+            console.log(globalThis.parseFloat('7'));
+            root.parseFloat = replacement;
+            console.log(root.parseFloat(8), globalThis.parseFloat(9));
+            function* read() { return globalThis.parseFloat(yield 'waiting'); }
+            const call = read();
+            console.log(call.next().value);
+            root.parseFloat = original;
+            console.log(call.next(10).value);
+            """;
+        Assert.Equal("5.5\nget\narg\n42\n7\n8 9\nwaiting\n10\n", TestHarness.RunUnchecked(source, mode));
+    }
+
+    [Theory, ModeData]
     public void GlobalThis_AssignmentPreservesReadOnlyConstants(ExecutionMode mode)
     {
         const string source = """
