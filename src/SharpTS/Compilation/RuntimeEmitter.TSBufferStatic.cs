@@ -8,7 +8,7 @@ public partial class RuntimeEmitter
     private void EmitBufferAllocValue(TypeBuilder owner, EmittedRuntime runtime, EmittedBufferRuntime buffer)
     {
         var method = owner.DefineMethod("BufferAllocValue", MethodAttributes.Public | MethodAttributes.Static,
-            _types.Object, [_types.Object]);
+            _types.Object, [_types.Object, _types.Object, _types.Object]);
         buffer.AllocValue = method;
         var il = method.GetILGenerator();
         var hasSize = il.DefineLabel();
@@ -21,6 +21,50 @@ public partial class RuntimeEmitter
         il.Emit(OpCodes.Unbox_Any, _types.Double);
         il.Emit(OpCodes.Conv_I4);
         il.Emit(OpCodes.Call, buffer.Alloc);
+        var result = il.DeclareLocal(buffer.Type);
+        il.Emit(OpCodes.Stloc, result);
+
+        var done = il.DefineLabel();
+        il.Emit(OpCodes.Ldarg_1);
+        il.Emit(OpCodes.Brfalse, done);
+        il.Emit(OpCodes.Ldarg_1);
+        il.Emit(OpCodes.Ldsfld, runtime.Sentinels.UndefinedInstance);
+        il.Emit(OpCodes.Beq, done);
+
+        var fill = il.DeclareLocal(_types.Object);
+        il.Emit(OpCodes.Ldarg_1);
+        il.Emit(OpCodes.Stloc, fill);
+        if (buffer.HasTypedArrayCopy)
+        {
+            var notView = il.DefineLabel();
+            il.Emit(OpCodes.Ldloc, fill);
+            il.Emit(OpCodes.Isinst, runtime.TypedArrays.RequireImplementation().BaseType);
+            il.Emit(OpCodes.Brfalse, notView);
+            il.Emit(OpCodes.Ldloc, fill);
+            il.Emit(OpCodes.Ldnull);
+            il.Emit(OpCodes.Ldnull);
+            il.Emit(OpCodes.Call, buffer.CopyBytesFrom);
+            il.Emit(OpCodes.Stloc, fill);
+            il.MarkLabel(notView);
+        }
+
+        var hasEncoding = il.DefineLabel();
+        il.Emit(OpCodes.Ldloc, result);
+        il.Emit(OpCodes.Ldloc, fill);
+        il.Emit(OpCodes.Ldc_I4_0);
+        il.Emit(OpCodes.Ldc_I4, int.MaxValue);
+        il.Emit(OpCodes.Ldarg_2);
+        il.Emit(OpCodes.Isinst, _types.String);
+        il.Emit(OpCodes.Dup);
+        il.Emit(OpCodes.Brtrue, hasEncoding);
+        il.Emit(OpCodes.Pop);
+        il.Emit(OpCodes.Ldstr, "utf8");
+        il.MarkLabel(hasEncoding);
+        il.Emit(OpCodes.Call, buffer.Fill);
+        il.Emit(OpCodes.Ret);
+
+        il.MarkLabel(done);
+        il.Emit(OpCodes.Ldloc, result);
         il.Emit(OpCodes.Ret);
     }
 

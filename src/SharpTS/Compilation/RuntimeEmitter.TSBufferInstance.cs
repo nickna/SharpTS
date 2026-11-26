@@ -610,22 +610,24 @@ public partial class RuntimeEmitter
         il.MarkLabel(continueLabel);
 
         // Determine fill bytes based on value type
-        var isDoubleLabel = il.DefineLabel();
         var isStringLabel = il.DefineLabel();
         var afterFillBytesLabel = il.DefineLabel();
+        var checkLength = il.DefineLabel();
 
         // if (value is double d)
         il.Emit(OpCodes.Ldarg_1);
         il.Emit(OpCodes.Isinst, _types.Double);
         il.Emit(OpCodes.Brfalse, isStringLabel);
 
-        // fillBytes = new byte[] { (byte)((int)d & 0xFF) }
+        // Reduce to a byte before narrowing the guest number to an integer.
         il.Emit(OpCodes.Ldc_I4_1);
         il.Emit(OpCodes.Newarr, _types.Byte);
         il.Emit(OpCodes.Dup);
         il.Emit(OpCodes.Ldc_I4_0);
         il.Emit(OpCodes.Ldarg_1);
         il.Emit(OpCodes.Unbox_Any, _types.Double);
+        il.Emit(OpCodes.Ldc_R8, 256.0);
+        il.Emit(OpCodes.Rem);
         il.Emit(OpCodes.Conv_I4);
         il.Emit(OpCodes.Ldc_I4, 0xFF);
         il.Emit(OpCodes.And);
@@ -641,30 +643,45 @@ public partial class RuntimeEmitter
         var defaultFillLabel = il.DefineLabel();
         il.Emit(OpCodes.Brfalse, defaultFillLabel);
 
-        // fillBytes = Encoding.UTF8.GetBytes(s) (simplified - always use UTF8)
-        il.Emit(OpCodes.Call, _types.GetProperty(_types.Encoding, "UTF8")!.GetGetMethod()!);
         il.Emit(OpCodes.Ldarg_1);
         il.Emit(OpCodes.Castclass, _types.String);
-        il.Emit(OpCodes.Callvirt, _types.GetMethod(_types.Encoding, "GetBytes", [_types.String])!);
+        il.Emit(OpCodes.Ldarg, 4);
+        il.Emit(OpCodes.Call, buffer.FromString);
+        il.Emit(OpCodes.Call, buffer.GetData);
         il.Emit(OpCodes.Stloc, fillBytesLocal);
+        il.Emit(OpCodes.Br, checkLength);
 
-        // if fillBytes.Length == 0 return this
-        var afterEmptyCheck = il.DefineLabel();
-        il.Emit(OpCodes.Ldloc, fillBytesLocal);
-        il.Emit(OpCodes.Ldlen);
-        il.Emit(OpCodes.Conv_I4);
-        il.Emit(OpCodes.Brtrue, afterEmptyCheck);
-        il.Emit(OpCodes.Ldarg_0);
-        il.Emit(OpCodes.Ret);
-
-        il.MarkLabel(afterEmptyCheck);
-        il.Emit(OpCodes.Br, afterFillBytesLabel);
-
-        // default: fillBytes = new byte[] { 0 }
         il.MarkLabel(defaultFillLabel);
+        var notBuffer = il.DefineLabel();
+        il.Emit(OpCodes.Ldarg_1);
+        il.Emit(OpCodes.Isinst, typeBuilder);
+        il.Emit(OpCodes.Brfalse, notBuffer);
+        il.Emit(OpCodes.Ldarg_1);
+        il.Emit(OpCodes.Castclass, typeBuilder);
+        il.Emit(OpCodes.Ldfld, buffer.DataField);
+        il.Emit(OpCodes.Stloc, fillBytesLocal);
+        il.Emit(OpCodes.Br, checkLength);
+
+        il.MarkLabel(notBuffer);
         il.Emit(OpCodes.Ldc_I4_1);
         il.Emit(OpCodes.Newarr, _types.Byte);
         il.Emit(OpCodes.Stloc, fillBytesLocal);
+        il.Emit(OpCodes.Ldarg_1);
+        il.Emit(OpCodes.Isinst, _types.Boolean);
+        il.Emit(OpCodes.Brfalse, afterFillBytesLabel);
+        il.Emit(OpCodes.Ldloc, fillBytesLocal);
+        il.Emit(OpCodes.Ldc_I4_0);
+        il.Emit(OpCodes.Ldarg_1);
+        il.Emit(OpCodes.Unbox_Any, _types.Boolean);
+        il.Emit(OpCodes.Stelem_I1);
+        il.Emit(OpCodes.Br, afterFillBytesLabel);
+
+        il.MarkLabel(checkLength);
+        il.Emit(OpCodes.Ldloc, fillBytesLocal);
+        il.Emit(OpCodes.Ldlen);
+        il.Emit(OpCodes.Brtrue, afterFillBytesLabel);
+        il.Emit(OpCodes.Ldarg_0);
+        il.Emit(OpCodes.Ret);
 
         il.MarkLabel(afterFillBytesLabel);
 

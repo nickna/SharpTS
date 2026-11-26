@@ -165,6 +165,8 @@ public static class BuiltInNames
     public const string Reflect = "Reflect";
     public const string Atomics = "Atomics";
     public const string Intl = "Intl";
+    internal static readonly string[] IntlConstructorNames =
+    ["NumberFormat", "DateTimeFormat", "Collator", "PluralRules", "RelativeTimeFormat", "ListFormat", "Segmenter", "DisplayNames"];
 
     #endregion
 

@@ -1038,6 +1038,7 @@ public sealed partial class RuntimeFeatureDetector
                 break;
 
             case Expr.Get g:
+                MarkProcessStreamRead(g.Object, g.Name.Lexeme);
                 if (_dateConstructorReceiverReads == 0 && IsDateConstructorEscape(g))
                     _set.UsesDateConstructorMutation = true;
                 // A held constructor or definition method can be reached without
@@ -1252,6 +1253,7 @@ public sealed partial class RuntimeFeatureDetector
                     _set.UsesStringPrototypeMutation = true;
                 if (gi.Index is Expr.Literal { Value: string computedGlobalName })
                 {
+                    MarkProcessStreamRead(gi.Object, computedGlobalName);
                     // Computed global-object constructor access, e.g.
                     // `this["Date"]`, is semantically the same feature trigger
                     // as the corresponding named member access.
@@ -2148,6 +2150,19 @@ public sealed partial class RuntimeFeatureDetector
 
     private bool IsOpaqueEvaluator(Expr owner, string memberName) =>
         IsGlobalObject(owner) && memberName is "eval" or "Function";
+
+    private void MarkProcessStreamRead(Expr receiver, string name)
+    {
+        if (name is not ("stdin" or "stdout" or "stderr")) return;
+        if (ExpressionUnwrapper.Unwrap(receiver) switch
+            {
+                Expr.Variable { Name.Lexeme: "process" } => true,
+                Expr.Get { Name.Lexeme: "process" } member => IsGlobalObject(member.Object),
+                Expr.GetIndex { Index: Expr.Literal { Value: "process" } } member => IsGlobalObject(member.Object),
+                _ => false,
+            })
+            _set.UsesNodeStreams = true;
+    }
 
     private void MarkOpaqueEvaluatorMutation()
     {

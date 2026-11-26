@@ -728,7 +728,7 @@ public partial class TypeChecker
     {
         BindingSymbol constBinding = RegisterValueDeclaration(stmt.Name);
         ReachLexicalValueFlow(constBinding);
-        _typeMap.MarkConstBinding(constBinding);
+        _typeMap.MarkConstBinding(constBinding, stmt.Initializer);
 
         TypeInfo constDeclaredType;
         TypeInfo? initializerFlowType = null;

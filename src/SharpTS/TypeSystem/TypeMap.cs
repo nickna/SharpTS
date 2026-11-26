@@ -66,7 +66,7 @@ public class TypeMap
     private readonly HashSet<Token> _rawNumericStorage = new(ReferenceEqualityComparer.Instance);
     private readonly HashSet<BindingSymbol> _rawNumericStorageBindings = new(ReferenceEqualityComparer.Instance);
     private readonly HashSet<BindingSymbol> _assertedAssignmentStorage = new(ReferenceEqualityComparer.Instance);
-    private readonly HashSet<BindingSymbol> _constBindings = new(ReferenceEqualityComparer.Instance);
+    private readonly Dictionary<BindingSymbol, Expr> _constInitializers = new(ReferenceEqualityComparer.Instance);
     private readonly HashSet<BindingSymbol> _sourceConstCaptureBindings = new(ReferenceEqualityComparer.Instance);
 
     // Written assertions can admit arbitrary values without changing the
@@ -74,8 +74,10 @@ public class TypeMap
     internal void MarkAssertedAssignmentStorage(BindingSymbol binding) => _assertedAssignmentStorage.Add(binding);
     internal bool IsAssertedAssignmentStorage(Token name) =>
         GetValueBinding(name) is { } binding && _assertedAssignmentStorage.Contains(binding);
-    internal void MarkConstBinding(BindingSymbol binding) => _constBindings.Add(binding);
-    internal bool IsConstBinding(BindingSymbol binding) => _constBindings.Contains(binding);
+    internal void MarkConstBinding(BindingSymbol binding, Expr initializer) => _constInitializers[binding] = initializer;
+    internal bool IsConstBinding(BindingSymbol binding) => _constInitializers.ContainsKey(binding);
+    internal Expr? GetConstInitializer(Token name) => GetValueBinding(name) is { } binding
+        && !_assertedAssignmentStorage.Contains(binding) ? _constInitializers.GetValueOrDefault(binding) : null;
     // Capture stability is independent of the existing asserted-assignment admission policy.
     internal void MarkSourceConstCaptureBinding(BindingSymbol binding) => _sourceConstCaptureBindings.Add(binding);
     internal bool IsConstCaptureBinding(BindingSymbol binding) => IsConstBinding(binding) || _sourceConstCaptureBindings.Contains(binding);

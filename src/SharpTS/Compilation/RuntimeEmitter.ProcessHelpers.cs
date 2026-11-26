@@ -696,21 +696,24 @@ public partial class RuntimeEmitter
 
         // --- GetStdout: create $Writable with Console.Write callback, cache in static field ---
         runtime.Process.RequireStreams().GetStdout = EmitStreamSingletonGetter(typeBuilder, runtime, "GetStdout",
-            runtime.Process.RequireStreams().StdoutInstance, runtime.RequireNodeStreams().WritableCtor, stdoutWriteImpl);
+            runtime.Process.RequireStreams().StdoutInstance, runtime.RequireNodeStreams().WritableCtor,
+            runtime.Process.StdoutIsTTY, stdoutWriteImpl);
 
         // --- GetStderr: create $Writable with Console.Error.Write callback ---
         runtime.Process.RequireStreams().GetStderr = EmitStreamSingletonGetter(typeBuilder, runtime, "GetStderr",
-            runtime.Process.RequireStreams().StderrInstance, runtime.RequireNodeStreams().WritableCtor, stderrWriteImpl);
+            runtime.Process.RequireStreams().StderrInstance, runtime.RequireNodeStreams().WritableCtor,
+            runtime.Process.StderrIsTTY, stderrWriteImpl);
 
         // --- GetStdin: create $Readable (no write callback needed) ---
         runtime.Process.RequireStreams().GetStdin = EmitStreamSingletonGetter(typeBuilder, runtime, "GetStdin",
-            runtime.Process.RequireStreams().StdinInstance, runtime.RequireNodeStreams().ReadableCtor, null);
+            runtime.Process.RequireStreams().StdinInstance, runtime.RequireNodeStreams().ReadableCtor,
+            runtime.Process.StdinIsTTY, null);
     }
 
     private MethodBuilder EmitStreamSingletonGetter(
         TypeBuilder typeBuilder, EmittedRuntime runtime,
         string methodName, FieldBuilder cacheField,
-        ConstructorBuilder streamCtor,
+        ConstructorBuilder streamCtor, MethodBuilder isTTY,
         MethodBuilder? writeImpl)
     {
         var method = typeBuilder.DefineMethod(
@@ -749,6 +752,17 @@ public partial class RuntimeEmitter
             // Call stream.SetWriteCallback(tsFunction)
             il.Emit(OpCodes.Callvirt, runtime.RequireNodeStreams().WritableSetWriteCallback);
         }
+
+        // Install the host terminal flag on the actual stream singleton.
+        var storage = runtime.DescriptorStorage;
+        il.Emit(OpCodes.Dup);
+        il.Emit(OpCodes.Ldstr, "isTTY");
+        il.Emit(OpCodes.Newobj, storage.DescriptorConstructor);
+        il.Emit(OpCodes.Dup);
+        il.Emit(OpCodes.Call, isTTY);
+        il.Emit(OpCodes.Callvirt, storage.DescriptorValue.GetSetMethod()!);
+        il.Emit(OpCodes.Call, storage.DefineProperty);
+        il.Emit(OpCodes.Pop);
 
         // Cache: _instance = stream
         il.Emit(OpCodes.Dup);
