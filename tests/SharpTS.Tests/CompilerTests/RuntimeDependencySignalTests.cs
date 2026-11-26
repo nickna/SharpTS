@@ -106,6 +106,8 @@ public class RuntimeDependencySignalTests
     [InlineData("function read(key: string) { return globalThis[key]; } read('Intl');", true)]
     [InlineData("const key: string = 'answer'; globalThis[key];", false)]
     [InlineData("const root = globalThis; const key = 'an' + 'swer'; root[key];", false)]
+    [InlineData("function root() { return this; } root()['In' + 'tl'];", true)]
+    [InlineData("const root = globalThis; function read(root: any, key: string) { return root[key]; } read({ answer: 42 }, 'answer');", false)]
     public void ComputedGlobalKeyRequiresIntlWhenItCanNameIntl(string source, bool requiresIntl)
     {
         Assert.Equal(requiresIntl, ReasonsFor(source).Contains("Intl"));
