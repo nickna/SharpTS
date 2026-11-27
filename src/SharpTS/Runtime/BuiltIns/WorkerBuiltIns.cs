@@ -30,6 +30,14 @@ public static class WorkerBuiltIns
     /// </summary>
     public static ISharpTSCallable SharedArrayBufferConstructor { get; } = new SharedArrayBufferConstructorImpl();
 
+    internal static int ArrayBufferLength(Interpreter interpreter, List<object?> arguments, string name)
+    {
+        double length = arguments.Count == 0 ? 0 : Math.Truncate(interpreter.ToNumberWithPrimitive(arguments[0]));
+        if (length < 0 || length > Array.MaxLength)
+            throw new ThrowException(new SharpTSRangeError($"Invalid {name} length"));
+        return double.IsNaN(length) ? 0 : (int)length;
+    }
+
     /// <summary>
     /// Creates an ArrayBuffer constructor function.
     /// </summary>
@@ -138,12 +146,7 @@ internal class SharedArrayBufferConstructorImpl : ISharpTSFunctionObject, IBuilt
     public bool IsInstance(object? value) => value is SharpTSSharedArrayBuffer;
 
     public object? Call(Interpreter interpreter, List<object?> arguments)
-    {
-        if (arguments.Count == 0 || arguments[0] is not double length)
-            throw new Exception("SharedArrayBuffer constructor requires a length argument");
-
-        return new SharpTSSharedArrayBuffer((int)length);
-    }
+        => new SharpTSSharedArrayBuffer(WorkerBuiltIns.ArrayBufferLength(interpreter, arguments, "SharedArrayBuffer"));
 }
 
 /// <summary>
@@ -174,17 +177,7 @@ internal class ArrayBufferConstructorImpl : ISharpTSFunctionObject, IBuiltInType
     public bool IsInstance(object? value) => value is SharpTSArrayBuffer;
 
     public object? Call(Interpreter interpreter, List<object?> arguments)
-    {
-        // ECMA-262 applies ToIndex(undefined) when length is omitted, yielding
-        // a valid zero-length ArrayBuffer.
-        if (arguments.Count == 0)
-            return new SharpTSArrayBuffer(0);
-
-        if (arguments[0] is not double length)
-            throw new Exception("ArrayBuffer constructor requires a length argument");
-
-        return new SharpTSArrayBuffer((int)length);
-    }
+        => new SharpTSArrayBuffer(WorkerBuiltIns.ArrayBufferLength(interpreter, arguments, "ArrayBuffer"));
 
     public object? GetProperty(string name, Interpreter? interpreter = null)
     {

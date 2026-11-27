@@ -10,8 +10,20 @@ namespace SharpTS.Runtime.Types;
 /// </summary>
 public sealed class SharpTSBufferConstructor
 {
-    private static readonly BuiltInMethod IsBufferMethod =
-        BuiltInMethod.CreateV2("isBuffer", 0, int.MaxValue, BufferIsBuffer).WithSpecLength(1);
+    private static readonly Dictionary<string, BuiltInMethod> Methods = new(StringComparer.Ordinal)
+    {
+        ["from"] = BuiltInMethod.CreateV2("from", 1, 3, BufferFrom),
+        ["of"] = BuiltInMethod.CreateV2("of", 0, int.MaxValue, BufferOf),
+        ["alloc"] = BuiltInMethod.CreateV2("alloc", 1, 3, BufferAlloc),
+        ["allocUnsafe"] = BuiltInMethod.CreateV2("allocUnsafe", 1, BufferAllocUnsafe),
+        ["allocUnsafeSlow"] = BuiltInMethod.CreateV2("allocUnsafeSlow", 1, BufferAllocUnsafe), // Same as allocUnsafe
+        ["concat"] = BuiltInMethod.CreateV2("concat", 1, 2, BufferConcat),
+        ["copyBytesFrom"] = BuiltInMethod.CreateV2("copyBytesFrom", 1, 3, BufferCopyBytesFrom),
+        ["isBuffer"] = BuiltInMethod.CreateV2("isBuffer", 0, int.MaxValue, BufferIsBuffer).WithSpecLength(1),
+        ["byteLength"] = BuiltInMethod.CreateV2("byteLength", 1, 2, BufferByteLength).WithSpecLength(2),
+        ["compare"] = BuiltInMethod.CreateV2("compare", 2, BufferCompare),
+        ["isEncoding"] = BuiltInMethod.CreateV2("isEncoding", 1, BufferIsEncoding),
+    };
 
     /// <summary>
     /// The singleton instance of the Buffer constructor.
@@ -30,25 +42,7 @@ public sealed class SharpTSBufferConstructor
     /// <summary>
     /// Gets a property from the Buffer namespace.
     /// </summary>
-    public object? GetProperty(string name)
-    {
-        return name switch
-        {
-            "from" => BuiltInMethod.CreateV2("from", 1, 2, BufferFrom),
-            "of" => BuiltInMethod.CreateV2("of", 0, int.MaxValue, BufferOf),
-            "alloc" => BuiltInMethod.CreateV2("alloc", 1, 3, BufferAlloc),
-            "allocUnsafe" => BuiltInMethod.CreateV2("allocUnsafe", 1, BufferAllocUnsafe),
-            "allocUnsafeSlow" => BuiltInMethod.CreateV2("allocUnsafeSlow", 1, BufferAllocUnsafe), // Same as allocUnsafe
-            "concat" => BuiltInMethod.CreateV2("concat", 1, 2, BufferConcat),
-            "copyBytesFrom" => BuiltInMethod.CreateV2("copyBytesFrom", 1, 3, BufferCopyBytesFrom),
-            "isBuffer" => IsBufferMethod,
-            "byteLength" => BuiltInMethod.CreateV2("byteLength", 1, 2, BufferByteLength).WithSpecLength(2),
-            "compare" => BuiltInMethod.CreateV2("compare", 2, BufferCompare),
-            "isEncoding" => BuiltInMethod.CreateV2("isEncoding", 1, BufferIsEncoding),
-            "poolSize" => PoolSize,
-            _ => null
-        };
-    }
+    public object? GetProperty(string name) => name == "poolSize" ? PoolSize : Methods.GetValueOrDefault(name);
 
     /// <summary>Sets a property on the Buffer namespace (currently only poolSize).</summary>
     public bool SetProperty(string name, object? value)
@@ -118,10 +112,33 @@ public sealed class SharpTSBufferConstructor
             SharpTSBuffer buf => SharpTSBuffer.FromBuffer(buf),
             SharpTSArray arr => SharpTSBuffer.FromArray(arr),
             List<object?> list => SharpTSBuffer.FromArray(list),
-            SharpTSArrayBuffer ab => new SharpTSBuffer(ab.GetBackingArray()),
+            SharpTSArrayBuffer or SharpTSSharedArrayBuffer => FromArrayBuffer(interpreter, data, args),
             SharpTSTypedArray typed => new SharpTSBuffer(typed.Buffer.AsSpan(typed.ByteOffset, typed.ByteLength).ToArray()),
             _ => throw new Exception($"Buffer.from: unsupported data type: {data.GetType().Name}")
         });
+    }
+
+    private static SharpTSBuffer FromArrayBuffer(Interp interpreter, object source, ReadOnlySpan<RuntimeValue> args)
+    {
+        var offset = args.Length > 1 ? interpreter.ToNumberWithPrimitive(args[1].ToObject()) : 0;
+        if (double.IsNaN(offset)) offset = 0;
+        var ab = source as SharpTSArrayBuffer;
+        int byteLength = ab?.ByteLength ?? ((SharpTSSharedArrayBuffer)source).ByteLength;
+        double available = byteLength - offset;
+        if (available < 0) throw OutsideBounds("offset");
+        bool hasLength = args.Length > 2 && !args[2].IsUndefined;
+        double length = hasLength
+            ? interpreter.ToNumberWithPrimitive(args[2].ToObject()) : byteLength - Math.Truncate(offset);
+        if (hasLength && length > available)
+            throw OutsideBounds("length");
+        if (offset <= -1) throw new ThrowException(new SharpTSRangeError("Invalid start offset"));
+        if (ab is { IsDetached: true })
+            throw new ThrowException(new SharpTSTypeError("Cannot create a Buffer from a detached ArrayBuffer"));
+        var bytes = ab?.GetBackingArray() ?? ((SharpTSSharedArrayBuffer)source).GetBackingArray();
+        return new SharpTSBuffer(bytes, (int)offset, length > 0 ? (int)length : 0);
+
+        static ThrowException OutsideBounds(string parameter) => new(new SharpTSRangeError(
+            $"\"{parameter}\" is outside of buffer bounds") { Code = "ERR_BUFFER_OUT_OF_BOUNDS" });
     }
 
     /// <summary>

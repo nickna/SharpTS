@@ -45,14 +45,13 @@ public class SharpTSTextEncoder : ISharpTSPropertyAccessor
     {
         source ??= "";
         var encoder = System.Text.Encoding.UTF8.GetEncoder();
-        var sourceChars = source.ToCharArray();
-        var destBytes = destination.Data;
+        var destBytes = destination.Bytes;
 
         int charsUsed;
         int bytesUsed;
         bool completed;
 
-        encoder.Convert(sourceChars, 0, sourceChars.Length, destBytes, 0, destBytes.Length,
+        encoder.Convert(source.AsSpan(), destBytes,
             true, out charsUsed, out bytesUsed, out completed);
 
         return new SharpTSObject(new Dictionary<string, object?>

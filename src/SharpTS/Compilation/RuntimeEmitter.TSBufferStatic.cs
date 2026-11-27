@@ -97,7 +97,8 @@ public partial class RuntimeEmitter
     private void EmitBufferFromValue(TypeBuilder owner, EmittedRuntime runtime, EmittedBufferRuntime buffer)
     {
         var method = owner.DefineMethod("BufferFromValue", MethodAttributes.Public | MethodAttributes.Static,
-            _types.Object, [_types.Object, _types.Object]);
+            _types.Object, [_types.Object, _types.Object, _types.Object]);
+        method.SetCustomAttribute(runtime.FunctionAttributes.PadUndefinedCtor, CustomAttributeEncoder.EmptyBlob);
         buffer.FromValue = method;
         var il = method.GetILGenerator();
 
@@ -123,15 +124,11 @@ public partial class RuntimeEmitter
         il.MarkLabel(notString);
 
         EmitTypedCase(buffer.Type, () => il.Emit(OpCodes.Call, buffer.FromBuffer));
+        var view = il.DefineLabel();
         if (runtime.ArrayBuffer is { } arrayBuffer)
-        {
-            // ArrayBuffer input shares the underlying bytes.
-            EmitTypedCase(arrayBuffer.Type, () =>
-            {
-                il.Emit(OpCodes.Callvirt, arrayBuffer.GetBuffer);
-                il.Emit(OpCodes.Newobj, buffer.Ctor);
-            });
-        }
+            EmitArrayBufferCase(arrayBuffer.Type, arrayBuffer.GetBuffer);
+        if (runtime.SharedArrayBuffer is { } shared)
+            EmitArrayBufferCase(shared.Type, shared.GetBuffer);
         if (buffer.HasTypedArrayCopy)
         {
             EmitTypedCase(runtime.TypedArrays.RequireImplementation().BaseType, () =>
@@ -148,6 +145,25 @@ public partial class RuntimeEmitter
         il.Emit(OpCodes.Call, buffer.FromArray);
         il.Emit(OpCodes.Ret);
 
+        if (runtime.ArrayBuffer is not null || runtime.SharedArrayBuffer is not null)
+        {
+            il.MarkLabel(view);
+            EmitBufferViewFromArguments(il, runtime, buffer);
+        }
+
+        void EmitArrayBufferCase(Type type, MethodInfo getBytes)
+        {
+            var next = il.DefineLabel();
+            il.Emit(OpCodes.Ldarg_0);
+            il.Emit(OpCodes.Isinst, type);
+            il.Emit(OpCodes.Brfalse, next);
+            il.Emit(OpCodes.Ldarg_0);
+            il.Emit(OpCodes.Castclass, type);
+            il.Emit(OpCodes.Callvirt, getBytes);
+            il.Emit(OpCodes.Br, view);
+            il.MarkLabel(next);
+        }
+
         void EmitTypedCase(Type type, Action emitConversion)
         {
             var next = il.DefineLabel();
@@ -159,6 +175,128 @@ public partial class RuntimeEmitter
             emitConversion();
             il.Emit(OpCodes.Ret);
             il.MarkLabel(next);
+        }
+    }
+
+    // The backing array is on the stack. Node compares unrounded values against
+    // the available bytes before converting the accepted view bounds to integers.
+    private void EmitBufferViewFromArguments(ILGenerator il, EmittedRuntime runtime, EmittedBufferRuntime buffer)
+    {
+        var data = il.DeclareLocal(_types.ByteArray);
+        var offset = il.DeclareLocal(_types.Double);
+        var length = il.DeclareLocal(_types.Double);
+        var available = il.DeclareLocal(_types.Double);
+        var numericOffset = il.DefineLabel();
+        var offsetInBounds = il.DefineLabel();
+        var explicitLength = il.DefineLabel();
+        var lengthInBounds = il.DefineLabel();
+        var validStart = il.DefineLabel();
+        var positiveLength = il.DefineLabel();
+
+        il.Emit(OpCodes.Stloc, data);
+        il.Emit(OpCodes.Ldarg_1);
+        il.Emit(OpCodes.Call, runtime.NumericCoercion.ToNumber);
+        il.Emit(OpCodes.Stloc, offset);
+        il.Emit(OpCodes.Ldloc, offset);
+        il.Emit(OpCodes.Call, typeof(double).GetMethod(nameof(double.IsNaN))!);
+        il.Emit(OpCodes.Brfalse, numericOffset);
+        il.Emit(OpCodes.Ldc_R8, 0d);
+        il.Emit(OpCodes.Stloc, offset);
+        il.MarkLabel(numericOffset);
+        var byteLength = il.DeclareLocal(_types.Int32);
+        var lengthReady = il.DefineLabel();
+        if (runtime.ArrayBuffer is { } ab)
+        {
+            var shared = il.DefineLabel();
+            il.Emit(OpCodes.Ldarg_0);
+            il.Emit(OpCodes.Isinst, ab.Type);
+            il.Emit(OpCodes.Dup);
+            il.Emit(OpCodes.Brfalse, shared);
+            il.Emit(OpCodes.Callvirt, ab.ByteLengthGetter);
+            il.Emit(OpCodes.Br, lengthReady);
+            il.MarkLabel(shared);
+            il.Emit(OpCodes.Pop);
+        }
+        il.Emit(OpCodes.Ldloc, data);
+        il.Emit(OpCodes.Ldlen);
+        il.Emit(OpCodes.Conv_I4);
+        il.MarkLabel(lengthReady);
+        il.Emit(OpCodes.Stloc, byteLength);
+        il.Emit(OpCodes.Ldloc, byteLength);
+        il.Emit(OpCodes.Conv_R8);
+        il.Emit(OpCodes.Ldloc, offset);
+        il.Emit(OpCodes.Sub);
+        il.Emit(OpCodes.Stloc, available);
+        il.Emit(OpCodes.Ldloc, available);
+        il.Emit(OpCodes.Ldc_R8, 0d);
+        il.Emit(OpCodes.Bge, offsetInBounds);
+        EmitBoundsError("offset");
+        il.MarkLabel(offsetInBounds);
+
+        il.Emit(OpCodes.Ldarg_2);
+        il.Emit(OpCodes.Isinst, runtime.Sentinels.UndefinedType);
+        il.Emit(OpCodes.Brfalse, explicitLength);
+        il.Emit(OpCodes.Ldloc, byteLength);
+        il.Emit(OpCodes.Conv_R8);
+        il.Emit(OpCodes.Ldloc, offset);
+        il.Emit(OpCodes.Call, typeof(Math).GetMethod(nameof(Math.Truncate), [typeof(double)])!);
+        il.Emit(OpCodes.Sub);
+        il.Emit(OpCodes.Stloc, length);
+        il.Emit(OpCodes.Br, lengthInBounds);
+
+        il.MarkLabel(explicitLength);
+        il.Emit(OpCodes.Ldarg_2);
+        il.Emit(OpCodes.Call, runtime.NumericCoercion.ToNumber);
+        il.Emit(OpCodes.Stloc, length);
+        il.Emit(OpCodes.Ldloc, length);
+        il.Emit(OpCodes.Ldloc, available);
+        il.Emit(OpCodes.Ble_Un, lengthInBounds);
+        EmitBoundsError("length");
+
+        il.MarkLabel(lengthInBounds);
+        il.Emit(OpCodes.Ldloc, offset);
+        il.Emit(OpCodes.Ldc_R8, -1d);
+        il.Emit(OpCodes.Bgt, validStart);
+        GuestErrorEmitter.ThrowError(il, runtime.Errors.CreateException, runtime.Errors.RangeErrorConstructor,
+            "Invalid start offset");
+        il.MarkLabel(validStart);
+        il.Emit(OpCodes.Ldloc, length);
+        il.Emit(OpCodes.Ldc_R8, 0d);
+        il.Emit(OpCodes.Bgt, positiveLength);
+        il.Emit(OpCodes.Ldc_R8, 0d);
+        il.Emit(OpCodes.Stloc, length);
+        il.MarkLabel(positiveLength);
+        if (runtime.ArrayBuffer is { } owner)
+        {
+            // Coercing length can execute user code and transfer the buffer.
+            var attached = il.DefineLabel();
+            il.Emit(OpCodes.Ldarg_0);
+            il.Emit(OpCodes.Isinst, owner.Type);
+            il.Emit(OpCodes.Brfalse, attached);
+            il.Emit(OpCodes.Ldarg_0);
+            il.Emit(OpCodes.Castclass, owner.Type);
+            il.Emit(OpCodes.Ldfld, owner.DetachedField);
+            il.Emit(OpCodes.Brfalse, attached);
+            GuestErrorEmitter.ThrowTypeError(il, runtime, "Cannot create a Buffer from a detached ArrayBuffer");
+            il.MarkLabel(attached);
+        }
+        il.Emit(OpCodes.Ldloc, data);
+        il.Emit(OpCodes.Ldloc, offset);
+        il.Emit(OpCodes.Conv_I4);
+        il.Emit(OpCodes.Ldloc, length);
+        il.Emit(OpCodes.Conv_I4);
+        il.Emit(OpCodes.Newobj, buffer.ViewCtor);
+        il.Emit(OpCodes.Ret);
+
+        void EmitBoundsError(string argument)
+        {
+            il.Emit(OpCodes.Ldstr, $"\"{argument}\" is outside of buffer bounds");
+            il.Emit(OpCodes.Newobj, runtime.Errors.RangeErrorConstructor);
+            il.Emit(OpCodes.Dup);
+            il.Emit(OpCodes.Ldstr, "ERR_BUFFER_OUT_OF_BOUNDS");
+            il.Emit(OpCodes.Callvirt, runtime.Errors.CodeSetter);
+            il.Emit(OpCodes.Call, runtime.Errors.CreateException);
+            il.Emit(OpCodes.Throw);
         }
     }
 
@@ -659,22 +797,18 @@ public partial class RuntimeEmitter
 
         // var bytes = new byte[source._data.Length]
         il.Emit(OpCodes.Ldarg_0);
-        il.Emit(OpCodes.Ldfld, buffer.DataField);
-        il.Emit(OpCodes.Ldlen);
-        il.Emit(OpCodes.Conv_I4);
+        il.Emit(OpCodes.Call, buffer.LengthGetter);
         il.Emit(OpCodes.Newarr, _types.Byte);
         il.Emit(OpCodes.Stloc, bytesLocal);
 
         // Array.Copy(source._data, 0, bytes, 0, source._data.Length)
         il.Emit(OpCodes.Ldarg_0);
-        il.Emit(OpCodes.Ldfld, buffer.DataField);
+        il.Emit(OpCodes.Call, buffer.GetData);
         il.Emit(OpCodes.Ldc_I4_0);
         il.Emit(OpCodes.Ldloc, bytesLocal);
         il.Emit(OpCodes.Ldc_I4_0);
         il.Emit(OpCodes.Ldarg_0);
-        il.Emit(OpCodes.Ldfld, buffer.DataField);
-        il.Emit(OpCodes.Ldlen);
-        il.Emit(OpCodes.Conv_I4);
+        il.Emit(OpCodes.Call, buffer.LengthGetter);
         il.Emit(OpCodes.Call, _types.ArrayCopy5);
 
         // return new $Buffer(bytes)
@@ -786,24 +920,20 @@ public partial class RuntimeEmitter
         // Array.Copy(buf._data, 0, bytes, offset, buf._data.Length)
         il.Emit(OpCodes.Ldloc, itemLocal);
         il.Emit(OpCodes.Castclass, typeBuilder);
-        il.Emit(OpCodes.Ldfld, buffer.DataField);
+        il.Emit(OpCodes.Call, buffer.GetData);
         il.Emit(OpCodes.Ldc_I4_0);
         il.Emit(OpCodes.Ldloc, bytesLocal);
         il.Emit(OpCodes.Ldloc, offsetLocal);
         il.Emit(OpCodes.Ldloc, itemLocal);
         il.Emit(OpCodes.Castclass, typeBuilder);
-        il.Emit(OpCodes.Ldfld, buffer.DataField);
-        il.Emit(OpCodes.Ldlen);
-        il.Emit(OpCodes.Conv_I4);
+        il.Emit(OpCodes.Call, buffer.LengthGetter);
         il.Emit(OpCodes.Call, _types.ArrayCopy5);
 
         // offset += buf._data.Length
         il.Emit(OpCodes.Ldloc, offsetLocal);
         il.Emit(OpCodes.Ldloc, itemLocal);
         il.Emit(OpCodes.Castclass, typeBuilder);
-        il.Emit(OpCodes.Ldfld, buffer.DataField);
-        il.Emit(OpCodes.Ldlen);
-        il.Emit(OpCodes.Conv_I4);
+        il.Emit(OpCodes.Call, buffer.LengthGetter);
         il.Emit(OpCodes.Add);
         il.Emit(OpCodes.Stloc, offsetLocal);
 
@@ -880,9 +1010,7 @@ public partial class RuntimeEmitter
         il.Emit(OpCodes.Ldloc, totalLocal);
         il.Emit(OpCodes.Ldloc, itemLocal);
         il.Emit(OpCodes.Castclass, typeBuilder);
-        il.Emit(OpCodes.Ldfld, buffer.DataField);
-        il.Emit(OpCodes.Ldlen);
-        il.Emit(OpCodes.Conv_I4);
+        il.Emit(OpCodes.Call, buffer.LengthGetter);
         il.Emit(OpCodes.Add);
         il.Emit(OpCodes.Stloc, totalLocal);
 

@@ -45,7 +45,7 @@ public sealed class SharpTSWebCrypto
             case SharpTSBuffer buffer:
                 if (buffer.Data.Length > 65536)
                     throw new Exception("QuotaExceededError: crypto.getRandomValues requested more than 65536 bytes");
-                RandomNumberGenerator.Fill(buffer.Data);
+                RandomNumberGenerator.Fill(buffer.Bytes);
                 return buffer;
             default:
                 throw new Exception("crypto.getRandomValues: argument must be an integer typed array");

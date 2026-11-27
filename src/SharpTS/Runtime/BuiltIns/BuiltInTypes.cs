@@ -711,7 +711,7 @@ public static class BuiltInTypes
         return name switch
         {
             // Properties
-            "length" => NumberType,
+            "length" or "byteLength" or "byteOffset" => NumberType,
 
             // Methods
             "toString" => new TypeInfo.Function([StringType], StringType, RequiredParams: 0), // encoding optional
@@ -805,10 +805,7 @@ public static class BuiltInTypes
 
         return name switch
         {
-            "from" => new TypeInfo.Function(
-                [new TypeInfo.Union([StringType, new TypeInfo.Array(NumberType), bufferType]), StringType],
-                bufferType,
-                RequiredParams: 1), // data required, encoding optional
+            "from" => BufferFromType.Implementation,
             "alloc" => new TypeInfo.Function(
                 [NumberType, AnyType, StringType],
                 bufferType,
@@ -830,6 +827,15 @@ public static class BuiltInTypes
             _ => null
         };
     }
+
+    internal static readonly TypeInfo.OverloadedFunction BufferFromType = new(
+        [
+            new([new TypeInfo.Union([StringType, new TypeInfo.Array(NumberType), TypeInfo.Buffer.Shared,
+                new TypeInfo.TypedArray("Uint8")]), StringType], TypeInfo.Buffer.Shared, RequiredParams: 1),
+            new([new TypeInfo.Union([new TypeInfo.ArrayBuffer(), new TypeInfo.SharedArrayBuffer()]), NumberType, NumberType],
+                TypeInfo.Buffer.Shared, RequiredParams: 1)
+        ],
+        new([AnyType, AnyType, NumberType], TypeInfo.Buffer.Shared, RequiredParams: 1));
 
     internal static readonly TypeInfo.Function BufferByteLengthType = new(
         [new TypeInfo.Union([StringType, TypeInfo.Buffer.Shared, new TypeInfo.ArrayBuffer(),
@@ -1147,7 +1153,7 @@ public static class BuiltInTypes
 
     private static readonly string[] BufferMemberNames =
     [
-        "length", "toString", "slice", "copy", "compare", "equals", "fill", "write",
+        "length", "byteOffset", "byteLength", "toString", "slice", "copy", "compare", "equals", "fill", "write",
         "readUInt8", "writeUInt8", "toJSON",
         "readInt8", "readUInt16LE", "readUInt16BE", "readUInt32LE", "readUInt32BE",
         "readInt16LE", "readInt16BE", "readInt32LE", "readInt32BE",

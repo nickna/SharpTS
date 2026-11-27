@@ -749,15 +749,14 @@ public partial class RuntimeEmitter
         if (inputs.Buffer is not null)
         {
             il.MarkLabel(tsBufferLabel);
-            var bufDataLocal = il.DeclareLocal(_types.MakeArrayType(_types.Byte));
+            var bufLocal = il.DeclareLocal(inputs.Buffer.Type);
             var bufIndexLocal = il.DeclareLocal(_types.Int32);
             var bufInRangeLabel = il.DefineLabel();
             var bufOutOfRangeLabel = il.DefineLabel();
             // data = ((TSBuffer)obj).Data;
             il.Emit(OpCodes.Ldarg_0);
             il.Emit(OpCodes.Castclass, inputs.Buffer!.Type);
-            il.Emit(OpCodes.Call, inputs.Buffer!.GetData);
-            il.Emit(OpCodes.Stloc, bufDataLocal);
+            il.Emit(OpCodes.Stloc, bufLocal);
             // idx = Convert.ToInt32(index);
             il.Emit(OpCodes.Ldarg_1);
             il.Emit(OpCodes.Call, _types.GetMethod(_types.Convert, "ToInt32", _types.Object));
@@ -768,9 +767,8 @@ public partial class RuntimeEmitter
             il.Emit(OpCodes.Blt, bufOutOfRangeLabel);
             // if (idx >= data.Length) goto outOfRange;
             il.Emit(OpCodes.Ldloc, bufIndexLocal);
-            il.Emit(OpCodes.Ldloc, bufDataLocal);
-            il.Emit(OpCodes.Ldlen);
-            il.Emit(OpCodes.Conv_I4);
+            il.Emit(OpCodes.Ldloc, bufLocal);
+            il.Emit(OpCodes.Call, inputs.Buffer.LengthGetter);
             il.Emit(OpCodes.Bge, bufOutOfRangeLabel);
             il.Emit(OpCodes.Br, bufInRangeLabel);
             // out-of-range: return NaN (boxed) — matches SharpTSBuffer.this[int] return.
@@ -780,10 +778,9 @@ public partial class RuntimeEmitter
             il.Emit(OpCodes.Ret);
             // in-range: return (double)data[idx] boxed
             il.MarkLabel(bufInRangeLabel);
-            il.Emit(OpCodes.Ldloc, bufDataLocal);
+            il.Emit(OpCodes.Ldloc, bufLocal);
             il.Emit(OpCodes.Ldloc, bufIndexLocal);
-            il.Emit(OpCodes.Ldelem_U1);
-            il.Emit(OpCodes.Conv_R8);
+            il.Emit(OpCodes.Call, inputs.Buffer.ReadUInt8);
             il.Emit(OpCodes.Box, _types.Double);
             il.Emit(OpCodes.Ret);
         }
@@ -1617,13 +1614,12 @@ public partial class RuntimeEmitter
         if (inputs.Buffer is not null)
         {
             il.MarkLabel(tsBufferSetLabel);
-            var bufSetDataLocal = il.DeclareLocal(_types.MakeArrayType(_types.Byte));
+            var bufSetLocal = il.DeclareLocal(inputs.Buffer.Type);
             var bufSetIndexLocal = il.DeclareLocal(_types.Int32);
             var bufSetDoneLabel = il.DefineLabel();
             il.Emit(OpCodes.Ldarg_0);
             il.Emit(OpCodes.Castclass, inputs.Buffer!.Type);
-            il.Emit(OpCodes.Call, inputs.Buffer!.GetData);
-            il.Emit(OpCodes.Stloc, bufSetDataLocal);
+            il.Emit(OpCodes.Stloc, bufSetLocal);
             il.Emit(OpCodes.Ldarg_1);
             il.Emit(OpCodes.Call, _types.GetMethod(_types.Convert, "ToInt32", _types.Object));
             il.Emit(OpCodes.Stloc, bufSetIndexLocal);
@@ -1633,19 +1629,20 @@ public partial class RuntimeEmitter
             il.Emit(OpCodes.Blt, bufSetDoneLabel);
             // if (idx >= data.Length) goto done;
             il.Emit(OpCodes.Ldloc, bufSetIndexLocal);
-            il.Emit(OpCodes.Ldloc, bufSetDataLocal);
-            il.Emit(OpCodes.Ldlen);
-            il.Emit(OpCodes.Conv_I4);
+            il.Emit(OpCodes.Ldloc, bufSetLocal);
+            il.Emit(OpCodes.Call, inputs.Buffer.LengthGetter);
             il.Emit(OpCodes.Bge, bufSetDoneLabel);
             // data[idx] = (byte)(Convert.ToInt32(value) & 0xFF);
-            il.Emit(OpCodes.Ldloc, bufSetDataLocal);
-            il.Emit(OpCodes.Ldloc, bufSetIndexLocal);
+            il.Emit(OpCodes.Ldloc, bufSetLocal);
             il.Emit(OpCodes.Ldarg_2);
             il.Emit(OpCodes.Call, _types.GetMethod(_types.Convert, "ToInt32", _types.Object));
             il.Emit(OpCodes.Ldc_I4, 0xFF);
             il.Emit(OpCodes.And);
             il.Emit(OpCodes.Conv_U1);
-            il.Emit(OpCodes.Stelem_I1);
+            il.Emit(OpCodes.Conv_R8);
+            il.Emit(OpCodes.Ldloc, bufSetIndexLocal);
+            il.Emit(OpCodes.Call, inputs.Buffer.WriteUInt8);
+            il.Emit(OpCodes.Pop);
             il.MarkLabel(bufSetDoneLabel);
             il.Emit(OpCodes.Ret);
         }

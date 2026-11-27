@@ -40,7 +40,7 @@ public static class BufferModuleInterpreter
             ["isAscii"] = BuiltInMethod.CreateV2("isAscii", 0, int.MaxValue, IsAscii).WithSpecLength(1),
 
             // Encoding conversion
-            ["transcode"] = BuiltInMethod.CreateV2("transcode", 3, Transcode),
+            ["transcode"] = BuiltInMethod.CreateV2("transcode", 0, int.MaxValue, Transcode).WithSpecLength(3),
 
             // Deprecated unsafe allocation (= Buffer.allocUnsafeSlow)
             ["SlowBuffer"] = BuiltInMethod.CreateV2("SlowBuffer", 1, SlowBuffer),
@@ -55,24 +55,6 @@ public static class BufferModuleInterpreter
             ["kStringMaxLength"] = BufferModuleHelpers.MaxStringLength,
             ["INSPECT_MAX_BYTES"] = BufferModuleHelpers.InspectMaxBytes,
         };
-    }
-
-    private static byte[] ToBytes(RuntimeValue value, string method)
-    {
-        return value.ToObject() switch
-        {
-            SharpTSBuffer buf => buf.Data,
-            SharpTSTypedArray ta => TypedArrayBytes(ta),
-            string s => System.Text.Encoding.UTF8.GetBytes(s),
-            _ => throw new Exception($"buffer.{method} requires a Buffer, TypedArray, or string argument")
-        };
-    }
-
-    private static byte[] TypedArrayBytes(SharpTSTypedArray ta)
-    {
-        var bytes = new byte[ta.ByteLength];
-        Array.Copy(ta.Buffer, ta.ByteOffset, bytes, 0, ta.ByteLength);
-        return bytes;
     }
 
     private static RuntimeValue IsUtf8(Interp interpreter, RuntimeValue receiver, ReadOnlySpan<RuntimeValue> args)
@@ -100,11 +82,15 @@ public static class BufferModuleInterpreter
 
     private static RuntimeValue Transcode(Interp interpreter, RuntimeValue receiver, ReadOnlySpan<RuntimeValue> args)
     {
-        if (args.Length < 3)
-            throw new Exception("transcode requires (source, fromEncoding, toEncoding)");
-        var source = ToBytes(args[0], "transcode");
-        var fromEnc = args[1].ToObject()?.ToString() ?? "utf8";
-        var toEnc = args[2].ToObject()?.ToString() ?? "utf8";
+        var source = (args.IsEmpty ? null : args[0].ToObject()) switch
+        {
+            SharpTSBuffer buffer => buffer.Data,
+            SharpTSUint8Array view => view.Buffer.AsSpan(view.ByteOffset, view.ByteLength).ToArray(),
+            _ => throw new ThrowException(new SharpTSTypeError(BufferModuleHelpers.InvalidTranscodeSourceMessage)
+                { Code = BufferModuleHelpers.InvalidValidationInputCode })
+        };
+        var fromEnc = args.Length > 1 ? args[1].ToObject()?.ToString() ?? "utf8" : "utf8";
+        var toEnc = args.Length > 2 ? args[2].ToObject()?.ToString() ?? "utf8" : "utf8";
         return RuntimeValue.FromObject(new SharpTSBuffer(BufferModuleHelpers.Transcode(source, fromEnc, toEnc)));
     }
 

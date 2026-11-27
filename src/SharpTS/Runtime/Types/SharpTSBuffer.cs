@@ -23,17 +23,18 @@ public class SharpTSBuffer : ITypeCategorized
     /// <inheritdoc />
     public TypeCategory RuntimeCategory => TypeCategory.Buffer;
 
-    private readonly byte[] _data;
+    private readonly ArraySegment<byte> _view;
+    internal Span<byte> Bytes => _view.AsSpan();
 
     /// <summary>
     /// Gets the length of this buffer in bytes.
     /// </summary>
-    public int Length => _data.Length;
+    public int Length => _view.Count;
 
     /// <summary>
-    /// Gets the underlying byte array.
+    /// Gets the bytes within this view. Partial views return a copy.
     /// </summary>
-    public byte[] Data => _data;
+    public byte[] Data => Length == _view.Array!.Length ? _view.Array : Bytes.ToArray();
 
     /// <summary>
     /// Creates a new Buffer wrapping the specified byte array.
@@ -41,7 +42,12 @@ public class SharpTSBuffer : ITypeCategorized
     /// <param name="data">The byte array to wrap.</param>
     public SharpTSBuffer(byte[] data)
     {
-        _data = data ?? throw new ArgumentNullException(nameof(data));
+        _view = new ArraySegment<byte>(data);
+    }
+
+    internal SharpTSBuffer(byte[] data, int offset, int length)
+    {
+        _view = new ArraySegment<byte>(data, offset, length);
     }
 
     /// <summary>
@@ -54,10 +60,10 @@ public class SharpTSBuffer : ITypeCategorized
         if (size < 0)
             throw new ArgumentException("Buffer size cannot be negative", nameof(size));
 
-        _data = new byte[size];
+        _view = new byte[size];
         if (zero)
         {
-            Array.Clear(_data, 0, size);
+            Bytes.Clear();
         }
     }
 
@@ -105,9 +111,7 @@ public class SharpTSBuffer : ITypeCategorized
         if (buffer == null)
             throw new ArgumentNullException(nameof(buffer));
 
-        var bytes = new byte[buffer.Length];
-        Array.Copy(buffer._data, bytes, buffer.Length);
-        return new SharpTSBuffer(bytes);
+        return new SharpTSBuffer(buffer.Bytes.ToArray());
     }
 
     /// <summary>
@@ -177,7 +181,7 @@ public class SharpTSBuffer : ITypeCategorized
             int bytesToCopy = Math.Min(buf.Length, actualLength - offset);
             if (bytesToCopy <= 0) break;
 
-            Array.Copy(buf._data, 0, result, offset, bytesToCopy);
+            buf.Bytes[..bytesToCopy].CopyTo(result.AsSpan(offset));
             offset += bytesToCopy;
         }
 
@@ -198,7 +202,7 @@ public class SharpTSBuffer : ITypeCategorized
     /// </summary>
     public string ToString(string encoding)
     {
-        return DecodeBytes(_data, encoding);
+        return DecodeBytes(Bytes, encoding);
     }
 
     /// <summary>
@@ -206,7 +210,7 @@ public class SharpTSBuffer : ITypeCategorized
     /// </summary>
     public override string ToString()
     {
-        return $"<Buffer {Convert.ToHexString(_data[..Math.Min(50, _data.Length)]).ToLowerInvariant()}{(_data.Length > 50 ? " ... " : "")}>";
+        return $"<Buffer {Convert.ToHexString(Bytes[..Math.Min(50, Length)]).ToLowerInvariant()}{(Length > 50 ? " ... " : "")}>";
     }
 
     /// <summary>
@@ -215,7 +219,7 @@ public class SharpTSBuffer : ITypeCategorized
     /// </summary>
     public SharpTSBuffer Slice(int start = 0, int? end = null)
     {
-        int len = _data.Length;
+        int len = Length;
 
         // Handle negative indices
         int actualStart = start < 0 ? Math.Max(0, len + start) : Math.Min(start, len);
@@ -229,9 +233,7 @@ public class SharpTSBuffer : ITypeCategorized
         if (actualStart >= actualEnd)
             return new SharpTSBuffer([]);
 
-        var sliced = new byte[actualEnd - actualStart];
-        Array.Copy(_data, actualStart, sliced, 0, sliced.Length);
-        return new SharpTSBuffer(sliced);
+        return new SharpTSBuffer(Bytes[actualStart..actualEnd].ToArray());
     }
 
     /// <summary>
@@ -243,17 +245,17 @@ public class SharpTSBuffer : ITypeCategorized
         if (target == null)
             throw new ArgumentNullException(nameof(target));
 
-        int actualSourceEnd = sourceEnd ?? _data.Length;
+        int actualSourceEnd = sourceEnd ?? Length;
 
         // Clamp values
         targetStart = Math.Max(0, Math.Min(targetStart, target.Length));
-        sourceStart = Math.Max(0, Math.Min(sourceStart, _data.Length));
-        actualSourceEnd = Math.Max(sourceStart, Math.Min(actualSourceEnd, _data.Length));
+        sourceStart = Math.Max(0, Math.Min(sourceStart, Length));
+        actualSourceEnd = Math.Max(sourceStart, Math.Min(actualSourceEnd, Length));
 
         int bytesToCopy = Math.Min(actualSourceEnd - sourceStart, target.Length - targetStart);
         if (bytesToCopy <= 0) return 0;
 
-        Array.Copy(_data, sourceStart, target._data, targetStart, bytesToCopy);
+        Bytes.Slice(sourceStart, bytesToCopy).CopyTo(target.Bytes[targetStart..]);
         return bytesToCopy;
     }
 
@@ -266,15 +268,15 @@ public class SharpTSBuffer : ITypeCategorized
         if (other == null)
             throw new ArgumentNullException(nameof(other));
 
-        int minLen = Math.Min(_data.Length, other._data.Length);
+        int minLen = Math.Min(Length, other.Length);
 
         for (int i = 0; i < minLen; i++)
         {
-            if (_data[i] < other._data[i]) return -1;
-            if (_data[i] > other._data[i]) return 1;
+            if (Bytes[i] < other.Bytes[i]) return -1;
+            if (Bytes[i] > other.Bytes[i]) return 1;
         }
 
-        return _data.Length.CompareTo(other._data.Length);
+        return Length.CompareTo(other.Length);
     }
 
     /// <summary>
@@ -283,11 +285,11 @@ public class SharpTSBuffer : ITypeCategorized
     public bool Equals(SharpTSBuffer other)
     {
         if (other == null) return false;
-        if (_data.Length != other._data.Length) return false;
+        if (Length != other.Length) return false;
 
-        for (int i = 0; i < _data.Length; i++)
+        for (int i = 0; i < Length; i++)
         {
-            if (_data[i] != other._data[i]) return false;
+            if (Bytes[i] != other.Bytes[i]) return false;
         }
 
         return true;
@@ -299,7 +301,7 @@ public class SharpTSBuffer : ITypeCategorized
     /// </summary>
     public SharpTSBuffer Fill(object value, int start = 0, int? end = null, string encoding = "utf8")
     {
-        int actualEnd = end ?? _data.Length;
+        int actualEnd = end ?? Length;
         FillInternal(value, start, actualEnd, encoding);
         return this;
     }
@@ -307,8 +309,8 @@ public class SharpTSBuffer : ITypeCategorized
     private void FillInternal(object value, int start, int end, string encoding, bool allocating = false)
     {
         // Clamp values
-        start = Math.Max(0, Math.Min(start, _data.Length));
-        end = Math.Max(start, Math.Min(end, _data.Length));
+        start = Math.Max(0, Math.Min(start, Length));
+        end = Math.Max(start, Math.Min(end, Length));
 
         if (start >= end) return;
 
@@ -342,7 +344,7 @@ public class SharpTSBuffer : ITypeCategorized
         }
         else if (value is SharpTSBuffer buf)
         {
-            fillBytes = buf._data;
+            fillBytes = buf.Bytes.ToArray();
         }
         else if (value is SharpTSTypedArray view)
         {
@@ -363,7 +365,7 @@ public class SharpTSBuffer : ITypeCategorized
         // Fill the buffer by repeating the fill bytes
         for (int i = start; i < end; i++)
         {
-            _data[i] = fillBytes[(i - start) % fillBytes.Length];
+            Bytes[i] = fillBytes[(i - start) % fillBytes.Length];
         }
     }
 
@@ -376,15 +378,17 @@ public class SharpTSBuffer : ITypeCategorized
         if (data == null)
             throw new ArgumentNullException(nameof(data));
 
+        if ((uint)offset > (uint)Length)
+            throw new ThrowException(new SharpTSRangeError("The offset is outside the buffer bounds") { Code = "ERR_OUT_OF_RANGE" });
         var bytes = EncodeString(data, encoding);
-        int maxWrite = _data.Length - offset;
+        int maxWrite = Length - offset;
         if (maxWrite <= 0) return 0;
 
         int bytesToWrite = length.HasValue
             ? Math.Min(Math.Min(length.Value, bytes.Length), maxWrite)
             : Math.Min(bytes.Length, maxWrite);
 
-        Array.Copy(bytes, 0, _data, offset, bytesToWrite);
+        bytes.AsSpan(0, bytesToWrite).CopyTo(Bytes[offset..]);
         return bytesToWrite;
     }
 
@@ -393,9 +397,9 @@ public class SharpTSBuffer : ITypeCategorized
     /// </summary>
     public double ReadUInt8(int offset = 0)
     {
-        if (offset < 0 || offset >= _data.Length)
+        if (offset < 0 || offset >= Length)
             throw new ArgumentOutOfRangeException(nameof(offset));
-        return _data[offset];
+        return Bytes[offset];
     }
 
     /// <summary>
@@ -403,9 +407,9 @@ public class SharpTSBuffer : ITypeCategorized
     /// </summary>
     public int WriteUInt8(double value, int offset = 0)
     {
-        if (offset < 0 || offset >= _data.Length)
+        if (offset < 0 || offset >= Length)
             throw new ArgumentOutOfRangeException(nameof(offset));
-        _data[offset] = (byte)((int)value & 0xFF);
+        Bytes[offset] = (byte)((int)value & 0xFF);
         return offset + 1;
     }
 
@@ -416,14 +420,14 @@ public class SharpTSBuffer : ITypeCategorized
     {
         get
         {
-            if (index < 0 || index >= _data.Length)
+            if (index < 0 || index >= Length)
                 return double.NaN; // JavaScript undefined behavior
-            return _data[index];
+            return Bytes[index];
         }
         set
         {
-            if (index >= 0 && index < _data.Length)
-                _data[index] = (byte)((int)value & 0xFF);
+            if (index >= 0 && index < Length)
+                Bytes[index] = (byte)((int)value & 0xFF);
         }
     }
 
@@ -446,7 +450,8 @@ public class SharpTSBuffer : ITypeCategorized
 
         return name switch
         {
-            "length" => (double)Length,
+            "length" or "byteLength" => (double)Length,
+            "byteOffset" => (double)_view.Offset,
 
             "toString" => BuiltInMethod.CreateV2("toString", 0, 1, (_, _, args) =>
             {
@@ -461,12 +466,7 @@ public class SharpTSBuffer : ITypeCategorized
                 return RuntimeValue.FromObject(Slice(start, end));
             }),
 
-            // subarray: same windowing arithmetic as slice. DEVIATION: SharpTS Buffers
-            // wrap a flat managed byte[] (not a view over a shared ArrayBuffer), so the
-            // result is an independent copy rather than sharing memory with the parent —
-            // mirroring this Buffer's existing copying `slice`. (Shared-memory views would
-            // require an offset/length backing refactor of both the interpreter and the
-            // compiled $Buffer.)
+            // subarray retains the existing copying slice behavior.
             "subarray" => BuiltInMethod.CreateV2("subarray", 0, 2, (_, _, args) =>
             {
                 int start = args.Length > 0 && args[0].IsNumber ? (int)args[0].AsNumberUnsafe() : 0;
@@ -554,8 +554,8 @@ public class SharpTSBuffer : ITypeCategorized
 
             "toJSON" => BuiltInMethod.CreateV2("toJSON", 0, (_, _, _) =>
             {
-                var elements = new List<object?>(_data.Length);
-                foreach (var b in _data)
+                var elements = new List<object?>(Length);
+                foreach (var b in Bytes)
                 {
                     elements.Add((double)b);
                 }
@@ -740,7 +740,7 @@ public class SharpTSBuffer : ITypeCategorized
     /// </summary>
     private void ValidateOffset(int offset, int byteCount)
     {
-        int maxOffset = _data.Length - byteCount;
+        int maxOffset = Length - byteCount;
         if (offset < 0 || offset > maxOffset)
             throw new Exception($"The value of \"offset\" is out of range. " +
                 $"It must be >= 0 and <= {maxOffset}. Received {offset}");
@@ -756,7 +756,7 @@ public class SharpTSBuffer : ITypeCategorized
     public double ReadInt8(int offset = 0)
     {
         ValidateOffset(offset, 1);
-        return (sbyte)_data[offset];
+        return (sbyte)Bytes[offset];
     }
 
     /// <summary>
@@ -765,7 +765,7 @@ public class SharpTSBuffer : ITypeCategorized
     public double ReadUInt16LE(int offset = 0)
     {
         ValidateOffset(offset, 2);
-        return BinaryPrimitives.ReadUInt16LittleEndian(_data.AsSpan(offset));
+        return BinaryPrimitives.ReadUInt16LittleEndian(Bytes[offset..]);
     }
 
     /// <summary>
@@ -774,7 +774,7 @@ public class SharpTSBuffer : ITypeCategorized
     public double ReadUInt16BE(int offset = 0)
     {
         ValidateOffset(offset, 2);
-        return BinaryPrimitives.ReadUInt16BigEndian(_data.AsSpan(offset));
+        return BinaryPrimitives.ReadUInt16BigEndian(Bytes[offset..]);
     }
 
     /// <summary>
@@ -783,7 +783,7 @@ public class SharpTSBuffer : ITypeCategorized
     public double ReadUInt32LE(int offset = 0)
     {
         ValidateOffset(offset, 4);
-        return BinaryPrimitives.ReadUInt32LittleEndian(_data.AsSpan(offset));
+        return BinaryPrimitives.ReadUInt32LittleEndian(Bytes[offset..]);
     }
 
     /// <summary>
@@ -792,7 +792,7 @@ public class SharpTSBuffer : ITypeCategorized
     public double ReadUInt32BE(int offset = 0)
     {
         ValidateOffset(offset, 4);
-        return BinaryPrimitives.ReadUInt32BigEndian(_data.AsSpan(offset));
+        return BinaryPrimitives.ReadUInt32BigEndian(Bytes[offset..]);
     }
 
     /// <summary>
@@ -801,7 +801,7 @@ public class SharpTSBuffer : ITypeCategorized
     public double ReadInt16LE(int offset = 0)
     {
         ValidateOffset(offset, 2);
-        return BinaryPrimitives.ReadInt16LittleEndian(_data.AsSpan(offset));
+        return BinaryPrimitives.ReadInt16LittleEndian(Bytes[offset..]);
     }
 
     /// <summary>
@@ -810,7 +810,7 @@ public class SharpTSBuffer : ITypeCategorized
     public double ReadInt16BE(int offset = 0)
     {
         ValidateOffset(offset, 2);
-        return BinaryPrimitives.ReadInt16BigEndian(_data.AsSpan(offset));
+        return BinaryPrimitives.ReadInt16BigEndian(Bytes[offset..]);
     }
 
     /// <summary>
@@ -819,7 +819,7 @@ public class SharpTSBuffer : ITypeCategorized
     public double ReadInt32LE(int offset = 0)
     {
         ValidateOffset(offset, 4);
-        return BinaryPrimitives.ReadInt32LittleEndian(_data.AsSpan(offset));
+        return BinaryPrimitives.ReadInt32LittleEndian(Bytes[offset..]);
     }
 
     /// <summary>
@@ -828,7 +828,7 @@ public class SharpTSBuffer : ITypeCategorized
     public double ReadInt32BE(int offset = 0)
     {
         ValidateOffset(offset, 4);
-        return BinaryPrimitives.ReadInt32BigEndian(_data.AsSpan(offset));
+        return BinaryPrimitives.ReadInt32BigEndian(Bytes[offset..]);
     }
 
     /// <summary>
@@ -837,7 +837,7 @@ public class SharpTSBuffer : ITypeCategorized
     public double ReadFloatLE(int offset = 0)
     {
         ValidateOffset(offset, 4);
-        return BitConverter.Int32BitsToSingle(BinaryPrimitives.ReadInt32LittleEndian(_data.AsSpan(offset)));
+        return BitConverter.Int32BitsToSingle(BinaryPrimitives.ReadInt32LittleEndian(Bytes[offset..]));
     }
 
     /// <summary>
@@ -846,7 +846,7 @@ public class SharpTSBuffer : ITypeCategorized
     public double ReadFloatBE(int offset = 0)
     {
         ValidateOffset(offset, 4);
-        return BitConverter.Int32BitsToSingle(BinaryPrimitives.ReadInt32BigEndian(_data.AsSpan(offset)));
+        return BitConverter.Int32BitsToSingle(BinaryPrimitives.ReadInt32BigEndian(Bytes[offset..]));
     }
 
     /// <summary>
@@ -855,7 +855,7 @@ public class SharpTSBuffer : ITypeCategorized
     public double ReadDoubleLE(int offset = 0)
     {
         ValidateOffset(offset, 8);
-        return BitConverter.Int64BitsToDouble(BinaryPrimitives.ReadInt64LittleEndian(_data.AsSpan(offset)));
+        return BitConverter.Int64BitsToDouble(BinaryPrimitives.ReadInt64LittleEndian(Bytes[offset..]));
     }
 
     /// <summary>
@@ -864,7 +864,7 @@ public class SharpTSBuffer : ITypeCategorized
     public double ReadDoubleBE(int offset = 0)
     {
         ValidateOffset(offset, 8);
-        return BitConverter.Int64BitsToDouble(BinaryPrimitives.ReadInt64BigEndian(_data.AsSpan(offset)));
+        return BitConverter.Int64BitsToDouble(BinaryPrimitives.ReadInt64BigEndian(Bytes[offset..]));
     }
 
     /// <summary>
@@ -873,7 +873,7 @@ public class SharpTSBuffer : ITypeCategorized
     public BigInteger ReadBigInt64LE(int offset = 0)
     {
         ValidateOffset(offset, 8);
-        return BinaryPrimitives.ReadInt64LittleEndian(_data.AsSpan(offset));
+        return BinaryPrimitives.ReadInt64LittleEndian(Bytes[offset..]);
     }
 
     /// <summary>
@@ -882,7 +882,7 @@ public class SharpTSBuffer : ITypeCategorized
     public BigInteger ReadBigInt64BE(int offset = 0)
     {
         ValidateOffset(offset, 8);
-        return BinaryPrimitives.ReadInt64BigEndian(_data.AsSpan(offset));
+        return BinaryPrimitives.ReadInt64BigEndian(Bytes[offset..]);
     }
 
     /// <summary>
@@ -891,7 +891,7 @@ public class SharpTSBuffer : ITypeCategorized
     public BigInteger ReadBigUInt64LE(int offset = 0)
     {
         ValidateOffset(offset, 8);
-        return BinaryPrimitives.ReadUInt64LittleEndian(_data.AsSpan(offset));
+        return BinaryPrimitives.ReadUInt64LittleEndian(Bytes[offset..]);
     }
 
     /// <summary>
@@ -900,7 +900,7 @@ public class SharpTSBuffer : ITypeCategorized
     public BigInteger ReadBigUInt64BE(int offset = 0)
     {
         ValidateOffset(offset, 8);
-        return BinaryPrimitives.ReadUInt64BigEndian(_data.AsSpan(offset));
+        return BinaryPrimitives.ReadUInt64BigEndian(Bytes[offset..]);
     }
 
     #endregion
@@ -913,7 +913,7 @@ public class SharpTSBuffer : ITypeCategorized
     public double WriteInt8(double value, int offset = 0)
     {
         ValidateOffset(offset, 1);
-        _data[offset] = (byte)(sbyte)value;
+        Bytes[offset] = (byte)(sbyte)value;
         return offset + 1;
     }
 
@@ -923,7 +923,7 @@ public class SharpTSBuffer : ITypeCategorized
     public double WriteUInt16LE(double value, int offset = 0)
     {
         ValidateOffset(offset, 2);
-        BinaryPrimitives.WriteUInt16LittleEndian(_data.AsSpan(offset), (ushort)value);
+        BinaryPrimitives.WriteUInt16LittleEndian(Bytes[offset..], (ushort)value);
         return offset + 2;
     }
 
@@ -933,7 +933,7 @@ public class SharpTSBuffer : ITypeCategorized
     public double WriteUInt16BE(double value, int offset = 0)
     {
         ValidateOffset(offset, 2);
-        BinaryPrimitives.WriteUInt16BigEndian(_data.AsSpan(offset), (ushort)value);
+        BinaryPrimitives.WriteUInt16BigEndian(Bytes[offset..], (ushort)value);
         return offset + 2;
     }
 
@@ -943,7 +943,7 @@ public class SharpTSBuffer : ITypeCategorized
     public double WriteUInt32LE(double value, int offset = 0)
     {
         ValidateOffset(offset, 4);
-        BinaryPrimitives.WriteUInt32LittleEndian(_data.AsSpan(offset), (uint)value);
+        BinaryPrimitives.WriteUInt32LittleEndian(Bytes[offset..], (uint)value);
         return offset + 4;
     }
 
@@ -953,7 +953,7 @@ public class SharpTSBuffer : ITypeCategorized
     public double WriteUInt32BE(double value, int offset = 0)
     {
         ValidateOffset(offset, 4);
-        BinaryPrimitives.WriteUInt32BigEndian(_data.AsSpan(offset), (uint)value);
+        BinaryPrimitives.WriteUInt32BigEndian(Bytes[offset..], (uint)value);
         return offset + 4;
     }
 
@@ -963,7 +963,7 @@ public class SharpTSBuffer : ITypeCategorized
     public double WriteInt16LE(double value, int offset = 0)
     {
         ValidateOffset(offset, 2);
-        BinaryPrimitives.WriteInt16LittleEndian(_data.AsSpan(offset), (short)value);
+        BinaryPrimitives.WriteInt16LittleEndian(Bytes[offset..], (short)value);
         return offset + 2;
     }
 
@@ -973,7 +973,7 @@ public class SharpTSBuffer : ITypeCategorized
     public double WriteInt16BE(double value, int offset = 0)
     {
         ValidateOffset(offset, 2);
-        BinaryPrimitives.WriteInt16BigEndian(_data.AsSpan(offset), (short)value);
+        BinaryPrimitives.WriteInt16BigEndian(Bytes[offset..], (short)value);
         return offset + 2;
     }
 
@@ -983,7 +983,7 @@ public class SharpTSBuffer : ITypeCategorized
     public double WriteInt32LE(double value, int offset = 0)
     {
         ValidateOffset(offset, 4);
-        BinaryPrimitives.WriteInt32LittleEndian(_data.AsSpan(offset), (int)value);
+        BinaryPrimitives.WriteInt32LittleEndian(Bytes[offset..], (int)value);
         return offset + 4;
     }
 
@@ -993,7 +993,7 @@ public class SharpTSBuffer : ITypeCategorized
     public double WriteInt32BE(double value, int offset = 0)
     {
         ValidateOffset(offset, 4);
-        BinaryPrimitives.WriteInt32BigEndian(_data.AsSpan(offset), (int)value);
+        BinaryPrimitives.WriteInt32BigEndian(Bytes[offset..], (int)value);
         return offset + 4;
     }
 
@@ -1003,7 +1003,7 @@ public class SharpTSBuffer : ITypeCategorized
     public double WriteFloatLE(double value, int offset = 0)
     {
         ValidateOffset(offset, 4);
-        BinaryPrimitives.WriteInt32LittleEndian(_data.AsSpan(offset), BitConverter.SingleToInt32Bits((float)value));
+        BinaryPrimitives.WriteInt32LittleEndian(Bytes[offset..], BitConverter.SingleToInt32Bits((float)value));
         return offset + 4;
     }
 
@@ -1013,7 +1013,7 @@ public class SharpTSBuffer : ITypeCategorized
     public double WriteFloatBE(double value, int offset = 0)
     {
         ValidateOffset(offset, 4);
-        BinaryPrimitives.WriteInt32BigEndian(_data.AsSpan(offset), BitConverter.SingleToInt32Bits((float)value));
+        BinaryPrimitives.WriteInt32BigEndian(Bytes[offset..], BitConverter.SingleToInt32Bits((float)value));
         return offset + 4;
     }
 
@@ -1023,7 +1023,7 @@ public class SharpTSBuffer : ITypeCategorized
     public double WriteDoubleLE(double value, int offset = 0)
     {
         ValidateOffset(offset, 8);
-        BinaryPrimitives.WriteInt64LittleEndian(_data.AsSpan(offset), BitConverter.DoubleToInt64Bits(value));
+        BinaryPrimitives.WriteInt64LittleEndian(Bytes[offset..], BitConverter.DoubleToInt64Bits(value));
         return offset + 8;
     }
 
@@ -1033,7 +1033,7 @@ public class SharpTSBuffer : ITypeCategorized
     public double WriteDoubleBE(double value, int offset = 0)
     {
         ValidateOffset(offset, 8);
-        BinaryPrimitives.WriteInt64BigEndian(_data.AsSpan(offset), BitConverter.DoubleToInt64Bits(value));
+        BinaryPrimitives.WriteInt64BigEndian(Bytes[offset..], BitConverter.DoubleToInt64Bits(value));
         return offset + 8;
     }
 
@@ -1050,7 +1050,7 @@ public class SharpTSBuffer : ITypeCategorized
             double d => (long)d,
             _ => throw new Exception("Value must be a BigInt or number")
         };
-        BinaryPrimitives.WriteInt64LittleEndian(_data.AsSpan(offset), longValue);
+        BinaryPrimitives.WriteInt64LittleEndian(Bytes[offset..], longValue);
         return offset + 8;
     }
 
@@ -1067,7 +1067,7 @@ public class SharpTSBuffer : ITypeCategorized
             double d => (long)d,
             _ => throw new Exception("Value must be a BigInt or number")
         };
-        BinaryPrimitives.WriteInt64BigEndian(_data.AsSpan(offset), longValue);
+        BinaryPrimitives.WriteInt64BigEndian(Bytes[offset..], longValue);
         return offset + 8;
     }
 
@@ -1084,7 +1084,7 @@ public class SharpTSBuffer : ITypeCategorized
             double d => (ulong)d,
             _ => throw new Exception("Value must be a BigInt or number")
         };
-        BinaryPrimitives.WriteUInt64LittleEndian(_data.AsSpan(offset), ulongValue);
+        BinaryPrimitives.WriteUInt64LittleEndian(Bytes[offset..], ulongValue);
         return offset + 8;
     }
 
@@ -1101,7 +1101,7 @@ public class SharpTSBuffer : ITypeCategorized
             double d => (ulong)d,
             _ => throw new Exception("Value must be a BigInt or number")
         };
-        BinaryPrimitives.WriteUInt64BigEndian(_data.AsSpan(offset), ulongValue);
+        BinaryPrimitives.WriteUInt64BigEndian(Bytes[offset..], ulongValue);
         return offset + 8;
     }
 
@@ -1116,7 +1116,7 @@ public class SharpTSBuffer : ITypeCategorized
         ValidateOffset(offset, byteLength);
         long val = 0;
         for (int i = 0; i < byteLength; i++)
-            val |= (long)_data[offset + i] << (8 * i);
+            val |= (long)Bytes[offset + i] << (8 * i);
         return val;
     }
 
@@ -1127,7 +1127,7 @@ public class SharpTSBuffer : ITypeCategorized
         ValidateOffset(offset, byteLength);
         long val = 0;
         for (int i = 0; i < byteLength; i++)
-            val = (val << 8) | _data[offset + i];
+            val = (val << 8) | Bytes[offset + i];
         return val;
     }
 
@@ -1147,7 +1147,7 @@ public class SharpTSBuffer : ITypeCategorized
         long v = (long)value;
         for (int i = 0; i < byteLength; i++)
         {
-            _data[offset + i] = (byte)(v & 0xFF);
+            Bytes[offset + i] = (byte)(v & 0xFF);
             v >>= 8;
         }
         return offset + byteLength;
@@ -1161,7 +1161,7 @@ public class SharpTSBuffer : ITypeCategorized
         long v = (long)value;
         for (int i = byteLength - 1; i >= 0; i--)
         {
-            _data[offset + i] = (byte)(v & 0xFF);
+            Bytes[offset + i] = (byte)(v & 0xFF);
             v >>= 8;
         }
         return offset + byteLength;
@@ -1197,27 +1197,27 @@ public class SharpTSBuffer : ITypeCategorized
     public double IndexOf(object value, int byteOffset = 0, string encoding = "utf8")
     {
         if (byteOffset < 0) byteOffset = 0;
-        if (byteOffset >= _data.Length) return -1;
+        if (byteOffset >= Length) return -1;
 
         byte[] searchBytes = value switch
         {
             double d => [(byte)(int)d],
             int n => [(byte)n],
             string s => EncodeString(s, encoding),
-            SharpTSBuffer buf => buf._data,
+            SharpTSBuffer buf => buf.Data,
             _ => throw new Exception("Invalid search value type")
         };
 
         if (searchBytes.Length == 0) return byteOffset;
-        if (searchBytes.Length > _data.Length - byteOffset) return -1;
+        if (searchBytes.Length > Length - byteOffset) return -1;
 
         // Simple linear search
-        for (int i = byteOffset; i <= _data.Length - searchBytes.Length; i++)
+        for (int i = byteOffset; i <= Length - searchBytes.Length; i++)
         {
             bool found = true;
             for (int j = 0; j < searchBytes.Length; j++)
             {
-                if (_data[i + j] != searchBytes[j])
+                if (Bytes[i + j] != searchBytes[j])
                 {
                     found = false;
                     break;
@@ -1247,12 +1247,12 @@ public class SharpTSBuffer : ITypeCategorized
     /// </summary>
     public SharpTSBuffer Swap16()
     {
-        if (_data.Length % 2 != 0)
+        if (Length % 2 != 0)
             throw new Exception("Buffer size must be a multiple of 16-bits");
 
-        for (int i = 0; i < _data.Length; i += 2)
+        for (int i = 0; i < Length; i += 2)
         {
-            (_data[i], _data[i + 1]) = (_data[i + 1], _data[i]);
+            (Bytes[i], Bytes[i + 1]) = (Bytes[i + 1], Bytes[i]);
         }
         return this;
     }
@@ -1263,13 +1263,13 @@ public class SharpTSBuffer : ITypeCategorized
     /// </summary>
     public SharpTSBuffer Swap32()
     {
-        if (_data.Length % 4 != 0)
+        if (Length % 4 != 0)
             throw new Exception("Buffer size must be a multiple of 32-bits");
 
-        for (int i = 0; i < _data.Length; i += 4)
+        for (int i = 0; i < Length; i += 4)
         {
-            (_data[i], _data[i + 3]) = (_data[i + 3], _data[i]);
-            (_data[i + 1], _data[i + 2]) = (_data[i + 2], _data[i + 1]);
+            (Bytes[i], Bytes[i + 3]) = (Bytes[i + 3], Bytes[i]);
+            (Bytes[i + 1], Bytes[i + 2]) = (Bytes[i + 2], Bytes[i + 1]);
         }
         return this;
     }
@@ -1280,15 +1280,15 @@ public class SharpTSBuffer : ITypeCategorized
     /// </summary>
     public SharpTSBuffer Swap64()
     {
-        if (_data.Length % 8 != 0)
+        if (Length % 8 != 0)
             throw new Exception("Buffer size must be a multiple of 64-bits");
 
-        for (int i = 0; i < _data.Length; i += 8)
+        for (int i = 0; i < Length; i += 8)
         {
-            (_data[i], _data[i + 7]) = (_data[i + 7], _data[i]);
-            (_data[i + 1], _data[i + 6]) = (_data[i + 6], _data[i + 1]);
-            (_data[i + 2], _data[i + 5]) = (_data[i + 5], _data[i + 2]);
-            (_data[i + 3], _data[i + 4]) = (_data[i + 4], _data[i + 3]);
+            (Bytes[i], Bytes[i + 7]) = (Bytes[i + 7], Bytes[i]);
+            (Bytes[i + 1], Bytes[i + 6]) = (Bytes[i + 6], Bytes[i + 1]);
+            (Bytes[i + 2], Bytes[i + 5]) = (Bytes[i + 5], Bytes[i + 2]);
+            (Bytes[i + 3], Bytes[i + 4]) = (Bytes[i + 4], Bytes[i + 3]);
         }
         return this;
     }
@@ -1307,7 +1307,7 @@ public class SharpTSBuffer : ITypeCategorized
 
     private static byte[] EncodeString(string data, string encoding) => BufferEncoding.Encode(data, encoding);
 
-    private static string DecodeBytes(byte[] data, string encoding) => BufferEncoding.Decode(data, encoding);
+    private static string DecodeBytes(ReadOnlySpan<byte> data, string encoding) => BufferEncoding.Decode(data, encoding);
 
     #endregion
 }

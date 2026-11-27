@@ -1613,27 +1613,17 @@ public partial class RuntimeEmitter
                 il.Emit(OpCodes.Isinst, runtime.RequireBuffer().Type);
                 il.Emit(OpCodes.Brfalse, notBuffer);
 
-                var dataLocal = il.DeclareLocal(_types.ByteArray);
-                il.Emit(OpCodes.Ldarg_1);
-                il.Emit(OpCodes.Castclass, runtime.RequireBuffer().Type);
-                il.Emit(OpCodes.Call, runtime.RequireBuffer().GetData);
+                var dataLocal = il.DeclareLocal(typeof(Span<byte>));
+                EmitBufferSpan(il, runtime.RequireBuffer(), OpCodes.Ldarg_1);
                 il.Emit(OpCodes.Stloc, dataLocal);
-
                 var quotaOk = il.DefineLabel();
-                il.Emit(OpCodes.Ldloc, dataLocal);
-                il.Emit(OpCodes.Ldlen);
-                il.Emit(OpCodes.Conv_I4);
+                il.Emit(OpCodes.Ldloca, dataLocal);
+                il.Emit(OpCodes.Call, typeof(Span<byte>).GetProperty("Length")!.GetMethod!);
                 il.Emit(OpCodes.Ldc_I4, 65536);
                 il.Emit(OpCodes.Ble, quotaOk);
                 EmitThrowMessage(il, "QuotaExceededError: crypto.getRandomValues requested more than 65536 bytes");
                 il.MarkLabel(quotaOk);
-
                 il.Emit(OpCodes.Ldloc, dataLocal);
-                il.Emit(OpCodes.Ldc_I4_0);
-                il.Emit(OpCodes.Ldloc, dataLocal);
-                il.Emit(OpCodes.Ldlen);
-                il.Emit(OpCodes.Conv_I4);
-                il.Emit(OpCodes.Newobj, spanCtor3);
                 il.Emit(OpCodes.Call, fill);
 
                 il.Emit(OpCodes.Ldarg_1);

@@ -11,6 +11,8 @@ public partial class RuntimeEmitter
         NativeSourceOwnerCatalog? SourceOwners,
         EmittedDynamicConstructionRuntime DynamicConstruction,
         EmittedArrayStorageRuntime ArrayStorage,
+        EmittedArrayBufferRuntime? ArrayBuffer,
+        EmittedSharedArrayBufferRuntime? SharedArrayBuffer,
         EmittedDescriptorStorageRuntime DescriptorStorage,
         EmittedObjectReadRuntime ObjectRead,
         EmittedOperatorRuntime Operators,
@@ -93,6 +95,12 @@ public partial class RuntimeEmitter
         il.Emit(OpCodes.Isinst, inputs.UndefinedType);
         il.Emit(OpCodes.Brtrue, throwLabel);
 
+        var applyNewTarget = il.DefineLabel();
+        if (inputs.ArrayBuffer is { } buffer)
+            EmitBufferConstructorCase(buffer.Type, buffer.Create);
+        if (inputs.SharedArrayBuffer is { } shared)
+            EmitBufferConstructorCase(shared.Type, shared.Create);
+
         // Array values use an IList<object> Type token, whose CLR construction
         // is unrelated to JavaScript's numeric-length and element-list forms.
         var notArrayTypeLabel = il.DefineLabel();
@@ -108,18 +116,19 @@ public partial class RuntimeEmitter
         il.MarkLabel(constructArray);
         il.Emit(OpCodes.Ldarg_1);
         il.Emit(OpCodes.Call, inputs.ArrayConstructor);
-        var array = il.DeclareLocal(_types.Object);
+        il.MarkLabel(applyNewTarget);
+        var instance = il.DeclareLocal(_types.Object);
         var prototype = il.DeclareLocal(_types.Object);
         var prototypeKind = il.DeclareLocal(_types.String);
-        var useArrayPrototype = il.DefineLabel();
+        var useIntrinsicPrototype = il.DefineLabel();
         var installPrototype = il.DefineLabel();
-        il.Emit(OpCodes.Stloc, array);
+        il.Emit(OpCodes.Stloc, instance);
         il.Emit(OpCodes.Ldarg_2);
         il.Emit(OpCodes.Ldstr, "prototype");
         il.Emit(OpCodes.Call, inputs.ObjectRead.Property);
         il.Emit(OpCodes.Stloc, prototype);
         il.Emit(OpCodes.Ldloc, prototype);
-        il.Emit(OpCodes.Brfalse, useArrayPrototype);
+        il.Emit(OpCodes.Brfalse, useIntrinsicPrototype);
         il.Emit(OpCodes.Ldloc, prototype);
         il.Emit(OpCodes.Call, inputs.Operators.TypeOf);
         il.Emit(OpCodes.Stloc, prototypeKind);
@@ -130,17 +139,45 @@ public partial class RuntimeEmitter
             il.Emit(OpCodes.Call, _types.StringOpEquality);
             il.Emit(OpCodes.Brtrue, installPrototype);
         }
-        il.Emit(OpCodes.Br, useArrayPrototype);
+        il.Emit(OpCodes.Br, useIntrinsicPrototype);
         il.MarkLabel(installPrototype);
-        il.Emit(OpCodes.Ldloc, array);
+        il.Emit(OpCodes.Ldloc, instance);
         il.Emit(OpCodes.Ldloc, prototype);
         il.Emit(OpCodes.Call, inputs.DescriptorStorage.SetPrototype);
-        il.MarkLabel(useArrayPrototype);
-        il.Emit(OpCodes.Ldloc, array);
+        il.MarkLabel(useIntrinsicPrototype);
+        il.Emit(OpCodes.Ldloc, instance);
         il.Emit(OpCodes.Ret);
         il.MarkLabel(notArrayTypeLabel);
         _nativeConstructorActivation?.RecordIntrinsicReturn(_types.IListOfObject, il);
         _nativeConstructorActivation?.RecordIntrinsicReturn(inputs.ArrayStorage.Type, il);
+
+        if (inputs.ArrayBuffer is not null) _nativeConstructorActivation?.RecordIntrinsicReturn(inputs.ArrayBuffer.Type, il);
+        if (inputs.SharedArrayBuffer is not null) _nativeConstructorActivation?.RecordIntrinsicReturn(inputs.SharedArrayBuffer.Type, il);
+
+        void EmitBufferConstructorCase(Type type, MethodInfo create)
+        {
+            var next = il.DefineLabel();
+            var hasLength = il.DefineLabel();
+            var construct = il.DefineLabel();
+            il.Emit(OpCodes.Ldarg_0);
+            il.Emit(OpCodes.Ldtoken, type);
+            il.Emit(OpCodes.Call, _types.TypeGetTypeFromHandle);
+            il.Emit(OpCodes.Bne_Un, next);
+            il.Emit(OpCodes.Ldarg_1);
+            il.Emit(OpCodes.Ldlen);
+            il.Emit(OpCodes.Brtrue, hasLength);
+            il.Emit(OpCodes.Ldc_R8, 0d);
+            il.Emit(OpCodes.Br, construct);
+            il.MarkLabel(hasLength);
+            il.Emit(OpCodes.Ldarg_1);
+            il.Emit(OpCodes.Ldc_I4_0);
+            il.Emit(OpCodes.Ldelem_Ref);
+            il.Emit(OpCodes.Call, inputs.NumericCoercion.ToNumber);
+            il.MarkLabel(construct);
+            il.Emit(OpCodes.Call, create);
+            il.Emit(OpCodes.Br, applyNewTarget);
+            il.MarkLabel(next);
+        }
 
         // Promise constructor values carry Task<object>, whose CLR callback
         // constructors do not implement the guest executor protocol.

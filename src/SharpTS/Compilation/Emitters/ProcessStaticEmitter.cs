@@ -1,4 +1,3 @@
-using System.Diagnostics;
 using System.Reflection.Emit;
 using SharpTS.Parsing;
 
@@ -53,14 +52,6 @@ public sealed class ProcessStaticEmitter : IStaticTypeEmitterStrategy
                 il.Emit(OpCodes.Ldnull);
                 return true;
 
-            case "nextTick":
-                EmitNextTick(emitter, arguments);
-                return true;
-
-            case "emitWarning":
-                EmitFourArgHelperCall(emitter, arguments, ctx.Runtime!.Process.EmitWarning);
-                return true;
-
             case "setSourceMapsEnabled":
                 // Route through the $Process property setter semantics via the
                 // live object (SetProperty handles the bool coercion).
@@ -78,59 +69,6 @@ public sealed class ProcessStaticEmitter : IStaticTypeEmitterStrategy
 
     // The ordinary property path reads the current process receiver.
     public bool TryEmitStaticPropertyGet(IEmitterContext emitter, string propertyName) => false;
-
-    /// <summary>Emits a call to a four-object-arg $Runtime helper (missing args → null).</summary>
-    private static void EmitFourArgHelperCall(IEmitterContext emitter, List<Expr> arguments, System.Reflection.Emit.MethodBuilder helper)
-    {
-        EmitterArgumentHelpers.EmitBoxedArgumentOrNull(emitter, arguments, 0);
-        EmitterArgumentHelpers.EmitBoxedArgumentOrNull(emitter, arguments, 1);
-        EmitterArgumentHelpers.EmitBoxedArgumentOrNull(emitter, arguments, 2);
-        EmitterArgumentHelpers.EmitBoxedArgumentOrNull(emitter, arguments, 3);
-        emitter.Context.IL.Emit(OpCodes.Call, helper);
-    }
-
-    /// <summary>
-    /// Emits IL for process.nextTick(callback, ...args).
-    /// Queues the callback before due timers.
-    /// </summary>
-    private static void EmitNextTick(IEmitterContext emitter, List<Expr> arguments)
-    {
-        var ctx = emitter.Context;
-        var il = ctx.IL;
-
-        // Emit callback - first argument
-        if (arguments.Count > 0)
-        {
-            emitter.EmitExpression(arguments[0]);
-            emitter.EmitBoxIfNeeded(arguments[0]);
-        }
-        else
-        {
-            il.Emit(OpCodes.Ldnull);
-        }
-
-        // Emit args array - remaining arguments (starting from index 1)
-        EmitArgsArray(emitter, arguments, 1);
-
-        il.Emit(OpCodes.Call, ctx.Runtime!.Process.QueueNextTick);
-
-        // nextTick has no result, retaining its existing undefined representation.
-        il.Emit(OpCodes.Ldnull);
-    }
-
-    /// <summary>
-    /// Emits an object[] array with the remaining arguments starting from startIndex,
-    /// expanding any <see cref="Expr.Spread"/> (<c>...args</c>) at runtime via the shared
-    /// spread-aware builder. Leaves an <c>object[]</c> on the stack (#1149).
-    /// </summary>
-    private static void EmitArgsArray(IEmitterContext emitter, List<Expr> arguments, int startIndex)
-    {
-        int extraArgCount = Math.Max(0, arguments.Count - startIndex);
-        var extra = extraArgCount > 0
-            ? arguments.GetRange(startIndex, extraArgCount)
-            : new List<Expr>();
-        emitter.EmitArgsArrayWithSpread(extra);
-    }
 
     /// <summary>
     /// Emits IL for EventEmitter method calls on process (on, once, off, emit, etc.).

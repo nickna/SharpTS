@@ -287,6 +287,7 @@ public partial class RuntimeEmitter
             typeBuilder,
             [_types.Object, _types.Object, _types.Object]);
         method.DefineParameter(1, ParameterAttributes.None, "__this");
+        method.SetCustomAttribute(runtime.FunctionAttributes.NonConstructibleCtor, CustomAttributeEncoder.EmptyBlob);
         method.SetCustomAttribute(runtime.FunctionAttributes.PadUndefinedCtor, CustomAttributeEncoder.EmptyBlob);
         var il = method.GetILGenerator();
         var receiver = il.DeclareLocal(typeBuilder);
@@ -352,6 +353,7 @@ public partial class RuntimeEmitter
         var getter = owner.DefineMethod("PrototypeGetByteLength", MethodAttributes.Public | MethodAttributes.Static,
             _types.Object, [_types.Object]);
         getter.DefineParameter(1, ParameterAttributes.None, "__this");
+        getter.SetCustomAttribute(runtime.FunctionAttributes.NonConstructibleCtor, CustomAttributeEncoder.EmptyBlob);
         var il = getter.GetILGenerator();
         EmitRequireArrayBufferReceiver(il, runtime, owner, $"{typeName}.prototype.byteLength");
         il.Emit(OpCodes.Callvirt, byteLengthGetter);

@@ -1248,6 +1248,8 @@ public partial class RuntimeEmitter
             typeBuilder,
             runtime.ObjectWrite,
             new SetFieldsPropertyInputs(
+                runtime.ArrayBuffer?.Type,
+                runtime.SharedArrayBuffer?.Type,
                 runtime.Dates,
                 runtime.DescriptorStorage,
                 runtime.Errors,
@@ -1266,6 +1268,8 @@ public partial class RuntimeEmitter
             typeBuilder,
             runtime.ObjectWrite,
             new SetFieldsPropertyStrictInputs(
+                runtime.ArrayBuffer?.Type,
+                runtime.SharedArrayBuffer?.Type,
                 runtime.Dates,
                 runtime.DescriptorStorage,
                 runtime.Errors,

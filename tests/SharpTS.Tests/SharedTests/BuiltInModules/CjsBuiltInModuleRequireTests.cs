@@ -62,13 +62,15 @@ public class CjsBuiltInModuleRequireTests
                 console.log(isAscii(buffer.Buffer.from('hello')), transcode(text, 'utf8', 'latin1').toString('hex'));
                 const result = SlowBuffer(3);
                 const { isBuffer } = buffer.Buffer;
+                console.log(buffer.Buffer.from === Buffer.from, buffer.Buffer.alloc === Buffer.alloc,
+                    buffer.Buffer.byteLength === Buffer.byteLength);
                 console.log(typeof isBuffer, isBuffer.name, isBuffer.length);
                 console.log(isBuffer(result), isBuffer(new Uint8Array(3)), isBuffer(null), result.length);
                 console.log(isBuffer === Buffer.isBuffer, isBuffer === buffer.Buffer['isBuffer']);
                 console.log(isBuffer(), isBuffer(undefined), isBuffer(result, 'ignored'));
                 """
         };
-        Assert.Equal("function function function function\ntrue false false\ntrue 68e96c6c6f\nfunction isBuffer 1\n" +
+        Assert.Equal("function function function function\ntrue false false\ntrue 68e96c6c6f\ntrue true true\nfunction isBuffer 1\n" +
                      "true false false 3\ntrue true\nfalse false true\n",
             TestHarness.RunModules(files, "main.cjs", mode));
     }
@@ -90,6 +92,24 @@ public class CjsBuiltInModuleRequireTests
         };
         const string expected = "true TypeError ERR_INVALID_ARG_TYPE\n";
         Assert.Equal(string.Concat(Enumerable.Repeat(expected, 10)), TestHarness.RunModules(files, "main.cjs", mode));
+    }
+
+    [Theory, ModeData]
+    public void Cjs_Require_Buffer_TranscodeRejectsUnsupportedSources(ExecutionMode mode)
+    {
+        var files = new Dictionary<string, string>
+        {
+            ["main.cjs"] = """
+                const { transcode } = require('node:buffer');
+                for (const source of ['A', [65], new Int8Array([65]), new Uint16Array([65]),
+                    new Uint8ClampedArray([65]), new ArrayBuffer(1), null, undefined]) {
+                    try { console.log(transcode(source, 'utf8', 'latin1')); }
+                    catch (error) { console.log(error instanceof TypeError, error.code); }
+                }
+                """
+        };
+        Assert.Equal(string.Concat(Enumerable.Repeat("true ERR_INVALID_ARG_TYPE\n", 8)),
+            TestHarness.RunModules(files, "main.cjs", mode));
     }
 
     [Theory, ModeData]

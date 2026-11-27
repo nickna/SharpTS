@@ -43,9 +43,7 @@ public partial class RuntimeEmitter
 
         // len = _data.Length
         il.Emit(OpCodes.Ldarg_0);
-        il.Emit(OpCodes.Ldfld, buffer.DataField);
-        il.Emit(OpCodes.Ldlen);
-        il.Emit(OpCodes.Conv_I4);
+        il.Emit(OpCodes.Call, buffer.LengthGetter);
         il.Emit(OpCodes.Stloc, lenLocal);
 
         // if (byteOffset >= len) return -1
@@ -98,7 +96,7 @@ public partial class RuntimeEmitter
         // searchBytes = (($Buffer)value)._data
         il.Emit(OpCodes.Ldarg_1);
         il.Emit(OpCodes.Castclass, typeBuilder);
-        il.Emit(OpCodes.Ldfld, buffer.DataField);
+        il.Emit(OpCodes.Call, buffer.GetData);
         il.Emit(OpCodes.Stloc, searchBytesLocal);
         il.Emit(OpCodes.Br, afterTypeCheck);
 
@@ -170,9 +168,9 @@ public partial class RuntimeEmitter
 
         // if (_data[i + j] != searchBytes[j]) { found = false; break; }
         var matchContinueLabel = il.DefineLabel();
-        il.Emit(OpCodes.Ldarg_0);
-        il.Emit(OpCodes.Ldfld, buffer.DataField);
+        EmitBufferRangeStart(il, buffer, OpCodes.Ldarg_0);
         il.Emit(OpCodes.Ldloc, indexLocal);
+        il.Emit(OpCodes.Add);
         il.Emit(OpCodes.Ldloc, innerIndexLocal);
         il.Emit(OpCodes.Add);
         il.Emit(OpCodes.Ldelem_U1);
@@ -268,9 +266,7 @@ public partial class RuntimeEmitter
         // Check length is multiple of 2
         var okLabel = il.DefineLabel();
         il.Emit(OpCodes.Ldarg_0);
-        il.Emit(OpCodes.Ldfld, buffer.DataField);
-        il.Emit(OpCodes.Ldlen);
-        il.Emit(OpCodes.Conv_I4);
+        il.Emit(OpCodes.Call, buffer.LengthGetter);
         il.Emit(OpCodes.Ldc_I4_2);
         il.Emit(OpCodes.Rem);
         il.Emit(OpCodes.Brfalse, okLabel);
@@ -287,9 +283,7 @@ public partial class RuntimeEmitter
 
         // len = _data.Length
         il.Emit(OpCodes.Ldarg_0);
-        il.Emit(OpCodes.Ldfld, buffer.DataField);
-        il.Emit(OpCodes.Ldlen);
-        il.Emit(OpCodes.Conv_I4);
+        il.Emit(OpCodes.Call, buffer.LengthGetter);
         il.Emit(OpCodes.Stloc, lenLocal);
 
         // for (i = 0; i < len; i += 2)
@@ -306,28 +300,28 @@ public partial class RuntimeEmitter
 
         // Swap _data[i] and _data[i+1]
         // temp = _data[i]
-        il.Emit(OpCodes.Ldarg_0);
-        il.Emit(OpCodes.Ldfld, buffer.DataField);
+        EmitBufferRangeStart(il, buffer, OpCodes.Ldarg_0);
         il.Emit(OpCodes.Ldloc, indexLocal);
+        il.Emit(OpCodes.Add);
         il.Emit(OpCodes.Ldelem_U1);
         il.Emit(OpCodes.Stloc, tempLocal);
 
         // _data[i] = _data[i+1]
-        il.Emit(OpCodes.Ldarg_0);
-        il.Emit(OpCodes.Ldfld, buffer.DataField);
+        EmitBufferRangeStart(il, buffer, OpCodes.Ldarg_0);
         il.Emit(OpCodes.Ldloc, indexLocal);
-        il.Emit(OpCodes.Ldarg_0);
-        il.Emit(OpCodes.Ldfld, buffer.DataField);
+        il.Emit(OpCodes.Add);
+        EmitBufferRangeStart(il, buffer, OpCodes.Ldarg_0);
         il.Emit(OpCodes.Ldloc, indexLocal);
+        il.Emit(OpCodes.Add);
         il.Emit(OpCodes.Ldc_I4_1);
         il.Emit(OpCodes.Add);
         il.Emit(OpCodes.Ldelem_U1);
         il.Emit(OpCodes.Stelem_I1);
 
         // _data[i+1] = temp
-        il.Emit(OpCodes.Ldarg_0);
-        il.Emit(OpCodes.Ldfld, buffer.DataField);
+        EmitBufferRangeStart(il, buffer, OpCodes.Ldarg_0);
         il.Emit(OpCodes.Ldloc, indexLocal);
+        il.Emit(OpCodes.Add);
         il.Emit(OpCodes.Ldc_I4_1);
         il.Emit(OpCodes.Add);
         il.Emit(OpCodes.Ldloc, tempLocal);
@@ -365,9 +359,7 @@ public partial class RuntimeEmitter
         // Check length is multiple of 4
         var okLabel = il.DefineLabel();
         il.Emit(OpCodes.Ldarg_0);
-        il.Emit(OpCodes.Ldfld, buffer.DataField);
-        il.Emit(OpCodes.Ldlen);
-        il.Emit(OpCodes.Conv_I4);
+        il.Emit(OpCodes.Call, buffer.LengthGetter);
         il.Emit(OpCodes.Ldc_I4_4);
         il.Emit(OpCodes.Rem);
         il.Emit(OpCodes.Brfalse, okLabel);
@@ -385,9 +377,7 @@ public partial class RuntimeEmitter
 
         // len = _data.Length
         il.Emit(OpCodes.Ldarg_0);
-        il.Emit(OpCodes.Ldfld, buffer.DataField);
-        il.Emit(OpCodes.Ldlen);
-        il.Emit(OpCodes.Conv_I4);
+        il.Emit(OpCodes.Call, buffer.LengthGetter);
         il.Emit(OpCodes.Stloc, lenLocal);
 
         // for (i = 0; i < len; i += 4)
@@ -440,9 +430,7 @@ public partial class RuntimeEmitter
         // Check length is multiple of 8
         var okLabel = il.DefineLabel();
         il.Emit(OpCodes.Ldarg_0);
-        il.Emit(OpCodes.Ldfld, buffer.DataField);
-        il.Emit(OpCodes.Ldlen);
-        il.Emit(OpCodes.Conv_I4);
+        il.Emit(OpCodes.Call, buffer.LengthGetter);
         il.Emit(OpCodes.Ldc_I4_8);
         il.Emit(OpCodes.Rem);
         il.Emit(OpCodes.Brfalse, okLabel);
@@ -459,9 +447,7 @@ public partial class RuntimeEmitter
 
         // len = _data.Length
         il.Emit(OpCodes.Ldarg_0);
-        il.Emit(OpCodes.Ldfld, buffer.DataField);
-        il.Emit(OpCodes.Ldlen);
-        il.Emit(OpCodes.Conv_I4);
+        il.Emit(OpCodes.Call, buffer.LengthGetter);
         il.Emit(OpCodes.Stloc, lenLocal);
 
         // for (i = 0; i < len; i += 8)
@@ -499,9 +485,9 @@ public partial class RuntimeEmitter
     private void EmitSwapBytes(EmittedBufferRuntime buffer, ILGenerator il, LocalBuilder indexLocal, int offset1, int offset2, LocalBuilder tempLocal)
     {
         // temp = _data[index + offset1]
-        il.Emit(OpCodes.Ldarg_0);
-        il.Emit(OpCodes.Ldfld, buffer.DataField);
+        EmitBufferRangeStart(il, buffer, OpCodes.Ldarg_0);
         il.Emit(OpCodes.Ldloc, indexLocal);
+        il.Emit(OpCodes.Add);
         if (offset1 > 0)
         {
             il.Emit(OpCodes.Ldc_I4, offset1);
@@ -511,26 +497,26 @@ public partial class RuntimeEmitter
         il.Emit(OpCodes.Stloc, tempLocal);
 
         // _data[index + offset1] = _data[index + offset2]
-        il.Emit(OpCodes.Ldarg_0);
-        il.Emit(OpCodes.Ldfld, buffer.DataField);
+        EmitBufferRangeStart(il, buffer, OpCodes.Ldarg_0);
         il.Emit(OpCodes.Ldloc, indexLocal);
+        il.Emit(OpCodes.Add);
         if (offset1 > 0)
         {
             il.Emit(OpCodes.Ldc_I4, offset1);
             il.Emit(OpCodes.Add);
         }
-        il.Emit(OpCodes.Ldarg_0);
-        il.Emit(OpCodes.Ldfld, buffer.DataField);
+        EmitBufferRangeStart(il, buffer, OpCodes.Ldarg_0);
         il.Emit(OpCodes.Ldloc, indexLocal);
+        il.Emit(OpCodes.Add);
         il.Emit(OpCodes.Ldc_I4, offset2);
         il.Emit(OpCodes.Add);
         il.Emit(OpCodes.Ldelem_U1);
         il.Emit(OpCodes.Stelem_I1);
 
         // _data[index + offset2] = temp
-        il.Emit(OpCodes.Ldarg_0);
-        il.Emit(OpCodes.Ldfld, buffer.DataField);
+        EmitBufferRangeStart(il, buffer, OpCodes.Ldarg_0);
         il.Emit(OpCodes.Ldloc, indexLocal);
+        il.Emit(OpCodes.Add);
         il.Emit(OpCodes.Ldc_I4, offset2);
         il.Emit(OpCodes.Add);
         il.Emit(OpCodes.Ldloc, tempLocal);

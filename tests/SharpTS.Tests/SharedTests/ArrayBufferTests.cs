@@ -169,6 +169,63 @@ public class ArrayBufferTests
     #region Slice Method Tests
 
     [Theory, ModeData]
+    public void ArrayBuffer_ConstructorAliasesAcceptJavaScriptLengths(ExecutionMode mode)
+    {
+        const string source = """
+            for (const make of [ArrayBuffer, SharedArrayBuffer]) {
+                console.log(new make(4).byteLength, new make(3.8).byteLength, new make().byteLength,
+                    new make(undefined).byteLength, new make('2').byteLength,
+                    Reflect.construct(make, [5]).byteLength, new make(...[6]).byteLength);
+                try { new make(-1); } catch (error) { console.log(error instanceof RangeError); }
+            }
+            """;
+        const string expected = "4 3 0 0 2 5 6\ntrue\n";
+        Assert.Equal(expected + expected, TestHarness.RunUnchecked(source, mode));
+    }
+
+    [Theory, ModeData]
+    public void ArrayBuffer_AssignmentShadowsInheritedMethods(ExecutionMode mode)
+    {
+        const string source = """
+            function check(value) {
+                const original = value.slice;
+                const replacement = () => 42;
+                value.slice = replacement;
+                const desc = Object.getOwnPropertyDescriptor(value, 'slice');
+                console.log(value.slice === replacement, value.slice(), desc.writable, desc.enumerable, desc.configurable);
+                delete value.slice;
+                console.log(value.slice === original);
+                function setStrict(obj, key) { 'use strict'; obj[key] = 17; }
+                setStrict(value, 'extra');
+                console.log(value.extra);
+                Object.preventExtensions(value);
+                try { setStrict(value, 'missing'); }
+                catch (error) { console.log(error instanceof TypeError); }
+            }
+            check(new ArrayBuffer(4));
+            check(new SharedArrayBuffer(4));
+            """;
+        const string result = "true 42 true true true\ntrue\n17\ntrue\n";
+        Assert.Equal(result + result, TestHarness.RunUnchecked(source, mode));
+    }
+
+    [Theory, ModeData]
+    public void ArrayBuffer_PrototypeMethodsRejectConstruction(ExecutionMode mode)
+    {
+        const string source = """
+            function Target() { console.log('target ran'); }
+            for (const proto of [ArrayBuffer.prototype, SharedArrayBuffer.prototype]) {
+                const getter = Object.getOwnPropertyDescriptor(proto, 'byteLength').get;
+                for (const method of [proto.slice, getter]) {
+                    try { Reflect.construct(Target, [], method); }
+                    catch (error) { console.log(error instanceof TypeError, error.name); }
+                }
+            }
+            """;
+        Assert.Equal(string.Concat(Enumerable.Repeat("true TypeError\n", 4)), TestHarness.RunUnchecked(source, mode));
+    }
+
+    [Theory, ModeData]
     public void SharedArrayBuffer_SliceUsesTheCallReceiver(ExecutionMode mode)
     {
         const string source = """

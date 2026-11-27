@@ -128,13 +128,21 @@ public sealed class EmittedObjectWriteRuntimeTests
         {
             ["Buffer"] = supplied ? runtime.Buffer : null, ["CommonJs"] = supplied ? runtime.Modules.CommonJs : null,
             ["Promise"] = supplied ? runtime.Promise : null, ["Abort"] = supplied ? runtime.Abort : null,
+            ["ArrayBufferType"] = supplied ? runtime.ArrayBuffer?.Type : null,
+            ["SharedArrayBufferType"] = supplied ? runtime.SharedArrayBuffer?.Type : null,
             ["TypedArrays"] = typedArrays, ["ProxySelected"] = false,
             ["ReflectAssignment"] = null
         };
         var owner = EmitWrites(emitter, probe, runtime, inputs); AssertFrozen(owner); probe.CreateType();
         var loaded = SaveVerifyLoad(builder); var saved = loaded.GetType(probe.FullName!)!;
         foreach (var name in new[] { "SetFieldsProperty", "SetFieldsPropertyStrict" })
-            Assert.Equal(supplied, ReadOperands(saved.GetMethod(name)!).Any(p => p.OpCode == OpCodes.Isinst && p.Member.Name == runtime.Promise!.Type.Name));
+        {
+            var types = ReadOperands(saved.GetMethod(name)!).Where(p => p.OpCode == OpCodes.Isinst)
+                .Select(p => p.Member.Name).ToHashSet();
+            Assert.Equal(supplied, types.Contains(runtime.Promise!.Type.Name));
+            Assert.Equal(supplied, types.Contains(runtime.RequireArrayBuffer().Type.Name));
+            Assert.Equal(supplied, types.Contains(runtime.RequireSharedArrayBuffer().Type.Name));
+        }
         foreach (var name in new[] { "SetProperty", "SetPropertyStrict" })
             Assert.Equal(supplied, ReadOperands(saved.GetMethod(name)!).Any(p => p.OpCode == OpCodes.Isinst && p.Member.Name == runtime.Modules.CommonJs!.Type.Name));
         var property = saved.GetMethod("SetProperty")!; var index = saved.GetMethod("SetIndex")!;
@@ -216,6 +224,8 @@ public sealed class EmittedObjectWriteRuntimeTests
             if (overrides.TryGetValue(parameter.Name!, out var value)) return value;
             if (parameter.Name == "NativeProxyRejection") return runtime.ReflectedMethods.NativeProxyRejection;
             if (parameter.Name == "SourceOwners") return runtime.ClassInitialization.SourceOwners;
+            if (parameter.Name == "ArrayBufferType") return runtime.ArrayBuffer?.Type;
+            if (parameter.Name == "SharedArrayBufferType") return runtime.SharedArrayBuffer?.Type;
             if (parameter.Name == "CommonJs") return runtime.Modules.CommonJs;
             if (parameter.Name == "ReflectAssignment") return runtime.Reflect.Assignment;
             if (parameter.Name == "GlobalThisSingletonField") return runtime.GlobalObject.SingletonField;

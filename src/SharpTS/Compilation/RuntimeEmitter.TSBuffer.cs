@@ -20,7 +20,26 @@ public partial class RuntimeEmitter
         buffer.Type = typeBuilder;
 
         // Field: private byte[] _data
-        buffer.DataField = typeBuilder.DefineField("_data", _types.MakeArrayType(_types.Byte), FieldAttributes.Private);
+        buffer.DataField = typeBuilder.DefineField("_data", _types.ByteArray, FieldAttributes.Assembly | FieldAttributes.InitOnly);
+
+        buffer.OffsetField = typeBuilder.DefineField("_byteOffset", _types.Int32, FieldAttributes.Assembly | FieldAttributes.InitOnly);
+        buffer.LengthField = typeBuilder.DefineField("_length", _types.Int32, FieldAttributes.Private | FieldAttributes.InitOnly);
+        var viewCtor = typeBuilder.DefineConstructor(MethodAttributes.Assembly, CallingConventions.Standard,
+            [_types.ByteArray, _types.Int32, _types.Int32]);
+        buffer.ViewCtor = viewCtor;
+        var viewIL = viewCtor.GetILGenerator();
+        viewIL.Emit(OpCodes.Ldarg_0);
+        viewIL.Emit(OpCodes.Call, _types.GetDefaultConstructor(_types.Object));
+        viewIL.Emit(OpCodes.Ldarg_0);
+        viewIL.Emit(OpCodes.Ldarg_1);
+        viewIL.Emit(OpCodes.Stfld, buffer.DataField);
+        viewIL.Emit(OpCodes.Ldarg_0);
+        viewIL.Emit(OpCodes.Ldarg_2);
+        viewIL.Emit(OpCodes.Stfld, buffer.OffsetField);
+        viewIL.Emit(OpCodes.Ldarg_0);
+        viewIL.Emit(OpCodes.Ldarg_3);
+        viewIL.Emit(OpCodes.Stfld, buffer.LengthField);
+        viewIL.Emit(OpCodes.Ret);
 
         // Constructor: public $Buffer(byte[] data)
         EmitTSBufferCtorBytes(typeBuilder, buffer);
@@ -32,6 +51,7 @@ public partial class RuntimeEmitter
         EmitTSBufferLengthProperty(typeBuilder, buffer);
 
         // Static methods
+        EmitTSBufferGetData(typeBuilder, buffer);
         EmitTSBufferFromString(typeBuilder, buffer, errors);
         EmitTSBufferFromArray(typeBuilder, buffer);
         EmitTSBufferFromBuffer(typeBuilder, buffer);
@@ -44,12 +64,11 @@ public partial class RuntimeEmitter
         // Instance methods
         EmitTSBufferToStringMethod(typeBuilder, buffer);
         EmitTSBufferSlice(typeBuilder, buffer);
-        EmitTSBufferGetData(typeBuilder, buffer);
         EmitTSBufferCopy(typeBuilder, buffer);
         EmitTSBufferCompare(typeBuilder, buffer);
         EmitTSBufferEquals(typeBuilder, buffer);
         EmitTSBufferFill(typeBuilder, buffer);
-        EmitTSBufferWrite(typeBuilder, buffer);
+        EmitTSBufferWrite(typeBuilder, buffer, errors);
         EmitTSBufferReadUInt8(typeBuilder, buffer);
         EmitTSBufferWriteUInt8(typeBuilder, buffer);
         EmitTSBufferToJSON(typeBuilder, buffer);
@@ -115,6 +134,29 @@ public partial class RuntimeEmitter
         typeBuilder.CreateType();
     }
 
+    // Leave the backing array and the view's starting byte offset on the stack.
+    private static void EmitBufferRangeStart(ILGenerator il, EmittedBufferRuntime buffer, OpCode receiver)
+    {
+        il.Emit(receiver);
+        il.Emit(OpCodes.Ldfld, buffer.DataField);
+        il.Emit(receiver);
+        il.Emit(OpCodes.Ldfld, buffer.OffsetField);
+    }
+
+    private static void EmitBufferSpan(ILGenerator il, EmittedBufferRuntime buffer, OpCode receiver)
+    {
+        il.Emit(receiver);
+        il.Emit(OpCodes.Castclass, buffer.Type);
+        il.Emit(OpCodes.Ldfld, buffer.DataField);
+        il.Emit(receiver);
+        il.Emit(OpCodes.Castclass, buffer.Type);
+        il.Emit(OpCodes.Ldfld, buffer.OffsetField);
+        il.Emit(receiver);
+        il.Emit(OpCodes.Castclass, buffer.Type);
+        il.Emit(OpCodes.Call, buffer.LengthGetter);
+        il.Emit(OpCodes.Newobj, typeof(Span<byte>).GetConstructor([typeof(byte[]), typeof(int), typeof(int)])!);
+    }
+
     /// <summary>
     /// Emits: public $Buffer(byte[] data)
     /// </summary>
@@ -129,15 +171,13 @@ public partial class RuntimeEmitter
 
         var il = ctor.GetILGenerator();
 
-        // Call base constructor
-        il.Emit(OpCodes.Ldarg_0);
-        il.Emit(OpCodes.Call, _types.GetDefaultConstructor(_types.Object));
-
-        // _data = data
         il.Emit(OpCodes.Ldarg_0);
         il.Emit(OpCodes.Ldarg_1);
-        il.Emit(OpCodes.Stfld, buffer.DataField);
-
+        il.Emit(OpCodes.Ldc_I4_0);
+        il.Emit(OpCodes.Ldarg_1);
+        il.Emit(OpCodes.Ldlen);
+        il.Emit(OpCodes.Conv_I4);
+        il.Emit(OpCodes.Call, buffer.ViewCtor);
         il.Emit(OpCodes.Ret);
     }
 
@@ -155,16 +195,10 @@ public partial class RuntimeEmitter
 
         var il = ctor.GetILGenerator();
 
-        // Call base constructor
-        il.Emit(OpCodes.Ldarg_0);
-        il.Emit(OpCodes.Call, _types.GetDefaultConstructor(_types.Object));
-
-        // _data = new byte[size]
         il.Emit(OpCodes.Ldarg_0);
         il.Emit(OpCodes.Ldarg_1);
         il.Emit(OpCodes.Newarr, _types.Byte);
-        il.Emit(OpCodes.Stfld, buffer.DataField);
-
+        il.Emit(OpCodes.Call, buffer.Ctor);
         il.Emit(OpCodes.Ret);
     }
 
@@ -185,9 +219,7 @@ public partial class RuntimeEmitter
 
         // return _data.Length
         il.Emit(OpCodes.Ldarg_0);
-        il.Emit(OpCodes.Ldfld, buffer.DataField);
-        il.Emit(OpCodes.Ldlen);
-        il.Emit(OpCodes.Conv_I4);
+        il.Emit(OpCodes.Ldfld, buffer.LengthField);
         il.Emit(OpCodes.Ret);
 
         // Define property

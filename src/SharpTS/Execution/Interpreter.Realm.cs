@@ -719,7 +719,7 @@ public partial class Interpreter
             var byteLength = BuiltInMethod.CreateV2("get byteLength", 0, static (_, receiver, _) =>
                 receiver.ToObject() is SharpTSArrayBuffer buffer
                     ? RuntimeValue.FromNumber(buffer.ByteLength)
-                    : throw new ThrowException(new SharpTSTypeError("ArrayBuffer byteLength called on incompatible receiver")));
+                    : throw new ThrowException(new SharpTSTypeError("ArrayBuffer byteLength called on incompatible receiver"))).AsNonConstructor();
             _arrayBufferPrototype.DefineProperty("byteLength", SharpTSPropertyDescriptor.ForGetter(byteLength));
             var slice = BuiltInMethod.CreateV2("slice", 0, int.MaxValue, static (interpreter, receiver, args) =>
             {
@@ -733,7 +733,7 @@ public partial class Interpreter
                 if (buffer.IsDetached)
                     throw new ThrowException(new SharpTSTypeError("Cannot perform ArrayBuffer.prototype.slice on a detached ArrayBuffer"));
                 return RuntimeValue.FromObject(buffer.Slice(begin, end));
-            }).WithSpecLength(2).MarkRealmOwned();
+            }).WithSpecLength(2).AsNonConstructor().MarkRealmOwned();
             _arrayBufferPrototype.DefineProperty("slice", new SharpTSPropertyDescriptor(
                 slice, writable: true, enumerable: false, configurable: true));
             _arrayBufferPrototype.DefineProperty(SharpTSSymbol.ToStringTag,
@@ -762,7 +762,7 @@ public partial class Interpreter
             var length = BuiltInMethod.CreateV2("get byteLength", 0, static (_, receiver, _) =>
                 receiver.ToObject() is SharpTSSharedArrayBuffer buffer
                     ? RuntimeValue.FromNumber(buffer.ByteLength)
-                    : throw new ThrowException(new SharpTSTypeError("SharedArrayBuffer byteLength called on incompatible receiver")));
+                    : throw new ThrowException(new SharpTSTypeError("SharedArrayBuffer byteLength called on incompatible receiver"))).AsNonConstructor();
             prototype.DefineProperty("byteLength", SharpTSPropertyDescriptor.ForGetter(length));
             var slice = BuiltInMethod.CreateV2("slice", 0, int.MaxValue, static (interpreter, receiver, args) =>
             {
@@ -772,7 +772,7 @@ public partial class Interpreter
                 int? end = args.Length < 2 || args[1].IsUndefined
                     ? null : ArrayBuiltIns.ToIntegerOrInfinityAsInt(interpreter, args[1].ToObject());
                 return RuntimeValue.FromObject(buffer.Slice(begin, end));
-            }).WithSpecLength(2).MarkRealmOwned();
+            }).WithSpecLength(2).AsNonConstructor().MarkRealmOwned();
             prototype.DefineProperty("slice", new SharpTSPropertyDescriptor(
                 slice, writable: true, enumerable: false, configurable: true));
         }

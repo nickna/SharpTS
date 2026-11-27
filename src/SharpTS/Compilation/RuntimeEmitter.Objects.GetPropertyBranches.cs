@@ -640,20 +640,37 @@ public partial class RuntimeEmitter
         il.Emit(OpCodes.Isinst, inputs.Buffer!.Type);
         il.Emit(OpCodes.Brfalse, notMatch);
 
-        // Check for "length"
+        var readLength = il.DefineLabel();
+        var next = il.DefineLabel();
+        il.Emit(OpCodes.Ldarg_1);
+        il.Emit(OpCodes.Ldstr, "byteLength");
+        il.Emit(OpCodes.Call, _types.StringOpEquality);
+        il.Emit(OpCodes.Brtrue, readLength);
         il.Emit(OpCodes.Ldarg_1);
         il.Emit(OpCodes.Ldstr, "length");
-        il.Emit(OpCodes.Call, _types.GetMethod(_types.String, "op_Equality", _types.String, _types.String));
-        var notBufferLenLabel = il.DefineLabel();
-        il.Emit(OpCodes.Brfalse, notBufferLenLabel);
-        // Get buf.Length
+        il.Emit(OpCodes.Call, _types.StringOpEquality);
+        il.Emit(OpCodes.Brfalse, next);
+        il.MarkLabel(readLength);
         il.Emit(OpCodes.Ldarg_0);
-        il.Emit(OpCodes.Castclass, inputs.Buffer!.Type);
-        il.Emit(OpCodes.Call, inputs.Buffer!.LengthGetter);
+        il.Emit(OpCodes.Castclass, inputs.Buffer.Type);
+        il.Emit(OpCodes.Call, inputs.Buffer.LengthGetter);
         il.Emit(OpCodes.Conv_R8);
         il.Emit(OpCodes.Box, _types.Double);
         il.Emit(OpCodes.Ret);
-        il.MarkLabel(notBufferLenLabel);
+        il.MarkLabel(next);
+
+        var notOffset = il.DefineLabel();
+        il.Emit(OpCodes.Ldarg_1);
+        il.Emit(OpCodes.Ldstr, "byteOffset");
+        il.Emit(OpCodes.Call, _types.StringOpEquality);
+        il.Emit(OpCodes.Brfalse, notOffset);
+        il.Emit(OpCodes.Ldarg_0);
+        il.Emit(OpCodes.Castclass, inputs.Buffer.Type);
+        il.Emit(OpCodes.Ldfld, inputs.Buffer.OffsetField);
+        il.Emit(OpCodes.Conv_R8);
+        il.Emit(OpCodes.Box, _types.Double);
+        il.Emit(OpCodes.Ret);
+        il.MarkLabel(notOffset);
         // Check for "toString" - return a wrapper that calls ToEncodedString
         il.Emit(OpCodes.Ldarg_1);
         il.Emit(OpCodes.Ldstr, "toString");
