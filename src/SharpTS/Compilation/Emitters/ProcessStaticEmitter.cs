@@ -80,7 +80,6 @@ public sealed class ProcessStaticEmitter : IStaticTypeEmitterStrategy
             case "prependListener":
             case "prependOnceListener":
             case "emit":
-            case "eventNames":
             case "setMaxListeners":
             case "getMaxListeners":
                 EmitProcessEventEmitterCall(emitter, methodName, arguments);
