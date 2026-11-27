@@ -594,61 +594,28 @@ public partial class ILEmitter
         IL.Emit(OpCodes.Br, builtInDone);
         IL.MarkLabel(notFunctionType);
 
-        // Number constructor values carry the Double Type token. CLR Double
-        // has no public constructor; the guest construction helper applies
-        // Number coercion and creates a fresh boxed primitive instead.
-        var notNumberType = IL.DefineLabel();
-        IL.Emit(OpCodes.Ldloc, typeLocal);
-        IL.Emit(OpCodes.Ldtoken, _ctx.Types.Double);
-        IL.Emit(OpCodes.Call, _ctx.Types.TypeGetTypeFromHandle);
-        IL.Emit(OpCodes.Bne_Un, notNumberType);
-        IL.Emit(OpCodes.Ldloc, typeLocal);
-        EmitArgsArrayWithSpread(n.Arguments);
-        IL.Emit(OpCodes.Call, _ctx.Runtime.DynamicConstruction.Value);
-        IL.Emit(OpCodes.Br, builtInDone);
-        IL.MarkLabel(notNumberType);
-
-        // Boolean values likewise carry a primitive CLR Type token. Use the
-        // guest wrapper factory, with ordinary argument/spread evaluation.
-        var notBooleanType = IL.DefineLabel();
-        IL.Emit(OpCodes.Ldloc, typeLocal);
-        IL.Emit(OpCodes.Ldtoken, _ctx.Types.Boolean);
-        IL.Emit(OpCodes.Call, _ctx.Types.TypeGetTypeFromHandle);
-        IL.Emit(OpCodes.Bne_Un, notBooleanType);
-        IL.Emit(OpCodes.Ldloc, typeLocal);
-        EmitArgsArrayWithSpread(n.Arguments);
-        IL.Emit(OpCodes.Call, _ctx.Runtime.DynamicConstruction.Value);
-        IL.Emit(OpCodes.Br, builtInDone);
-        IL.MarkLabel(notBooleanType);
-
-        // Array constructor values carry an IList<object> Type token. Its
-        // CLR interface has no constructor; use the guest length/element rules.
-        var notArrayType = IL.DefineLabel();
-        IL.Emit(OpCodes.Ldloc, typeLocal);
-        IL.Emit(OpCodes.Ldtoken, _ctx.Types.IListOfObject);
-        IL.Emit(OpCodes.Call, _ctx.Types.TypeGetTypeFromHandle);
-        IL.Emit(OpCodes.Bne_Un, notArrayType);
-        IL.Emit(OpCodes.Ldloc, typeLocal);
-        EmitArgsArrayWithSpread(n.Arguments);
-        IL.Emit(OpCodes.Call, _ctx.Runtime.DynamicConstruction.Value);
-        IL.Emit(OpCodes.Br, builtInDone);
-        IL.MarkLabel(notArrayType);
-
-        if (_ctx.Runtime.Promise is not null)
+        // These Type tokens have JavaScript constructor adapters. They all
+        // consume the same spread-expanded argument list before CLR fallback.
+        var guestConstruction = IL.DefineLabel();
+        var otherType = IL.DefineLabel();
+        Type?[] guestTypes = [_ctx.Types.Double, _ctx.Types.Boolean, _ctx.Types.IListOfObject,
+            _ctx.Runtime.ArrayBuffer?.Type, _ctx.Runtime.SharedArrayBuffer?.Type,
+            _ctx.Runtime.Promise is null ? null : _ctx.Types.TaskOfObject];
+        foreach (var type in guestTypes)
         {
-            // Aliases and member-held Promise constructors reach this Type
-            // path. Expand arguments once before the shared executor adapter.
-            var notPromiseType = IL.DefineLabel();
+            if (type is null) continue;
             IL.Emit(OpCodes.Ldloc, typeLocal);
-            IL.Emit(OpCodes.Ldtoken, _ctx.Types.TaskOfObject);
+            IL.Emit(OpCodes.Ldtoken, type);
             IL.Emit(OpCodes.Call, _ctx.Types.TypeGetTypeFromHandle);
-            IL.Emit(OpCodes.Bne_Un, notPromiseType);
-            IL.Emit(OpCodes.Ldloc, typeLocal);
-            EmitArgsArrayWithSpread(n.Arguments);
-            IL.Emit(OpCodes.Call, _ctx.Runtime.DynamicConstruction.Value);
-            IL.Emit(OpCodes.Br, builtInDone);
-            IL.MarkLabel(notPromiseType);
+            IL.Emit(OpCodes.Beq, guestConstruction);
         }
+        IL.Emit(OpCodes.Br, otherType);
+        IL.MarkLabel(guestConstruction);
+        IL.Emit(OpCodes.Ldloc, typeLocal);
+        EmitArgsArrayWithSpread(n.Arguments);
+        IL.Emit(OpCodes.Call, _ctx.Runtime.DynamicConstruction.Value);
+        IL.Emit(OpCodes.Br, builtInDone);
+        IL.MarkLabel(otherType);
 
         // Expand each iterable at its source position, after capturing the
         // constructor value and before any later argument or constructor body.

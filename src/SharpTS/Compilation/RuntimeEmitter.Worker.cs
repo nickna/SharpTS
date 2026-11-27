@@ -21,7 +21,7 @@ public partial class RuntimeEmitter
         // runtime field references would be valid.
         if (_features.HasAnyTypedArray)
         {
-            EmitSharedArrayBufferHelper(runtimeType, runtime.RequireSharedArrayBuffer());
+            EmitSharedArrayBufferHelper(runtimeType, runtime.RequireSharedArrayBuffer(), runtime.Errors);
             EmitArrayBufferHelper(runtimeType, runtime);
             // DataView adapters are emitted before GetProperty in
             // EmitRuntimeClass because dynamic method values bind them.
@@ -62,12 +62,37 @@ public partial class RuntimeEmitter
         EmitWorkerThreadsModuleHelpers(runtimeType, runtime.Workers);
     }
 
+    private static void EmitArrayBufferLength(ILGenerator il, EmittedErrorRuntime errors, string name)
+    {
+        var numeric = il.DefineLabel();
+        var invalid = il.DefineLabel();
+        var done = il.DefineLabel();
+        il.Emit(OpCodes.Ldarg_0);
+        il.Emit(OpCodes.Call, typeof(double).GetMethod(nameof(double.IsNaN))!);
+        il.Emit(OpCodes.Brfalse, numeric);
+        il.Emit(OpCodes.Ldc_I4_0);
+        il.Emit(OpCodes.Br, done);
+        il.MarkLabel(numeric);
+        il.Emit(OpCodes.Ldarg_0);
+        il.Emit(OpCodes.Ldc_R8, -1d);
+        il.Emit(OpCodes.Ble, invalid);
+        il.Emit(OpCodes.Ldarg_0);
+        il.Emit(OpCodes.Ldc_R8, (double)Array.MaxLength + 1);
+        il.Emit(OpCodes.Bge, invalid);
+        il.Emit(OpCodes.Ldarg_0);
+        il.Emit(OpCodes.Conv_I4);
+        il.Emit(OpCodes.Br, done);
+        il.MarkLabel(invalid);
+        GuestErrorEmitter.ThrowError(il, errors.CreateException, errors.RangeErrorConstructor, $"Invalid {name} length");
+        il.MarkLabel(done);
+    }
+
     /// <summary>
     /// Emits helper for creating SharedArrayBuffer.
     /// public static object CreateSharedArrayBuffer(double byteLength)
     /// Uses the emitted $SharedArrayBuffer type (pure-IL, no reflection).
     /// </summary>
-    private void EmitSharedArrayBufferHelper(TypeBuilder runtimeType, EmittedSharedArrayBufferRuntime buffer)
+    private void EmitSharedArrayBufferHelper(TypeBuilder runtimeType, EmittedSharedArrayBufferRuntime buffer, EmittedErrorRuntime errors)
     {
         var method = runtimeType.DefineMethod(
             "CreateSharedArrayBuffer",
@@ -78,9 +103,7 @@ public partial class RuntimeEmitter
 
         var il = method.GetILGenerator();
 
-        // return new $SharedArrayBuffer((int)byteLength)
-        il.Emit(OpCodes.Ldarg_0);  // byteLength (double)
-        il.Emit(OpCodes.Conv_I4);  // convert to int
+        EmitArrayBufferLength(il, errors, "SharedArrayBuffer");
         int creationOffset = il.ILOffset;
         il.Emit(OpCodes.Newobj, buffer.Ctor);
         il.Emit(OpCodes.Ret);
@@ -180,9 +203,7 @@ public partial class RuntimeEmitter
 
         var il = method.GetILGenerator();
 
-        // return new $ArrayBuffer((int)byteLength)
-        il.Emit(OpCodes.Ldarg_0);  // byteLength (double)
-        il.Emit(OpCodes.Conv_I4);  // convert to int
+        EmitArrayBufferLength(il, runtime.Errors, "ArrayBuffer");
         il.Emit(OpCodes.Newobj, runtime.RequireArrayBuffer().Ctor);
         il.Emit(OpCodes.Ret);
 

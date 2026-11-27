@@ -882,6 +882,8 @@ public partial class RuntimeEmitter
                 runtime.ClassInitialization.SourceOwners,
                 runtime.DynamicConstruction,
                 runtime.ArrayStorage,
+                runtime.ArrayBuffer,
+                runtime.SharedArrayBuffer,
                 runtime.DescriptorStorage,
                 runtime.ObjectRead,
                 runtime.Operators,

@@ -169,6 +169,21 @@ public class ArrayBufferTests
     #region Slice Method Tests
 
     [Theory, ModeData]
+    public void ArrayBuffer_ConstructorAliasesAcceptJavaScriptLengths(ExecutionMode mode)
+    {
+        const string source = """
+            for (const make of [ArrayBuffer, SharedArrayBuffer]) {
+                console.log(new make(4).byteLength, new make(3.8).byteLength, new make().byteLength,
+                    new make(undefined).byteLength, new make('2').byteLength,
+                    Reflect.construct(make, [5]).byteLength, new make(...[6]).byteLength);
+                try { new make(-1); } catch (error) { console.log(error instanceof RangeError); }
+            }
+            """;
+        const string expected = "4 3 0 0 2 5 6\ntrue\n";
+        Assert.Equal(expected + expected, TestHarness.RunUnchecked(source, mode));
+    }
+
+    [Theory, ModeData]
     public void ArrayBuffer_AssignmentShadowsInheritedMethods(ExecutionMode mode)
     {
         const string source = """
