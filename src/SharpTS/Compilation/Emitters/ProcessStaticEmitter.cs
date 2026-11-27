@@ -71,19 +71,6 @@ public sealed class ProcessStaticEmitter : IStaticTypeEmitterStrategy
                 il.Emit(OpCodes.Ldnull);
                 return true;
 
-            case "on":
-            case "addListener":
-            case "once":
-            case "off":
-            case "removeListener":
-            case "removeAllListeners":
-            case "prependListener":
-            case "prependOnceListener":
-            case "emit":
-            case "setMaxListeners":
-                EmitProcessEventEmitterCall(emitter, methodName, arguments);
-                return true;
-
             default:
                 return false;
         }
