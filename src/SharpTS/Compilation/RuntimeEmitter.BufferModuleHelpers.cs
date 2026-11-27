@@ -14,7 +14,6 @@ public partial class RuntimeEmitter
     {
         var buffer = runtime.RequireBuffer();
         EmitBufferCoerceString(buffer, typeBuilder);
-        EmitBufferBytesOf(typeBuilder, buffer);
         var invalidCharacterError = EmitBufferInvalidCharacterError(typeBuilder, runtime);
         var requireInput = EmitRequireBase64Input(typeBuilder, runtime.Errors);
         EmitBufferAtobBtoa(typeBuilder, buffer, invalidCharacterError, requireInput, runtime.StringCoercion.ToJsString);
@@ -22,7 +21,7 @@ public partial class RuntimeEmitter
         buffer.BtoaValue = EmitBase64Value("BufferBtoaValue", "btoa", buffer.Btoa);
         var validationBytes = EmitBufferValidationBytes(typeBuilder, runtime, buffer);
         EmitBufferIsUtf8Ascii(typeBuilder, buffer, validationBytes);
-        EmitBufferTranscode(typeBuilder, buffer, runtime.TypedArrays.Implementation);
+        EmitBufferTranscode(typeBuilder, buffer, runtime.TypedArrays.Implementation, runtime.Errors);
         EmitBufferSlowBuffer(typeBuilder, buffer);
         EmitBufferModuleConstants(typeBuilder, runtime);
 
@@ -228,46 +227,6 @@ public partial class RuntimeEmitter
         il.MarkLabel(retEmpty);
         il.Emit(OpCodes.Ldstr, "");
         il.Emit(OpCodes.Ret);
-    }
-
-    /// <summary>Emits <c>byte[] BufferBytesOf(object)</c> — $Buffer → GetData, string → UTF8 bytes.</summary>
-    private void EmitBufferBytesOf(TypeBuilder typeBuilder, EmittedBufferRuntime buffer)
-    {
-        var method = typeBuilder.DefineMethod(
-            "BufferBytesOf",
-            System.Reflection.MethodAttributes.Public | System.Reflection.MethodAttributes.Static,
-            _types.MakeArrayType(_types.Byte), [_types.Object]);
-        buffer.BytesOf = method;
-
-        var il = method.GetILGenerator();
-        var isStr = il.DefineLabel();
-        var throwLabel = il.DefineLabel();
-
-        il.Emit(OpCodes.Ldarg_0);
-        il.Emit(OpCodes.Brfalse, throwLabel);
-        // $Buffer?
-        il.Emit(OpCodes.Ldarg_0);
-        il.Emit(OpCodes.Isinst, buffer.Type);
-        il.Emit(OpCodes.Brfalse, isStr);
-        il.Emit(OpCodes.Ldarg_0);
-        il.Emit(OpCodes.Castclass, buffer.Type);
-        il.Emit(OpCodes.Callvirt, buffer.GetData);
-        il.Emit(OpCodes.Ret);
-        // string?
-        il.MarkLabel(isStr);
-        il.Emit(OpCodes.Ldarg_0);
-        il.Emit(OpCodes.Isinst, _types.String);
-        il.Emit(OpCodes.Brfalse, throwLabel);
-        il.Emit(OpCodes.Call, _types.GetProperty(_types.Encoding, "UTF8")!.GetGetMethod()!);
-        il.Emit(OpCodes.Ldarg_0);
-        il.Emit(OpCodes.Castclass, _types.String);
-        il.Emit(OpCodes.Callvirt, _types.GetMethod(_types.Encoding, "GetBytes", [_types.String])!);
-        il.Emit(OpCodes.Ret);
-
-        il.MarkLabel(throwLabel);
-        il.Emit(OpCodes.Ldstr, "buffer module helper requires a Buffer or string argument");
-        il.Emit(OpCodes.Newobj, _types.GetConstructor(_types.Exception, _types.String));
-        il.Emit(OpCodes.Throw);
     }
 
     private MethodBuilder EmitBufferInvalidCharacterError(TypeBuilder typeBuilder, EmittedRuntime runtime)
@@ -571,7 +530,7 @@ public partial class RuntimeEmitter
     }
 
     private void EmitBufferTranscode(TypeBuilder typeBuilder, EmittedBufferRuntime buffer,
-        EmittedTypedArrayImplementation? arrays)
+        EmittedTypedArrayImplementation? arrays, EmittedErrorRuntime errors)
     {
         // transcode(source, from, to) = Buffer.from(decode(sourceBytes, from), to)
         var method = typeBuilder.DefineMethod(
@@ -611,8 +570,17 @@ public partial class RuntimeEmitter
         }
 
         il.Emit(OpCodes.Ldarg_0);
-        il.Emit(OpCodes.Call, buffer.BytesOf);
-        NativePrototypeFieldsLookup.EmitCarrierCreate(_nativePrototypeFields, il, buffer.Ctor);
+        il.Emit(OpCodes.Isinst, buffer.Type);
+        il.Emit(OpCodes.Dup);
+        il.Emit(OpCodes.Brtrue, decode);
+        il.Emit(OpCodes.Pop);
+        il.Emit(OpCodes.Ldstr, BufferModuleHelpers.InvalidTranscodeSourceMessage);
+        il.Emit(OpCodes.Newobj, errors.TypeErrorConstructor);
+        il.Emit(OpCodes.Dup);
+        il.Emit(OpCodes.Ldstr, BufferModuleHelpers.InvalidValidationInputCode);
+        il.Emit(OpCodes.Callvirt, errors.CodeSetter);
+        il.Emit(OpCodes.Call, errors.CreateException);
+        il.Emit(OpCodes.Throw);
         il.MarkLabel(decode);
         il.Emit(OpCodes.Ldarg_1);
         il.Emit(OpCodes.Call, buffer.CoerceString);

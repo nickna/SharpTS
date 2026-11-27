@@ -95,6 +95,24 @@ public class CjsBuiltInModuleRequireTests
     }
 
     [Theory, ModeData]
+    public void Cjs_Require_Buffer_TranscodeRejectsUnsupportedSources(ExecutionMode mode)
+    {
+        var files = new Dictionary<string, string>
+        {
+            ["main.cjs"] = """
+                const { transcode } = require('node:buffer');
+                for (const source of ['A', [65], new Int8Array([65]), new Uint16Array([65]),
+                    new Uint8ClampedArray([65]), new ArrayBuffer(1), null, undefined]) {
+                    try { console.log(transcode(source, 'utf8', 'latin1')); }
+                    catch (error) { console.log(error instanceof TypeError, error.code); }
+                }
+                """
+        };
+        Assert.Equal(string.Concat(Enumerable.Repeat("true ERR_INVALID_ARG_TYPE\n", 8)),
+            TestHarness.RunModules(files, "main.cjs", mode));
+    }
+
+    [Theory, ModeData]
     public void Cjs_Require_Assert_Ok(ExecutionMode mode)
     {
         var files = new Dictionary<string, string>

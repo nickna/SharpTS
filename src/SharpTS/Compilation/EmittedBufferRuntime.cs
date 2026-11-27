@@ -618,12 +618,6 @@ public sealed class EmittedBufferRuntime
         internal set => Set(ref _coerceString, value);
     }
 
-    private MethodBuilder? _bytesOf;
-    public MethodBuilder BytesOf
-    {
-        get => Require(_bytesOf);
-        internal set => Set(ref _bytesOf, value);
-    }
 
     private void RequireTypedArrayCopy()
     {
@@ -736,7 +730,6 @@ public sealed class EmittedBufferRuntime
         _ = Swap64;
         _ = DataField;
         _ = CoerceString;
-        _ = BytesOf;
         IsComplete = true;
     }
 }

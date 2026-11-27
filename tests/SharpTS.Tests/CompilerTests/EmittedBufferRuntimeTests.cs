@@ -107,7 +107,7 @@ public class EmittedBufferRuntimeTests
         Assert.DoesNotContain(reader.TypeDefinitions,
             handle => reader.GetString(reader.GetTypeDefinition(handle).Name) == "$Buffer");
         Assert.DoesNotContain(reader.MethodDefinitions,
-            handle => reader.GetString(reader.GetMethodDefinition(handle).Name) is "BufferCopyBytesFrom" or "BufferAtob" or "BufferBytesOf");
+            handle => reader.GetString(reader.GetMethodDefinition(handle).Name) is "BufferCopyBytesFrom" or "BufferAtob" or "BufferTranscode");
     }
 
     [Theory]
@@ -132,7 +132,7 @@ public class EmittedBufferRuntimeTests
         Assert.Same(buffer.Type, buffer.Ctor.DeclaringType);
         Assert.Same(buffer.Type, buffer.DataField.DeclaringType);
         Assert.Same(buffer.Type, buffer.ReadUInt32LE.DeclaringType);
-        Assert.Same(runtime.RuntimeClass.Type, buffer.BytesOf.DeclaringType);
+        Assert.Same(runtime.RuntimeClass.Type, buffer.Transcode.DeclaringType);
         Assert.Same(runtime.RuntimeClass.Type, buffer.CoerceString.DeclaringType);
         foreach (var property in EnabledHandles(buffer))
         {

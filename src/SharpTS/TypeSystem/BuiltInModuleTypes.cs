@@ -337,7 +337,7 @@ public static partial class BuiltInModuleTypes
 
         var anyType = TypeInfo.Any.Shared;
         var transcodeSource = new TypeInfo.Union([
-            bufferType, new TypeInfo.TypedArray("Uint8"), new TypeInfo.Array(numberType), stringType
+            bufferType, new TypeInfo.TypedArray("Uint8")
         ]);
         var validationSource = new TypeInfo.Union([
             bufferType, new TypeInfo.ArrayBuffer(), new TypeInfo.SharedArrayBuffer(),
