@@ -24,6 +24,25 @@ public class DataViewTests
     #region Constructor Tests
 
     [Theory, ModeData]
+    public void DataView_ConstructorRejectsAlreadyDetachedArrayBuffer(ExecutionMode mode)
+    {
+        const string source = """
+            const buffer = new ArrayBuffer(4);
+            const transferred = structuredClone(buffer, { transfer: [buffer] });
+            for (const construct of [() => new DataView(buffer), () => new DataView(buffer, 0, 0),
+                                     () => new DataView(buffer, 1), () => new DataView(buffer, 0, -1)]) {
+                try { construct(); console.log('constructed'); }
+                catch (error) { console.log(error.name, error instanceof TypeError); }
+            }
+            try { new DataView(buffer, -1); }
+            catch (error) { console.log(error.name, error instanceof RangeError); }
+            console.log(new DataView(transferred).byteLength, new DataView(new ArrayBuffer(0)).byteLength);
+            """;
+        const string expected = "TypeError true\nTypeError true\nTypeError true\nTypeError true\nRangeError true\n4 0\n";
+        Assert.Equal(expected, TestHarness.RunUnchecked(source, mode));
+    }
+
+    [Theory, ModeData]
     public void DataView_Constructor_CreatesViewOverArrayBuffer(ExecutionMode mode)
     {
         var source = @"

@@ -58,10 +58,13 @@ public class SharpTSDataView : ITypeCategorized
     /// <param name="byteLength">The number of bytes to include in the view. Defaults to the remainder of the buffer.</param>
     public SharpTSDataView(SharpTSArrayBuffer buffer, int byteOffset = 0, int? byteLength = null)
     {
-        if (byteOffset < 0 || byteOffset > buffer.ByteLength)
-        {
-            throw new Exception("RangeError: Invalid DataView offset");
-        }
+        if (byteOffset < 0)
+            throw new ThrowException(new SharpTSRangeError("Invalid DataView offset"));
+
+        _arrayBuffer = buffer;
+        ThrowIfDetached();
+        if (byteOffset > buffer.ByteLength)
+            throw new ThrowException(new SharpTSRangeError("Invalid DataView offset"));
 
         int maxLength = buffer.ByteLength - byteOffset;
         int actualLength = byteLength ?? maxLength;
@@ -71,7 +74,6 @@ public class SharpTSDataView : ITypeCategorized
             throw new Exception("RangeError: Invalid DataView length");
         }
 
-        _arrayBuffer = buffer;
         _buffer = buffer.GetBackingArray();
         _byteOffset = byteOffset;
         _byteLength = actualLength;
@@ -87,7 +89,7 @@ public class SharpTSDataView : ITypeCategorized
     {
         if (byteOffset < 0 || byteOffset > buffer.ByteLength)
         {
-            throw new Exception("RangeError: Invalid DataView offset");
+            throw new ThrowException(new SharpTSRangeError("Invalid DataView offset"));
         }
 
         int maxLength = buffer.ByteLength - byteOffset;
