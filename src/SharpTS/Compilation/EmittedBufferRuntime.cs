@@ -21,6 +21,13 @@ public sealed class EmittedBufferRuntime
         internal set => Set(ref _type, value);
     }
 
+    private ConstructorBuilder? _viewCtor;
+    public ConstructorBuilder ViewCtor
+    {
+        get => Require(_viewCtor);
+        internal set => Set(ref _viewCtor, value);
+    }
+
     private ConstructorBuilder? _ctor;
     public ConstructorBuilder Ctor
     {
@@ -604,6 +611,20 @@ public sealed class EmittedBufferRuntime
         internal set => Set(ref _swap64, value);
     }
 
+    private FieldBuilder? _offsetField;
+    public FieldBuilder OffsetField
+    {
+        get => Require(_offsetField);
+        internal set => Set(ref _offsetField, value);
+    }
+
+    private FieldBuilder? _lengthField;
+    public FieldBuilder LengthField
+    {
+        get => Require(_lengthField);
+        internal set => Set(ref _lengthField, value);
+    }
+
     private FieldBuilder? _dataField;
     public FieldBuilder DataField
     {
@@ -645,6 +666,7 @@ public sealed class EmittedBufferRuntime
     {
         EnsureMutable();
         _ = Type;
+        _ = ViewCtor;
         _ = Ctor;
         _ = CtorSize;
         _ = LengthGetter;
@@ -728,6 +750,8 @@ public sealed class EmittedBufferRuntime
         _ = Swap16;
         _ = Swap32;
         _ = Swap64;
+        _ = OffsetField;
+        _ = LengthField;
         _ = DataField;
         _ = CoerceString;
         IsComplete = true;

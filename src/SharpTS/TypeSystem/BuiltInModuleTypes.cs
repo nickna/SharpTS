@@ -315,10 +315,7 @@ public static partial class BuiltInModuleTypes
         // Buffer constructor type - an object with static methods
         var bufferConstructorType = new TypeInfo.Record(new Dictionary<string, TypeInfo>
         {
-            ["from"] = new TypeInfo.Function(
-                [new TypeInfo.Union([stringType, new TypeInfo.Array(numberType), bufferType]), stringType],
-                bufferType,
-                RequiredParams: 1),
+            ["from"] = BuiltInTypes.BufferFromType,
             ["alloc"] = new TypeInfo.Function(
                 [numberType, TypeInfo.Any.Shared, stringType],
                 bufferType,

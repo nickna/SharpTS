@@ -147,7 +147,7 @@ public partial class RuntimeEmitter
 
         EmitWithFsErrorHandling(il, runtime.NodeErrors, pathLocal, "read", afterTry =>
         {
-            var fileStreamReadMethod = typeof(FileStream).GetMethod("Read", [typeof(byte[]), typeof(int), typeof(int)])!;
+            var fileStreamReadMethod = typeof(FileStream).GetMethod("Read", [typeof(Span<byte>)])!;
             var fileStreamSeekMethod = typeof(FileStream).GetMethod("Seek")!;
 
             // Get FileStream from $FileDescriptorTable (pure-IL, no reflection)
@@ -177,18 +177,14 @@ public partial class RuntimeEmitter
 
             il.MarkLabel(skipSeekLabel);
 
-            // Get buffer data - cast to compiled $Buffer type and call GetData()
-            il.Emit(OpCodes.Ldarg_1);
-            il.Emit(OpCodes.Castclass, runtime.RequireBuffer().Type);
-            il.Emit(OpCodes.Callvirt, runtime.RequireBuffer().GetData);
-            var dataLocal = il.DeclareLocal(typeof(byte[]));
-            il.Emit(OpCodes.Stloc, dataLocal);
-
-            // Read from stream
+            var view = il.DeclareLocal(typeof(Span<byte>));
+            EmitBufferSpan(il, runtime.RequireBuffer(), OpCodes.Ldarg_1);
+            il.Emit(OpCodes.Stloc, view);
             il.Emit(OpCodes.Ldloc, streamLocal);
-            il.Emit(OpCodes.Ldloc, dataLocal);
+            il.Emit(OpCodes.Ldloca, view);
             il.Emit(OpCodes.Ldloc, offsetLocal);
             il.Emit(OpCodes.Ldloc, lengthLocal);
+            il.Emit(OpCodes.Call, typeof(Span<byte>).GetMethod("Slice", [typeof(int), typeof(int)])!);
             il.Emit(OpCodes.Callvirt, fileStreamReadMethod);
             il.Emit(OpCodes.Conv_R8);
             il.Emit(OpCodes.Stloc, resultLocal);

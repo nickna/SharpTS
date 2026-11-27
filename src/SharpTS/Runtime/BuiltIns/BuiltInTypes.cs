@@ -711,7 +711,7 @@ public static class BuiltInTypes
         return name switch
         {
             // Properties
-            "length" => NumberType,
+            "length" or "byteLength" or "byteOffset" => NumberType,
 
             // Methods
             "toString" => new TypeInfo.Function([StringType], StringType, RequiredParams: 0), // encoding optional
@@ -805,10 +805,7 @@ public static class BuiltInTypes
 
         return name switch
         {
-            "from" => new TypeInfo.Function(
-                [new TypeInfo.Union([StringType, new TypeInfo.Array(NumberType), bufferType]), StringType],
-                bufferType,
-                RequiredParams: 1), // data required, encoding optional
+            "from" => BufferFromType,
             "alloc" => new TypeInfo.Function(
                 [NumberType, AnyType, StringType],
                 bufferType,
@@ -830,6 +827,13 @@ public static class BuiltInTypes
             _ => null
         };
     }
+
+    internal static readonly TypeInfo.Function BufferFromType = new(
+        [new TypeInfo.Union([StringType, new TypeInfo.Array(NumberType), TypeInfo.Buffer.Shared,
+            new TypeInfo.ArrayBuffer(), new TypeInfo.SharedArrayBuffer(),
+            .. BuiltInNames.TypedArrayNames.Select(name => new TypeInfo.TypedArray(name[..^"Array".Length]))]),
+            new TypeInfo.Union([StringType, NumberType]), NumberType],
+        TypeInfo.Buffer.Shared, RequiredParams: 1);
 
     internal static readonly TypeInfo.Function BufferByteLengthType = new(
         [new TypeInfo.Union([StringType, TypeInfo.Buffer.Shared, new TypeInfo.ArrayBuffer(),

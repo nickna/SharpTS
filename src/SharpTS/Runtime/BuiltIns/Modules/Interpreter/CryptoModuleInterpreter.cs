@@ -221,7 +221,7 @@ public static class CryptoModuleInterpreter
         if (args.Length == 0 || args[0].ToObject() is not SharpTSBuffer buffer)
             throw new Exception("crypto.randomFillSync requires a Buffer argument");
 
-        var data = buffer.Data;
+        var data = buffer.Bytes;
 
         // Optional offset and size parameters
         int offset = 0;
@@ -248,8 +248,7 @@ public static class CryptoModuleInterpreter
             throw new Exception($"crypto.randomFillSync: size out of range");
 
         // Fill the specified range with random bytes
-        var randomBytes = RandomNumberGenerator.GetBytes(size);
-        Array.Copy(randomBytes, 0, data, offset, size);
+        RandomNumberGenerator.Fill(data.Slice(offset, size));
 
         // Return the buffer (same reference)
         return RuntimeValue.FromObject(buffer);
@@ -1120,8 +1119,7 @@ public static class CryptoModuleInterpreter
                 if (size < 0 || offset + size > buffer.Data.Length)
                     throw new Exception("size out of range");
 
-                var randomBytes = RandomNumberGenerator.GetBytes(size);
-                Array.Copy(randomBytes, 0, buffer.Data, offset, size);
+                RandomNumberGenerator.Fill(buffer.Bytes.Slice(offset, size));
                 ScheduleCallbackAndUnref(interpreter, callback, null, buffer);
             }
             catch (Exception ex)

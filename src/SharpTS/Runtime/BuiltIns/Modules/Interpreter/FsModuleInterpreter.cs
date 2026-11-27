@@ -875,8 +875,7 @@ public static class FsModuleInterpreter
             }
 
             // Read into buffer
-            var data = buffer.Data;
-            var bytesRead = stream.Read(data, offset, length);
+            var bytesRead = stream.Read(buffer.Bytes.Slice(offset, length));
             return (double)bytesRead;
         }));
     }

@@ -55,6 +55,31 @@ public class BufferTests
     }
 
     [Theory, ModeData]
+    public void Buffer_FromArrayBufferHonorsViewBounds(ExecutionMode mode)
+    {
+        const string source = """
+            const backing = new ArrayBuffer(5);
+            const bytes = new Uint8Array(backing);
+            bytes.set([1, 2, 3, 4, 5]);
+            const view = Buffer.from(backing, 1, 3);
+            console.log(view.length, view.byteOffset, view.byteLength, view[0], view[2], view.toString('hex'));
+            bytes[1] = 9;
+            view[1] = 7;
+            view.writeUInt8(15, 2);
+            console.log(view.toString('hex'), bytes[1], bytes[2], bytes[3], bytes[4]);
+            const from = Buffer.from;
+            for (const args of [[2], ['2', undefined], [0, null], [5, 0], [1, -3], [1.6],
+                [1.6, 1.5], [6], [1, 8], [-1]]) {
+                try { console.log(from(backing, ...args).length); }
+                catch (error) { console.log(error.name, error.code); }
+            }
+            """;
+        Assert.Equal("3 1 3 2 4 020304\n09070f 9 7 15 5\n3\n3\n0\n0\n0\n4\n1\n" +
+            "RangeError ERR_BUFFER_OUT_OF_BOUNDS\nRangeError ERR_BUFFER_OUT_OF_BOUNDS\nRangeError undefined\n",
+            TestHarness.RunModules(new Dictionary<string, string> { ["main.js"] = source }, "main.js", mode));
+    }
+
+    [Theory, ModeData]
     public void Buffer_FromResolvesTheCurrentReceiverBeforeEvaluatingArguments(ExecutionMode mode)
     {
         const string source = """

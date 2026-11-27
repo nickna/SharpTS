@@ -39,9 +39,9 @@ public partial class RuntimeEmitter
         il.Emit(OpCodes.Bge, endLoop);
 
         // byteVal = (long)(byte)_data[offset + i]  (zero-extended)
-        il.Emit(OpCodes.Ldarg_0);
-        il.Emit(OpCodes.Ldfld, buffer.DataField);
+        EmitBufferRangeStart(il, buffer, OpCodes.Ldarg_0);
         il.Emit(OpCodes.Ldarg_1);
+        il.Emit(OpCodes.Add);
         il.Emit(OpCodes.Ldloc, iLocal);
         il.Emit(OpCodes.Add);
         il.Emit(OpCodes.Ldelem_U1);
@@ -168,9 +168,9 @@ public partial class RuntimeEmitter
         }
 
         // _data[offset + i] = (byte)(v & 0xFF)
-        il.Emit(OpCodes.Ldarg_0);
-        il.Emit(OpCodes.Ldfld, buffer.DataField);
+        EmitBufferRangeStart(il, buffer, OpCodes.Ldarg_0);
         il.Emit(OpCodes.Ldarg_2);
+        il.Emit(OpCodes.Add);
         il.Emit(OpCodes.Ldloc, iLocal);
         il.Emit(OpCodes.Add);
         il.Emit(OpCodes.Ldloc, vLocal);
@@ -236,9 +236,7 @@ public partial class RuntimeEmitter
         il.Emit(OpCodes.Ldarg, byteLengthArg);
         il.Emit(OpCodes.Add);
         il.Emit(OpCodes.Ldarg_0);
-        il.Emit(OpCodes.Ldfld, buffer.DataField);
-        il.Emit(OpCodes.Ldlen);
-        il.Emit(OpCodes.Conv_I4);
+        il.Emit(OpCodes.Call, buffer.LengthGetter);
         il.Emit(OpCodes.Ble, offOk);
         il.MarkLabel(offThrow);
         il.Emit(OpCodes.Ldstr, "offset");

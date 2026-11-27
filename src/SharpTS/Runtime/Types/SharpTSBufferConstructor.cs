@@ -12,7 +12,7 @@ public sealed class SharpTSBufferConstructor
 {
     private static readonly Dictionary<string, BuiltInMethod> Methods = new(StringComparer.Ordinal)
     {
-        ["from"] = BuiltInMethod.CreateV2("from", 1, 2, BufferFrom),
+        ["from"] = BuiltInMethod.CreateV2("from", 1, 3, BufferFrom),
         ["of"] = BuiltInMethod.CreateV2("of", 0, int.MaxValue, BufferOf),
         ["alloc"] = BuiltInMethod.CreateV2("alloc", 1, 3, BufferAlloc),
         ["allocUnsafe"] = BuiltInMethod.CreateV2("allocUnsafe", 1, BufferAllocUnsafe),
@@ -112,10 +112,29 @@ public sealed class SharpTSBufferConstructor
             SharpTSBuffer buf => SharpTSBuffer.FromBuffer(buf),
             SharpTSArray arr => SharpTSBuffer.FromArray(arr),
             List<object?> list => SharpTSBuffer.FromArray(list),
-            SharpTSArrayBuffer ab => new SharpTSBuffer(ab.GetBackingArray()),
+            SharpTSArrayBuffer or SharpTSSharedArrayBuffer => FromArrayBuffer(interpreter, data, args),
             SharpTSTypedArray typed => new SharpTSBuffer(typed.Buffer.AsSpan(typed.ByteOffset, typed.ByteLength).ToArray()),
             _ => throw new Exception($"Buffer.from: unsupported data type: {data.GetType().Name}")
         });
+    }
+
+    private static SharpTSBuffer FromArrayBuffer(Interp interpreter, object source, ReadOnlySpan<RuntimeValue> args)
+    {
+        var offset = args.Length > 1 ? interpreter.ToNumberWithPrimitive(args[1].ToObject()) : 0;
+        if (double.IsNaN(offset)) offset = 0;
+        var bytes = source is SharpTSArrayBuffer ab ? ab.GetBackingArray() : ((SharpTSSharedArrayBuffer)source).GetBackingArray();
+        double available = bytes.Length - offset;
+        if (available < 0) throw OutsideBounds("offset");
+        bool hasLength = args.Length > 2 && !args[2].IsUndefined;
+        double length = hasLength
+            ? interpreter.ToNumberWithPrimitive(args[2].ToObject()) : bytes.Length - Math.Truncate(offset);
+        if (hasLength && length > available)
+            throw OutsideBounds("length");
+        if (offset <= -1) throw new ThrowException(new SharpTSRangeError("Invalid start offset"));
+        return new SharpTSBuffer(bytes, (int)offset, length > 0 ? (int)length : 0);
+
+        static ThrowException OutsideBounds(string parameter) => new(new SharpTSRangeError(
+            $"\"{parameter}\" is outside of buffer bounds") { Code = "ERR_BUFFER_OUT_OF_BOUNDS" });
     }
 
     /// <summary>

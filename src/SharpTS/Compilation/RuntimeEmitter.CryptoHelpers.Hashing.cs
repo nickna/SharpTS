@@ -136,51 +136,23 @@ public partial class RuntimeEmitter
 
         var il = method.GetILGenerator();
 
-        // Local for buffer's byte[] data
-        var dataLocal = il.DeclareLocal(_types.MakeArrayType(_types.Byte));
-        var sizeLocal = il.DeclareLocal(_types.Int32);
-        var randomBytesLocal = il.DeclareLocal(_types.MakeArrayType(_types.Byte));
-
-        // Get buffer.Data (assume arg0 is $Buffer with Data property)
-        il.Emit(OpCodes.Ldarg_0);
-        il.Emit(OpCodes.Castclass, runtime.RequireBuffer().Type);
-        il.Emit(OpCodes.Call, runtime.RequireBuffer().GetData);
-        il.Emit(OpCodes.Stloc, dataLocal);
-
-        // Calculate actual size: if size == -1, use data.Length - offset
-        var sizeCalculatedLabel = il.DefineLabel();
-        il.Emit(OpCodes.Ldarg_2); // size
+        var view = il.DeclareLocal(typeof(Span<byte>));
+        EmitBufferSpan(il, runtime.RequireBuffer(), OpCodes.Ldarg_0);
+        il.Emit(OpCodes.Stloc, view);
+        il.Emit(OpCodes.Ldloca, view);
+        il.Emit(OpCodes.Ldarg_1);
+        il.Emit(OpCodes.Ldarg_2);
         il.Emit(OpCodes.Ldc_I4_M1);
-        il.Emit(OpCodes.Bne_Un, sizeCalculatedLabel);
-
-        // size = data.Length - offset
-        il.Emit(OpCodes.Ldloc, dataLocal);
-        il.Emit(OpCodes.Ldlen);
-        il.Emit(OpCodes.Conv_I4);
-        il.Emit(OpCodes.Ldarg_1); // offset
-        il.Emit(OpCodes.Sub);
-        il.Emit(OpCodes.Stloc, sizeLocal);
-        var continueLabel = il.DefineLabel();
-        il.Emit(OpCodes.Br, continueLabel);
-
-        il.MarkLabel(sizeCalculatedLabel);
-        il.Emit(OpCodes.Ldarg_2); // size
-        il.Emit(OpCodes.Stloc, sizeLocal);
-
-        il.MarkLabel(continueLabel);
-
-        // Generate random bytes: RandomNumberGenerator.GetBytes(size)
-        il.Emit(OpCodes.Ldloc, sizeLocal);
-        il.Emit(OpCodes.Call, _types.RandomNumberGeneratorGetBytes);
-        il.Emit(OpCodes.Stloc, randomBytesLocal);
-
-        // Array.Copy(randomBytes, 0, data, offset, size)
-        il.Emit(OpCodes.Ldloc, randomBytesLocal); // sourceArray
-        il.Emit(OpCodes.Ldc_I4_0);                // sourceIndex
-        il.Emit(OpCodes.Ldloc, dataLocal);        // destinationArray
-        il.Emit(OpCodes.Ldarg_1);                 // destinationIndex (offset)
-        il.Emit(OpCodes.Ldloc, sizeLocal);        // length
-        il.Emit(OpCodes.Call, _types.ArrayCopy5);
+        var explicitSize = il.DefineLabel();
+        var fill = il.DefineLabel();
+        il.Emit(OpCodes.Bne_Un, explicitSize);
+        il.Emit(OpCodes.Call, typeof(Span<byte>).GetMethod("Slice", [typeof(int)])!);
+        il.Emit(OpCodes.Br, fill);
+        il.MarkLabel(explicitSize);
+        il.Emit(OpCodes.Ldarg_2);
+        il.Emit(OpCodes.Call, typeof(Span<byte>).GetMethod("Slice", [typeof(int), typeof(int)])!);
+        il.MarkLabel(fill);
+        il.Emit(OpCodes.Call, typeof(System.Security.Cryptography.RandomNumberGenerator).GetMethod("Fill", [typeof(Span<byte>)])!);
 
         // Return the buffer
         il.Emit(OpCodes.Ldarg_0);

@@ -38,7 +38,9 @@ public static class BufferEncoding
     }
 
     /// <summary>Decodes bytes to a string using the given Node encoding name.</summary>
-    public static string Decode(byte[] data, string? encoding)
+    public static string Decode(byte[] data, string? encoding) => Decode(data.AsSpan(), encoding);
+
+    internal static string Decode(ReadOnlySpan<byte> data, string? encoding)
     {
         switch (Normalize(encoding))
         {
