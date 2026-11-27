@@ -785,7 +785,12 @@ public partial class RuntimeEmitter
             il.Emit(OpCodes.Ldarg_1);
             il.Emit(OpCodes.Ldloc, fbDescLocal);
             il.Emit(OpCodes.Call, inputs.DescriptorStorage.DefineProperty);
-            il.Emit(OpCodes.Pop);
+            var done = il.DefineLabel();
+            il.Emit(OpCodes.Brtrue, done);
+            il.Emit(OpCodes.Ldarg_3);
+            il.Emit(OpCodes.Brfalse, done);
+            EmitThrowTypeErrorWithName(il, inputs.Errors, "Cannot add property '", "' to a non-extensible object");
+            il.MarkLabel(done);
             il.Emit(OpCodes.Ret);
         }
 

@@ -198,11 +198,14 @@ public class ArrayBufferTests
                 function setStrict(obj, key) { 'use strict'; obj[key] = 17; }
                 setStrict(value, 'extra');
                 console.log(value.extra);
+                Object.preventExtensions(value);
+                try { setStrict(value, 'missing'); }
+                catch (error) { console.log(error instanceof TypeError); }
             }
             check(new ArrayBuffer(4));
             check(new SharedArrayBuffer(4));
             """;
-        const string result = "true 42 true true true\ntrue\n17\n";
+        const string result = "true 42 true true true\ntrue\n17\ntrue\n";
         Assert.Equal(result + result, TestHarness.RunUnchecked(source, mode));
     }
 
