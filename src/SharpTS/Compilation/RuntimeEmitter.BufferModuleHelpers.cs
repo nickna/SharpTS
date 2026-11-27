@@ -248,13 +248,13 @@ public partial class RuntimeEmitter
     {
         var method = typeBuilder.DefineMethod("CreateBufferInvalidCharacterError",
             System.Reflection.MethodAttributes.Private | System.Reflection.MethodAttributes.Static,
-            _types.Exception, [_types.String]);
+            _types.Exception, Type.EmptyTypes);
         var il = method.GetILGenerator();
         var errors = runtime.Errors;
         var descriptors = runtime.DescriptorStorage;
         var descriptor = il.DeclareLocal(descriptors.DescriptorType);
 
-        il.Emit(OpCodes.Ldarg_0);
+        il.Emit(OpCodes.Ldstr, BufferModuleHelpers.InvalidCharacterMessage);
         il.Emit(OpCodes.Newobj, errors.MessageConstructor);
         il.Emit(OpCodes.Dup);
         il.Emit(OpCodes.Ldstr, BufferModuleHelpers.InvalidCharacterErrorName);
@@ -334,7 +334,6 @@ public partial class RuntimeEmitter
         ail.Emit(OpCodes.Leave, decoded);
         ail.BeginCatchBlock(_types.Resolve("System.FormatException"));
         ail.Emit(OpCodes.Pop);
-        ail.Emit(OpCodes.Ldstr, "Invalid character");
         ail.Emit(OpCodes.Call, invalidCharacterError);
         ail.Emit(OpCodes.Throw);
         ail.EndExceptionBlock();
@@ -342,19 +341,50 @@ public partial class RuntimeEmitter
         ail.Emit(OpCodes.Ldloc, result);
         ail.Emit(OpCodes.Ret);
 
-        // btoa(data) = Buffer.from(data, 'latin1').toString('base64')
+        // Validate UTF-16 code units before encoding, since Latin1.GetBytes
+        // substitutes out-of-range characters instead of rejecting them.
         var btoa = typeBuilder.DefineMethod(
             "BufferBtoa",
             System.Reflection.MethodAttributes.Public | System.Reflection.MethodAttributes.Static,
             _types.String, [_types.Object]);
         buffer.Btoa = btoa;
         var bil = btoa.GetILGenerator();
+        var input = bil.DeclareLocal(_types.String);
+        var index = bil.DeclareLocal(_types.Int32);
+        var checkIndex = bil.DefineLabel();
+        var checkCharacter = bil.DefineLabel();
+        var nextCharacter = bil.DefineLabel();
         bil.Emit(OpCodes.Ldarg_0);
         bil.Emit(OpCodes.Call, buffer.CoerceString);
-        bil.Emit(OpCodes.Ldstr, "latin1");
-        bil.Emit(OpCodes.Call, buffer.FromString);
-        bil.Emit(OpCodes.Ldstr, "base64");
-        bil.Emit(OpCodes.Callvirt, buffer.ToStringMethod);
+        bil.Emit(OpCodes.Stloc, input);
+        bil.Emit(OpCodes.Ldc_I4_0);
+        bil.Emit(OpCodes.Stloc, index);
+        bil.Emit(OpCodes.Br, checkIndex);
+
+        bil.MarkLabel(checkCharacter);
+        bil.Emit(OpCodes.Ldloc, input);
+        bil.Emit(OpCodes.Ldloc, index);
+        bil.Emit(OpCodes.Callvirt, _types.GetProperty(_types.String, "Chars")!.GetGetMethod()!);
+        bil.Emit(OpCodes.Ldc_I4, (int)byte.MaxValue);
+        bil.Emit(OpCodes.Ble, nextCharacter);
+        bil.Emit(OpCodes.Call, invalidCharacterError);
+        bil.Emit(OpCodes.Throw);
+
+        bil.MarkLabel(nextCharacter);
+        bil.Emit(OpCodes.Ldloc, index);
+        bil.Emit(OpCodes.Ldc_I4_1);
+        bil.Emit(OpCodes.Add);
+        bil.Emit(OpCodes.Stloc, index);
+        bil.MarkLabel(checkIndex);
+        bil.Emit(OpCodes.Ldloc, index);
+        bil.Emit(OpCodes.Ldloc, input);
+        bil.Emit(OpCodes.Callvirt, length);
+        bil.Emit(OpCodes.Blt, checkCharacter);
+
+        bil.Emit(OpCodes.Call, _types.GetProperty(_types.Encoding, "Latin1")!.GetGetMethod()!);
+        bil.Emit(OpCodes.Ldloc, input);
+        bil.Emit(OpCodes.Callvirt, _types.GetMethod(_types.Encoding, "GetBytes", _types.String));
+        bil.Emit(OpCodes.Call, _types.ConvertToBase64String);
         bil.Emit(OpCodes.Ret);
     }
 

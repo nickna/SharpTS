@@ -1451,6 +1451,27 @@ public class BufferTests
     }
 
     [Theory, ModeData]
+    public void BufferModule_BtoaRejectsCharactersOutsideLatin1(ExecutionMode mode)
+    {
+        var files = new Dictionary<string, string>
+        {
+            ["main.ts"] = """
+                import { btoa as moduleBtoa } from 'node:buffer';
+                for (const encode of [(text: string) => moduleBtoa(text), (text: string) => btoa(text)]) {
+                    console.log('base64:' + encode(''));
+                    console.log(encode('\u0000\u0080\u00ff'));
+                    for (const text of ['\u0100', 'ok\uD800', '\uD83D\uDE00']) {
+                        try { encode(text); console.log('accepted'); }
+                        catch (error) { console.log(error.name, error.code, typeof error.code); }
+                    }
+                }
+                """
+        };
+        const string result = "base64:\nAID/\nInvalidCharacterError 5 number\nInvalidCharacterError 5 number\nInvalidCharacterError 5 number\n";
+        Assert.Equal(result + result, TestHarness.RunModules(files, "main.ts", mode));
+    }
+
+    [Theory, ModeData]
     public void BufferModule_GlobalAtobBtoa(ExecutionMode mode)
     {
         // atob/btoa are also globals (no import).

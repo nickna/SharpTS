@@ -25,6 +25,7 @@ public static class BufferModuleHelpers
     internal const string AtobWhitespace = " \t\n\f\r";
     internal const string InvalidCharacterErrorName = "InvalidCharacterError";
     internal const double InvalidCharacterErrorCode = 5;
+    internal const string InvalidCharacterMessage = "Invalid character";
 
     /// <summary>Decodes forgiving Base64 into a Latin-1 binary string.</summary>
     public static string Atob(string data)
@@ -44,24 +45,26 @@ public static class BufferModuleHelpers
         }
         catch (FormatException)
         {
-            throw CreateInvalidCharacterError("Invalid character");
+            throw CreateInvalidCharacterError();
         }
     }
 
-    private static ThrowException CreateInvalidCharacterError(string message)
+    private static ThrowException CreateInvalidCharacterError()
     {
-        var error = new SharpTSError(message) { Name = InvalidCharacterErrorName };
+        var error = new SharpTSError(InvalidCharacterMessage) { Name = InvalidCharacterErrorName };
         error.DefineProperty("code", new SharpTSPropertyDescriptor(value: InvalidCharacterErrorCode));
         return new ThrowException(error);
     }
 
-    /// <summary>
-    /// btoa(data): encodes a Latin-1 "binary string" to base64. Composed from
-    /// <see cref="BufferEncoding"/> so it mirrors the compiled twin
-    /// (Buffer.from(data,'latin1').toString('base64')).
-    /// </summary>
+    /// <summary>Encodes a Latin-1 binary string to Base64.</summary>
     public static string Btoa(string data)
-        => BufferEncoding.Decode(BufferEncoding.Encode(data, "latin1"), "base64");
+    {
+        foreach (char character in data)
+            if (character > byte.MaxValue)
+                throw CreateInvalidCharacterError();
+
+        return Convert.ToBase64String(Encoding.Latin1.GetBytes(data));
+    }
 
     /// <summary>Whether <paramref name="bytes"/> is well-formed UTF-8.</summary>
     public static bool IsUtf8(byte[] bytes) => System.Text.Unicode.Utf8.IsValid(bytes);
