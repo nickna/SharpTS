@@ -203,8 +203,26 @@ public partial class RuntimeEmitter
         il.Emit(OpCodes.Ldc_R8, 0d);
         il.Emit(OpCodes.Stloc, offset);
         il.MarkLabel(numericOffset);
+        var byteLength = il.DeclareLocal(_types.Int32);
+        var lengthReady = il.DefineLabel();
+        if (runtime.ArrayBuffer is { } ab)
+        {
+            var shared = il.DefineLabel();
+            il.Emit(OpCodes.Ldarg_0);
+            il.Emit(OpCodes.Isinst, ab.Type);
+            il.Emit(OpCodes.Dup);
+            il.Emit(OpCodes.Brfalse, shared);
+            il.Emit(OpCodes.Callvirt, ab.ByteLengthGetter);
+            il.Emit(OpCodes.Br, lengthReady);
+            il.MarkLabel(shared);
+            il.Emit(OpCodes.Pop);
+        }
         il.Emit(OpCodes.Ldloc, data);
         il.Emit(OpCodes.Ldlen);
+        il.Emit(OpCodes.Conv_I4);
+        il.MarkLabel(lengthReady);
+        il.Emit(OpCodes.Stloc, byteLength);
+        il.Emit(OpCodes.Ldloc, byteLength);
         il.Emit(OpCodes.Conv_R8);
         il.Emit(OpCodes.Ldloc, offset);
         il.Emit(OpCodes.Sub);
@@ -218,8 +236,7 @@ public partial class RuntimeEmitter
         il.Emit(OpCodes.Ldarg_2);
         il.Emit(OpCodes.Isinst, runtime.Sentinels.UndefinedType);
         il.Emit(OpCodes.Brfalse, explicitLength);
-        il.Emit(OpCodes.Ldloc, data);
-        il.Emit(OpCodes.Ldlen);
+        il.Emit(OpCodes.Ldloc, byteLength);
         il.Emit(OpCodes.Conv_R8);
         il.Emit(OpCodes.Ldloc, offset);
         il.Emit(OpCodes.Call, typeof(Math).GetMethod(nameof(Math.Truncate), [typeof(double)])!);
@@ -249,6 +266,20 @@ public partial class RuntimeEmitter
         il.Emit(OpCodes.Ldc_R8, 0d);
         il.Emit(OpCodes.Stloc, length);
         il.MarkLabel(positiveLength);
+        if (runtime.ArrayBuffer is { } owner)
+        {
+            // Coercing length can execute user code and transfer the buffer.
+            var attached = il.DefineLabel();
+            il.Emit(OpCodes.Ldarg_0);
+            il.Emit(OpCodes.Isinst, owner.Type);
+            il.Emit(OpCodes.Brfalse, attached);
+            il.Emit(OpCodes.Ldarg_0);
+            il.Emit(OpCodes.Castclass, owner.Type);
+            il.Emit(OpCodes.Ldfld, owner.DetachedField);
+            il.Emit(OpCodes.Brfalse, attached);
+            GuestErrorEmitter.ThrowTypeError(il, runtime, "Cannot create a Buffer from a detached ArrayBuffer");
+            il.MarkLabel(attached);
+        }
         il.Emit(OpCodes.Ldloc, data);
         il.Emit(OpCodes.Ldloc, offset);
         il.Emit(OpCodes.Conv_I4);

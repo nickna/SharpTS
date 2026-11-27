@@ -80,6 +80,24 @@ public class BufferTests
     }
 
     [Theory, ModeData]
+    public void Buffer_ViewWritesAndConstructionRespectBackingBounds(ExecutionMode mode)
+    {
+        const string source = """
+            const ab = new ArrayBuffer(4);
+            new Uint8Array(ab).set([1, 2, 3, 4]);
+            const whole = Buffer.from(ab);
+            const view = Buffer.from(ab, 1, 3);
+            view.fill(whole);
+            try { view.write('X', -1); } catch (error) { console.log(error.name, error.code); }
+            console.log(whole.toString('hex'));
+            const length = { valueOf() { structuredClone(ab, { transfer: [ab] }); return 1; } };
+            try { Buffer.from(ab, 0, length); } catch (error) { console.log(error instanceof TypeError); }
+            """;
+        Assert.Equal("RangeError ERR_OUT_OF_RANGE\n01010203\ntrue\n",
+            TestHarness.RunModules(new Dictionary<string, string> { ["main.js"] = source }, "main.js", mode));
+    }
+
+    [Theory, ModeData]
     public void Buffer_FromResolvesTheCurrentReceiverBeforeEvaluatingArguments(ExecutionMode mode)
     {
         const string source = """

@@ -648,9 +648,11 @@ public partial class RuntimeEmitter
         il.Emit(OpCodes.Ldarg_1);
         il.Emit(OpCodes.Isinst, typeBuilder);
         il.Emit(OpCodes.Brfalse, notBuffer);
-        il.Emit(OpCodes.Ldarg_1);
-        il.Emit(OpCodes.Castclass, typeBuilder);
-        il.Emit(OpCodes.Call, buffer.GetData);
+        EmitBufferSpan(il, buffer, OpCodes.Ldarg_1);
+        var fillView = il.DeclareLocal(typeof(Span<byte>));
+        il.Emit(OpCodes.Stloc, fillView);
+        il.Emit(OpCodes.Ldloca, fillView);
+        il.Emit(OpCodes.Call, typeof(Span<byte>).GetMethod("ToArray")!);
         il.Emit(OpCodes.Stloc, fillBytesLocal);
         il.Emit(OpCodes.Br, checkLength);
 
@@ -721,7 +723,7 @@ public partial class RuntimeEmitter
     /// <summary>
     /// Emits: public int Write(string data, int offset, int length, string encoding)
     /// </summary>
-    private void EmitTSBufferWrite(TypeBuilder typeBuilder, EmittedBufferRuntime buffer)
+    private void EmitTSBufferWrite(TypeBuilder typeBuilder, EmittedBufferRuntime buffer, EmittedErrorRuntime errors)
     {
         var method = typeBuilder.DefineMethod(
             "Write",
@@ -743,6 +745,19 @@ public partial class RuntimeEmitter
         il.Emit(OpCodes.Ldarg_0);
         il.Emit(OpCodes.Call, buffer.LengthGetter);
         il.Emit(OpCodes.Stloc, thisLenLocal);
+
+        var offsetInRange = il.DefineLabel();
+        il.Emit(OpCodes.Ldarg_2);
+        il.Emit(OpCodes.Ldloc, thisLenLocal);
+        il.Emit(OpCodes.Ble_Un, offsetInRange);
+        il.Emit(OpCodes.Ldstr, "The offset is outside the buffer bounds");
+        il.Emit(OpCodes.Newobj, errors.RangeErrorConstructor);
+        il.Emit(OpCodes.Dup);
+        il.Emit(OpCodes.Ldstr, "ERR_OUT_OF_RANGE");
+        il.Emit(OpCodes.Callvirt, errors.CodeSetter);
+        il.Emit(OpCodes.Call, errors.CreateException);
+        il.Emit(OpCodes.Throw);
+        il.MarkLabel(offsetInRange);
 
         // Encode string to bytes (always UTF8 for simplicity)
         il.Emit(OpCodes.Call, _types.GetProperty(_types.Encoding, "UTF8")!.GetGetMethod()!);

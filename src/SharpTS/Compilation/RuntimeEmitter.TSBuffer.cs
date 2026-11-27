@@ -68,7 +68,7 @@ public partial class RuntimeEmitter
         EmitTSBufferCompare(typeBuilder, buffer);
         EmitTSBufferEquals(typeBuilder, buffer);
         EmitTSBufferFill(typeBuilder, buffer);
-        EmitTSBufferWrite(typeBuilder, buffer);
+        EmitTSBufferWrite(typeBuilder, buffer, errors);
         EmitTSBufferReadUInt8(typeBuilder, buffer);
         EmitTSBufferWriteUInt8(typeBuilder, buffer);
         EmitTSBufferToJSON(typeBuilder, buffer);

@@ -344,7 +344,7 @@ public class SharpTSBuffer : ITypeCategorized
         }
         else if (value is SharpTSBuffer buf)
         {
-            fillBytes = buf.Data;
+            fillBytes = buf.Bytes.ToArray();
         }
         else if (value is SharpTSTypedArray view)
         {
@@ -378,6 +378,8 @@ public class SharpTSBuffer : ITypeCategorized
         if (data == null)
             throw new ArgumentNullException(nameof(data));
 
+        if ((uint)offset > (uint)Length)
+            throw new ThrowException(new SharpTSRangeError("The offset is outside the buffer bounds") { Code = "ERR_OUT_OF_RANGE" });
         var bytes = EncodeString(data, encoding);
         int maxWrite = Length - offset;
         if (maxWrite <= 0) return 0;

@@ -122,15 +122,19 @@ public sealed class SharpTSBufferConstructor
     {
         var offset = args.Length > 1 ? interpreter.ToNumberWithPrimitive(args[1].ToObject()) : 0;
         if (double.IsNaN(offset)) offset = 0;
-        var bytes = source is SharpTSArrayBuffer ab ? ab.GetBackingArray() : ((SharpTSSharedArrayBuffer)source).GetBackingArray();
-        double available = bytes.Length - offset;
+        var ab = source as SharpTSArrayBuffer;
+        int byteLength = ab?.ByteLength ?? ((SharpTSSharedArrayBuffer)source).ByteLength;
+        double available = byteLength - offset;
         if (available < 0) throw OutsideBounds("offset");
         bool hasLength = args.Length > 2 && !args[2].IsUndefined;
         double length = hasLength
-            ? interpreter.ToNumberWithPrimitive(args[2].ToObject()) : bytes.Length - Math.Truncate(offset);
+            ? interpreter.ToNumberWithPrimitive(args[2].ToObject()) : byteLength - Math.Truncate(offset);
         if (hasLength && length > available)
             throw OutsideBounds("length");
         if (offset <= -1) throw new ThrowException(new SharpTSRangeError("Invalid start offset"));
+        if (ab is { IsDetached: true })
+            throw new ThrowException(new SharpTSTypeError("Cannot create a Buffer from a detached ArrayBuffer"));
+        var bytes = ab?.GetBackingArray() ?? ((SharpTSSharedArrayBuffer)source).GetBackingArray();
         return new SharpTSBuffer(bytes, (int)offset, length > 0 ? (int)length : 0);
 
         static ThrowException OutsideBounds(string parameter) => new(new SharpTSRangeError(
