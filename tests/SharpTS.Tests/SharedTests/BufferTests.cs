@@ -195,6 +195,25 @@ public class BufferTests
     }
 
     [Theory, ModeData]
+    public void Buffer_ByteLengthObservesAnArrayBufferOwnGetter(ExecutionMode mode)
+    {
+        const string source = """
+            const value = new ArrayBuffer(4);
+            const sentinel = { length: 99 };
+            let reads = 0;
+            Object.defineProperty(value, 'byteLength', {
+                configurable: true,
+                get() { reads++; return this === value ? sentinel : -1; }
+            });
+            const byteLength = Buffer.byteLength;
+            console.log(Buffer.byteLength(value) === sentinel, byteLength(value) === sentinel, reads);
+            delete value.byteLength;
+            console.log(byteLength(value), reads);
+            """;
+        Assert.Equal("true true 2\n4 2\n", TestHarness.RunUnchecked(source, mode));
+    }
+
+    [Theory, ModeData]
     public void Buffer_FromDecodesBase64Permissively(ExecutionMode mode)
     {
         const string source = """
