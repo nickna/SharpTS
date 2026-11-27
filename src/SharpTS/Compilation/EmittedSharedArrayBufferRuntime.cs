@@ -20,6 +20,27 @@ public sealed class EmittedSharedArrayBufferRuntime
         internal set => Set(ref _type, value);
     }
 
+    private FieldBuilder? _prototypeField;
+    public FieldBuilder PrototypeField
+    {
+        get => Require(_prototypeField);
+        internal set => Set(ref _prototypeField, value);
+    }
+
+    private MethodBuilder? _prototypeByteLengthGetter;
+    public MethodBuilder PrototypeByteLengthGetter
+    {
+        get => Require(_prototypeByteLengthGetter);
+        internal set => Set(ref _prototypeByteLengthGetter, value);
+    }
+
+    private MethodBuilder? _prototypeSlice;
+    public MethodBuilder PrototypeSlice
+    {
+        get => Require(_prototypeSlice);
+        internal set => Set(ref _prototypeSlice, value);
+    }
+
     private ConstructorBuilder? _ctor;
     public ConstructorBuilder Ctor
     {
@@ -96,6 +117,9 @@ public sealed class EmittedSharedArrayBufferRuntime
     {
         EnsureMutable();
         _ = Type;
+        _ = PrototypeField;
+        _ = PrototypeByteLengthGetter;
+        _ = PrototypeSlice;
         _ = Ctor;
         _ = ByteLengthGetter;
         _ = GetBuffer;

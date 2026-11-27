@@ -2667,13 +2667,18 @@ public partial class RuntimeEmitter
             }
 
             if (inputs.ArrayBuffer is { } arrayBufferPrototype)
+                EmitArrayBufferPrototype(arrayBufferPrototype.Type, arrayBufferPrototype.PrototypeField);
+            if (inputs.SharedArrayBuffer is { } sharedArrayBufferPrototype)
+                EmitArrayBufferPrototype(sharedArrayBufferPrototype.Type, sharedArrayBufferPrototype.PrototypeField);
+
+            void EmitArrayBufferPrototype(Type receiverType, FieldBuilder prototype)
             {
                 var notArrayBufferPrototype = il.DefineLabel();
                 il.Emit(OpCodes.Ldarg_0);
-                il.Emit(OpCodes.Ldtoken, arrayBufferPrototype.Type);
+                il.Emit(OpCodes.Ldtoken, receiverType);
                 il.Emit(OpCodes.Call, _types.TypeGetTypeFromHandle);
                 il.Emit(OpCodes.Bne_Un, notArrayBufferPrototype);
-                il.Emit(OpCodes.Ldsfld, arrayBufferPrototype.PrototypeField);
+                il.Emit(OpCodes.Ldsfld, prototype);
                 il.Emit(OpCodes.Ret);
                 il.MarkLabel(notArrayBufferPrototype);
             }
@@ -3314,8 +3319,9 @@ public partial class RuntimeEmitter
             il.Emit(OpCodes.Call, inputs.TypedArrays.RequireImplementation().GetMember);
             il.Emit(OpCodes.Ret);
 
-            // Own properties on $ArrayBuffer shadow its intrinsic members.
+            // Own properties on ArrayBuffers shadow their intrinsic members.
             il.MarkLabel(arrayBufferLabel);
+            il.MarkLabel(sharedArrayBufferLabel);
             var arrayBufferDescriptor = il.DeclareLocal(inputs.DescriptorStorage.DescriptorType);
             var noArrayBufferDescriptor = il.DefineLabel();
             il.Emit(OpCodes.Ldarg_0);
@@ -3341,36 +3347,6 @@ public partial class RuntimeEmitter
             il.Emit(OpCodes.Ldarg_1);
             il.Emit(OpCodes.Ldarg_0);
             il.Emit(OpCodes.Call, inputs.Reflect.Get);
-            il.Emit(OpCodes.Ret);
-
-            // $SharedArrayBuffer handler - check for "byteLength"
-            il.MarkLabel(sharedArrayBufferLabel);
-            il.Emit(OpCodes.Ldarg_1);
-            il.Emit(OpCodes.Ldstr, "byteLength");
-            il.Emit(OpCodes.Call, _types.GetMethod(_types.String, "op_Equality", _types.String, _types.String));
-            var notSharedArrayBufferByteLengthLabel = il.DefineLabel();
-            il.Emit(OpCodes.Brfalse, notSharedArrayBufferByteLengthLabel);
-            // Return ByteLength as double
-            il.Emit(OpCodes.Ldarg_0);
-            il.Emit(OpCodes.Castclass, inputs.SharedArrayBuffer!.Type);
-            il.Emit(OpCodes.Callvirt, inputs.SharedArrayBuffer!.ByteLengthGetter);
-            il.Emit(OpCodes.Conv_R8);
-            il.Emit(OpCodes.Box, _types.Double);
-            il.Emit(OpCodes.Ret);
-            il.MarkLabel(notSharedArrayBufferByteLengthLabel);
-            il.Emit(OpCodes.Ldarg_1);
-            il.Emit(OpCodes.Ldstr, "slice");
-            il.Emit(OpCodes.Call, _types.GetMethod(_types.String, "op_Equality", _types.String, _types.String));
-            var notSharedArrayBufferSliceLabel = il.DefineLabel();
-            il.Emit(OpCodes.Brfalse, notSharedArrayBufferSliceLabel);
-            il.Emit(OpCodes.Ldarg_0);
-            var parameterMethod5 = EmitReflectedMethodLiteral(il, inputs.SharedArrayBuffer!.Slice);
-            il.Emit(OpCodes.Ldstr, "slice");
-            il.Emit(OpCodes.Ldc_I4_2);
-            EmitReflectedFunctionConstructor(il, inputs.TSFunctionCtorWithCache, parameterMethod5, cached: true);
-            il.Emit(OpCodes.Ret);
-            il.MarkLabel(notSharedArrayBufferSliceLabel);
-            il.Emit(OpCodes.Ldsfld, inputs.UndefinedInstance);
             il.Emit(OpCodes.Ret);
 
             EmitDataViewHandler();

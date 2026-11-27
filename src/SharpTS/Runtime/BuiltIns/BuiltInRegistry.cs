@@ -1139,23 +1139,6 @@ public sealed class BuiltInRegistry
         registry.RegisterInstanceType(typeof(SharpTSBroadcastChannel), (instance, name) =>
             ((SharpTSBroadcastChannel)instance).GetMember(name));
 
-        // Register SharedArrayBuffer instance members
-        registry.RegisterInstanceType(typeof(SharpTSSharedArrayBuffer), (instance, name) =>
-        {
-            var sab = (SharpTSSharedArrayBuffer)instance;
-            return name switch
-            {
-                "byteLength" => (double)sab.ByteLength,
-                "slice" => BuiltInMethod.CreateV2("slice", 1, 2, (_, _, args) =>
-                {
-                    int begin = args.Length > 0 && args[0].IsNumber ? (int)args[0].AsNumberUnsafe() : 0;
-                    int? end = args.Length > 1 && args[1].IsNumber ? (int)args[1].AsNumberUnsafe() : null;
-                    return RuntimeValue.FromObject(sab.Slice(begin, end));
-                }),
-                _ => null
-            };
-        });
-
         // Register TypedArray instance members
         registry.RegisterInstanceType(typeof(SharpTSInt8Array), (instance, name) =>
             ((SharpTSTypedArray)instance).GetMember(name));

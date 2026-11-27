@@ -612,7 +612,7 @@ public partial class RuntimeEmitter
         if (features.HasAnyTypedArray)
         {
             EmitArrayBufferType(moduleBuilder, runtime);
-            EmitSharedArrayBufferType(moduleBuilder, runtime.RequireSharedArrayBuffer());
+            EmitSharedArrayBufferType(moduleBuilder, runtime);
             EmitDataViewType(moduleBuilder, runtime);
             EmitTypedArrayTypes(moduleBuilder, runtime);
             // $BoundTypedArrayMethod Phase 1 (#940): callable wrapper for typed-array bulk methods.

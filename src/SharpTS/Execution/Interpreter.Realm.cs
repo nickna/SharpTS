@@ -582,6 +582,11 @@ public partial class Interpreter
             value = GetArrayBufferConstructor();
             return true;
         }
+        if (name == BuiltInNames.SharedArrayBuffer)
+        {
+            value = GetSharedArrayBufferConstructor();
+            return true;
+        }
         if (name == BuiltInNames.RegExp)
         {
             value = RegExpConstructorObject;
@@ -604,7 +609,7 @@ public partial class Interpreter
     /// method identity holds (<c>Math.max === Math.max</c>).
     /// </summary>
     internal static bool IsRealmIntrinsicName(string name)
-        => name is BuiltInNames.Console or BuiltInNames.Intl or "Object" or "Math" or "JSON" or "String" or "Number" or "Boolean" or "Array" or "ArrayBuffer" or "RegExp" or "Promise"
+        => name is BuiltInNames.Console or BuiltInNames.Intl or "Object" or "Math" or "JSON" or "String" or "Number" or "Boolean" or "Array" or "ArrayBuffer" or "SharedArrayBuffer" or "RegExp" or "Promise"
             || BuiltInNames.IsErrorTypeName(name);
 
     // Per-realm String/Number/Boolean.prototype. Each is an extensible ECMA-262
@@ -741,6 +746,43 @@ public partial class Interpreter
     {
         GetArrayBufferConstructor();
         return _arrayBufferPrototype!;
+    }
+
+    private SharedArrayBufferConstructorImpl? _sharedArrayBufferConstructor;
+    private SharpTSObject? _sharedArrayBufferPrototype;
+
+    private SharedArrayBufferConstructorImpl GetSharedArrayBufferConstructor()
+    {
+        if (_sharedArrayBufferConstructor is null)
+        {
+            var prototype = _sharedArrayBufferPrototype = new SharpTSObject([]);
+            _sharedArrayBufferConstructor = new SharedArrayBufferConstructorImpl(prototype);
+            prototype.DefineProperty("constructor", new SharpTSPropertyDescriptor(
+                _sharedArrayBufferConstructor, writable: true, enumerable: false, configurable: true));
+            var length = BuiltInMethod.CreateV2("get byteLength", 0, static (_, receiver, _) =>
+                receiver.ToObject() is SharpTSSharedArrayBuffer buffer
+                    ? RuntimeValue.FromNumber(buffer.ByteLength)
+                    : throw new ThrowException(new SharpTSTypeError("SharedArrayBuffer byteLength called on incompatible receiver")));
+            prototype.DefineProperty("byteLength", SharpTSPropertyDescriptor.ForGetter(length));
+            var slice = BuiltInMethod.CreateV2("slice", 0, int.MaxValue, static (interpreter, receiver, args) =>
+            {
+                if (receiver.ToObject() is not SharpTSSharedArrayBuffer buffer)
+                    throw new ThrowException(new SharpTSTypeError("SharedArrayBuffer.prototype.slice called on incompatible receiver"));
+                int begin = args.IsEmpty ? 0 : ArrayBuiltIns.ToIntegerOrInfinityAsInt(interpreter, args[0].ToObject());
+                int? end = args.Length < 2 || args[1].IsUndefined
+                    ? null : ArrayBuiltIns.ToIntegerOrInfinityAsInt(interpreter, args[1].ToObject());
+                return RuntimeValue.FromObject(buffer.Slice(begin, end));
+            }).WithSpecLength(2).MarkRealmOwned();
+            prototype.DefineProperty("slice", new SharpTSPropertyDescriptor(
+                slice, writable: true, enumerable: false, configurable: true));
+        }
+        return _sharedArrayBufferConstructor;
+    }
+
+    internal SharpTSObject GetSharedArrayBufferPrototype()
+    {
+        GetSharedArrayBufferConstructor();
+        return _sharedArrayBufferPrototype!;
     }
     internal Runtime.Types.SharpTSFunctionPrototype GetFunctionPrototype() => _functionPrototype ??= new();
     internal Runtime.Types.SharpTSObjectPrototype GetObjectPrototype()

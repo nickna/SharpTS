@@ -1507,7 +1507,7 @@ public partial class Interpreter
 
         if (obj is ISharpTSGeneratorFunctionValue or SharpTSGenerator or SharpTSAsyncGenerator
             or SharpTSArrayIterator or SharpTSMap or SharpTSSet or SharpTSSuppressedError or SharpTSArrayBuffer
-            or SharpTSDomException)
+            or SharpTSSharedArrayBuffer or SharpTSDomException)
             return RuntimeValue.FromBoxed(GetPropertyValue(obj, get.Name.Lexeme));
 
         if (NeedsLiveFunctionPrototypeRead(obj, get.Name.Lexeme))

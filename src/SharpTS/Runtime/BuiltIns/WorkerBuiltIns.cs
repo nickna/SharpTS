@@ -26,9 +26,9 @@ public static class WorkerBuiltIns
     }
 
     /// <summary>
-    /// Creates a SharedArrayBuffer constructor function.
+    /// Provides the SharedArrayBuffer constructor used by the construction dispatcher.
     /// </summary>
-    public static ISharpTSCallable SharedArrayBufferConstructor => new SharedArrayBufferConstructorImpl();
+    public static ISharpTSCallable SharedArrayBufferConstructor { get; } = new SharedArrayBufferConstructorImpl();
 
     /// <summary>
     /// Creates an ArrayBuffer constructor function.
@@ -121,8 +121,18 @@ internal interface IBuiltInTypeConstructor
 /// <summary>
 /// SharedArrayBuffer constructor implementation.
 /// </summary>
-internal class SharedArrayBufferConstructorImpl : ISharpTSCallable, IBuiltInTypeConstructor
+internal class SharedArrayBufferConstructorImpl : ISharpTSFunctionObject, IBuiltInTypeConstructor
 {
+    public SharpTSObject OwnProperties { get; }
+
+    internal SharedArrayBufferConstructorImpl(SharpTSObject? prototype = null)
+    {
+        OwnProperties = FunctionObjectProperties.Create("SharedArrayBuffer", 1);
+        if (prototype is not null)
+            OwnProperties.DefineProperty("prototype", new SharpTSPropertyDescriptor(
+                prototype, writable: false, enumerable: false, configurable: false));
+    }
+
     public int Arity() => 1;
 
     public bool IsInstance(object? value) => value is SharpTSSharedArrayBuffer;
@@ -133,15 +143,6 @@ internal class SharedArrayBufferConstructorImpl : ISharpTSCallable, IBuiltInType
             throw new Exception("SharedArrayBuffer constructor requires a length argument");
 
         return new SharpTSSharedArrayBuffer((int)length);
-    }
-
-    public object? GetProperty(string name)
-    {
-        return name switch
-        {
-            "prototype" => null,
-            _ => null
-        };
     }
 }
 
