@@ -168,6 +168,20 @@ public sealed class EmittedBufferRuntime
         internal set => Set(ref _btoa, value);
     }
 
+    private MethodBuilder? _atobValue;
+    public MethodBuilder AtobValue
+    {
+        get => Require(_atobValue);
+        internal set => Set(ref _atobValue, value);
+    }
+
+    private MethodBuilder? _btoaValue;
+    public MethodBuilder BtoaValue
+    {
+        get => Require(_btoaValue);
+        internal set => Set(ref _btoaValue, value);
+    }
+
     private MethodBuilder? _isUtf8;
     public MethodBuilder IsUtf8
     {
@@ -658,6 +672,8 @@ public sealed class EmittedBufferRuntime
         _ = GetData;
         _ = Atob;
         _ = Btoa;
+        _ = AtobValue;
+        _ = BtoaValue;
         _ = IsUtf8;
         _ = IsAscii;
         _ = Transcode;

@@ -27,7 +27,6 @@ public class TypeEmitterRegistryTests
         { new TI.AsyncGenerator(new TI.Any()), typeof(AsyncGeneratorEmitter) },
         { new TI.Error(), typeof(ErrorEmitter) },
         { new TI.SharedArrayBuffer(), typeof(SharedArrayBufferEmitter) },
-        { new TI.ArrayBuffer(), typeof(ArrayBufferEmitter) },
         { new TI.DataView(), typeof(DataViewEmitter) },
         { new TI.AbortController(), typeof(AbortControllerEmitter) },
         { new TI.AbortSignal(), typeof(AbortSignalEmitter) },

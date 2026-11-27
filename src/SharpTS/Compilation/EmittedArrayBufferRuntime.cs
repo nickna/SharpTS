@@ -41,6 +41,13 @@ public sealed class EmittedArrayBufferRuntime
         internal set => Set(ref _byteLengthGetter, value);
     }
 
+    private MethodBuilder? _prototypeByteLengthGetter;
+    public MethodBuilder PrototypeByteLengthGetter
+    {
+        get => Require(_prototypeByteLengthGetter);
+        internal set => Set(ref _prototypeByteLengthGetter, value);
+    }
+
     private MethodBuilder? _getBuffer;
     public MethodBuilder GetBuffer
     {
@@ -127,6 +134,7 @@ public sealed class EmittedArrayBufferRuntime
         _ = Ctor;
         _ = PrototypeField;
         _ = ByteLengthGetter;
+        _ = PrototypeByteLengthGetter;
         _ = GetBuffer;
         _ = Slice;
         _ = SliceDynamic;

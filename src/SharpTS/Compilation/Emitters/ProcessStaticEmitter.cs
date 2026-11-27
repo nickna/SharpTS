@@ -81,7 +81,6 @@ public sealed class ProcessStaticEmitter : IStaticTypeEmitterStrategy
             case "prependOnceListener":
             case "emit":
             case "setMaxListeners":
-            case "getMaxListeners":
                 EmitProcessEventEmitterCall(emitter, methodName, arguments);
                 return true;
 

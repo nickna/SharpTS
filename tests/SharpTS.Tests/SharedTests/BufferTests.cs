@@ -1522,16 +1522,34 @@ public class BufferTests
     }
 
     [Theory, ModeData]
+    public void BufferModule_Base64DistinguishesOmittedInputFromUndefined(ExecutionMode mode)
+    {
+        const string source = """
+            for (const convert of [atob, btoa]) {
+                try { convert(...[]); }
+                catch (error) { console.log(error instanceof TypeError, error.name, error.code, error.message); }
+            }
+            try { atob(undefined); }
+            catch (error) { console.log(error.name, error.code); }
+            let extra = 0;
+            console.log(btoa(undefined, ++extra), btoa(null), extra);
+            """;
+        const string missing = "true TypeError ERR_MISSING_ARGS The \"input\" argument must be specified\n";
+        Assert.Equal(missing + missing + "InvalidCharacterError 5\ndW5kZWZpbmVk bnVsbA== 1\n",
+            TestHarness.RunUnchecked(source, mode));
+    }
+
+    [Theory, ModeData]
     public void BufferModule_InvalidCharactersThrowDomException(ExecutionMode mode)
     {
         const string source = """
             const D = globalThis.DOMException;
-            console.log(typeof D, D === DOMException);
+            console.log(typeof D, D === DOMException, D.name, Reflect.get(D, 'name'));
             for (const convert of [() => atob('!'), () => btoa('\u0100')]) {
                 try { convert(); console.log('accepted'); }
                 catch (error) {
                     console.log(error instanceof D, error instanceof Error, error.constructor === D,
-                        Object.getPrototypeOf(error) === D.prototype, error.name, error.code);
+                        Object.getPrototypeOf(error) === D.prototype, error.constructor.name, error.name, error.code);
                 }
             }
             console.log(Object.getPrototypeOf(D.prototype) === Error.prototype, D.INVALID_CHARACTER_ERR);
@@ -1543,8 +1561,8 @@ public class BufferTests
             try { readCode.call({}); }
             catch (error) { console.log(error instanceof TypeError); }
             """;
-        const string branded = "true true true true InvalidCharacterError 5\n";
-        Assert.Equal("function true\n" + branded + branded +
+        const string branded = "true true true true DOMException InvalidCharacterError 5\n";
+        Assert.Equal("function true DOMException DOMException\n" + branded + branded +
             "true 5\ntrue AbortError true 20\n[object DOMException] DOMException\nError 0\ntrue\n",
             TestHarness.RunUnchecked(source, mode));
     }
@@ -1559,11 +1577,27 @@ public class BufferTests
                 console.log(isUtf8(Buffer.from('héllo')));
                 console.log(isAscii(Buffer.from('héllo')));
                 console.log(isAscii(Buffer.from('hello')));
+
+                const bytes = new Uint8Array([255, 195, 169]);
+                const view = new Uint8Array(bytes.buffer, 1, 2);
+                console.log(isUtf8(view), isAscii(view), isUtf8(bytes.buffer), isAscii(bytes.buffer));
+                const shared = new SharedArrayBuffer(2);
+                console.log(isUtf8(shared), isAscii(shared));
+                console.log(isUtf8(new Uint16Array([65])), isAscii(new Uint16Array([65])));
+
+                const detached = bytes.buffer;
+                structuredClone(detached, { transfer: [detached] });
+                for (const validate of [isUtf8, isAscii]) {
+                    console.log(validate(view));
+                    try { validate(detached); }
+                    catch (error) { console.log(error.name, error.code); }
+                }
                 """
         };
 
         var output = TestHarness.RunModules(files, "main.ts", mode);
-        Assert.Equal("true\nfalse\ntrue\n", output);
+        Assert.Equal("true\nfalse\ntrue\ntrue false false false\ntrue true\ntrue true\n" +
+            "true\nError ERR_INVALID_STATE\ntrue\nError ERR_INVALID_STATE\n", output);
     }
 
     [Theory, ModeData]

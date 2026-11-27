@@ -43,6 +43,9 @@ public partial class Interpreter
     /// </summary>
     private static readonly FrozenDictionary<string, object> _globalConstants = CreateGlobalsLookup();
 
+    internal static SharpTSGlobalFunction GetIntrinsicGlobalFunction(string name)
+        => (SharpTSGlobalFunction)_globalConstants[name];
+
     /// <summary>
     /// The names of every global constant and built-in singleton, for REPL autocomplete.
     /// </summary>
@@ -713,6 +716,21 @@ public partial class Interpreter
                     ? RuntimeValue.FromNumber(buffer.ByteLength)
                     : throw new ThrowException(new SharpTSTypeError("ArrayBuffer byteLength called on incompatible receiver")));
             _arrayBufferPrototype.DefineProperty("byteLength", SharpTSPropertyDescriptor.ForGetter(byteLength));
+            var slice = BuiltInMethod.CreateV2("slice", 0, int.MaxValue, static (interpreter, receiver, args) =>
+            {
+                if (receiver.ToObject() is not SharpTSArrayBuffer buffer)
+                    throw new ThrowException(new SharpTSTypeError("ArrayBuffer.prototype.slice called on incompatible receiver"));
+                if (buffer.IsDetached)
+                    throw new ThrowException(new SharpTSTypeError("Cannot perform ArrayBuffer.prototype.slice on a detached ArrayBuffer"));
+                int begin = args.IsEmpty ? 0 : ArrayBuiltIns.ToIntegerOrInfinityAsInt(interpreter, args[0].ToObject());
+                int? end = args.Length < 2 || args[1].IsUndefined
+                    ? null : ArrayBuiltIns.ToIntegerOrInfinityAsInt(interpreter, args[1].ToObject());
+                if (buffer.IsDetached)
+                    throw new ThrowException(new SharpTSTypeError("Cannot perform ArrayBuffer.prototype.slice on a detached ArrayBuffer"));
+                return RuntimeValue.FromObject(buffer.Slice(begin, end));
+            }).WithSpecLength(2).MarkRealmOwned();
+            _arrayBufferPrototype.DefineProperty("slice", new SharpTSPropertyDescriptor(
+                slice, writable: true, enumerable: false, configurable: true));
         }
         return _arrayBufferConstructor;
     }

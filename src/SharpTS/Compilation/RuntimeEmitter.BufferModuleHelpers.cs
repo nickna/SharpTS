@@ -16,8 +16,12 @@ public partial class RuntimeEmitter
         EmitBufferCoerceString(buffer, typeBuilder);
         EmitBufferBytesOf(typeBuilder, buffer);
         var invalidCharacterError = EmitBufferInvalidCharacterError(typeBuilder, runtime);
-        EmitBufferAtobBtoa(typeBuilder, buffer, invalidCharacterError, runtime.StringCoercion.ToJsString);
-        EmitBufferIsUtf8Ascii(typeBuilder, buffer);
+        var requireInput = EmitRequireBase64Input(typeBuilder, runtime.Errors);
+        EmitBufferAtobBtoa(typeBuilder, buffer, invalidCharacterError, requireInput, runtime.StringCoercion.ToJsString);
+        buffer.AtobValue = EmitBase64Value("BufferAtobValue", "atob", buffer.Atob);
+        buffer.BtoaValue = EmitBase64Value("BufferBtoaValue", "btoa", buffer.Btoa);
+        var validationBytes = EmitBufferValidationBytes(typeBuilder, runtime, buffer);
+        EmitBufferIsUtf8Ascii(typeBuilder, buffer, validationBytes);
         EmitBufferTranscode(typeBuilder, buffer);
         EmitBufferSlowBuffer(typeBuilder, buffer);
         EmitBufferModuleConstants(typeBuilder, runtime);
@@ -28,6 +32,20 @@ public partial class RuntimeEmitter
         runtime.BuiltInModules.Register("buffer", "isAscii", buffer.IsAscii);
         runtime.BuiltInModules.Register("buffer", "transcode", buffer.Transcode);
         runtime.BuiltInModules.Register("buffer", "SlowBuffer", buffer.SlowBuffer);
+
+        MethodBuilder EmitBase64Value(string clrName, string name, MethodBuilder target)
+        {
+            var value = typeBuilder.DefineMethod(clrName,
+                System.Reflection.MethodAttributes.Public | System.Reflection.MethodAttributes.Static,
+                _types.Object, Type.EmptyTypes);
+            var il = value.GetILGenerator();
+            var parameters = EmitReflectedMethodLiteralViaHandle(il, target);
+            il.Emit(OpCodes.Ldstr, name);
+            il.Emit(OpCodes.Ldc_I4_1);
+            EmitReflectedFunctionFactory(il, runtime.FunctionConstruction.GetOrCreate, parameters);
+            il.Emit(OpCodes.Ret);
+            return value;
+        }
     }
 
     /// <summary>
@@ -267,14 +285,36 @@ public partial class RuntimeEmitter
         return method;
     }
 
+    private MethodBuilder EmitRequireBase64Input(TypeBuilder typeBuilder, EmittedErrorRuntime errors)
+    {
+        var method = typeBuilder.DefineMethod("RequireBase64Input",
+            System.Reflection.MethodAttributes.Private | System.Reflection.MethodAttributes.Static,
+            _types.Object, [_types.ObjectArray]);
+        var il = method.GetILGenerator();
+        var hasInput = il.DefineLabel();
+        il.Emit(OpCodes.Ldarg_0);
+        il.Emit(OpCodes.Ldlen);
+        il.Emit(OpCodes.Brtrue, hasInput);
+        il.Emit(OpCodes.Ldstr, BufferModuleHelpers.MissingInputMessage);
+        il.Emit(OpCodes.Newobj, errors.TypeErrorConstructor);
+        il.Emit(OpCodes.Dup);
+        il.Emit(OpCodes.Ldstr, BufferModuleHelpers.MissingInputCode);
+        il.Emit(OpCodes.Callvirt, errors.CodeSetter);
+        il.Emit(OpCodes.Call, errors.CreateException);
+        il.Emit(OpCodes.Throw);
+        il.MarkLabel(hasInput);
+        il.Emit(OpCodes.Ldarg_0);
+        il.Emit(OpCodes.Ldc_I4_0);
+        il.Emit(OpCodes.Ldelem_Ref);
+        il.Emit(OpCodes.Ret);
+        return method;
+    }
+
     private void EmitBufferAtobBtoa(TypeBuilder typeBuilder, EmittedBufferRuntime buffer,
-        MethodBuilder invalidCharacterError, MethodBuilder toJsString)
+        MethodBuilder invalidCharacterError, MethodBuilder requireInput, MethodBuilder toJsString)
     {
         // Mirror BufferModuleHelpers.Atob with BCL calls in the standalone runtime.
-        var atob = typeBuilder.DefineMethod(
-            "BufferAtob",
-            System.Reflection.MethodAttributes.Public | System.Reflection.MethodAttributes.Static,
-            _types.String, [_types.Object]);
+        var atob = DefineConverter("BufferAtob");
         buffer.Atob = atob;
         var ail = atob.GetILGenerator();
         var data = ail.DeclareLocal(_types.String);
@@ -285,6 +325,7 @@ public partial class RuntimeEmitter
         var length = _types.GetProperty(_types.String, nameof(string.Length))!.GetGetMethod()!;
 
         ail.Emit(OpCodes.Ldarg_0);
+        ail.Emit(OpCodes.Call, requireInput);
         ail.Emit(OpCodes.Call, toJsString);
         foreach (var whitespace in BufferModuleHelpers.AtobWhitespace)
             EmitStringReplace(ail, whitespace.ToString(), "");
@@ -334,10 +375,7 @@ public partial class RuntimeEmitter
 
         // Validate UTF-16 code units before encoding, since Latin1.GetBytes
         // substitutes out-of-range characters instead of rejecting them.
-        var btoa = typeBuilder.DefineMethod(
-            "BufferBtoa",
-            System.Reflection.MethodAttributes.Public | System.Reflection.MethodAttributes.Static,
-            _types.String, [_types.Object]);
+        var btoa = DefineConverter("BufferBtoa");
         buffer.Btoa = btoa;
         var bil = btoa.GetILGenerator();
         var input = bil.DeclareLocal(_types.String);
@@ -346,6 +384,7 @@ public partial class RuntimeEmitter
         var checkCharacter = bil.DefineLabel();
         var nextCharacter = bil.DefineLabel();
         bil.Emit(OpCodes.Ldarg_0);
+        bil.Emit(OpCodes.Call, requireInput);
         bil.Emit(OpCodes.Call, toJsString);
         bil.Emit(OpCodes.Stloc, input);
         bil.Emit(OpCodes.Ldc_I4_0);
@@ -377,13 +416,119 @@ public partial class RuntimeEmitter
         bil.Emit(OpCodes.Callvirt, _types.GetMethod(_types.Encoding, "GetBytes", _types.String));
         bil.Emit(OpCodes.Call, _types.ConvertToBase64String);
         bil.Emit(OpCodes.Ret);
+
+        MethodBuilder DefineConverter(string name)
+        {
+            var converter = typeBuilder.DefineMethod(name,
+                System.Reflection.MethodAttributes.Public | System.Reflection.MethodAttributes.Static,
+                _types.String, [_types.ObjectArray]);
+            converter.DefineParameter(1, System.Reflection.ParameterAttributes.None, "args")
+                .SetCustomAttribute(_types.GetDefaultConstructor(_types.ParamArrayAttribute), CustomAttributeEncoder.EmptyBlob);
+            return converter;
+        }
     }
 
-    private void EmitBufferIsUtf8Ascii(TypeBuilder typeBuilder, EmittedBufferRuntime buffer)
+    private MethodBuilder EmitBufferValidationBytes(TypeBuilder owner, EmittedRuntime runtime, EmittedBufferRuntime buffer)
     {
-        var byteArr = _types.MakeArrayType(_types.Byte);
+        var intReference = _types.Int32.MakeByRefType();
+        var method = owner.DefineMethod("BufferValidationBytes",
+            System.Reflection.MethodAttributes.Private | System.Reflection.MethodAttributes.Static,
+            _types.ByteArray, [_types.Object, intReference, intReference]);
+        var il = method.GetILGenerator();
+        var wholeArray = il.DefineLabel();
+
+        if (runtime.ArrayBuffer is { } arrayBuffer)
+        {
+            var next = il.DefineLabel();
+            var attached = il.DefineLabel();
+            var input = TestInput(arrayBuffer.Type, next);
+            il.Emit(OpCodes.Ldloc, input);
+            il.Emit(OpCodes.Ldfld, arrayBuffer.DetachedField);
+            il.Emit(OpCodes.Brfalse, attached);
+            il.Emit(OpCodes.Ldstr, BufferModuleHelpers.DetachedValidationMessage);
+            il.Emit(OpCodes.Newobj, runtime.Errors.MessageConstructor);
+            il.Emit(OpCodes.Dup);
+            il.Emit(OpCodes.Ldstr, BufferModuleHelpers.DetachedValidationCode);
+            il.Emit(OpCodes.Callvirt, runtime.Errors.CodeSetter);
+            il.Emit(OpCodes.Call, runtime.Errors.CreateException);
+            il.Emit(OpCodes.Throw);
+            il.MarkLabel(attached);
+            il.Emit(OpCodes.Ldloc, input);
+            il.Emit(OpCodes.Callvirt, arrayBuffer.GetBuffer);
+            il.Emit(OpCodes.Br, wholeArray);
+            il.MarkLabel(next);
+        }
+
+        if (runtime.SharedArrayBuffer is { } shared)
+        {
+            var next = il.DefineLabel();
+            var input = TestInput(shared.Type, next);
+            il.Emit(OpCodes.Ldloc, input);
+            il.Emit(OpCodes.Callvirt, shared.GetBuffer);
+            il.Emit(OpCodes.Br, wholeArray);
+            il.MarkLabel(next);
+        }
+
+        if (runtime.TypedArrays.Implementation is { } arrays)
+        {
+            var next = il.DefineLabel();
+            var attached = il.DefineLabel();
+            var input = TestInput(arrays.BaseType, next);
+            il.Emit(OpCodes.Ldloc, input);
+            il.Emit(OpCodes.Call, arrays.IsDetached);
+            il.Emit(OpCodes.Brfalse, attached);
+            // Node treats a detached view as an empty byte range.
+            il.Emit(OpCodes.Ldc_I4_0);
+            il.Emit(OpCodes.Newarr, _types.Byte);
+            il.Emit(OpCodes.Br, wholeArray);
+            il.MarkLabel(attached);
+            il.Emit(OpCodes.Ldarg_1);
+            il.Emit(OpCodes.Ldloc, input);
+            il.Emit(OpCodes.Callvirt, arrays.ByteOffsetGetter);
+            il.Emit(OpCodes.Stind_I4);
+            il.Emit(OpCodes.Ldarg_2);
+            il.Emit(OpCodes.Ldloc, input);
+            il.Emit(OpCodes.Callvirt, arrays.ByteLengthGetter);
+            il.Emit(OpCodes.Stind_I4);
+            il.Emit(OpCodes.Ldloc, input);
+            il.Emit(OpCodes.Callvirt, arrays.GetBuffer);
+            il.Emit(OpCodes.Ret);
+            il.MarkLabel(next);
+        }
+
+        il.Emit(OpCodes.Ldarg_0);
+        il.Emit(OpCodes.Call, buffer.BytesOf);
+        il.MarkLabel(wholeArray);
+        var data = il.DeclareLocal(_types.ByteArray);
+        il.Emit(OpCodes.Stloc, data);
+        il.Emit(OpCodes.Ldarg_1);
+        il.Emit(OpCodes.Ldc_I4_0);
+        il.Emit(OpCodes.Stind_I4);
+        il.Emit(OpCodes.Ldarg_2);
+        il.Emit(OpCodes.Ldloc, data);
+        il.Emit(OpCodes.Ldlen);
+        il.Emit(OpCodes.Conv_I4);
+        il.Emit(OpCodes.Stind_I4);
+        il.Emit(OpCodes.Ldloc, data);
+        il.Emit(OpCodes.Ret);
+        return method;
+
+        LocalBuilder TestInput(Type type, Label next)
+        {
+            var input = il.DeclareLocal(type);
+            il.Emit(OpCodes.Ldarg_0);
+            il.Emit(OpCodes.Isinst, type);
+            il.Emit(OpCodes.Stloc, input);
+            il.Emit(OpCodes.Ldloc, input);
+            il.Emit(OpCodes.Brfalse, next);
+            return input;
+        }
+    }
+
+    private void EmitBufferIsUtf8Ascii(TypeBuilder typeBuilder, EmittedBufferRuntime buffer, MethodBuilder validationBytes)
+    {
         var roSpanByte = typeof(ReadOnlySpan<byte>);
-        var roSpanOp = roSpanByte.GetMethod("op_Implicit", [byteArr])!;
+        var fromRange = roSpanByte.GetConstructor([_types.ByteArray, _types.Int32, _types.Int32])!;
         var utf8IsValid = typeof(System.Text.Unicode.Utf8).GetMethod("IsValid", [roSpanByte])!;
         var asciiIsValid = typeof(System.Text.Ascii).GetMethod("IsValid", [roSpanByte])!;
 
@@ -395,9 +540,15 @@ public partial class RuntimeEmitter
                 _types.Object, [_types.Object]);
             store(method);
             var il = method.GetILGenerator();
+            var offset = il.DeclareLocal(_types.Int32);
+            var length = il.DeclareLocal(_types.Int32);
             il.Emit(OpCodes.Ldarg_0);
-            il.Emit(OpCodes.Call, buffer.BytesOf);
-            il.Emit(OpCodes.Call, roSpanOp);
+            il.Emit(OpCodes.Ldloca, offset);
+            il.Emit(OpCodes.Ldloca, length);
+            il.Emit(OpCodes.Call, validationBytes);
+            il.Emit(OpCodes.Ldloc, offset);
+            il.Emit(OpCodes.Ldloc, length);
+            il.Emit(OpCodes.Newobj, fromRange);
             il.Emit(OpCodes.Call, isValid);
             il.Emit(OpCodes.Box, _types.Boolean);
             il.Emit(OpCodes.Ret);

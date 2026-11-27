@@ -1,4 +1,5 @@
 using SharpTS.Runtime.Types;
+using SharpTS.Runtime.Exceptions;
 using Interp = SharpTS.Execution.Interpreter;
 
 namespace SharpTS.Runtime.BuiltIns.Modules.Interpreter;
@@ -31,8 +32,8 @@ public static class BufferModuleInterpreter
             ["resolveObjectURL"] = BuiltInMethod.CreateV2("resolveObjectURL", 1, ResolveObjectURL),
 
             // Base64 (also exposed as globals atob/btoa)
-            ["atob"] = BuiltInMethod.CreateV2("atob", 1, Atob),
-            ["btoa"] = BuiltInMethod.CreateV2("btoa", 1, Btoa),
+            ["atob"] = Interp.GetIntrinsicGlobalFunction(BuiltInNames.Atob),
+            ["btoa"] = Interp.GetIntrinsicGlobalFunction(BuiltInNames.Btoa),
 
             // Validation helpers
             ["isUtf8"] = BuiltInMethod.CreateV2("isUtf8", 1, IsUtf8),
@@ -74,33 +75,29 @@ public static class BufferModuleInterpreter
         return bytes;
     }
 
-    private static RuntimeValue Atob(Interp interpreter, RuntimeValue receiver, ReadOnlySpan<RuntimeValue> args)
-    {
-        if (args.Length == 0)
-            throw new Exception("atob requires an argument");
-        return RuntimeValue.FromString(BufferModuleHelpers.Atob(args[0].ToObject()?.ToString() ?? ""));
-    }
-
-    private static RuntimeValue Btoa(Interp interpreter, RuntimeValue receiver, ReadOnlySpan<RuntimeValue> args)
-    {
-        if (args.Length == 0)
-            throw new Exception("btoa requires an argument");
-        return RuntimeValue.FromString(BufferModuleHelpers.Btoa(args[0].ToObject()?.ToString() ?? ""));
-    }
-
     private static RuntimeValue IsUtf8(Interp interpreter, RuntimeValue receiver, ReadOnlySpan<RuntimeValue> args)
     {
         if (args.Length == 0)
             throw new Exception("isUtf8 requires a Buffer or TypedArray argument");
-        return RuntimeValue.FromBoolean(BufferModuleHelpers.IsUtf8(ToBytes(args[0], "isUtf8")));
+        return RuntimeValue.FromBoolean(BufferModuleHelpers.IsUtf8(ValidationBytes(args[0], "isUtf8")));
     }
 
     private static RuntimeValue IsAscii(Interp interpreter, RuntimeValue receiver, ReadOnlySpan<RuntimeValue> args)
     {
         if (args.Length == 0)
             throw new Exception("isAscii requires a Buffer or TypedArray argument");
-        return RuntimeValue.FromBoolean(BufferModuleHelpers.IsAscii(ToBytes(args[0], "isAscii")));
+        return RuntimeValue.FromBoolean(BufferModuleHelpers.IsAscii(ValidationBytes(args[0], "isAscii")));
     }
+
+    private static ReadOnlySpan<byte> ValidationBytes(RuntimeValue value, string method) => value.ToObject() switch
+    {
+        SharpTSArrayBuffer { IsDetached: true } => throw new ThrowException(new SharpTSError(
+            BufferModuleHelpers.DetachedValidationMessage) { Code = BufferModuleHelpers.DetachedValidationCode }),
+        SharpTSArrayBuffer buffer => buffer.AsSpan(),
+        SharpTSSharedArrayBuffer buffer => buffer.AsSpan(),
+        SharpTSTypedArray view => view.Buffer.AsSpan(view.ByteOffset, view.ByteLength),
+        _ => ToBytes(value, method),
+    };
 
     private static RuntimeValue Transcode(Interp interpreter, RuntimeValue receiver, ReadOnlySpan<RuntimeValue> args)
     {

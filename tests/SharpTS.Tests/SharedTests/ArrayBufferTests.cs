@@ -63,7 +63,53 @@ public class ArrayBufferTests
         Assert.Equal("true true\ntrue true\ntrue\ntrue\n", TestHarness.RunUnchecked(source, mode));
     }
 
+    [Theory, ModeData]
+    public void ArrayBuffer_PrototypeCanBeReplacedAndRestored(ExecutionMode mode)
+    {
+        const string source = """
+            const value = new ArrayBuffer(4);
+            const original = ArrayBuffer.prototype;
+            const replacement = { get label() { return this === value ? 'replacement' : 'wrong'; } };
+            console.log(Reflect.setPrototypeOf(value, replacement), Reflect.getPrototypeOf(value) === replacement);
+            console.log(value.label, value.byteLength === undefined, typeof value.slice);
+            console.log(Reflect.setPrototypeOf(value, value), Object.getPrototypeOf(value) === replacement);
+            console.log(Reflect.setPrototypeOf(value, null), Object.getPrototypeOf(value) === null);
+            console.log(Object.setPrototypeOf(value, original) === value, value.byteLength);
+            Reflect.preventExtensions(value);
+            console.log(Reflect.setPrototypeOf(value, original), Reflect.setPrototypeOf(value, null));
+            """;
+        Assert.Equal("true true\nreplacement true undefined\nfalse true\ntrue true\ntrue 4\ntrue false\n",
+            TestHarness.RunUnchecked(source, mode));
+    }
+
     #region ByteLength Property Tests
+
+    [Theory, ModeData]
+    public void ArrayBuffer_PrototypeExposesTheIntrinsicDescriptors(ExecutionMode mode)
+    {
+        const string source = """
+            const value = new ArrayBuffer(4);
+            const prototype = ArrayBuffer.prototype;
+            console.log(Object.hasOwn(prototype, 'byteLength'), Object.hasOwn(prototype, 'slice'));
+            console.log(value.constructor === ArrayBuffer, value.slice === prototype.slice);
+            const length = Object.getOwnPropertyDescriptor(prototype, 'byteLength');
+            console.log(length.get.name, length.enumerable, length.configurable,
+                length.get.call(value), Reflect.get(prototype, 'byteLength', value));
+            const slice = Object.getOwnPropertyDescriptor(prototype, 'slice');
+            console.log(slice.value.length, slice.writable, slice.enumerable, slice.configurable);
+            console.log(slice.value.call(value, 1, 3).byteLength, value.slice(0, null).byteLength,
+                value.slice(0, Infinity).byteLength, value.slice().byteLength);
+            for (const member of [length.get, slice.value]) {
+                try { member.call({}); }
+                catch (error) { console.log(error instanceof TypeError); }
+            }
+            prototype.slice = function () { return this === value; };
+            console.log(value.slice(), delete prototype.slice, typeof value.slice);
+            prototype.slice = slice.value;
+            """;
+        Assert.Equal("true true\ntrue true\nget byteLength false true 4 4\n2 true false true\n2 0 4 4\n" +
+            "true\ntrue\ntrue true undefined\n", TestHarness.RunUnchecked(source, mode));
+    }
 
     [Theory, ModeData]
     public void ArrayBuffer_ByteLength_ReturnsCorrectValue(ExecutionMode mode)

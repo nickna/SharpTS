@@ -25,6 +25,10 @@ public static class BufferModuleHelpers
     internal const string AtobWhitespace = " \t\n\f\r";
     internal const string InvalidCharacterErrorName = "InvalidCharacterError";
     internal const string InvalidCharacterMessage = "Invalid character";
+    internal const string MissingInputCode = "ERR_MISSING_ARGS";
+    internal const string MissingInputMessage = "The \"input\" argument must be specified";
+    internal const string DetachedValidationCode = "ERR_INVALID_STATE";
+    internal const string DetachedValidationMessage = "Cannot validate on a detached buffer";
 
     /// <summary>Decodes forgiving Base64 into a Latin-1 binary string.</summary>
     public static string Atob(string data)
@@ -62,10 +66,14 @@ public static class BufferModuleHelpers
     }
 
     /// <summary>Whether <paramref name="bytes"/> is well-formed UTF-8.</summary>
-    public static bool IsUtf8(byte[] bytes) => System.Text.Unicode.Utf8.IsValid(bytes);
+    public static bool IsUtf8(byte[] bytes) => IsUtf8(bytes.AsSpan());
+
+    internal static bool IsUtf8(ReadOnlySpan<byte> bytes) => System.Text.Unicode.Utf8.IsValid(bytes);
 
     /// <summary>Whether every byte of <paramref name="bytes"/> is in the ASCII range.</summary>
-    public static bool IsAscii(byte[] bytes) => System.Text.Ascii.IsValid(bytes);
+    public static bool IsAscii(byte[] bytes) => IsAscii(bytes.AsSpan());
+
+    internal static bool IsAscii(ReadOnlySpan<byte> bytes) => System.Text.Ascii.IsValid(bytes);
 
     /// <summary>
     /// transcode(source, fromEnc, toEnc): re-encodes bytes from one supported Buffer

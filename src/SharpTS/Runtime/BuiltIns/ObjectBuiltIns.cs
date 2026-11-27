@@ -2779,6 +2779,7 @@ public static partial class ObjectBuiltIns
         SharpTSSymbolPrototype => interp?.GetObjectPrototype(),
         SharpTSTypedArray { HasExplicitPrototype: true } typedArray => typedArray.ExplicitPrototype,
         SharpTSTypedArray typedArray => interp?.GetTypedArrayPrototype(typedArray.TypeName),
+        SharpTSArrayBuffer { HasExplicitPrototype: true } arrayBuffer => arrayBuffer.ExplicitPrototype,
         SharpTSArrayBuffer => interp?.GetArrayBufferPrototype(),
         // These native carriers do not yet materialize their individual
         // prototype objects. Their conceptual chains still reach Object.prototype.
@@ -2911,6 +2912,13 @@ public static partial class ObjectBuiltIns
                 if (!PropertyDescriptorStore.IsExtensible(typedArray)) return false;
                 if (WouldCreatePrototypeCycle(interpreter, typedArray, proto)) return false;
                 typedArray.SetExplicitPrototype(proto);
+                return true;
+
+            case SharpTSArrayBuffer arrayBuffer:
+                if (ReferenceEquals(PrototypeOf(interpreter, arrayBuffer), proto)) return true;
+                if (!arrayBuffer.OwnProperties.IsExtensible || WouldCreatePrototypeCycle(interpreter, arrayBuffer, proto))
+                    return false;
+                arrayBuffer.SetExplicitPrototype(proto);
                 return true;
 
             case SharpTSObject obj:

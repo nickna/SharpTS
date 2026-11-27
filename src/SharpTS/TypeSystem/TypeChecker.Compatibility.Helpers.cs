@@ -1,5 +1,6 @@
 using SharpTS.Runtime.BuiltIns;
 using SharpTS.Parsing;
+using SharpTS.TypeSystem.Exceptions;
 using System.Collections.Frozen;
 
 namespace SharpTS.TypeSystem;
@@ -439,7 +440,7 @@ public partial class TypeChecker
         if (FailsWeakTypeCheck(target, source))
             return "TS2559";
 
-        int missingMemberCount = MissingRequiredMemberCount(target, source);
+        int missingMemberCount = MissingRequiredMemberNames(target, source).Count();
         if (missingMemberCount > 0)
             return missingMemberCount == 1 ? "TS2741" : "TS2739";
         if (source is TypeInfo.InstantiatedGeneric { GenericDefinition: TypeInfo.GenericClass } specialized
@@ -448,12 +449,31 @@ public partial class TypeChecker
         return "TS2322";
     }
 
-    /// <summary>The number of required target members absent from an object-like source.</summary>
-    private int MissingRequiredMemberCount(TypeInfo target, TypeInfo source)
+    private TypeMismatchException CreateAssignmentMismatch(TypeInfo target, TypeInfo source, int line)
+    {
+        string code = AssignmentDiagnosticCode(target, source);
+        return DescribeMissingQualifiedMember(target, source, code) is { } message
+            ? new TypeMismatchException(message, target, source, line, tsCode: code)
+            : new TypeMismatchException(target, source, line, tsCode: code);
+    }
+
+    private string? DescribeMissingQualifiedMember(TypeInfo target, TypeInfo source, string code)
+    {
+        if (code != "TS2741" || (QualifiedInterfaceNames.Get(target) is null && QualifiedInterfaceNames.Get(source) is null)
+            || MissingRequiredMemberNames(target, source).FirstOrDefault() is not { } member)
+            return null;
+
+        string sourceName = QualifiedInterfaceNames.Display(source, bareInterfaceName: true);
+        string targetName = QualifiedInterfaceNames.Display(target, bareInterfaceName: true);
+        return $"Property '{member}' is missing in type '{sourceName}' but required in type '{targetName}'.";
+    }
+
+    /// <summary>Required target members absent from an object-like source.</summary>
+    private IEnumerable<string> MissingRequiredMemberNames(TypeInfo target, TypeInfo source)
     {
         if (source is not (TypeInfo.Record or TypeInfo.Interface or TypeInfo.Class or TypeInfo.Instance
             or TypeInfo.InstantiatedGeneric { GenericDefinition: TypeInfo.GenericClass }))
-            return 0;
+            yield break;
         HashSet<string>? hiddenStatics = null;
         if (source is TypeInfo.InstantiatedGeneric { GenericDefinition: TypeInfo.GenericClass })
         {
@@ -462,15 +482,13 @@ public partial class TypeChecker
                 .Where(member => member.Value.Access != AccessModifier.Public)
                 .Select(member => member.Key).ToHashSet(StringComparer.Ordinal);
         }
-        int count = 0;
         foreach (var name in RequiredMemberNames(target))
             if (GetMemberType(source, name) is null && hiddenStatics?.Contains(name) != true)
-                count++;
-        return count;
+                yield return name;
     }
 
     private bool MissingRequiredMember(TypeInfo target, TypeInfo source) =>
-        MissingRequiredMemberCount(target, source) > 0;
+        MissingRequiredMemberNames(target, source).Any();
 
     /// <summary>Type-parameter substitution map for a generic-class instantiation.</summary>
     private static Dictionary<string, TypeInfo> GenericClassSubs(TypeInfo.GenericClass gc, List<TypeInfo> args)

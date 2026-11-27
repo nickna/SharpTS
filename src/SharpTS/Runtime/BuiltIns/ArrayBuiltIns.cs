@@ -246,7 +246,7 @@ public static class ArrayBuiltIns
     /// Implements JavaScript's ToIntegerOrInfinity algorithm (ECMA-262 7.1.5).
     /// Converts a value to an integer, handling NaN, Infinity, and null.
     /// </summary>
-    private static int ToIntegerOrInfinityAsInt(Interpreter interpreter, object? value)
+    internal static int ToIntegerOrInfinityAsInt(Interpreter interpreter, object? value)
     {
         double integer = ToIntegerOrInfinity(interpreter, value);
         if (double.IsPositiveInfinity(integer) || integer >= int.MaxValue)

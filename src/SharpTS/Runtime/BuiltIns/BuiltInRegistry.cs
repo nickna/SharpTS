@@ -1156,23 +1156,6 @@ public sealed class BuiltInRegistry
             };
         });
 
-        // Register ArrayBuffer instance members
-        registry.RegisterInstanceType(typeof(SharpTSArrayBuffer), (instance, name) =>
-        {
-            var ab = (SharpTSArrayBuffer)instance;
-            return name switch
-            {
-                "byteLength" => (double)ab.ByteLength,
-                "slice" => BuiltInMethod.CreateV2("slice", 1, 2, (_, _, args) =>
-                {
-                    int begin = args.Length > 0 && args[0].IsNumber ? (int)args[0].AsNumberUnsafe() : 0;
-                    int? end = args.Length > 1 && args[1].IsNumber ? (int)args[1].AsNumberUnsafe() : null;
-                    return RuntimeValue.FromObject(ab.Slice(begin, end));
-                }),
-                _ => null
-            };
-        });
-
         // Register TypedArray instance members
         registry.RegisterInstanceType(typeof(SharpTSInt8Array), (instance, name) =>
             ((SharpTSTypedArray)instance).GetMember(name));
