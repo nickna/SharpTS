@@ -195,6 +195,25 @@ public class BufferTests
     }
 
     [Theory, ModeData]
+    public void Buffer_ByteLengthObservesAnArrayBufferOwnGetter(ExecutionMode mode)
+    {
+        const string source = """
+            const value = new ArrayBuffer(4);
+            const sentinel = { length: 99 };
+            let reads = 0;
+            Object.defineProperty(value, 'byteLength', {
+                configurable: true,
+                get() { reads++; return this === value ? sentinel : -1; }
+            });
+            const byteLength = Buffer.byteLength;
+            console.log(Buffer.byteLength(value) === sentinel, byteLength(value) === sentinel, reads);
+            delete value.byteLength;
+            console.log(byteLength(value), reads);
+            """;
+        Assert.Equal("true true 2\n4 2\n", TestHarness.RunUnchecked(source, mode));
+    }
+
+    [Theory, ModeData]
     public void Buffer_FromDecodesBase64Permissively(ExecutionMode mode)
     {
         const string source = """
@@ -1482,6 +1501,52 @@ public class BufferTests
 
         var output = TestHarness.Run(source, mode);
         Assert.Equal("U2hhcnBUUw==\ntrue\n", output);
+    }
+
+    [Theory, ModeData]
+    public void BufferModule_GlobalBase64HelpersAreMutableFunctionValues(ExecutionMode mode)
+    {
+        const string source = """
+            const decode = atob;
+            const encode = globalThis['btoa'];
+            console.log(typeof globalThis.atob, decode === globalThis.atob, decode.name, decode.length);
+            console.log(typeof btoa, encode === btoa, encode.name, encode.length);
+            console.log(decode('YQ'), encode('a'), encode(null));
+            const descriptor = Object.getOwnPropertyDescriptor(globalThis, 'atob');
+            console.log(descriptor.value === decode, descriptor.writable, descriptor.enumerable, descriptor.configurable);
+            globalThis.atob = value => 'replacement:' + value;
+            console.log(atob('YQ'), decode('YQ'));
+            """;
+        Assert.Equal("function true atob 1\nfunction true btoa 1\na YQ== bnVsbA==\ntrue true true true\nreplacement:YQ a\n",
+            TestHarness.RunUnchecked(source, mode));
+    }
+
+    [Theory, ModeData]
+    public void BufferModule_InvalidCharactersThrowDomException(ExecutionMode mode)
+    {
+        const string source = """
+            const D = globalThis.DOMException;
+            console.log(typeof D, D === DOMException);
+            for (const convert of [() => atob('!'), () => btoa('\u0100')]) {
+                try { convert(); console.log('accepted'); }
+                catch (error) {
+                    console.log(error instanceof D, error instanceof Error, error.constructor === D,
+                        Object.getPrototypeOf(error) === D.prototype, error.name, error.code);
+                }
+            }
+            console.log(Object.getPrototypeOf(D.prototype) === Error.prototype, D.INVALID_CHARACTER_ERR);
+            const manual = new D(null, 'AbortError');
+            const readCode = Object.getOwnPropertyDescriptor(D.prototype, 'code').get;
+            console.log(manual instanceof D, manual.name, manual.message === 'null', readCode.call(manual));
+            console.log(Object.prototype.toString.call(manual), D.prototype[Symbol.toStringTag]);
+            console.log(new D().name, new D().code);
+            try { readCode.call({}); }
+            catch (error) { console.log(error instanceof TypeError); }
+            """;
+        const string branded = "true true true true InvalidCharacterError 5\n";
+        Assert.Equal("function true\n" + branded + branded +
+            "true 5\ntrue AbortError true 20\n[object DOMException] DOMException\nError 0\ntrue\n",
+            TestHarness.RunUnchecked(source, mode));
     }
 
     [Theory, ModeData]

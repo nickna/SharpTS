@@ -50,7 +50,7 @@ public sealed class EmittedErrorRuntimeTests
         var first = new EmittedRuntime(); var second = new EmittedRuntime();
         Assert.NotSame(first.Errors, second.Errors); Assert.False(first.Errors.IsComplete);
         Assert.Null(typeof(EmittedRuntime).GetProperty(nameof(EmittedRuntime.Errors))!.SetMethod);
-        Assert.Equal(68, Handles.Length);
+        Assert.Equal(72, Handles.Length);
     }
 
     [Theory]
@@ -335,7 +335,7 @@ public sealed class EmittedErrorRuntimeTests
     }
     private static void Expect<T>(Action action) where T : Exception => Assert.IsType<T>(Assert.Throws<TargetInvocationException>(action).InnerException);
     private static PersistedAssemblyBuilder NewAssembly() => new(new AssemblyName($"error_runtime_{Guid.NewGuid():N}"), typeof(object).Assembly);
-    private static RuntimeFeatureSet Detect(bool promise) => new RuntimeFeatureDetector().Detect(new Parser(new Lexer(promise ? "Promise.resolve(1);" : "const n = 1;").ScanTokens()).ParseOrThrow());
+    private static RuntimeFeatureSet Detect(bool promise) => new RuntimeFeatureDetector().Detect(new Parser(new Lexer(promise ? "DOMException; Promise.resolve(1);" : "DOMException;").ScanTokens()).ParseOrThrow());
     private static object? Call(Type type, string name, params object?[] values) => type.GetMethod(name, Members)!.Invoke(null, values);
     private static Assembly SaveVerifyLoad(PersistedAssemblyBuilder builder)
     {

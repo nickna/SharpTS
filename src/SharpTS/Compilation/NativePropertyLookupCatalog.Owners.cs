@@ -17,6 +17,7 @@ internal sealed partial class NativePropertyLookupCatalog
             runtime.Errors.Type, runtime.Errors.TypeErrorType, runtime.Errors.RangeErrorType,
             runtime.Errors.ReferenceErrorType, runtime.Errors.SyntaxErrorType, runtime.Errors.URIErrorType,
             runtime.Errors.EvalErrorType, runtime.Errors.AggregateErrorType,
+            runtime.Errors.HasDomException ? runtime.Errors.DomExceptionType : null,
             runtime.Dates.Implementation?.Type, runtime.RegExps.Implementation?.Type, runtime.Buffer?.Type,
             runtime.MessageChannels.Type, runtime.MessageChannels.Port.Type,
             runtime.BroadcastChannel?.Type, runtime.Zlib?.TransformCtor.DeclaringType,

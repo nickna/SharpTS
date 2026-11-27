@@ -27,6 +27,26 @@ public sealed class DataViewBufferTypeTests
     }
 
     [Theory]
+    [InlineData("function accept(buffer: ArrayBuffer): void {} const original = new ArrayBuffer(1); accept(original.slice());")]
+    [InlineData("const copy: ArrayBuffer = new ArrayBuffer(4).slice(1); function copyOf(buffer: ArrayBuffer): ArrayBuffer { return buffer.slice(); }")]
+    [InlineData("function copyOf(buffer?: ArrayBuffer): ArrayBuffer | undefined { return buffer?.slice(); }")]
+    public void ArrayBufferSliceResultsFollowTheirCompletedDeclaration(string source)
+    {
+        Assert.Empty(CheckWithLibraries(source));
+    }
+
+    [Fact]
+    public void ArrayBufferSliceResultIsNotAssignableToAnUnrelatedNamespacedInterface()
+    {
+        const string source = """
+            namespace Local { export interface ArrayBuffer { marker: true; } }
+            const value: Local.ArrayBuffer = new ArrayBuffer(4).slice();
+            """;
+        var diagnostic = Assert.Single(CheckWithLibraries(source));
+        Assert.Contains("not assignable", diagnostic.Message);
+    }
+
+    [Theory]
     [InlineData("new DataView(1);", "TS2769")]
     [InlineData("new DataView(new ArrayBuffer(8), 'offset');", "TS2769")]
     [InlineData("new DataView();", "TS2769")]

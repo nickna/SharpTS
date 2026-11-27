@@ -81,7 +81,10 @@ public partial class RuntimeEmitter
                 inputs.UndefinedType
             )
         );
-        EmitCreateErrorFromTypeOrNull(errors);
+        var createDomException = errors.HasDomException
+            ? EmitDomExceptionFactory(typeBuilder, errors, inputs.StringCoercion.ToJsString, inputs.UndefinedType)
+            : null;
+        EmitCreateErrorFromTypeOrNull(errors, createDomException);
     }
 
     /// <summary>
@@ -90,7 +93,7 @@ public partial class RuntimeEmitter
     /// constructors directly, losing optional arguments and own descriptors.
     /// Returns null for non-error types so the caller can keep its normal path.
     /// </summary>
-    private void EmitCreateErrorFromTypeOrNull(EmittedErrorRuntime errors)
+    private void EmitCreateErrorFromTypeOrNull(EmittedErrorRuntime errors, MethodBuilder? createDomException)
     {
         var method = errors.CreateErrorFromTypeOrNull;
 
@@ -100,7 +103,7 @@ public partial class RuntimeEmitter
         var typeEquality = _types.GetMethod(
             _types.Type, "op_Equality", _types.Type, _types.Type);
 
-        void EmitCase(Type errorType, string jsName)
+        void EmitCase(Type errorType, string? jsName, MethodBuilder factory)
         {
             var next = il.DefineLabel();
             il.Emit(OpCodes.Ldarg_0);
@@ -108,21 +111,23 @@ public partial class RuntimeEmitter
             il.Emit(OpCodes.Call, getTypeFromHandle);
             il.Emit(OpCodes.Call, typeEquality);
             il.Emit(OpCodes.Brfalse, next);
-            il.Emit(OpCodes.Ldstr, jsName);
+            if (jsName is not null) il.Emit(OpCodes.Ldstr, jsName);
             il.Emit(OpCodes.Ldarg_1);
-            il.Emit(OpCodes.Call, errors.CreateError);
+            il.Emit(OpCodes.Call, factory);
             il.Emit(OpCodes.Ret);
             il.MarkLabel(next);
         }
 
-        EmitCase(errors.Type, "Error");
-        EmitCase(errors.TypeErrorType, "TypeError");
-        EmitCase(errors.RangeErrorType, "RangeError");
-        EmitCase(errors.ReferenceErrorType, "ReferenceError");
-        EmitCase(errors.SyntaxErrorType, "SyntaxError");
-        EmitCase(errors.URIErrorType, "URIError");
-        EmitCase(errors.EvalErrorType, "EvalError");
-        EmitCase(errors.AggregateErrorType, "AggregateError");
+        EmitCase(errors.Type, "Error", errors.CreateError);
+        EmitCase(errors.TypeErrorType, "TypeError", errors.CreateError);
+        EmitCase(errors.RangeErrorType, "RangeError", errors.CreateError);
+        EmitCase(errors.ReferenceErrorType, "ReferenceError", errors.CreateError);
+        EmitCase(errors.SyntaxErrorType, "SyntaxError", errors.CreateError);
+        EmitCase(errors.URIErrorType, "URIError", errors.CreateError);
+        EmitCase(errors.EvalErrorType, "EvalError", errors.CreateError);
+        EmitCase(errors.AggregateErrorType, "AggregateError", errors.CreateError);
+        if (createDomException is not null)
+            EmitCase(errors.DomExceptionType, null, createDomException);
         il.Emit(OpCodes.Ldnull);
         il.Emit(OpCodes.Ret);
         errors.MarkCreateFromTypeBodyEmitted();

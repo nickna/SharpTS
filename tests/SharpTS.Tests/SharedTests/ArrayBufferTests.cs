@@ -49,6 +49,20 @@ public class ArrayBufferTests
 
     #endregion
 
+    [Theory, ModeData]
+    public void ArrayBuffer_UsesItsIntrinsicPrototype(ExecutionMode mode)
+    {
+        const string source = """
+            const value = new ArrayBuffer(4);
+            const prototype = ArrayBuffer.prototype;
+            console.log(Object.getPrototypeOf(value) === prototype, Reflect.getPrototypeOf(value) === prototype);
+            console.log(prototype.constructor === ArrayBuffer, Object.getPrototypeOf(prototype) === Object.prototype);
+            console.log(Object.prototype.isPrototypeOf.call(prototype, value));
+            console.log(Object.getPrototypeOf(value.slice(1)) === prototype);
+            """;
+        Assert.Equal("true true\ntrue true\ntrue\ntrue\n", TestHarness.RunUnchecked(source, mode));
+    }
+
     #region ByteLength Property Tests
 
     [Theory, ModeData]

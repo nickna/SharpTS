@@ -47,7 +47,8 @@ public partial class Interpreter
     /// The names of every global constant and built-in singleton, for REPL autocomplete.
     /// </summary>
     internal static IEnumerable<string> GlobalNames
-        => _globalConstants.Keys.Concat([BuiltInNames.Console, BuiltInNames.Intl]).Concat(BuiltInNames.ErrorTypeNames);
+        => _globalConstants.Keys.Concat([BuiltInNames.Console, BuiltInNames.Intl, SharpTSDomException.TypeName])
+            .Concat(BuiltInNames.ErrorTypeNames);
 
     // The process-wide RegExp constructor singleton (a SharpTSBuiltInConstructor),
     // resolved once from the static globals table. ECMA-262 §22.2.6.1 requires
@@ -146,6 +147,7 @@ public partial class Interpreter
             BuiltInNames.IsNaN, BuiltInNames.IsFinite,
             BuiltInNames.StructuredClone,
             BuiltInNames.EncodeURIComponent, BuiltInNames.DecodeURIComponent,
+            BuiltInNames.Atob, BuiltInNames.Btoa,
             BuiltInNames.SetTimeout, BuiltInNames.ClearTimeout,
             BuiltInNames.SetInterval, BuiltInNames.ClearInterval,
             BuiltInNames.SetImmediate, BuiltInNames.ClearImmediate,
@@ -159,7 +161,8 @@ public partial class Interpreter
                     {
                         BuiltInNames.ParseInt or BuiltInNames.StructuredClone => 2,
                         BuiltInNames.ParseFloat or BuiltInNames.BigInt or BuiltInNames.Eval
-                            or BuiltInNames.EncodeURIComponent or BuiltInNames.DecodeURIComponent or BuiltInNames.QueueMicrotask => 1,
+                            or BuiltInNames.EncodeURIComponent or BuiltInNames.DecodeURIComponent or BuiltInNames.QueueMicrotask
+                            or BuiltInNames.Atob or BuiltInNames.Btoa => 1,
                         _ => 0
                     });
         }
@@ -521,7 +524,7 @@ public partial class Interpreter
     /// </summary>
     internal bool TryGetRealmIntrinsic(string name, out object? value)
     {
-        if (BuiltInNames.IsErrorTypeName(name))
+        if (BuiltInNames.IsErrorTypeName(name) || name == SharpTSDomException.TypeName)
         {
             value = GetErrorClass(name);
             return true;
@@ -779,6 +782,7 @@ public partial class Interpreter
             _errorClasses = new Dictionary<string, Runtime.Types.SharpTSErrorClass>(StringComparer.Ordinal)
             {
                 [BuiltInNames.Error] = errorClass,
+                [SharpTSDomException.TypeName] = new SharpTSDomExceptionClass(errorClass),
             };
             foreach (var name in BuiltInNames.ErrorTypeNames)
             {
@@ -813,6 +817,8 @@ public partial class Interpreter
     private SharpTSGlobalThis CreateRealmGlobalThis()
     {
         var globalThis = new SharpTSGlobalThis(ResolveGlobalObjectIntrinsic);
+        globalThis.DefineProperty(SharpTSDomException.TypeName, new SharpTSPropertyDescriptor(
+            value: GetErrorClass(SharpTSDomException.TypeName), writable: true, configurable: true));
         globalThis.DefineProperty(BuiltInNames.Intl, new SharpTSPropertyDescriptor
         {
             Value = GetIntlNamespace(), HasValue = true,
@@ -832,11 +838,12 @@ public partial class Interpreter
             HasSet = true, Set = setter, RawSet = setter,
             HasEnumerable = true, HasConfigurable = true, Configurable = true
         });
-        // Node timer globals are enumerable, mutable own data slots. Use the
-        // same actual function values as bare-name lookup, so descriptors,
+        // Node timer and Base64 globals are enumerable, mutable own data slots.
+        // Use the same function values as bare-name lookup, so descriptors,
         // replacement and deletion share the global object's storage.
         foreach (string name in new[]
         {
+            BuiltInNames.Atob, BuiltInNames.Btoa,
             BuiltInNames.SetTimeout, BuiltInNames.ClearTimeout,
             BuiltInNames.SetInterval, BuiltInNames.ClearInterval,
             BuiltInNames.SetImmediate, BuiltInNames.ClearImmediate,

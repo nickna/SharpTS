@@ -22,6 +22,8 @@ public partial class TypeChecker
         ForgetSourceMemberCall(call);
         TypeInfo result = CheckCallCore(call, contextualResultType);
         result = ApplyImmediateArrowValueFlow(call, result);
+        // A selected signature may retain the original shape of a merged declaration.
+        result = RefreshCompletedInterfaceBinding(result);
         if (OptionalCallCanShortCircuit(call))
         {
             result = CreateUnion(result, TypeInfo.Undefined.Shared);

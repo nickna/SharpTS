@@ -2614,6 +2614,8 @@ public partial class RuntimeEmitter
             EmitErrorTypeBranch(inputs.Errors.SyntaxErrorType,    inputs.Errors.SyntaxErrorPrototypePopulate,    inputs.Errors.SyntaxErrorPrototype);
             EmitErrorTypeBranch(inputs.Errors.URIErrorType,       inputs.Errors.URIErrorPrototypePopulate,       inputs.Errors.URIErrorPrototype);
             EmitErrorTypeBranch(inputs.Errors.EvalErrorType,      inputs.Errors.EvalErrorPrototypePopulate,      inputs.Errors.EvalErrorPrototype);
+            if (inputs.Errors.HasDomException)
+                EmitErrorTypeBranch(inputs.Errors.DomExceptionType, inputs.Errors.DomExceptionPrototypePopulate, inputs.Errors.DomExceptionPrototype);
             EmitErrorTypeBranch(inputs.Errors.AggregateErrorType, inputs.Errors.AggregateErrorPrototypePopulate, inputs.Errors.AggregateErrorPrototype);
             // Base Error last (its Type token is distinct from the subclass tokens).
             EmitErrorTypeBranch(inputs.Errors.Type, inputs.Errors.PrototypePopulate, inputs.Errors.Prototype);

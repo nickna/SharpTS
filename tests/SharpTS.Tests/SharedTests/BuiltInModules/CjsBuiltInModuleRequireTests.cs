@@ -46,6 +46,26 @@ public class CjsBuiltInModuleRequireTests
     }
 
     [Theory, ModeData]
+    public void Cjs_Require_Buffer_ValidationTranscodeAndAllocationHelpers(ExecutionMode mode)
+    {
+        var files = new Dictionary<string, string>
+        {
+            ["main.cjs"] = """
+                const buffer = require('node:buffer');
+                const { isUtf8, isAscii, transcode, SlowBuffer } = buffer;
+                console.log(typeof isUtf8, typeof isAscii, typeof transcode, typeof SlowBuffer);
+                const text = buffer.Buffer.from('héllo');
+                console.log(buffer.isUtf8(text), isUtf8(buffer.Buffer.from([255])), isAscii(text));
+                console.log(isAscii(buffer.Buffer.from('hello')), transcode(text, 'utf8', 'latin1').toString('hex'));
+                const result = SlowBuffer(3);
+                console.log(Buffer.isBuffer(result), result.length);
+                """
+        };
+        Assert.Equal("function function function function\ntrue false false\ntrue 68e96c6c6f\ntrue 3\n",
+            TestHarness.RunModules(files, "main.cjs", mode));
+    }
+
+    [Theory, ModeData]
     public void Cjs_Require_Assert_Ok(ExecutionMode mode)
     {
         var files = new Dictionary<string, string>

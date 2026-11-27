@@ -120,6 +120,7 @@ public sealed partial class RuntimeFeatureDetector
             UsesDate = false,
             UsesRegExp = false,
             UsesBuffer = false,
+            UsesDomException = false,
             UsesBigInt = false,
             UsesOs = false,
             UsesChildProcess = false,
@@ -231,6 +232,10 @@ public sealed partial class RuntimeFeatureDetector
         {
             _set.UsesBuffer = true;
         }
+        // Base64 errors and dynamic access to the global object can expose
+        // DOMException without a direct reference to its constructor.
+        _set.UsesDomException |= _set.UsesBuffer || _hasPossibleGlobalObjectSource
+            || _set.UsesSourceExecution || _set.UsesVm;
         // WebCrypto (#1063): subtle results are $ArrayBuffer and getRandomValues
         // consumes $TypedArray views, so crypto implies both base types.
         if (_set.UsesCrypto)
@@ -429,6 +434,7 @@ public sealed partial class RuntimeFeatureDetector
                 _set.UsesObjectIntegrityMutation = true;
                 if (name is "eval" or "Function")
                 {
+                    _set.UsesDomException = true;
                     // Callable discovery can expose helper calls from grouped,
                     // indirect or aliased literal source after this feature walk.
                     _set.UsesArrayBinding = true;
@@ -621,11 +627,12 @@ public sealed partial class RuntimeFeatureDetector
             // `new Buffer(...)` (deprecated but still supported), and bare
             // value-form access.
             case "Buffer":
-            // Global atob/btoa compile to $Runtime.BufferAtob/BufferBtoa, which compose
-            // the $Buffer helpers — ensure $Buffer + the buffer module methods are emitted.
+            // Global atob/btoa share the emitted Base64 helpers with node:buffer.
             case "atob":
             case "btoa":
                 _set.UsesBuffer = true; break;
+            case "DOMException":
+                _set.UsesDomException = true; break;
 
             // BigInt — `BigInt(123)` constructor calls, `BigInt.asIntN(...)`,
             // and bare value-form access. The `123n` literal path is detected
@@ -1502,6 +1509,8 @@ public sealed partial class RuntimeFeatureDetector
                 break;
 
             case Expr.Assign asg:
+                if (asg.Name.Lexeme == "DOMException")
+                    _set.UsesDomException = true;
                 if (asg.Name.Lexeme == "Array")
                     _set.UsesArrayConstructorMutation = true;
                 if (asg.Name.Lexeme == "Date")
@@ -1532,6 +1541,8 @@ public sealed partial class RuntimeFeatureDetector
                 VisitExpr(asg.Value);
                 break;
             case Expr.CompoundAssign ca:
+                if (ca.Name.Lexeme == "DOMException")
+                    _set.UsesDomException = true;
                 if (ca.Name.Lexeme == "Number")
                 {
                     _set.UsesNumberPrototypeMutation = true;
@@ -1623,6 +1634,8 @@ public sealed partial class RuntimeFeatureDetector
                 VisitExpr(csi.Value);
                 break;
             case Expr.LogicalAssign la:
+                if (la.Name.Lexeme == "DOMException")
+                    _set.UsesDomException = true;
                 if (_opaqueValueBindings.Contains(la.Name.Lexeme) || IsOpaqueCheckedBinding(la.Name))
                     MarkPotentiallyMaterialized(la.Value);
                 if (la.Name.Lexeme == "Number")

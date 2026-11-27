@@ -498,6 +498,15 @@ public partial class Interpreter
                 continue;
             }
 
+            if (current is SharpTSDomException domException)
+            {
+                if (TryReadDescriptor(domException.GetOwnPropertyDescriptor(name), receiver, out var ownValue))
+                    return ownValue;
+                if (name == "stack") return domException.Stack;
+                current = GetErrorClass(SharpTSDomException.TypeName).Prototype;
+                continue;
+            }
+
             if (current is ISharpTSOwnPropertyObject ownPropertyObject)
             {
                 if (TryReadDescriptor(ownPropertyObject.OwnProperties.GetOwnPropertyDescriptor(name),
@@ -848,6 +857,11 @@ public partial class Interpreter
                 return inputView.ReadToStringTag(receiver);
             if (current is SharpTSProxy proxy)
                 return proxy.TrapGet(symbol, this, receiver);
+            if (current is SharpTSDomException)
+            {
+                current = ObjectBuiltIns.PrototypeOf(this, current);
+                continue;
+            }
             if (TryGetPromiseConstructorSymbolProperties(current, out var intrinsicProperties))
             {
                 if (TryReadDescriptor(intrinsicProperties.GetOwnPropertyDescriptor(symbol), receiver, out var value))
@@ -1494,7 +1508,8 @@ public partial class Interpreter
             return RuntimeValue.FromBoxed(GetPropertyValue(primitiveConstructor, get.Name.Lexeme));
 
         if (obj is ISharpTSGeneratorFunctionValue or SharpTSGenerator or SharpTSAsyncGenerator
-            or SharpTSArrayIterator or SharpTSMap or SharpTSSet or SharpTSSuppressedError or SharpTSArrayBuffer)
+            or SharpTSArrayIterator or SharpTSMap or SharpTSSet or SharpTSSuppressedError or SharpTSArrayBuffer
+            or SharpTSDomException)
             return RuntimeValue.FromBoxed(GetPropertyValue(obj, get.Name.Lexeme));
 
         if (NeedsLiveFunctionPrototypeRead(obj, get.Name.Lexeme))

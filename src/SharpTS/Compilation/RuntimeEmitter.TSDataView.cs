@@ -29,8 +29,8 @@ public partial class RuntimeEmitter
         view.ArrayBufferField = typeBuilder.DefineField("_arrayBuffer", _types.Object, FieldAttributes.Private | FieldAttributes.InitOnly);
 
         // Constructor: public $DataView(object buffer, int byteOffset, int? byteLength)
-        EmitDataViewConstructor(typeBuilder, runtime);
         EmitDataViewThrowIfDetached(typeBuilder, runtime);
+        EmitDataViewConstructor(typeBuilder, runtime);
 
         // Properties: ByteLength, ByteOffset, Buffer
         EmitDataViewProperties(typeBuilder, view);
@@ -74,72 +74,50 @@ public partial class RuntimeEmitter
         il.Emit(OpCodes.Ldarg_1);
         il.Emit(OpCodes.Stfld, view.ArrayBufferField);
 
-        // Get ByteLength from buffer - try $ArrayBuffer.ByteLength property first
-        var getBufferByteLengthLabel = il.DefineLabel();
+        var arrayBuffer = runtime.RequireArrayBuffer();
+        var sharedBuffer = runtime.RequireSharedArrayBuffer();
+        var ordinaryBuffer = il.DeclareLocal(arrayBuffer.Type);
+        var supportedBuffer = il.DefineLabel();
+        var readSharedBuffer = il.DefineLabel();
         var afterByteLengthLabel = il.DefineLabel();
 
-        // Check if buffer is $ArrayBuffer
+        // Validate the owner before applying the offset and detachment checks.
         il.Emit(OpCodes.Ldarg_1);
-        il.Emit(OpCodes.Isinst, runtime.RequireArrayBuffer().Type);
-        il.Emit(OpCodes.Brfalse, getBufferByteLengthLabel);
-
-        // It's $ArrayBuffer - call get_ByteLength
+        il.Emit(OpCodes.Isinst, arrayBuffer.Type);
+        il.Emit(OpCodes.Stloc, ordinaryBuffer);
+        il.Emit(OpCodes.Ldloc, ordinaryBuffer);
+        il.Emit(OpCodes.Brtrue, supportedBuffer);
         il.Emit(OpCodes.Ldarg_1);
-        il.Emit(OpCodes.Castclass, runtime.RequireArrayBuffer().Type);
-        il.Emit(OpCodes.Callvirt, runtime.RequireArrayBuffer().ByteLengthGetter);
-        il.Emit(OpCodes.Stloc, byteLenLocal);
-
-        // Get the backing array via GetBuffer()
-        il.Emit(OpCodes.Ldarg_1);
-        il.Emit(OpCodes.Castclass, runtime.RequireArrayBuffer().Type);
-        il.Emit(OpCodes.Callvirt, runtime.RequireArrayBuffer().GetBuffer);
-        il.Emit(OpCodes.Stloc, byteArrayLocal);
-        il.Emit(OpCodes.Br, afterByteLengthLabel);
-
-        il.MarkLabel(getBufferByteLengthLabel);
-
-        // Check if buffer is $SharedArrayBuffer
-        var unsupportedBufferLabel = il.DefineLabel();
-        il.Emit(OpCodes.Ldarg_1);
-        il.Emit(OpCodes.Isinst, runtime.RequireSharedArrayBuffer().Type);
-        il.Emit(OpCodes.Brfalse, unsupportedBufferLabel);
-
-        // It's $SharedArrayBuffer
-        il.Emit(OpCodes.Ldarg_1);
-        il.Emit(OpCodes.Castclass, runtime.RequireSharedArrayBuffer().Type);
-        il.Emit(OpCodes.Callvirt, runtime.RequireSharedArrayBuffer().ByteLengthGetter);
-        il.Emit(OpCodes.Stloc, byteLenLocal);
-
-        il.Emit(OpCodes.Ldarg_1);
-        il.Emit(OpCodes.Castclass, runtime.RequireSharedArrayBuffer().Type);
-        il.Emit(OpCodes.Callvirt, runtime.RequireSharedArrayBuffer().GetBuffer);
-        il.Emit(OpCodes.Stloc, byteArrayLocal);
-        il.Emit(OpCodes.Br, afterByteLengthLabel);
-
-        il.MarkLabel(unsupportedBufferLabel);
+        il.Emit(OpCodes.Isinst, sharedBuffer.Type);
+        il.Emit(OpCodes.Brtrue, supportedBuffer);
         il.Emit(OpCodes.Ldstr, "DataView requires emitted ArrayBuffer/SharedArrayBuffer.");
         il.Emit(OpCodes.Newobj, _types.InvalidOperationExceptionCtorString);
         il.Emit(OpCodes.Throw);
 
-        il.MarkLabel(afterByteLengthLabel);
-
-        // Validate byteOffset: if (byteOffset < 0 || byteOffset > bufferByteLength) throw
-        var offsetValid1 = il.DefineLabel();
+        il.MarkLabel(supportedBuffer);
+        var offsetNonNegative = il.DefineLabel();
         il.Emit(OpCodes.Ldarg_2);
         il.Emit(OpCodes.Ldc_I4_0);
-        il.Emit(OpCodes.Bge, offsetValid1);
-        il.Emit(OpCodes.Ldstr, "RangeError: Invalid DataView offset");
-        il.Emit(OpCodes.Newobj, typeof(Exception).GetConstructor([typeof(string)])!);
-        il.Emit(OpCodes.Throw);
-        il.MarkLabel(offsetValid1);
+        il.Emit(OpCodes.Bge, offsetNonNegative);
+        GuestErrorEmitter.ThrowError(il, runtime, runtime.Errors.RangeErrorConstructor, "Invalid DataView offset");
+        il.MarkLabel(offsetNonNegative);
+
+        il.Emit(OpCodes.Ldarg_0);
+        il.Emit(OpCodes.Call, view.ThrowIfDetached);
+        il.Emit(OpCodes.Ldloc, ordinaryBuffer);
+        il.Emit(OpCodes.Brfalse, readSharedBuffer);
+        ReadBuffer(arrayBuffer.Type, arrayBuffer.ByteLengthGetter, arrayBuffer.GetBuffer);
+        il.Emit(OpCodes.Br, afterByteLengthLabel);
+
+        il.MarkLabel(readSharedBuffer);
+        ReadBuffer(sharedBuffer.Type, sharedBuffer.ByteLengthGetter, sharedBuffer.GetBuffer);
+        il.MarkLabel(afterByteLengthLabel);
 
         var offsetValid2 = il.DefineLabel();
         il.Emit(OpCodes.Ldarg_2);
         il.Emit(OpCodes.Ldloc, byteLenLocal);
         il.Emit(OpCodes.Ble, offsetValid2);
-        il.Emit(OpCodes.Ldstr, "RangeError: Invalid DataView offset");
-        il.Emit(OpCodes.Newobj, typeof(Exception).GetConstructor([typeof(string)])!);
-        il.Emit(OpCodes.Throw);
+        GuestErrorEmitter.ThrowError(il, runtime, runtime.Errors.RangeErrorConstructor, "Invalid DataView offset");
         il.MarkLabel(offsetValid2);
 
         // maxLength = bufferByteLength - byteOffset
@@ -202,6 +180,17 @@ public partial class RuntimeEmitter
         il.Emit(OpCodes.Stfld, view.ByteLengthField);
 
         il.Emit(OpCodes.Ret);
+
+        void ReadBuffer(Type type, MethodBuilder byteLengthGetter, MethodBuilder getBuffer)
+        {
+            il.Emit(OpCodes.Ldarg_1);
+            il.Emit(OpCodes.Castclass, type);
+            il.Emit(OpCodes.Dup);
+            il.Emit(OpCodes.Callvirt, byteLengthGetter);
+            il.Emit(OpCodes.Stloc, byteLenLocal);
+            il.Emit(OpCodes.Callvirt, getBuffer);
+            il.Emit(OpCodes.Stloc, byteArrayLocal);
+        }
     }
 
     private void EmitDataViewThrowIfDetached(TypeBuilder typeBuilder, EmittedRuntime runtime)

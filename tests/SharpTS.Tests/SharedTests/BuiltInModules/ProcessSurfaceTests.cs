@@ -258,6 +258,25 @@ public class ProcessSurfaceTests
     }
 
     [Theory, ModeData]
+    public void Process_EventNamesResolvesTheCurrentReceiver(ExecutionMode mode)
+    {
+        const string source = """
+            const original = process;
+            const replacement = {
+                eventNames() { return this === replacement ? ['replacement'] : ['wrong receiver']; }
+            };
+            globalThis.process = replacement;
+            console.log(process.eventNames().join(','), globalThis.process.eventNames().join(','));
+            globalThis.process = original;
+            const handler = () => {};
+            process.on('example', handler);
+            console.log(process.eventNames().includes('example'));
+            process.removeListener('example', handler);
+            """;
+        Assert.Equal("replacement replacement\ntrue\n", TestHarness.RunUnchecked(source, mode));
+    }
+
+    [Theory, ModeData]
     public void Process_Umask_GetAndSetRoundTrip(ExecutionMode mode)
     {
         var source = """

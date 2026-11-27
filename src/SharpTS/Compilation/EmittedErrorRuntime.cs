@@ -366,6 +366,36 @@ public sealed class EmittedErrorRuntime
         internal set => SetHandle(ref _aggregateErrorType, value);
     }
 
+    private Type? _domExceptionType;
+    internal bool HasDomException => _domExceptionType is not null;
+
+    public Type DomExceptionType
+    {
+        get => Require(_domExceptionType);
+        internal set => SetHandle(ref _domExceptionType, value);
+    }
+
+    private ConstructorBuilder? _domExceptionConstructor;
+    public ConstructorBuilder DomExceptionConstructor
+    {
+        get => Require(_domExceptionConstructor);
+        internal set => SetHandle(ref _domExceptionConstructor, value);
+    }
+
+    private FieldBuilder? _domExceptionPrototype;
+    public FieldBuilder DomExceptionPrototype
+    {
+        get => Require(_domExceptionPrototype);
+        internal set => SetHandle(ref _domExceptionPrototype, value);
+    }
+
+    private MethodBuilder? _domExceptionPrototypePopulate;
+    public MethodBuilder DomExceptionPrototypePopulate
+    {
+        get => Require(_domExceptionPrototypePopulate);
+        internal set => SetHandle(ref _domExceptionPrototypePopulate, value);
+    }
+
     private ConstructorBuilder? _aggregateErrorConstructor;
     public ConstructorBuilder AggregateErrorConstructor
     {
@@ -593,6 +623,14 @@ public sealed class EmittedErrorRuntime
         _ = URIErrorType;
         _ = URIErrorConstructor;
         _ = EvalErrorType;
+        if (HasDomException || _domExceptionConstructor is not null ||
+            _domExceptionPrototype is not null || _domExceptionPrototypePopulate is not null)
+        {
+            _ = DomExceptionType;
+            _ = DomExceptionConstructor;
+            _ = DomExceptionPrototype;
+            _ = DomExceptionPrototypePopulate;
+        }
         _ = EvalErrorConstructor;
         _ = AggregateErrorType;
         _ = AggregateErrorConstructor;

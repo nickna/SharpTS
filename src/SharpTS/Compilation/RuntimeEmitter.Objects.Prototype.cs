@@ -61,7 +61,8 @@ public partial class RuntimeEmitter
         MethodInfo? NativeProxyRejection,
         EmittedGuestOwnPropertyRuntime? GuestOwnProperties = null,
         EmittedVmRuntime? Vm = null,
-        EmittedTypedArrayRuntime? TypedArrays = null
+        EmittedTypedArrayRuntime? TypedArrays = null,
+        EmittedArrayBufferRuntime? ArrayBuffer = null
     );
 
     private readonly record struct ObjectSetPrototypeOfInputs(
@@ -833,6 +834,8 @@ public partial class RuntimeEmitter
         EmitErrorInstanceBranch(inputs.Errors.URIErrorType,       inputs.Errors.URIErrorPrototypePopulate,       inputs.Errors.URIErrorPrototype);
         EmitErrorInstanceBranch(inputs.Errors.EvalErrorType,      inputs.Errors.EvalErrorPrototypePopulate,      inputs.Errors.EvalErrorPrototype);
         EmitErrorInstanceBranch(inputs.Errors.AggregateErrorType, inputs.Errors.AggregateErrorPrototypePopulate, inputs.Errors.AggregateErrorPrototype);
+        if (inputs.Errors.HasDomException)
+            EmitErrorInstanceBranch(inputs.Errors.DomExceptionType, inputs.Errors.DomExceptionPrototypePopulate, inputs.Errors.DomExceptionPrototype);
 
         // Base $Error instances (plain `new Error(...)`) → Error.prototype.
         var notTSErrForProtoLabel = il.DefineLabel();
@@ -1122,6 +1125,8 @@ public partial class RuntimeEmitter
         }
         EmitNativePrototypeFallback(inputs.NativeFunctionTypes,
             inputs.FunctionPrototypePopulateMethod, inputs.FunctionPrototypeField);
+        if (inputs.ArrayBuffer is { } arrayBuffer)
+            EmitNativePrototypeFallback([arrayBuffer.Type], null, arrayBuffer.PrototypeField);
         if (inputs.TypedArrays?.Implementation is { } arrays)
         {
             var notTypedArray = il.DefineLabel();

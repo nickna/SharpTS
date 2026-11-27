@@ -48,6 +48,7 @@ public class PromiseRuntimeFeatureGatingTests(ITestOutputHelper output)
 
         Assert.DoesNotContain(types, type =>
             type.Name.Contains("Promise", StringComparison.Ordinal));
+        Assert.DoesNotContain(types, type => type.Name == "$DOMException");
         Assert.DoesNotContain(types.SelectMany(type => type.GetMethods(
                 BindingFlags.Public | BindingFlags.NonPublic | BindingFlags.Static)),
             method => method.Name.StartsWith("ArrayBinding", StringComparison.Ordinal) ||

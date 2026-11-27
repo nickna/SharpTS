@@ -16,13 +16,18 @@ public partial class RuntimeEmitter
         EmitBufferCoerceString(buffer, typeBuilder);
         EmitBufferBytesOf(typeBuilder, buffer);
         var invalidCharacterError = EmitBufferInvalidCharacterError(typeBuilder, runtime);
-        EmitBufferAtobBtoa(typeBuilder, buffer, invalidCharacterError);
-        runtime.BuiltInModules.Register("buffer", "atob", buffer.Atob);
-        runtime.BuiltInModules.Register("buffer", "btoa", buffer.Btoa);
+        EmitBufferAtobBtoa(typeBuilder, buffer, invalidCharacterError, runtime.StringCoercion.ToJsString);
         EmitBufferIsUtf8Ascii(typeBuilder, buffer);
         EmitBufferTranscode(typeBuilder, buffer);
         EmitBufferSlowBuffer(typeBuilder, buffer);
         EmitBufferModuleConstants(typeBuilder, runtime);
+
+        runtime.BuiltInModules.Register("buffer", "atob", buffer.Atob);
+        runtime.BuiltInModules.Register("buffer", "btoa", buffer.Btoa);
+        runtime.BuiltInModules.Register("buffer", "isUtf8", buffer.IsUtf8);
+        runtime.BuiltInModules.Register("buffer", "isAscii", buffer.IsAscii);
+        runtime.BuiltInModules.Register("buffer", "transcode", buffer.Transcode);
+        runtime.BuiltInModules.Register("buffer", "SlowBuffer", buffer.SlowBuffer);
     }
 
     /// <summary>
@@ -254,33 +259,16 @@ public partial class RuntimeEmitter
             _types.Exception, Type.EmptyTypes);
         var il = method.GetILGenerator();
         var errors = runtime.Errors;
-        var descriptors = runtime.DescriptorStorage;
-        var descriptor = il.DeclareLocal(descriptors.DescriptorType);
-
         il.Emit(OpCodes.Ldstr, BufferModuleHelpers.InvalidCharacterMessage);
-        il.Emit(OpCodes.Newobj, errors.MessageConstructor);
-        il.Emit(OpCodes.Dup);
         il.Emit(OpCodes.Ldstr, BufferModuleHelpers.InvalidCharacterErrorName);
-        il.Emit(OpCodes.Callvirt, errors.NameSetter);
-
-        il.Emit(OpCodes.Newobj, descriptors.DescriptorConstructor);
-        il.Emit(OpCodes.Stloc, descriptor);
-        il.Emit(OpCodes.Ldloc, descriptor);
-        il.Emit(OpCodes.Ldc_R8, BufferModuleHelpers.InvalidCharacterErrorCode);
-        il.Emit(OpCodes.Box, _types.Double);
-        il.Emit(OpCodes.Callvirt, descriptors.DescriptorValue.GetSetMethod()!);
-        il.Emit(OpCodes.Dup);
-        il.Emit(OpCodes.Ldstr, "code");
-        il.Emit(OpCodes.Ldloc, descriptor);
-        il.Emit(OpCodes.Call, descriptors.DefineProperty);
-        il.Emit(OpCodes.Pop);
-
+        il.Emit(OpCodes.Newobj, errors.DomExceptionConstructor);
         il.Emit(OpCodes.Call, errors.CreateException);
         il.Emit(OpCodes.Ret);
         return method;
     }
 
-    private void EmitBufferAtobBtoa(TypeBuilder typeBuilder, EmittedBufferRuntime buffer, MethodBuilder invalidCharacterError)
+    private void EmitBufferAtobBtoa(TypeBuilder typeBuilder, EmittedBufferRuntime buffer,
+        MethodBuilder invalidCharacterError, MethodBuilder toJsString)
     {
         // Mirror BufferModuleHelpers.Atob with BCL calls in the standalone runtime.
         var atob = typeBuilder.DefineMethod(
@@ -297,7 +285,7 @@ public partial class RuntimeEmitter
         var length = _types.GetProperty(_types.String, nameof(string.Length))!.GetGetMethod()!;
 
         ail.Emit(OpCodes.Ldarg_0);
-        ail.Emit(OpCodes.Call, buffer.CoerceString);
+        ail.Emit(OpCodes.Call, toJsString);
         foreach (var whitespace in BufferModuleHelpers.AtobWhitespace)
             EmitStringReplace(ail, whitespace.ToString(), "");
         ail.Emit(OpCodes.Stloc, data);
@@ -358,7 +346,7 @@ public partial class RuntimeEmitter
         var checkCharacter = bil.DefineLabel();
         var nextCharacter = bil.DefineLabel();
         bil.Emit(OpCodes.Ldarg_0);
-        bil.Emit(OpCodes.Call, buffer.CoerceString);
+        bil.Emit(OpCodes.Call, toJsString);
         bil.Emit(OpCodes.Stloc, input);
         bil.Emit(OpCodes.Ldc_I4_0);
         bil.Emit(OpCodes.Stloc, index);

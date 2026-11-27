@@ -296,6 +296,8 @@ public partial class RuntimeEmitter
         errors.URIErrorPrototypePopulate       = DefineShell("_URIErrorPrototypePopulate");
         errors.EvalErrorPrototypePopulate      = DefineShell("_EvalErrorPrototypePopulate");
         errors.AggregateErrorPrototypePopulate = DefineShell("_AggregateErrorPrototypePopulate");
+        if (errors.HasDomException)
+            errors.DomExceptionPrototypePopulate = DefineShell("_DOMExceptionPrototypePopulate");
     }
 
     private void EmitNativeErrorPrototypePopulates(EmittedErrorRuntime errors, EmittedDescriptorStorageRuntime descriptorStorage)
@@ -356,7 +358,6 @@ public partial class RuntimeEmitter
             errors.AggregateErrorType,
             "AggregateError"
         );
-        errors.MarkNativePrototypeBodiesEmitted();
     }
 
     private void EmitOneNativeErrorPopulate(
