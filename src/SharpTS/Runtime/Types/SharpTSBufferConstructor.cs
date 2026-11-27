@@ -98,7 +98,7 @@ public sealed class SharpTSBufferConstructor
 
     /// <summary>
     /// Buffer.from(data, encoding?)
-    /// Creates a Buffer from string, array, or another buffer.
+    /// Creates a Buffer from string, array, or another buffer, sharing an ArrayBuffer's bytes.
     /// </summary>
     private static RuntimeValue BufferFrom(Interp interpreter, RuntimeValue receiver, ReadOnlySpan<RuntimeValue> args)
     {
@@ -118,9 +118,7 @@ public sealed class SharpTSBufferConstructor
             SharpTSBuffer buf => SharpTSBuffer.FromBuffer(buf),
             SharpTSArray arr => SharpTSBuffer.FromArray(arr),
             List<object?> list => SharpTSBuffer.FromArray(list),
-            // Buffer.from(arrayBuffer) / Buffer.from(typedArray) (#1063) — copies
-            // (Node copies for TypedArray; for ArrayBuffer Node shares memory — we copy).
-            SharpTSArrayBuffer ab => new SharpTSBuffer(ab.AsSpan().ToArray()),
+            SharpTSArrayBuffer ab => new SharpTSBuffer(ab.GetBackingArray()),
             SharpTSTypedArray typed => new SharpTSBuffer(typed.Buffer.AsSpan(typed.ByteOffset, typed.ByteLength).ToArray()),
             _ => throw new Exception($"Buffer.from: unsupported data type: {data.GetType().Name}")
         });

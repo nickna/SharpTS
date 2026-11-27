@@ -38,6 +38,23 @@ public class BufferTests
     }
 
     [Theory, ModeData]
+    public void Buffer_FromArrayBufferSharesTheBackingBytes(ExecutionMode mode)
+    {
+        const string source = """
+            const backing = new ArrayBuffer(2);
+            const bytes = new Uint8Array(backing);
+            bytes[0] = 7;
+            const shared = Buffer.from(backing);
+            const copied = Buffer.from(bytes);
+            bytes[0] = 11;
+            shared[1] = 19;
+            console.log(shared[0], bytes[1], copied[0], copied[1]);
+            """;
+
+        Assert.Equal("11 19 7 0\n", TestHarness.RunUnchecked(source, mode));
+    }
+
+    [Theory, ModeData]
     public void Buffer_FromResolvesTheCurrentReceiverBeforeEvaluatingArguments(ExecutionMode mode)
     {
         const string source = """
