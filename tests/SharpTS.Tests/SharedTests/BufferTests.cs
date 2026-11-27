@@ -1440,14 +1440,35 @@ public class BufferTests
                 }
                 for (const text of ['YQ-_', '-___', 'YQ=', 'YQ===', 'YQ==Yg==', 'Y', 'YQ\v', 'YQ\u00a0']) {
                     try { decode(text); console.log('accepted'); }
-                    catch { console.log('rejected'); }
+                    catch (error) { console.log(error.name, error.code, typeof error.code); }
                 }
             }
             """;
         const string decoded = "hex:61\nhex:6162\nhex:fbffff\nhex:61\nhex:61\nhex:\n";
-        const string rejected = "rejected\nrejected\nrejected\nrejected\nrejected\nrejected\nrejected\nrejected\n";
+        var rejected = string.Concat(Enumerable.Repeat("InvalidCharacterError 5 number\n", 8));
         var files = new Dictionary<string, string> { ["main.ts"] = source };
         Assert.Equal(decoded + rejected + decoded + rejected, TestHarness.RunModules(files, "main.ts", mode));
+    }
+
+    [Theory, ModeData]
+    public void BufferModule_BtoaRejectsCharactersOutsideLatin1(ExecutionMode mode)
+    {
+        var files = new Dictionary<string, string>
+        {
+            ["main.ts"] = """
+                import { btoa as moduleBtoa } from 'node:buffer';
+                for (const encode of [(text: string) => moduleBtoa(text), (text: string) => btoa(text)]) {
+                    console.log('base64:' + encode(''));
+                    console.log(encode('\u0000\u0080\u00ff'));
+                    for (const text of ['\u0100', 'ok\uD800', '\uD83D\uDE00']) {
+                        try { encode(text); console.log('accepted'); }
+                        catch (error) { console.log(error.name, error.code, typeof error.code); }
+                    }
+                }
+                """
+        };
+        const string result = "base64:\nAID/\nInvalidCharacterError 5 number\nInvalidCharacterError 5 number\nInvalidCharacterError 5 number\n";
+        Assert.Equal(result + result, TestHarness.RunModules(files, "main.ts", mode));
     }
 
     [Theory, ModeData]

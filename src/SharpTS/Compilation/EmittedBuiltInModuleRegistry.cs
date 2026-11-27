@@ -28,6 +28,8 @@ public sealed class EmittedBuiltInModuleRegistry
         ArgumentNullException.ThrowIfNull(module);
         ArgumentNullException.ThrowIfNull(features);
         _module = module;
+        if (features.UsesBuffer)
+            Select("buffer", "atob", "btoa");
         if (features.UsesNodeStreams)
             Select("stream",
                 "Duplex", "finished", "PassThrough", "pipeline",

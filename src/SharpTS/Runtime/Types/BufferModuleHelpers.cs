@@ -1,4 +1,5 @@
 using System.Text;
+using SharpTS.Runtime.Exceptions;
 
 namespace SharpTS.Runtime.Types;
 
@@ -22,6 +23,9 @@ public static class BufferModuleHelpers
     public const double InspectMaxBytes = 50.0;         // buffer.INSPECT_MAX_BYTES default
 
     internal const string AtobWhitespace = " \t\n\f\r";
+    internal const string InvalidCharacterErrorName = "InvalidCharacterError";
+    internal const double InvalidCharacterErrorCode = 5;
+    internal const string InvalidCharacterMessage = "Invalid character";
 
     /// <summary>Decodes forgiving Base64 into a Latin-1 binary string.</summary>
     public static string Atob(string data)
@@ -35,16 +39,32 @@ public static class BufferModuleHelpers
         if (remainder >= 2 && !data.Contains('='))
             data = data.PadRight(data.Length + 4 - remainder, '=');
 
-        return Encoding.Latin1.GetString(Convert.FromBase64String(data));
+        try
+        {
+            return Encoding.Latin1.GetString(Convert.FromBase64String(data));
+        }
+        catch (FormatException)
+        {
+            throw CreateInvalidCharacterError();
+        }
     }
 
-    /// <summary>
-    /// btoa(data): encodes a Latin-1 "binary string" to base64. Composed from
-    /// <see cref="BufferEncoding"/> so it mirrors the compiled twin
-    /// (Buffer.from(data,'latin1').toString('base64')).
-    /// </summary>
+    private static ThrowException CreateInvalidCharacterError()
+    {
+        var error = new SharpTSError(InvalidCharacterMessage) { Name = InvalidCharacterErrorName };
+        error.DefineProperty("code", new SharpTSPropertyDescriptor(value: InvalidCharacterErrorCode));
+        return new ThrowException(error);
+    }
+
+    /// <summary>Encodes a Latin-1 binary string to Base64.</summary>
     public static string Btoa(string data)
-        => BufferEncoding.Decode(BufferEncoding.Encode(data, "latin1"), "base64");
+    {
+        foreach (char character in data)
+            if (character > byte.MaxValue)
+                throw CreateInvalidCharacterError();
+
+        return Convert.ToBase64String(Encoding.Latin1.GetBytes(data));
+    }
 
     /// <summary>Whether <paramref name="bytes"/> is well-formed UTF-8.</summary>
     public static bool IsUtf8(byte[] bytes) => System.Text.Unicode.Utf8.IsValid(bytes);

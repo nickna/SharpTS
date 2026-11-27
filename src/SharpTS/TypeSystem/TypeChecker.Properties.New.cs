@@ -1249,7 +1249,7 @@ public partial class TypeChecker
                 // Generic constructor signature - try to instantiate
                 var result = TryMatchGenericConstructorSignature(ctorSig, typeArgs, argTypes, qualifiedName, typeArgNodes);
                 if (result != null)
-                    return result;
+                    return RefreshCompletedInterfaceBinding(result);
             }
             else
             {
@@ -1266,7 +1266,9 @@ public partial class TypeChecker
                         }
                     }
                     RecordEditorInvocationSelection(ctorSig);
-                    return ctorSig.ReturnType;
+                    // A library constructor signature can refer to an earlier
+                    // shape of an interface that was merged later in the program.
+                    return RefreshCompletedInterfaceBinding(ctorSig.ReturnType);
                 }
             }
             NextSignature:;

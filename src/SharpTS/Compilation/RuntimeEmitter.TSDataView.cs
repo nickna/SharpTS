@@ -2,6 +2,7 @@ using System.Buffers.Binary;
 using System.Linq;
 using System.Reflection;
 using System.Reflection.Emit;
+using SharpTS.Runtime.Types;
 
 namespace SharpTS.Compilation;
 
@@ -29,9 +30,10 @@ public partial class RuntimeEmitter
 
         // Constructor: public $DataView(object buffer, int byteOffset, int? byteLength)
         EmitDataViewConstructor(typeBuilder, runtime);
+        EmitDataViewThrowIfDetached(typeBuilder, runtime);
 
         // Properties: ByteLength, ByteOffset, Buffer
-        EmitDataViewProperties(typeBuilder, runtime);
+        EmitDataViewProperties(typeBuilder, view);
 
         // Getter methods: GetInt8, GetUint8, GetInt16, GetUint16, GetInt32, GetUint32, GetFloat32, GetFloat64
         EmitDataViewGetters(typeBuilder, view);
@@ -202,33 +204,39 @@ public partial class RuntimeEmitter
         il.Emit(OpCodes.Ret);
     }
 
-    private void EmitDataViewProperties(
-        TypeBuilder typeBuilder,
-        EmittedRuntime runtime)
+    private void EmitDataViewThrowIfDetached(TypeBuilder typeBuilder, EmittedRuntime runtime)
     {
         var view = runtime.RequireDataView();
         var arrayBuffer = runtime.RequireArrayBuffer();
+        view.ThrowIfDetached = typeBuilder.DefineMethod("ThrowIfDetached", MethodAttributes.Private,
+            _types.Void, Type.EmptyTypes);
+        var il = view.ThrowIfDetached.GetILGenerator();
+        var backingBuffer = il.DeclareLocal(arrayBuffer.Type);
+        var attached = il.DefineLabel();
+        il.Emit(OpCodes.Ldarg_0);
+        il.Emit(OpCodes.Ldfld, view.ArrayBufferField);
+        il.Emit(OpCodes.Isinst, arrayBuffer.Type);
+        il.Emit(OpCodes.Stloc, backingBuffer);
+        il.Emit(OpCodes.Ldloc, backingBuffer);
+        il.Emit(OpCodes.Brfalse, attached);
+        il.Emit(OpCodes.Ldloc, backingBuffer);
+        il.Emit(OpCodes.Ldfld, arrayBuffer.DetachedField);
+        il.Emit(OpCodes.Brfalse, attached);
+        EmitThrowTypeError(il, runtime.Errors, SharpTSDataView.DetachedBufferMessage);
+        il.MarkLabel(attached);
+        il.Emit(OpCodes.Ret);
+    }
 
+    private void EmitDataViewProperties(TypeBuilder typeBuilder, EmittedDataViewRuntime view)
+    {
         // ByteLength property
         var byteLengthProp = typeBuilder.DefineProperty("ByteLength", PropertyAttributes.None, _types.Int32, Type.EmptyTypes);
         var byteLengthGetter = typeBuilder.DefineMethod("get_ByteLength",
             MethodAttributes.Public | MethodAttributes.SpecialName | MethodAttributes.HideBySig,
             _types.Int32, Type.EmptyTypes);
         var il = byteLengthGetter.GetILGenerator();
-        var backingBuffer = il.DeclareLocal(arrayBuffer.Type);
-        var readLength = il.DefineLabel();
         il.Emit(OpCodes.Ldarg_0);
-        il.Emit(OpCodes.Ldfld, view.ArrayBufferField);
-        il.Emit(OpCodes.Isinst, arrayBuffer.Type);
-        il.Emit(OpCodes.Stloc, backingBuffer);
-        il.Emit(OpCodes.Ldloc, backingBuffer);
-        il.Emit(OpCodes.Brfalse, readLength);
-        il.Emit(OpCodes.Ldloc, backingBuffer);
-        il.Emit(OpCodes.Ldfld, arrayBuffer.DetachedField);
-        il.Emit(OpCodes.Brfalse, readLength);
-        EmitThrowTypeError(il, runtime.Errors, "Cannot read byteLength of a DataView with a detached ArrayBuffer");
-
-        il.MarkLabel(readLength);
+        il.Emit(OpCodes.Call, view.ThrowIfDetached);
         il.Emit(OpCodes.Ldarg_0);
         il.Emit(OpCodes.Ldfld, view.ByteLengthField);
         il.Emit(OpCodes.Ret);
@@ -241,6 +249,8 @@ public partial class RuntimeEmitter
             MethodAttributes.Public | MethodAttributes.SpecialName | MethodAttributes.HideBySig,
             _types.Int32, Type.EmptyTypes);
         il = byteOffsetGetter.GetILGenerator();
+        il.Emit(OpCodes.Ldarg_0);
+        il.Emit(OpCodes.Call, view.ThrowIfDetached);
         il.Emit(OpCodes.Ldarg_0);
         il.Emit(OpCodes.Ldfld, view.ByteOffsetField);
         il.Emit(OpCodes.Ret);
@@ -309,7 +319,7 @@ public partial class RuntimeEmitter
         var il = method.GetILGenerator();
 
         // Bounds check: if (byteOffset < 0 || byteOffset >= _byteLength) throw
-        EmitBoundsCheck(il, view.ByteLengthField, 1);
+        EmitBoundsCheck(il, view, 1);
 
         // return (sbyte/byte) _buffer[_byteOffset + byteOffset]
         il.Emit(OpCodes.Ldarg_0);
@@ -344,7 +354,7 @@ public partial class RuntimeEmitter
         var il = method.GetILGenerator();
 
         // Bounds check
-        EmitBoundsCheck(il, view.ByteLengthField, 2);
+        EmitBoundsCheck(il, view, 2);
 
         // Use array indexing directly instead of Span - simpler and avoids conversion issues
         // Calculate absolute offset: _byteOffset + byteOffset
@@ -421,7 +431,7 @@ public partial class RuntimeEmitter
         var il = method.GetILGenerator();
 
         // Bounds check
-        EmitBoundsCheck(il, view.ByteLengthField, 4);
+        EmitBoundsCheck(il, view, 4);
 
         var offsetLocal = il.DeclareLocal(_types.Int32);
         il.Emit(OpCodes.Ldarg_0);
@@ -516,7 +526,7 @@ public partial class RuntimeEmitter
 
         var il = method.GetILGenerator();
 
-        EmitBoundsCheck(il, view.ByteLengthField, 4);
+        EmitBoundsCheck(il, view, 4);
 
         var offsetLocal = il.DeclareLocal(_types.Int32);
         il.Emit(OpCodes.Ldarg_0);
@@ -579,7 +589,7 @@ public partial class RuntimeEmitter
 
         var il = method.GetILGenerator();
 
-        EmitBoundsCheck(il, view.ByteLengthField, 8);
+        EmitBoundsCheck(il, view, 8);
 
         var offsetLocal = il.DeclareLocal(_types.Int32);
         il.Emit(OpCodes.Ldarg_0);
@@ -664,7 +674,7 @@ public partial class RuntimeEmitter
 
         var il = method.GetILGenerator();
 
-        EmitBoundsCheck(il, view.ByteLengthField, 8);
+        EmitBoundsCheck(il, view, 8);
 
         var offsetLocal = il.DeclareLocal(_types.Int32);
         il.Emit(OpCodes.Ldarg_0);
@@ -840,7 +850,7 @@ public partial class RuntimeEmitter
 
         var il = method.GetILGenerator();
 
-        EmitBoundsCheck(il, view.ByteLengthField, 1);
+        EmitBoundsCheck(il, view, 1);
 
         // _buffer[_byteOffset + byteOffset] = (byte)ToInt32(value)
         il.Emit(OpCodes.Ldarg_0);
@@ -878,7 +888,7 @@ public partial class RuntimeEmitter
 
         var il = method.GetILGenerator();
 
-        EmitBoundsCheck(il, view.ByteLengthField, 2);
+        EmitBoundsCheck(il, view, 2);
 
         var offsetLocal = il.DeclareLocal(_types.Int32);
         var valueLocal = il.DeclareLocal(_types.Int32);
@@ -968,7 +978,7 @@ public partial class RuntimeEmitter
 
         var il = method.GetILGenerator();
 
-        EmitBoundsCheck(il, view.ByteLengthField, 4);
+        EmitBoundsCheck(il, view, 4);
 
         var offsetLocal = il.DeclareLocal(_types.Int32);
         var valueLocal = il.DeclareLocal(_types.Int32);
@@ -1041,7 +1051,7 @@ public partial class RuntimeEmitter
 
         var il = method.GetILGenerator();
 
-        EmitBoundsCheck(il, view.ByteLengthField, 4);
+        EmitBoundsCheck(il, view, 4);
 
         var offsetLocal = il.DeclareLocal(_types.Int32);
         var valueLocal = il.DeclareLocal(_types.Int32); // Store as int bits
@@ -1099,7 +1109,7 @@ public partial class RuntimeEmitter
 
         var il = method.GetILGenerator();
 
-        EmitBoundsCheck(il, view.ByteLengthField, 8);
+        EmitBoundsCheck(il, view, 8);
 
         var offsetLocal = il.DeclareLocal(_types.Int32);
         var valueLocal = il.DeclareLocal(typeof(long)); // Store as long bits
@@ -1167,7 +1177,7 @@ public partial class RuntimeEmitter
 
         var il = method.GetILGenerator();
 
-        EmitBoundsCheck(il, view.ByteLengthField, 8);
+        EmitBoundsCheck(il, view, 8);
 
         var offsetLocal = il.DeclareLocal(_types.Int32);
         var valueLocal = il.DeclareLocal(typeof(long)); // Store as long bits (same bit width as ulong)
@@ -1267,7 +1277,7 @@ public partial class RuntimeEmitter
         il.Emit(OpCodes.Stelem_I1);
     }
 
-    private void EmitBoundsCheck(ILGenerator il, FieldBuilder byteLengthField, int size)
+    private void EmitBoundsCheck(ILGenerator il, EmittedDataViewRuntime view, int size)
     {
         var validLabel = il.DefineLabel();
 
@@ -1282,13 +1292,16 @@ public partial class RuntimeEmitter
 
         il.MarkLabel(validLabel);
 
-        // if (byteOffset + size > _byteLength) throw
+        il.Emit(OpCodes.Ldarg_0);
+        il.Emit(OpCodes.Call, view.ThrowIfDetached);
+
+        // if (byteOffset > _byteLength - size) throw
         var valid2Label = il.DefineLabel();
         il.Emit(OpCodes.Ldarg_1);
-        il.Emit(OpCodes.Ldc_I4, size);
-        il.Emit(OpCodes.Add);
         il.Emit(OpCodes.Ldarg_0);
-        il.Emit(OpCodes.Ldfld, byteLengthField);
+        il.Emit(OpCodes.Ldfld, view.ByteLengthField);
+        il.Emit(OpCodes.Ldc_I4, size);
+        il.Emit(OpCodes.Sub);
         il.Emit(OpCodes.Ble_S, valid2Label);
 
         il.Emit(OpCodes.Ldstr, "RangeError: Offset is outside the bounds of the DataView");

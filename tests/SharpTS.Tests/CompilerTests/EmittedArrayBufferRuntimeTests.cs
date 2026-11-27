@@ -161,11 +161,12 @@ public class EmittedArrayBufferRuntimeTests
         bytes[0] = 99;
         Assert.Equal(42, slicedBytes[0]);
         var dynamicSlice = type.GetMethod(buffer.SliceDynamic.Name)!.Invoke(value, ["1.9", 4d]);
-        Assert.Equal(3d, helpers.GetMethod(buffer.GetByteLength.Name)!.Invoke(null, [dynamicSlice]));
-        Assert.Equal(8d, helpers.GetMethod(buffer.GetByteLength.Name)!.Invoke(null, [value]));
+        var getByteLength = type.GetMethod(buffer.ByteLengthGetter.Name)!;
+        Assert.Equal(3, getByteLength.Invoke(dynamicSlice, null));
+        Assert.Equal(8, getByteLength.Invoke(value, null));
         type.GetMethod(buffer.Detach.Name)!.Invoke(value, null);
         Assert.Equal(true, type.GetField(buffer.DetachedField.Name, BindingFlags.NonPublic | BindingFlags.Instance)!.GetValue(value));
-        Assert.Equal(0d, helpers.GetMethod(buffer.GetByteLength.Name)!.Invoke(null, [value]));
+        Assert.Equal(0, getByteLength.Invoke(value, null));
         Assert.Same(bytes, getBytes.Invoke(value, null));
     }
 

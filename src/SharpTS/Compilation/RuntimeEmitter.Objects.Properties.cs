@@ -3312,8 +3312,20 @@ public partial class RuntimeEmitter
             il.Emit(OpCodes.Call, inputs.TypedArrays.RequireImplementation().GetMember);
             il.Emit(OpCodes.Ret);
 
-            // $ArrayBuffer handler - check for "byteLength"
+            // Own properties on $ArrayBuffer shadow its intrinsic members.
             il.MarkLabel(arrayBufferLabel);
+            var arrayBufferDescriptor = il.DeclareLocal(inputs.DescriptorStorage.DescriptorType);
+            var noArrayBufferDescriptor = il.DefineLabel();
+            il.Emit(OpCodes.Ldarg_0);
+            il.Emit(OpCodes.Ldarg_1);
+            il.Emit(OpCodes.Call, inputs.DescriptorStorage.GetPropertyDescriptor);
+            il.Emit(OpCodes.Stloc, arrayBufferDescriptor);
+            il.Emit(OpCodes.Ldloc, arrayBufferDescriptor);
+            il.Emit(OpCodes.Brfalse, noArrayBufferDescriptor);
+            EmitDescriptorReadAndReturn(il, inputs.DescriptorStorage, arrayBufferDescriptor,
+                () => il.Emit(OpCodes.Ldarg_0), inputs.InvokeMethodValue, inputs.UndefinedInstance, inputs.UndefinedType);
+            il.MarkLabel(noArrayBufferDescriptor);
+
             il.Emit(OpCodes.Ldarg_1);
             il.Emit(OpCodes.Ldstr, "byteLength");
             il.Emit(OpCodes.Call, _types.GetMethod(_types.String, "op_Equality", _types.String, _types.String));

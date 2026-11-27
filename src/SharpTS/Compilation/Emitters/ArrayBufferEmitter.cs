@@ -5,7 +5,7 @@ namespace SharpTS.Compilation.Emitters;
 
 /// <summary>
 /// Emitter strategy for ArrayBuffer instance method calls and property access.
-/// Handles ArrayBuffer methods like slice() and properties like byteLength.
+/// Handles ArrayBuffer methods like slice().
 /// </summary>
 public sealed class ArrayBufferEmitter : ITypeEmitterStrategy
 {
@@ -61,32 +61,8 @@ public sealed class ArrayBufferEmitter : ITypeEmitterStrategy
         return false;
     }
 
-    /// <summary>
-    /// Attempts to emit IL for a property get on an ArrayBuffer receiver.
-    /// </summary>
-    public bool TryEmitPropertyGet(IEmitterContext emitter, Expr receiver, string propertyName)
-    {
-        // Check if we can handle this property BEFORE emitting anything
-        if (propertyName is not "byteLength")
-            return false;
-
-        var ctx = emitter.Context;
-        var il = ctx.IL;
-
-        // Now we know we can handle it, emit the receiver
-        emitter.EmitExpression(receiver);
-        emitter.EmitBoxIfNeeded(receiver);
-
-        switch (propertyName)
-        {
-            case "byteLength":
-                il.Emit(OpCodes.Call, ctx.Runtime!.RequireArrayBuffer().GetByteLength);
-                il.Emit(OpCodes.Box, ctx.Types.Double);
-                return true;
-        }
-
-        return false;
-    }
+    // Ordinary reads must consult own descriptors before the intrinsic getter.
+    public bool TryEmitPropertyGet(IEmitterContext emitter, Expr receiver, string propertyName) => false;
 
     /// <summary>
     /// ArrayBuffer doesn't have settable properties.

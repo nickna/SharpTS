@@ -109,6 +109,29 @@ public class DataViewTests
 
     #endregion
 
+    [Theory, ModeData]
+    public void DataView_RejectsMetadataAndElementAccessAfterTransfer(ExecutionMode mode)
+    {
+        const string source = """
+            const buffer = new ArrayBuffer(12);
+            const view = new DataView(buffer, 1, 8);
+            view.setUint8(0, 23);
+            const received = structuredClone(buffer, { transfer: [buffer] });
+            const operations = [
+                () => view.byteOffset, () => view.byteLength,
+                () => view.getUint8(0), () => view.getUint32(20), () => view.getBigInt64(0),
+                () => view.setUint8(0, 42), () => view.setFloat64(0, 1), () => view.setBigUint64(0, 1n)
+            ];
+            for (const operation of operations) {
+                try { operation(); console.log('accepted'); }
+                catch (error) { console.log(error.name, error instanceof TypeError); }
+            }
+            console.log(view.buffer === buffer, new DataView(received).getUint8(1));
+            """;
+        var errors = string.Concat(Enumerable.Repeat("TypeError true\n", 8));
+        Assert.Equal(errors + "true 23\n", TestHarness.RunUnchecked(source, mode));
+    }
+
     #region Buffer Property Tests
 
     [Theory, ModeData]

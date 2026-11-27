@@ -27,6 +27,25 @@ public class CjsBuiltInModuleRequireTests
     }
 
     [Theory, ModeData]
+    public void Cjs_Require_Buffer_Base64Helpers(ExecutionMode mode)
+    {
+        var files = new Dictionary<string, string>
+        {
+            ["main.cjs"] = """
+                const buffer = require('node:buffer');
+                const { atob: decode, btoa: encode } = buffer;
+                console.log(typeof buffer.Buffer, typeof decode, typeof encode);
+                console.log(buffer.atob('YQ'), encode('ab'));
+                console.log(decode(buffer.btoa('z')));
+                try { decode('!'); }
+                catch (error) { console.log(error.name, error.code); }
+                """
+        };
+        Assert.Equal("function function function\na YWI=\nz\nInvalidCharacterError 5\n",
+            TestHarness.RunModules(files, "main.cjs", mode));
+    }
+
+    [Theory, ModeData]
     public void Cjs_Require_Assert_Ok(ExecutionMode mode)
     {
         var files = new Dictionary<string, string>

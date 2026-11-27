@@ -232,6 +232,32 @@ public class ProcessSurfaceTests
     }
 
     [Theory, ModeData]
+    public void Process_ListenerCountAndKillResolveTheCurrentReceiver(ExecutionMode mode)
+    {
+        const string source = """
+            const original = process;
+            const replacement = {
+                listenerCount(name) { return this === replacement && name === 'example' ? 7 : -1; },
+                get kill() {
+                    console.log('get kill');
+                    return function (pid, signal) {
+                        return this === replacement && pid === original.pid && signal === 0 ? 42 : -1;
+                    };
+                }
+            };
+            globalThis.process = replacement;
+            console.log(process.listenerCount('example'), globalThis.process.listenerCount('example'));
+            function restore() { console.log('arg'); globalThis.process = original; return 0; }
+            console.log(process.kill(original.pid, restore()));
+            const handler = () => {};
+            process.on('example', handler);
+            console.log(process.listenerCount('example'), process.kill(process.pid, 0));
+            process.removeListener('example', handler);
+            """;
+        Assert.Equal("7 7\nget kill\narg\n42\n1 true\n", TestHarness.RunUnchecked(source, mode));
+    }
+
+    [Theory, ModeData]
     public void Process_Umask_GetAndSetRoundTrip(ExecutionMode mode)
     {
         var source = """

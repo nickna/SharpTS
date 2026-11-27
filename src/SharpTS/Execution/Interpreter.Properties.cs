@@ -503,14 +503,16 @@ public partial class Interpreter
                 if (TryReadDescriptor(ownPropertyObject.OwnProperties.GetOwnPropertyDescriptor(name),
                         receiver, out var ownValue))
                     return ownValue;
-                var collectionMember = current switch
+                var intrinsicMember = current switch
                 {
                     SharpTSMap map => MapBuiltIns.GetMember(map, name),
                     SharpTSSet set => SetBuiltIns.GetMember(set, name),
+                    SharpTSArrayBuffer buffer when name == "slice" =>
+                        BuiltInRegistry.Instance.TryGetInstanceMember(buffer, name).Member,
                     _ => null
                 };
-                if (collectionMember is not null)
-                    return collectionMember;
+                if (intrinsicMember is not null)
+                    return intrinsicMember;
                 current = ObjectBuiltIns.PrototypeOf(this, current);
                 continue;
             }
@@ -1492,7 +1494,7 @@ public partial class Interpreter
             return RuntimeValue.FromBoxed(GetPropertyValue(primitiveConstructor, get.Name.Lexeme));
 
         if (obj is ISharpTSGeneratorFunctionValue or SharpTSGenerator or SharpTSAsyncGenerator
-            or SharpTSArrayIterator or SharpTSMap or SharpTSSet or SharpTSSuppressedError)
+            or SharpTSArrayIterator or SharpTSMap or SharpTSSet or SharpTSSuppressedError or SharpTSArrayBuffer)
             return RuntimeValue.FromBoxed(GetPropertyValue(obj, get.Name.Lexeme));
 
         if (NeedsLiveFunctionPrototypeRead(obj, get.Name.Lexeme))

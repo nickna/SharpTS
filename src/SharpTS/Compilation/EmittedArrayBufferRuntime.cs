@@ -69,13 +69,6 @@ public sealed class EmittedArrayBufferRuntime
         internal set => Set(ref _create, value);
     }
 
-    private MethodBuilder? _getByteLength;
-    public MethodBuilder GetByteLength
-    {
-        get => Require(_getByteLength);
-        internal set => Set(ref _getByteLength, value);
-    }
-
     private MethodBuilder? _sliceObject;
     public MethodBuilder SliceObject
     {
@@ -138,7 +131,6 @@ public sealed class EmittedArrayBufferRuntime
         _ = Slice;
         _ = SliceDynamic;
         _ = Create;
-        _ = GetByteLength;
         _ = SliceObject;
         _ = IsView;
         _ = BufferField;
