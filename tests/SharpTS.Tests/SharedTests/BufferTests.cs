@@ -1610,11 +1610,16 @@ public class BufferTests
                 const out = transcode(Buffer.from('hello'), 'utf8', 'latin1');
                 console.log(out.toString('latin1'));
                 console.log(out.length);
+                const bytes = new Uint8Array([255, 195, 169, 255]);
+                const view = new Uint8Array(bytes.buffer, 1, 2);
+                console.log(transcode(view, 'utf8', 'latin1').toString('hex'));
+                structuredClone(bytes.buffer, { transfer: [bytes.buffer] });
+                console.log(transcode(view, 'utf8', 'latin1').length);
                 """
         };
 
         var output = TestHarness.RunModules(files, "main.ts", mode);
-        Assert.Equal("hello\n5\n", output);
+        Assert.Equal("hello\n5\ne9\n0\n", output);
     }
 
     [Theory, ModeData]
