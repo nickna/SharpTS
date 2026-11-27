@@ -29,7 +29,7 @@ public sealed class EmittedBuiltInModuleRegistry
         ArgumentNullException.ThrowIfNull(features);
         _module = module;
         if (features.UsesBuffer)
-            Select("buffer", "atob", "btoa");
+            Select("buffer", "atob", "btoa", "isUtf8", "isAscii", "transcode", "SlowBuffer");
         if (features.UsesNodeStreams)
             Select("stream",
                 "Duplex", "finished", "PassThrough", "pipeline",

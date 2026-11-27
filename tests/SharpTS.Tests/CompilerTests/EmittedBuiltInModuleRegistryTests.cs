@@ -62,7 +62,7 @@ public class EmittedBuiltInModuleRegistryTests
         Assert.True(keys.IsReadOnly);
         Assert.Throws<NotSupportedException>(() => keys.Add(("fs", "lstatSync")));
         Assert.Throws<NotSupportedException>(keys.Clear);
-        Assert.Equal(183, Create(RuntimeFeatureSet.EmitEverything()).Registry.SelectedExports.Count);
+        Assert.Equal(187, Create(RuntimeFeatureSet.EmitEverything()).Registry.SelectedExports.Count);
     }
 
     [Fact]

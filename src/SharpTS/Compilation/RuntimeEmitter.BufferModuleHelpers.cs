@@ -17,12 +17,17 @@ public partial class RuntimeEmitter
         EmitBufferBytesOf(typeBuilder, buffer);
         var invalidCharacterError = EmitBufferInvalidCharacterError(typeBuilder, runtime);
         EmitBufferAtobBtoa(typeBuilder, buffer, invalidCharacterError, runtime.StringCoercion.ToJsString);
-        runtime.BuiltInModules.Register("buffer", "atob", buffer.Atob);
-        runtime.BuiltInModules.Register("buffer", "btoa", buffer.Btoa);
         EmitBufferIsUtf8Ascii(typeBuilder, buffer);
         EmitBufferTranscode(typeBuilder, buffer);
         EmitBufferSlowBuffer(typeBuilder, buffer);
         EmitBufferModuleConstants(typeBuilder, runtime);
+
+        runtime.BuiltInModules.Register("buffer", "atob", buffer.Atob);
+        runtime.BuiltInModules.Register("buffer", "btoa", buffer.Btoa);
+        runtime.BuiltInModules.Register("buffer", "isUtf8", buffer.IsUtf8);
+        runtime.BuiltInModules.Register("buffer", "isAscii", buffer.IsAscii);
+        runtime.BuiltInModules.Register("buffer", "transcode", buffer.Transcode);
+        runtime.BuiltInModules.Register("buffer", "SlowBuffer", buffer.SlowBuffer);
     }
 
     /// <summary>
