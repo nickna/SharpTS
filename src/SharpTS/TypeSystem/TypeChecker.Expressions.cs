@@ -2361,14 +2361,14 @@ public partial class TypeChecker
                     $" Subsequent variable declarations must have the same type. Variable '{assign.Name.Lexeme}' must be of type '{declaredType}', but here has type '{valueType}'.",
                     line: assign.Name.Line, tsCode: "TS2403");
             }
-            throw new TypeCheckException(
-                $" Cannot assign type '{valueType}' to variable '{assign.Name.Lexeme}' of type '{declaredType}'.",
-                line: assign.Name.Line,
-                tsCode: declaredType is TypeInfo.Intersection ||
-                    _environment.GetValueBinding(assign.Name.Lexeme) is { } targetSymbol &&
-                    _intersectionDeclaredVariables.Contains(targetSymbol)
-                    ? "TS2322"
-                    : AssignmentDiagnosticCode(declaredType, valueType));
+            string code = declaredType is TypeInfo.Intersection ||
+                _environment.GetValueBinding(assign.Name.Lexeme) is { } targetSymbol &&
+                _intersectionDeclaredVariables.Contains(targetSymbol)
+                ? "TS2322"
+                : AssignmentDiagnosticCode(declaredType, valueType);
+            throw new TypeCheckException(DescribeMissingQualifiedMember(declaredType, valueType, code) ??
+                $" Cannot assign type '{QualifiedInterfaceNames.Display(valueType)}' to variable '{assign.Name.Lexeme}' of type '{QualifiedInterfaceNames.Display(declaredType)}'.",
+                line: assign.Name.Line, tsCode: code);
         }
 
         // A reassignment widens the variable's OWN narrowing only when the assigned value falls

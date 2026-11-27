@@ -10,6 +10,7 @@ namespace SharpTS.TypeSystem;
 public partial class TypeChecker
 {
     private TypeInfo.Namespace? _currentMergedNamespace;
+    private string? _namespaceDiagnosticPath;
 
     /// <summary>
     /// Type-checks a namespace declaration, handling declaration merging.
@@ -95,7 +96,9 @@ public partial class TypeChecker
         }
 
         TypeInfo.Namespace? previousMergedNamespace = _currentMergedNamespace;
+        string? previousDiagnosticPath = _namespaceDiagnosticPath;
         _currentMergedNamespace = existingNs;
+        _namespaceDiagnosticPath = previousDiagnosticPath is null ? name : $"{previousDiagnosticPath}.{name}";
         _namespaceDepth++;
         try
         {
@@ -198,6 +201,7 @@ public partial class TypeChecker
         {
             _namespaceDepth--;
             _currentMergedNamespace = previousMergedNamespace;
+            _namespaceDiagnosticPath = previousDiagnosticPath;
         }
 
         // Create namespace with frozen collections
@@ -282,6 +286,8 @@ public partial class TypeChecker
                 if (ifaceType != null)
                 {
                     types[interfaceStmt.Name.Lexeme] = ifaceType;
+                    if (ifaceType is TypeInfo.Interface or TypeInfo.GenericInterface)
+                        QualifiedInterfaceNames.Retain(ifaceType, $"{_namespaceDiagnosticPath}.{interfaceStmt.Name.Lexeme}");
                 }
                 break;
 

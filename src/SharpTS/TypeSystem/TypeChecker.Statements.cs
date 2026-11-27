@@ -420,7 +420,7 @@ public partial class TypeChecker
 
                     if (!IsCompatible(declaredType, initializerType))
                     {
-                        throw new TypeMismatchException(declaredType, initializerType, stmt.Name.Line, tsCode: AssignmentDiagnosticCode(declaredType, initializerType));
+                        throw CreateAssignmentMismatch(declaredType, initializerType, stmt.Name.Line);
                     }
 
                     initializerFlowType = NarrowToDeclaredSlot(declaredType, initializerType);
@@ -773,7 +773,7 @@ public partial class TypeChecker
             var initType = CheckExprWithContext(stmt.Initializer, constDeclaredType);
             if (!IsCompatible(constDeclaredType, initType))
             {
-                throw new TypeMismatchException(constDeclaredType, initType, stmt.Name.Line, tsCode: AssignmentDiagnosticCode(constDeclaredType, initType));
+                throw CreateAssignmentMismatch(constDeclaredType, initType, stmt.Name.Line);
             }
             initializerFlowType = NarrowToDeclaredSlot(constDeclaredType, initType);
         }

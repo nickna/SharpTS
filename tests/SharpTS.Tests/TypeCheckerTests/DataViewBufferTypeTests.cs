@@ -43,7 +43,25 @@ public sealed class DataViewBufferTypeTests
             const value: Local.ArrayBuffer = new ArrayBuffer(4).slice();
             """;
         var diagnostic = Assert.Single(CheckWithLibraries(source));
-        Assert.Contains("not assignable", diagnostic.Message);
+        Assert.Equal("TS2741", diagnostic.TsCode);
+        Assert.Contains("Property 'marker' is missing in type 'ArrayBuffer' but required in type 'Local.ArrayBuffer'.",
+            diagnostic.Message);
+    }
+
+    [Fact]
+    public void AssignmentsDistinguishInterfacesWithTheSameNameInNestedNamespaces()
+    {
+        const string source = """
+            namespace First.Inner { export interface Buffer { first: true; } }
+            namespace Second.Inner { export interface Buffer { second: true; } }
+            declare const input: First.Inner.Buffer;
+            let target: Second.Inner.Buffer;
+            target = input;
+            """;
+        var diagnostic = Assert.Single(CheckWithLibraries(source));
+        Assert.Equal("TS2741", diagnostic.TsCode);
+        Assert.Contains("Property 'second' is missing in type 'First.Inner.Buffer' but required in type 'Second.Inner.Buffer'.",
+            diagnostic.Message);
     }
 
     [Theory]

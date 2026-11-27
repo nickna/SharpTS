@@ -18,7 +18,9 @@ public class TypeMismatchException : TypeCheckException
     public TypeInfo Actual { get; init; }
 
     public TypeMismatchException(TypeInfo expected, TypeInfo actual, int? line = null, int? column = null, string? tsCode = null)
-        : base(DiagnosticCode.TypeMismatch, $"Type '{actual}' is not assignable to type '{expected}'", line, column, tsCode: tsCode)
+        : base(DiagnosticCode.TypeMismatch,
+            $"Type '{QualifiedInterfaceNames.Display(actual)}' is not assignable to type '{QualifiedInterfaceNames.Display(expected)}'",
+            line, column, tsCode: tsCode)
     {
         Expected = expected;
         Actual = actual;
