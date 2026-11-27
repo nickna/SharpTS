@@ -43,6 +43,9 @@ public partial class Interpreter
     /// </summary>
     private static readonly FrozenDictionary<string, object> _globalConstants = CreateGlobalsLookup();
 
+    internal static SharpTSGlobalFunction GetIntrinsicGlobalFunction(string name)
+        => (SharpTSGlobalFunction)_globalConstants[name];
+
     /// <summary>
     /// The names of every global constant and built-in singleton, for REPL autocomplete.
     /// </summary>

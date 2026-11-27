@@ -57,6 +57,12 @@ public sealed class BufferModuleEmitter : IBuiltInModuleEmitter
                     ctx.Runtime.RequireBuffer().Type, NativeConstructorValueProducerKind.BuiltInConstructor,
                     ctx.CurrentMethod, ctx.CurrentClassBuilder);
                 return true;
+            case "atob":
+                il.Emit(OpCodes.Call, ctx.Runtime!.RequireBuffer().AtobValue);
+                return true;
+            case "btoa":
+                il.Emit(OpCodes.Call, ctx.Runtime!.RequireBuffer().BtoaValue);
+                return true;
             case "constants":
                 il.Emit(OpCodes.Call, ctx.Runtime!.RequireBuffer().ModuleConstants);
                 return true;

@@ -31,8 +31,8 @@ public static class BufferModuleInterpreter
             ["resolveObjectURL"] = BuiltInMethod.CreateV2("resolveObjectURL", 1, ResolveObjectURL),
 
             // Base64 (also exposed as globals atob/btoa)
-            ["atob"] = BuiltInMethod.CreateV2("atob", 1, Atob),
-            ["btoa"] = BuiltInMethod.CreateV2("btoa", 1, Btoa),
+            ["atob"] = Interp.GetIntrinsicGlobalFunction(BuiltInNames.Atob),
+            ["btoa"] = Interp.GetIntrinsicGlobalFunction(BuiltInNames.Btoa),
 
             // Validation helpers
             ["isUtf8"] = BuiltInMethod.CreateV2("isUtf8", 1, IsUtf8),
@@ -72,20 +72,6 @@ public static class BufferModuleInterpreter
         var bytes = new byte[ta.ByteLength];
         Array.Copy(ta.Buffer, ta.ByteOffset, bytes, 0, ta.ByteLength);
         return bytes;
-    }
-
-    private static RuntimeValue Atob(Interp interpreter, RuntimeValue receiver, ReadOnlySpan<RuntimeValue> args)
-    {
-        if (args.Length == 0)
-            throw new Exception("atob requires an argument");
-        return RuntimeValue.FromString(BufferModuleHelpers.Atob(args[0].ToObject()?.ToString() ?? ""));
-    }
-
-    private static RuntimeValue Btoa(Interp interpreter, RuntimeValue receiver, ReadOnlySpan<RuntimeValue> args)
-    {
-        if (args.Length == 0)
-            throw new Exception("btoa requires an argument");
-        return RuntimeValue.FromString(BufferModuleHelpers.Btoa(args[0].ToObject()?.ToString() ?? ""));
     }
 
     private static RuntimeValue IsUtf8(Interp interpreter, RuntimeValue receiver, ReadOnlySpan<RuntimeValue> args)

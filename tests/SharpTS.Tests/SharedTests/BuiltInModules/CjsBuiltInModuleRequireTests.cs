@@ -35,13 +35,16 @@ public class CjsBuiltInModuleRequireTests
                 const buffer = require('node:buffer');
                 const { atob: decode, btoa: encode } = buffer;
                 console.log(typeof buffer.Buffer, typeof decode, typeof encode);
+                console.log(decode === globalThis.atob, encode === globalThis.btoa);
+                globalThis.atob = () => 'replacement';
+                console.log(require('buffer').atob === decode, atob('YQ'));
                 console.log(buffer.atob('YQ'), encode('ab'));
                 console.log(decode(buffer.btoa('z')));
                 try { decode('!'); }
                 catch (error) { console.log(error.name, error.code); }
                 """
         };
-        Assert.Equal("function function function\na YWI=\nz\nInvalidCharacterError 5\n",
+        Assert.Equal("function function function\ntrue true\ntrue replacement\na YWI=\nz\nInvalidCharacterError 5\n",
             TestHarness.RunModules(files, "main.cjs", mode));
     }
 

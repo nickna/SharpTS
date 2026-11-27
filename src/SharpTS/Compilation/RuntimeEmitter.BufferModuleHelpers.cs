@@ -17,6 +17,8 @@ public partial class RuntimeEmitter
         EmitBufferBytesOf(typeBuilder, buffer);
         var invalidCharacterError = EmitBufferInvalidCharacterError(typeBuilder, runtime);
         EmitBufferAtobBtoa(typeBuilder, buffer, invalidCharacterError, runtime.StringCoercion.ToJsString);
+        buffer.AtobValue = EmitBase64Value("BufferAtobValue", "atob", buffer.Atob);
+        buffer.BtoaValue = EmitBase64Value("BufferBtoaValue", "btoa", buffer.Btoa);
         EmitBufferIsUtf8Ascii(typeBuilder, buffer);
         EmitBufferTranscode(typeBuilder, buffer);
         EmitBufferSlowBuffer(typeBuilder, buffer);
@@ -28,6 +30,20 @@ public partial class RuntimeEmitter
         runtime.BuiltInModules.Register("buffer", "isAscii", buffer.IsAscii);
         runtime.BuiltInModules.Register("buffer", "transcode", buffer.Transcode);
         runtime.BuiltInModules.Register("buffer", "SlowBuffer", buffer.SlowBuffer);
+
+        MethodBuilder EmitBase64Value(string clrName, string name, MethodBuilder target)
+        {
+            var value = typeBuilder.DefineMethod(clrName,
+                System.Reflection.MethodAttributes.Public | System.Reflection.MethodAttributes.Static,
+                _types.Object, Type.EmptyTypes);
+            var il = value.GetILGenerator();
+            var parameters = EmitReflectedMethodLiteralViaHandle(il, target);
+            il.Emit(OpCodes.Ldstr, name);
+            il.Emit(OpCodes.Ldc_I4_1);
+            EmitReflectedFunctionFactory(il, runtime.FunctionConstruction.GetOrCreate, parameters);
+            il.Emit(OpCodes.Ret);
+            return value;
+        }
     }
 
     /// <summary>

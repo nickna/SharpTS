@@ -105,8 +105,8 @@ public partial class RuntimeEmitter
         {
             var buffer = runtime.RequireBuffer();
             EmitGlobalAccessor(owner, il, runtime, "Buffer", get => EmitConstructor(get, buffer.Type));
-            InstallFunction("atob", buffer.Atob, 1);
-            InstallFunction("btoa", buffer.Btoa, 1);
+            InstallData("atob", true, () => il.Emit(OpCodes.Call, buffer.AtobValue));
+            InstallData("btoa", true, () => il.Emit(OpCodes.Call, buffer.BtoaValue));
         }
         if (runtime.Intl is { } intl)
         {
