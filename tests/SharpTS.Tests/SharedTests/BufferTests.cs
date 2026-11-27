@@ -1485,6 +1485,24 @@ public class BufferTests
     }
 
     [Theory, ModeData]
+    public void BufferModule_GlobalBase64HelpersAreMutableFunctionValues(ExecutionMode mode)
+    {
+        const string source = """
+            const decode = atob;
+            const encode = globalThis['btoa'];
+            console.log(typeof globalThis.atob, decode === globalThis.atob, decode.name, decode.length);
+            console.log(typeof btoa, encode === btoa, encode.name, encode.length);
+            console.log(decode('YQ'), encode('a'), encode(null));
+            const descriptor = Object.getOwnPropertyDescriptor(globalThis, 'atob');
+            console.log(descriptor.value === decode, descriptor.writable, descriptor.enumerable, descriptor.configurable);
+            globalThis.atob = value => 'replacement:' + value;
+            console.log(atob('YQ'), decode('YQ'));
+            """;
+        Assert.Equal("function true atob 1\nfunction true btoa 1\na YQ== bnVsbA==\ntrue true true true\nreplacement:YQ a\n",
+            TestHarness.RunUnchecked(source, mode));
+    }
+
+    [Theory, ModeData]
     public void BufferModule_IsUtf8IsAscii(ExecutionMode mode)
     {
         var files = new Dictionary<string, string>

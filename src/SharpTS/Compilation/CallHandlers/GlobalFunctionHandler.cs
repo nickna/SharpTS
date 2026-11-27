@@ -40,8 +40,6 @@ public class GlobalFunctionHandler : ICallHandler
             "String" => EmitStringConversion(emitter, il, ctx, call),
             "Number" => EmitNumberConversion(emitter, il, ctx, call),
             "Boolean" => EmitBooleanConversion(emitter, il, ctx, call),
-            "atob" => EmitBase64Global(emitter, il, ctx, call, ctx.Runtime!.RequireBuffer().Atob),
-            "btoa" => EmitBase64Global(emitter, il, ctx, call, ctx.Runtime!.RequireBuffer().Btoa),
             _ => false
         };
     }
@@ -68,27 +66,6 @@ public class GlobalFunctionHandler : ICallHandler
         il.Emit(System.Reflection.Emit.OpCodes.Ldloc, arguments);
         il.Emit(System.Reflection.Emit.OpCodes.Call, ctx.Runtime.Invocation.Method);
         emitter.SetStackUnknown();
-        return true;
-    }
-
-    /// <summary>
-    /// Emits a compiled global <c>atob(x)</c>/<c>btoa(x)</c> by routing to the pure-BCL
-    /// $Runtime.BufferAtob/BufferBtoa helper (the same one the buffer module export uses).
-    /// </summary>
-    private static bool EmitBase64Global(IEmitterContext emitter, System.Reflection.Emit.ILGenerator il,
-        CompilationContext ctx, Expr.Call call, System.Reflection.Emit.MethodBuilder target)
-    {
-        if (call.Arguments.Count == 0)
-        {
-            il.Emit(System.Reflection.Emit.OpCodes.Ldnull);
-        }
-        else
-        {
-            emitter.EmitExpression(call.Arguments[0]);
-            emitter.EmitBoxIfNeeded(call.Arguments[0]);
-        }
-        il.Emit(System.Reflection.Emit.OpCodes.Call, target);
-        emitter.SetStackType(StackType.String);
         return true;
     }
 

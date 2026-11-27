@@ -285,7 +285,7 @@ internal static class GlobalFunctionHandlers
     {
         if (arguments.Count < 1)
             throw new InterpreterException($"{BuiltInNames.Atob}() requires exactly one argument.");
-        var str = CoerceToString(await evaluateArg(arguments[0]));
+        var str = interpreter.ToStringForBuiltInArgument((await evaluateArg(arguments[0])).ToObject());
         return RuntimeValue.FromString(Types.BufferModuleHelpers.Atob(str));
     }
 
@@ -296,7 +296,7 @@ internal static class GlobalFunctionHandlers
     {
         if (arguments.Count < 1)
             throw new InterpreterException($"{BuiltInNames.Btoa}() requires exactly one argument.");
-        var str = CoerceToString(await evaluateArg(arguments[0]));
+        var str = interpreter.ToStringForBuiltInArgument((await evaluateArg(arguments[0])).ToObject());
         return RuntimeValue.FromString(Types.BufferModuleHelpers.Btoa(str));
     }
 

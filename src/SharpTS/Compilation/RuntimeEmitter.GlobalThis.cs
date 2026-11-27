@@ -94,7 +94,12 @@ public partial class RuntimeEmitter
         var il = initializer.GetILGenerator();
         EmitGlobalAccessor(owner, il, runtime, "process", get => get.Emit(OpCodes.Call, runtime.Process.GetObject));
         if (_features.UsesBuffer)
-            EmitGlobalAccessor(owner, il, runtime, "Buffer", get => EmitConstructor(get, runtime.RequireBuffer().Type));
+        {
+            var buffer = runtime.RequireBuffer();
+            EmitGlobalAccessor(owner, il, runtime, "Buffer", get => EmitConstructor(get, buffer.Type));
+            InstallFunction("atob", buffer.Atob, 1);
+            InstallFunction("btoa", buffer.Btoa, 1);
+        }
         if (runtime.Intl is { } intl)
         {
             InstallData("Intl", false, () =>
@@ -110,16 +115,16 @@ public partial class RuntimeEmitter
             InstallData("TextDecoder", false, () => EmitConstructor(il, text.DecoderType));
         }
         if (_emitHosted || _features.UsesStructuredClone)
-        {
-            InstallData("structuredClone", true, () =>
-            {
-                var parameters = EmitReflectedMethodLiteralViaHandle(il, runtime.StructuredClone.GuestClone);
-                il.Emit(OpCodes.Ldstr, "structuredClone");
-                il.Emit(OpCodes.Ldc_I4_2);
-                EmitReflectedFunctionFactory(il, runtime.FunctionConstruction.GetOrCreate, parameters);
-            });
-        }
+            InstallFunction("structuredClone", runtime.StructuredClone.GuestClone, 2);
         il.Emit(OpCodes.Ret);
+
+        void InstallFunction(string name, MethodBuilder method, int length) => InstallData(name, true, () =>
+        {
+            var parameters = EmitReflectedMethodLiteralViaHandle(il, method);
+            il.Emit(OpCodes.Ldstr, name);
+            il.Emit(OpCodes.Ldc_I4, length);
+            EmitReflectedFunctionFactory(il, runtime.FunctionConstruction.GetOrCreate, parameters);
+        });
 
         void EmitConstructor(ILGenerator target, Type type) =>
             NativeConstructorActivationLookup.EmitValue(_nativeConstructorActivation, _types, target, type,
