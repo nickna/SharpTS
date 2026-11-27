@@ -337,6 +337,10 @@ public static partial class BuiltInModuleTypes
 
         var anyType = TypeInfo.Any.Shared;
         var byteSource = new TypeInfo.Union([bufferType, new TypeInfo.Array(numberType), stringType]);
+        var validationSource = new TypeInfo.Union([
+            .. byteSource.Types, new TypeInfo.ArrayBuffer(), new TypeInfo.SharedArrayBuffer(),
+            .. BuiltInNames.TypedArrayNames.Select(name => new TypeInfo.TypedArray(name[..^"Array".Length]))
+        ]);
 
         return new Dictionary<string, TypeInfo>
         {
@@ -352,8 +356,8 @@ public static partial class BuiltInModuleTypes
             ["btoa"] = new TypeInfo.Function([stringType], stringType),
 
             // Validation
-            ["isUtf8"] = new TypeInfo.Function([byteSource], BooleanType),
-            ["isAscii"] = new TypeInfo.Function([byteSource], BooleanType),
+            ["isUtf8"] = new TypeInfo.Function([validationSource], BooleanType),
+            ["isAscii"] = new TypeInfo.Function([validationSource], BooleanType),
 
             // Encoding conversion
             ["transcode"] = new TypeInfo.Function([byteSource, stringType, stringType], bufferType),

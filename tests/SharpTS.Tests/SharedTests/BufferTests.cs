@@ -1577,11 +1577,27 @@ public class BufferTests
                 console.log(isUtf8(Buffer.from('héllo')));
                 console.log(isAscii(Buffer.from('héllo')));
                 console.log(isAscii(Buffer.from('hello')));
+
+                const bytes = new Uint8Array([255, 195, 169]);
+                const view = new Uint8Array(bytes.buffer, 1, 2);
+                console.log(isUtf8(view), isAscii(view), isUtf8(bytes.buffer), isAscii(bytes.buffer));
+                const shared = new SharedArrayBuffer(2);
+                console.log(isUtf8(shared), isAscii(shared));
+                console.log(isUtf8(new Uint16Array([65])), isAscii(new Uint16Array([65])));
+
+                const detached = bytes.buffer;
+                structuredClone(detached, { transfer: [detached] });
+                for (const validate of [isUtf8, isAscii]) {
+                    console.log(validate(view));
+                    try { validate(detached); }
+                    catch (error) { console.log(error.name, error.code); }
+                }
                 """
         };
 
         var output = TestHarness.RunModules(files, "main.ts", mode);
-        Assert.Equal("true\nfalse\ntrue\n", output);
+        Assert.Equal("true\nfalse\ntrue\ntrue false false false\ntrue true\ntrue true\n" +
+            "true\nError ERR_INVALID_STATE\ntrue\nError ERR_INVALID_STATE\n", output);
     }
 
     [Theory, ModeData]

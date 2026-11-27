@@ -20,7 +20,8 @@ public partial class RuntimeEmitter
         EmitBufferAtobBtoa(typeBuilder, buffer, invalidCharacterError, requireInput, runtime.StringCoercion.ToJsString);
         buffer.AtobValue = EmitBase64Value("BufferAtobValue", "atob", buffer.Atob);
         buffer.BtoaValue = EmitBase64Value("BufferBtoaValue", "btoa", buffer.Btoa);
-        EmitBufferIsUtf8Ascii(typeBuilder, buffer);
+        var validationBytes = EmitBufferValidationBytes(typeBuilder, runtime, buffer);
+        EmitBufferIsUtf8Ascii(typeBuilder, buffer, validationBytes);
         EmitBufferTranscode(typeBuilder, buffer);
         EmitBufferSlowBuffer(typeBuilder, buffer);
         EmitBufferModuleConstants(typeBuilder, runtime);
@@ -427,11 +428,107 @@ public partial class RuntimeEmitter
         }
     }
 
-    private void EmitBufferIsUtf8Ascii(TypeBuilder typeBuilder, EmittedBufferRuntime buffer)
+    private MethodBuilder EmitBufferValidationBytes(TypeBuilder owner, EmittedRuntime runtime, EmittedBufferRuntime buffer)
     {
-        var byteArr = _types.MakeArrayType(_types.Byte);
+        var intReference = _types.Int32.MakeByRefType();
+        var method = owner.DefineMethod("BufferValidationBytes",
+            System.Reflection.MethodAttributes.Private | System.Reflection.MethodAttributes.Static,
+            _types.ByteArray, [_types.Object, intReference, intReference]);
+        var il = method.GetILGenerator();
+        var wholeArray = il.DefineLabel();
+
+        if (runtime.ArrayBuffer is { } arrayBuffer)
+        {
+            var next = il.DefineLabel();
+            var attached = il.DefineLabel();
+            var input = TestInput(arrayBuffer.Type, next);
+            il.Emit(OpCodes.Ldloc, input);
+            il.Emit(OpCodes.Ldfld, arrayBuffer.DetachedField);
+            il.Emit(OpCodes.Brfalse, attached);
+            il.Emit(OpCodes.Ldstr, BufferModuleHelpers.DetachedValidationMessage);
+            il.Emit(OpCodes.Newobj, runtime.Errors.MessageConstructor);
+            il.Emit(OpCodes.Dup);
+            il.Emit(OpCodes.Ldstr, BufferModuleHelpers.DetachedValidationCode);
+            il.Emit(OpCodes.Callvirt, runtime.Errors.CodeSetter);
+            il.Emit(OpCodes.Call, runtime.Errors.CreateException);
+            il.Emit(OpCodes.Throw);
+            il.MarkLabel(attached);
+            il.Emit(OpCodes.Ldloc, input);
+            il.Emit(OpCodes.Callvirt, arrayBuffer.GetBuffer);
+            il.Emit(OpCodes.Br, wholeArray);
+            il.MarkLabel(next);
+        }
+
+        if (runtime.SharedArrayBuffer is { } shared)
+        {
+            var next = il.DefineLabel();
+            var input = TestInput(shared.Type, next);
+            il.Emit(OpCodes.Ldloc, input);
+            il.Emit(OpCodes.Callvirt, shared.GetBuffer);
+            il.Emit(OpCodes.Br, wholeArray);
+            il.MarkLabel(next);
+        }
+
+        if (runtime.TypedArrays.Implementation is { } arrays)
+        {
+            var next = il.DefineLabel();
+            var attached = il.DefineLabel();
+            var input = TestInput(arrays.BaseType, next);
+            il.Emit(OpCodes.Ldloc, input);
+            il.Emit(OpCodes.Call, arrays.IsDetached);
+            il.Emit(OpCodes.Brfalse, attached);
+            // Node treats a detached view as an empty byte range.
+            il.Emit(OpCodes.Ldc_I4_0);
+            il.Emit(OpCodes.Newarr, _types.Byte);
+            il.Emit(OpCodes.Br, wholeArray);
+            il.MarkLabel(attached);
+            il.Emit(OpCodes.Ldarg_1);
+            il.Emit(OpCodes.Ldloc, input);
+            il.Emit(OpCodes.Callvirt, arrays.ByteOffsetGetter);
+            il.Emit(OpCodes.Stind_I4);
+            il.Emit(OpCodes.Ldarg_2);
+            il.Emit(OpCodes.Ldloc, input);
+            il.Emit(OpCodes.Callvirt, arrays.ByteLengthGetter);
+            il.Emit(OpCodes.Stind_I4);
+            il.Emit(OpCodes.Ldloc, input);
+            il.Emit(OpCodes.Callvirt, arrays.GetBuffer);
+            il.Emit(OpCodes.Ret);
+            il.MarkLabel(next);
+        }
+
+        il.Emit(OpCodes.Ldarg_0);
+        il.Emit(OpCodes.Call, buffer.BytesOf);
+        il.MarkLabel(wholeArray);
+        var data = il.DeclareLocal(_types.ByteArray);
+        il.Emit(OpCodes.Stloc, data);
+        il.Emit(OpCodes.Ldarg_1);
+        il.Emit(OpCodes.Ldc_I4_0);
+        il.Emit(OpCodes.Stind_I4);
+        il.Emit(OpCodes.Ldarg_2);
+        il.Emit(OpCodes.Ldloc, data);
+        il.Emit(OpCodes.Ldlen);
+        il.Emit(OpCodes.Conv_I4);
+        il.Emit(OpCodes.Stind_I4);
+        il.Emit(OpCodes.Ldloc, data);
+        il.Emit(OpCodes.Ret);
+        return method;
+
+        LocalBuilder TestInput(Type type, Label next)
+        {
+            var input = il.DeclareLocal(type);
+            il.Emit(OpCodes.Ldarg_0);
+            il.Emit(OpCodes.Isinst, type);
+            il.Emit(OpCodes.Stloc, input);
+            il.Emit(OpCodes.Ldloc, input);
+            il.Emit(OpCodes.Brfalse, next);
+            return input;
+        }
+    }
+
+    private void EmitBufferIsUtf8Ascii(TypeBuilder typeBuilder, EmittedBufferRuntime buffer, MethodBuilder validationBytes)
+    {
         var roSpanByte = typeof(ReadOnlySpan<byte>);
-        var roSpanOp = roSpanByte.GetMethod("op_Implicit", [byteArr])!;
+        var fromRange = roSpanByte.GetConstructor([_types.ByteArray, _types.Int32, _types.Int32])!;
         var utf8IsValid = typeof(System.Text.Unicode.Utf8).GetMethod("IsValid", [roSpanByte])!;
         var asciiIsValid = typeof(System.Text.Ascii).GetMethod("IsValid", [roSpanByte])!;
 
@@ -443,9 +540,15 @@ public partial class RuntimeEmitter
                 _types.Object, [_types.Object]);
             store(method);
             var il = method.GetILGenerator();
+            var offset = il.DeclareLocal(_types.Int32);
+            var length = il.DeclareLocal(_types.Int32);
             il.Emit(OpCodes.Ldarg_0);
-            il.Emit(OpCodes.Call, buffer.BytesOf);
-            il.Emit(OpCodes.Call, roSpanOp);
+            il.Emit(OpCodes.Ldloca, offset);
+            il.Emit(OpCodes.Ldloca, length);
+            il.Emit(OpCodes.Call, validationBytes);
+            il.Emit(OpCodes.Ldloc, offset);
+            il.Emit(OpCodes.Ldloc, length);
+            il.Emit(OpCodes.Newobj, fromRange);
             il.Emit(OpCodes.Call, isValid);
             il.Emit(OpCodes.Box, _types.Boolean);
             il.Emit(OpCodes.Ret);
