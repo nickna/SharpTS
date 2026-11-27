@@ -15,7 +15,17 @@ public class SharpTSArrayBuffer : ITypeCategorized, ISharpTSOwnPropertyObject
     private readonly byte[] _data;
     private bool _detached;
     private SharpTSObject? _ownProperties;
-    SharpTSObject ISharpTSOwnPropertyObject.OwnProperties => _ownProperties ??= new([]);
+    internal SharpTSObject OwnProperties => _ownProperties ??= new([]);
+    SharpTSObject ISharpTSOwnPropertyObject.OwnProperties => OwnProperties;
+    internal bool HasExplicitPrototype => _ownProperties is { IsNullPrototype: true } or { Prototype: not null };
+    internal object? ExplicitPrototype => _ownProperties?.Prototype;
+
+    internal void SetExplicitPrototype(object? prototype)
+    {
+        var properties = OwnProperties;
+        properties.Prototype = prototype;
+        properties.IsNullPrototype = prototype is null;
+    }
 
     /// <inheritdoc />
     public TypeCategory RuntimeCategory => TypeCategory.Buffer;

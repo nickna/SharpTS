@@ -63,6 +63,25 @@ public class ArrayBufferTests
         Assert.Equal("true true\ntrue true\ntrue\ntrue\n", TestHarness.RunUnchecked(source, mode));
     }
 
+    [Theory, ModeData]
+    public void ArrayBuffer_PrototypeCanBeReplacedAndRestored(ExecutionMode mode)
+    {
+        const string source = """
+            const value = new ArrayBuffer(4);
+            const original = ArrayBuffer.prototype;
+            const replacement = { get label() { return this === value ? 'replacement' : 'wrong'; } };
+            console.log(Reflect.setPrototypeOf(value, replacement), Reflect.getPrototypeOf(value) === replacement);
+            console.log(value.label, value.byteLength === undefined, typeof value.slice);
+            console.log(Reflect.setPrototypeOf(value, value), Object.getPrototypeOf(value) === replacement);
+            console.log(Reflect.setPrototypeOf(value, null), Object.getPrototypeOf(value) === null);
+            console.log(Object.setPrototypeOf(value, original) === value, value.byteLength);
+            Reflect.preventExtensions(value);
+            console.log(Reflect.setPrototypeOf(value, original), Reflect.setPrototypeOf(value, null));
+            """;
+        Assert.Equal("true true\nreplacement true undefined\nfalse true\ntrue true\ntrue 4\ntrue false\n",
+            TestHarness.RunUnchecked(source, mode));
+    }
+
     #region ByteLength Property Tests
 
     [Theory, ModeData]
