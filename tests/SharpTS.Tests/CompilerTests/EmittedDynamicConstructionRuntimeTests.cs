@@ -165,6 +165,7 @@ public sealed class EmittedDynamicConstructionRuntimeTests
             ],
             ["EmitConstructDynamicValue"] =
             [
+                ("ArrayBuffer", typeof(EmittedArrayBufferRuntime)),
                 ("ArrayConstructor", typeof(MethodInfo)),
                 ("ArrayStorage", typeof(EmittedArrayStorageRuntime)),
                 ("Booleans", typeof(EmittedBooleanRuntime)),
@@ -180,6 +181,7 @@ public sealed class EmittedDynamicConstructionRuntimeTests
                 ("Operators", typeof(EmittedOperatorRuntime)),
                 ("Promise", typeof(EmittedPromiseRuntime)),
                 ("RegExps", typeof(EmittedRegExpRuntime)),
+                ("SharedArrayBuffer", typeof(EmittedSharedArrayBufferRuntime)),
                 ("SourceOwners", typeof(NativeSourceOwnerCatalog)),
                 ("StringCoercion", typeof(EmittedStringCoercionRuntime)),
                 ("UndefinedInstance", typeof(FieldInfo)),
