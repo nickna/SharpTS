@@ -10,6 +10,9 @@ namespace SharpTS.Runtime.Types;
 /// </summary>
 public sealed class SharpTSBufferConstructor
 {
+    private static readonly BuiltInMethod IsBufferMethod =
+        BuiltInMethod.CreateV2("isBuffer", 0, int.MaxValue, BufferIsBuffer).WithSpecLength(1);
+
     /// <summary>
     /// The singleton instance of the Buffer constructor.
     /// </summary>
@@ -38,7 +41,7 @@ public sealed class SharpTSBufferConstructor
             "allocUnsafeSlow" => BuiltInMethod.CreateV2("allocUnsafeSlow", 1, BufferAllocUnsafe), // Same as allocUnsafe
             "concat" => BuiltInMethod.CreateV2("concat", 1, 2, BufferConcat),
             "copyBytesFrom" => BuiltInMethod.CreateV2("copyBytesFrom", 1, 3, BufferCopyBytesFrom),
-            "isBuffer" => BuiltInMethod.CreateV2("isBuffer", 1, BufferIsBuffer),
+            "isBuffer" => IsBufferMethod,
             "byteLength" => BuiltInMethod.CreateV2("byteLength", 1, 2, BufferByteLength).WithSpecLength(2),
             "compare" => BuiltInMethod.CreateV2("compare", 2, BufferCompare),
             "isEncoding" => BuiltInMethod.CreateV2("isEncoding", 1, BufferIsEncoding),

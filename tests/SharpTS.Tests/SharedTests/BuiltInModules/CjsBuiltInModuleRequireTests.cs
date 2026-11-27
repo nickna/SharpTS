@@ -64,9 +64,12 @@ public class CjsBuiltInModuleRequireTests
                 const { isBuffer } = buffer.Buffer;
                 console.log(typeof isBuffer, isBuffer.name, isBuffer.length);
                 console.log(isBuffer(result), isBuffer(new Uint8Array(3)), isBuffer(null), result.length);
+                console.log(isBuffer === Buffer.isBuffer, isBuffer === buffer.Buffer['isBuffer']);
+                console.log(isBuffer(), isBuffer(undefined), isBuffer(result, 'ignored'));
                 """
         };
-        Assert.Equal("function function function function\ntrue false false\ntrue 68e96c6c6f\nfunction isBuffer 1\ntrue false false 3\n",
+        Assert.Equal("function function function function\ntrue false false\ntrue 68e96c6c6f\nfunction isBuffer 1\n" +
+                     "true false false 3\ntrue true\nfalse false true\n",
             TestHarness.RunModules(files, "main.cjs", mode));
     }
 
