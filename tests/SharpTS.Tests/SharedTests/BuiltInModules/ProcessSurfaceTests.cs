@@ -84,6 +84,25 @@ public class ProcessSurfaceTests
         Assert.Equal("42\n", output);
     }
 
+    [Theory, ModeData]
+    public void Process_GetMaxListenersUsesCurrentReceiver(ExecutionMode mode)
+    {
+        const string source = """
+            const original = process;
+            const replacement = {
+                get getMaxListeners() {
+                    console.log('get');
+                    return function (value) { return this === replacement ? value : -1; };
+                }
+            };
+            globalThis.process = replacement;
+            function restore() { console.log('arg'); globalThis.process = original; return [42]; }
+            console.log(process.getMaxListeners(...restore()));
+            console.log(process.getMaxListeners());
+            """;
+        Assert.Equal("get\narg\n42\n10\n", TestHarness.RunUnchecked(source, mode));
+    }
+
     // ---- #1082: diagnostics ----
 
     [Theory, ModeData]
