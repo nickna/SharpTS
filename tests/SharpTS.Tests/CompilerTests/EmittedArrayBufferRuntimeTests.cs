@@ -160,7 +160,7 @@ public class EmittedArrayBufferRuntimeTests
         Assert.NotSame(bytes, slicedBytes);
         bytes[0] = 99;
         Assert.Equal(42, slicedBytes[0]);
-        var dynamicSlice = type.GetMethod(buffer.SliceDynamic.Name)!.Invoke(value, ["1.9", 4d]);
+        var dynamicSlice = type.GetMethod(buffer.SliceDynamic.Name)!.Invoke(null, [value, "1.9", 4d]);
         var getByteLength = type.GetMethod(buffer.ByteLengthGetter.Name)!;
         Assert.Equal(3, getByteLength.Invoke(dynamicSlice, null));
         Assert.Equal(8, getByteLength.Invoke(value, null));
@@ -172,7 +172,7 @@ public class EmittedArrayBufferRuntimeTests
 
     [Theory]
     [InlineData("const b = new ArrayBuffer(8); console.log(b.byteLength, b.slice(-4).byteLength, b instanceof ArrayBuffer);")]
-    [InlineData("const b: any = new ArrayBuffer(8); const slice = b.slice; console.log(slice(1.9, 5).byteLength, b.slice().byteLength);")]
+    [InlineData("const b: any = new ArrayBuffer(8); const slice = b.slice; console.log(slice.call(b, 1.9, 5).byteLength, b.slice().byteLength);")]
     [InlineData("const isView = ArrayBuffer.isView; const b = new ArrayBuffer(8); console.log(isView(new Uint8Array(b)), isView(new DataView(b)), isView(b));")]
     [InlineData("const b = new ArrayBuffer(8); const view = new DataView(b); view.setUint32(0, 123, true); console.log(Buffer.from(b)[0], new Uint8Array(b).buffer === b);")]
     [InlineData("const b = new ArrayBuffer(8); console.log(Array.from(b).length, structuredClone(b).byteLength);")]

@@ -3328,34 +3328,19 @@ public partial class RuntimeEmitter
                 () => il.Emit(OpCodes.Ldarg_0), inputs.InvokeMethodValue, inputs.UndefinedInstance, inputs.UndefinedType);
             il.MarkLabel(noArrayBufferDescriptor);
 
-            il.Emit(OpCodes.Ldarg_1);
-            il.Emit(OpCodes.Ldstr, "byteLength");
-            il.Emit(OpCodes.Call, _types.GetMethod(_types.String, "op_Equality", _types.String, _types.String));
-            var notArrayBufferByteLengthLabel = il.DefineLabel();
-            il.Emit(OpCodes.Brfalse, notArrayBufferByteLengthLabel);
-            // Return ByteLength as double
+            // Use the live prototype and preserve the ArrayBuffer as Receiver.
+            var hasArrayBufferPrototype = il.DefineLabel();
             il.Emit(OpCodes.Ldarg_0);
-            il.Emit(OpCodes.Castclass, inputs.ArrayBuffer!.Type);
-            il.Emit(OpCodes.Callvirt, inputs.ArrayBuffer!.ByteLengthGetter);
-            il.Emit(OpCodes.Conv_R8);
-            il.Emit(OpCodes.Box, _types.Double);
-            il.Emit(OpCodes.Ret);
-            il.MarkLabel(notArrayBufferByteLengthLabel);
-            // ArrayBuffer.prototype.slice — bind the emitted instance helper so
-            // generic/any-typed receivers remain callable.
-            il.Emit(OpCodes.Ldarg_1);
-            il.Emit(OpCodes.Ldstr, "slice");
-            il.Emit(OpCodes.Call, _types.GetMethod(_types.String, "op_Equality", _types.String, _types.String));
-            var notArrayBufferSliceLabel = il.DefineLabel();
-            il.Emit(OpCodes.Brfalse, notArrayBufferSliceLabel);
-            il.Emit(OpCodes.Ldarg_0);
-            var parameterMethod4 = EmitReflectedMethodLiteral(il, inputs.ArrayBuffer!.SliceDynamic);
-            il.Emit(OpCodes.Ldstr, "slice");
-            il.Emit(OpCodes.Ldc_I4_2);
-            EmitReflectedFunctionConstructor(il, inputs.TSFunctionCtorWithCache, parameterMethod4, cached: true);
-            il.Emit(OpCodes.Ret);
-            il.MarkLabel(notArrayBufferSliceLabel);
+            il.Emit(OpCodes.Call, inputs.ObjectPrototypes.GetPrototypeOf);
+            il.Emit(OpCodes.Dup);
+            il.Emit(OpCodes.Brtrue, hasArrayBufferPrototype);
+            il.Emit(OpCodes.Pop);
             il.Emit(OpCodes.Ldsfld, inputs.UndefinedInstance);
+            il.Emit(OpCodes.Ret);
+            il.MarkLabel(hasArrayBufferPrototype);
+            il.Emit(OpCodes.Ldarg_1);
+            il.Emit(OpCodes.Ldarg_0);
+            il.Emit(OpCodes.Call, inputs.Reflect.Get);
             il.Emit(OpCodes.Ret);
 
             // $SharedArrayBuffer handler - check for "byteLength"

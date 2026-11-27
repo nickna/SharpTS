@@ -75,6 +75,7 @@ public partial class RuntimeEmitter
         // Method: public $ArrayBuffer Slice(int begin, int end)
         EmitArrayBufferSlice(typeBuilder, arrayBuffer);
         EmitArrayBufferSliceDynamic(typeBuilder, runtime);
+        EmitArrayBufferPrototypeByteLengthGetter(typeBuilder, runtime, arrayBuffer);
 
         // Finalize the type
         typeBuilder.CreateType();
@@ -280,26 +281,58 @@ public partial class RuntimeEmitter
         var arrayBuffer = runtime.RequireArrayBuffer();
         var method = typeBuilder.DefineMethod(
             "SliceDynamic",
-            MethodAttributes.Public,
+            MethodAttributes.Public | MethodAttributes.Static,
             typeBuilder,
-            [_types.Object, _types.Object]);
+            [_types.Object, _types.Object, _types.Object]);
+        method.DefineParameter(1, ParameterAttributes.None, "__this");
+        method.SetCustomAttribute(runtime.FunctionAttributes.PadUndefinedCtor, CustomAttributeEncoder.EmptyBlob);
         arrayBuffer.SliceDynamic = method;
         var il = method.GetILGenerator();
+        var receiver = il.DeclareLocal(arrayBuffer.Type);
         var begin = il.DeclareLocal(_types.Int32);
         var end = il.DeclareLocal(_types.Int32);
+
+        EmitRequireArrayBufferReceiver(il, runtime, arrayBuffer, "slice");
+        il.Emit(OpCodes.Stloc, receiver);
+        RequireAttached();
+        EmitIndexOrDefault(1, begin, 0);
+        EmitIndexOrDefault(2, end, int.MaxValue);
+        RequireAttached();
+        il.Emit(OpCodes.Ldloc, receiver);
+        il.Emit(OpCodes.Ldloc, begin);
+        il.Emit(OpCodes.Ldloc, end);
+        il.Emit(OpCodes.Callvirt, arrayBuffer.Slice);
+        il.Emit(OpCodes.Ret);
+
+        void RequireAttached()
+        {
+            var attached = il.DefineLabel();
+            il.Emit(OpCodes.Ldloc, receiver);
+            il.Emit(OpCodes.Ldfld, arrayBuffer.DetachedField);
+            il.Emit(OpCodes.Brfalse, attached);
+            GuestErrorEmitter.ThrowTypeError(il, runtime, "Cannot perform ArrayBuffer.prototype.slice on a detached ArrayBuffer");
+            il.MarkLabel(attached);
+        }
 
         void EmitIndexOrDefault(int arg, LocalBuilder target, int defaultValue)
         {
             var useDefault = il.DefineLabel();
+            var notNaN = il.DefineLabel();
             var ready = il.DefineLabel();
-            il.Emit(OpCodes.Ldarg, arg);
-            il.Emit(OpCodes.Brfalse, useDefault);
             il.Emit(OpCodes.Ldarg, arg);
             il.Emit(OpCodes.Isinst, runtime.Sentinels.UndefinedType);
             il.Emit(OpCodes.Brtrue, useDefault);
             il.Emit(OpCodes.Ldarg, arg);
             il.Emit(OpCodes.Call, runtime.NumericCoercion.ToNumber);
-            il.Emit(OpCodes.Call, _types.GetMethod(_types.Math, "Truncate", _types.Double));
+            il.Emit(OpCodes.Dup);
+            il.Emit(OpCodes.Call, _types.GetMethod(_types.Double, "IsNaN", _types.Double));
+            il.Emit(OpCodes.Brfalse, notNaN);
+            il.Emit(OpCodes.Pop);
+            il.Emit(OpCodes.Ldc_R8, 0d);
+            il.MarkLabel(notNaN);
+            il.Emit(OpCodes.Ldc_R8, (double)int.MinValue);
+            il.Emit(OpCodes.Ldc_R8, (double)int.MaxValue);
+            il.Emit(OpCodes.Call, _types.GetMethod(_types.Math, "Clamp", _types.Double, _types.Double, _types.Double));
             il.Emit(OpCodes.Conv_I4);
             il.Emit(OpCodes.Stloc, target);
             il.Emit(OpCodes.Br, ready);
@@ -308,13 +341,57 @@ public partial class RuntimeEmitter
             il.Emit(OpCodes.Stloc, target);
             il.MarkLabel(ready);
         }
+    }
 
-        EmitIndexOrDefault(1, begin, 0);
-        EmitIndexOrDefault(2, end, int.MaxValue);
-        il.Emit(OpCodes.Ldarg_0);
-        il.Emit(OpCodes.Ldloc, begin);
-        il.Emit(OpCodes.Ldloc, end);
-        il.Emit(OpCodes.Callvirt, arrayBuffer.Slice);
+    private void EmitArrayBufferPrototypeByteLengthGetter(TypeBuilder owner, EmittedRuntime runtime,
+        EmittedArrayBufferRuntime arrayBuffer)
+    {
+        var getter = owner.DefineMethod("PrototypeGetByteLength", MethodAttributes.Public | MethodAttributes.Static,
+            _types.Object, [_types.Object]);
+        getter.DefineParameter(1, ParameterAttributes.None, "__this");
+        arrayBuffer.PrototypeByteLengthGetter = getter;
+        var il = getter.GetILGenerator();
+        EmitRequireArrayBufferReceiver(il, runtime, arrayBuffer, "byteLength");
+        il.Emit(OpCodes.Callvirt, arrayBuffer.ByteLengthGetter);
+        il.Emit(OpCodes.Conv_R8);
+        il.Emit(OpCodes.Box, _types.Double);
         il.Emit(OpCodes.Ret);
+    }
+
+    private void EmitRequireArrayBufferReceiver(ILGenerator il, EmittedRuntime runtime,
+        EmittedArrayBufferRuntime arrayBuffer, string member)
+    {
+        var valid = il.DefineLabel();
+        il.Emit(OpCodes.Ldarg_0);
+        il.Emit(OpCodes.Isinst, arrayBuffer.Type);
+        il.Emit(OpCodes.Dup);
+        il.Emit(OpCodes.Brtrue, valid);
+        il.Emit(OpCodes.Pop);
+        GuestErrorEmitter.ThrowTypeError(il, runtime, $"ArrayBuffer.prototype.{member} called on incompatible receiver");
+        il.MarkLabel(valid);
+    }
+
+    private void EmitArrayBufferPrototypeMembers(ILGenerator il, EmittedRuntime runtime,
+        EmittedArrayBufferRuntime arrayBuffer, LocalBuilder descriptor, MethodInfo setItem)
+    {
+        var storage = runtime.DescriptorStorage;
+        var prototype = arrayBuffer.PrototypeField;
+        il.Emit(OpCodes.Ldsfld, prototype);
+        il.Emit(OpCodes.Ldstr, "byteLength");
+        il.Emit(OpCodes.Newobj, storage.DescriptorConstructor);
+        il.Emit(OpCodes.Dup);
+        var parameters = EmitReflectedMethodLiteralViaHandle(il, arrayBuffer.PrototypeByteLengthGetter);
+        il.Emit(OpCodes.Ldstr, "get byteLength");
+        il.Emit(OpCodes.Ldc_I4_0);
+        EmitReflectedFunctionFactory(il, runtime.FunctionConstruction.GetOrCreate, parameters);
+        il.Emit(OpCodes.Callvirt, storage.DescriptorGetter.GetSetMethod()!);
+        il.Emit(OpCodes.Dup);
+        il.Emit(OpCodes.Ldc_I4_0);
+        il.Emit(OpCodes.Callvirt, storage.DescriptorEnumerable.GetSetMethod()!);
+        il.Emit(OpCodes.Call, storage.DefineProperty);
+        il.Emit(OpCodes.Pop);
+
+        EmitWirePrototypeMethod(il, runtime, prototype, descriptor, setItem, "slice", arrayBuffer.SliceDynamic, 2,
+            nameThisParam: false);
     }
 }

@@ -37,7 +37,6 @@ public sealed class TypeEmitterRegistry
         registry.Register<TypeInfo.AsyncGenerator>(new AsyncGeneratorEmitter());
         registry.Register<TypeInfo.Error>(new ErrorEmitter());
         registry.Register<TypeInfo.SharedArrayBuffer>(new SharedArrayBufferEmitter());
-        registry.Register<TypeInfo.ArrayBuffer>(new ArrayBufferEmitter());
         registry.Register<TypeInfo.DataView>(new DataViewEmitter());
         registry.Register<TypeInfo.AbortController>(new AbortControllerEmitter());
         registry.Register<TypeInfo.AbortSignal>(new AbortSignalEmitter());

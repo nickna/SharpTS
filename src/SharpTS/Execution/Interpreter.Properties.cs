@@ -516,8 +516,6 @@ public partial class Interpreter
                 {
                     SharpTSMap map => MapBuiltIns.GetMember(map, name),
                     SharpTSSet set => SetBuiltIns.GetMember(set, name),
-                    SharpTSArrayBuffer buffer when name == "slice" =>
-                        BuiltInRegistry.Instance.TryGetInstanceMember(buffer, name).Member,
                     _ => null
                 };
                 if (intrinsicMember is not null)

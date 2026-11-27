@@ -2805,8 +2805,10 @@ public partial class StandaloneDllTests
             bytes[0] = 99;
             console.log(new Uint8Array(slice)[0], slice.byteLength);
             const dynamic: any = buffer;
-            const bound = dynamic.slice;
-            console.log(bound(4, 8).byteLength, dynamic.slice(-4).byteLength);
+            const extracted = dynamic.slice;
+            try { extracted(4, 8); }
+            catch (error) { console.log(error instanceof TypeError); }
+            console.log(extracted.call(dynamic, 4, 8).byteLength, dynamic.slice(-4).byteLength);
             const isView = ArrayBuffer.isView;
             console.log(isView(view), isView(bytes), isView(buffer), isView(null));
             console.log(bytes.buffer === buffer, view.buffer === buffer, buffer instanceof ArrayBuffer);
@@ -2825,7 +2827,7 @@ public partial class StandaloneDllTests
         {
             Assert.DoesNotContain("SharpTS", GetAssemblyReferences(dllPath));
             Assert.False(File.Exists(Path.Combine(tempDir, "SharpTS.dll")));
-            Assert.Equal("16 4 305419896\n42 8\n4 4\ntrue true false false\ntrue true true\n99 7\ninvalid length\n11\n",
+            Assert.Equal("16 4 305419896\n42 8\ntrue\n4 4\ntrue true false false\ntrue true true\n99 7\ninvalid length\n11\n",
                 ExecuteCompiledDllIsolated(dllPath, timeoutMs: 15000));
         }
         finally

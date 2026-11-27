@@ -66,6 +66,33 @@ public class ArrayBufferTests
     #region ByteLength Property Tests
 
     [Theory, ModeData]
+    public void ArrayBuffer_PrototypeExposesTheIntrinsicDescriptors(ExecutionMode mode)
+    {
+        const string source = """
+            const value = new ArrayBuffer(4);
+            const prototype = ArrayBuffer.prototype;
+            console.log(Object.hasOwn(prototype, 'byteLength'), Object.hasOwn(prototype, 'slice'));
+            console.log(value.constructor === ArrayBuffer, value.slice === prototype.slice);
+            const length = Object.getOwnPropertyDescriptor(prototype, 'byteLength');
+            console.log(length.get.name, length.enumerable, length.configurable,
+                length.get.call(value), Reflect.get(prototype, 'byteLength', value));
+            const slice = Object.getOwnPropertyDescriptor(prototype, 'slice');
+            console.log(slice.value.length, slice.writable, slice.enumerable, slice.configurable);
+            console.log(slice.value.call(value, 1, 3).byteLength, value.slice(0, null).byteLength,
+                value.slice(0, Infinity).byteLength, value.slice().byteLength);
+            for (const member of [length.get, slice.value]) {
+                try { member.call({}); }
+                catch (error) { console.log(error instanceof TypeError); }
+            }
+            prototype.slice = function () { return this === value; };
+            console.log(value.slice(), delete prototype.slice, typeof value.slice);
+            prototype.slice = slice.value;
+            """;
+        Assert.Equal("true true\ntrue true\nget byteLength false true 4 4\n2 true false true\n2 0 4 4\n" +
+            "true\ntrue\ntrue true undefined\n", TestHarness.RunUnchecked(source, mode));
+    }
+
+    [Theory, ModeData]
     public void ArrayBuffer_ByteLength_ReturnsCorrectValue(ExecutionMode mode)
     {
         var source = @"

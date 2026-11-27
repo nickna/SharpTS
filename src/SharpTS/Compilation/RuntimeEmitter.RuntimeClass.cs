@@ -682,12 +682,14 @@ public partial class RuntimeEmitter
         {
             EmitLinkProto(arrayBufferPrototypeLink.PrototypeField);
             var descriptor = cctorIL.DeclareLocal(runtime.DescriptorStorage.DescriptorType);
+            var setItem = _types.GetMethod(_types.DictionaryStringObject, "set_Item", _types.String, _types.Object);
             EmitInstallConstructor(cctorIL, runtime, arrayBufferPrototypeLink.PrototypeField, descriptor,
-                _types.GetMethod(_types.DictionaryStringObject, "set_Item", _types.String, _types.Object), () =>
+                setItem, () =>
                 {
                     cctorIL.Emit(OpCodes.Ldtoken, arrayBufferPrototypeLink.Type);
                     cctorIL.Emit(OpCodes.Call, _types.TypeGetTypeFromHandle);
                 });
+            EmitArrayBufferPrototypeMembers(cctorIL, runtime, arrayBufferPrototypeLink, descriptor, setItem);
         }
         EmitLinkProto(errorPrototypeField);
         EmitLinkProto(functionPrototypeField);
