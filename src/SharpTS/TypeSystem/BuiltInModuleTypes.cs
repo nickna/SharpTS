@@ -338,7 +338,7 @@ public static partial class BuiltInModuleTypes
         var anyType = TypeInfo.Any.Shared;
         var byteSource = new TypeInfo.Union([bufferType, new TypeInfo.Array(numberType), stringType]);
         var validationSource = new TypeInfo.Union([
-            .. byteSource.Types, new TypeInfo.ArrayBuffer(), new TypeInfo.SharedArrayBuffer(),
+            bufferType, new TypeInfo.ArrayBuffer(), new TypeInfo.SharedArrayBuffer(),
             .. BuiltInNames.TypedArrayNames.Select(name => new TypeInfo.TypedArray(name[..^"Array".Length]))
         ]);
 

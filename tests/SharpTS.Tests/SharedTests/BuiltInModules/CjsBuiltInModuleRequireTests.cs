@@ -74,6 +74,25 @@ public class CjsBuiltInModuleRequireTests
     }
 
     [Theory, ModeData]
+    public void Cjs_Require_Buffer_ValidatorsRejectNonBinaryInput(ExecutionMode mode)
+    {
+        var files = new Dictionary<string, string>
+        {
+            ["main.cjs"] = """
+                const { isUtf8, isAscii } = require('node:buffer');
+                for (const validate of [isUtf8, isAscii]) {
+                    for (const args of [[], ['ascii'], [[65]], [new DataView(new ArrayBuffer(1))], [null]]) {
+                        try { console.log(validate(...args)); }
+                        catch (error) { console.log(error instanceof TypeError, error.name, error.code); }
+                    }
+                }
+                """
+        };
+        const string expected = "true TypeError ERR_INVALID_ARG_TYPE\n";
+        Assert.Equal(string.Concat(Enumerable.Repeat(expected, 10)), TestHarness.RunModules(files, "main.cjs", mode));
+    }
+
+    [Theory, ModeData]
     public void Cjs_Require_Assert_Ok(ExecutionMode mode)
     {
         var files = new Dictionary<string, string>

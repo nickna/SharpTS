@@ -496,8 +496,20 @@ public partial class RuntimeEmitter
             il.MarkLabel(next);
         }
 
-        il.Emit(OpCodes.Ldarg_0);
-        il.Emit(OpCodes.Call, buffer.BytesOf);
+        var invalidInput = il.DefineLabel();
+        var bufferInput = TestInput(buffer.Type, invalidInput);
+        il.Emit(OpCodes.Ldloc, bufferInput);
+        il.Emit(OpCodes.Callvirt, buffer.GetData);
+        il.Emit(OpCodes.Br, wholeArray);
+        il.MarkLabel(invalidInput);
+        il.Emit(OpCodes.Ldstr, BufferModuleHelpers.InvalidValidationInputMessage);
+        il.Emit(OpCodes.Newobj, runtime.Errors.TypeErrorConstructor);
+        il.Emit(OpCodes.Dup);
+        il.Emit(OpCodes.Ldstr, BufferModuleHelpers.InvalidValidationInputCode);
+        il.Emit(OpCodes.Callvirt, runtime.Errors.CodeSetter);
+        il.Emit(OpCodes.Call, runtime.Errors.CreateException);
+        il.Emit(OpCodes.Throw);
+
         il.MarkLabel(wholeArray);
         var data = il.DeclareLocal(_types.ByteArray);
         il.Emit(OpCodes.Stloc, data);

@@ -36,8 +36,8 @@ public static class BufferModuleInterpreter
             ["btoa"] = Interp.GetIntrinsicGlobalFunction(BuiltInNames.Btoa),
 
             // Validation helpers
-            ["isUtf8"] = BuiltInMethod.CreateV2("isUtf8", 1, IsUtf8),
-            ["isAscii"] = BuiltInMethod.CreateV2("isAscii", 1, IsAscii),
+            ["isUtf8"] = BuiltInMethod.CreateV2("isUtf8", 0, int.MaxValue, IsUtf8).WithSpecLength(1),
+            ["isAscii"] = BuiltInMethod.CreateV2("isAscii", 0, int.MaxValue, IsAscii).WithSpecLength(1),
 
             // Encoding conversion
             ["transcode"] = BuiltInMethod.CreateV2("transcode", 3, Transcode),
@@ -77,26 +77,25 @@ public static class BufferModuleInterpreter
 
     private static RuntimeValue IsUtf8(Interp interpreter, RuntimeValue receiver, ReadOnlySpan<RuntimeValue> args)
     {
-        if (args.Length == 0)
-            throw new Exception("isUtf8 requires a Buffer or TypedArray argument");
-        return RuntimeValue.FromBoolean(BufferModuleHelpers.IsUtf8(ValidationBytes(args[0], "isUtf8")));
+        return RuntimeValue.FromBoolean(BufferModuleHelpers.IsUtf8(ValidationBytes(args)));
     }
 
     private static RuntimeValue IsAscii(Interp interpreter, RuntimeValue receiver, ReadOnlySpan<RuntimeValue> args)
     {
-        if (args.Length == 0)
-            throw new Exception("isAscii requires a Buffer or TypedArray argument");
-        return RuntimeValue.FromBoolean(BufferModuleHelpers.IsAscii(ValidationBytes(args[0], "isAscii")));
+        return RuntimeValue.FromBoolean(BufferModuleHelpers.IsAscii(ValidationBytes(args)));
     }
 
-    private static ReadOnlySpan<byte> ValidationBytes(RuntimeValue value, string method) => value.ToObject() switch
+    private static ReadOnlySpan<byte> ValidationBytes(ReadOnlySpan<RuntimeValue> arguments)
+        => (arguments.IsEmpty ? SharpTSUndefined.Instance : arguments[0].ToObject()) switch
     {
+        SharpTSBuffer buffer => buffer.Data,
         SharpTSArrayBuffer { IsDetached: true } => throw new ThrowException(new SharpTSError(
             BufferModuleHelpers.DetachedValidationMessage) { Code = BufferModuleHelpers.DetachedValidationCode }),
         SharpTSArrayBuffer buffer => buffer.AsSpan(),
         SharpTSSharedArrayBuffer buffer => buffer.AsSpan(),
         SharpTSTypedArray view => view.Buffer.AsSpan(view.ByteOffset, view.ByteLength),
-        _ => ToBytes(value, method),
+        _ => throw new ThrowException(new SharpTSTypeError(
+            BufferModuleHelpers.InvalidValidationInputMessage) { Code = BufferModuleHelpers.InvalidValidationInputCode }),
     };
 
     private static RuntimeValue Transcode(Interp interpreter, RuntimeValue receiver, ReadOnlySpan<RuntimeValue> args)
