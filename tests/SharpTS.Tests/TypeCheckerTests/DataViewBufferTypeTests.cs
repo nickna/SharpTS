@@ -18,9 +18,19 @@ public sealed class DataViewBufferTypeTests
     }
 
     [Theory]
+    [InlineData("function accept(buffer: ArrayBuffer): void {} accept(new ArrayBuffer(1));")]
+    [InlineData("const buffer: ArrayBuffer = new ArrayBuffer(1); function make(): ArrayBuffer { return new ArrayBuffer(2); }")]
+    [InlineData("function f() { class ArrayBuffer { constructor(public label: string) {} } const value: ArrayBuffer = new ArrayBuffer('local'); }")]
+    public void ArrayBufferConstructorResultsFollowTheirCompletedDeclaration(string source)
+    {
+        Assert.Empty(CheckWithLibraries(source));
+    }
+
+    [Theory]
     [InlineData("new DataView(1);", "TS2769")]
     [InlineData("new DataView(new ArrayBuffer(8), 'offset');", "TS2769")]
     [InlineData("new DataView();", "TS2769")]
+    [InlineData("new ArrayBuffer('length');", "TS2769")]
     [InlineData("const n: string = new DataView(new ArrayBuffer(8)).byteLength;", "TS2322")]
     [InlineData("function f() { class DataView { constructor(label: string) {} } new DataView(1); }", "TS2345")]
     public void DeclaredConstructorArgumentsAndResultsRemainChecked(string source, string code)
