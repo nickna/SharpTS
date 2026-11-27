@@ -29,7 +29,20 @@ public partial class RuntimeEmitter
         il.MarkLabel(notNamespace);
     }
 
+    private static void EmitBufferPropertyStoreBranches(ILGenerator il, Type? arrayBuffer, Type? sharedBuffer, Label store)
+    {
+        foreach (var type in new[] { arrayBuffer, sharedBuffer })
+        {
+            if (type is null) continue;
+            il.Emit(OpCodes.Ldarg_0);
+            il.Emit(OpCodes.Isinst, type);
+            il.Emit(OpCodes.Brtrue, store);
+        }
+    }
+
     private readonly record struct SetFieldsPropertyInputs(
+        Type? ArrayBufferType,
+        Type? SharedArrayBufferType,
         EmittedDateRuntime Dates,
         EmittedDescriptorStorageRuntime DescriptorStorage,
         EmittedErrorRuntime Errors,
@@ -45,6 +58,8 @@ public partial class RuntimeEmitter
     );
 
     private readonly record struct SetFieldsPropertyStrictInputs(
+        Type? ArrayBufferType,
+        Type? SharedArrayBufferType,
         EmittedDateRuntime Dates,
         EmittedDescriptorStorageRuntime DescriptorStorage,
         EmittedErrorRuntime Errors,
@@ -414,6 +429,7 @@ public partial class RuntimeEmitter
         // names (like `obj.length`, `obj[0]`).
         var pdsStoreLabel = il.DefineLabel();
         var afterPdsStoreLabel = il.DefineLabel();
+        EmitBufferPropertyStoreBranches(il, inputs.ArrayBufferType, inputs.SharedArrayBufferType, pdsStoreLabel);
         if (inputs.Dates.Implementation is not null)
         {
             il.Emit(OpCodes.Ldarg_0);
@@ -730,6 +746,7 @@ public partial class RuntimeEmitter
         // extensibility throws were already handled at the top of this method.
         var fieldsPdsStoreLabel = il.DefineLabel();
         var afterFieldsPdsStoreLabel = il.DefineLabel();
+        EmitBufferPropertyStoreBranches(il, inputs.ArrayBufferType, inputs.SharedArrayBufferType, fieldsPdsStoreLabel);
         if (inputs.Dates.Implementation is not null)
         {
             il.Emit(OpCodes.Ldarg_0);

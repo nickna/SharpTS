@@ -169,6 +169,29 @@ public class ArrayBufferTests
     #region Slice Method Tests
 
     [Theory, ModeData]
+    public void ArrayBuffer_AssignmentShadowsInheritedMethods(ExecutionMode mode)
+    {
+        const string source = """
+            function check(value) {
+                const original = value.slice;
+                const replacement = () => 42;
+                value.slice = replacement;
+                const desc = Object.getOwnPropertyDescriptor(value, 'slice');
+                console.log(value.slice === replacement, value.slice(), desc.writable, desc.enumerable, desc.configurable);
+                delete value.slice;
+                console.log(value.slice === original);
+                function setStrict(obj, key) { 'use strict'; obj[key] = 17; }
+                setStrict(value, 'extra');
+                console.log(value.extra);
+            }
+            check(new ArrayBuffer(4));
+            check(new SharedArrayBuffer(4));
+            """;
+        const string result = "true 42 true true true\ntrue\n17\n";
+        Assert.Equal(result + result, TestHarness.RunUnchecked(source, mode));
+    }
+
+    [Theory, ModeData]
     public void SharedArrayBuffer_SliceUsesTheCallReceiver(ExecutionMode mode)
     {
         const string source = """
