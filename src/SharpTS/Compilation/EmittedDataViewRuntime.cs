@@ -27,6 +27,13 @@ public sealed class EmittedDataViewRuntime
         internal set => Set(ref _ctor, value);
     }
 
+    private MethodBuilder? _throwIfDetached;
+    public MethodBuilder ThrowIfDetached
+    {
+        get => Require(_throwIfDetached);
+        internal set => Set(ref _throwIfDetached, value);
+    }
+
     private MethodBuilder? _byteLengthGetter;
     public MethodBuilder ByteLengthGetter
     {
@@ -407,6 +414,7 @@ public sealed class EmittedDataViewRuntime
         EnsureMutable();
         _ = Type;
         _ = Ctor;
+        _ = ThrowIfDetached;
         _ = ByteLengthGetter;
         _ = ByteOffsetGetter;
         _ = BufferGetter;

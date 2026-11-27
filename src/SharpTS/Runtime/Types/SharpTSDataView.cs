@@ -24,14 +24,26 @@ public class SharpTSDataView : ITypeCategorized
     /// <summary>
     /// Gets the size of the view in bytes.
     /// </summary>
-    public int ByteLength => _arrayBuffer?.IsDetached == true
-        ? throw new ThrowException(new SharpTSTypeError("Cannot read byteLength of a DataView with a detached ArrayBuffer"))
-        : _byteLength;
+    public int ByteLength
+    {
+        get
+        {
+            ThrowIfDetached();
+            return _byteLength;
+        }
+    }
 
     /// <summary>
     /// Gets the offset (in bytes) of this view from the start of its buffer.
     /// </summary>
-    public int ByteOffset => _byteOffset;
+    public int ByteOffset
+    {
+        get
+        {
+            ThrowIfDetached();
+            return _byteOffset;
+        }
+    }
 
     /// <summary>
     /// Gets the underlying buffer (ArrayBuffer or SharedArrayBuffer).
@@ -94,12 +106,23 @@ public class SharpTSDataView : ITypeCategorized
 
     #region Bounds Checking
 
+    internal const string DetachedBufferMessage = "Cannot perform operation on a DataView with a detached ArrayBuffer";
+
+    private void ThrowIfDetached()
+    {
+        if (_arrayBuffer?.IsDetached == true)
+            throw new ThrowException(new SharpTSTypeError(DetachedBufferMessage));
+    }
+
     private void CheckBounds(int byteOffset, int size)
     {
-        if (byteOffset < 0 || byteOffset + size > _byteLength)
+        if (byteOffset >= 0)
         {
-            throw new Exception("RangeError: Offset is outside the bounds of the DataView");
+            ThrowIfDetached();
+            if (byteOffset <= _byteLength - size)
+                return;
         }
+        throw new Exception("RangeError: Offset is outside the bounds of the DataView");
     }
 
     #endregion
