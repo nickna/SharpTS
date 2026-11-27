@@ -12,13 +12,16 @@ public partial class RuntimeEmitter
     /// </summary>
     private void EmitBufferModuleMethods(TypeBuilder typeBuilder, EmittedRuntime runtime)
     {
-        EmitBufferCoerceString(runtime.RequireBuffer(), typeBuilder);
-        EmitBufferBytesOf(typeBuilder, runtime.RequireBuffer());
+        var buffer = runtime.RequireBuffer();
+        EmitBufferCoerceString(buffer, typeBuilder);
+        EmitBufferBytesOf(typeBuilder, buffer);
         var invalidCharacterError = EmitBufferInvalidCharacterError(typeBuilder, runtime);
-        EmitBufferAtobBtoa(typeBuilder, runtime.RequireBuffer(), invalidCharacterError);
-        EmitBufferIsUtf8Ascii(typeBuilder, runtime.RequireBuffer());
-        EmitBufferTranscode(typeBuilder, runtime.RequireBuffer());
-        EmitBufferSlowBuffer(typeBuilder, runtime.RequireBuffer());
+        EmitBufferAtobBtoa(typeBuilder, buffer, invalidCharacterError);
+        runtime.BuiltInModules.Register("buffer", "atob", buffer.Atob);
+        runtime.BuiltInModules.Register("buffer", "btoa", buffer.Btoa);
+        EmitBufferIsUtf8Ascii(typeBuilder, buffer);
+        EmitBufferTranscode(typeBuilder, buffer);
+        EmitBufferSlowBuffer(typeBuilder, buffer);
         EmitBufferModuleConstants(typeBuilder, runtime);
     }
 
