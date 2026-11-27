@@ -124,6 +124,8 @@ public partial class RuntimeEmitter
         }
         if (_emitHosted || _features.UsesStructuredClone)
             InstallFunction("structuredClone", runtime.StructuredClone.GuestClone, 2);
+        if (runtime.ArrayBuffer is { } arrayBuffer)
+            EmitPrototypeToStringTag(il, runtime, arrayBuffer.PrototypeField, "ArrayBuffer");
         il.Emit(OpCodes.Ret);
 
         void InstallFunction(string name, MethodBuilder method, int length) => InstallData(name, true, () =>

@@ -16,6 +16,8 @@ public partial class RuntimeEmitter
             TypeAttributes.Public | TypeAttributes.Sealed | TypeAttributes.Class,
             _types.Object
         );
+        var functionName = runtime.FunctionAttributes.FunctionNameCtor;
+        typeBuilder.SetCustomAttribute(functionName, CustomAttributeEncoder.Encode(functionName, "ArrayBuffer"));
         var arrayBuffer = runtime.RequireArrayBuffer();
         arrayBuffer.Type = typeBuilder;
 

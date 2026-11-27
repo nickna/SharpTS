@@ -1670,7 +1670,8 @@ public partial class RuntimeEmitter
                 runtime.Reflect.ToPropertyKey,
                 Errors: runtime.Errors,
                 NativeProxyRejection: runtime.ReflectedMethods.NativeProxyRejection,
-                GuestOwnProperties: runtime.GuestOwnProperties
+                GuestOwnProperties: runtime.GuestOwnProperties,
+                ArrayBuffer: runtime.ArrayBuffer
             )
         );
         // Apply wrappers were finalized earlier against the forward declaration;

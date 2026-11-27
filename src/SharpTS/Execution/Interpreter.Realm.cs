@@ -731,6 +731,8 @@ public partial class Interpreter
             }).WithSpecLength(2).MarkRealmOwned();
             _arrayBufferPrototype.DefineProperty("slice", new SharpTSPropertyDescriptor(
                 slice, writable: true, enumerable: false, configurable: true));
+            _arrayBufferPrototype.DefineProperty(SharpTSSymbol.ToStringTag,
+                new SharpTSPropertyDescriptor(value: BuiltInNames.ArrayBuffer, configurable: true));
         }
         return _arrayBufferConstructor;
     }

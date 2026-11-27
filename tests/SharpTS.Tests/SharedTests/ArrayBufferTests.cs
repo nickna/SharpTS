@@ -64,6 +64,27 @@ public class ArrayBufferTests
     }
 
     [Theory, ModeData]
+    public void ArrayBuffer_UsesTheJavaScriptNameAndPrototypeStringTag(ExecutionMode mode)
+    {
+        const string source = """
+            const value = new ArrayBuffer(4);
+            const prototype = ArrayBuffer.prototype;
+            const key = Symbol.toStringTag;
+            const tag = Object.getOwnPropertyDescriptor(prototype, key);
+            console.log(ArrayBuffer.name, value.constructor.name, value[key], Object.prototype.toString.call(value));
+            console.log(Object.hasOwn(prototype, key), Object.hasOwn(value, key),
+                tag.value, tag.writable, tag.enumerable, tag.configurable);
+            Object.setPrototypeOf(value, { [key]: 'Replacement' });
+            console.log(value[key], Object.prototype.toString.call(value));
+            Object.setPrototypeOf(value, null);
+            console.log(value[key], Object.prototype.toString.call(value));
+            """;
+        Assert.Equal("ArrayBuffer ArrayBuffer ArrayBuffer [object ArrayBuffer]\n" +
+            "true false ArrayBuffer false false true\nReplacement [object Replacement]\nundefined [object Object]\n",
+            TestHarness.RunUnchecked(source, mode));
+    }
+
+    [Theory, ModeData]
     public void ArrayBuffer_PrototypeCanBeReplacedAndRestored(ExecutionMode mode)
     {
         const string source = """

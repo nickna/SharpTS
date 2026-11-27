@@ -79,7 +79,8 @@ public partial class RuntimeEmitter
         MethodInfo ToPropertyKey,
         EmittedErrorRuntime Errors,
         MethodInfo? NativeProxyRejection,
-        EmittedGuestOwnPropertyRuntime? GuestOwnProperties = null
+        EmittedGuestOwnPropertyRuntime? GuestOwnProperties = null,
+        EmittedArrayBufferRuntime? ArrayBuffer = null
     );
 
     private readonly record struct RegExpSymbolDispatchInputs(
@@ -587,25 +588,35 @@ public partial class RuntimeEmitter
             // Primitive [[Get]] starts at the corresponding intrinsic
             // prototype. Keep arg0 as the receiver so strict getters observe
             // the primitive rather than the prototype dictionary.
-            void EmitPrimitiveSymbolPrototype(Type primitiveType, FieldBuilder prototype, MethodBuilder populate)
+            void EmitInitialSymbolPrototype(Type receiverType, FieldBuilder prototype, MethodBuilder? populate,
+                bool respectExplicitPrototype = false)
             {
                 var next = il.DefineLabel();
                 il.Emit(OpCodes.Ldarg_0);
-                il.Emit(OpCodes.Isinst, primitiveType);
+                il.Emit(OpCodes.Isinst, receiverType);
                 il.Emit(OpCodes.Brfalse, next);
-                il.Emit(OpCodes.Call, populate);
+                if (respectExplicitPrototype)
+                {
+                    il.Emit(OpCodes.Ldarg_0);
+                    il.Emit(OpCodes.Call, inputs.DescriptorStorage.HasPrototypeEntry);
+                    il.Emit(OpCodes.Brtrue, next);
+                }
+                if (populate is not null)
+                    il.Emit(OpCodes.Call, populate);
                 il.Emit(OpCodes.Ldsfld, prototype);
                 il.Emit(OpCodes.Stloc, symbolProtoLocal);
                 il.Emit(OpCodes.Br, symbolProtoLoopLabel);
                 il.MarkLabel(next);
             }
-            EmitPrimitiveSymbolPrototype(_types.Double, inputs.Numbers.PrototypeField, inputs.Numbers.PrototypePopulateMethod);
-            EmitPrimitiveSymbolPrototype(_types.Int32, inputs.Numbers.PrototypeField, inputs.Numbers.PrototypePopulateMethod);
-            EmitPrimitiveSymbolPrototype(_types.Boolean, inputs.Booleans.PrototypeField, inputs.Booleans.PrototypePopulateMethod);
-            EmitPrimitiveSymbolPrototype(_types.String, inputs.Strings.PrototypeField, inputs.Strings.PrototypePopulateMethod);
-            EmitPrimitiveSymbolPrototype(inputs.Symbols.Type, inputs.Symbols.Prototype, inputs.Symbols.PopulatePrototype);
+            EmitInitialSymbolPrototype(_types.Double, inputs.Numbers.PrototypeField, inputs.Numbers.PrototypePopulateMethod);
+            EmitInitialSymbolPrototype(_types.Int32, inputs.Numbers.PrototypeField, inputs.Numbers.PrototypePopulateMethod);
+            EmitInitialSymbolPrototype(_types.Boolean, inputs.Booleans.PrototypeField, inputs.Booleans.PrototypePopulateMethod);
+            EmitInitialSymbolPrototype(_types.String, inputs.Strings.PrototypeField, inputs.Strings.PrototypePopulateMethod);
+            EmitInitialSymbolPrototype(inputs.Symbols.Type, inputs.Symbols.Prototype, inputs.Symbols.PopulatePrototype);
             if (inputs.BigInt.Implementation is not null)
-                EmitPrimitiveSymbolPrototype(_types.BigInteger, inputs.BigInt.PrototypeField, inputs.BigInt.PrototypePopulateMethod);
+                EmitInitialSymbolPrototype(_types.BigInteger, inputs.BigInt.PrototypeField, inputs.BigInt.PrototypePopulateMethod);
+            if (inputs.ArrayBuffer is { } arrayBuffer)
+                EmitInitialSymbolPrototype(arrayBuffer.Type, arrayBuffer.PrototypeField, null, respectExplicitPrototype: true);
             il.Emit(OpCodes.Ldarg_0);
             il.Emit(OpCodes.Call, inputs.DescriptorStorage.GetPrototype);
             il.Emit(OpCodes.Stloc, symbolProtoLocal);
