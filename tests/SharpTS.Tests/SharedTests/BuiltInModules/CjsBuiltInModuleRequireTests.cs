@@ -61,10 +61,12 @@ public class CjsBuiltInModuleRequireTests
                 console.log(buffer.isUtf8(text), isUtf8(buffer.Buffer.from([255])), isAscii(text));
                 console.log(isAscii(buffer.Buffer.from('hello')), transcode(text, 'utf8', 'latin1').toString('hex'));
                 const result = SlowBuffer(3);
-                console.log(Buffer.isBuffer(result), result.length);
+                const { isBuffer } = buffer.Buffer;
+                console.log(typeof isBuffer, isBuffer.name, isBuffer.length);
+                console.log(isBuffer(result), isBuffer(new Uint8Array(3)), isBuffer(null), result.length);
                 """
         };
-        Assert.Equal("function function function function\ntrue false false\ntrue 68e96c6c6f\ntrue 3\n",
+        Assert.Equal("function function function function\ntrue false false\ntrue 68e96c6c6f\nfunction isBuffer 1\ntrue false false 3\n",
             TestHarness.RunModules(files, "main.cjs", mode));
     }
 

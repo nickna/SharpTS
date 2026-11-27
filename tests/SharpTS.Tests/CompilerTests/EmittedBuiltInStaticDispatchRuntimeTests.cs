@@ -209,7 +209,8 @@ public sealed class EmittedBuiltInStaticDispatchRuntimeTests
                 Type = typeof(Guid),
                 FromValue = Stub("BufferFrom"),
                 AllocValue = Stub("BufferAlloc"),
-                ByteLengthValue = Stub("BufferByteLength")
+                ByteLengthValue = Stub("BufferByteLength"),
+                IsBuffer = Stub("BufferIsBuffer")
             };
         }
         var inputsType = typeof(RuntimeEmitter).GetNestedType("BuiltInStaticDispatchInputs", BindingFlags.NonPublic)!;
@@ -245,6 +246,7 @@ public sealed class EmittedBuiltInStaticDispatchRuntimeTests
             Assert.Equal("EmittedMapRuntime_GroupBy:groupBy:2", Lookup(typeof(Dictionary<object, object>), "groupBy"));
             Assert.Equal("BufferFrom:from:1", Lookup(typeof(Guid), "from"));
             Assert.Equal("BufferAlloc:alloc:3", Lookup(typeof(Guid), "alloc"));
+            Assert.Equal("BufferIsBuffer:isBuffer:1", Lookup(typeof(Guid), "isBuffer"));
             Assert.Equal("BufferByteLength:byteLength:2", Lookup(typeof(Guid), "byteLength"));
         }
         else
