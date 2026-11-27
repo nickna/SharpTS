@@ -259,27 +259,9 @@ public partial class RuntimeEmitter
             _types.Exception, Type.EmptyTypes);
         var il = method.GetILGenerator();
         var errors = runtime.Errors;
-        var descriptors = runtime.DescriptorStorage;
-        var descriptor = il.DeclareLocal(descriptors.DescriptorType);
-
         il.Emit(OpCodes.Ldstr, BufferModuleHelpers.InvalidCharacterMessage);
-        il.Emit(OpCodes.Newobj, errors.MessageConstructor);
-        il.Emit(OpCodes.Dup);
         il.Emit(OpCodes.Ldstr, BufferModuleHelpers.InvalidCharacterErrorName);
-        il.Emit(OpCodes.Callvirt, errors.NameSetter);
-
-        il.Emit(OpCodes.Newobj, descriptors.DescriptorConstructor);
-        il.Emit(OpCodes.Stloc, descriptor);
-        il.Emit(OpCodes.Ldloc, descriptor);
-        il.Emit(OpCodes.Ldc_R8, BufferModuleHelpers.InvalidCharacterErrorCode);
-        il.Emit(OpCodes.Box, _types.Double);
-        il.Emit(OpCodes.Callvirt, descriptors.DescriptorValue.GetSetMethod()!);
-        il.Emit(OpCodes.Dup);
-        il.Emit(OpCodes.Ldstr, "code");
-        il.Emit(OpCodes.Ldloc, descriptor);
-        il.Emit(OpCodes.Call, descriptors.DefineProperty);
-        il.Emit(OpCodes.Pop);
-
+        il.Emit(OpCodes.Newobj, errors.DomExceptionConstructor);
         il.Emit(OpCodes.Call, errors.CreateException);
         il.Emit(OpCodes.Ret);
         return method;

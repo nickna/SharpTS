@@ -93,6 +93,14 @@ public partial class RuntimeEmitter
     {
         var il = initializer.GetILGenerator();
         EmitGlobalAccessor(owner, il, runtime, "process", get => get.Emit(OpCodes.Call, runtime.Process.GetObject));
+        if (runtime.Errors.HasDomException)
+        {
+            InstallData("DOMException", false, () =>
+            {
+                il.Emit(OpCodes.Call, runtime.Errors.DomExceptionPrototypePopulate);
+                EmitConstructor(il, runtime.Errors.DomExceptionType);
+            });
+        }
         if (_features.UsesBuffer)
         {
             var buffer = runtime.RequireBuffer();

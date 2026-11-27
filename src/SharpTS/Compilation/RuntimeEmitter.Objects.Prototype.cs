@@ -834,6 +834,8 @@ public partial class RuntimeEmitter
         EmitErrorInstanceBranch(inputs.Errors.URIErrorType,       inputs.Errors.URIErrorPrototypePopulate,       inputs.Errors.URIErrorPrototype);
         EmitErrorInstanceBranch(inputs.Errors.EvalErrorType,      inputs.Errors.EvalErrorPrototypePopulate,      inputs.Errors.EvalErrorPrototype);
         EmitErrorInstanceBranch(inputs.Errors.AggregateErrorType, inputs.Errors.AggregateErrorPrototypePopulate, inputs.Errors.AggregateErrorPrototype);
+        if (inputs.Errors.HasDomException)
+            EmitErrorInstanceBranch(inputs.Errors.DomExceptionType, inputs.Errors.DomExceptionPrototypePopulate, inputs.Errors.DomExceptionPrototype);
 
         // Base $Error instances (plain `new Error(...)`) → Error.prototype.
         var notTSErrForProtoLabel = il.DefineLabel();

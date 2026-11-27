@@ -1522,6 +1522,34 @@ public class BufferTests
     }
 
     [Theory, ModeData]
+    public void BufferModule_InvalidCharactersThrowDomException(ExecutionMode mode)
+    {
+        const string source = """
+            const D = globalThis.DOMException;
+            console.log(typeof D, D === DOMException);
+            for (const convert of [() => atob('!'), () => btoa('\u0100')]) {
+                try { convert(); console.log('accepted'); }
+                catch (error) {
+                    console.log(error instanceof D, error instanceof Error, error.constructor === D,
+                        Object.getPrototypeOf(error) === D.prototype, error.name, error.code);
+                }
+            }
+            console.log(Object.getPrototypeOf(D.prototype) === Error.prototype, D.INVALID_CHARACTER_ERR);
+            const manual = new D(null, 'AbortError');
+            const readCode = Object.getOwnPropertyDescriptor(D.prototype, 'code').get;
+            console.log(manual instanceof D, manual.name, manual.message === 'null', readCode.call(manual));
+            console.log(Object.prototype.toString.call(manual), D.prototype[Symbol.toStringTag]);
+            console.log(new D().name, new D().code);
+            try { readCode.call({}); }
+            catch (error) { console.log(error instanceof TypeError); }
+            """;
+        const string branded = "true true true true InvalidCharacterError 5\n";
+        Assert.Equal("function true\n" + branded + branded +
+            "true 5\ntrue AbortError true 20\n[object DOMException] DOMException\nError 0\ntrue\n",
+            TestHarness.RunUnchecked(source, mode));
+    }
+
+    [Theory, ModeData]
     public void BufferModule_IsUtf8IsAscii(ExecutionMode mode)
     {
         var files = new Dictionary<string, string>

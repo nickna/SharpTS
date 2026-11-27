@@ -216,6 +216,9 @@ public partial class RuntimeEmitter
         var uriErrorPrototypeField = DefineSubclassProto("_uriErrorPrototype");
         var evalErrorPrototypeField = DefineSubclassProto("_evalErrorPrototype");
         var aggregateErrorPrototypeField = DefineSubclassProto("_aggregateErrorPrototype");
+        var domExceptionPrototypeField = runtime.Errors.HasDomException
+            ? DefineSubclassProto("_domExceptionPrototype")
+            : null;
         runtime.Errors.TypeErrorPrototype = typeErrorPrototypeField;
         runtime.Errors.RangeErrorPrototype = rangeErrorPrototypeField;
         runtime.Errors.ReferenceErrorPrototype = referenceErrorPrototypeField;
@@ -223,6 +226,8 @@ public partial class RuntimeEmitter
         runtime.Errors.URIErrorPrototype = uriErrorPrototypeField;
         runtime.Errors.EvalErrorPrototype = evalErrorPrototypeField;
         runtime.Errors.AggregateErrorPrototype = aggregateErrorPrototypeField;
+        if (domExceptionPrototypeField is not null)
+            runtime.Errors.DomExceptionPrototype = domExceptionPrototypeField;
 
         // Function.prototype singleton — populated lazily with $TSFunction
         // wrappers for call/apply/bind/toString/constructor. test262's
@@ -593,8 +598,9 @@ public partial class RuntimeEmitter
         foreach (var f in new[] {
             typeErrorPrototypeField, rangeErrorPrototypeField, referenceErrorPrototypeField,
             syntaxErrorPrototypeField, uriErrorPrototypeField, evalErrorPrototypeField,
-            aggregateErrorPrototypeField })
+            aggregateErrorPrototypeField, domExceptionPrototypeField })
         {
+            if (f is null) continue;
             cctorIL.Emit(OpCodes.Newobj, _types.GetDefaultConstructor(_types.DictionaryStringObject));
             cctorIL.Emit(OpCodes.Stsfld, f);
         }
@@ -3321,6 +3327,9 @@ public partial class RuntimeEmitter
         // Must run after EmitErrorPrototypePopulate so PDSSetPrototype can chain
         // each subclass-proto's [[Prototype]] to %Error.prototype%.
         EmitNativeErrorPrototypePopulates(runtime.Errors, runtime.DescriptorStorage);
+        if (runtime.Errors.HasDomException)
+            EmitDomExceptionPrototypePopulate(typeBuilder, runtime);
+        runtime.Errors.MarkNativePrototypeBodiesEmitted();
         // Function.prototype populate body — must come after $TSFunction +
         // $BoundTSFunction emission and after InvokeMethodValue is wired
         // (the call/apply helpers route through it). Emitted in the same tail

@@ -47,7 +47,8 @@ public partial class Interpreter
     /// The names of every global constant and built-in singleton, for REPL autocomplete.
     /// </summary>
     internal static IEnumerable<string> GlobalNames
-        => _globalConstants.Keys.Concat([BuiltInNames.Console, BuiltInNames.Intl]).Concat(BuiltInNames.ErrorTypeNames);
+        => _globalConstants.Keys.Concat([BuiltInNames.Console, BuiltInNames.Intl, SharpTSDomException.TypeName])
+            .Concat(BuiltInNames.ErrorTypeNames);
 
     // The process-wide RegExp constructor singleton (a SharpTSBuiltInConstructor),
     // resolved once from the static globals table. ECMA-262 §22.2.6.1 requires
@@ -523,7 +524,7 @@ public partial class Interpreter
     /// </summary>
     internal bool TryGetRealmIntrinsic(string name, out object? value)
     {
-        if (BuiltInNames.IsErrorTypeName(name))
+        if (BuiltInNames.IsErrorTypeName(name) || name == SharpTSDomException.TypeName)
         {
             value = GetErrorClass(name);
             return true;
@@ -781,6 +782,7 @@ public partial class Interpreter
             _errorClasses = new Dictionary<string, Runtime.Types.SharpTSErrorClass>(StringComparer.Ordinal)
             {
                 [BuiltInNames.Error] = errorClass,
+                [SharpTSDomException.TypeName] = new SharpTSDomExceptionClass(errorClass),
             };
             foreach (var name in BuiltInNames.ErrorTypeNames)
             {
@@ -815,6 +817,8 @@ public partial class Interpreter
     private SharpTSGlobalThis CreateRealmGlobalThis()
     {
         var globalThis = new SharpTSGlobalThis(ResolveGlobalObjectIntrinsic);
+        globalThis.DefineProperty(SharpTSDomException.TypeName, new SharpTSPropertyDescriptor(
+            value: GetErrorClass(SharpTSDomException.TypeName), writable: true, configurable: true));
         globalThis.DefineProperty(BuiltInNames.Intl, new SharpTSPropertyDescriptor
         {
             Value = GetIntlNamespace(), HasValue = true,

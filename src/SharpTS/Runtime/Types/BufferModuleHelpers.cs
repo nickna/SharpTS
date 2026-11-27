@@ -24,7 +24,6 @@ public static class BufferModuleHelpers
 
     internal const string AtobWhitespace = " \t\n\f\r";
     internal const string InvalidCharacterErrorName = "InvalidCharacterError";
-    internal const double InvalidCharacterErrorCode = 5;
     internal const string InvalidCharacterMessage = "Invalid character";
 
     /// <summary>Decodes forgiving Base64 into a Latin-1 binary string.</summary>
@@ -50,11 +49,7 @@ public static class BufferModuleHelpers
     }
 
     private static ThrowException CreateInvalidCharacterError()
-    {
-        var error = new SharpTSError(InvalidCharacterMessage) { Name = InvalidCharacterErrorName };
-        error.DefineProperty("code", new SharpTSPropertyDescriptor(value: InvalidCharacterErrorCode));
-        return new ThrowException(error);
-    }
+        => new(new SharpTSDomException(InvalidCharacterMessage, InvalidCharacterErrorName));
 
     /// <summary>Encodes a Latin-1 binary string to Base64.</summary>
     public static string Btoa(string data)

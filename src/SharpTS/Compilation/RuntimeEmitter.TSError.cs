@@ -25,6 +25,8 @@ public partial class RuntimeEmitter
         EmitTSSyntaxErrorClass(moduleBuilder, errors);
         EmitTSURIErrorClass(moduleBuilder, errors);
         EmitTSEvalErrorClass(moduleBuilder, errors);
+        if (_emitHosted || _features.UsesDomException || _features.UsesBuffer)
+            EmitDomExceptionClass(moduleBuilder, errors);
 
         // Emit $AggregateError (extends $Error, has Errors property)
         EmitTSAggregateErrorClass(moduleBuilder, errors);
