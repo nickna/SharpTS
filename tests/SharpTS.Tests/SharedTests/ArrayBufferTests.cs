@@ -207,6 +207,22 @@ public class ArrayBufferTests
     }
 
     [Theory, ModeData]
+    public void ArrayBuffer_PrototypeMethodsRejectConstruction(ExecutionMode mode)
+    {
+        const string source = """
+            function Target() { console.log('target ran'); }
+            for (const proto of [ArrayBuffer.prototype, SharedArrayBuffer.prototype]) {
+                const getter = Object.getOwnPropertyDescriptor(proto, 'byteLength').get;
+                for (const method of [proto.slice, getter]) {
+                    try { Reflect.construct(Target, [], method); }
+                    catch (error) { console.log(error instanceof TypeError, error.name); }
+                }
+            }
+            """;
+        Assert.Equal(string.Concat(Enumerable.Repeat("true TypeError\n", 4)), TestHarness.RunUnchecked(source, mode));
+    }
+
+    [Theory, ModeData]
     public void SharedArrayBuffer_SliceUsesTheCallReceiver(ExecutionMode mode)
     {
         const string source = """
