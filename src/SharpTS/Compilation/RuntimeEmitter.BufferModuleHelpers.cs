@@ -14,7 +14,8 @@ public partial class RuntimeEmitter
     {
         EmitBufferCoerceString(runtime.RequireBuffer(), typeBuilder);
         EmitBufferBytesOf(typeBuilder, runtime.RequireBuffer());
-        EmitBufferAtobBtoa(typeBuilder, runtime.RequireBuffer());
+        var invalidCharacterError = EmitBufferInvalidCharacterError(typeBuilder, runtime);
+        EmitBufferAtobBtoa(typeBuilder, runtime.RequireBuffer(), invalidCharacterError);
         EmitBufferIsUtf8Ascii(typeBuilder, runtime.RequireBuffer());
         EmitBufferTranscode(typeBuilder, runtime.RequireBuffer());
         EmitBufferSlowBuffer(typeBuilder, runtime.RequireBuffer());
@@ -243,7 +244,40 @@ public partial class RuntimeEmitter
         il.Emit(OpCodes.Throw);
     }
 
-    private void EmitBufferAtobBtoa(TypeBuilder typeBuilder, EmittedBufferRuntime buffer)
+    private MethodBuilder EmitBufferInvalidCharacterError(TypeBuilder typeBuilder, EmittedRuntime runtime)
+    {
+        var method = typeBuilder.DefineMethod("CreateBufferInvalidCharacterError",
+            System.Reflection.MethodAttributes.Private | System.Reflection.MethodAttributes.Static,
+            _types.Exception, [_types.String]);
+        var il = method.GetILGenerator();
+        var errors = runtime.Errors;
+        var descriptors = runtime.DescriptorStorage;
+        var descriptor = il.DeclareLocal(descriptors.DescriptorType);
+
+        il.Emit(OpCodes.Ldarg_0);
+        il.Emit(OpCodes.Newobj, errors.MessageConstructor);
+        il.Emit(OpCodes.Dup);
+        il.Emit(OpCodes.Ldstr, BufferModuleHelpers.InvalidCharacterErrorName);
+        il.Emit(OpCodes.Callvirt, errors.NameSetter);
+
+        il.Emit(OpCodes.Newobj, descriptors.DescriptorConstructor);
+        il.Emit(OpCodes.Stloc, descriptor);
+        il.Emit(OpCodes.Ldloc, descriptor);
+        il.Emit(OpCodes.Ldc_R8, BufferModuleHelpers.InvalidCharacterErrorCode);
+        il.Emit(OpCodes.Box, _types.Double);
+        il.Emit(OpCodes.Callvirt, descriptors.DescriptorValue.GetSetMethod()!);
+        il.Emit(OpCodes.Dup);
+        il.Emit(OpCodes.Ldstr, "code");
+        il.Emit(OpCodes.Ldloc, descriptor);
+        il.Emit(OpCodes.Call, descriptors.DefineProperty);
+        il.Emit(OpCodes.Pop);
+
+        il.Emit(OpCodes.Call, errors.CreateException);
+        il.Emit(OpCodes.Ret);
+        return method;
+    }
+
+    private void EmitBufferAtobBtoa(TypeBuilder typeBuilder, EmittedBufferRuntime buffer, MethodBuilder invalidCharacterError)
     {
         // Mirror BufferModuleHelpers.Atob with BCL calls in the standalone runtime.
         var atob = typeBuilder.DefineMethod(
@@ -254,7 +288,9 @@ public partial class RuntimeEmitter
         var ail = atob.GetILGenerator();
         var data = ail.DeclareLocal(_types.String);
         var remainder = ail.DeclareLocal(_types.Int32);
+        var result = ail.DeclareLocal(_types.String);
         var decode = ail.DefineLabel();
+        var decoded = ail.DefineLabel();
         var length = _types.GetProperty(_types.String, nameof(string.Length))!.GetGetMethod()!;
 
         ail.Emit(OpCodes.Ldarg_0);
@@ -288,10 +324,22 @@ public partial class RuntimeEmitter
         ail.Emit(OpCodes.Stloc, data);
 
         ail.MarkLabel(decode);
+        ail.Emit(OpCodes.Nop);
+        ail.BeginExceptionBlock();
         ail.Emit(OpCodes.Call, _types.GetProperty(_types.Encoding, "Latin1")!.GetGetMethod()!);
         ail.Emit(OpCodes.Ldloc, data);
         ail.Emit(OpCodes.Call, _types.ConvertFromBase64String);
         ail.Emit(OpCodes.Callvirt, _types.GetMethod(_types.Encoding, "GetString", _types.ByteArray));
+        ail.Emit(OpCodes.Stloc, result);
+        ail.Emit(OpCodes.Leave, decoded);
+        ail.BeginCatchBlock(_types.Resolve("System.FormatException"));
+        ail.Emit(OpCodes.Pop);
+        ail.Emit(OpCodes.Ldstr, "Invalid character");
+        ail.Emit(OpCodes.Call, invalidCharacterError);
+        ail.Emit(OpCodes.Throw);
+        ail.EndExceptionBlock();
+        ail.MarkLabel(decoded);
+        ail.Emit(OpCodes.Ldloc, result);
         ail.Emit(OpCodes.Ret);
 
         // btoa(data) = Buffer.from(data, 'latin1').toString('base64')

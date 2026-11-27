@@ -1440,12 +1440,12 @@ public class BufferTests
                 }
                 for (const text of ['YQ-_', '-___', 'YQ=', 'YQ===', 'YQ==Yg==', 'Y', 'YQ\v', 'YQ\u00a0']) {
                     try { decode(text); console.log('accepted'); }
-                    catch { console.log('rejected'); }
+                    catch (error) { console.log(error.name, error.code, typeof error.code); }
                 }
             }
             """;
         const string decoded = "hex:61\nhex:6162\nhex:fbffff\nhex:61\nhex:61\nhex:\n";
-        const string rejected = "rejected\nrejected\nrejected\nrejected\nrejected\nrejected\nrejected\nrejected\n";
+        var rejected = string.Concat(Enumerable.Repeat("InvalidCharacterError 5 number\n", 8));
         var files = new Dictionary<string, string> { ["main.ts"] = source };
         Assert.Equal(decoded + rejected + decoded + rejected, TestHarness.RunModules(files, "main.ts", mode));
     }

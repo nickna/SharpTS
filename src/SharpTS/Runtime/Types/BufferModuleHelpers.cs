@@ -1,4 +1,5 @@
 using System.Text;
+using SharpTS.Runtime.Exceptions;
 
 namespace SharpTS.Runtime.Types;
 
@@ -22,6 +23,8 @@ public static class BufferModuleHelpers
     public const double InspectMaxBytes = 50.0;         // buffer.INSPECT_MAX_BYTES default
 
     internal const string AtobWhitespace = " \t\n\f\r";
+    internal const string InvalidCharacterErrorName = "InvalidCharacterError";
+    internal const double InvalidCharacterErrorCode = 5;
 
     /// <summary>Decodes forgiving Base64 into a Latin-1 binary string.</summary>
     public static string Atob(string data)
@@ -35,7 +38,21 @@ public static class BufferModuleHelpers
         if (remainder >= 2 && !data.Contains('='))
             data = data.PadRight(data.Length + 4 - remainder, '=');
 
-        return Encoding.Latin1.GetString(Convert.FromBase64String(data));
+        try
+        {
+            return Encoding.Latin1.GetString(Convert.FromBase64String(data));
+        }
+        catch (FormatException)
+        {
+            throw CreateInvalidCharacterError("Invalid character");
+        }
+    }
+
+    private static ThrowException CreateInvalidCharacterError(string message)
+    {
+        var error = new SharpTSError(message) { Name = InvalidCharacterErrorName };
+        error.DefineProperty("code", new SharpTSPropertyDescriptor(value: InvalidCharacterErrorCode));
+        return new ThrowException(error);
     }
 
     /// <summary>
