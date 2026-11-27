@@ -13,7 +13,7 @@ public partial class RuntimeEmitter
 
     // AggregateError errors field
 
-    private void EmitTSErrorClasses(ModuleBuilder moduleBuilder, EmittedErrorRuntime errors)
+    private void EmitTSErrorClasses(ModuleBuilder moduleBuilder, EmittedErrorRuntime errors, ConstructorBuilder functionName)
     {
         // Emit base $Error class first
         EmitTSErrorBaseClass(moduleBuilder, errors);
@@ -26,7 +26,7 @@ public partial class RuntimeEmitter
         EmitTSURIErrorClass(moduleBuilder, errors);
         EmitTSEvalErrorClass(moduleBuilder, errors);
         if (_emitHosted || _features.UsesDomException || _features.UsesBuffer)
-            EmitDomExceptionClass(moduleBuilder, errors);
+            EmitDomExceptionClass(moduleBuilder, errors, functionName);
 
         // Emit $AggregateError (extends $Error, has Errors property)
         EmitTSAggregateErrorClass(moduleBuilder, errors);

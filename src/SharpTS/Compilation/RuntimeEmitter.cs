@@ -386,7 +386,7 @@ public partial class RuntimeEmitter
 
         // Emit $Error class hierarchy for standalone error support
         // NOTE: Must stay in sync with SharpTS.Runtime.Types.SharpTSError and subclasses
-        EmitTSErrorClasses(moduleBuilder, runtime.Errors);
+        EmitTSErrorClasses(moduleBuilder, runtime.Errors, runtime.FunctionAttributes.FunctionNameCtor);
         if (reflectiveCallRejection is not null)
             GuestErrorEmitter.ThrowError(reflectiveCallRejection.GetILGenerator(), runtime.Errors.CreateException,
                 runtime.Errors.TypeErrorConstructor, NativeReflectiveCallableMessage);

@@ -1544,12 +1544,12 @@ public class BufferTests
     {
         const string source = """
             const D = globalThis.DOMException;
-            console.log(typeof D, D === DOMException);
+            console.log(typeof D, D === DOMException, D.name, Reflect.get(D, 'name'));
             for (const convert of [() => atob('!'), () => btoa('\u0100')]) {
                 try { convert(); console.log('accepted'); }
                 catch (error) {
                     console.log(error instanceof D, error instanceof Error, error.constructor === D,
-                        Object.getPrototypeOf(error) === D.prototype, error.name, error.code);
+                        Object.getPrototypeOf(error) === D.prototype, error.constructor.name, error.name, error.code);
                 }
             }
             console.log(Object.getPrototypeOf(D.prototype) === Error.prototype, D.INVALID_CHARACTER_ERR);
@@ -1561,8 +1561,8 @@ public class BufferTests
             try { readCode.call({}); }
             catch (error) { console.log(error instanceof TypeError); }
             """;
-        const string branded = "true true true true InvalidCharacterError 5\n";
-        Assert.Equal("function true\n" + branded + branded +
+        const string branded = "true true true true DOMException InvalidCharacterError 5\n";
+        Assert.Equal("function true DOMException DOMException\n" + branded + branded +
             "true 5\ntrue AbortError true 20\n[object DOMException] DOMException\nError 0\ntrue\n",
             TestHarness.RunUnchecked(source, mode));
     }

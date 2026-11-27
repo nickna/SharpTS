@@ -6,10 +6,11 @@ namespace SharpTS.Compilation;
 
 public partial class RuntimeEmitter
 {
-    private void EmitDomExceptionClass(ModuleBuilder module, EmittedErrorRuntime errors)
+    private void EmitDomExceptionClass(ModuleBuilder module, EmittedErrorRuntime errors, ConstructorBuilder functionName)
     {
         var type = EmitTypeDefinitions.DefineType(module, "$DOMException",
             TypeAttributes.Public | TypeAttributes.Class | TypeAttributes.BeforeFieldInit, errors.Type);
+        type.SetCustomAttribute(functionName, CustomAttributeEncoder.Encode(functionName, SharpTSDomException.TypeName));
         errors.DomExceptionType = type;
         var constructor = type.DefineConstructor(MethodAttributes.Public, CallingConventions.Standard,
             [_types.String, _types.String]);
