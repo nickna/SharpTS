@@ -92,7 +92,7 @@ public partial class TypeChecker
     // Parent record/function keys may display nested classes by name alone.
     // A constructor comparison makes every enclosing result unsuitable for those caches.
     private ulong _ordinaryConstructorComparisonEpoch;
-    private ulong _typedArrayDeclarationComparisonEpoch;
+    private ulong _binaryDeclarationComparisonEpoch;
 
     /// <summary>
     /// Argument/parameter assignability that additionally honors parameter optionality.
@@ -136,8 +136,9 @@ public partial class TypeChecker
         // type parameter that is in scope during real checking but not during speculation relates
         // differently (naked vs its constraint). Its verdicts are therefore non-authoritative and
         // must neither be written to nor served from the shared cache, or they poison the real pass.
-        bool typedArrayDeclarationPair = IsTypedArrayDeclarationPair(expected, actual);
-        if (typedArrayDeclarationPair) unchecked { _typedArrayDeclarationComparisonEpoch++; }
+        bool binaryDeclarationPair = IsTypedArrayDeclarationPair(expected, actual)
+            || IsIntrinsicBinaryDeclarationPair(expected, actual);
+        if (binaryDeclarationPair) unchecked { _binaryDeclarationComparisonEpoch++; }
         bool ordinaryConstructorPair = IsOrdinaryConstructorPair(expected, actual);
         // Count identity comparisons too: their early success must not seed a
         // parent cache entry that could later match a different same-named class.
@@ -150,7 +151,7 @@ public partial class TypeChecker
         // authoritative for another constructor comparison.
         bool uncacheable = (_strictFunctionTypes && _methodBivarianceDepth > 0)
             || _varianceMeasurementDepth > 0 || _suppressDiagnostics > 0
-            || ordinaryConstructorContext || typedArrayDeclarationPair;
+            || ordinaryConstructorContext || binaryDeclarationPair;
 
         // Level 1: Fast identity-based cache (reference equality)
         _identityCompatibilityCache ??= new(IdentityCacheKeyComparer.Instance);
@@ -197,14 +198,14 @@ public partial class TypeChecker
         try
         {
             ulong constructorEpoch = _ordinaryConstructorComparisonEpoch;
-            ulong typedArrayEpoch = _typedArrayDeclarationComparisonEpoch;
+            ulong binaryDeclarationEpoch = _binaryDeclarationComparisonEpoch;
             // Cache miss - compute result
             var result = IsCompatibleCore(expected, actual);
 
-            // A nested constructor relation also invalidates the enclosing comparison's
-            // name-based cache key, even after the constructor depth has unwound.
+            // A nested identity-dependent relation also invalidates the enclosing
+            // structural cache key, including for a union or function.
             if (!uncacheable && constructorEpoch == _ordinaryConstructorComparisonEpoch
-                && typedArrayEpoch == _typedArrayDeclarationComparisonEpoch)
+                && binaryDeclarationEpoch == _binaryDeclarationComparisonEpoch)
             {
                 _compatibilityCache[structuralKey] = result;
                 _identityCompatibilityCache[identityKey] = result;
@@ -909,6 +910,18 @@ public partial class TypeChecker
             return true;
         }
 
+        // Built-in signatures use intrinsic binary types even when source
+        // values are described by the loaded standard library declarations.
+        if (expected is TypeInfo.ArrayBuffer { ByteLength: null }
+            && (actual is TypeInfo.ArrayBuffer || IsCapturedBinaryDeclaration(actual, _typedArrayArrayBufferDeclaration)))
+            return true;
+        if (expected is TypeInfo.SharedArrayBuffer { ByteLength: null }
+            && (actual is TypeInfo.SharedArrayBuffer || IsCapturedBinaryDeclaration(actual, _typedArraySharedBufferDeclaration)))
+            return true;
+        if (expected is TypeInfo.DataView { ByteLength: null, ByteOffset: null }
+            && (actual is TypeInfo.DataView || IsCapturedBinaryDeclaration(actual, _defaultLibraryDataViewType)))
+            return true;
+
         // Date / RegExp identity (these only became reachable as TYPE-position types once the
         // global names stopped resolving to `any`).
         if (expected is TypeInfo.Date && actual is TypeInfo.Date) return true;
@@ -921,6 +934,10 @@ public partial class TypeChecker
             return expTa.ElementType == actTa.ElementType
                 && (expTa.BufferType is null || actTa.BufferType is { } actualBuffer
                     && IsCompatible(expTa.BufferType, actualBuffer));
+        if (expected is TypeInfo.TypedArray { BufferType: null } intrinsicArray
+            && _typedArrayDeclarations.TryGetValue(intrinsicArray.ElementType + "Array", out var arrayDeclaration)
+            && IsCapturedBinaryDeclaration(actual, arrayDeclaration.Definition))
+            return true;
 
         // Error-family compatibility (reachable since Error/TypeError/… stopped resolving to `any`,
         // #528). Every built-in error shares the same structural shape (name/message/stack/cause), so

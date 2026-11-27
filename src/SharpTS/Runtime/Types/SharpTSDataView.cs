@@ -1,4 +1,5 @@
 using System.Buffers.Binary;
+using SharpTS.Runtime.Exceptions;
 using SharpTS.TypeSystem;
 using Interp = SharpTS.Execution.Interpreter;
 
@@ -23,7 +24,9 @@ public class SharpTSDataView : ITypeCategorized
     /// <summary>
     /// Gets the size of the view in bytes.
     /// </summary>
-    public int ByteLength => _byteLength;
+    public int ByteLength => _arrayBuffer?.IsDetached == true
+        ? throw new ThrowException(new SharpTSTypeError("Cannot read byteLength of a DataView with a detached ArrayBuffer"))
+        : _byteLength;
 
     /// <summary>
     /// Gets the offset (in bytes) of this view from the start of its buffer.
@@ -431,5 +434,7 @@ public class SharpTSDataView : ITypeCategorized
 
     #endregion
 
-    public override string ToString() => $"DataView {{ byteLength: {ByteLength}, byteOffset: {ByteOffset} }}";
+    public override string ToString() => _arrayBuffer?.IsDetached == true
+        ? "DataView { detached }"
+        : $"DataView {{ byteLength: {_byteLength}, byteOffset: {_byteOffset} }}";
 }

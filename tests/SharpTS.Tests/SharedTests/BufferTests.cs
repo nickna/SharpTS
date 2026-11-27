@@ -1,3 +1,4 @@
+using SharpTS.Modules;
 using SharpTS.Tests.Infrastructure;
 using Xunit;
 
@@ -109,6 +110,88 @@ public class BufferTests
             console.log(Buffer.byteLength('61x2', 'hex'), Buffer.byteLength('61x', 'HEX'));
             """;
         Assert.Equal("4 1\n5 0\n4 1\n5 0\n2 1\n", TestHarness.Run(source, mode));
+    }
+
+    [Theory, ModeData]
+    public void Buffer_ByteLengthAcceptsArrayBuffersAndViews(ExecutionMode mode)
+    {
+        const string source = """
+            import { Buffer as ImportedBuffer } from 'node:buffer';
+            const buffer = new ArrayBuffer(8);
+            const shared = new SharedArrayBuffer(10);
+            const words = new Uint16Array(buffer, 2, 3);
+            const view = new DataView(buffer, 1, 2);
+            const sharedView = new DataView(shared, 3, 5);
+            const bigInts = new BigInt64Array(2);
+            const precise: number = Buffer.byteLength(words);
+            console.log(Buffer.byteLength(buffer), Buffer.byteLength(shared), precise, Buffer.byteLength(view));
+            console.log(ImportedBuffer.byteLength(sharedView), ImportedBuffer.byteLength(bigInts));
+            console.log(ImportedBuffer.byteLength(new Uint8Array(0)), ImportedBuffer.byteLength(new ArrayBuffer(0)));
+            """;
+        var files = new Dictionary<string, string> { ["main.ts"] = source };
+        Assert.Equal("8 10 6 2\n5 16\n0 0\n", TestHarness.RunModules(files, "main.ts", mode));
+    }
+
+    [Theory, ModeData]
+    public void Buffer_ByteLengthAcceptsStandardLibraryBinaryTypes(ExecutionMode mode)
+    {
+        const string source = """
+            import { Buffer as ImportedBuffer } from 'node:buffer';
+            function measure(buffer: ArrayBuffer, shared: SharedArrayBuffer, words: Uint16Array, view: DataView): number {
+                return ImportedBuffer.byteLength(buffer) + ImportedBuffer.byteLength(shared)
+                     + ImportedBuffer.byteLength(words) + ImportedBuffer.byteLength(view);
+            }
+            console.log(ImportedBuffer.byteLength(new Uint16Array(3)),
+                        ImportedBuffer.byteLength(new DataView(new ArrayBuffer(2))));
+            """;
+        var options = TypeScriptProgramOptions.Default with { Lib = ["lib.es2022.d.ts", "lib.dom.d.ts"] };
+        Assert.Equal("6 2\n", TestHarness.RunWithLibraries(source, mode, options));
+    }
+
+    [Theory, ModeData]
+    public void Buffer_ByteLengthChecksBinaryBrandsAndIgnoresEncoding(ExecutionMode mode)
+    {
+        const string source = """
+            const byteLength = Buffer.byteLength;
+            const buffer = new ArrayBuffer(8);
+            const words = new Uint16Array(buffer, 2, 3);
+            const view = new DataView(buffer, 1, 2);
+            const encoding = { [Symbol.toPrimitive]() { throw new Error('encoding must not be coerced'); } };
+            console.log(byteLength(buffer, encoding), byteLength(words, encoding), byteLength(view, encoding));
+            structuredClone(buffer, { transfer: [buffer] });
+            console.log(byteLength(buffer), byteLength(words));
+            for (const value of [view, { byteLength: 20 }]) {
+                try { byteLength(value); console.log('accepted'); }
+                catch (error) { console.log(error instanceof TypeError); }
+            }
+            """;
+        Assert.Equal("8 6 2\n0 0\ntrue\ntrue\n", TestHarness.RunUnchecked(source, mode));
+    }
+
+    [Theory]
+    [InlineData(true)]
+    [InlineData(false)]
+    public void Buffer_ByteLengthDistinguishesSameShapedBinaryDeclarations(bool libraryFirst)
+    {
+        const string declarations = """
+            import { Buffer as ImportedBuffer } from 'node:buffer';
+            namespace Local {
+                export interface ArrayBuffer {
+                    readonly byteLength: number;
+                    slice(begin?: number, end?: number): ArrayBuffer;
+                }
+            }
+            """;
+        const string library = "function library(value: ArrayBuffer) { return ImportedBuffer.byteLength(value); }";
+        const string local = "function local(value: Local.ArrayBuffer) { return ImportedBuffer.byteLength(value); }";
+        string source = declarations + "\n" + (libraryFirst ? library + "\n" + local : local + "\n" + library);
+        var options = TypeScriptProgramOptions.Default with { Lib = ["lib.es5.d.ts"] };
+
+        var error = Assert.Throws<TypeCheckDiagnosticException>(() =>
+            TestHarness.RunWithLibraries(source, ExecutionMode.Interpreted, options));
+        var diagnostic = Assert.Single(error.Diagnostics);
+        Assert.Equal("TS2345", diagnostic.TsCode);
+        Assert.Equal(libraryFirst ? 9 : 8, diagnostic.Line);
     }
 
     [Theory, ModeData]
@@ -1344,6 +1427,27 @@ public class BufferTests
 
         var output = TestHarness.RunModules(files, "main.ts", mode);
         Assert.Equal("true\ntrue\n", output);
+    }
+
+    [Theory, ModeData]
+    public void BufferModule_AtobUsesForgivingBase64(ExecutionMode mode)
+    {
+        const string source = """
+            import { atob as moduleAtob } from 'node:buffer';
+            for (const decode of [(text: string) => moduleAtob(text), (text: string) => atob(text)]) {
+                for (const text of ['YQ', 'YWI', '+///', 'Y R\t\r\n\f', 'YQ= =\f', ' \t\r\n\f']) {
+                    console.log('hex:' + Buffer.from(decode(text), 'latin1').toString('hex'));
+                }
+                for (const text of ['YQ-_', '-___', 'YQ=', 'YQ===', 'YQ==Yg==', 'Y', 'YQ\v', 'YQ\u00a0']) {
+                    try { decode(text); console.log('accepted'); }
+                    catch { console.log('rejected'); }
+                }
+            }
+            """;
+        const string decoded = "hex:61\nhex:6162\nhex:fbffff\nhex:61\nhex:61\nhex:\n";
+        const string rejected = "rejected\nrejected\nrejected\nrejected\nrejected\nrejected\nrejected\nrejected\n";
+        var files = new Dictionary<string, string> { ["main.ts"] = source };
+        Assert.Equal(decoded + rejected + decoded + rejected, TestHarness.RunModules(files, "main.ts", mode));
     }
 
     [Theory, ModeData]

@@ -61,10 +61,6 @@ public sealed class ProcessStaticEmitter : IStaticTypeEmitterStrategy
                 EmitTwoArgHelperCall(emitter, arguments, ctx.Runtime!.Process.Kill);
                 return true;
 
-            case "umask":
-                EmitOneArgHelperCall(emitter, arguments, ctx.Runtime!.Process.Umask);
-                return true;
-
             case "emitWarning":
                 EmitFourArgHelperCall(emitter, arguments, ctx.Runtime!.Process.EmitWarning);
                 return true;
@@ -88,7 +84,6 @@ public sealed class ProcessStaticEmitter : IStaticTypeEmitterStrategy
             case "prependListener":
             case "prependOnceListener":
             case "emit":
-            case "listeners":
             case "listenerCount":
             case "eventNames":
             case "setMaxListeners":
@@ -103,13 +98,6 @@ public sealed class ProcessStaticEmitter : IStaticTypeEmitterStrategy
 
     // The ordinary property path reads the current process receiver.
     public bool TryEmitStaticPropertyGet(IEmitterContext emitter, string propertyName) => false;
-
-    /// <summary>Emits a call to a one-object-arg $Runtime helper (missing arg → null).</summary>
-    private static void EmitOneArgHelperCall(IEmitterContext emitter, List<Expr> arguments, System.Reflection.Emit.MethodBuilder helper)
-    {
-        EmitterArgumentHelpers.EmitBoxedArgumentOrNull(emitter, arguments, 0);
-        emitter.Context.IL.Emit(OpCodes.Call, helper);
-    }
 
     /// <summary>Emits a call to a two-object-arg $Runtime helper (missing args → null).</summary>
     private static void EmitTwoArgHelperCall(IEmitterContext emitter, List<Expr> arguments, System.Reflection.Emit.MethodBuilder helper)

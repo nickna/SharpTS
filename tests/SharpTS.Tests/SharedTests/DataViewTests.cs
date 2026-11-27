@@ -8,6 +8,19 @@ namespace SharpTS.Tests.SharedTests;
 /// </summary>
 public class DataViewTests
 {
+    [Theory, ModeData]
+    public void DataView_CanBeLoggedAfterBufferTransfer(ExecutionMode mode)
+    {
+        const string source = """
+            const buffer = new ArrayBuffer(4);
+            const view = new DataView(buffer, 1, 2);
+            structuredClone(buffer, { transfer: [buffer] });
+            console.log(view);
+            console.log('continued');
+            """;
+        Assert.EndsWith("continued\n", TestHarness.RunUnchecked(source, mode));
+    }
+
     #region Constructor Tests
 
     [Theory, ModeData]

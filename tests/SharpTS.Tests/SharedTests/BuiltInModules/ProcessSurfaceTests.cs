@@ -206,6 +206,32 @@ public class ProcessSurfaceTests
     // ---- #1083: umask ----
 
     [Theory, ModeData]
+    public void Process_UmaskAndListenersResolveTheCurrentReceiver(ExecutionMode mode)
+    {
+        const string source = """
+            const original = globalThis.process;
+            const replacement = {
+                umask(...changes) { return (this === replacement ? 'mask:' : 'wrong:') + changes.join(','); },
+                get listeners() {
+                    console.log('get');
+                    return function (name) { return [this === replacement ? 'event:' + name : 'wrong']; };
+                }
+            };
+            globalThis.process = replacement;
+            console.log(process.umask(), globalThis.process.umask(18));
+            console.log(process.listeners('direct')[0], globalThis.process.listeners('global')[0]);
+            function restore() { console.log('arg'); globalThis.process = original; return ['retained']; }
+            console.log(process.listeners(...restore())[0]);
+            const handler = () => {};
+            process.on('example', handler);
+            console.log(typeof process.umask(), process.listeners('example')[0] === handler);
+            process.removeListener('example', handler);
+            """;
+        Assert.Equal("mask: mask:18\nget\nget\nevent:direct event:global\nget\narg\nevent:retained\nnumber true\n",
+            TestHarness.RunUnchecked(source, mode));
+    }
+
+    [Theory, ModeData]
     public void Process_Umask_GetAndSetRoundTrip(ExecutionMode mode)
     {
         var source = """

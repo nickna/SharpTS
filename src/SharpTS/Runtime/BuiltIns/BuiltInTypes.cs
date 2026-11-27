@@ -820,10 +820,7 @@ public static class BuiltInTypes
                 bufferType,
                 RequiredParams: 1), // list required, totalLength optional
             "isBuffer" => new TypeInfo.Function([AnyType], BooleanType),
-            "byteLength" => new TypeInfo.Function(
-                [new TypeInfo.Union([StringType, bufferType]), StringType],
-                NumberType,
-                RequiredParams: 1), // string required, encoding optional
+            "byteLength" => BufferByteLengthType,
             "compare" => new TypeInfo.Function([bufferType, bufferType], NumberType),
             "isEncoding" => new TypeInfo.Function([StringType], BooleanType),
             "of" => new TypeInfo.Function([NumberType], bufferType, RequiredParams: 0, HasRestParam: true),
@@ -833,6 +830,14 @@ public static class BuiltInTypes
             _ => null
         };
     }
+
+    internal static readonly TypeInfo.Function BufferByteLengthType = new(
+        [new TypeInfo.Union([StringType, TypeInfo.Buffer.Shared, new TypeInfo.ArrayBuffer(),
+            new TypeInfo.SharedArrayBuffer(), new TypeInfo.DataView(),
+            .. BuiltInNames.TypedArrayNames.Select(name => new TypeInfo.TypedArray(name[..^"Array".Length]))]),
+            StringType],
+        NumberType,
+        RequiredParams: 1);
 
     /// <summary>
     /// Type signatures for instance members on Promise objects.

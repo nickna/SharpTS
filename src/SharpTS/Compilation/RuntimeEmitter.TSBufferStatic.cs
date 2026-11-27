@@ -189,12 +189,35 @@ public partial class RuntimeEmitter
 
         il.MarkLabel(notBuffer);
         il.Emit(OpCodes.Pop);
+
+        if (runtime.TypedArrays.Implementation is { } arrays)
+        {
+            Type[] binaryTypes = [runtime.RequireArrayBuffer().Type, runtime.RequireSharedArrayBuffer().Type,
+                arrays.BaseType, runtime.RequireDataView().Type];
+            var readViewLength = il.DefineLabel();
+            var notView = il.DefineLabel();
+            foreach (var type in binaryTypes)
+            {
+                il.Emit(OpCodes.Ldarg_0);
+                il.Emit(OpCodes.Isinst, type);
+                il.Emit(OpCodes.Brtrue, readViewLength);
+            }
+            il.Emit(OpCodes.Br, notView);
+
+            il.MarkLabel(readViewLength);
+            il.Emit(OpCodes.Ldarg_0);
+            il.Emit(OpCodes.Ldstr, "byteLength");
+            il.Emit(OpCodes.Call, runtime.ObjectRead.Property);
+            il.Emit(OpCodes.Ret);
+            il.MarkLabel(notView);
+        }
+
         il.Emit(OpCodes.Ldarg_0);
         il.Emit(OpCodes.Isinst, _types.String);
         il.Emit(OpCodes.Stloc, text);
         il.Emit(OpCodes.Ldloc, text);
         il.Emit(OpCodes.Brtrue, isString);
-        EmitThrowTypeError(il, runtime.Errors, "Buffer.byteLength requires a string or Buffer argument");
+        EmitThrowTypeError(il, runtime.Errors, "Buffer.byteLength requires a string, Buffer, ArrayBuffer, or ArrayBuffer view");
 
         il.MarkLabel(isString);
         il.Emit(OpCodes.Ldloc, text);

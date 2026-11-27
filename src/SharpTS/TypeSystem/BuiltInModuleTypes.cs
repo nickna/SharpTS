@@ -1,5 +1,6 @@
 using System.Collections.Frozen;
 using SharpTS.Parsing;
+using SharpTS.Runtime.BuiltIns;
 
 namespace SharpTS.TypeSystem;
 
@@ -329,10 +330,7 @@ public static partial class BuiltInModuleTypes
                 bufferType,
                 RequiredParams: 1),
             ["isBuffer"] = new TypeInfo.Function([TypeInfo.Any.Shared], BooleanType),
-            ["byteLength"] = new TypeInfo.Function(
-                [new TypeInfo.Union([stringType, bufferType]), stringType],
-                numberType,
-                RequiredParams: 1),
+            ["byteLength"] = BuiltInTypes.BufferByteLengthType,
             ["compare"] = new TypeInfo.Function([bufferType, bufferType], numberType),
             ["isEncoding"] = new TypeInfo.Function([stringType], BooleanType)
         }.ToFrozenDictionary());
