@@ -25,6 +25,8 @@ public static class BufferModuleHelpers
     internal const string AtobWhitespace = " \t\n\f\r";
     internal const string InvalidCharacterErrorName = "InvalidCharacterError";
     internal const string InvalidCharacterMessage = "Invalid character";
+    internal const string MissingInputCode = "ERR_MISSING_ARGS";
+    internal const string MissingInputMessage = "The \"input\" argument must be specified";
 
     /// <summary>Decodes forgiving Base64 into a Latin-1 binary string.</summary>
     public static string Atob(string data)

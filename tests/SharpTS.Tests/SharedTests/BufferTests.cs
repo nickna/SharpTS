@@ -1522,6 +1522,24 @@ public class BufferTests
     }
 
     [Theory, ModeData]
+    public void BufferModule_Base64DistinguishesOmittedInputFromUndefined(ExecutionMode mode)
+    {
+        const string source = """
+            for (const convert of [atob, btoa]) {
+                try { convert(...[]); }
+                catch (error) { console.log(error instanceof TypeError, error.name, error.code, error.message); }
+            }
+            try { atob(undefined); }
+            catch (error) { console.log(error.name, error.code); }
+            let extra = 0;
+            console.log(btoa(undefined, ++extra), btoa(null), extra);
+            """;
+        const string missing = "true TypeError ERR_MISSING_ARGS The \"input\" argument must be specified\n";
+        Assert.Equal(missing + missing + "InvalidCharacterError 5\ndW5kZWZpbmVk bnVsbA== 1\n",
+            TestHarness.RunUnchecked(source, mode));
+    }
+
+    [Theory, ModeData]
     public void BufferModule_InvalidCharactersThrowDomException(ExecutionMode mode)
     {
         const string source = """

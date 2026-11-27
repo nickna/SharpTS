@@ -35,8 +35,12 @@ public sealed class BufferModuleEmitter : IBuiltInModuleEmitter
 
         switch (methodName)
         {
-            case "atob": return EmitUnary(emitter, arguments, ctx.Runtime!.RequireBuffer().Atob);
-            case "btoa": return EmitUnary(emitter, arguments, ctx.Runtime!.RequireBuffer().Btoa);
+            case "atob":
+            case "btoa":
+                var buffer = ctx.Runtime!.RequireBuffer();
+                emitter.EmitArgsArrayWithSpread(arguments);
+                il.Emit(OpCodes.Call, methodName == "atob" ? buffer.Atob : buffer.Btoa);
+                return true;
             case "isUtf8": return EmitUnary(emitter, arguments, ctx.Runtime!.RequireBuffer().IsUtf8);
             case "isAscii": return EmitUnary(emitter, arguments, ctx.Runtime!.RequireBuffer().IsAscii);
             case "SlowBuffer": return EmitUnary(emitter, arguments, ctx.Runtime!.RequireBuffer().SlowBuffer);

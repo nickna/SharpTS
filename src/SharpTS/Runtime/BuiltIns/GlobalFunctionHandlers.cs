@@ -284,7 +284,7 @@ internal static class GlobalFunctionHandlers
         Interpreter interpreter)
     {
         if (arguments.Count < 1)
-            throw new InterpreterException($"{BuiltInNames.Atob}() requires exactly one argument.");
+            throw CreateMissingBase64InputError();
         var str = interpreter.ToStringForBuiltInArgument((await evaluateArg(arguments[0])).ToObject());
         return RuntimeValue.FromString(Types.BufferModuleHelpers.Atob(str));
     }
@@ -295,10 +295,13 @@ internal static class GlobalFunctionHandlers
         Interpreter interpreter)
     {
         if (arguments.Count < 1)
-            throw new InterpreterException($"{BuiltInNames.Btoa}() requires exactly one argument.");
+            throw CreateMissingBase64InputError();
         var str = interpreter.ToStringForBuiltInArgument((await evaluateArg(arguments[0])).ToObject());
         return RuntimeValue.FromString(Types.BufferModuleHelpers.Btoa(str));
     }
+
+    private static ThrowException CreateMissingBase64InputError() =>
+        new(new SharpTSTypeError(BufferModuleHelpers.MissingInputMessage) { Code = BufferModuleHelpers.MissingInputCode });
 
     private static string CoerceToString(RuntimeValue value)
     {
