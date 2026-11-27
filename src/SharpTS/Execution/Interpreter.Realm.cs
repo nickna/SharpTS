@@ -705,6 +705,11 @@ public partial class Interpreter
             _arrayBufferPrototype.DefineProperty("constructor", new Runtime.Types.SharpTSPropertyDescriptor(
                 _arrayBufferConstructor,
                 writable: true, enumerable: false, configurable: true));
+            var byteLength = BuiltInMethod.CreateV2("get byteLength", 0, static (_, receiver, _) =>
+                receiver.ToObject() is SharpTSArrayBuffer buffer
+                    ? RuntimeValue.FromNumber(buffer.ByteLength)
+                    : throw new ThrowException(new SharpTSTypeError("ArrayBuffer byteLength called on incompatible receiver")));
+            _arrayBufferPrototype.DefineProperty("byteLength", SharpTSPropertyDescriptor.ForGetter(byteLength));
         }
         return _arrayBufferConstructor;
     }

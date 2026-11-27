@@ -64,6 +64,25 @@ public class ArrayBufferTests
         Assert.Equal("8\n1024\n", output);
     }
 
+    [Theory, ModeData]
+    public void ArrayBuffer_ByteLengthOwnDescriptorShadowsIntrinsicGetter(ExecutionMode mode)
+    {
+        const string source = """
+            const value = new ArrayBuffer(4);
+            Object.defineProperty(value, 'byteLength', {
+                configurable: true,
+                get() { return this === value ? 'custom' : 'wrong receiver'; }
+            });
+            console.log(value.byteLength, value['byteLength'], Reflect.get(value, 'byteLength'));
+            console.log(Object.hasOwn(value, 'byteLength'), delete value.byteLength, value.byteLength);
+            Object.defineProperty(value, 'byteLength', { configurable: true, value: null });
+            console.log(value.byteLength === null);
+            Object.defineProperty(value, 'byteLength', { set(value) {} });
+            console.log(value.byteLength === undefined);
+            """;
+        Assert.Equal("custom custom custom\ntrue true 4\ntrue\ntrue\n", TestHarness.RunUnchecked(source, mode));
+    }
+
     #endregion
 
     #region Slice Method Tests

@@ -191,7 +191,6 @@ public partial class RuntimeEmitter
         // Also emit slice and byteLength helpers. isView is emitted earlier
         // for the static-member lookup table.
         EmitArrayBufferSliceHelper(runtimeType, runtime.RequireArrayBuffer());
-        EmitArrayBufferByteLengthHelper(runtimeType, runtime.RequireArrayBuffer());
     }
 
     /// <summary>
@@ -228,46 +227,6 @@ public partial class RuntimeEmitter
         il.Emit(OpCodes.Ret);
 
         arrayBuffer.SliceObject = method;
-    }
-
-    /// <summary>
-    /// Emits ArrayBuffer.byteLength getter helper.
-    /// Uses the emitted $ArrayBuffer type when possible (pure-IL, no reflection).
-    /// </summary>
-    private void EmitArrayBufferByteLengthHelper(TypeBuilder runtimeType, EmittedArrayBufferRuntime arrayBuffer)
-    {
-        var method = runtimeType.DefineMethod(
-            "ArrayBufferByteLength",
-            MethodAttributes.Public | MethodAttributes.Static,
-            _types.Double,
-            [_types.Object]
-        );
-
-        var il = method.GetILGenerator();
-
-        // Check if obj is $ArrayBuffer - if so, call ByteLength getter directly
-        var notEmittedTypeLabel = il.DefineLabel();
-
-        il.Emit(OpCodes.Ldarg_0);
-        il.Emit(OpCodes.Isinst, arrayBuffer.Type);
-        il.Emit(OpCodes.Brfalse, notEmittedTypeLabel);
-
-        // It's our emitted $ArrayBuffer - call ByteLength directly
-        il.Emit(OpCodes.Ldarg_0);
-        il.Emit(OpCodes.Castclass, arrayBuffer.Type);
-        il.Emit(OpCodes.Callvirt, arrayBuffer.ByteLengthGetter);
-        il.Emit(OpCodes.Conv_R8);  // Convert int to double
-        il.Emit(OpCodes.Ret);
-
-        // Not our emitted type
-        il.MarkLabel(notEmittedTypeLabel);
-        il.Emit(OpCodes.Ldstr, "ArrayBuffer.byteLength requires emitted ArrayBuffer.");
-        il.Emit(OpCodes.Newobj, _types.InvalidOperationExceptionCtorString);
-        il.Emit(OpCodes.Throw);
-
-        il.Emit(OpCodes.Ret);
-
-        arrayBuffer.GetByteLength = method;
     }
 
     /// <summary>

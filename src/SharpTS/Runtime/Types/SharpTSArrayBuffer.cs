@@ -10,10 +10,12 @@ namespace SharpTS.Runtime.Types;
 /// Unlike SharedArrayBuffer, ArrayBuffer is not shared across threads and
 /// does not require pinned memory or IDisposable.
 /// </remarks>
-public class SharpTSArrayBuffer : ITypeCategorized
+public class SharpTSArrayBuffer : ITypeCategorized, ISharpTSOwnPropertyObject
 {
     private readonly byte[] _data;
     private bool _detached;
+    private SharpTSObject? _ownProperties;
+    SharpTSObject ISharpTSOwnPropertyObject.OwnProperties => _ownProperties ??= new([]);
 
     /// <inheritdoc />
     public TypeCategory RuntimeCategory => TypeCategory.Buffer;
