@@ -165,7 +165,7 @@ public class EmittedSharedArrayBufferRuntimeTests
 
     [Theory]
     [InlineData("const b = new SharedArrayBuffer(8); console.log(b.byteLength, b.slice(2).byteLength, b instanceof SharedArrayBuffer);")]
-    [InlineData("const b: any = new SharedArrayBuffer(8); const slice = b.slice; console.log(slice(1, 5).byteLength);")]
+    [InlineData("const b: any = new SharedArrayBuffer(8); const slice = b.slice; console.log(slice.call(b, 1, 5).byteLength);")]
     [InlineData("const b = new SharedArrayBuffer(8); const view = new DataView(b); view.setUint32(0, 123, true); console.log(new Uint8Array(b)[0]);")]
     [InlineData("const b = new SharedArrayBuffer(8); console.log(Array.from(b).length, structuredClone(b).byteLength);")]
     [InlineData("console.log(Buffer.from([1, 2]).length, Array.from([3, 4]).length);")]

@@ -35,6 +35,25 @@ public partial class RuntimeEmitter
         il.MarkLabel(doFillLabel);
     }
 
+    private void EmitPrototypeToStringTag(ILGenerator il, EmittedRuntime runtime, FieldBuilder prototype, string tag)
+    {
+        var storage = runtime.DescriptorStorage;
+        il.Emit(OpCodes.Ldsfld, prototype);
+        il.Emit(OpCodes.Call, runtime.Symbols.GetStorage);
+        il.Emit(OpCodes.Ldsfld, runtime.Symbols.ToStringTag);
+        il.Emit(OpCodes.Newobj, storage.DescriptorConstructor);
+        il.Emit(OpCodes.Dup);
+        il.Emit(OpCodes.Ldstr, tag);
+        il.Emit(OpCodes.Callvirt, storage.DescriptorValue.GetSetMethod()!);
+        il.Emit(OpCodes.Dup);
+        il.Emit(OpCodes.Ldc_I4_0);
+        il.Emit(OpCodes.Callvirt, storage.DescriptorWritable.GetSetMethod()!);
+        il.Emit(OpCodes.Dup);
+        il.Emit(OpCodes.Ldc_I4_0);
+        il.Emit(OpCodes.Callvirt, storage.DescriptorEnumerable.GetSetMethod()!);
+        il.Emit(OpCodes.Callvirt, _types.GetMethod(_types.DictionaryObjectObject, "set_Item", _types.Object, _types.Object));
+    }
+
     /// <summary>
     /// Emits a non-enumerable PDS data-descriptor install for
     /// <c>protoField[jsName]</c> (built-in §17 attrs: W:T, E:F, C:T) so

@@ -2781,13 +2781,14 @@ public static partial class ObjectBuiltIns
         SharpTSTypedArray typedArray => interp?.GetTypedArrayPrototype(typedArray.TypeName),
         SharpTSArrayBuffer { HasExplicitPrototype: true } arrayBuffer => arrayBuffer.ExplicitPrototype,
         SharpTSArrayBuffer => interp?.GetArrayBufferPrototype(),
+        SharpTSSharedArrayBuffer => interp?.GetSharedArrayBufferPrototype(),
         // These native carriers do not yet materialize their individual
         // prototype objects. Their conceptual chains still reach Object.prototype.
         // Keep this fallback limited to native types without an explicit prototype
         // carrier: ordinary null roots and Proxy trap results remain authoritative.
         SharpTSMap or SharpTSSet or SharpTSWeakMap or SharpTSWeakSet
             or SharpTSWeakRef or SharpTSFinalizationRegistry
-            or SharpTSSharedArrayBuffer or SharpTSDataView
+            or SharpTSDataView
             or SharpTSBuffer
             or SharpTSAbortController or SharpTSAbortSignal
             or SharpTSIterator or SharpTSTextEncoder or SharpTSTextDecoder

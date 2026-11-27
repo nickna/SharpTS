@@ -49,6 +49,7 @@ public partial class RuntimeEmitter
             runtime.Reflect.Namespace is not null ? runtime.Reflect.RequireNamespace().SingletonField : null,
             runtime.Reflect.Namespace is not null ? runtime.Reflect.RequireNamespace().SingletonPopulateMethod : null,
             runtime.ArrayBuffer?.Type,
+            runtime.SharedArrayBuffer?.Type,
             _features.UsesCrypto ? runtime.WebCrypto.GetObject : null,
             _features.UsesFetch ? runtime.Fetch.RequireImplementation().Invoke : null,
             runtime.Abort?.GetControllerConstructor);
@@ -70,7 +71,7 @@ public partial class RuntimeEmitter
 
     private readonly record struct GlobalPropertyOptionalInputs(
         FieldBuilder? ConsoleSingleton, Type? DateType, Type? RegExpType, FieldBuilder? ReflectSingleton, MethodBuilder? PopulateReflectSingleton,
-        Type? ArrayBufferType,
+        Type? ArrayBufferType, Type? SharedArrayBufferType,
         MethodBuilder? GetCryptoObject, MethodBuilder? FetchInvoke,
         MethodBuilder? GetAbortControllerConstructor);
 
@@ -124,6 +125,8 @@ public partial class RuntimeEmitter
         }
         if (_emitHosted || _features.UsesStructuredClone)
             InstallFunction("structuredClone", runtime.StructuredClone.GuestClone, 2);
+        if (runtime.ArrayBuffer is { } arrayBuffer)
+            EmitPrototypeToStringTag(il, runtime, arrayBuffer.PrototypeField, "ArrayBuffer");
         il.Emit(OpCodes.Ret);
 
         void InstallFunction(string name, MethodBuilder method, int length) => InstallData(name, true, () =>
@@ -505,6 +508,8 @@ public partial class RuntimeEmitter
         EmitTypeBranch("Promise", _types.TaskOfObject);
         if (inputs.Optional.ArrayBufferType is not null)
             EmitTypeBranch("ArrayBuffer", inputs.Optional.ArrayBufferType);
+        if (inputs.Optional.SharedArrayBufferType is not null)
+            EmitTypeBranch("SharedArrayBuffer", inputs.Optional.SharedArrayBufferType);
         EmitTypeBranch("Function", inputs.FunctionType);
         // `Object` — return System.Object's Type token so `globalThis.Object === Object`
         // holds (bare `Object` lowers to this same helper via ILEmitter.Expressions.cs,

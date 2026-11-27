@@ -356,7 +356,7 @@ public static class ReflectBuiltIns
                     return RuntimeValue.FromBoxed(ObjectBuiltIns.PrototypeOf(interpreter, target));
                 if (target is SharpTSProxy or ISharpTSGeneratorFunctionValue or SharpTSGenerator or SharpTSAsyncGenerator
                     or SharpTSClassPrototype or SharpTSArrayGlobal or SharpTSClass or SharpTSFunctionPrototype
-                    or SharpTSArrayBuffer or SharpTSDomException)
+                    or SharpTSArrayBuffer or SharpTSSharedArrayBuffer or SharpTSDomException)
                     return RuntimeValue.FromBoxed(ObjectBuiltIns.PrototypeOf(interpreter, target));
                 return RuntimeValue.FromBoxed(target switch
                 {

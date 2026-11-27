@@ -10,6 +10,9 @@ namespace SharpTS.Runtime.Types;
 /// </summary>
 public sealed class SharpTSBufferConstructor
 {
+    private static readonly BuiltInMethod IsBufferMethod =
+        BuiltInMethod.CreateV2("isBuffer", 0, int.MaxValue, BufferIsBuffer).WithSpecLength(1);
+
     /// <summary>
     /// The singleton instance of the Buffer constructor.
     /// </summary>
@@ -38,7 +41,7 @@ public sealed class SharpTSBufferConstructor
             "allocUnsafeSlow" => BuiltInMethod.CreateV2("allocUnsafeSlow", 1, BufferAllocUnsafe), // Same as allocUnsafe
             "concat" => BuiltInMethod.CreateV2("concat", 1, 2, BufferConcat),
             "copyBytesFrom" => BuiltInMethod.CreateV2("copyBytesFrom", 1, 3, BufferCopyBytesFrom),
-            "isBuffer" => BuiltInMethod.CreateV2("isBuffer", 1, BufferIsBuffer),
+            "isBuffer" => IsBufferMethod,
             "byteLength" => BuiltInMethod.CreateV2("byteLength", 1, 2, BufferByteLength).WithSpecLength(2),
             "compare" => BuiltInMethod.CreateV2("compare", 2, BufferCompare),
             "isEncoding" => BuiltInMethod.CreateV2("isEncoding", 1, BufferIsEncoding),
@@ -95,7 +98,7 @@ public sealed class SharpTSBufferConstructor
 
     /// <summary>
     /// Buffer.from(data, encoding?)
-    /// Creates a Buffer from string, array, or another buffer.
+    /// Creates a Buffer from string, array, or another buffer, sharing an ArrayBuffer's bytes.
     /// </summary>
     private static RuntimeValue BufferFrom(Interp interpreter, RuntimeValue receiver, ReadOnlySpan<RuntimeValue> args)
     {
@@ -115,9 +118,7 @@ public sealed class SharpTSBufferConstructor
             SharpTSBuffer buf => SharpTSBuffer.FromBuffer(buf),
             SharpTSArray arr => SharpTSBuffer.FromArray(arr),
             List<object?> list => SharpTSBuffer.FromArray(list),
-            // Buffer.from(arrayBuffer) / Buffer.from(typedArray) (#1063) — copies
-            // (Node copies for TypedArray; for ArrayBuffer Node shares memory — we copy).
-            SharpTSArrayBuffer ab => new SharpTSBuffer(ab.AsSpan().ToArray()),
+            SharpTSArrayBuffer ab => new SharpTSBuffer(ab.GetBackingArray()),
             SharpTSTypedArray typed => new SharpTSBuffer(typed.Buffer.AsSpan(typed.ByteOffset, typed.ByteLength).ToArray()),
             _ => throw new Exception($"Buffer.from: unsupported data type: {data.GetType().Name}")
         });

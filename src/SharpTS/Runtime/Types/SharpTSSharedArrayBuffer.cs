@@ -13,10 +13,12 @@ namespace SharpTS.Runtime.Types;
 /// Unlike regular ArrayBuffer, SharedArrayBuffer is shared by reference
 /// across threads (not cloned during postMessage).
 /// </remarks>
-public class SharpTSSharedArrayBuffer : ITypeCategorized, IDisposable
+public class SharpTSSharedArrayBuffer : ITypeCategorized, ISharpTSOwnPropertyObject, IDisposable
 {
     private readonly byte[] _data;
     private bool _disposed;
+    private SharpTSObject? _ownProperties;
+    SharpTSObject ISharpTSOwnPropertyObject.OwnProperties => _ownProperties ??= new([]);
 
     /// <summary>
     /// Unique identifier for this buffer, used for Atomics.wait/notify waiter tracking.

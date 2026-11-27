@@ -9,13 +9,14 @@ public partial class RuntimeEmitter
     /// Emits the $SharedArrayBuffer type for standalone DLLs.
     /// Similar to $ArrayBuffer but marked as shared.
     /// </summary>
-    private void EmitSharedArrayBufferType(ModuleBuilder module, EmittedSharedArrayBufferRuntime buffer)
+    private void EmitSharedArrayBufferType(ModuleBuilder module, EmittedRuntime runtime)
     {
         var typeBuilder = EmitTypeDefinitions.DefineType(module,
             "$SharedArrayBuffer",
             TypeAttributes.Public | TypeAttributes.Sealed | TypeAttributes.Class,
             _types.Object
         );
+        var buffer = runtime.RequireSharedArrayBuffer();
         buffer.Type = typeBuilder;
 
         // Field: byte[] _buffer
@@ -54,7 +55,10 @@ public partial class RuntimeEmitter
         EmitSharedArrayBufferGetBuffer(typeBuilder, buffer);
 
         // Method: public $SharedArrayBuffer Slice(int begin, int end)
-        EmitSharedArrayBufferSliceMethod(typeBuilder, buffer);
+        buffer.Slice = EmitArrayBufferSlice(typeBuilder, buffer.BufferField, buffer.Ctor);
+        buffer.PrototypeSlice = EmitArrayBufferPrototypeSlice(typeBuilder, runtime, buffer.Slice, "SharedArrayBuffer");
+        buffer.PrototypeByteLengthGetter = EmitArrayBufferPrototypeByteLengthGetter(
+            typeBuilder, runtime, buffer.ByteLengthGetter, "SharedArrayBuffer");
 
         // Finalize the type
         typeBuilder.CreateType();
@@ -102,72 +106,5 @@ public partial class RuntimeEmitter
         il.Emit(OpCodes.Ldfld, buffer.BufferField);
         il.Emit(OpCodes.Ret);
         _nativeTypedArrayBuffers?.RecordDeclaration(buffer);
-    }
-
-    private void EmitSharedArrayBufferSliceMethod(TypeBuilder typeBuilder, EmittedSharedArrayBufferRuntime buffer)
-    {
-        var method = typeBuilder.DefineMethod(
-            "Slice",
-            MethodAttributes.Public,
-            typeBuilder,
-            [_types.Int32, _types.Int32]
-        );
-        buffer.Slice = method;
-
-        var il = method.GetILGenerator();
-
-        var bufLenLocal = il.DeclareLocal(_types.Int32);
-        var endLocal = il.DeclareLocal(_types.Int32);
-        var lengthLocal = il.DeclareLocal(_types.Int32);
-
-        // var bufLen = _buffer.Length
-        il.Emit(OpCodes.Ldarg_0);
-        il.Emit(OpCodes.Ldfld, buffer.BufferField);
-        il.Emit(OpCodes.Ldlen);
-        il.Emit(OpCodes.Conv_I4);
-        il.Emit(OpCodes.Stloc, bufLenLocal);
-
-        // var actualEnd = end > bufLen ? bufLen : end
-        var endOkLabel = il.DefineLabel();
-        il.Emit(OpCodes.Ldarg_2);
-        il.Emit(OpCodes.Ldloc, bufLenLocal);
-        il.Emit(OpCodes.Ble, endOkLabel);
-        il.Emit(OpCodes.Ldloc, bufLenLocal);
-        il.Emit(OpCodes.Stloc, endLocal);
-        var afterEndClamp = il.DefineLabel();
-        il.Emit(OpCodes.Br, afterEndClamp);
-
-        il.MarkLabel(endOkLabel);
-        il.Emit(OpCodes.Ldarg_2);
-        il.Emit(OpCodes.Stloc, endLocal);
-
-        il.MarkLabel(afterEndClamp);
-
-        // var length = actualEnd - begin
-        il.Emit(OpCodes.Ldloc, endLocal);
-        il.Emit(OpCodes.Ldarg_1);
-        il.Emit(OpCodes.Sub);
-        il.Emit(OpCodes.Stloc, lengthLocal);
-
-        // var result = new $SharedArrayBuffer(length)
-        var resultLocal = il.DeclareLocal(typeBuilder);
-        il.Emit(OpCodes.Ldloc, lengthLocal);
-        il.Emit(OpCodes.Newobj, buffer.Ctor);
-        il.Emit(OpCodes.Stloc, resultLocal);
-
-        // Array.Copy(this._buffer, begin, result._buffer, 0, length)
-        var arrayCopy = typeof(Array).GetMethod("Copy", [typeof(Array), typeof(int), typeof(Array), typeof(int), typeof(int)])!;
-        il.Emit(OpCodes.Ldarg_0);
-        il.Emit(OpCodes.Ldfld, buffer.BufferField);
-        il.Emit(OpCodes.Ldarg_1);
-        il.Emit(OpCodes.Ldloc, resultLocal);
-        il.Emit(OpCodes.Ldfld, buffer.BufferField);
-        il.Emit(OpCodes.Ldc_I4_0);
-        il.Emit(OpCodes.Ldloc, lengthLocal);
-        il.Emit(OpCodes.Call, arrayCopy);
-
-        // return result
-        il.Emit(OpCodes.Ldloc, resultLocal);
-        il.Emit(OpCodes.Ret);
     }
 }

@@ -62,7 +62,8 @@ public partial class RuntimeEmitter
         EmittedGuestOwnPropertyRuntime? GuestOwnProperties = null,
         EmittedVmRuntime? Vm = null,
         EmittedTypedArrayRuntime? TypedArrays = null,
-        EmittedArrayBufferRuntime? ArrayBuffer = null
+        EmittedArrayBufferRuntime? ArrayBuffer = null,
+        EmittedSharedArrayBufferRuntime? SharedArrayBuffer = null
     );
 
     private readonly record struct ObjectSetPrototypeOfInputs(
@@ -1127,6 +1128,8 @@ public partial class RuntimeEmitter
             inputs.FunctionPrototypePopulateMethod, inputs.FunctionPrototypeField);
         if (inputs.ArrayBuffer is { } arrayBuffer)
             EmitNativePrototypeFallback([arrayBuffer.Type], null, arrayBuffer.PrototypeField);
+        if (inputs.SharedArrayBuffer is { } sharedArrayBuffer)
+            EmitNativePrototypeFallback([sharedArrayBuffer.Type], null, sharedArrayBuffer.PrototypeField);
         if (inputs.TypedArrays?.Implementation is { } arrays)
         {
             var notTypedArray = il.DefineLabel();

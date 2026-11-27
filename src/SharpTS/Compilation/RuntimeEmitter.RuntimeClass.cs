@@ -170,6 +170,11 @@ public partial class RuntimeEmitter
                 "_arrayBufferPrototype",
                 _types.DictionaryStringObject,
                 FieldAttributes.Public | FieldAttributes.Static | FieldAttributes.InitOnly);
+        if (runtime.SharedArrayBuffer is { } sharedArrayBufferPrototypeOwner)
+            sharedArrayBufferPrototypeOwner.PrototypeField = typeBuilder.DefineField(
+                "_sharedArrayBufferPrototype",
+                _types.DictionaryStringObject,
+                FieldAttributes.Public | FieldAttributes.Static | FieldAttributes.InitOnly);
 
         // Array.prototype singleton — populated lazily after $TSFunction and the
         // Array* helper MethodBuilders are defined. Read by ArrayStaticEmitter
@@ -577,6 +582,11 @@ public partial class RuntimeEmitter
             cctorIL.Emit(OpCodes.Newobj, _types.GetDefaultConstructor(_types.DictionaryStringObject));
             cctorIL.Emit(OpCodes.Stsfld, arrayBufferPrototypeInit.PrototypeField);
         }
+        if (runtime.SharedArrayBuffer is { } sharedArrayBufferPrototypeInit)
+        {
+            cctorIL.Emit(OpCodes.Newobj, _types.GetDefaultConstructor(_types.DictionaryStringObject));
+            cctorIL.Emit(OpCodes.Stsfld, sharedArrayBufferPrototypeInit.PrototypeField);
+        }
 
         // Array.prototype starts empty; populated lazily by
         // EmitArrayPrototypePopulate-emitted helper on first read.
@@ -679,21 +689,28 @@ public partial class RuntimeEmitter
         EmitLinkProto(stringPrototypeField);
         EmitLinkProto(arrayPrototypeField);
         if (runtime.ArrayBuffer is { } arrayBufferPrototypeLink)
-        {
-            EmitLinkProto(arrayBufferPrototypeLink.PrototypeField);
-            var descriptor = cctorIL.DeclareLocal(runtime.DescriptorStorage.DescriptorType);
-            var setItem = _types.GetMethod(_types.DictionaryStringObject, "set_Item", _types.String, _types.Object);
-            EmitInstallConstructor(cctorIL, runtime, arrayBufferPrototypeLink.PrototypeField, descriptor,
-                setItem, () =>
-                {
-                    cctorIL.Emit(OpCodes.Ldtoken, arrayBufferPrototypeLink.Type);
-                    cctorIL.Emit(OpCodes.Call, _types.TypeGetTypeFromHandle);
-                });
-            EmitArrayBufferPrototypeMembers(cctorIL, runtime, arrayBufferPrototypeLink, descriptor, setItem);
-        }
+            EmitLinkBufferPrototype(arrayBufferPrototypeLink.Type, arrayBufferPrototypeLink.PrototypeField,
+                arrayBufferPrototypeLink.PrototypeByteLengthGetter, arrayBufferPrototypeLink.SliceDynamic);
+        if (runtime.SharedArrayBuffer is { } sharedArrayBufferPrototypeLink)
+            EmitLinkBufferPrototype(sharedArrayBufferPrototypeLink.Type, sharedArrayBufferPrototypeLink.PrototypeField,
+                sharedArrayBufferPrototypeLink.PrototypeByteLengthGetter, sharedArrayBufferPrototypeLink.PrototypeSlice);
         EmitLinkProto(errorPrototypeField);
         EmitLinkProto(functionPrototypeField);
         EmitLinkProto(regexpPrototypeField);
+
+        void EmitLinkBufferPrototype(Type type, FieldBuilder prototype, MethodBuilder byteLengthGetter, MethodBuilder slice)
+        {
+            EmitLinkProto(prototype);
+            var descriptor = cctorIL.DeclareLocal(runtime.DescriptorStorage.DescriptorType);
+            var setItem = _types.GetMethod(_types.DictionaryStringObject, "set_Item", _types.String, _types.Object);
+            EmitInstallConstructor(cctorIL, runtime, prototype, descriptor,
+                setItem, () =>
+                {
+                    cctorIL.Emit(OpCodes.Ldtoken, type);
+                    cctorIL.Emit(OpCodes.Call, _types.TypeGetTypeFromHandle);
+                });
+            EmitArrayBufferPrototypeMembers(cctorIL, runtime, prototype, byteLengthGetter, slice, descriptor, setItem);
+        }
 
         // Initialize _mapNullSentinel = new object()
         cctorIL.Emit(OpCodes.Newobj, _types.GetDefaultConstructor(_types.Object));
@@ -1670,7 +1687,8 @@ public partial class RuntimeEmitter
                 runtime.Reflect.ToPropertyKey,
                 Errors: runtime.Errors,
                 NativeProxyRejection: runtime.ReflectedMethods.NativeProxyRejection,
-                GuestOwnProperties: runtime.GuestOwnProperties
+                GuestOwnProperties: runtime.GuestOwnProperties,
+                ArrayBuffer: runtime.ArrayBuffer
             )
         );
         // Apply wrappers were finalized earlier against the forward declaration;
@@ -2421,7 +2439,8 @@ public partial class RuntimeEmitter
                 GuestOwnProperties: runtime.GuestOwnProperties,
                 Vm: runtime.Vm,
                 TypedArrays: runtime.TypedArrays,
-                ArrayBuffer: runtime.ArrayBuffer
+                ArrayBuffer: runtime.ArrayBuffer,
+                SharedArrayBuffer: runtime.SharedArrayBuffer
             ),
             prototypeStoreField
         );

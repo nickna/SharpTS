@@ -64,10 +64,32 @@ public class CjsBuiltInModuleRequireTests
                 const { isBuffer } = buffer.Buffer;
                 console.log(typeof isBuffer, isBuffer.name, isBuffer.length);
                 console.log(isBuffer(result), isBuffer(new Uint8Array(3)), isBuffer(null), result.length);
+                console.log(isBuffer === Buffer.isBuffer, isBuffer === buffer.Buffer['isBuffer']);
+                console.log(isBuffer(), isBuffer(undefined), isBuffer(result, 'ignored'));
                 """
         };
-        Assert.Equal("function function function function\ntrue false false\ntrue 68e96c6c6f\nfunction isBuffer 1\ntrue false false 3\n",
+        Assert.Equal("function function function function\ntrue false false\ntrue 68e96c6c6f\nfunction isBuffer 1\n" +
+                     "true false false 3\ntrue true\nfalse false true\n",
             TestHarness.RunModules(files, "main.cjs", mode));
+    }
+
+    [Theory, ModeData]
+    public void Cjs_Require_Buffer_ValidatorsRejectNonBinaryInput(ExecutionMode mode)
+    {
+        var files = new Dictionary<string, string>
+        {
+            ["main.cjs"] = """
+                const { isUtf8, isAscii } = require('node:buffer');
+                for (const validate of [isUtf8, isAscii]) {
+                    for (const args of [[], ['ascii'], [[65]], [new DataView(new ArrayBuffer(1))], [null]]) {
+                        try { console.log(validate(...args)); }
+                        catch (error) { console.log(error instanceof TypeError, error.name, error.code); }
+                    }
+                }
+                """
+        };
+        const string expected = "true TypeError ERR_INVALID_ARG_TYPE\n";
+        Assert.Equal(string.Concat(Enumerable.Repeat(expected, 10)), TestHarness.RunModules(files, "main.cjs", mode));
     }
 
     [Theory, ModeData]

@@ -29,6 +29,8 @@ public static class BufferModuleHelpers
     internal const string MissingInputMessage = "The \"input\" argument must be specified";
     internal const string DetachedValidationCode = "ERR_INVALID_STATE";
     internal const string DetachedValidationMessage = "Cannot validate on a detached buffer";
+    internal const string InvalidValidationInputCode = "ERR_INVALID_ARG_TYPE";
+    internal const string InvalidValidationInputMessage = "The \"input\" argument must be an instance of ArrayBuffer, Buffer, or TypedArray.";
 
     /// <summary>Decodes forgiving Base64 into a Latin-1 binary string.</summary>
     public static string Atob(string data)

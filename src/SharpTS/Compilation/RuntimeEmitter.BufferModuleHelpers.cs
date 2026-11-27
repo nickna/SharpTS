@@ -22,7 +22,7 @@ public partial class RuntimeEmitter
         buffer.BtoaValue = EmitBase64Value("BufferBtoaValue", "btoa", buffer.Btoa);
         var validationBytes = EmitBufferValidationBytes(typeBuilder, runtime, buffer);
         EmitBufferIsUtf8Ascii(typeBuilder, buffer, validationBytes);
-        EmitBufferTranscode(typeBuilder, buffer);
+        EmitBufferTranscode(typeBuilder, buffer, runtime.TypedArrays.Implementation);
         EmitBufferSlowBuffer(typeBuilder, buffer);
         EmitBufferModuleConstants(typeBuilder, runtime);
 
@@ -496,8 +496,20 @@ public partial class RuntimeEmitter
             il.MarkLabel(next);
         }
 
-        il.Emit(OpCodes.Ldarg_0);
-        il.Emit(OpCodes.Call, buffer.BytesOf);
+        var invalidInput = il.DefineLabel();
+        var bufferInput = TestInput(buffer.Type, invalidInput);
+        il.Emit(OpCodes.Ldloc, bufferInput);
+        il.Emit(OpCodes.Callvirt, buffer.GetData);
+        il.Emit(OpCodes.Br, wholeArray);
+        il.MarkLabel(invalidInput);
+        il.Emit(OpCodes.Ldstr, BufferModuleHelpers.InvalidValidationInputMessage);
+        il.Emit(OpCodes.Newobj, runtime.Errors.TypeErrorConstructor);
+        il.Emit(OpCodes.Dup);
+        il.Emit(OpCodes.Ldstr, BufferModuleHelpers.InvalidValidationInputCode);
+        il.Emit(OpCodes.Callvirt, runtime.Errors.CodeSetter);
+        il.Emit(OpCodes.Call, runtime.Errors.CreateException);
+        il.Emit(OpCodes.Throw);
+
         il.MarkLabel(wholeArray);
         var data = il.DeclareLocal(_types.ByteArray);
         il.Emit(OpCodes.Stloc, data);
@@ -558,7 +570,8 @@ public partial class RuntimeEmitter
         Emit("BufferIsAscii", asciiIsValid, m => buffer.IsAscii = m);
     }
 
-    private void EmitBufferTranscode(TypeBuilder typeBuilder, EmittedBufferRuntime buffer)
+    private void EmitBufferTranscode(TypeBuilder typeBuilder, EmittedBufferRuntime buffer,
+        EmittedTypedArrayImplementation? arrays)
     {
         // transcode(source, from, to) = Buffer.from(decode(sourceBytes, from), to)
         var method = typeBuilder.DefineMethod(
@@ -568,10 +581,39 @@ public partial class RuntimeEmitter
         buffer.Transcode = method;
 
         var il = method.GetILGenerator();
-        // str = new $Buffer(BufferBytesOf(source)).ToEncodedString(coerce(from))
+        var decode = il.DefineLabel();
+        if (arrays is not null)
+        {
+            var otherSource = il.DefineLabel();
+            var attached = il.DefineLabel();
+            var input = il.DeclareLocal(arrays.Uint8ArrayType);
+            il.Emit(OpCodes.Ldarg_0);
+            il.Emit(OpCodes.Isinst, arrays.Uint8ArrayType);
+            il.Emit(OpCodes.Stloc, input);
+            il.Emit(OpCodes.Ldloc, input);
+            il.Emit(OpCodes.Brfalse, otherSource);
+            il.Emit(OpCodes.Ldloc, input);
+            il.Emit(OpCodes.Call, arrays.IsDetached);
+            il.Emit(OpCodes.Brfalse, attached);
+            il.Emit(OpCodes.Ldc_I4_0);
+            il.Emit(OpCodes.Newarr, _types.Byte);
+            NativePrototypeFieldsLookup.EmitCarrierCreate(_nativePrototypeFields, il, buffer.Ctor);
+            il.Emit(OpCodes.Br, decode);
+            il.MarkLabel(attached);
+            // Copy only the source view's bytes, preserving its offset and length.
+            il.Emit(OpCodes.Ldloc, input);
+            il.Emit(OpCodes.Ldnull);
+            il.Emit(OpCodes.Ldnull);
+            il.Emit(OpCodes.Call, buffer.CopyBytesFrom);
+            il.Emit(OpCodes.Castclass, buffer.Type);
+            il.Emit(OpCodes.Br, decode);
+            il.MarkLabel(otherSource);
+        }
+
         il.Emit(OpCodes.Ldarg_0);
         il.Emit(OpCodes.Call, buffer.BytesOf);
         NativePrototypeFieldsLookup.EmitCarrierCreate(_nativePrototypeFields, il, buffer.Ctor);
+        il.MarkLabel(decode);
         il.Emit(OpCodes.Ldarg_1);
         il.Emit(OpCodes.Call, buffer.CoerceString);
         il.Emit(OpCodes.Callvirt, buffer.ToStringMethod);

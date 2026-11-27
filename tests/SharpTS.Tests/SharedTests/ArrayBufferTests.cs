@@ -64,6 +64,27 @@ public class ArrayBufferTests
     }
 
     [Theory, ModeData]
+    public void ArrayBuffer_UsesTheJavaScriptNameAndPrototypeStringTag(ExecutionMode mode)
+    {
+        const string source = """
+            const value = new ArrayBuffer(4);
+            const prototype = ArrayBuffer.prototype;
+            const key = Symbol.toStringTag;
+            const tag = Object.getOwnPropertyDescriptor(prototype, key);
+            console.log(ArrayBuffer.name, value.constructor.name, value[key], Object.prototype.toString.call(value));
+            console.log(Object.hasOwn(prototype, key), Object.hasOwn(value, key),
+                tag.value, tag.writable, tag.enumerable, tag.configurable);
+            Object.setPrototypeOf(value, { [key]: 'Replacement' });
+            console.log(value[key], Object.prototype.toString.call(value));
+            Object.setPrototypeOf(value, null);
+            console.log(value[key], Object.prototype.toString.call(value));
+            """;
+        Assert.Equal("ArrayBuffer ArrayBuffer ArrayBuffer [object ArrayBuffer]\n" +
+            "true false ArrayBuffer false false true\nReplacement [object Replacement]\nundefined [object Object]\n",
+            TestHarness.RunUnchecked(source, mode));
+    }
+
+    [Theory, ModeData]
     public void ArrayBuffer_PrototypeCanBeReplacedAndRestored(ExecutionMode mode)
     {
         const string source = """
@@ -146,6 +167,28 @@ public class ArrayBufferTests
     #endregion
 
     #region Slice Method Tests
+
+    [Theory, ModeData]
+    public void SharedArrayBuffer_SliceUsesTheCallReceiver(ExecutionMode mode)
+    {
+        const string source = """
+            const first = new SharedArrayBuffer(4);
+            const second = new SharedArrayBuffer(8);
+            const prototype = SharedArrayBuffer.prototype;
+            const slice = first.slice;
+            console.log(Reflect.getPrototypeOf(first) === prototype, first.constructor === globalThis.SharedArrayBuffer);
+            console.log(slice === second['slice'], slice === prototype.slice, slice.name, slice.length);
+            console.log(first.slice(1).byteLength, slice.call(second, -3).byteLength,
+                Reflect.apply(slice, second, [1, 3]).byteLength);
+            try { slice(1); } catch (error) { console.log(error instanceof TypeError, error.name); }
+            try { slice.call(new ArrayBuffer(4), 1); }
+            catch (error) { console.log(error instanceof TypeError, error.name); }
+            Object.defineProperty(first, 'slice', { value: function () { return this === first; } });
+            console.log(first.slice(), second.slice === slice);
+            """;
+        Assert.Equal("true true\ntrue true slice 2\n3 3 2\ntrue TypeError\ntrue TypeError\ntrue true\n",
+            TestHarness.RunUnchecked(source, mode));
+    }
 
     [Theory, ModeData]
     public void ArrayBuffer_Slice_CreatesNewBuffer(ExecutionMode mode)

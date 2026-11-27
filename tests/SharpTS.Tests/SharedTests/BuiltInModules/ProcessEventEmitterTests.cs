@@ -9,6 +9,37 @@ namespace SharpTS.Tests.SharedTests.BuiltInModules;
 public class ProcessEventEmitterTests
 {
     [Theory, ModeData]
+    public void Process_EventCallsUseTheCurrentReceiver(ExecutionMode mode)
+    {
+        const string source = """
+            const original = process;
+            const listener = () => {};
+            function method(event, callback) {
+                return this === replacement && event === 'custom' && callback === listener;
+            }
+            const replacement = {
+                on: method, addListener: method, once: method, off: method, removeListener: method,
+                prependListener: method, prependOnceListener: method, emit: method,
+                removeAllListeners(event) { return this === replacement && event === 'custom'; },
+                get setMaxListeners() {
+                    console.log('get');
+                    return function (count) { return this === replacement ? count + 1 : -1; };
+                }
+            };
+            globalThis.process = replacement;
+            console.log(process.on('custom', listener), process.addListener('custom', listener),
+                process.once('custom', listener), process.off('custom', listener),
+                process.removeListener('custom', listener), process.prependListener('custom', listener),
+                process.prependOnceListener('custom', listener), process.emit('custom', listener),
+                process.removeAllListeners('custom'));
+            function restore() { console.log('arg'); globalThis.process = original; return [10]; }
+            console.log(process.setMaxListeners(...restore()));
+            """;
+        Assert.Equal("true true true true true true true true true\nget\narg\n11\n",
+            TestHarness.RunUnchecked(source, mode));
+    }
+
+    [Theory, ModeData]
     public void Process_On_RegistersAndEmitsEvent(ExecutionMode mode)
     {
         var source = """
