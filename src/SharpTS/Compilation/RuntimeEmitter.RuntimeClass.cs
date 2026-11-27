@@ -2383,7 +2383,7 @@ public partial class RuntimeEmitter
                 {
                     _types.DictionaryObjectObject, _types.HashSetOfObject,
                     _types.ConditionalWeakTableObjectObject, _types.WeakReferenceObject,
-                    _types.ObjectArray, runtime.ArrayBuffer?.Type,
+                    _types.ObjectArray,
                     runtime.SharedArrayBuffer?.Type, runtime.DataView?.Type,
                     runtime.TypedArrays.Implementation?.BaseType, runtime.Buffer?.Type,
                     runtime.TextEncoding?.EncoderType, runtime.TextEncoding?.DecoderType,
@@ -2412,7 +2412,8 @@ public partial class RuntimeEmitter
                 NativeProxyRejection: runtime.ReflectedMethods.NativeProxyRejection,
                 GuestOwnProperties: runtime.GuestOwnProperties,
                 Vm: runtime.Vm,
-                TypedArrays: runtime.TypedArrays
+                TypedArrays: runtime.TypedArrays,
+                ArrayBuffer: runtime.ArrayBuffer
             ),
             prototypeStoreField
         );
