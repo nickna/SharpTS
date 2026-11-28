@@ -21,6 +21,20 @@ public sealed class EmittedBufferRuntime
         set => Set(ref _readUInt8Value, value);
     }
 
+    private MethodBuilder? _indexOfValue;
+    internal MethodBuilder IndexOfValue
+    {
+        get => Require(_indexOfValue);
+        set => Set(ref _indexOfValue, value);
+    }
+
+    private MethodBuilder? _includesValue;
+    internal MethodBuilder IncludesValue
+    {
+        get => Require(_includesValue);
+        set => Set(ref _includesValue, value);
+    }
+
     private MethodBuilder? _byteOffsetGetter;
     internal MethodBuilder ByteOffsetGetter
     {
@@ -731,6 +745,8 @@ public sealed class EmittedBufferRuntime
         _ = OwnerGetter;
         _ = ByteOffsetGetter;
         _ = ReadUInt8Value;
+        _ = IndexOfValue;
+        _ = IncludesValue;
         _ = Type;
         _ = ViewCtor;
         _ = Ctor;

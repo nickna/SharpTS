@@ -743,44 +743,22 @@ public partial class RuntimeEmitter
             il.Emit(OpCodes.Ret);
         }
 
-        // $Buffer handler: load byte from the underlying byte[] and return as boxed double.
-        // Matches SharpTSBuffer.this[int] semantics: out-of-range returns NaN (boxed double),
-        // in-range returns the byte as a double. Gated together with the dispatch arm.
-        if (inputs.Buffer is not null)
+        if (inputs.Buffer is { } buffer)
         {
             il.MarkLabel(tsBufferLabel);
-            var bufLocal = il.DeclareLocal(inputs.Buffer.Type);
-            var bufIndexLocal = il.DeclareLocal(_types.Int32);
-            var bufInRangeLabel = il.DefineLabel();
-            var bufOutOfRangeLabel = il.DefineLabel();
-            // data = ((TSBuffer)obj).Data;
+            var index = il.DeclareLocal(_types.Int32);
+            var outOfRange = il.DefineLabel();
+            // Named keys use ordinary property lookup, including first-class Buffer methods.
+            EmitViewIndexGuard(il, buffer.Type, buffer.LengthGetter, inputs.ToNumber,
+                inputs.StringCoercion.ToJsString, index, classInstanceLabel, outOfRange);
             il.Emit(OpCodes.Ldarg_0);
-            il.Emit(OpCodes.Castclass, inputs.Buffer!.Type);
-            il.Emit(OpCodes.Stloc, bufLocal);
-            // idx = Convert.ToInt32(index);
-            il.Emit(OpCodes.Ldarg_1);
-            il.Emit(OpCodes.Call, _types.GetMethod(_types.Convert, "ToInt32", _types.Object));
-            il.Emit(OpCodes.Stloc, bufIndexLocal);
-            // if (idx < 0) goto outOfRange;
-            il.Emit(OpCodes.Ldloc, bufIndexLocal);
-            il.Emit(OpCodes.Ldc_I4_0);
-            il.Emit(OpCodes.Blt, bufOutOfRangeLabel);
-            // if (idx >= data.Length) goto outOfRange;
-            il.Emit(OpCodes.Ldloc, bufIndexLocal);
-            il.Emit(OpCodes.Ldloc, bufLocal);
-            il.Emit(OpCodes.Call, inputs.Buffer.LengthGetter);
-            il.Emit(OpCodes.Bge, bufOutOfRangeLabel);
-            il.Emit(OpCodes.Br, bufInRangeLabel);
-            // out-of-range: return NaN (boxed) — matches SharpTSBuffer.this[int] return.
-            il.MarkLabel(bufOutOfRangeLabel);
-            il.Emit(OpCodes.Ldsfld, inputs.UndefinedInstance);
-            il.Emit(OpCodes.Ret);
-            // in-range: return (double)data[idx] boxed
-            il.MarkLabel(bufInRangeLabel);
-            il.Emit(OpCodes.Ldloc, bufLocal);
-            il.Emit(OpCodes.Ldloc, bufIndexLocal);
-            il.Emit(OpCodes.Call, inputs.Buffer.ReadUInt8);
+            il.Emit(OpCodes.Castclass, buffer.Type);
+            il.Emit(OpCodes.Ldloc, index);
+            il.Emit(OpCodes.Call, buffer.ReadUInt8);
             il.Emit(OpCodes.Box, _types.Double);
+            il.Emit(OpCodes.Ret);
+            il.MarkLabel(outOfRange);
+            il.Emit(OpCodes.Ldsfld, inputs.UndefinedInstance);
             il.Emit(OpCodes.Ret);
         }
 

@@ -70,6 +70,7 @@ public partial class RuntimeEmitter
         compare.Emit(OpCodes.Box, _types.Double);
         compare.Emit(OpCodes.Ret);
 
+        EmitBufferConcatMethods(owner, runtime, buffer);
         buffer.ConcatValue = Define("BufferConcatValue", _types.Object, _types.Object);
         var concat = buffer.ConcatValue.GetILGenerator();
         var buffers = concat.DeclareLocal(_types.ListOfObject);
@@ -1020,179 +1021,140 @@ public partial class RuntimeEmitter
         il.Emit(OpCodes.Ret);
     }
 
-    /// <summary>
-    /// Emits: public static $Buffer Concat(List<object?> buffers, int totalLength)
-    /// </summary>
-    private void EmitTSBufferConcat(TypeBuilder typeBuilder, EmittedBufferRuntime buffer)
+    private void EmitBufferConcatMethods(TypeBuilder owner, EmittedRuntime runtime, EmittedBufferRuntime buffer)
     {
-        var method = typeBuilder.DefineMethod(
-            "Concat",
-            MethodAttributes.Public | MethodAttributes.Static,
-            typeBuilder,
-            [_types.ListOfObject, _types.Int32]
-        );
-        buffer.Concat = method;
-
-        var il = method.GetILGenerator();
-
-        // Simplified: calculate total length and create combined buffer
-        var bytesLocal = il.DeclareLocal(_types.MakeArrayType(_types.Byte));
-        var offsetLocal = il.DeclareLocal(_types.Int32);
-        var indexLocal = il.DeclareLocal(_types.Int32);
-        var itemLocal = il.DeclareLocal(_types.Object);
-        var loopStart = il.DefineLabel();
-        var loopEnd = il.DefineLabel();
-        var notBufferLabel = il.DefineLabel();
-
-        // var bytes = new byte[totalLength]
-        il.Emit(OpCodes.Ldarg_1);
-        il.Emit(OpCodes.Newarr, _types.Byte);
-        il.Emit(OpCodes.Stloc, bytesLocal);
-
-        // int offset = 0
-        il.Emit(OpCodes.Ldc_I4_0);
-        il.Emit(OpCodes.Stloc, offsetLocal);
-
-        // Loop through buffers
-        il.Emit(OpCodes.Ldc_I4_0);
-        il.Emit(OpCodes.Stloc, indexLocal);
-
-        var countProperty = _types.GetProperty(_types.ListOfObject, "Count");
-        var indexerMethod = _types.GetMethod(_types.ListOfObject, "get_Item", _types.Int32);
-
-        il.MarkLabel(loopStart);
-        il.Emit(OpCodes.Ldloc, offsetLocal);
-        il.Emit(OpCodes.Ldarg_1);
-        il.Emit(OpCodes.Bge, loopEnd);
-        il.Emit(OpCodes.Ldloc, indexLocal);
+        // Both passes use the same intrinsic byte range, including for sliced or detached views.
+        var segmentType = typeof(ArraySegment<byte>);
+        var segmentCtor = segmentType.GetConstructor([_types.ByteArray, _types.Int32, _types.Int32])!;
+        var getSegment = owner.DefineMethod("BufferConcatSegment", MethodAttributes.Private | MethodAttributes.Static,
+            segmentType, [_types.Object]);
+        var il = getSegment.GetILGenerator();
+        var notBuffer = il.DefineLabel();
+        var input = il.DeclareLocal(buffer.Type);
         il.Emit(OpCodes.Ldarg_0);
-        il.Emit(OpCodes.Callvirt, countProperty.GetGetMethod()!);
-        il.Emit(OpCodes.Bge, loopEnd);
-
-        // var item = buffers[i]
-        il.Emit(OpCodes.Ldarg_0);
-        il.Emit(OpCodes.Ldloc, indexLocal);
-        il.Emit(OpCodes.Callvirt, indexerMethod);
-        il.Emit(OpCodes.Stloc, itemLocal);
-
-        // if (item is $Buffer buf)
-        il.Emit(OpCodes.Ldloc, itemLocal);
-        il.Emit(OpCodes.Isinst, typeBuilder);
-        il.Emit(OpCodes.Brfalse, notBufferLabel);
-
-        var copyLength = il.DeclareLocal(_types.Int32);
-        il.Emit(OpCodes.Ldloc, itemLocal);
-        il.Emit(OpCodes.Castclass, typeBuilder);
+        il.Emit(OpCodes.Isinst, buffer.Type);
+        il.Emit(OpCodes.Stloc, input);
+        il.Emit(OpCodes.Ldloc, input);
+        il.Emit(OpCodes.Brfalse, notBuffer);
+        il.Emit(OpCodes.Ldloc, input);
+        il.Emit(OpCodes.Ldfld, buffer.DataField);
+        il.Emit(OpCodes.Ldloc, input);
+        il.Emit(OpCodes.Call, buffer.ByteOffsetGetter);
+        il.Emit(OpCodes.Ldloc, input);
         il.Emit(OpCodes.Call, buffer.LengthGetter);
-        il.Emit(OpCodes.Ldarg_1);
-        il.Emit(OpCodes.Ldloc, offsetLocal);
-        il.Emit(OpCodes.Sub);
-        il.Emit(OpCodes.Call, _types.MathMinInt32);
-        il.Emit(OpCodes.Stloc, copyLength);
-        il.Emit(OpCodes.Ldloc, itemLocal);
-        il.Emit(OpCodes.Castclass, typeBuilder);
-        il.Emit(OpCodes.Call, buffer.GetData);
-        il.Emit(OpCodes.Ldc_I4_0);
-        il.Emit(OpCodes.Ldloc, bytesLocal);
-        il.Emit(OpCodes.Ldloc, offsetLocal);
-        il.Emit(OpCodes.Ldloc, copyLength);
-        il.Emit(OpCodes.Call, _types.ArrayCopy5);
-        il.Emit(OpCodes.Ldloc, offsetLocal);
-        il.Emit(OpCodes.Ldloc, copyLength);
-        il.Emit(OpCodes.Add);
-        il.Emit(OpCodes.Stloc, offsetLocal);
-
-        il.MarkLabel(notBufferLabel);
-
-        // i++
-        il.Emit(OpCodes.Ldloc, indexLocal);
-        il.Emit(OpCodes.Ldc_I4_1);
-        il.Emit(OpCodes.Add);
-        il.Emit(OpCodes.Stloc, indexLocal);
-        il.Emit(OpCodes.Br, loopStart);
-
-        il.MarkLabel(loopEnd);
-
-        // return new $Buffer(bytes)
-        il.Emit(OpCodes.Ldloc, bytesLocal);
-        il.Emit(OpCodes.Newobj, buffer.Ctor);
+        il.Emit(OpCodes.Newobj, segmentCtor);
         il.Emit(OpCodes.Ret);
-    }
+        il.MarkLabel(notBuffer);
 
-    /// <summary>
-    /// Emits: public static int CalculateBuffersTotalLength(List<object?> buffers)
-    /// Helper method to calculate total length of buffers for Buffer.concat()
-    /// </summary>
-    private void EmitCalculateBuffersTotalLength(TypeBuilder typeBuilder, EmittedBufferRuntime buffer)
-    {
-        var method = typeBuilder.DefineMethod(
-            "CalculateBuffersTotalLength",
-            MethodAttributes.Public | MethodAttributes.Static,
-            _types.Int32,
-            [_types.ListOfObject]
-        );
-        buffer.CalculateTotalLength = method;
+        if (runtime.TypedArrays.Implementation is { } arrays)
+        {
+            var invalid = il.DefineLabel();
+            var attached = il.DefineLabel();
+            var view = il.DeclareLocal(arrays.Uint8ArrayType);
+            il.Emit(OpCodes.Ldarg_0);
+            il.Emit(OpCodes.Isinst, arrays.Uint8ArrayType);
+            il.Emit(OpCodes.Stloc, view);
+            il.Emit(OpCodes.Ldloc, view);
+            il.Emit(OpCodes.Brfalse, invalid);
+            il.Emit(OpCodes.Ldloc, view);
+            il.Emit(OpCodes.Call, arrays.IsDetached);
+            il.Emit(OpCodes.Brfalse, attached);
+            il.Emit(OpCodes.Call, segmentType.GetProperty("Empty")!.GetMethod!);
+            il.Emit(OpCodes.Ret);
+            il.MarkLabel(attached);
+            il.Emit(OpCodes.Ldloc, view);
+            il.Emit(OpCodes.Call, arrays.GetBuffer);
+            il.Emit(OpCodes.Ldloc, view);
+            il.Emit(OpCodes.Call, arrays.ByteOffsetGetter);
+            il.Emit(OpCodes.Ldloc, view);
+            il.Emit(OpCodes.Call, arrays.LengthGetter);
+            il.Emit(OpCodes.Newobj, segmentCtor);
+            il.Emit(OpCodes.Ret);
+            il.MarkLabel(invalid);
+        }
 
-        var il = method.GetILGenerator();
+        il.Emit(OpCodes.Ldstr, "Buffer.concat requires Buffer or Uint8Array elements");
+        il.Emit(OpCodes.Newobj, runtime.Errors.TypeErrorConstructor);
+        il.Emit(OpCodes.Dup);
+        il.Emit(OpCodes.Ldstr, "ERR_INVALID_ARG_TYPE");
+        il.Emit(OpCodes.Callvirt, runtime.Errors.CodeSetter);
+        il.Emit(OpCodes.Call, runtime.Errors.CreateException);
+        il.Emit(OpCodes.Throw);
 
-        var totalLocal = il.DeclareLocal(_types.Int32);
-        var indexLocal = il.DeclareLocal(_types.Int32);
-        var itemLocal = il.DeclareLocal(_types.Object);
-        var loopStart = il.DefineLabel();
-        var loopEnd = il.DefineLabel();
-        var notBufferLabel = il.DefineLabel();
+        const MethodAttributes attributes = MethodAttributes.Public | MethodAttributes.Static;
+        buffer.CalculateTotalLength = owner.DefineMethod("CalculateBuffersTotalLength", attributes,
+            _types.Int32, [_types.ListOfObject]);
+        buffer.Concat = owner.DefineMethod("Concat", attributes, buffer.Type, [_types.ListOfObject, _types.Int32]);
+        EmitPass(buffer.CalculateTotalLength.GetILGenerator(), copy: false);
+        EmitPass(buffer.Concat.GetILGenerator(), copy: true);
 
-        // int total = 0
-        il.Emit(OpCodes.Ldc_I4_0);
-        il.Emit(OpCodes.Stloc, totalLocal);
+        void EmitPass(ILGenerator body, bool copy)
+        {
+            var index = body.DeclareLocal(_types.Int32);
+            var offset = body.DeclareLocal(_types.Int32);
+            var segment = body.DeclareLocal(segmentType);
+            var count = body.DeclareLocal(_types.Int32);
+            var check = body.DefineLabel();
+            var next = body.DefineLabel();
+            LocalBuilder? destination = null;
+            if (copy)
+            {
+                destination = body.DeclareLocal(_types.ByteArray);
+                body.Emit(OpCodes.Ldarg_1);
+                body.Emit(OpCodes.Newarr, _types.Byte);
+                body.Emit(OpCodes.Stloc, destination);
+            }
 
-        // int i = 0
-        il.Emit(OpCodes.Ldc_I4_0);
-        il.Emit(OpCodes.Stloc, indexLocal);
-
-        var countProperty = _types.GetProperty(_types.ListOfObject, "Count");
-        var indexerMethod = _types.GetMethod(_types.ListOfObject, "get_Item", _types.Int32);
-
-        // Loop: while (i < buffers.Count)
-        il.MarkLabel(loopStart);
-        il.Emit(OpCodes.Ldloc, indexLocal);
-        il.Emit(OpCodes.Ldarg_0);
-        il.Emit(OpCodes.Callvirt, countProperty.GetGetMethod()!);
-        il.Emit(OpCodes.Bge, loopEnd);
-
-        // var item = buffers[i]
-        il.Emit(OpCodes.Ldarg_0);
-        il.Emit(OpCodes.Ldloc, indexLocal);
-        il.Emit(OpCodes.Callvirt, indexerMethod);
-        il.Emit(OpCodes.Stloc, itemLocal);
-
-        // if (item is $Buffer buf)
-        il.Emit(OpCodes.Ldloc, itemLocal);
-        il.Emit(OpCodes.Isinst, typeBuilder);
-        il.Emit(OpCodes.Brfalse, notBufferLabel);
-
-        // total += buf._data.Length
-        il.Emit(OpCodes.Ldloc, totalLocal);
-        il.Emit(OpCodes.Ldloc, itemLocal);
-        il.Emit(OpCodes.Castclass, typeBuilder);
-        il.Emit(OpCodes.Call, buffer.LengthGetter);
-        il.Emit(OpCodes.Add);
-        il.Emit(OpCodes.Stloc, totalLocal);
-
-        il.MarkLabel(notBufferLabel);
-
-        // i++
-        il.Emit(OpCodes.Ldloc, indexLocal);
-        il.Emit(OpCodes.Ldc_I4_1);
-        il.Emit(OpCodes.Add);
-        il.Emit(OpCodes.Stloc, indexLocal);
-        il.Emit(OpCodes.Br, loopStart);
-
-        il.MarkLabel(loopEnd);
-
-        // return total
-        il.Emit(OpCodes.Ldloc, totalLocal);
-        il.Emit(OpCodes.Ret);
+            body.Emit(OpCodes.Br, check);
+            body.MarkLabel(next);
+            body.Emit(OpCodes.Ldarg_0);
+            body.Emit(OpCodes.Ldloc, index);
+            body.Emit(OpCodes.Callvirt, _types.GetMethod(_types.ListOfObject, "get_Item", _types.Int32));
+            body.Emit(OpCodes.Call, getSegment);
+            body.Emit(OpCodes.Stloc, segment);
+            body.Emit(OpCodes.Ldloca, segment);
+            body.Emit(OpCodes.Call, segmentType.GetProperty("Count")!.GetMethod!);
+            if (destination != null)
+            {
+                body.Emit(OpCodes.Ldarg_1);
+                body.Emit(OpCodes.Ldloc, offset);
+                body.Emit(OpCodes.Sub);
+                body.Emit(OpCodes.Call, _types.MathMinInt32);
+            }
+            body.Emit(OpCodes.Stloc, count);
+            if (destination != null)
+            {
+                body.Emit(OpCodes.Ldloca, segment);
+                body.Emit(OpCodes.Call, segmentType.GetProperty("Array")!.GetMethod!);
+                body.Emit(OpCodes.Ldloca, segment);
+                body.Emit(OpCodes.Call, segmentType.GetProperty("Offset")!.GetMethod!);
+                body.Emit(OpCodes.Ldloc, destination);
+                body.Emit(OpCodes.Ldloc, offset);
+                body.Emit(OpCodes.Ldloc, count);
+                body.Emit(OpCodes.Call, _types.ArrayCopy5);
+            }
+            body.Emit(OpCodes.Ldloc, offset);
+            body.Emit(OpCodes.Ldloc, count);
+            body.Emit(OpCodes.Add);
+            body.Emit(OpCodes.Stloc, offset);
+            body.Emit(OpCodes.Ldloc, index);
+            body.Emit(OpCodes.Ldc_I4_1);
+            body.Emit(OpCodes.Add);
+            body.Emit(OpCodes.Stloc, index);
+            body.MarkLabel(check);
+            body.Emit(OpCodes.Ldloc, index);
+            body.Emit(OpCodes.Ldarg_0);
+            body.Emit(OpCodes.Callvirt, _types.GetProperty(_types.ListOfObject, "Count").GetGetMethod()!);
+            body.Emit(OpCodes.Blt, next);
+            if (destination != null)
+            {
+                body.Emit(OpCodes.Ldloc, destination);
+                body.Emit(OpCodes.Newobj, buffer.Ctor);
+            }
+            else
+                body.Emit(OpCodes.Ldloc, offset);
+            body.Emit(OpCodes.Ret);
+        }
     }
 
     /// <summary>

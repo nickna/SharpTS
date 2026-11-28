@@ -1346,6 +1346,8 @@ public partial class RuntimeEmitter
         if (runtime.FinalizationRegistry.Implementation is { } finalizationRegistry)
             EmitFinalizationRegistryMethods(typeBuilder, finalizationRegistry,
                 runtime.FinalizationRegistry.PokeTable, runtime.Sentinels.UndefinedInstance);
+        if (runtime.Buffer is { } searchBuffer)
+            EmitBufferSearchValues(typeBuilder, runtime, searchBuffer);
         // Boxed Symbol property access binds these helpers directly.
         EmitSymbolPrototypePopulate(
             typeBuilder,

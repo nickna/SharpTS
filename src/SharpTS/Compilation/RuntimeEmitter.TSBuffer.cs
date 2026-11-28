@@ -82,8 +82,6 @@ public partial class RuntimeEmitter
         EmitTSBufferFromBuffer(typeBuilder, buffer);
         EmitTSBufferAlloc(typeBuilder, buffer);
         EmitTSBufferAllocUnsafe(typeBuilder, buffer);
-        EmitTSBufferConcat(typeBuilder, buffer);
-        EmitCalculateBuffersTotalLength(typeBuilder, buffer);
         EmitTSBufferIsBuffer(typeBuilder, buffer);
 
         // Instance methods

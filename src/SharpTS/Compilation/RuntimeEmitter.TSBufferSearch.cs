@@ -7,6 +7,69 @@ public partial class RuntimeEmitter
 {
     #region Search Methods
 
+    private void EmitBufferSearchValues(TypeBuilder owner, EmittedRuntime runtime, EmittedBufferRuntime buffer)
+    {
+        buffer.IndexOfValue = EmitMethod("BufferIndexOfValue", buffer.IndexOf);
+        buffer.IncludesValue = EmitMethod("BufferIncludesValue", buffer.Includes);
+
+        MethodBuilder EmitMethod(string name, MethodBuilder search)
+        {
+            var method = owner.DefineMethod(name, MethodAttributes.Public | MethodAttributes.Static, search.ReturnType,
+                [_types.Object, _types.Object, _types.Object, _types.Object]);
+            method.DefineParameter(1, ParameterAttributes.None, "__this");
+            method.SetCustomAttribute(runtime.FunctionAttributes.PadUndefinedCtor, CustomAttributeEncoder.EmptyBlob);
+            var il = method.GetILGenerator();
+            var receiver = il.DeclareLocal(buffer.Type);
+            var valid = il.DefineLabel();
+            il.Emit(OpCodes.Ldarg_0);
+            il.Emit(OpCodes.Isinst, buffer.Type);
+            il.Emit(OpCodes.Stloc, receiver);
+            il.Emit(OpCodes.Ldloc, receiver);
+            il.Emit(OpCodes.Brtrue, valid);
+            EmitThrowTypeError(il, runtime.Errors, "Buffer search requires a Buffer receiver");
+            il.MarkLabel(valid);
+
+            var missingNeedle = il.DefineLabel();
+            var hasNeedle = il.DefineLabel();
+            il.Emit(OpCodes.Ldarg_1);
+            il.Emit(OpCodes.Brfalse, missingNeedle);
+            il.Emit(OpCodes.Ldarg_1);
+            il.Emit(OpCodes.Isinst, runtime.Sentinels.UndefinedType);
+            il.Emit(OpCodes.Brfalse, hasNeedle);
+            il.MarkLabel(missingNeedle);
+            EmitThrowTypeError(il, runtime.Errors, "Buffer search requires a value argument");
+            il.MarkLabel(hasNeedle);
+
+            // A string in the offset position selects the encoding and starts the search at zero.
+            var offset = il.DeclareLocal(_types.Int32);
+            var encoding = il.DeclareLocal(_types.String);
+            var invoke = il.DefineLabel();
+            il.Emit(OpCodes.Ldarg_2);
+            il.Emit(OpCodes.Isinst, _types.String);
+            il.Emit(OpCodes.Stloc, encoding);
+            il.Emit(OpCodes.Ldloc, encoding);
+            il.Emit(OpCodes.Brtrue, invoke);
+            il.Emit(OpCodes.Ldarg_2);
+            il.Emit(OpCodes.Call, runtime.NumericCoercion.ToNumber);
+            il.Emit(OpCodes.Call, ((Func<double, int>)int.CreateSaturating<double>).Method);
+            il.Emit(OpCodes.Stloc, offset);
+            il.Emit(OpCodes.Ldarg_3);
+            il.Emit(OpCodes.Isinst, runtime.Sentinels.UndefinedType);
+            il.Emit(OpCodes.Brtrue, invoke);
+            il.Emit(OpCodes.Ldarg_3);
+            il.Emit(OpCodes.Call, runtime.StringCoercion.ToJsString);
+            il.Emit(OpCodes.Stloc, encoding);
+            il.MarkLabel(invoke);
+            il.Emit(OpCodes.Ldloc, receiver);
+            il.Emit(OpCodes.Ldarg_1);
+            il.Emit(OpCodes.Ldloc, offset);
+            il.Emit(OpCodes.Ldloc, encoding);
+            il.Emit(OpCodes.Call, search);
+            il.Emit(OpCodes.Ret);
+            return method;
+        }
+    }
+
     /// <summary>
     /// Emits: public double IndexOf(object value, int byteOffset, string encoding)
     /// </summary>

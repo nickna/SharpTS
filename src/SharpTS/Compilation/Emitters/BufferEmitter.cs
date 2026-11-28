@@ -491,11 +491,12 @@ public sealed class BufferEmitter : ITypeEmitterStrategy
 
             // Search methods
             case "indexOf":
-                EmitIndexOfMethod(emitter, arguments);
-                return true;
-
             case "includes":
-                EmitIncludesMethod(emitter, arguments);
+                var buffer = ctx.Runtime!.RequireBuffer();
+                var search = methodName == "indexOf" ? buffer.IndexOfValue : buffer.IncludesValue;
+                emitter.EmitStaticCallArguments(arguments, search, search.GetParameters()[1..]);
+                il.Emit(OpCodes.Call, search);
+                il.Emit(OpCodes.Box, search.ReturnType);
                 return true;
 
             // Swap methods
@@ -719,90 +720,6 @@ public sealed class BufferEmitter : ITypeEmitterStrategy
 
         il.Emit(OpCodes.Call, method);
         il.Emit(OpCodes.Box, ctx.Types.Double);
-    }
-
-    /// <summary>
-    /// Emits indexOf method call that takes (value, byteOffset?, encoding?) and returns double.
-    /// Stack: buffer -> result (boxed double)
-    /// </summary>
-    private void EmitIndexOfMethod(IEmitterContext emitter, List<Expr> arguments)
-    {
-        var ctx = emitter.Context;
-        var il = ctx.IL;
-
-        // Emit value argument (required)
-        emitter.EmitExpression(arguments[0]);
-        emitter.EmitBoxIfNeeded(arguments[0]);
-
-        // Emit byteOffset argument (default 0)
-        if (arguments.Count > 1)
-        {
-            emitter.EmitExpression(arguments[1]);
-            emitter.EmitBoxIfNeeded(arguments[1]);
-            il.Emit(OpCodes.Unbox_Any, ctx.Types.Double);
-            il.Emit(OpCodes.Conv_I4);
-        }
-        else
-        {
-            il.Emit(OpCodes.Ldc_I4_0);
-        }
-
-        // Emit encoding argument (default "utf8")
-        if (arguments.Count > 2)
-        {
-            emitter.EmitExpression(arguments[2]);
-            emitter.EmitBoxIfNeeded(arguments[2]);
-            il.Emit(OpCodes.Callvirt, ctx.Types.GetMethod(ctx.Types.Object, "ToString")!);
-        }
-        else
-        {
-            il.Emit(OpCodes.Ldstr, "utf8");
-        }
-
-        il.Emit(OpCodes.Call, ctx.Runtime!.RequireBuffer().IndexOf);
-        il.Emit(OpCodes.Box, ctx.Types.Double);
-    }
-
-    /// <summary>
-    /// Emits includes method call that takes (value, byteOffset?, encoding?) and returns boolean.
-    /// Stack: buffer -> result (boxed bool)
-    /// </summary>
-    private void EmitIncludesMethod(IEmitterContext emitter, List<Expr> arguments)
-    {
-        var ctx = emitter.Context;
-        var il = ctx.IL;
-
-        // Emit value argument (required)
-        emitter.EmitExpression(arguments[0]);
-        emitter.EmitBoxIfNeeded(arguments[0]);
-
-        // Emit byteOffset argument (default 0)
-        if (arguments.Count > 1)
-        {
-            emitter.EmitExpression(arguments[1]);
-            emitter.EmitBoxIfNeeded(arguments[1]);
-            il.Emit(OpCodes.Unbox_Any, ctx.Types.Double);
-            il.Emit(OpCodes.Conv_I4);
-        }
-        else
-        {
-            il.Emit(OpCodes.Ldc_I4_0);
-        }
-
-        // Emit encoding argument (default "utf8")
-        if (arguments.Count > 2)
-        {
-            emitter.EmitExpression(arguments[2]);
-            emitter.EmitBoxIfNeeded(arguments[2]);
-            il.Emit(OpCodes.Callvirt, ctx.Types.GetMethod(ctx.Types.Object, "ToString")!);
-        }
-        else
-        {
-            il.Emit(OpCodes.Ldstr, "utf8");
-        }
-
-        il.Emit(OpCodes.Call, ctx.Runtime!.RequireBuffer().Includes);
-        il.Emit(OpCodes.Box, ctx.Types.Boolean);
     }
 
     #endregion
