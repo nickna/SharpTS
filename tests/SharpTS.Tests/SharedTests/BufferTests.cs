@@ -13,6 +13,17 @@ public class BufferTests
     #region Type Annotation and Basic Operations
 
     [Theory, ModeData]
+    public void ConcatHonorsDestinationLength(ExecutionMode mode)
+    {
+        const string source = """
+            const parts = [Buffer.of(65), Buffer.of(66,67)];
+            const concat = Buffer.concat;
+            for (const n of [0,1,2,3,4]) console.log(concat(parts,n).toString('hex'));
+            """;
+        Assert.Equal("\n41\n4142\n414243\n41424300\n", TestHarness.RunUnchecked(source, mode));
+    }
+
+    [Theory, ModeData]
     public void Buffer_TypeAnnotation_Works(ExecutionMode mode)
     {
         var source = """

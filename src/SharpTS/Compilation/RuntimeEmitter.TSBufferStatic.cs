@@ -1047,6 +1047,9 @@ public partial class RuntimeEmitter
         var indexerMethod = _types.GetMethod(_types.ListOfObject, "get_Item", _types.Int32);
 
         il.MarkLabel(loopStart);
+        il.Emit(OpCodes.Ldloc, offsetLocal);
+        il.Emit(OpCodes.Ldarg_1);
+        il.Emit(OpCodes.Bge, loopEnd);
         il.Emit(OpCodes.Ldloc, indexLocal);
         il.Emit(OpCodes.Ldarg_0);
         il.Emit(OpCodes.Callvirt, countProperty.GetGetMethod()!);
@@ -1063,24 +1066,25 @@ public partial class RuntimeEmitter
         il.Emit(OpCodes.Isinst, typeBuilder);
         il.Emit(OpCodes.Brfalse, notBufferLabel);
 
-        // Copy buffer data
-        // Array.Copy(buf._data, 0, bytes, offset, buf._data.Length)
+        var copyLength = il.DeclareLocal(_types.Int32);
+        il.Emit(OpCodes.Ldloc, itemLocal);
+        il.Emit(OpCodes.Castclass, typeBuilder);
+        il.Emit(OpCodes.Call, buffer.LengthGetter);
+        il.Emit(OpCodes.Ldarg_1);
+        il.Emit(OpCodes.Ldloc, offsetLocal);
+        il.Emit(OpCodes.Sub);
+        il.Emit(OpCodes.Call, _types.MathMinInt32);
+        il.Emit(OpCodes.Stloc, copyLength);
         il.Emit(OpCodes.Ldloc, itemLocal);
         il.Emit(OpCodes.Castclass, typeBuilder);
         il.Emit(OpCodes.Call, buffer.GetData);
         il.Emit(OpCodes.Ldc_I4_0);
         il.Emit(OpCodes.Ldloc, bytesLocal);
         il.Emit(OpCodes.Ldloc, offsetLocal);
-        il.Emit(OpCodes.Ldloc, itemLocal);
-        il.Emit(OpCodes.Castclass, typeBuilder);
-        il.Emit(OpCodes.Call, buffer.LengthGetter);
+        il.Emit(OpCodes.Ldloc, copyLength);
         il.Emit(OpCodes.Call, _types.ArrayCopy5);
-
-        // offset += buf._data.Length
         il.Emit(OpCodes.Ldloc, offsetLocal);
-        il.Emit(OpCodes.Ldloc, itemLocal);
-        il.Emit(OpCodes.Castclass, typeBuilder);
-        il.Emit(OpCodes.Call, buffer.LengthGetter);
+        il.Emit(OpCodes.Ldloc, copyLength);
         il.Emit(OpCodes.Add);
         il.Emit(OpCodes.Stloc, offsetLocal);
 
