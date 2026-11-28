@@ -13,6 +13,19 @@ public class BufferTests
     #region Type Annotation and Basic Operations
 
     [Theory, ModeData]
+    public void ReadUInt8ValidatesOffsetsBeforeConversion(ExecutionMode mode)
+    {
+        const string source = """
+            const b=Buffer.of(65,66), read=b.readUInt8;
+            console.log(read.call(b),read.call(b,undefined),read.call(b,1));
+            for(const x of ['1',null,0.5,NaN,Infinity,-1,2]) {
+                try { console.log(read.call(b,x)); } catch(e) {console.log(e.name);}
+            }
+            """;
+        Assert.Equal("65 65 66\nTypeError\nTypeError\nRangeError\nRangeError\nRangeError\nRangeError\nRangeError\n", TestHarness.RunUnchecked(source, mode));
+    }
+
+    [Theory, ModeData]
     public void SearchEncodesStringNeedles(ExecutionMode mode)
     {
         const string source = """

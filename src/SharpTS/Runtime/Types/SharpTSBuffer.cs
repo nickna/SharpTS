@@ -28,7 +28,18 @@ public class SharpTSBuffer : ITypeCategorized
         {
             if (receiver.ToObject() is not SharpTSBuffer buffer)
                 throw new ThrowException(new SharpTSTypeError("Buffer.readUInt8 requires a Buffer receiver"));
-            return RuntimeValue.FromNumber(buffer.ReadUInt8(OffsetArg(args, 0)));
+            double offset = 0;
+            if (args.Length > 0 && !args[0].IsUndefined)
+            {
+                if (!args[0].IsNumber)
+                    throw new ThrowException(new SharpTSTypeError("The offset must be a number") { Code = "ERR_INVALID_ARG_TYPE" });
+                offset = args[0].AsNumberUnsafe();
+            }
+            if (double.IsInteger(offset) && buffer.Length == 0)
+                throw new ThrowException(new SharpTSRangeError("Buffer is empty") { Code = "ERR_BUFFER_OUT_OF_BOUNDS" });
+            if (!double.IsInteger(offset) || offset < 0 || offset >= buffer.Length)
+                throw new ThrowException(new SharpTSRangeError("The offset is out of range") { Code = "ERR_OUT_OF_RANGE" });
+            return RuntimeValue.FromNumber(buffer.ReadUInt8((int)offset));
         });
 
     private readonly ArraySegment<byte> _view;

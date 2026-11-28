@@ -825,11 +825,13 @@ public partial class RuntimeEmitter
         il.Emit(OpCodes.Ret);
     }
 
-    private void EmitBufferReadUInt8Value(TypeBuilder type, EmittedBufferRuntime buffer, EmittedErrorRuntime errors)
+    private void EmitBufferReadUInt8Value(TypeBuilder type, EmittedBufferRuntime buffer, EmittedErrorRuntime errors,
+        Type undefinedType, ConstructorInfo padUndefined)
     {
         var method = type.DefineMethod("BufferReadUInt8Value", MethodAttributes.Public | MethodAttributes.Static,
             _types.Double, [_types.Object, _types.Object]);
         method.DefineParameter(1, ParameterAttributes.None, "__this");
+        method.SetCustomAttribute(padUndefined, CustomAttributeEncoder.EmptyBlob);
         buffer.ReadUInt8Value = method;
         var il = method.GetILGenerator();
         var receiver = il.DeclareLocal(type);
@@ -841,20 +843,59 @@ public partial class RuntimeEmitter
         il.Emit(OpCodes.Brtrue, validReceiver);
         EmitThrowTypeError(il, errors, "Buffer.readUInt8 requires a Buffer receiver");
         il.MarkLabel(validReceiver);
-        var offset = il.DeclareLocal(_types.Int32);
-        var read = il.DefineLabel();
+        var offset = il.DeclareLocal(_types.Double);
+        var checkBounds = il.DefineLabel();
+        var numeric = il.DefineLabel();
+        il.Emit(OpCodes.Ldarg_1);
+        il.Emit(OpCodes.Isinst, undefinedType);
+        il.Emit(OpCodes.Brtrue, checkBounds);
         il.Emit(OpCodes.Ldarg_1);
         il.Emit(OpCodes.Isinst, _types.Double);
-        il.Emit(OpCodes.Brfalse, read);
+        il.Emit(OpCodes.Brtrue, numeric);
+        ThrowOffsetError(errors.TypeErrorConstructor, "The offset must be a number", "ERR_INVALID_ARG_TYPE");
+        il.MarkLabel(numeric);
         il.Emit(OpCodes.Ldarg_1);
         il.Emit(OpCodes.Unbox_Any, _types.Double);
-        il.Emit(OpCodes.Conv_I4);
         il.Emit(OpCodes.Stloc, offset);
-        il.MarkLabel(read);
+        il.MarkLabel(checkBounds);
+        var invalid = il.DefineLabel();
+        var valid = il.DefineLabel();
+        il.Emit(OpCodes.Ldloc, offset);
+        il.Emit(OpCodes.Call, typeof(double).GetMethod(nameof(double.IsInteger), [typeof(double)])!);
+        il.Emit(OpCodes.Brfalse, invalid);
+        var nonEmpty = il.DefineLabel();
+        il.Emit(OpCodes.Ldloc, receiver);
+        il.Emit(OpCodes.Call, buffer.LengthGetter);
+        il.Emit(OpCodes.Brtrue, nonEmpty);
+        ThrowOffsetError(errors.RangeErrorConstructor, "Buffer is empty", "ERR_BUFFER_OUT_OF_BOUNDS");
+        il.MarkLabel(nonEmpty);
+        il.Emit(OpCodes.Ldloc, offset);
+        il.Emit(OpCodes.Ldc_R8, 0d);
+        il.Emit(OpCodes.Blt, invalid);
+        il.Emit(OpCodes.Ldloc, offset);
+        il.Emit(OpCodes.Ldloc, receiver);
+        il.Emit(OpCodes.Call, buffer.LengthGetter);
+        il.Emit(OpCodes.Conv_R8);
+        il.Emit(OpCodes.Blt, valid);
+        il.MarkLabel(invalid);
+        ThrowOffsetError(errors.RangeErrorConstructor, "The offset is out of range", "ERR_OUT_OF_RANGE");
+        il.MarkLabel(valid);
         il.Emit(OpCodes.Ldloc, receiver);
         il.Emit(OpCodes.Ldloc, offset);
+        il.Emit(OpCodes.Conv_I4);
         il.Emit(OpCodes.Call, buffer.ReadUInt8);
         il.Emit(OpCodes.Ret);
+
+        void ThrowOffsetError(ConstructorInfo ctor, string message, string code)
+        {
+            il.Emit(OpCodes.Ldstr, message);
+            il.Emit(OpCodes.Newobj, ctor);
+            il.Emit(OpCodes.Dup);
+            il.Emit(OpCodes.Ldstr, code);
+            il.Emit(OpCodes.Callvirt, errors.CodeSetter);
+            il.Emit(OpCodes.Call, errors.CreateException);
+            il.Emit(OpCodes.Throw);
+        }
     }
 
     /// <summary>
