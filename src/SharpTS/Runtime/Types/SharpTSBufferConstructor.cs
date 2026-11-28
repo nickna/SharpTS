@@ -249,10 +249,14 @@ public sealed class SharpTSBufferConstructor
     /// </summary>
     private static RuntimeValue BufferCompare(Interp interpreter, RuntimeValue receiver, ReadOnlySpan<RuntimeValue> args)
     {
-        if (args.Length < 2 || args[0].ToObject() is not SharpTSBuffer buf1 || args[1].ToObject() is not SharpTSBuffer buf2)
-            throw new Exception("Buffer.compare requires two Buffer arguments");
+        static ReadOnlySpan<byte> VisibleBytes(RuntimeValue value) => value.ToObject() switch
+        {
+            SharpTSBuffer buffer => buffer.Bytes,
+            SharpTSUint8Array view => view.Buffer.AsSpan(view.ByteOffset, view.ByteLength),
+            _ => throw new ThrowException(new SharpTSTypeError("Buffer.compare requires Buffer or Uint8Array arguments"))
+        };
 
-        return RuntimeValue.FromNumber(buf1.Compare(buf2));
+        return RuntimeValue.FromNumber(Math.Sign(VisibleBytes(args[0]).SequenceCompareTo(VisibleBytes(args[1]))));
     }
 
     /// <summary>
@@ -264,16 +268,8 @@ public sealed class SharpTSBufferConstructor
         if (args.Length == 0 || !args[0].IsString)
             return RuntimeValue.False;
 
-        return RuntimeValue.FromBoolean(args[0].AsStringUnsafe().ToLowerInvariant() switch
-        {
-            "utf8" or "utf-8" => true,
-            "ascii" => true,
-            "base64" => true,
-            "hex" => true,
-            "latin1" or "binary" => true,
-            "ucs2" or "ucs-2" or "utf16le" or "utf-16le" => true,
-            _ => false
-        });
+        string encoding = args[0].AsStringUnsafe();
+        return RuntimeValue.FromBoolean(encoding.Length > 0 && BufferEncoding.IsSupported(encoding));
     }
 
     public override string ToString() => "[Function: Buffer]";

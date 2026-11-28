@@ -9,7 +9,8 @@ namespace SharpTS.Compilation;
 /// </summary>
 public partial class RuntimeEmitter
 {
-    private void EmitTSBufferClass(ModuleBuilder moduleBuilder, EmittedBufferRuntime buffer, EmittedErrorRuntime errors, EmittedArrayBufferRuntime? arrayBuffer)
+    private void EmitTSBufferClass(ModuleBuilder moduleBuilder, EmittedBufferRuntime buffer, EmittedErrorRuntime errors, EmittedArrayBufferRuntime? arrayBuffer,
+        Type undefinedType, ConstructorInfo padUndefined)
     {
         // Define class: public sealed class $Buffer
         var typeBuilder = EmitTypeDefinitions.DefineType(moduleBuilder,
@@ -94,7 +95,7 @@ public partial class RuntimeEmitter
         EmitTSBufferFill(typeBuilder, buffer);
         EmitTSBufferWrite(typeBuilder, buffer, errors);
         EmitTSBufferReadUInt8(typeBuilder, buffer);
-        EmitBufferReadUInt8Value(typeBuilder, buffer, errors);
+        EmitBufferReadUInt8Value(typeBuilder, buffer, errors, undefinedType, padUndefined);
         EmitTSBufferWriteUInt8(typeBuilder, buffer);
         EmitTSBufferToJSON(typeBuilder, buffer);
 

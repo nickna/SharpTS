@@ -13,6 +13,85 @@ public class BufferTests
     #region Type Annotation and Basic Operations
 
     [Theory, ModeData]
+    public void ReflectReadsBufferBackingWithoutDirectAccess(ExecutionMode mode)
+    {
+        const string source = """
+            const b=Buffer.alloc(3);
+            const get=Reflect.get;
+            const owner=get(b,'buffer');
+            console.log(owner.byteLength,get(b,'buffer')===owner);
+            """;
+        Assert.Equal("3 true\n", TestHarness.RunUnchecked(source, mode));
+    }
+
+    [Theory, ModeData]
+    public void CompareReadsVisibleUint8ArrayBytes(ExecutionMode mode)
+    {
+        const string source = """
+            const compare=Buffer.compare, a=new Uint8Array([7,1,9]).subarray(1,2), b=Buffer.of(2);
+            console.log(compare(a,b), compare(b,a), compare(a,new Uint8Array([1])));
+            try { compare(new Uint16Array([1]),b); } catch(e) { console.log(e.name); }
+            """;
+        Assert.Equal("-1 1 0\nTypeError\n", TestHarness.RunUnchecked(source, mode));
+    }
+
+    [Theory, ModeData]
+    public void ReadUInt8ValidatesOffsetsBeforeConversion(ExecutionMode mode)
+    {
+        const string source = """
+            const b=Buffer.of(65,66), read=b.readUInt8;
+            console.log(read.call(b),read.call(b,undefined),read.call(b,1));
+            for(const x of ['1',null,0.5,NaN,Infinity,-1,2]) {
+                try { console.log(read.call(b,x)); } catch(e) {console.log(e.name);}
+            }
+            """;
+        Assert.Equal("65 65 66\nTypeError\nTypeError\nRangeError\nRangeError\nRangeError\nRangeError\nRangeError\n", TestHarness.RunUnchecked(source, mode));
+    }
+
+    [Theory, ModeData]
+    public void SearchEncodesStringNeedles(ExecutionMode mode)
+    {
+        const string source = """
+            const b=Buffer.of(65,66,255);
+            console.log(b.indexOf('42',0,'hex'), b.includes('QQ==',0,'base64'), b.indexOf('\u00ff',0,'latin1'));
+            console.log(b.indexOf('42',2,'hex'));
+            """;
+        Assert.Equal("1 true 2\n-1\n", TestHarness.Run(source, mode));
+    }
+
+    [Theory, ModeData]
+    public void ReadUInt8SharesFunctionAndUsesReceiver(ExecutionMode mode)
+    {
+        const string source = """
+            const a=Buffer.of(65), b=Buffer.of(66);
+            const f=a.readUInt8;
+            console.log(f===b.readUint8, f.call(b), a.readUInt8());
+            try { f(); } catch(e) { console.log(e.name); }
+            """;
+        Assert.Equal("true 66 65\nTypeError\n", TestHarness.RunUnchecked(source, mode));
+    }
+
+    [Theory, ModeData]
+    public void IsEncodingRecognizesBase64Url(ExecutionMode mode)
+    {
+        const string source = """
+            console.log(Buffer.isEncoding('Base64URL'), Buffer.isEncoding(''), Buffer.isEncoding('unknown'));
+            """;
+        Assert.Equal("true false false\n", TestHarness.RunUnchecked(source, mode));
+    }
+
+    [Theory, ModeData]
+    public void ConcatHonorsDestinationLength(ExecutionMode mode)
+    {
+        const string source = """
+            const parts = [Buffer.of(65), Buffer.of(66,67)];
+            const concat = Buffer.concat;
+            for (const n of [0,1,2,3,4]) console.log(concat(parts,n).toString('hex'));
+            """;
+        Assert.Equal("\n41\n4142\n414243\n41424300\n", TestHarness.RunUnchecked(source, mode));
+    }
+
+    [Theory, ModeData]
     public void Buffer_TypeAnnotation_Works(ExecutionMode mode)
     {
         var source = """

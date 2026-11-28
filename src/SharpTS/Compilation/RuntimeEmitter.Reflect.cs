@@ -21,7 +21,7 @@ public partial class RuntimeEmitter
         MethodInfo GetFunctionMethod, MethodInfo InvokeMethodValue, FieldInfo UndefinedInstance, Type UndefinedType,
         MethodInfo GetProperty, MethodInfo GetPrototypeOf, MethodInfo GetIndex, MethodInfo IsSymbol,
         MethodInfo FindOwnSymbolMethod, MethodInfo? NativeProxyRejection, EmittedErrorRuntime Errors,
-        EmittedTypedArrayRuntime TypedArrays, MethodInfo HasPrototypeEntry);
+        EmittedBufferRuntime? Buffer, EmittedTypedArrayRuntime TypedArrays, MethodInfo HasPrototypeEntry);
 
     private readonly record struct ReflectToPropertyKeyInputs(Type SymbolType, FieldInfo SymbolToPrimitive,
         Type UndefinedType, MethodInfo ToJsString, MethodInfo GetProperty, MethodInfo InvokeMethodValue,
@@ -268,6 +268,45 @@ public partial class RuntimeEmitter
         il.Emit(OpCodes.Call, inputs.GetProperty);
         il.Emit(OpCodes.Ret);
         il.MarkLabel(ordinaryGetLabel);
+        if (inputs.Buffer is { } buffer)
+        {
+            var ordinary = il.DefineLabel();
+            il.Emit(OpCodes.Ldarg_0);
+            il.Emit(OpCodes.Isinst, buffer.Type);
+            il.Emit(OpCodes.Brfalse, ordinary);
+            il.Emit(OpCodes.Ldloc, key);
+            il.Emit(OpCodes.Isinst, _types.String);
+            il.Emit(OpCodes.Ldstr, "buffer");
+            il.Emit(OpCodes.Call, _types.StringOpEquality);
+            il.Emit(OpCodes.Brfalse, ordinary);
+            il.Emit(OpCodes.Ldarg_0);
+            il.Emit(OpCodes.Call, inputs.HasPrototypeEntry);
+            il.Emit(OpCodes.Brtrue, ordinary);
+
+            var otherReceiver = il.DefineLabel();
+            il.Emit(OpCodes.Ldarg_2);
+            il.Emit(OpCodes.Isinst, buffer.Type);
+            il.Emit(OpCodes.Brfalse, otherReceiver);
+            il.Emit(OpCodes.Ldarg_2);
+            il.Emit(OpCodes.Castclass, buffer.Type);
+            il.Emit(OpCodes.Call, buffer.OwnerGetter);
+            il.Emit(OpCodes.Ret);
+            il.MarkLabel(otherReceiver);
+            if (inputs.TypedArrays.Implementation is { } arrays)
+            {
+                var invalid = il.DefineLabel();
+                il.Emit(OpCodes.Ldarg_2);
+                il.Emit(OpCodes.Isinst, arrays.BaseType);
+                il.Emit(OpCodes.Brfalse, invalid);
+                il.Emit(OpCodes.Ldarg_2);
+                il.Emit(OpCodes.Castclass, arrays.BaseType);
+                il.Emit(OpCodes.Callvirt, arrays.BufferGetter);
+                il.Emit(OpCodes.Ret);
+                il.MarkLabel(invalid);
+            }
+            EmitThrowTypeError(il, inputs.Errors, "TypedArray buffer getter called on incompatible receiver");
+            il.MarkLabel(ordinary);
+        }
         if (inputs.TypedArrays.Implementation is { } typedArrays)
         {
             var ordinaryPrototype = il.DefineLabel();

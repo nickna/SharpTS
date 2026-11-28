@@ -288,19 +288,14 @@ public sealed class BufferEmitter : ITypeEmitterStrategy
                 return true;
 
             case "readUInt8":
-                // offset (default 0)
                 if (arguments.Count > 0)
                 {
                     emitter.EmitExpression(arguments[0]);
                     emitter.EmitBoxIfNeeded(arguments[0]);
-                    il.Emit(OpCodes.Unbox_Any, ctx.Types.Double);
-                    il.Emit(OpCodes.Conv_I4);
                 }
                 else
-                {
-                    il.Emit(OpCodes.Ldc_I4_0);
-                }
-                il.Emit(OpCodes.Call, ctx.Runtime!.RequireBuffer().ReadUInt8);
+                    il.Emit(OpCodes.Ldsfld, ctx.Runtime!.Sentinels.UndefinedInstance);
+                il.Emit(OpCodes.Call, ctx.Runtime!.RequireBuffer().ReadUInt8Value);
                 il.Emit(OpCodes.Box, ctx.Types.Double);
                 return true;
 

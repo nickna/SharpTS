@@ -819,7 +819,7 @@ public static class BuiltInTypes
                 RequiredParams: 1), // list required, totalLength optional
             "isBuffer" => new TypeInfo.Function([AnyType], BooleanType),
             "byteLength" => BufferByteLengthType,
-            "compare" => new TypeInfo.Function([bufferType, bufferType], NumberType),
+            "compare" => BufferCompareType,
             "isEncoding" => new TypeInfo.Function([StringType], BooleanType),
             "of" => new TypeInfo.Function([NumberType], bufferType, RequiredParams: 0, HasRestParam: true),
             "copyBytesFrom" => new TypeInfo.Function([AnyType, NumberType, NumberType], bufferType, RequiredParams: 1),
@@ -839,6 +839,9 @@ public static class BuiltInTypes
                 TypeInfo.Buffer.Shared, RequiredParams: 1)
         ],
         new([AnyType, AnyType, NumberType], TypeInfo.Buffer.Shared, RequiredParams: 1));
+
+    private static readonly TypeInfo BufferOrUint8Array = new TypeInfo.Union([TypeInfo.Buffer.Shared, new TypeInfo.TypedArray("Uint8")]);
+    internal static readonly TypeInfo.Function BufferCompareType = new([BufferOrUint8Array, BufferOrUint8Array], NumberType);
 
     internal static readonly TypeInfo.Function BufferByteLengthType = new(
         [new TypeInfo.Union([StringType, TypeInfo.Buffer.Shared, new TypeInfo.ArrayBuffer(),

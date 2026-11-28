@@ -516,7 +516,8 @@ public partial class RuntimeEmitter
         // NOTE: Must come before $Hash and $Hmac since they return Buffer
         // NOTE: Must stay in sync with SharpTS.Runtime.Types.SharpTSBuffer
         if (features.UsesBuffer)
-            EmitTSBufferClass(moduleBuilder, runtime.RequireBuffer(), runtime.Errors, runtime.ArrayBuffer);
+            EmitTSBufferClass(moduleBuilder, runtime.RequireBuffer(), runtime.Errors, runtime.ArrayBuffer,
+                runtime.Sentinels.UndefinedType, runtime.FunctionAttributes.PadUndefinedCtor);
 
         // Construction values bridge early declarations and later body emission.
         StreamingSignVerifyParts? signConstruction = null;

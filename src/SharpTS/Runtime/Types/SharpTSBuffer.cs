@@ -23,6 +23,25 @@ public class SharpTSBuffer : ITypeCategorized
     /// <inheritdoc />
     public TypeCategory RuntimeCategory => TypeCategory.Buffer;
 
+    internal static readonly BuiltInMethod ReadUInt8Method = BuiltInMethod.CreateV2("readUInt8", 0, int.MaxValue,
+        (_, receiver, args) =>
+        {
+            if (receiver.ToObject() is not SharpTSBuffer buffer)
+                throw new ThrowException(new SharpTSTypeError("Buffer.readUInt8 requires a Buffer receiver"));
+            double offset = 0;
+            if (args.Length > 0 && !args[0].IsUndefined)
+            {
+                if (!args[0].IsNumber)
+                    throw new ThrowException(new SharpTSTypeError("The offset must be a number") { Code = "ERR_INVALID_ARG_TYPE" });
+                offset = args[0].AsNumberUnsafe();
+            }
+            if (double.IsInteger(offset) && buffer.Length == 0)
+                throw new ThrowException(new SharpTSRangeError("Buffer is empty") { Code = "ERR_BUFFER_OUT_OF_BOUNDS" });
+            if (!double.IsInteger(offset) || offset < 0 || offset >= buffer.Length)
+                throw new ThrowException(new SharpTSRangeError("The offset is out of range") { Code = "ERR_OUT_OF_RANGE" });
+            return RuntimeValue.FromNumber(buffer.ReadUInt8((int)offset));
+        });
+
     private readonly ArraySegment<byte> _view;
     private object? _owner;
     private bool IsDetached => _owner is SharpTSArrayBuffer { IsDetached: true };
@@ -542,11 +561,7 @@ public class SharpTSBuffer : ITypeCategorized
                 return RuntimeValue.FromNumber(Write(data, offset, length, encoding));
             }),
 
-            "readUInt8" => BuiltInMethod.CreateV2("readUInt8", 0, 1, (_, _, args) =>
-            {
-                int offset = args.Length > 0 && args[0].IsNumber ? (int)args[0].AsNumberUnsafe() : 0;
-                return RuntimeValue.FromNumber(ReadUInt8(offset));
-            }),
+            "readUInt8" => ReadUInt8Method,
 
             "writeUInt8" => BuiltInMethod.CreateV2("writeUInt8", 1, 2, (_, _, args) =>
             {

@@ -328,7 +328,7 @@ public static partial class BuiltInModuleTypes
                 RequiredParams: 1),
             ["isBuffer"] = new TypeInfo.Function([TypeInfo.Any.Shared], BooleanType),
             ["byteLength"] = BuiltInTypes.BufferByteLengthType,
-            ["compare"] = new TypeInfo.Function([bufferType, bufferType], numberType),
+            ["compare"] = BuiltInTypes.BufferCompareType,
             ["isEncoding"] = new TypeInfo.Function([stringType], BooleanType)
         }.ToFrozenDictionary());
 
