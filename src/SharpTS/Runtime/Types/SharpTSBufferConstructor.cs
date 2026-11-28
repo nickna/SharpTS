@@ -264,16 +264,8 @@ public sealed class SharpTSBufferConstructor
         if (args.Length == 0 || !args[0].IsString)
             return RuntimeValue.False;
 
-        return RuntimeValue.FromBoolean(args[0].AsStringUnsafe().ToLowerInvariant() switch
-        {
-            "utf8" or "utf-8" => true,
-            "ascii" => true,
-            "base64" => true,
-            "hex" => true,
-            "latin1" or "binary" => true,
-            "ucs2" or "ucs-2" or "utf16le" or "utf-16le" => true,
-            _ => false
-        });
+        string encoding = args[0].AsStringUnsafe();
+        return RuntimeValue.FromBoolean(encoding.Length > 0 && BufferEncoding.IsSupported(encoding));
     }
 
     public override string ToString() => "[Function: Buffer]";

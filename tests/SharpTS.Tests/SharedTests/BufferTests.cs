@@ -13,6 +13,15 @@ public class BufferTests
     #region Type Annotation and Basic Operations
 
     [Theory, ModeData]
+    public void IsEncodingRecognizesBase64Url(ExecutionMode mode)
+    {
+        const string source = """
+            console.log(Buffer.isEncoding('Base64URL'), Buffer.isEncoding(''), Buffer.isEncoding('unknown'));
+            """;
+        Assert.Equal("true false false\n", TestHarness.RunUnchecked(source, mode));
+    }
+
+    [Theory, ModeData]
     public void ConcatHonorsDestinationLength(ExecutionMode mode)
     {
         const string source = """
