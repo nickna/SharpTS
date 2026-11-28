@@ -81,12 +81,12 @@ public partial class RuntimeEmitter
         il.Emit(OpCodes.Isinst, _types.String);
         il.Emit(OpCodes.Brfalse, notStringLabel);
 
-        // searchBytes = Encoding.UTF8.GetBytes((string)value)
-        // Use UTF8 for now (ignoring encoding parameter for simplicity)
-        il.Emit(OpCodes.Call, typeof(System.Text.Encoding).GetProperty("UTF8")!.GetGetMethod()!);
         il.Emit(OpCodes.Ldarg_1);
         il.Emit(OpCodes.Castclass, _types.String);
-        il.Emit(OpCodes.Callvirt, _types.EncodingGetBytesFromString);
+        il.Emit(OpCodes.Ldarg_3);
+        il.Emit(OpCodes.Ldc_I4_1);
+        il.Emit(OpCodes.Call, buffer.EncodeString);
+        il.Emit(OpCodes.Call, buffer.GetData);
         il.Emit(OpCodes.Stloc, searchBytesLocal);
         il.Emit(OpCodes.Br, afterTypeCheck);
 

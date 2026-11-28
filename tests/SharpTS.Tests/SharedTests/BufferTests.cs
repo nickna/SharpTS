@@ -13,6 +13,17 @@ public class BufferTests
     #region Type Annotation and Basic Operations
 
     [Theory, ModeData]
+    public void SearchEncodesStringNeedles(ExecutionMode mode)
+    {
+        const string source = """
+            const b=Buffer.of(65,66,255);
+            console.log(b.indexOf('42',0,'hex'), b.includes('QQ==',0,'base64'), b.indexOf('ÿ',0,'latin1'));
+            console.log(b.indexOf('42',2,'hex'));
+            """;
+        Assert.Equal("1 true 2\n-1\n", TestHarness.Run(source, mode));
+    }
+
+    [Theory, ModeData]
     public void ReadUInt8SharesFunctionAndUsesReceiver(ExecutionMode mode)
     {
         const string source = """
