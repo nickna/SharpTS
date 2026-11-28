@@ -210,7 +210,14 @@ public sealed class EmittedBuiltInStaticDispatchRuntimeTests
                 FromValue = Stub("BufferFrom"),
                 AllocValue = Stub("BufferAlloc"),
                 ByteLengthValue = Stub("BufferByteLength"),
-                IsBuffer = Stub("BufferIsBuffer")
+                IsBuffer = Stub("BufferIsBuffer"),
+                FromArray = Stub("BufferOf"),
+                AllocUnsafeValue = Stub("BufferAllocUnsafe"),
+                AllocUnsafeSlowValue = Stub("BufferAllocUnsafeSlow"),
+                ConcatValue = Stub("BufferConcat"),
+                CopyBytesFromValue = Stub("BufferCopyBytesFrom"),
+                CompareValue = Stub("BufferCompare"),
+                IsEncodingValue = Stub("BufferIsEncoding")
             };
         }
         var inputsType = typeof(RuntimeEmitter).GetNestedType("BuiltInStaticDispatchInputs", BindingFlags.NonPublic)!;
@@ -248,6 +255,13 @@ public sealed class EmittedBuiltInStaticDispatchRuntimeTests
             Assert.Equal("BufferAlloc:alloc:3", Lookup(typeof(Guid), "alloc"));
             Assert.Equal("BufferIsBuffer:isBuffer:1", Lookup(typeof(Guid), "isBuffer"));
             Assert.Equal("BufferByteLength:byteLength:2", Lookup(typeof(Guid), "byteLength"));
+            Assert.Equal("BufferOf:of:0", Lookup(typeof(Guid), "of"));
+            Assert.Equal("BufferAllocUnsafe:allocUnsafe:1", Lookup(typeof(Guid), "allocUnsafe"));
+            Assert.Equal("BufferAllocUnsafeSlow:allocUnsafeSlow:1", Lookup(typeof(Guid), "allocUnsafeSlow"));
+            Assert.Equal("BufferConcat:concat:2", Lookup(typeof(Guid), "concat"));
+            Assert.Equal("BufferCopyBytesFrom:copyBytesFrom:3", Lookup(typeof(Guid), "copyBytesFrom"));
+            Assert.Equal("BufferCompare:compare:2", Lookup(typeof(Guid), "compare"));
+            Assert.Equal("BufferIsEncoding:isEncoding:1", Lookup(typeof(Guid), "isEncoding"));
         }
         else
         {

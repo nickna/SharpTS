@@ -7,6 +7,108 @@ namespace SharpTS.Compilation;
 
 public partial class RuntimeEmitter
 {
+    private void EmitBufferStaticFunctionValues(TypeBuilder owner, EmittedRuntime runtime, EmittedBufferRuntime buffer)
+    {
+        MethodBuilder Define(string name, params Type[] parameters) =>
+            owner.DefineMethod(name, MethodAttributes.Public | MethodAttributes.Static, _types.Object, parameters);
+
+        MethodBuilder DefineUnsafeAllocator(string name)
+        {
+            var method = Define(name, _types.Object);
+            var il = method.GetILGenerator();
+            il.Emit(OpCodes.Ldarg_0);
+            il.Emit(OpCodes.Ldnull);
+            il.Emit(OpCodes.Ldnull);
+            il.Emit(OpCodes.Call, buffer.AllocValue);
+            il.Emit(OpCodes.Ret);
+            return method;
+        }
+
+        buffer.AllocUnsafeValue = DefineUnsafeAllocator("BufferAllocUnsafeValue");
+        buffer.AllocUnsafeSlowValue = DefineUnsafeAllocator("BufferAllocUnsafeSlowValue");
+
+        if (buffer.HasTypedArrayCopy)
+            buffer.CopyBytesFromValue = buffer.CopyBytesFrom;
+        else
+        {
+            buffer.CopyBytesFromValue = Define("BufferCopyBytesFromValue", _types.Object, _types.Object, _types.Object);
+            EmitThrowTypeError(buffer.CopyBytesFromValue.GetILGenerator(), runtime.Errors,
+                "Buffer.copyBytesFrom requires a TypedArray argument");
+        }
+
+        buffer.CompareValue = Define("BufferCompareValue", _types.Object, _types.Object);
+        var compare = buffer.CompareValue.GetILGenerator();
+        foreach (var arg in new[] { OpCodes.Ldarg_0, OpCodes.Ldarg_1 })
+        {
+            var valid = compare.DefineLabel();
+            compare.Emit(arg);
+            compare.Emit(OpCodes.Isinst, buffer.Type);
+            compare.Emit(OpCodes.Brtrue, valid);
+            EmitThrowTypeError(compare, runtime.Errors, "Buffer.compare requires two buffers");
+            compare.MarkLabel(valid);
+        }
+        compare.Emit(OpCodes.Ldarg_0);
+        compare.Emit(OpCodes.Castclass, buffer.Type);
+        compare.Emit(OpCodes.Ldarg_1);
+        compare.Emit(OpCodes.Castclass, buffer.Type);
+        compare.Emit(OpCodes.Call, buffer.Compare);
+        compare.Emit(OpCodes.Conv_R8);
+        compare.Emit(OpCodes.Box, _types.Double);
+        compare.Emit(OpCodes.Ret);
+
+        buffer.ConcatValue = Define("BufferConcatValue", _types.Object, _types.Object);
+        var concat = buffer.ConcatValue.GetILGenerator();
+        var buffers = concat.DeclareLocal(_types.ListOfObject);
+        var validList = concat.DefineLabel();
+        concat.Emit(OpCodes.Ldarg_0);
+        concat.Emit(OpCodes.Isinst, _types.ListOfObject);
+        concat.Emit(OpCodes.Stloc, buffers);
+        concat.Emit(OpCodes.Ldloc, buffers);
+        concat.Emit(OpCodes.Brtrue, validList);
+        EmitThrowTypeError(concat, runtime.Errors, "Buffer.concat requires an array");
+        concat.MarkLabel(validList);
+        concat.Emit(OpCodes.Ldloc, buffers);
+        var calculate = concat.DefineLabel();
+        var ready = concat.DefineLabel();
+        concat.Emit(OpCodes.Ldarg_1);
+        concat.Emit(OpCodes.Isinst, _types.Double);
+        concat.Emit(OpCodes.Brfalse, calculate);
+        concat.Emit(OpCodes.Ldarg_1);
+        concat.Emit(OpCodes.Unbox_Any, _types.Double);
+        concat.Emit(OpCodes.Conv_I4);
+        concat.Emit(OpCodes.Br, ready);
+        concat.MarkLabel(calculate);
+        concat.Emit(OpCodes.Ldloc, buffers);
+        concat.Emit(OpCodes.Call, buffer.CalculateTotalLength);
+        concat.MarkLabel(ready);
+        concat.Emit(OpCodes.Call, buffer.Concat);
+        concat.Emit(OpCodes.Ret);
+
+        buffer.IsEncodingValue = Define("BufferIsEncodingValue", _types.Object);
+        var encodingIL = buffer.IsEncodingValue.GetILGenerator();
+        var encoding = encodingIL.DeclareLocal(_types.String);
+        var unknown = encodingIL.DefineLabel();
+        var known = encodingIL.DefineLabel();
+        var done = encodingIL.DefineLabel();
+        encodingIL.Emit(OpCodes.Ldarg_0);
+        encodingIL.Emit(OpCodes.Isinst, _types.String);
+        encodingIL.Emit(OpCodes.Stloc, encoding);
+        encodingIL.Emit(OpCodes.Ldloc, encoding);
+        encodingIL.Emit(OpCodes.Brfalse, unknown);
+        encodingIL.Emit(OpCodes.Ldloc, encoding);
+        encodingIL.Emit(OpCodes.Callvirt, _types.GetMethod(_types.String, "ToLowerInvariant")!);
+        encodingIL.Emit(OpCodes.Stloc, encoding);
+        EmitBufferEncodingChecks(encodingIL, encoding, (known, known, known, known, known, known));
+        encodingIL.MarkLabel(unknown);
+        encodingIL.Emit(OpCodes.Ldc_I4_0);
+        encodingIL.Emit(OpCodes.Br, done);
+        encodingIL.MarkLabel(known);
+        encodingIL.Emit(OpCodes.Ldc_I4_1);
+        encodingIL.MarkLabel(done);
+        encodingIL.Emit(OpCodes.Box, _types.Boolean);
+        encodingIL.Emit(OpCodes.Ret);
+    }
+
     private void EmitBufferAllocValue(TypeBuilder owner, EmittedRuntime runtime, EmittedBufferRuntime buffer)
     {
         var method = owner.DefineMethod("BufferAllocValue", MethodAttributes.Public | MethodAttributes.Static,

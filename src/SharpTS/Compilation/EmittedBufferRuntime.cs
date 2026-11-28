@@ -119,6 +119,48 @@ public sealed class EmittedBufferRuntime
         internal set => Set(ref _allocUnsafe, value);
     }
 
+    private MethodBuilder? _allocUnsafeValue;
+    internal MethodBuilder AllocUnsafeValue
+    {
+        get => Require(_allocUnsafeValue);
+        set => Set(ref _allocUnsafeValue, value);
+    }
+
+    private MethodBuilder? _allocUnsafeSlowValue;
+    internal MethodBuilder AllocUnsafeSlowValue
+    {
+        get => Require(_allocUnsafeSlowValue);
+        set => Set(ref _allocUnsafeSlowValue, value);
+    }
+
+    private MethodBuilder? _concatValue;
+    internal MethodBuilder ConcatValue
+    {
+        get => Require(_concatValue);
+        set => Set(ref _concatValue, value);
+    }
+
+    private MethodBuilder? _compareValue;
+    internal MethodBuilder CompareValue
+    {
+        get => Require(_compareValue);
+        set => Set(ref _compareValue, value);
+    }
+
+    private MethodBuilder? _isEncodingValue;
+    internal MethodBuilder IsEncodingValue
+    {
+        get => Require(_isEncodingValue);
+        set => Set(ref _isEncodingValue, value);
+    }
+
+    private MethodBuilder? _copyBytesFromValue;
+    internal MethodBuilder CopyBytesFromValue
+    {
+        get => Require(_copyBytesFromValue);
+        set => Set(ref _copyBytesFromValue, value);
+    }
+
     private MethodBuilder? _concat;
     public MethodBuilder Concat
     {
@@ -680,6 +722,12 @@ public sealed class EmittedBufferRuntime
         _ = AllocValue;
         _ = ByteLengthValue;
         _ = AllocUnsafe;
+        _ = AllocUnsafeValue;
+        _ = AllocUnsafeSlowValue;
+        _ = ConcatValue;
+        _ = CompareValue;
+        _ = IsEncodingValue;
+        _ = CopyBytesFromValue;
         _ = Concat;
         _ = CalculateTotalLength;
         _ = IsBuffer;

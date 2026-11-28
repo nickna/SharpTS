@@ -1463,6 +1463,23 @@ public class BufferTests
     #region buffer module exports (#1160)
 
     [Theory, ModeData]
+    public void BufferModule_StaticFunctionsCanBeSavedAndCalled(ExecutionMode mode)
+    {
+        const string source = """
+            const {Buffer: B} = require('node:buffer');
+            for (const key of ['of','allocUnsafe','allocUnsafeSlow','concat','copyBytesFrom','compare','isEncoding'])
+                console.log(typeof B[key], B[key] === B[key]);
+            const {of, allocUnsafe, allocUnsafeSlow, concat, copyBytesFrom, compare, isEncoding} = B;
+            const first = of(65, 66);
+            console.log(first.toString(), allocUnsafe(3).length, allocUnsafeSlow(4).length);
+            console.log(concat([first, of(67)]).toString(), compare(first, of(65, 66)));
+            console.log(copyBytesFrom(new Uint8Array([10, 11]), 1).toString('hex'), isEncoding('UTF-8'), isEncoding(''));
+            """;
+        Assert.Equal(string.Concat(Enumerable.Repeat("function true\n", 7)) + "AB 3 4\nABC 0\n0b true false\n",
+            TestHarness.RunModules(new Dictionary<string, string> { ["main.cjs"] = source }, "main.cjs", mode));
+    }
+
+    [Theory, ModeData]
     public void BufferModule_ImportedConstructorCanCallFromThroughAnAlias(ExecutionMode mode)
     {
         var files = new Dictionary<string, string>
