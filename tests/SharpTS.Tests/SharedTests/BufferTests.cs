@@ -13,6 +13,18 @@ public class BufferTests
     #region Type Annotation and Basic Operations
 
     [Theory, ModeData]
+    public void ReflectReadsBufferBackingWithoutDirectAccess(ExecutionMode mode)
+    {
+        const string source = """
+            const b=Buffer.alloc(3);
+            const get=Reflect.get;
+            const owner=get(b,'buffer');
+            console.log(owner.byteLength,get(b,'buffer')===owner);
+            """;
+        Assert.Equal("3 true\n", TestHarness.RunUnchecked(source, mode));
+    }
+
+    [Theory, ModeData]
     public void CompareReadsVisibleUint8ArrayBytes(ExecutionMode mode)
     {
         const string source = """

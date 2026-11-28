@@ -2535,6 +2535,7 @@ public partial class RuntimeEmitter
                 runtime.SymbolAccessors.FindOwnMethod,
                 NativeProxyRejection: runtime.ReflectedMethods.NativeProxyRejection,
                 Errors: runtime.Errors,
+                Buffer: runtime.Buffer,
                 TypedArrays: runtime.TypedArrays,
                 HasPrototypeEntry: runtime.DescriptorStorage.HasPrototypeEntry
             )

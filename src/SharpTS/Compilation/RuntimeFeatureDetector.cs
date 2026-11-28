@@ -239,7 +239,7 @@ public sealed partial class RuntimeFeatureDetector
             || _set.UsesSourceExecution || _set.UsesVm;
         // WebCrypto (#1063): subtle results are $ArrayBuffer and getRandomValues
         // consumes $TypedArray views. Reading a Buffer backing store also exposes ArrayBuffer.
-        if (_set.UsesCrypto || (_set.UsesBuffer && _readsBufferBacking))
+        if (_set.UsesCrypto || (_set.UsesBuffer && (_readsBufferBacking || _set.UsesReflect)))
         {
             _set.TypedArrays |= RuntimeFeatureSet.TypedArrayKinds.ArrayBuffer
                               | RuntimeFeatureSet.TypedArrayKinds.TypedArrayBase;
