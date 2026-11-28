@@ -387,6 +387,7 @@ public partial class RuntimeEmitter
         il.Emit(OpCodes.Conv_I4);
         il.Emit(OpCodes.Ldloc, length);
         il.Emit(OpCodes.Conv_I4);
+        il.Emit(OpCodes.Ldarg_0);
         il.Emit(OpCodes.Newobj, buffer.ViewCtor);
         il.Emit(OpCodes.Ret);
 

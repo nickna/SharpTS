@@ -14,6 +14,20 @@ public sealed class EmittedBufferRuntime
     public bool HasTypedArrayCopy { get; }
     public bool IsComplete { get; private set; }
 
+    private MethodBuilder? _byteOffsetGetter;
+    internal MethodBuilder ByteOffsetGetter
+    {
+        get => Require(_byteOffsetGetter);
+        set => Set(ref _byteOffsetGetter, value);
+    }
+
+    private MethodBuilder? _ownerGetter;
+    internal MethodBuilder OwnerGetter
+    {
+        get => Require(_ownerGetter);
+        set => Set(ref _ownerGetter, value);
+    }
+
     private Type? _type;
     public Type Type
     {
@@ -707,6 +721,8 @@ public sealed class EmittedBufferRuntime
     internal void CompleteEmission()
     {
         EnsureMutable();
+        _ = OwnerGetter;
+        _ = ByteOffsetGetter;
         _ = Type;
         _ = ViewCtor;
         _ = Ctor;

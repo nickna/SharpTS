@@ -24,12 +24,14 @@ public class SharpTSBuffer : ITypeCategorized
     public TypeCategory RuntimeCategory => TypeCategory.Buffer;
 
     private readonly ArraySegment<byte> _view;
-    internal Span<byte> Bytes => _view.AsSpan();
+    private object? _owner;
+    private bool IsDetached => _owner is SharpTSArrayBuffer { IsDetached: true };
+    internal Span<byte> Bytes => IsDetached ? Span<byte>.Empty : _view.AsSpan();
 
     /// <summary>
     /// Gets the length of this buffer in bytes.
     /// </summary>
-    public int Length => _view.Count;
+    public int Length => IsDetached ? 0 : _view.Count;
 
     /// <summary>
     /// Gets the bytes within this view. Partial views return a copy.
@@ -45,8 +47,9 @@ public class SharpTSBuffer : ITypeCategorized
         _view = new ArraySegment<byte>(data);
     }
 
-    internal SharpTSBuffer(byte[] data, int offset, int length)
+    internal SharpTSBuffer(byte[] data, int offset, int length, object owner)
     {
+        _owner = owner;
         _view = new ArraySegment<byte>(data, offset, length);
     }
 
@@ -451,7 +454,8 @@ public class SharpTSBuffer : ITypeCategorized
         return name switch
         {
             "length" or "byteLength" => (double)Length,
-            "byteOffset" => (double)_view.Offset,
+            "byteOffset" => IsDetached ? 0d : (double)_view.Offset,
+            "buffer" => _owner ??= new SharpTSArrayBuffer(_view.Array!),
 
             "toString" => BuiltInMethod.CreateV2("toString", 0, 1, (_, _, args) =>
             {

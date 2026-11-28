@@ -65,6 +65,16 @@ public partial class RuntimeEmitter
 
         ctorIl.Emit(OpCodes.Ret);
 
+        arrayBuffer.BackingCtor = typeBuilder.DefineConstructor(MethodAttributes.Assembly, CallingConventions.Standard,
+            [_types.ByteArray]);
+        var backingIL = arrayBuffer.BackingCtor.GetILGenerator();
+        backingIL.Emit(OpCodes.Ldarg_0);
+        backingIL.Emit(OpCodes.Call, _types.GetDefaultConstructor(_types.Object));
+        backingIL.Emit(OpCodes.Ldarg_0);
+        backingIL.Emit(OpCodes.Ldarg_1);
+        backingIL.Emit(OpCodes.Stfld, arrayBuffer.BufferField);
+        backingIL.Emit(OpCodes.Ret);
+
         // Property: public int ByteLength => _detached ? 0 : _buffer.Length
         EmitArrayBufferByteLength(typeBuilder, arrayBuffer);
 

@@ -135,7 +135,7 @@ public sealed class SharpTSBufferConstructor
         if (ab is { IsDetached: true })
             throw new ThrowException(new SharpTSTypeError("Cannot create a Buffer from a detached ArrayBuffer"));
         var bytes = ab?.GetBackingArray() ?? ((SharpTSSharedArrayBuffer)source).GetBackingArray();
-        return new SharpTSBuffer(bytes, (int)offset, length > 0 ? (int)length : 0);
+        return new SharpTSBuffer(bytes, (int)offset, length > 0 ? (int)length : 0, source);
 
         static ThrowException OutsideBounds(string parameter) => new(new SharpTSRangeError(
             $"\"{parameter}\" is outside of buffer bounds") { Code = "ERR_BUFFER_OUT_OF_BOUNDS" });

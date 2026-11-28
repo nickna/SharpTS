@@ -13,6 +13,13 @@ public sealed class EmittedArrayBufferRuntime
 
     public bool IsComplete { get; private set; }
 
+    private ConstructorBuilder? _backingCtor;
+    public ConstructorBuilder BackingCtor
+    {
+        get => Require(_backingCtor);
+        internal set => Set(ref _backingCtor, value);
+    }
+
     private TypeBuilder? _type;
     public TypeBuilder Type
     {
@@ -130,6 +137,7 @@ public sealed class EmittedArrayBufferRuntime
     internal void CompleteEmission()
     {
         EnsureMutable();
+        _ = BackingCtor;
         _ = Type;
         _ = Ctor;
         _ = PrototypeField;

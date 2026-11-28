@@ -712,6 +712,7 @@ public static class BuiltInTypes
         {
             // Properties
             "length" or "byteLength" or "byteOffset" => NumberType,
+            "buffer" => new TypeInfo.Union([new TypeInfo.ArrayBuffer(), new TypeInfo.SharedArrayBuffer()]),
 
             // Methods
             "toString" => new TypeInfo.Function([StringType], StringType, RequiredParams: 0), // encoding optional

@@ -1443,11 +1443,26 @@ public class BufferTests
     }
 
     [Theory, ModeData]
-    public void Buffer_IndexAccess_OutOfRange_ReturnsNaN(ExecutionMode mode)
+    public void Buffer_ArrayBufferOwnerAndViewBoundsSurviveTransfer(ExecutionMode mode)
     {
-        // Matches SharpTSBuffer.this[int] — out-of-range reads yield NaN in
-        // both interpreted and compiled modes. (Node itself returns undefined;
-        // aligning SharpTS to that is a separate effort.)
+        const string source = """
+            const ab = new ArrayBuffer(4);
+            const whole = Buffer.from(ab);
+            const view = Buffer.from(ab, 1, 2);
+            view[0] = 65;
+            console.log(whole.buffer === ab, view.buffer === ab, whole[1], view.byteOffset);
+            structuredClone(ab, {transfer:[ab]});
+            view[0] = 66;
+            console.log(view.buffer === ab, whole.length, view.byteOffset, view.byteLength, view[0]);
+            const owned = Buffer.alloc(2);
+            console.log(owned.buffer === owned.buffer, owned.buffer.byteLength);
+            """;
+        Assert.Equal("true true 65 1\ntrue 0 0 0 undefined\ntrue 2\n", TestHarness.Run(source, mode));
+    }
+
+    [Theory, ModeData]
+    public void Buffer_IndexAccess_OutOfRange_ReturnsUndefined(ExecutionMode mode)
+    {
         var source = """
             const buf = Buffer.from([1, 2, 3]);
             console.log(buf[10]);
@@ -1455,7 +1470,7 @@ public class BufferTests
             """;
 
         var output = TestHarness.Run(source, mode);
-        Assert.Equal("NaN\nnumber\n", output);
+        Assert.Equal("undefined\nundefined\n", output);
     }
 
     #endregion
