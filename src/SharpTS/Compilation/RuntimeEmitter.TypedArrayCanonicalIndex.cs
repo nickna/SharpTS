@@ -48,11 +48,18 @@ public partial class RuntimeEmitter
         LocalBuilder index, Label notCanonical, Label invalid)
     {
         var arrays = typedArrays.RequireImplementation();
-        var key = il.DeclareLocal(_types.String);
-        var numeric = il.DeclareLocal(_types.Double);
         il.Emit(OpCodes.Ldarg_0);
         il.Emit(OpCodes.Call, typedArrays.IsTypedArray);
         il.Emit(OpCodes.Brfalse, notCanonical);
+        EmitViewIndexGuard(il, arrays.BaseType, arrays.LengthGetter, toNumber, toJsString,
+            index, notCanonical, invalid);
+    }
+
+    private void EmitViewIndexGuard(ILGenerator il, Type viewType, MethodInfo lengthGetter,
+        MethodInfo toNumber, MethodInfo toJsString, LocalBuilder index, Label notCanonical, Label invalid)
+    {
+        var key = il.DeclareLocal(_types.String);
+        var numeric = il.DeclareLocal(_types.Double);
         il.Emit(OpCodes.Ldarg_1);
         il.Emit(OpCodes.Isinst, _types.String);
         il.Emit(OpCodes.Stloc, key);
@@ -81,8 +88,8 @@ public partial class RuntimeEmitter
         il.Emit(OpCodes.Blt_Un, invalid);
         il.Emit(OpCodes.Ldloc, numeric);
         il.Emit(OpCodes.Ldarg_0);
-        il.Emit(OpCodes.Castclass, arrays.BaseType);
-        il.Emit(OpCodes.Callvirt, arrays.LengthGetter);
+        il.Emit(OpCodes.Castclass, viewType);
+        il.Emit(OpCodes.Callvirt, lengthGetter);
         il.Emit(OpCodes.Conv_R8);
         il.Emit(OpCodes.Bge_Un, invalid);
         il.Emit(OpCodes.Ldloc, numeric);

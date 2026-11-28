@@ -47,7 +47,7 @@ public partial class RuntimeEmitter
         Type UndefinedType
     );
 
-    private readonly record struct BufferGetBranchInputs(EmittedBufferRuntime? Buffer, ConstructorBuilder TSFunctionCtor, MethodBuilder GetOrCreate);
+    private readonly record struct BufferGetBranchInputs(EmittedBufferRuntime? Buffer, ConstructorBuilder TSFunctionCtor, MethodBuilder GetOrCreate, FieldInfo UndefinedInstance);
 
     private readonly record struct StatsGetBranchInputs(EmittedFileSystemRuntime? FileSystem, ConstructorBuilder TSFunctionCtor);
 
@@ -631,8 +631,7 @@ public partial class RuntimeEmitter
     }
 
     /// <summary>
-    /// $Buffer arm: "length" → boxed double; "toString" → a $TSFunction over ToEncodedString;
-    /// anything else → null. Caller gates this arm and its dispatch on _features.UsesBuffer.
+    /// Reads intrinsic Buffer properties and method values when the receiver type is dynamic.
     /// </summary>
     private void EmitBufferGetBranch(ILGenerator il, BufferGetBranchInputs inputs, Label notMatch)
     {
@@ -698,6 +697,24 @@ public partial class RuntimeEmitter
         EmitReflectedFunctionFactory(il, inputs.GetOrCreate, parameters);
         il.Emit(OpCodes.Ret);
         il.MarkLabel(nextMethod);
+        EmitSearchMethod("indexOf", inputs.Buffer.IndexOfValue);
+        EmitSearchMethod("includes", inputs.Buffer.IncludesValue);
+
+        void EmitSearchMethod(string name, MethodBuilder target)
+        {
+            var skip = il.DefineLabel();
+            il.Emit(OpCodes.Ldarg_1);
+            il.Emit(OpCodes.Ldstr, name);
+            il.Emit(OpCodes.Call, _types.StringOpEquality);
+            il.Emit(OpCodes.Brfalse, skip);
+            var parameters = EmitReflectedMethodLiteral(il, target);
+            il.Emit(OpCodes.Ldstr, name);
+            il.Emit(OpCodes.Ldc_I4_3);
+            EmitReflectedFunctionFactory(il, inputs.GetOrCreate, parameters);
+            il.Emit(OpCodes.Ret);
+            il.MarkLabel(skip);
+        }
+
         // Check for "toString" - return a wrapper that calls ToEncodedString
         il.Emit(OpCodes.Ldarg_1);
         il.Emit(OpCodes.Ldstr, "toString");
@@ -714,8 +731,7 @@ public partial class RuntimeEmitter
         il.Emit(OpCodes.Newobj, inputs.TSFunctionCtor);
         il.Emit(OpCodes.Ret);
         il.MarkLabel(notBufferToStringLabel);
-        // Unknown buffer property - return null
-        il.Emit(OpCodes.Ldnull);
+        il.Emit(OpCodes.Ldsfld, inputs.UndefinedInstance);
         il.Emit(OpCodes.Ret);
     }
 

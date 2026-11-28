@@ -54,9 +54,29 @@ public class BufferTests
         const string source = """
             const b=Buffer.of(65,66,255);
             console.log(b.indexOf('42',0,'hex'), b.includes('QQ==',0,'base64'), b.indexOf('\u00ff',0,'latin1'));
-            console.log(b.indexOf('42',2,'hex'));
+            console.log(b.indexOf('42',2,'hex'), b.includes('42','hex'));
             """;
-        Assert.Equal("1 true 2\n-1\n", TestHarness.Run(source, mode));
+        Assert.Equal("1 true 2\n-1 true\n", TestHarness.Run(source, mode));
+    }
+
+    [Theory, ModeData]
+    public void GenericBufferSearchReadsReturnCallableMethods(ExecutionMode mode)
+    {
+        const string source = """
+            function find(b) {
+                const index = b.indexOf, includes = b['includes'];
+                const other = Buffer.of(67);
+                console.log(typeof index, typeof includes, index.length, includes.length);
+                console.log(index === other.indexOf, includes === other.includes);
+                console.log(b.indexOf('42', 0, 'hex'), b.includes('42', 'hex'));
+                console.log(index.call(other, 67), includes.call(other, 66));
+                try { index(65); } catch (e) { console.log(e.name); }
+                try { b.includes(); } catch (e) { console.log(e.name); }
+            }
+            find(Buffer.of(65, 66));
+            """;
+        Assert.Equal("function function 3 3\ntrue true\n1 true\n0 false\nTypeError\nTypeError\n",
+            TestHarness.RunUnchecked(source, mode));
     }
 
     [Theory, ModeData]

@@ -42,6 +42,35 @@ public class SharpTSBuffer : ITypeCategorized
             return RuntimeValue.FromNumber(buffer.ReadUInt8((int)offset));
         });
 
+    private static readonly BuiltInMethod IndexOfMethod = CreateSearchMethod("indexOf");
+    private static readonly BuiltInMethod IncludesMethod = CreateSearchMethod("includes");
+
+    internal static bool IsUnboundMethod(object member) =>
+        ReferenceEquals(member, ReadUInt8Method) || ReferenceEquals(member, IndexOfMethod) || ReferenceEquals(member, IncludesMethod);
+
+    private static BuiltInMethod CreateSearchMethod(string name) =>
+        BuiltInMethod.CreateV2(name, 0, int.MaxValue, (interpreter, receiver, args) =>
+        {
+            if (receiver.ToObject() is not SharpTSBuffer buffer)
+                throw new ThrowException(new SharpTSTypeError("Buffer search requires a Buffer receiver"));
+            if (args.Length == 0 || args[0].IsNull || args[0].IsUndefined)
+                throw new ThrowException(new SharpTSTypeError("Buffer search requires a value argument"));
+
+            int offset = 0;
+            string encoding = "utf8";
+            if (args.Length > 1 && args[1].IsString)
+                encoding = args[1].AsStringUnsafe();
+            else
+            {
+                if (args.Length > 1)
+                    offset = int.CreateSaturating(interpreter.ToNumberWithPrimitive(args[1].ToObject()));
+                if (args.Length > 2 && !args[2].IsUndefined)
+                    encoding = args[2].ToObject()?.ToString() ?? "null";
+            }
+            double index = buffer.IndexOf(args[0].ToObject()!, offset, encoding);
+            return name == "indexOf" ? RuntimeValue.FromNumber(index) : RuntimeValue.FromBoolean(index >= 0);
+        }).WithSpecLength(3).AsNonConstructor();
+
     private readonly ArraySegment<byte> _view;
     private object? _owner;
     private bool IsDetached => _owner is SharpTSArrayBuffer { IsDetached: true };
@@ -674,23 +703,8 @@ public class SharpTSBuffer : ITypeCategorized
                 RuntimeValue.FromNumber(WriteBigUInt64BE(BigIntArg(args, "writeBigUInt64BE"), OffsetArg(args, 1)))),
 
             // Search methods
-            "indexOf" => BuiltInMethod.CreateV2("indexOf", 1, 3, (_, _, args) =>
-            {
-                if (args.Length == 0 || args[0].IsNull)
-                    throw new Exception("Buffer.indexOf requires a value argument");
-                int byteOffset = OffsetArg(args, 1);
-                string encoding = args.Length > 2 ? args[2].ToObject()?.ToString() ?? "utf8" : "utf8";
-                return RuntimeValue.FromNumber(IndexOf(args[0].ToObject()!, byteOffset, encoding));
-            }),
-
-            "includes" => BuiltInMethod.CreateV2("includes", 1, 3, (_, _, args) =>
-            {
-                if (args.Length == 0 || args[0].IsNull)
-                    throw new Exception("Buffer.includes requires a value argument");
-                int byteOffset = OffsetArg(args, 1);
-                string encoding = args.Length > 2 ? args[2].ToObject()?.ToString() ?? "utf8" : "utf8";
-                return RuntimeValue.FromBoolean(Includes(args[0].ToObject()!, byteOffset, encoding));
-            }),
+            "indexOf" => IndexOfMethod,
+            "includes" => IncludesMethod,
 
             // Swap methods
             "swap16" => BuiltInMethod.CreateV2("swap16", 0, (_, _, _) => RuntimeValue.FromObject(Swap16())),

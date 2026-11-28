@@ -785,8 +785,8 @@ public static class BuiltInTypes
             "writeIntBE" => new TypeInfo.Function([NumberType, NumberType, NumberType], NumberType, RequiredParams: 3),
 
             // Search methods
-            "indexOf" => new TypeInfo.Function([AnyType, NumberType, StringType], NumberType, RequiredParams: 1),
-            "includes" => new TypeInfo.Function([AnyType, NumberType, StringType], BooleanType, RequiredParams: 1),
+            "indexOf" => new TypeInfo.Function([AnyType, new TypeInfo.Union([NumberType, StringType]), StringType], NumberType, RequiredParams: 1),
+            "includes" => new TypeInfo.Function([AnyType, new TypeInfo.Union([NumberType, StringType]), StringType], BooleanType, RequiredParams: 1),
 
             // Swap methods
             "swap16" => new TypeInfo.Function([], bufferType),
