@@ -825,6 +825,38 @@ public partial class RuntimeEmitter
         il.Emit(OpCodes.Ret);
     }
 
+    private void EmitBufferReadUInt8Value(TypeBuilder type, EmittedBufferRuntime buffer, EmittedErrorRuntime errors)
+    {
+        var method = type.DefineMethod("BufferReadUInt8Value", MethodAttributes.Public | MethodAttributes.Static,
+            _types.Double, [_types.Object, _types.Object]);
+        method.DefineParameter(1, ParameterAttributes.None, "__this");
+        buffer.ReadUInt8Value = method;
+        var il = method.GetILGenerator();
+        var receiver = il.DeclareLocal(type);
+        var validReceiver = il.DefineLabel();
+        il.Emit(OpCodes.Ldarg_0);
+        il.Emit(OpCodes.Isinst, type);
+        il.Emit(OpCodes.Stloc, receiver);
+        il.Emit(OpCodes.Ldloc, receiver);
+        il.Emit(OpCodes.Brtrue, validReceiver);
+        EmitThrowTypeError(il, errors, "Buffer.readUInt8 requires a Buffer receiver");
+        il.MarkLabel(validReceiver);
+        var offset = il.DeclareLocal(_types.Int32);
+        var read = il.DefineLabel();
+        il.Emit(OpCodes.Ldarg_1);
+        il.Emit(OpCodes.Isinst, _types.Double);
+        il.Emit(OpCodes.Brfalse, read);
+        il.Emit(OpCodes.Ldarg_1);
+        il.Emit(OpCodes.Unbox_Any, _types.Double);
+        il.Emit(OpCodes.Conv_I4);
+        il.Emit(OpCodes.Stloc, offset);
+        il.MarkLabel(read);
+        il.Emit(OpCodes.Ldloc, receiver);
+        il.Emit(OpCodes.Ldloc, offset);
+        il.Emit(OpCodes.Call, buffer.ReadUInt8);
+        il.Emit(OpCodes.Ret);
+    }
+
     /// <summary>
     /// Emits: public double ReadUInt8(int offset)
     /// Returns the byte value at offset as a double.

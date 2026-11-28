@@ -1442,6 +1442,21 @@ public class BufferTests
         Assert.Equal("42 44 255\n", output);
     }
 
+    [Fact]
+    public void Buffer_CompiledReadUInt8MethodUsesCallSiteReceiver()
+    {
+        const string source = """
+            function method(value: any) { return value.readUInt8; }
+            const a = Buffer.of(65);
+            const b = Buffer.of(66, 67);
+            const f = method(a);
+            console.log(typeof f, f === method(b), f === b.readUint8);
+            console.log(f.call(b), f.apply(b, [1]));
+            try { f(); } catch (e) { console.log('invalid receiver'); }
+            """;
+        Assert.Equal("function true true\n66 67\ninvalid receiver\n", TestHarness.RunCompiled(source));
+    }
+
     [Theory, ModeData]
     public void Buffer_ArrayBufferOwnerAndViewBoundsSurviveTransfer(ExecutionMode mode)
     {

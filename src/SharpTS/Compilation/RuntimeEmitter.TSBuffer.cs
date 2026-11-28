@@ -94,6 +94,7 @@ public partial class RuntimeEmitter
         EmitTSBufferFill(typeBuilder, buffer);
         EmitTSBufferWrite(typeBuilder, buffer, errors);
         EmitTSBufferReadUInt8(typeBuilder, buffer);
+        EmitBufferReadUInt8Value(typeBuilder, buffer, errors);
         EmitTSBufferWriteUInt8(typeBuilder, buffer);
         EmitTSBufferToJSON(typeBuilder, buffer);
 

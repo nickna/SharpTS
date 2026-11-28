@@ -14,6 +14,13 @@ public sealed class EmittedBufferRuntime
     public bool HasTypedArrayCopy { get; }
     public bool IsComplete { get; private set; }
 
+    private MethodBuilder? _readUInt8Value;
+    internal MethodBuilder ReadUInt8Value
+    {
+        get => Require(_readUInt8Value);
+        set => Set(ref _readUInt8Value, value);
+    }
+
     private MethodBuilder? _byteOffsetGetter;
     internal MethodBuilder ByteOffsetGetter
     {
@@ -723,6 +730,7 @@ public sealed class EmittedBufferRuntime
         EnsureMutable();
         _ = OwnerGetter;
         _ = ByteOffsetGetter;
+        _ = ReadUInt8Value;
         _ = Type;
         _ = ViewCtor;
         _ = Ctor;
