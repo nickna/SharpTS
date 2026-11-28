@@ -88,15 +88,14 @@ public class RuntimeTypeSyncTests : IClassFixture<RuntimeTypeSyncTests.CompiledA
         ["Equals", "GetHashCode", "GetType", "ToString", "MemberwiseClone", "Finalize"];
 
     /// <summary>
-    /// Sync pairs: runtime type → emitted type name suffix → methods intentionally not emitted.
-    /// The emitted type name is looked up by suffix match (e.g., "Date" matches "$Date").
+    /// Sync pairs: runtime type → exact emitted type name → methods intentionally not emitted.
     /// </summary>
     private static readonly SyncPair[] SyncPairs =
     [
-        new(typeof(SharpTSDate), "Date",
+        new(typeof(SharpTSDate), "$TSDate",
             [.. BaseIgnored, "SetFromEpochMilliseconds", "ToLocalTime"]),
 
-        new(typeof(SharpTSRegExp), "RegExp",
+        new(typeof(SharpTSRegExp), "$RegExp",
             [.. BaseIgnored,
              // Per-instance accessor map (interpreter-only path). Compiled $RegExp
              // routes defineProperty accessors through the central PropertyDescriptor
@@ -105,10 +104,10 @@ public class RuntimeTypeSyncTests : IClassFixture<RuntimeTypeSyncTests.CompiledA
              // (added in ad935b84 for ECMA-262 §22.2 configurable-accessor parity).
              "DefineAccessor", "TryGetAccessor"]),
 
-        new(typeof(SharpTSError), "Error",
+        new(typeof(SharpTSError), "$Error",
             [.. BaseIgnored, "GetMember"]),
 
-        new(typeof(SharpTSArray), "Array",
+        new(typeof(SharpTSArray), "$Array",
             [.. BaseIgnored,
              // Internal helpers accessed via GetFieldsProperty dispatch, not direct calls
              "GetMember", "GetEnumerator", "get_RawLength", "set_RawLength",
@@ -131,7 +130,7 @@ public class RuntimeTypeSyncTests : IClassFixture<RuntimeTypeSyncTests.CompiledA
              "ContainsElement", "IndexOfElement",
              "SetLength", "GetRaw", "HasIndex", "DeleteAt"]),
 
-        new(typeof(SharpTSObject), "Object",
+        new(typeof(SharpTSObject), "$Object",
             [.. BaseIgnored, "GetMember",
              // Symbol-based operations handled via separate dispatch
              "GetBySymbol", "SetBySymbol", "SetBySymbolStrict",
@@ -143,10 +142,10 @@ public class RuntimeTypeSyncTests : IClassFixture<RuntimeTypeSyncTests.CompiledA
              // RuntimeValue overloads used only by interpreter, not emitted IL
              "GetPropertyRV"]),
 
-        new(typeof(SharpTSBuffer), "Buffer",
+        new(typeof(SharpTSBuffer), "$Buffer",
             [.. BaseIgnored, "GetMember"]),
 
-        new(typeof(SharpTSEventEmitter), "EventEmitter",
+        new(typeof(SharpTSEventEmitter), "$EventEmitter",
             [.. BaseIgnored, "GetMember",
              // C#-specific optimization methods, not part of JS EventEmitter API.
              // EmitWith is interp-only: async built-ins emit lifecycle events on the
@@ -155,17 +154,7 @@ public class RuntimeTypeSyncTests : IClassFixture<RuntimeTypeSyncTests.CompiledA
              "AddListenerDirect", "EmitDirect", "EmitWith", "RemoveListenerDirect"]),
     ];
 
-    private record SyncPair(Type RuntimeType, string EmittedNameSuffix, string[] IgnoredMethods);
-
-    /// <summary>
-    /// Finds an emitted type by name suffix (e.g., "Date" finds "$Date" or "$TSDate").
-    /// </summary>
-    private Type? FindEmittedType(string nameSuffix)
-    {
-        if (_fixture.CompiledAssembly == null) return null;
-        return _fixture.CompiledAssembly.GetTypes()
-            .FirstOrDefault(t => t.Name.EndsWith(nameSuffix) && t.Name.StartsWith("$"));
-    }
+    private record SyncPair(Type RuntimeType, string EmittedName, string[] IgnoredMethods);
 
     [Fact]
     public void Fixture_CompiledSuccessfully()
@@ -176,20 +165,20 @@ public class RuntimeTypeSyncTests : IClassFixture<RuntimeTypeSyncTests.CompiledA
 
     [Theory]
     [MemberData(nameof(GetSyncPairData))]
-    public void EmittedType_Exists(string runtimeTypeName, string emittedNameSuffix)
+    public void EmittedType_Exists(string runtimeTypeName, string emittedName)
     {
-        var emittedType = FindEmittedType(emittedNameSuffix);
+        var emittedType = _fixture.CompiledAssembly?.GetType(emittedName);
         Assert.NotNull(emittedType);
         _output.WriteLine($"Found emitted type for {runtimeTypeName}: {emittedType!.Name} ({emittedType.GetMethods().Length} methods)");
     }
 
     [Theory]
     [MemberData(nameof(GetSyncPairData))]
-    public void EmittedType_HasAllPublicMethods(string runtimeTypeName, string emittedNameSuffix)
+    public void EmittedType_HasAllPublicMethods(string runtimeTypeName, string emittedName)
     {
         var pair = SyncPairs.First(p => p.RuntimeType.Name == runtimeTypeName);
         var runtimeType = pair.RuntimeType;
-        var emittedType = FindEmittedType(emittedNameSuffix);
+        var emittedType = _fixture.CompiledAssembly?.GetType(emittedName);
         if (emittedType == null) return;
 
         var ignored = new HashSet<string>(pair.IgnoredMethods);
@@ -230,9 +219,9 @@ public class RuntimeTypeSyncTests : IClassFixture<RuntimeTypeSyncTests.CompiledA
 
     [Theory]
     [MemberData(nameof(GetSyncPairData))]
-    public void EmittedType_HasConstructors(string runtimeTypeName, string emittedNameSuffix)
+    public void EmittedType_HasConstructors(string runtimeTypeName, string emittedName)
     {
-        var emittedType = FindEmittedType(emittedNameSuffix);
+        var emittedType = _fixture.CompiledAssembly?.GetType(emittedName);
         Assert.NotNull(emittedType);
 
         var ctors = emittedType!.GetConstructors(BindingFlags.Public | BindingFlags.Instance);
@@ -252,10 +241,10 @@ public class RuntimeTypeSyncTests : IClassFixture<RuntimeTypeSyncTests.CompiledA
     {
         if (_fixture.CompiledAssembly == null) return;
 
-        var expectedSuffixes = new[] { "TypeError", "RangeError", "ReferenceError", "SyntaxError", "URIError", "EvalError" };
-        foreach (var suffix in expectedSuffixes)
+        var expectedNames = new[] { "$TypeError", "$RangeError", "$ReferenceError", "$SyntaxError", "$URIError", "$EvalError" };
+        foreach (var name in expectedNames)
         {
-            var errorType = FindEmittedType(suffix);
+            var errorType = _fixture.CompiledAssembly.GetType(name);
             Assert.NotNull(errorType);
             _output.WriteLine($"{errorType!.Name}: base = {errorType.BaseType?.Name}");
         }
@@ -264,7 +253,7 @@ public class RuntimeTypeSyncTests : IClassFixture<RuntimeTypeSyncTests.CompiledA
     [Fact]
     public void EmittedType_ErrorHasRequiredMembers()
     {
-        var errorType = FindEmittedType("Error");
+        var errorType = _fixture.CompiledAssembly?.GetType("$Error");
         Assert.NotNull(errorType);
 
         var allMembers = errorType!
@@ -370,6 +359,6 @@ public class RuntimeTypeSyncTests : IClassFixture<RuntimeTypeSyncTests.CompiledA
 
     public static IEnumerable<object[]> GetSyncPairData()
     {
-        return SyncPairs.Select(p => new object[] { p.RuntimeType.Name, p.EmittedNameSuffix });
+        return SyncPairs.Select(p => new object[] { p.RuntimeType.Name, p.EmittedName });
     }
 }
