@@ -113,9 +113,19 @@ public sealed class SharpTSBufferConstructor
             SharpTSArray arr => SharpTSBuffer.FromArray(arr),
             List<object?> list => SharpTSBuffer.FromArray(list),
             SharpTSArrayBuffer or SharpTSSharedArrayBuffer => FromArrayBuffer(interpreter, data, args),
-            SharpTSTypedArray typed => new SharpTSBuffer(typed.Buffer.AsSpan(typed.ByteOffset, typed.ByteLength).ToArray()),
+            SharpTSTypedArray typed => FromTypedArray(interpreter, typed),
             _ => throw new Exception($"Buffer.from: unsupported data type: {data.GetType().Name}")
         });
+    }
+
+    private static SharpTSBuffer FromTypedArray(Interp interpreter, SharpTSTypedArray source)
+    {
+        if (source.Length != 0 && source is SharpTSBigInt64Array or SharpTSBigUint64Array)
+            throw new ThrowException(new SharpTSTypeError("Cannot convert a BigInt value to a number"));
+        var bytes = new byte[source.Length];
+        for (int i = 0; i < bytes.Length; i++)
+            bytes[i] = unchecked((byte)interpreter.ToUint32(source[i]));
+        return new SharpTSBuffer(bytes);
     }
 
     private static SharpTSBuffer FromArrayBuffer(Interp interpreter, object source, ReadOnlySpan<RuntimeValue> args)

@@ -233,12 +233,9 @@ public partial class RuntimeEmitter
             EmitArrayBufferCase(shared.Type, shared.GetBuffer);
         if (buffer.HasTypedArrayCopy)
         {
-            EmitTypedCase(runtime.TypedArrays.RequireImplementation().BaseType, () =>
-            {
-                il.Emit(OpCodes.Ldnull);
-                il.Emit(OpCodes.Ldnull);
-                il.Emit(OpCodes.Call, buffer.CopyBytesFrom);
-            });
+            var arrays = runtime.TypedArrays.RequireImplementation();
+            EmitTypedCase(arrays.BaseType, () => EmitBufferFromElements(il, runtime, buffer,
+                arrays.BaseType, arrays.LengthGetter, arrays.ElementGet));
         }
         EmitTypedCase(_types.ListOfObject, () => il.Emit(OpCodes.Call, buffer.FromArray));
 
@@ -278,6 +275,44 @@ public partial class RuntimeEmitter
             il.Emit(OpCodes.Ret);
             il.MarkLabel(next);
         }
+    }
+
+    // The source is on the stack. Read each JS element, including view offsets,
+    // and apply ToUint8 via ToInt32 and the low byte.
+    private void EmitBufferFromElements(ILGenerator il, EmittedRuntime runtime, EmittedBufferRuntime buffer,
+        Type sourceType, MethodInfo lengthGetter, MethodInfo getElement)
+    {
+        var source = il.DeclareLocal(sourceType);
+        var bytes = il.DeclareLocal(_types.ByteArray);
+        var index = il.DeclareLocal(_types.Int32);
+        il.Emit(OpCodes.Stloc, source);
+        il.Emit(OpCodes.Ldloc, source);
+        il.Emit(OpCodes.Callvirt, lengthGetter);
+        il.Emit(OpCodes.Newarr, _types.Byte);
+        il.Emit(OpCodes.Stloc, bytes);
+        var test = il.DefineLabel();
+        var copy = il.DefineLabel();
+        il.Emit(OpCodes.Br, test);
+        il.MarkLabel(copy);
+        il.Emit(OpCodes.Ldloc, bytes);
+        il.Emit(OpCodes.Ldloc, index);
+        il.Emit(OpCodes.Ldloc, source);
+        il.Emit(OpCodes.Ldloc, index);
+        il.Emit(OpCodes.Callvirt, getElement);
+        il.Emit(OpCodes.Call, runtime.NumericCoercion.JsToInt32);
+        il.Emit(OpCodes.Stelem_I1);
+        il.Emit(OpCodes.Ldloc, index);
+        il.Emit(OpCodes.Ldc_I4_1);
+        il.Emit(OpCodes.Add);
+        il.Emit(OpCodes.Stloc, index);
+        il.MarkLabel(test);
+        il.Emit(OpCodes.Ldloc, index);
+        il.Emit(OpCodes.Ldloc, bytes);
+        il.Emit(OpCodes.Ldlen);
+        il.Emit(OpCodes.Conv_I4);
+        il.Emit(OpCodes.Blt, copy);
+        il.Emit(OpCodes.Ldloc, bytes);
+        il.Emit(OpCodes.Newobj, buffer.Ctor);
     }
 
     // The backing array is on the stack. Node compares unrounded values against

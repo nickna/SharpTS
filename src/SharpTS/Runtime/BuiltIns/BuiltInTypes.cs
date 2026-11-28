@@ -832,7 +832,9 @@ public static class BuiltInTypes
     internal static readonly TypeInfo.OverloadedFunction BufferFromType = new(
         [
             new([new TypeInfo.Union([StringType, new TypeInfo.Array(NumberType), TypeInfo.Buffer.Shared,
-                new TypeInfo.TypedArray("Uint8")]), StringType], TypeInfo.Buffer.Shared, RequiredParams: 1),
+                .. BuiltInNames.TypedArrayNames
+                    .Where(name => name is not (BuiltInNames.BigInt64Array or BuiltInNames.BigUint64Array))
+                    .Select(name => new TypeInfo.TypedArray(name[..^"Array".Length]))]), StringType], TypeInfo.Buffer.Shared, RequiredParams: 1),
             new([new TypeInfo.Union([new TypeInfo.ArrayBuffer(), new TypeInfo.SharedArrayBuffer()]), NumberType, NumberType],
                 TypeInfo.Buffer.Shared, RequiredParams: 1)
         ],

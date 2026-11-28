@@ -38,6 +38,25 @@ public class BufferTests
     }
 
     [Theory, ModeData]
+    public void Buffer_FromTypedArrayConvertsEachElementAndCopiesTheView(ExecutionMode mode)
+    {
+        const string source = """
+            import { Buffer as B } from 'node:buffer';
+            const words = new Uint16Array([0x1234, 0x2345, 0x3456]);
+            const view = words.subarray(1);
+            const copy = B.from(view);
+            view[0] = 0;
+            console.log(copy.toString('hex'), Buffer.copyBytesFrom(view).length);
+            console.log(B.from(new Float64Array([257.5, -1.5, NaN, 4294967555])).toString('hex'));
+            const big: any = new BigInt64Array(1);
+            try { B.from(big); } catch (e) { console.log(e.name); }
+            console.log(B.from(new BigInt64Array(0) as any).length);
+            """;
+        Assert.Equal("4556 4\n01ff0003\nTypeError\n0\n",
+            TestHarness.RunModules(new Dictionary<string, string> { ["main.ts"] = source }, "main.ts", mode));
+    }
+
+    [Theory, ModeData]
     public void Buffer_FromArrayBufferSharesTheBackingBytes(ExecutionMode mode)
     {
         const string source = """
