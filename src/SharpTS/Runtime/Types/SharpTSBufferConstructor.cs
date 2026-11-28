@@ -249,10 +249,14 @@ public sealed class SharpTSBufferConstructor
     /// </summary>
     private static RuntimeValue BufferCompare(Interp interpreter, RuntimeValue receiver, ReadOnlySpan<RuntimeValue> args)
     {
-        if (args.Length < 2 || args[0].ToObject() is not SharpTSBuffer buf1 || args[1].ToObject() is not SharpTSBuffer buf2)
-            throw new Exception("Buffer.compare requires two Buffer arguments");
+        static ReadOnlySpan<byte> VisibleBytes(RuntimeValue value) => value.ToObject() switch
+        {
+            SharpTSBuffer buffer => buffer.Bytes,
+            SharpTSUint8Array view => view.Buffer.AsSpan(view.ByteOffset, view.ByteLength),
+            _ => throw new ThrowException(new SharpTSTypeError("Buffer.compare requires Buffer or Uint8Array arguments"))
+        };
 
-        return RuntimeValue.FromNumber(buf1.Compare(buf2));
+        return RuntimeValue.FromNumber(Math.Sign(VisibleBytes(args[0]).SequenceCompareTo(VisibleBytes(args[1]))));
     }
 
     /// <summary>

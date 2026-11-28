@@ -44,7 +44,21 @@ public partial class RuntimeEmitter
             compare.Emit(arg);
             compare.Emit(OpCodes.Isinst, buffer.Type);
             compare.Emit(OpCodes.Brtrue, valid);
-            EmitThrowTypeError(compare, runtime.Errors, "Buffer.compare requires two buffers");
+            if (runtime.TypedArrays.Implementation is { } arrays)
+            {
+                var invalid = compare.DefineLabel();
+                compare.Emit(arg);
+                compare.Emit(OpCodes.Isinst, arrays.Uint8ArrayType);
+                compare.Emit(OpCodes.Brfalse, invalid);
+                compare.Emit(arg);
+                compare.Emit(OpCodes.Ldnull);
+                compare.Emit(OpCodes.Ldnull);
+                compare.Emit(OpCodes.Call, buffer.CopyBytesFrom);
+                compare.Emit(OpCodes.Starg, (short)(arg == OpCodes.Ldarg_0 ? 0 : 1));
+                compare.Emit(OpCodes.Br, valid);
+                compare.MarkLabel(invalid);
+            }
+            EmitThrowTypeError(compare, runtime.Errors, "Buffer.compare requires Buffer or Uint8Array arguments");
             compare.MarkLabel(valid);
         }
         compare.Emit(OpCodes.Ldarg_0);

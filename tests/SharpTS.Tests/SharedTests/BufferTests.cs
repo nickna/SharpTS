@@ -13,6 +13,17 @@ public class BufferTests
     #region Type Annotation and Basic Operations
 
     [Theory, ModeData]
+    public void CompareReadsVisibleUint8ArrayBytes(ExecutionMode mode)
+    {
+        const string source = """
+            const compare=Buffer.compare, a=new Uint8Array([7,1,9]).subarray(1,2), b=Buffer.of(2);
+            console.log(compare(a,b), compare(b,a), compare(a,new Uint8Array([1])));
+            try { compare(new Uint16Array([1]),b); } catch(e) { console.log(e.name); }
+            """;
+        Assert.Equal("-1 1 0\nTypeError\n", TestHarness.RunUnchecked(source, mode));
+    }
+
+    [Theory, ModeData]
     public void ReadUInt8ValidatesOffsetsBeforeConversion(ExecutionMode mode)
     {
         const string source = """
