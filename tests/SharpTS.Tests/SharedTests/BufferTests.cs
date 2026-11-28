@@ -1442,6 +1442,20 @@ public class BufferTests
         Assert.Equal("42 44 255\n", output);
     }
 
+    [Theory, ModeData]
+    public void Buffer_SearchEmptyNeedleIncludesEndOfView(ExecutionMode mode)
+    {
+        const string source = """
+            const b = Buffer.from(new ArrayBuffer(5), 1, 3);
+            const empty = Buffer.alloc(0);
+            for (const offset of [-4, -1, 0, 2, 3, 4])
+                console.log(b.indexOf('', offset), b.indexOf(empty, offset), b.includes('', offset));
+            console.log(empty.indexOf('', 5), b.indexOf(0, -1), b.includes(0, 3));
+            """;
+        Assert.Equal("0 0 true\n2 2 true\n0 0 true\n2 2 true\n3 3 true\n3 3 true\n0 2 false\n",
+            TestHarness.Run(source, mode));
+    }
+
     [Fact]
     public void Buffer_CompiledReadUInt8MethodUsesCallSiteReceiver()
     {

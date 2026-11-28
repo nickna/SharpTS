@@ -32,24 +32,28 @@ public partial class RuntimeEmitter
         var returnMinusOne = il.DefineLabel();
         var afterTypeCheck = il.DefineLabel();
 
-        // if (byteOffset < 0) byteOffset = 0
-        var offsetOkLabel = il.DefineLabel();
-        il.Emit(OpCodes.Ldarg_2);
-        il.Emit(OpCodes.Ldc_I4_0);
-        il.Emit(OpCodes.Bge, offsetOkLabel);
-        il.Emit(OpCodes.Ldc_I4_0);
-        il.Emit(OpCodes.Starg, 2);
-        il.MarkLabel(offsetOkLabel);
-
-        // len = _data.Length
         il.Emit(OpCodes.Ldarg_0);
         il.Emit(OpCodes.Call, buffer.LengthGetter);
         il.Emit(OpCodes.Stloc, lenLocal);
 
-        // if (byteOffset >= len) return -1
+        // Negative offsets count from the end; clamp both directions to [0, length].
+        var nonNegative = il.DefineLabel();
+        var normalized = il.DefineLabel();
+        il.Emit(OpCodes.Ldarg_2);
+        il.Emit(OpCodes.Ldc_I4_0);
+        il.Emit(OpCodes.Bge, nonNegative);
         il.Emit(OpCodes.Ldarg_2);
         il.Emit(OpCodes.Ldloc, lenLocal);
-        il.Emit(OpCodes.Bge, returnMinusOne);
+        il.Emit(OpCodes.Add);
+        il.Emit(OpCodes.Ldc_I4_0);
+        il.Emit(OpCodes.Call, _types.MathMaxInt32);
+        il.Emit(OpCodes.Br, normalized);
+        il.MarkLabel(nonNegative);
+        il.Emit(OpCodes.Ldarg_2);
+        il.Emit(OpCodes.Ldloc, lenLocal);
+        il.Emit(OpCodes.Call, _types.MathMinInt32);
+        il.MarkLabel(normalized);
+        il.Emit(OpCodes.Starg, 2);
 
         // Check if value is double (single byte)
         var notDoubleLabel = il.DefineLabel();

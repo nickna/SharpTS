@@ -1200,8 +1200,7 @@ public class SharpTSBuffer : ITypeCategorized
     /// </summary>
     public double IndexOf(object value, int byteOffset = 0, string encoding = "utf8")
     {
-        if (byteOffset < 0) byteOffset = 0;
-        if (byteOffset >= Length) return -1;
+        byteOffset = byteOffset < 0 ? Math.Max(Length + byteOffset, 0) : Math.Min(byteOffset, Length);
 
         byte[] searchBytes = value switch
         {
