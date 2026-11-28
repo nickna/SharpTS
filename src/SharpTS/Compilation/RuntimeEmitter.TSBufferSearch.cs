@@ -51,7 +51,7 @@ public partial class RuntimeEmitter
             il.Emit(OpCodes.Brtrue, invoke);
             il.Emit(OpCodes.Ldarg_2);
             il.Emit(OpCodes.Call, runtime.NumericCoercion.ToNumber);
-            il.Emit(OpCodes.Call, typeof(int).GetMethod(nameof(int.CreateSaturating))!.MakeGenericMethod(_types.Double));
+            il.Emit(OpCodes.Call, ((Func<double, int>)int.CreateSaturating<double>).Method);
             il.Emit(OpCodes.Stloc, offset);
             il.Emit(OpCodes.Ldarg_3);
             il.Emit(OpCodes.Isinst, runtime.Sentinels.UndefinedType);
