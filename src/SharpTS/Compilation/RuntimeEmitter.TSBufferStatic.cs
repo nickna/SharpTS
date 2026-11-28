@@ -235,8 +235,17 @@ public partial class RuntimeEmitter
         {
             var arrays = runtime.TypedArrays.RequireImplementation();
             EmitTypedCase(arrays.BaseType, () => EmitBufferFromElements(il, runtime, buffer,
-                arrays.BaseType, arrays.LengthGetter, arrays.ElementGet));
+                arrays.BaseType, arrays.LengthGetter, () => il.Emit(OpCodes.Callvirt, arrays.ElementGet)));
         }
+        // $Array inherits List<object>, but its numeric and sparse elements can live
+        // outside the inherited list. Read its JS length and observable indexed slots.
+        var array = runtime.ArrayStorage;
+        EmitTypedCase(array.Type, () => EmitBufferFromElements(il, runtime, buffer, array.Type, array.LengthGetter, () =>
+        {
+            il.Emit(OpCodes.Conv_R8);
+            il.Emit(OpCodes.Box, _types.Double);
+            il.Emit(OpCodes.Call, runtime.ObjectRead.Index);
+        }));
         EmitTypedCase(_types.ListOfObject, () => il.Emit(OpCodes.Call, buffer.FromArray));
 
         il.Emit(OpCodes.Ldarg_0);
@@ -280,7 +289,7 @@ public partial class RuntimeEmitter
     // The source is on the stack. Read each JS element, including view offsets,
     // and apply ToUint8 via ToInt32 and the low byte.
     private void EmitBufferFromElements(ILGenerator il, EmittedRuntime runtime, EmittedBufferRuntime buffer,
-        Type sourceType, MethodInfo lengthGetter, MethodInfo getElement)
+        Type sourceType, MethodInfo lengthGetter, Action emitElementRead)
     {
         var source = il.DeclareLocal(sourceType);
         var bytes = il.DeclareLocal(_types.ByteArray);
@@ -298,7 +307,7 @@ public partial class RuntimeEmitter
         il.Emit(OpCodes.Ldloc, index);
         il.Emit(OpCodes.Ldloc, source);
         il.Emit(OpCodes.Ldloc, index);
-        il.Emit(OpCodes.Callvirt, getElement);
+        emitElementRead();
         il.Emit(OpCodes.Call, runtime.NumericCoercion.JsToInt32);
         il.Emit(OpCodes.Stelem_I1);
         il.Emit(OpCodes.Ldloc, index);

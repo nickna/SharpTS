@@ -1543,6 +1543,22 @@ public class BufferTests
     }
 
     [Theory, ModeData]
+    public void BufferModule_RenamedImportReadsNumericAndSparseArrays(ExecutionMode mode)
+    {
+        const string source = """
+            import { Buffer as B } from 'node:buffer';
+            console.log(B.from([65]).length, B.from([65]).toString('hex'));
+            const sparse = [65, 66];
+            sparse[3] = 68;
+            const copy = B.from(sparse);
+            sparse[0] = 0;
+            console.log(copy.toString('hex'));
+            """;
+        Assert.Equal("1 41\n41420044\n",
+            TestHarness.RunModules(new Dictionary<string, string> { ["main.mjs"] = source }, "main.mjs", mode));
+    }
+
+    [Theory, ModeData]
     public void BufferModule_ImportedConstructorCanCallFromThroughAnAlias(ExecutionMode mode)
     {
         var files = new Dictionary<string, string>
