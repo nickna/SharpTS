@@ -1,5 +1,4 @@
 using System.Net;
-using System.Net.Http;
 using System.Net.NetworkInformation;
 using System.Net.Sockets;
 using SharpTS.Tests.Infrastructure;
@@ -39,73 +38,40 @@ public class HttpServerLifecycleTests
                 !IPAddress.IsLoopback(address));
         Skip.If(interfaceAddress == null, "No non-loopback IPv4 interface is available");
 
-        var port = TestPorts.GetAvailablePort();
-        // The full suite compiles thousands of snippets concurrently. Use a dedicated
-        // worker so thread-pool pressure cannot prevent the host-side probe from running.
-        var clientTask = Task.Factory.StartNew(
-            () => GetWithoutProxyWithRetry(interfaceAddress, port),
-            CancellationToken.None,
-            TaskCreationOptions.LongRunning,
-            TaskScheduler.Default);
         var files = new Dictionary<string, string>
         {
             ["./main.ts"] = $$"""
                 import * as http from 'http';
+                import * as net from 'net';
                 const server = http.createServer((_req: any, res: any) => {
+                    res.setHeader('Content-Length', '9');
                     res.end('reachable');
-                    server.close();
                 });
-                server.listen({{port}}, '0.0.0.0', () => {
+                server.listen(0, '0.0.0.0', () => {
                     const address = server.address();
-                    console.log('callback');
-                    console.log('address=' + address.address);
-                    console.log('family=' + address.family);
+                    console.log('callback', address.address, address.family);
+
+                    // Connect to the non-loopback interface only after listen has completed.
+                    // A TCP socket keeps the probe independent of HTTP proxy settings.
+                    const client = net.createConnection({host: '{{interfaceAddress}}', port: address.port});
+                    let response = '';
+                    client.on('connect', () => {
+                        client.write('GET / HTTP/1.0\r\nHost: {{interfaceAddress}}\r\nConnection: close\r\n\r\n');
+                    });
+                    client.on('data', (chunk: any) => { response += chunk.toString(); });
+                    client.on('end', () => {
+                        console.log(response.split('\r\n\r\n')[1]);
+                        server.close();
+                    });
+                    client.on('error', (err: any) => {
+                        console.log(err.message);
+                        server.close();
+                    });
                 });
                 """
         };
-
-        var output = TestHarness.RunModules(
-            files, "./main.ts", mode, timeout: TimeSpan.FromSeconds(75));
-        var body = clientTask.GetAwaiter().GetResult();
-
-        Assert.Contains("callback", output);
-        Assert.Contains("address=0.0.0.0", output);
-        Assert.Contains("family=IPv4", output);
-        Assert.Equal("reachable", body);
-    }
-
-    private static string GetWithoutProxyWithRetry(
-        IPAddress address, int port)
-    {
-        using var handler = new HttpClientHandler { UseProxy = false };
-        using var client = new HttpClient(handler)
-        {
-            Timeout = TimeSpan.FromSeconds(1)
-        };
-
-        var uri = new Uri($"http://{address}:{port}/");
-        // This budget includes any compilation that occurs before server.listen().
-        // Keep it below the harness timeout so a genuine bind failure stays bounded.
-        var deadline = DateTime.UtcNow + TimeSpan.FromSeconds(60);
-        Exception? lastException = null;
-
-        while (DateTime.UtcNow < deadline)
-        {
-            try
-            {
-                return client.GetStringAsync(uri).GetAwaiter().GetResult();
-            }
-            catch (Exception exception) when (
-                exception is HttpRequestException or TaskCanceledException)
-            {
-                lastException = exception;
-                Thread.Sleep(25);
-            }
-        }
-
-        throw new TimeoutException(
-            $"The wildcard HTTP listener never became reachable at {uri}.",
-            lastException);
+        var output = TestHarness.RunModules(files, "./main.ts", mode, timeout: TimeSpan.FromSeconds(75));
+        Assert.Equal("callback 0.0.0.0 IPv4\nreachable\n", output);
     }
 
     [Theory, ModeData]
