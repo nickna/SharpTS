@@ -813,10 +813,7 @@ public static class BuiltInTypes
                 RequiredParams: 1), // size required, fill and encoding optional
             "allocUnsafe" => new TypeInfo.Function([NumberType], bufferType),
             "allocUnsafeSlow" => new TypeInfo.Function([NumberType], bufferType),
-            "concat" => new TypeInfo.Function(
-                [new TypeInfo.Array(bufferType), NumberType],
-                bufferType,
-                RequiredParams: 1), // list required, totalLength optional
+            "concat" => BufferConcatType,
             "isBuffer" => new TypeInfo.Function([AnyType], BooleanType),
             "byteLength" => BufferByteLengthType,
             "compare" => BufferCompareType,
@@ -841,6 +838,8 @@ public static class BuiltInTypes
         new([AnyType, AnyType, NumberType], TypeInfo.Buffer.Shared, RequiredParams: 1));
 
     private static readonly TypeInfo BufferOrUint8Array = new TypeInfo.Union([TypeInfo.Buffer.Shared, new TypeInfo.TypedArray("Uint8")]);
+    internal static readonly TypeInfo.Function BufferConcatType = new([new TypeInfo.Array(BufferOrUint8Array), NumberType],
+        TypeInfo.Buffer.Shared, RequiredParams: 1);
     internal static readonly TypeInfo.Function BufferCompareType = new([BufferOrUint8Array, BufferOrUint8Array], NumberType);
 
     internal static readonly TypeInfo.Function BufferByteLengthType = new(

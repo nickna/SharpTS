@@ -322,10 +322,7 @@ public static partial class BuiltInModuleTypes
                 RequiredParams: 1),
             ["allocUnsafe"] = new TypeInfo.Function([numberType], bufferType),
             ["allocUnsafeSlow"] = new TypeInfo.Function([numberType], bufferType),
-            ["concat"] = new TypeInfo.Function(
-                [new TypeInfo.Array(bufferType), numberType],
-                bufferType,
-                RequiredParams: 1),
+            ["concat"] = BuiltInTypes.BufferConcatType,
             ["isBuffer"] = new TypeInfo.Function([TypeInfo.Any.Shared], BooleanType),
             ["byteLength"] = BuiltInTypes.BufferByteLengthType,
             ["compare"] = BuiltInTypes.BufferCompareType,

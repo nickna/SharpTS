@@ -167,46 +167,30 @@ public class SharpTSBuffer : ITypeCategorized
     }
 
     /// <summary>
-    /// Concatenates a list of Buffers into a single Buffer.
+    /// Concatenates the visible bytes of Buffers and Uint8Arrays into a new Buffer.
     /// </summary>
     public static SharpTSBuffer Concat(IReadOnlyCollection<object?> buffers, int? totalLength = null)
     {
         if (buffers == null || buffers.Count == 0)
             return new SharpTSBuffer(0);
 
-        // Calculate total length if not provided
-        int calculatedLength = 0;
-        var validBuffers = new List<SharpTSBuffer>();
+        static ReadOnlySpan<byte> VisibleBytes(object? item) => item switch
+        {
+            SharpTSBuffer buffer => buffer.Bytes,
+            SharpTSUint8Array view => view.Buffer.AsSpan(view.ByteOffset, view.ByteLength),
+            _ => throw new ThrowException(new SharpTSTypeError("Buffer.concat requires Buffer or Uint8Array elements")
+                { Code = "ERR_INVALID_ARG_TYPE" })
+        };
 
+        var result = new byte[totalLength ?? buffers.Sum(item => VisibleBytes(item).Length)];
+        int offset = 0;
         foreach (var item in buffers)
         {
-            if (item is SharpTSBuffer buf)
-            {
-                validBuffers.Add(buf);
-                calculatedLength += buf.Length;
-            }
-            else if (item is SharpTSArray arr)
-            {
-                // Convert array to buffer
-                var converted = FromArray(arr);
-                validBuffers.Add(converted);
-                calculatedLength += converted.Length;
-            }
+            var bytes = VisibleBytes(item);
+            int count = Math.Min(bytes.Length, result.Length - offset);
+            bytes[..count].CopyTo(result.AsSpan(offset));
+            offset += count;
         }
-
-        int actualLength = totalLength ?? calculatedLength;
-        var result = new byte[actualLength];
-        int offset = 0;
-
-        foreach (var buf in validBuffers)
-        {
-            int bytesToCopy = Math.Min(buf.Length, actualLength - offset);
-            if (bytesToCopy <= 0) break;
-
-            buf.Bytes[..bytesToCopy].CopyTo(result.AsSpan(offset));
-            offset += bytesToCopy;
-        }
-
         return new SharpTSBuffer(result);
     }
 

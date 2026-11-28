@@ -92,6 +92,38 @@ public class BufferTests
     }
 
     [Theory, ModeData]
+    public void ConcatCopiesVisibleUint8ArrayBytes(ExecutionMode mode)
+    {
+        const string source = """
+            import { Buffer as B } from 'node:buffer';
+            const view = new Uint8Array([0, 65, 66, 0]).subarray(1, 3);
+            const concat = B.concat;
+            const parts = [Buffer.alloc(0), view, new Uint8Array(0), Buffer.of(67)];
+            const copy = Buffer.concat([view]);
+            console.log(concat(parts).toString('hex'), concat(parts, 1).toString('hex'),
+                concat(parts, 4).toString('hex'));
+            view[0] = 9;
+            console.log(copy.toString('hex'));
+            """;
+        Assert.Equal("414243 41 41424300\n4142\n",
+            TestHarness.RunModules(new Dictionary<string, string> { ["main.ts"] = source }, "main.ts", mode));
+    }
+
+    [Theory, ModeData]
+    public void ConcatValidatesEveryElementAfterTruncation(ExecutionMode mode)
+    {
+        const string source = """
+            const concat = Buffer.concat;
+            for (const invalid of [new Uint16Array(1), new Uint8ClampedArray(1), [65]]) {
+                try { concat([Buffer.of(1), invalid], 1); }
+                catch (e) { console.log(e.name, e.code); }
+            }
+            """;
+        Assert.Equal(string.Concat(Enumerable.Repeat("TypeError ERR_INVALID_ARG_TYPE\n", 3)),
+            TestHarness.RunUnchecked(source, mode));
+    }
+
+    [Theory, ModeData]
     public void Buffer_TypeAnnotation_Works(ExecutionMode mode)
     {
         var source = """
