@@ -1956,6 +1956,7 @@ public partial class Interpreter
     /// </summary>
     private static object BindBuiltInMember(object member, object receiver)
     {
+        if (ReferenceEquals(member, SharpTSBuffer.ReadUInt8Method)) return member;
         if (member is BuiltInMethod m && !m.IsBound)
             return m.Bind(receiver);
         if (member is BuiltInAsyncMethod am)
@@ -2915,7 +2916,7 @@ public partial class Interpreter
                 // adapters directly. Prototype adapters receive `this` at the
                 // member-call site so ordinary reads preserve function identity.
                 if (member is BuiltInMethod m)
-                    return obj is SharpTSPromisePrototype ? m : m.Bind(obj);
+                    return obj is SharpTSPromisePrototype || ReferenceEquals(m, SharpTSBuffer.ReadUInt8Method) ? m : m.Bind(obj);
                 if (member is BuiltInAsyncMethod am)
                     return obj is SharpTSPromisePrototype ? am : am.Bind(obj);
                 return member;

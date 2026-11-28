@@ -23,6 +23,14 @@ public class SharpTSBuffer : ITypeCategorized
     /// <inheritdoc />
     public TypeCategory RuntimeCategory => TypeCategory.Buffer;
 
+    internal static readonly BuiltInMethod ReadUInt8Method = BuiltInMethod.CreateV2("readUInt8", 0, int.MaxValue,
+        (_, receiver, args) =>
+        {
+            if (receiver.ToObject() is not SharpTSBuffer buffer)
+                throw new ThrowException(new SharpTSTypeError("Buffer.readUInt8 requires a Buffer receiver"));
+            return RuntimeValue.FromNumber(buffer.ReadUInt8(OffsetArg(args, 0)));
+        });
+
     private readonly ArraySegment<byte> _view;
     private object? _owner;
     private bool IsDetached => _owner is SharpTSArrayBuffer { IsDetached: true };
@@ -542,11 +550,7 @@ public class SharpTSBuffer : ITypeCategorized
                 return RuntimeValue.FromNumber(Write(data, offset, length, encoding));
             }),
 
-            "readUInt8" => BuiltInMethod.CreateV2("readUInt8", 0, 1, (_, _, args) =>
-            {
-                int offset = args.Length > 0 && args[0].IsNumber ? (int)args[0].AsNumberUnsafe() : 0;
-                return RuntimeValue.FromNumber(ReadUInt8(offset));
-            }),
+            "readUInt8" => ReadUInt8Method,
 
             "writeUInt8" => BuiltInMethod.CreateV2("writeUInt8", 1, 2, (_, _, args) =>
             {

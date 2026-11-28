@@ -13,6 +13,18 @@ public class BufferTests
     #region Type Annotation and Basic Operations
 
     [Theory, ModeData]
+    public void ReadUInt8SharesFunctionAndUsesReceiver(ExecutionMode mode)
+    {
+        const string source = """
+            const a=Buffer.of(65), b=Buffer.of(66);
+            const f=a.readUInt8;
+            console.log(f===b.readUint8, f.call(b), a.readUInt8());
+            try { f(); } catch(e) { console.log(e.name); }
+            """;
+        Assert.Equal("true 66 65\nTypeError\n", TestHarness.RunUnchecked(source, mode));
+    }
+
+    [Theory, ModeData]
     public void IsEncodingRecognizesBase64Url(ExecutionMode mode)
     {
         const string source = """
