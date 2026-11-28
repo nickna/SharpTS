@@ -505,6 +505,10 @@ public partial class RuntimeEmitter
         // NOTE: Must stay in sync with NodeError in Runtime/BuiltIns/Modules/NodeError.cs
         EmitNodeErrorClass(moduleBuilder, runtime.NodeErrors);
 
+        // Buffer views consult the ArrayBuffer owner after transfer.
+        if (features.HasAnyTypedArray)
+            EmitArrayBufferType(moduleBuilder, runtime);
+
         // Emit $Buffer class for standalone buffer support — gated on UsesBuffer.
         // Implied by crypto/fs/zlib/http/fetch/dgram/net (their methods return
         // or consume Buffer values), so the gate only fires when ALL of those
@@ -512,7 +516,7 @@ public partial class RuntimeEmitter
         // NOTE: Must come before $Hash and $Hmac since they return Buffer
         // NOTE: Must stay in sync with SharpTS.Runtime.Types.SharpTSBuffer
         if (features.UsesBuffer)
-            EmitTSBufferClass(moduleBuilder, runtime.RequireBuffer(), runtime.Errors);
+            EmitTSBufferClass(moduleBuilder, runtime.RequireBuffer(), runtime.Errors, runtime.ArrayBuffer);
 
         // Construction values bridge early declarations and later body emission.
         StreamingSignVerifyParts? signConstruction = null;
@@ -605,13 +609,12 @@ public partial class RuntimeEmitter
             EmitDirType(moduleBuilder, runtime);
         }
 
-        // Emit $ArrayBuffer, $SharedArrayBuffer, $DataView, and the 11 typed-array
+        // Emit $SharedArrayBuffer, $DataView, and the 11 typed-array
         // variants. Gated on TypedArrays != None — granular per-kind selection
         // (Int8 vs Float32 etc.) is a future refinement; today we emit them as
         // a single bag whenever any typed-array identifier was seen.
         if (features.HasAnyTypedArray)
         {
-            EmitArrayBufferType(moduleBuilder, runtime);
             EmitSharedArrayBufferType(moduleBuilder, runtime);
             EmitDataViewType(moduleBuilder, runtime);
             EmitTypedArrayTypes(moduleBuilder, runtime);

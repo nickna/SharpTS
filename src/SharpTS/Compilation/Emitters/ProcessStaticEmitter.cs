@@ -52,16 +52,6 @@ public sealed class ProcessStaticEmitter : IStaticTypeEmitterStrategy
                 il.Emit(OpCodes.Ldnull);
                 return true;
 
-            case "setSourceMapsEnabled":
-                // Route through the $Process property setter semantics via the
-                // live object (SetProperty handles the bool coercion).
-                il.Emit(OpCodes.Call, ctx.Runtime!.Process.GetObject);
-                il.Emit(OpCodes.Ldstr, "sourceMapsEnabled");
-                EmitterArgumentHelpers.EmitBoxedArgumentOrNull(emitter, arguments, 0);
-                il.Emit(OpCodes.Call, ctx.Runtime!.ObjectWrite.Property);
-                il.Emit(OpCodes.Ldnull);
-                return true;
-
             default:
                 return false;
         }

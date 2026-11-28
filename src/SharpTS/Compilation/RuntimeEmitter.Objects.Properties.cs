@@ -2099,7 +2099,7 @@ public partial class RuntimeEmitter
         if (inputs.Buffer is not null)
         {
             var notBufferLabel = il.DefineLabel();
-            EmitBufferGetBranch(il, new BufferGetBranchInputs(inputs.Buffer, inputs.TSFunctionCtor), notBufferLabel);
+            EmitBufferGetBranch(il, new BufferGetBranchInputs(inputs.Buffer, inputs.TSFunctionCtor, inputs.TSFunctionGetOrCreate), notBufferLabel);
             il.MarkLabel(notBufferLabel);
         }
 

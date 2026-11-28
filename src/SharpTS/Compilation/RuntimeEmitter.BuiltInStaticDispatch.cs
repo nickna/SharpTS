@@ -124,6 +124,13 @@ public partial class RuntimeEmitter
             EmitNamedLookup("alloc", buffer.AllocValue, 3);
             EmitNamedLookup("byteLength", buffer.ByteLengthValue, 2);
             EmitNamedLookup("isBuffer", buffer.IsBuffer, 1);
+            EmitNamedLookup("of", buffer.FromArray, 0);
+            EmitNamedLookup("allocUnsafe", buffer.AllocUnsafeValue, 1);
+            EmitNamedLookup("allocUnsafeSlow", buffer.AllocUnsafeSlowValue, 1);
+            EmitNamedLookup("concat", buffer.ConcatValue, 2);
+            EmitNamedLookup("copyBytesFrom", buffer.CopyBytesFromValue, 3);
+            EmitNamedLookup("compare", buffer.CompareValue, 2);
+            EmitNamedLookup("isEncoding", buffer.IsEncodingValue, 1);
             il.MarkLabel(skipBuffer);
         }
 

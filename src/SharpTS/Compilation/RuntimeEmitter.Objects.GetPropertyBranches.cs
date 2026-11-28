@@ -47,7 +47,7 @@ public partial class RuntimeEmitter
         Type UndefinedType
     );
 
-    private readonly record struct BufferGetBranchInputs(EmittedBufferRuntime? Buffer, ConstructorBuilder TSFunctionCtor);
+    private readonly record struct BufferGetBranchInputs(EmittedBufferRuntime? Buffer, ConstructorBuilder TSFunctionCtor, MethodBuilder GetOrCreate);
 
     private readonly record struct StatsGetBranchInputs(EmittedFileSystemRuntime? FileSystem, ConstructorBuilder TSFunctionCtor);
 
@@ -666,11 +666,38 @@ public partial class RuntimeEmitter
         il.Emit(OpCodes.Brfalse, notOffset);
         il.Emit(OpCodes.Ldarg_0);
         il.Emit(OpCodes.Castclass, inputs.Buffer.Type);
-        il.Emit(OpCodes.Ldfld, inputs.Buffer.OffsetField);
+        il.Emit(OpCodes.Call, inputs.Buffer.ByteOffsetGetter);
         il.Emit(OpCodes.Conv_R8);
         il.Emit(OpCodes.Box, _types.Double);
         il.Emit(OpCodes.Ret);
         il.MarkLabel(notOffset);
+        var notOwner = il.DefineLabel();
+        il.Emit(OpCodes.Ldarg_1);
+        il.Emit(OpCodes.Ldstr, "buffer");
+        il.Emit(OpCodes.Call, _types.StringOpEquality);
+        il.Emit(OpCodes.Brfalse, notOwner);
+        il.Emit(OpCodes.Ldarg_0);
+        il.Emit(OpCodes.Castclass, inputs.Buffer.Type);
+        il.Emit(OpCodes.Call, inputs.Buffer.OwnerGetter);
+        il.Emit(OpCodes.Ret);
+        il.MarkLabel(notOwner);
+        var readUInt8 = il.DefineLabel();
+        var nextMethod = il.DefineLabel();
+        il.Emit(OpCodes.Ldarg_1);
+        il.Emit(OpCodes.Ldstr, "readUInt8");
+        il.Emit(OpCodes.Call, _types.StringOpEquality);
+        il.Emit(OpCodes.Brtrue, readUInt8);
+        il.Emit(OpCodes.Ldarg_1);
+        il.Emit(OpCodes.Ldstr, "readUint8");
+        il.Emit(OpCodes.Call, _types.StringOpEquality);
+        il.Emit(OpCodes.Brfalse, nextMethod);
+        il.MarkLabel(readUInt8);
+        var parameters = EmitReflectedMethodLiteral(il, inputs.Buffer.ReadUInt8Value);
+        il.Emit(OpCodes.Ldstr, "readUInt8");
+        il.Emit(OpCodes.Ldc_I4_0);
+        EmitReflectedFunctionFactory(il, inputs.GetOrCreate, parameters);
+        il.Emit(OpCodes.Ret);
+        il.MarkLabel(nextMethod);
         // Check for "toString" - return a wrapper that calls ToEncodedString
         il.Emit(OpCodes.Ldarg_1);
         il.Emit(OpCodes.Ldstr, "toString");

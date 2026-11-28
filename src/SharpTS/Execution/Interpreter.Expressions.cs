@@ -1512,7 +1512,7 @@ public partial class Interpreter
             IndexTarget.ArraySymbol t => t.Target.GetBySymbol(t.Key)
                 ?? SharpTSUndefined.Instance,
             IndexTarget.TypedArray t => t.Target[t.Index],
-            IndexTarget.Buffer t => t.Target[t.Index],
+            IndexTarget.Buffer t => (uint)t.Index < (uint)t.Target.Length ? t.Target[t.Index] : SharpTSUndefined.Instance,
             IndexTarget.ConstEnumError t => throw new InterpreterException(
                 $"Runtime Error: Cannot use index access on const enum '{t.Target.Name}'. Const enum members can only be accessed by name."),
             // Route through the same implementation the dotted path uses. A bare

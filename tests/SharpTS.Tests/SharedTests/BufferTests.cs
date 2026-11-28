@@ -38,6 +38,25 @@ public class BufferTests
     }
 
     [Theory, ModeData]
+    public void Buffer_FromTypedArrayConvertsEachElementAndCopiesTheView(ExecutionMode mode)
+    {
+        const string source = """
+            import { Buffer as B } from 'node:buffer';
+            const words = new Uint16Array([0x1234, 0x2345, 0x3456]);
+            const view = words.subarray(1);
+            const copy = B.from(view);
+            view[0] = 0;
+            console.log(copy.toString('hex'), Buffer.copyBytesFrom(view).length);
+            console.log(B.from(new Float64Array([257.5, -1.5, NaN, 4294967555])).toString('hex'));
+            const big: any = new BigInt64Array(1);
+            try { B.from(big); } catch (e) { console.log(e.name); }
+            console.log(B.from(new BigInt64Array(0) as any).length);
+            """;
+        Assert.Equal("4556 4\n01ff0003\nTypeError\n0\n",
+            TestHarness.RunModules(new Dictionary<string, string> { ["main.ts"] = source }, "main.ts", mode));
+    }
+
+    [Theory, ModeData]
     public void Buffer_FromArrayBufferSharesTheBackingBytes(ExecutionMode mode)
     {
         const string source = """
@@ -1443,11 +1462,55 @@ public class BufferTests
     }
 
     [Theory, ModeData]
-    public void Buffer_IndexAccess_OutOfRange_ReturnsNaN(ExecutionMode mode)
+    public void Buffer_SearchEmptyNeedleIncludesEndOfView(ExecutionMode mode)
     {
-        // Matches SharpTSBuffer.this[int] — out-of-range reads yield NaN in
-        // both interpreted and compiled modes. (Node itself returns undefined;
-        // aligning SharpTS to that is a separate effort.)
+        const string source = """
+            const b = Buffer.from(new ArrayBuffer(5), 1, 3);
+            const empty = Buffer.alloc(0);
+            for (const offset of [-4, -1, 0, 2, 3, 4])
+                console.log(b.indexOf('', offset), b.indexOf(empty, offset), b.includes('', offset));
+            console.log(empty.indexOf('', 5), b.indexOf(0, -1), b.includes(0, 3));
+            """;
+        Assert.Equal("0 0 true\n2 2 true\n0 0 true\n2 2 true\n3 3 true\n3 3 true\n0 2 false\n",
+            TestHarness.Run(source, mode));
+    }
+
+    [Fact]
+    public void Buffer_CompiledReadUInt8MethodUsesCallSiteReceiver()
+    {
+        const string source = """
+            function method(value: any) { return value.readUInt8; }
+            const a = Buffer.of(65);
+            const b = Buffer.of(66, 67);
+            const f = method(a);
+            console.log(typeof f, f === method(b), f === b.readUint8);
+            console.log(f.call(b), f.apply(b, [1]));
+            try { f(); } catch (e) { console.log('invalid receiver'); }
+            """;
+        Assert.Equal("function true true\n66 67\ninvalid receiver\n", TestHarness.RunCompiled(source));
+    }
+
+    [Theory, ModeData]
+    public void Buffer_ArrayBufferOwnerAndViewBoundsSurviveTransfer(ExecutionMode mode)
+    {
+        const string source = """
+            const ab = new ArrayBuffer(4);
+            const whole = Buffer.from(ab);
+            const view = Buffer.from(ab, 1, 2);
+            view[0] = 65;
+            console.log(whole.buffer === ab, view.buffer === ab, whole[1], view.byteOffset);
+            structuredClone(ab, {transfer:[ab]});
+            view[0] = 66;
+            console.log(view.buffer === ab, whole.length, view.byteOffset, view.byteLength, view[0]);
+            const owned = Buffer.alloc(2);
+            console.log(owned.buffer === owned.buffer, owned.buffer.byteLength);
+            """;
+        Assert.Equal("true true 65 1\ntrue 0 0 0 undefined\ntrue 2\n", TestHarness.Run(source, mode));
+    }
+
+    [Theory, ModeData]
+    public void Buffer_IndexAccess_OutOfRange_ReturnsUndefined(ExecutionMode mode)
+    {
         var source = """
             const buf = Buffer.from([1, 2, 3]);
             console.log(buf[10]);
@@ -1455,12 +1518,45 @@ public class BufferTests
             """;
 
         var output = TestHarness.Run(source, mode);
-        Assert.Equal("NaN\nnumber\n", output);
+        Assert.Equal("undefined\nundefined\n", output);
     }
 
     #endregion
 
     #region buffer module exports (#1160)
+
+    [Theory, ModeData]
+    public void BufferModule_StaticFunctionsCanBeSavedAndCalled(ExecutionMode mode)
+    {
+        const string source = """
+            const {Buffer: B} = require('node:buffer');
+            for (const key of ['of','allocUnsafe','allocUnsafeSlow','concat','copyBytesFrom','compare','isEncoding'])
+                console.log(typeof B[key], B[key] === B[key]);
+            const {of, allocUnsafe, allocUnsafeSlow, concat, copyBytesFrom, compare, isEncoding} = B;
+            const first = of(65, 66);
+            console.log(first.toString(), allocUnsafe(3).length, allocUnsafeSlow(4).length);
+            console.log(concat([first, of(67)]).toString(), compare(first, of(65, 66)));
+            console.log(copyBytesFrom(new Uint8Array([10, 11]), 1).toString('hex'), isEncoding('UTF-8'), isEncoding(''));
+            """;
+        Assert.Equal(string.Concat(Enumerable.Repeat("function true\n", 7)) + "AB 3 4\nABC 0\n0b true false\n",
+            TestHarness.RunModules(new Dictionary<string, string> { ["main.cjs"] = source }, "main.cjs", mode));
+    }
+
+    [Theory, ModeData]
+    public void BufferModule_RenamedImportReadsNumericAndSparseArrays(ExecutionMode mode)
+    {
+        const string source = """
+            import { Buffer as B } from 'node:buffer';
+            console.log(B.from([65]).length, B.from([65]).toString('hex'));
+            const sparse = [65, 66];
+            sparse[3] = 68;
+            const copy = B.from(sparse);
+            sparse[0] = 0;
+            console.log(copy.toString('hex'));
+            """;
+        Assert.Equal("1 41\n41420044\n",
+            TestHarness.RunModules(new Dictionary<string, string> { ["main.mjs"] = source }, "main.mjs", mode));
+    }
 
     [Theory, ModeData]
     public void BufferModule_ImportedConstructorCanCallFromThroughAnAlias(ExecutionMode mode)

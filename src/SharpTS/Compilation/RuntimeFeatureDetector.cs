@@ -72,6 +72,7 @@ public sealed partial class RuntimeFeatureDetector
     private TypeMap? _typeMap;
     private int _dateConstructorReceiverReads;
     private bool _hasPossibleGlobalObjectSource;
+    private bool _readsBufferBacking;
     private bool _hasComputedIntlCandidate;
 
     public RuntimeFeatureDetector() : this(nativeClassBodiesOnly: false) { }
@@ -237,8 +238,8 @@ public sealed partial class RuntimeFeatureDetector
         _set.UsesDomException |= _set.UsesBuffer || _hasPossibleGlobalObjectSource
             || _set.UsesSourceExecution || _set.UsesVm;
         // WebCrypto (#1063): subtle results are $ArrayBuffer and getRandomValues
-        // consumes $TypedArray views, so crypto implies both base types.
-        if (_set.UsesCrypto)
+        // consumes $TypedArray views. Reading a Buffer backing store also exposes ArrayBuffer.
+        if (_set.UsesCrypto || (_set.UsesBuffer && _readsBufferBacking))
         {
             _set.TypedArrays |= RuntimeFeatureSet.TypedArrayKinds.ArrayBuffer
                               | RuntimeFeatureSet.TypedArrayKinds.TypedArrayBase;
@@ -1055,6 +1056,7 @@ public sealed partial class RuntimeFeatureDetector
                 break;
 
             case Expr.Get g:
+                _readsBufferBacking |= g.Name.Lexeme == "buffer";
                 MarkProcessStreamRead(g.Object, g.Name.Lexeme);
                 if (_dateConstructorReceiverReads == 0 && IsDateConstructorEscape(g))
                     _set.UsesDateConstructorMutation = true;
@@ -1245,6 +1247,7 @@ public sealed partial class RuntimeFeatureDetector
                 break;
 
             case Expr.GetIndex gi:
+                _readsBufferBacking |= gi.Index is Expr.Literal { Value: "buffer" } or not Expr.Literal;
                 if (_dateConstructorReceiverReads == 0 && IsDateConstructorEscape(gi))
                     _set.UsesDateConstructorMutation = true;
                 // Opaque keys can select a constructor or descriptor mutator.

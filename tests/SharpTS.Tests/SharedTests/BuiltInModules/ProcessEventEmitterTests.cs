@@ -18,6 +18,7 @@ public class ProcessEventEmitterTests
                 return this === replacement && event === 'custom' && callback === listener;
             }
             const replacement = {
+                setSourceMapsEnabled(value) { return this === replacement && value === true; },
                 nextTick(callback) { return this === replacement && callback === listener; },
                 emitWarning(message) { return this === replacement && message === "probe"; },
                 on: method, addListener: method, once: method, off: method, removeListener: method,
@@ -29,7 +30,7 @@ public class ProcessEventEmitterTests
                 }
             };
             globalThis.process = replacement;
-            console.log(process.nextTick(listener), process.emitWarning("probe"));
+            console.log(process.nextTick(listener), process.emitWarning("probe"), process.setSourceMapsEnabled(true));
             console.log(process.on('custom', listener), process.addListener('custom', listener),
                 process.once('custom', listener), process.off('custom', listener),
                 process.removeListener('custom', listener), process.prependListener('custom', listener),
@@ -38,7 +39,7 @@ public class ProcessEventEmitterTests
             function restore() { console.log('arg'); globalThis.process = original; return [10]; }
             console.log(process.setMaxListeners(...restore()));
             """;
-        Assert.Equal("true true\ntrue true true true true true true true true\nget\narg\n11\n",
+        Assert.Equal("true true true\ntrue true true true true true true true true\nget\narg\n11\n",
             TestHarness.RunUnchecked(source, mode));
     }
 

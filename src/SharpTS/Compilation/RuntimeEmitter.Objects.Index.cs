@@ -773,8 +773,7 @@ public partial class RuntimeEmitter
             il.Emit(OpCodes.Br, bufInRangeLabel);
             // out-of-range: return NaN (boxed) — matches SharpTSBuffer.this[int] return.
             il.MarkLabel(bufOutOfRangeLabel);
-            il.Emit(OpCodes.Ldc_R8, double.NaN);
-            il.Emit(OpCodes.Box, _types.Double);
+            il.Emit(OpCodes.Ldsfld, inputs.UndefinedInstance);
             il.Emit(OpCodes.Ret);
             // in-range: return (double)data[idx] boxed
             il.MarkLabel(bufInRangeLabel);

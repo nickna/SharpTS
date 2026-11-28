@@ -14,6 +14,27 @@ public sealed class EmittedBufferRuntime
     public bool HasTypedArrayCopy { get; }
     public bool IsComplete { get; private set; }
 
+    private MethodBuilder? _readUInt8Value;
+    internal MethodBuilder ReadUInt8Value
+    {
+        get => Require(_readUInt8Value);
+        set => Set(ref _readUInt8Value, value);
+    }
+
+    private MethodBuilder? _byteOffsetGetter;
+    internal MethodBuilder ByteOffsetGetter
+    {
+        get => Require(_byteOffsetGetter);
+        set => Set(ref _byteOffsetGetter, value);
+    }
+
+    private MethodBuilder? _ownerGetter;
+    internal MethodBuilder OwnerGetter
+    {
+        get => Require(_ownerGetter);
+        set => Set(ref _ownerGetter, value);
+    }
+
     private Type? _type;
     public Type Type
     {
@@ -117,6 +138,48 @@ public sealed class EmittedBufferRuntime
     {
         get => Require(_allocUnsafe);
         internal set => Set(ref _allocUnsafe, value);
+    }
+
+    private MethodBuilder? _allocUnsafeValue;
+    internal MethodBuilder AllocUnsafeValue
+    {
+        get => Require(_allocUnsafeValue);
+        set => Set(ref _allocUnsafeValue, value);
+    }
+
+    private MethodBuilder? _allocUnsafeSlowValue;
+    internal MethodBuilder AllocUnsafeSlowValue
+    {
+        get => Require(_allocUnsafeSlowValue);
+        set => Set(ref _allocUnsafeSlowValue, value);
+    }
+
+    private MethodBuilder? _concatValue;
+    internal MethodBuilder ConcatValue
+    {
+        get => Require(_concatValue);
+        set => Set(ref _concatValue, value);
+    }
+
+    private MethodBuilder? _compareValue;
+    internal MethodBuilder CompareValue
+    {
+        get => Require(_compareValue);
+        set => Set(ref _compareValue, value);
+    }
+
+    private MethodBuilder? _isEncodingValue;
+    internal MethodBuilder IsEncodingValue
+    {
+        get => Require(_isEncodingValue);
+        set => Set(ref _isEncodingValue, value);
+    }
+
+    private MethodBuilder? _copyBytesFromValue;
+    internal MethodBuilder CopyBytesFromValue
+    {
+        get => Require(_copyBytesFromValue);
+        set => Set(ref _copyBytesFromValue, value);
     }
 
     private MethodBuilder? _concat;
@@ -665,6 +728,9 @@ public sealed class EmittedBufferRuntime
     internal void CompleteEmission()
     {
         EnsureMutable();
+        _ = OwnerGetter;
+        _ = ByteOffsetGetter;
+        _ = ReadUInt8Value;
         _ = Type;
         _ = ViewCtor;
         _ = Ctor;
@@ -680,6 +746,12 @@ public sealed class EmittedBufferRuntime
         _ = AllocValue;
         _ = ByteLengthValue;
         _ = AllocUnsafe;
+        _ = AllocUnsafeValue;
+        _ = AllocUnsafeSlowValue;
+        _ = ConcatValue;
+        _ = CompareValue;
+        _ = IsEncodingValue;
+        _ = CopyBytesFromValue;
         _ = Concat;
         _ = CalculateTotalLength;
         _ = IsBuffer;

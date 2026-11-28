@@ -9,7 +9,7 @@ namespace SharpTS.Compilation;
 /// </summary>
 public partial class RuntimeEmitter
 {
-    private void EmitTSBufferClass(ModuleBuilder moduleBuilder, EmittedBufferRuntime buffer, EmittedErrorRuntime errors)
+    private void EmitTSBufferClass(ModuleBuilder moduleBuilder, EmittedBufferRuntime buffer, EmittedErrorRuntime errors, EmittedArrayBufferRuntime? arrayBuffer)
     {
         // Define class: public sealed class $Buffer
         var typeBuilder = EmitTypeDefinitions.DefineType(moduleBuilder,
@@ -24,8 +24,9 @@ public partial class RuntimeEmitter
 
         buffer.OffsetField = typeBuilder.DefineField("_byteOffset", _types.Int32, FieldAttributes.Assembly | FieldAttributes.InitOnly);
         buffer.LengthField = typeBuilder.DefineField("_length", _types.Int32, FieldAttributes.Private | FieldAttributes.InitOnly);
+        var owner = typeBuilder.DefineField("_owner", _types.Object, FieldAttributes.Private);
         var viewCtor = typeBuilder.DefineConstructor(MethodAttributes.Assembly, CallingConventions.Standard,
-            [_types.ByteArray, _types.Int32, _types.Int32]);
+            [_types.ByteArray, _types.Int32, _types.Int32, _types.Object]);
         buffer.ViewCtor = viewCtor;
         var viewIL = viewCtor.GetILGenerator();
         viewIL.Emit(OpCodes.Ldarg_0);
@@ -39,7 +40,29 @@ public partial class RuntimeEmitter
         viewIL.Emit(OpCodes.Ldarg_0);
         viewIL.Emit(OpCodes.Ldarg_3);
         viewIL.Emit(OpCodes.Stfld, buffer.LengthField);
+        viewIL.Emit(OpCodes.Ldarg_0);
+        viewIL.Emit(OpCodes.Ldarg_S, (byte)4);
+        viewIL.Emit(OpCodes.Stfld, owner);
         viewIL.Emit(OpCodes.Ret);
+
+        buffer.OwnerGetter = typeBuilder.DefineMethod("get_buffer", MethodAttributes.Assembly, _types.Object, Type.EmptyTypes);
+        var ownerIL = buffer.OwnerGetter.GetILGenerator();
+        if (arrayBuffer is not null)
+        {
+            var ready = ownerIL.DefineLabel();
+            ownerIL.Emit(OpCodes.Ldarg_0);
+            ownerIL.Emit(OpCodes.Ldfld, owner);
+            ownerIL.Emit(OpCodes.Brtrue, ready);
+            ownerIL.Emit(OpCodes.Ldarg_0);
+            ownerIL.Emit(OpCodes.Ldarg_0);
+            ownerIL.Emit(OpCodes.Ldfld, buffer.DataField);
+            ownerIL.Emit(OpCodes.Newobj, arrayBuffer.BackingCtor);
+            ownerIL.Emit(OpCodes.Stfld, owner);
+            ownerIL.MarkLabel(ready);
+        }
+        ownerIL.Emit(OpCodes.Ldarg_0);
+        ownerIL.Emit(OpCodes.Ldfld, owner);
+        ownerIL.Emit(OpCodes.Ret);
 
         // Constructor: public $Buffer(byte[] data)
         EmitTSBufferCtorBytes(typeBuilder, buffer);
@@ -48,7 +71,8 @@ public partial class RuntimeEmitter
         EmitTSBufferCtorSize(typeBuilder, buffer);
 
         // Property: public int Length
-        EmitTSBufferLengthProperty(typeBuilder, buffer);
+        buffer.LengthGetter = EmitBufferViewBound(typeBuilder, "Length", buffer.LengthField, owner, arrayBuffer);
+        buffer.ByteOffsetGetter = EmitBufferViewBound(typeBuilder, "ByteOffset", buffer.OffsetField, owner, arrayBuffer);
 
         // Static methods
         EmitTSBufferGetData(typeBuilder, buffer);
@@ -70,6 +94,7 @@ public partial class RuntimeEmitter
         EmitTSBufferFill(typeBuilder, buffer);
         EmitTSBufferWrite(typeBuilder, buffer, errors);
         EmitTSBufferReadUInt8(typeBuilder, buffer);
+        EmitBufferReadUInt8Value(typeBuilder, buffer, errors);
         EmitTSBufferWriteUInt8(typeBuilder, buffer);
         EmitTSBufferToJSON(typeBuilder, buffer);
 
@@ -177,6 +202,7 @@ public partial class RuntimeEmitter
         il.Emit(OpCodes.Ldarg_1);
         il.Emit(OpCodes.Ldlen);
         il.Emit(OpCodes.Conv_I4);
+        il.Emit(OpCodes.Ldnull);
         il.Emit(OpCodes.Call, buffer.ViewCtor);
         il.Emit(OpCodes.Ret);
     }
@@ -202,33 +228,33 @@ public partial class RuntimeEmitter
         il.Emit(OpCodes.Ret);
     }
 
-    /// <summary>
-    /// Emits: public int Length { get; }
-    /// </summary>
-    private void EmitTSBufferLengthProperty(TypeBuilder typeBuilder, EmittedBufferRuntime buffer)
+    private MethodBuilder EmitBufferViewBound(TypeBuilder type, string name, FieldBuilder bound,
+        FieldBuilder owner, EmittedArrayBufferRuntime? arrayBuffer)
     {
-        var method = typeBuilder.DefineMethod(
-            "get_Length",
-            MethodAttributes.Public | MethodAttributes.SpecialName,
-            _types.Int32,
-            Type.EmptyTypes
-        );
-        buffer.LengthGetter = method;
-
-        var il = method.GetILGenerator();
-
-        // return _data.Length
+        var getter = type.DefineMethod("get_" + name, MethodAttributes.Public | MethodAttributes.SpecialName,
+            _types.Int32, Type.EmptyTypes);
+        var il = getter.GetILGenerator();
+        if (arrayBuffer is not null)
+        {
+            var attached = il.DefineLabel();
+            var ab = il.DeclareLocal(arrayBuffer.Type);
+            il.Emit(OpCodes.Ldarg_0);
+            il.Emit(OpCodes.Ldfld, owner);
+            il.Emit(OpCodes.Isinst, arrayBuffer.Type);
+            il.Emit(OpCodes.Stloc, ab);
+            il.Emit(OpCodes.Ldloc, ab);
+            il.Emit(OpCodes.Brfalse, attached);
+            il.Emit(OpCodes.Ldloc, ab);
+            il.Emit(OpCodes.Ldfld, arrayBuffer.DetachedField);
+            il.Emit(OpCodes.Brfalse, attached);
+            il.Emit(OpCodes.Ldc_I4_0);
+            il.Emit(OpCodes.Ret);
+            il.MarkLabel(attached);
+        }
         il.Emit(OpCodes.Ldarg_0);
-        il.Emit(OpCodes.Ldfld, buffer.LengthField);
+        il.Emit(OpCodes.Ldfld, bound);
         il.Emit(OpCodes.Ret);
-
-        // Define property
-        var property = typeBuilder.DefineProperty(
-            "Length",
-            PropertyAttributes.None,
-            _types.Int32,
-            Type.EmptyTypes
-        );
-        property.SetGetMethod(method);
+        type.DefineProperty(name, PropertyAttributes.None, _types.Int32, Type.EmptyTypes).SetGetMethod(getter);
+        return getter;
     }
 }
